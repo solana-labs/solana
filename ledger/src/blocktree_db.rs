@@ -13,8 +13,9 @@ use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
 
+pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, Direction,
+    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator,
     IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
 };
 
@@ -80,12 +81,6 @@ pub enum IteratorMode<Index> {
     Start,
     End,
     From(Index, IteratorDirection),
-}
-
-#[allow(dead_code)]
-pub enum IteratorDirection {
-    Forward,
-    Reverse,
 }
 
 pub mod columns {
@@ -219,14 +214,9 @@ impl Rocks {
             match iterator_mode {
                 IteratorMode::Start => self.0.iterator_cf(cf, RocksIteratorMode::Start)?,
                 IteratorMode::End => self.0.iterator_cf(cf, RocksIteratorMode::End)?,
-                IteratorMode::From(start_from, direction) => {
-                    let rocks_direction = match direction {
-                        IteratorDirection::Forward => Direction::Forward,
-                        IteratorDirection::Reverse => Direction::Reverse,
-                    };
-                    self.0
-                        .iterator_cf(cf, RocksIteratorMode::From(start_from, rocks_direction))?
-                }
+                IteratorMode::From(start_from, direction) => self
+                    .0
+                    .iterator_cf(cf, RocksIteratorMode::From(start_from, direction))?,
             }
         };
 
