@@ -6,7 +6,7 @@ set -e
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
 
 # TODO: Remove all default values, force explicitness in the testcase definition
-[[ -n $TEST_DURATION ]] || TEST_DURATION=300
+[[ -n $TEST_DURATION_SECONDS ]] || TEST_DURATION_SECONDS=300
 [[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=0
 [[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES=2
 [[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=1
@@ -114,38 +114,38 @@ launchTestnet() {
   echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
   sleep "$RAMP_UP_TIME"
 
-  echo --- wait "$TEST_DURATION" seconds to complete test
-  sleep "$TEST_DURATION"
+  echo --- wait "$TEST_DURATION_SECONDS" seconds to complete test
+  sleep "$TEST_DURATION_SECONDS"
 
   echo --- collect statistics about run
   declare q_mean_tps='
     SELECT round(mean("sum_count")) AS "mean_tps" FROM (
       SELECT sum("count") AS "sum_count"
         FROM "'$TESTNET_TAG'"."autogen"."banking_stage-record_transactions"
-        WHERE time > now() - '"$TEST_DURATION"'s GROUP BY time(1s)
+        WHERE time > now() - '"$TEST_DURATION_SECONDS"'s GROUP BY time(1s)
     )'
 
   declare q_max_tps='
     SELECT round(max("sum_count")) AS "max_tps" FROM (
       SELECT sum("count") AS "sum_count"
         FROM "'$TESTNET_TAG'"."autogen"."banking_stage-record_transactions"
-        WHERE time > now() - '"$TEST_DURATION"'s GROUP BY time(1s)
+        WHERE time > now() - '"$TEST_DURATION_SECONDS"'s GROUP BY time(1s)
     )'
 
   declare q_mean_confirmation='
     SELECT round(mean("duration_ms")) as "mean_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
-      WHERE time > now() - '"$TEST_DURATION"'s'
+      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
 
   declare q_max_confirmation='
     SELECT round(max("duration_ms")) as "max_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
-      WHERE time > now() - '"$TEST_DURATION"'s'
+      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
 
   declare q_99th_confirmation='
     SELECT round(percentile("duration_ms", 99)) as "99th_percentile_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
-      WHERE time > now() - '"$TEST_DURATION"'s'
+      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
 
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
@@ -191,7 +191,7 @@ TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         NUMBER_OF_CLIENT_NODES \
                         CLIENT_OPTIONS \
                         TESTNET_ZONES \
-                        TEST_DURATION \
+                        TEST_DURATION_SECONDS \
                         ADDITIONAL_FLAGS)
 
 TEST_CONFIGURATION=
