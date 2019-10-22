@@ -8,13 +8,9 @@ upload_results_to_slack() {
 
   [[ -n $BUILDKITE_MESSAGE ]] || BUILDKITE_MESSAGE="Message not defined"
 
-  if [[ -n $BUILDKITE_COMMIT ]] ; then
-    COMMIT_BUTTON_TEXT="$(echo "$BUILDKITE_COMMIT" | head -c 8)"
-    COMMIT_URL="https://github.com/solana-labs/solana/commit/${BUILDKITE_COMMIT}"
-  else
-    COMMIT_BUTTON_TEXT="Commit not defined"
-    COMMIT_URL="https://github.com/solana-labs/solana/commits/master"
-  fi
+  COMMIT=$(git rev-parse HEAD)
+  COMMIT_BUTTON_TEXT="$(echo "$COMMIT" | head -c 8)"
+  COMMIT_URL="https://github.com/solana-labs/solana/commit/${COMMIT}"
 
   if [[ -n $BUILDKITE_BUILD_URL ]] ; then
     BUILD_BUTTON_TEXT="Build Kite Job"
