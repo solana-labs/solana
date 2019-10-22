@@ -7,7 +7,6 @@ import {
   BpfLoader,
   Transaction,
   sendAndConfirmTransaction,
-  SOL_LAMPORTS,
 } from '../src';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
@@ -18,15 +17,23 @@ if (!mockRpcEnabled) {
   jest.setTimeout(120000);
 }
 
+const NUM_RETRIES = 100; /* allow some number of retries */
+
 test('load BPF C program', async () => {
   if (mockRpcEnabled) {
     console.log('non-live test skipped');
     return;
   }
 
-  const connection = new Connection(url);
-  const from = await newAccountWithLamports(connection, SOL_LAMPORTS);
   const data = await fs.readFile('test/fixtures/noop-c/noop.so');
+
+  const connection = new Connection(url);
+  const [, feeCalculator] = await connection.getRecentBlockhash();
+  const fees =
+    feeCalculator.lamportsPerSignature *
+    (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);
+  const from = await newAccountWithLamports(connection, fees);
+
   const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true, isDebitable: true}],
@@ -41,11 +48,17 @@ test('load BPF Rust program', async () => {
     return;
   }
 
-  const connection = new Connection(url);
-  const from = await newAccountWithLamports(connection, SOL_LAMPORTS);
   const data = await fs.readFile(
     'test/fixtures/noop-rust/solana_bpf_rust_noop.so',
   );
+
+  const connection = new Connection(url);
+  const [, feeCalculator] = await connection.getRecentBlockhash();
+  const fees =
+    feeCalculator.lamportsPerSignature *
+    (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);
+  const from = await newAccountWithLamports(connection, fees);
+
   const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true, isDebitable: true}],

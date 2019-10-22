@@ -29,6 +29,16 @@ export class Loader {
   }
 
   /**
+   * Minimum number of signatures required to load a program not including
+   * retries
+   *
+   * Can be used to calculate transaction fees
+   */
+  static getMinNumSignatures(dataLength: number): number {
+    return Math.ceil(dataLength / Loader.chunkSize);
+  }
+
+  /**
    * Loads a generic program
    *
    * @param connection The connection to use
