@@ -5,8 +5,7 @@ use crate::{
     result::Result, service::Service,
 };
 use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver};
-use solana_ledger::blocktree_meta::SlotMeta;
+use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
 use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
     collections::BTreeSet,
