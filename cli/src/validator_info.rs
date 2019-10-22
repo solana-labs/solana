@@ -1,5 +1,6 @@
 use crate::{
     cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+    display::println_name_value,
     input_parsers::pubkey_of,
     input_validators::{is_pubkey, is_url},
 };
@@ -127,19 +128,19 @@ fn parse_args(matches: &ArgMatches<'_>) -> Value {
 
 fn parse_validator_info(
     pubkey: &Pubkey,
-    account_data: &[u8],
-) -> Result<(Pubkey, String), Box<dyn error::Error>> {
-    let key_list: ConfigKeys = deserialize(&account_data)?;
+    account: &Account,
+) -> Result<(Pubkey, Map<String, serde_json::value::Value>), Box<dyn error::Error>> {
+    if account.owner != solana_config_api::id() {
+        return Err(format!("{} is not a validator info account", pubkey).into());
+    }
+    let key_list: ConfigKeys = deserialize(&account.data)?;
     if !key_list.keys.is_empty() {
         let (validator_pubkey, _) = key_list.keys[1];
-        let validator_info: String = deserialize(&get_config_data(account_data)?)?;
+        let validator_info_string: String = deserialize(&get_config_data(&account.data)?)?;
+        let validator_info: Map<_, _> = serde_json::from_str(&validator_info_string)?;
         Ok((validator_pubkey, validator_info))
     } else {
-        Err(format!(
-            "account {} found, but could not be parsed as ValidatorInfo",
-            pubkey
-        )
-        .into())
+        Err(format!("{} could not be parsed as a validator info account", pubkey).into())
     }
 }
 
@@ -281,7 +282,7 @@ pub fn process_set_validator_info(
             key_list.keys.contains(&(id(), false))
         })
         .find(|(pubkey, account)| {
-            let (validator_pubkey, _) = parse_validator_info(&pubkey, &account.data).unwrap();
+            let (validator_pubkey, _) = parse_validator_info(&pubkey, &account).unwrap();
             validator_pubkey == config.keypair.pubkey()
         });
 
@@ -355,32 +356,38 @@ pub fn process_set_validator_info(
 }
 
 pub fn process_get_validator_info(rpc_client: &RpcClient, pubkey: Option<Pubkey>) -> ProcessResult {
-    if let Some(info_pubkey) = pubkey {
-        let validator_info_data = rpc_client.get_account_data(&info_pubkey)?;
-        let (validator_pubkey, validator_info) =
-            parse_validator_info(&info_pubkey, &validator_info_data)?;
-        println!("Validator pubkey: {:?}", validator_pubkey);
-        println!("Info: {}", validator_info);
+    let validator_info: Vec<(Pubkey, Account)> = if let Some(validator_info_pubkey) = pubkey {
+        vec![(
+            validator_info_pubkey,
+            rpc_client.get_account(&validator_info_pubkey)?,
+        )]
     } else {
         let all_config = rpc_client.get_program_accounts(&solana_config_api::id())?;
-        let all_validator_info: Vec<&(Pubkey, Account)> = all_config
-            .iter()
-            .filter(|(_, account)| {
-                let key_list: ConfigKeys = deserialize(&account.data).map_err(|_| false).unwrap();
+        all_config
+            .into_iter()
+            .filter(|(_, validator_info_account)| {
+                let key_list: ConfigKeys = deserialize(&validator_info_account.data)
+                    .map_err(|_| false)
+                    .unwrap();
                 key_list.keys.contains(&(id(), false))
             })
-            .collect();
-        if all_validator_info.is_empty() {
-            println!("No validator info accounts found");
-        }
-        for (info_pubkey, account) in all_validator_info.iter() {
-            println!("Validator info from {:?}", info_pubkey);
-            let (validator_pubkey, validator_info) =
-                parse_validator_info(&info_pubkey, &account.data)?;
-            println!("  Validator pubkey: {:?}", validator_pubkey);
-            println!("  Info: {}", validator_info);
+            .collect()
+    };
+
+    if validator_info.is_empty() {
+        println!("No validator info accounts found");
+    }
+    for (validator_info_pubkey, validator_info_account) in validator_info.iter() {
+        let (validator_pubkey, validator_info) =
+            parse_validator_info(&validator_info_pubkey, &validator_info_account)?;
+        println!();
+        println_name_value("Validator Identity Pubkey:", &validator_pubkey.to_string());
+        println_name_value("  info pubkey:", &validator_info_pubkey.to_string());
+        for (key, value) in validator_info.iter() {
+            println_name_value(&format!("  {}:", key), &value.as_str().unwrap_or("?"));
         }
     }
+
     Ok("".to_string())
 }
 
@@ -468,15 +475,23 @@ mod tests {
 
         let mut info = Map::new();
         info.insert("name".to_string(), Value::String("Alice".to_string()));
-        let info_string = serde_json::to_string(&Value::Object(info)).unwrap();
+        let info_string = serde_json::to_string(&Value::Object(info.clone())).unwrap();
         let validator_info = ValidatorInfo {
             info: info_string.clone(),
         };
         let data = serialize(&(config, validator_info)).unwrap();
 
         assert_eq!(
-            parse_validator_info(&Pubkey::default(), &data).unwrap(),
-            (pubkey, info_string)
+            parse_validator_info(
+                &Pubkey::default(),
+                &Account {
+                    owner: solana_config_api::id(),
+                    data,
+                    ..Account::default()
+                }
+            )
+            .unwrap(),
+            (pubkey, info)
         );
     }
 
