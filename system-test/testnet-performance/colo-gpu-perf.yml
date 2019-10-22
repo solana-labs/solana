@@ -6,7 +6,7 @@ steps:
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-edge-perf-gpu-enabled"
       RAMP_UP_TIME: 0
-      TEST_DURATION: 600
+      TEST_DURATION_SECONDS: 600
       NUMBER_OF_VALIDATOR_NODES: 4
       NUMBER_OF_CLIENT_NODES: 2
       CLIENT_OPTIONS: "bench-tps=2=--tx_count 15000 --thread-batch-sleep-ms 250"
