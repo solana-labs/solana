@@ -70,6 +70,12 @@ impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for BlocktreeError 
     }
 }
 
+impl std::convert::From<rocksdb::Error> for BlocktreeError {
+    fn from(e: rocksdb::Error) -> BlocktreeError {
+        BlocktreeError::RocksDb(e)
+    }
+}
+
 pub enum IteratorMode<Index> {
     Start,
     End,
@@ -729,12 +735,6 @@ impl WriteBatch {
     #[inline]
     fn get_cf<C: Column>(&self) -> ColumnFamily {
         self.map[C::NAME]
-    }
-}
-
-impl std::convert::From<rocksdb::Error> for BlocktreeError {
-    fn from(e: rocksdb::Error) -> BlocktreeError {
-        BlocktreeError::RocksDb(e)
     }
 }
 
