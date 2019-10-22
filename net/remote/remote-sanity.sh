@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 #
-# This script is to be run on the bootstrap full node
+# This script is to be run on the bootstrap validator
 #
 
 cd "$(dirname "$0")"/../..

@@ -48,7 +48,7 @@ Operate a configured testnet
                                             -c bench-tps=2="--tx_count 25000"
                                         This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                         to the bench-tps client.
-   -n NUM_FULL_NODES                  - Number of validators to apply command to.
+   -n NUM_VALIDATORS                  - Number of validators to apply command to.
    --gpu-mode GPU_MODE                - Specify GPU mode to launch validators with (default: $gpuMode).
                                         MODE must be one of
                                           on - GPU *required*, any vendor *
@@ -775,7 +775,7 @@ deploy() {
   echo
   echo "+++ Deployment Successful"
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional validator deployment (${#validatorIpList[@]} full nodes, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
+  echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir"
 }

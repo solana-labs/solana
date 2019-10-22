@@ -188,7 +188,7 @@ The public key of a [keypair](terminology.md#keypair).
 
 ## archiver
 
-Storage mining client, stores some part of the ledger enumerated in blocks and submits storage proofs to the chain. Not a full-node.
+Storage mining client, stores some part of the ledger enumerated in blocks and submits storage proofs to the chain. Not a validator.
 
 ## root
 

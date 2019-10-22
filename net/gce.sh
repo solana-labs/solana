@@ -147,7 +147,7 @@ Manage testnet instances
                     - Add an additional [number] GB SSD to all validators to store the config directory.
                       If not set, config will be written to the boot disk by default.
                       Only supported on GCE.
-   --dedicated      - Use dedicated instances for additional full nodes
+   --dedicated      - Use dedicated instances for additional validators
                       (by default preemptible instances are used to reduce
                       cost).  Note that the bootstrap leader, archiver,
                       blockstreamer and client nodes are always dedicated.

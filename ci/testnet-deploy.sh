@@ -54,7 +54,7 @@ Deploys a CD testnet
                                  specified release channel (edge|beta|stable) or release tag
                                  (vX.Y.Z)
                                  (default: $tarChannelOrTag)
-   -n [number]          - Number of additional full nodes (default: $additionalValidatorCount)
+   -n [number]          - Number of additional validators (default: $additionalValidatorCount)
    -c [number]          - Number of client bencher nodes (default: $clientNodeCount)
    -u                   - Include a Blockstreamer (default: $blockstreamer)
    -P                   - Use public network IP addresses (default: $publicNetwork)
