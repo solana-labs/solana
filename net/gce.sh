@@ -79,6 +79,7 @@ validatorAdditionalDiskSizeInGb=
 externalNodes=false
 failOnValidatorBootupFailure=true
 preemptible=true
+evalInfo=false
 
 publicNetwork=false
 letsEncryptDomainName=
@@ -159,6 +160,8 @@ Manage testnet instances
    none
 
  info-specific options:
+   --eval           - Output in a form that can be eval-ed by a shell: eval $(gce.sh info)
+
    none
 
 EOF
@@ -188,6 +191,9 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 == --dedicated ]]; then
       preemptible=false
+      shift
+    elif [[ $1 == --eval ]]; then
+      evalInfo=true
       shift
     else
       usage "Unknown long option: $1"
@@ -799,14 +805,21 @@ info)
     printf "  %-16s | %-15s | %-15s | %s\n" "$nodeType" "$ip" "$ipPrivate" "$zone"
   }
 
-  printNode "Node Type" "Public IP" "Private IP" "Zone"
-  echo "-------------------+-----------------+-----------------+--------------"
+  if ! $evalInfo; then
+    printNode "Node Type" "Public IP" "Private IP" "Zone"
+    echo "-------------------+-----------------+-----------------+--------------"
+  fi
+
   nodeType=bootstrap-leader
   for i in $(seq 0 $(( ${#validatorIpList[@]} - 1)) ); do
     ipAddress=${validatorIpList[$i]}
     ipAddressPrivate=${validatorIpListPrivate[$i]}
     zone=${validatorIpListZone[$i]}
-    printNode $nodeType "$ipAddress" "$ipAddressPrivate" "$zone"
+    if $evalInfo; then
+      echo "NET_VALIDATOR${i}_IP=$ipAddress"
+    else
+      printNode $nodeType "$ipAddress" "$ipAddressPrivate" "$zone"
+    fi
     nodeType=validator
   done
 
@@ -814,21 +827,33 @@ info)
     ipAddress=${clientIpList[$i]}
     ipAddressPrivate=${clientIpListPrivate[$i]}
     zone=${clientIpListZone[$i]}
-    printNode client "$ipAddress" "$ipAddressPrivate" "$zone"
+    if $evalInfo; then
+      echo "NET_CLIENT${i}_IP=$ipAddress"
+    else
+      printNode client "$ipAddress" "$ipAddressPrivate" "$zone"
+    fi
   done
 
   for i in $(seq 0 $(( ${#blockstreamerIpList[@]} - 1)) ); do
     ipAddress=${blockstreamerIpList[$i]}
     ipAddressPrivate=${blockstreamerIpListPrivate[$i]}
     zone=${blockstreamerIpListZone[$i]}
-    printNode blockstreamer "$ipAddress" "$ipAddressPrivate" "$zone"
+    if $evalInfo; then
+      echo "NET_BLOCKSTREAMER${i}_IP=$ipAddress"
+    else
+      printNode blockstreamer "$ipAddress" "$ipAddressPrivate" "$zone"
+    fi
   done
 
   for i in $(seq 0 $(( ${#archiverIpList[@]} - 1)) ); do
     ipAddress=${archiverIpList[$i]}
     ipAddressPrivate=${archiverIpListPrivate[$i]}
     zone=${archiverIpListZone[$i]}
-    printNode archiver "$ipAddress" "$ipAddressPrivate" "$zone"
+    if $evalInfo; then
+      echo "NET_ARCHIVER${i}_IP=$ipAddress"
+    else
+      printNode archiver "$ipAddress" "$ipAddressPrivate" "$zone"
+    fi
   done
   ;;
 status)
