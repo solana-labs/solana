@@ -89,10 +89,10 @@ pub fn init() {
 fn verify_shred(packet: &Packet, slot_leaders: &HashMap<u64, Pubkey>) -> Option<u8> {
     let sig_start = 0;
     let sig_end = size_of::<Signature>();
-    let slot_start = sig_end;
+    let slot_start = sig_end + size_of::<ShredType>();
     let slot_end = sig_end + size_of::<u64>();
-    let msg_start = sig_start;
-    let msg_end = packet.data.len() - sig_start;
+    let msg_start = sig_end;
+    let msg_end = packet.data.len() - sig_end;
     let slot = deserialize(packet.data[slot_start..slot_end]).ok()?;
     let pubkey = slot_headers.lookup(slot).ok()?;
     if !signature.verify(
@@ -120,17 +120,22 @@ pub fn verify_shreds_cpu(shreds: &[Packets], slot_leaders: &HashMap<u64, Pubkey>
     rv 
 
 }
-fn shred_gpu_pubkeys(packet: &[Packets], slot_leaders: &HashMap<u64, Pubkey>) ->  (PinnedVec<Pubkey>, Vec<Vec<u32>>) {
+
+fn shred_gpu_pubkeys(
+    packet: &[Packets],
+    slot_leaders: &HashMap<u64, Pubkey>,
+    recycler_offsets: &Recycler<TxOffset>,
+    recycler_pubkeys: &Recycler<Pubkey>,
+) ->  (PinnedVec<Pubkey>, Vec<TxOffset>) {
     assert_eq!(slot_leaders.get(u64::max()), Some(Pubkey::default()));
-    let slots = PAR_THREAD_POOL.with(|thread_pool| {
+    let slots:Vec<Vec<u64>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches
                 .into_par_iter()
                 .map(|p| 
-                     
-                     p.packets.par_iter().map(|packet|  {
-                        let slot_start = size_of::<Signature>();
-                        let slot_end = sig_end + size_of::<u64>();
+                     p.packets.iter().map(|packet|  {
+                        let slot_start = size_of::<Signature>() + size_of::<ShredType>();
+                        let slot_end = slot_start + size_of::<u64>();
                         if let Ok(slot) = deserialize(packet.data[slot_start..slot_end]) 
                             && slot_leaders.contains_key(slot)) {
                             slot
@@ -142,39 +147,46 @@ fn shred_gpu_pubkeys(packet: &[Packets], slot_leaders: &HashMap<u64, Pubkey>) ->
                 .collect()
         })
     }); 
-    let keys = HashMap::new(slots.iter().flat_map(|x|).enumerate());
-    let pubkey_vec = PinnedVec::new();
-    for (k,i) in keys {
-        let pubkey = slot_leaders.get(k).unwrap();
-        pubkey_vec.append(pubkey)
+    let mut keys: HashMap<Pubkey, Vec<u64>> = HashMap::new();
+    for batch in slots.iter() {
+        for slot in batch.iter() {
+            let key = slot_leaders.get(slot).unwrap();
+            keys.entry(key).or_insert(vec![]).append(slot);    
+        }
     }
-    let offsets = slots
+    let mut pubkey_vec = recycler_pubkeys.new();
+    let mut slot_to_key_ix = HashMap::new();
+    for ((k,slots), i) in keys.enumerate() {
+        pubkey_vec.append(key);
+        for s in slots {
+            slot_to_key_ix.insert(s, i);
+        }
+
+    }
+    let offset_table = slots
         .into_iter()
         .map(|packet_slots| { 
-            packet_slots.into_iter().map(|slot|
-                keys.get(slot).unwrap() * size_of::<Pubkey>()
-            ).collect()
+            let mut offsets = recycler_offsets.new();
+            packet_slots.iter().for_each(|slot|
+                offets.append(slot_to_key_ix.get(slot).unwrap() * size_of::<Pubkey>());
+            );
+            offsets
         }).collect();
-    (pubkey_vec, offsets)
-    
+    (pubkey_vec, offset_table)
 }
 
-fn shred_gpu_offsets(packet: &Packet, slot_leaders: &HashMap<u64, Pubkey>) -> Result<TxOffsets> {
-    let sig_start = 0;
-    let sig_end = size_of::<Signature>();
-    let slot_start = sig_end;
-    let slot_end = sig_end + size_of::<u64>();
+fn shred_gpu_offsets(pubkeys_end: &mut u32, packet: &Packets) -> Result<TxOffsets> {
+    let sig_start = *pubkeys_end;
+    let sig_end = sig_start + size_of::<Signature>();
     let msg_start = sig_start;
     let msg_end = packet.data.len() - sig_start;
-    let slot = deserialize(packet.data[slot_start..slot_end]).ok()?;
-    let pubkey = slot_headers.lookup(slot).ok()?;
 }
  
 pub fn verify_shreds_gpu(
     shreds: &[Packets],
     slot_leaders: &HashMap<u64, Pubkey>,
-    recycler: &Recycler<TxOffset>,
-    recycler: &Recycler<Pubkey>,
+    recycler_offsets: &Recycler<TxOffset>,
+    recycler_pubkeys: &Recycler<Pubkey>,
 ) -> Vec<Vec<u8>> {
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
