@@ -8,6 +8,7 @@ zone=
 bootstrapValidatorAddress=
 bootstrapValidatorMachineType=
 clientNodeCount=0
+idleClients=false
 additionalValidatorCount=10
 publicNetwork=false
 stopNetwork=false
@@ -139,6 +140,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --limit-ledger-size ]]; then
       maybeLimitLedgerSize=$1
+      shift 1
+    elif [[ $1 = --idle-clients ]]; then
+      idleClients=true
       shift 1
     else
       usage "Unknown long option: $1"
@@ -393,6 +397,10 @@ if ! $skipStart; then
       $maybeNoSnapshot
       $maybeLimitLedgerSize
     )
+
+    if $idleClients; then
+      args+=(-c "idle=$clientNodeCount=")
+    fi
 
     time net/net.sh "${args[@]}"
   ) || ok=false
