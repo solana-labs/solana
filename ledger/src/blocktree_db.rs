@@ -2,22 +2,19 @@ use crate::blocktree_meta;
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
 use log::*;
-
+pub use rocksdb::Direction as IteratorDirection;
+use rocksdb::{
+    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator,
+    IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-
 use solana_sdk::clock::Slot;
 use std::collections::HashMap;
 use std::fs;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
-
-pub use rocksdb::Direction as IteratorDirection;
-use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator,
-    IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
-};
 
 // A good value for this is the number of cores on the machine
 const TOTAL_THREADS: i32 = 8;
