@@ -239,6 +239,7 @@ impl Archiver {
             };
         let client = crate::gossip_service::get_client(&nodes);
 
+        info!("Setting up mining account...");
         if let Err(e) = Self::setup_mining_account(&client, &keypair, &storage_keypair) {
             //shutdown services before exiting
             exit.store(true, Ordering::Relaxed);
@@ -575,12 +576,19 @@ impl Archiver {
         storage_keypair: &Keypair,
     ) -> Result<()> {
         // make sure archiver has some balance
-        if client.poll_get_balance(&keypair.pubkey())? == 0 {
+        info!("checking archiver keypair...");
+        if client.poll_balance_with_timeout(
+            &keypair.pubkey(),
+            &Duration::from_millis(100),
+            &Duration::from_secs(5),
+        )? == 0
+        {
             return Err(
                 io::Error::new(io::ErrorKind::Other, "keypair account has no balance").into(),
             );
         }
 
+        info!("checking storage account keypair...");
         // check if the storage account exists
         let balance = client.poll_get_balance(&storage_keypair.pubkey());
         if balance.is_err() || balance.unwrap() == 0 {
