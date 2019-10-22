@@ -1,6 +1,7 @@
 //! The `blocktree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
+pub use crate::blocktree_db::{BlocktreeError, Result};
 use crate::entry::{create_ticks, Entry};
 use crate::erasure::ErasureConfig;
 use crate::shred::{Shred, Shredder};
@@ -26,7 +27,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::result;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 
@@ -54,37 +54,6 @@ pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 
 pub type SlotMetaWorkingSetEntry = (Rc<RefCell<SlotMeta>>, Option<SlotMeta>);
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
-
-#[derive(Debug)]
-pub enum BlocktreeError {
-    ShredForIndexExists,
-    InvalidShredData(Box<bincode::ErrorKind>),
-    RocksDb(rocksdb::Error),
-    SlotNotRooted,
-    IO(std::io::Error),
-    Serialize(std::boxed::Box<bincode::ErrorKind>),
-}
-pub type Result<T> = result::Result<T, BlocktreeError>;
-
-impl std::error::Error for BlocktreeError {}
-
-impl std::fmt::Display for BlocktreeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "blocktree error")
-    }
-}
-
-impl std::convert::From<std::io::Error> for BlocktreeError {
-    fn from(e: std::io::Error) -> BlocktreeError {
-        BlocktreeError::IO(e)
-    }
-}
-
-impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for BlocktreeError {
-    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> BlocktreeError {
-        BlocktreeError::Serialize(e)
-    }
-}
 
 // ledger window
 pub struct Blocktree {

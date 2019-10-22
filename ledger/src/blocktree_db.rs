@@ -24,6 +24,37 @@ const TOTAL_THREADS: i32 = 8;
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 const MIN_WRITE_BUFFER_SIZE: u64 = 64 * 1024; // 64KB
 
+#[derive(Debug)]
+pub enum BlocktreeError {
+    ShredForIndexExists,
+    InvalidShredData(Box<bincode::ErrorKind>),
+    RocksDb(rocksdb::Error),
+    SlotNotRooted,
+    IO(std::io::Error),
+    Serialize(std::boxed::Box<bincode::ErrorKind>),
+}
+pub type Result<T> = std::result::Result<T, BlocktreeError>;
+
+impl std::error::Error for BlocktreeError {}
+
+impl std::fmt::Display for BlocktreeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "blocktree error")
+    }
+}
+
+impl std::convert::From<std::io::Error> for BlocktreeError {
+    fn from(e: std::io::Error) -> BlocktreeError {
+        BlocktreeError::IO(e)
+    }
+}
+
+impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for BlocktreeError {
+    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> BlocktreeError {
+        BlocktreeError::Serialize(e)
+    }
+}
+
 pub enum IteratorMode<Index> {
     Start,
     End,
