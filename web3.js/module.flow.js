@@ -240,6 +240,7 @@ declare module '@solana/web3.js' {
 
   // === src/loader.js ===
   declare export class Loader {
+    static getMinNumSignatures(dataLength: number): number;
     static load(
       connection: Connection,
       payer: Account,
@@ -252,6 +253,7 @@ declare module '@solana/web3.js' {
   // === src/bpf-loader.js ===
   declare export class BpfLoader {
     static programId: PublicKey;
+    static getMinNumSignatures(dataLength: number): number;
     static load(
       connection: Connection,
       payer: Account,
