@@ -88,12 +88,13 @@ launchTestnet() {
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         "$maybeMachineType" "$VALIDATOR_NODE_MACHINE_TYPE" \
-        -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/"-z "} "$ADDITIONAL_FLAGS"
+        -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/"-z "} ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     colo)
+    # shellcheck disable=SC2068
       net/colo.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" -g \
-        -p "$TESTNET_TAG" "$ADDITIONAL_FLAGS"
+        -p "$TESTNET_TAG" ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     *)
       echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
