@@ -746,11 +746,13 @@ deploy() {
                                  # have caught up to the bootstrap leader yet
 
   SECONDS=0
-  for ((i=0; i < "$numClients" && i < $((numBenchTpsClients + numBenchExchangeClients)); i++)) do
+  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
     if [[ $i -lt "$numBenchTpsClients" ]]; then
       startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
-    else
+    elif [[ $i -lt $((numBenchTpsClients + numBenchExchangeClients)) ]]; then
       startClient "${clientIpList[$i]}" "solana-bench-exchange" $((i-numBenchTpsClients))
+    else
+      startClient "${clientIpList[$i]}" "idle"
     fi
   done
   clientDeployTime=$SECONDS
