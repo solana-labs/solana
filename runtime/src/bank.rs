@@ -5,7 +5,7 @@
 use crate::{
     accounts::{Accounts, TransactionLoadResult},
     accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
-    blockhash_queue::{BlockhashQueue, HashAgeResult},
+    blockhash_queue::{BlockhashQueue, HashAgeKind, HashAgeResult},
     message_processor::{MessageProcessor, ProcessInstruction},
     rent_collector::RentCollector,
     serde_utils::{
@@ -864,7 +864,7 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        results: Vec<Result<()>>,
+        results: Vec<Result<HashAgeKind>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<TransactionLoadResult>> {
         self.rc.accounts.load_accounts(
@@ -903,21 +903,18 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<HashAgeKind>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
-                if lock_res.is_ok()
-                    && hash_queue
-                        .check_hash_age(&tx.message().recent_blockhash, max_age)
-                        .is_err()
-                {
-                    error_counters.reserve_blockhash += 1;
-                    Err(TransactionError::BlockhashNotFound)
-                } else {
-                    lock_res
-                }
+            .map(|(tx, lock_res)| match lock_res {
+                Ok(()) => hash_queue
+                    .check_hash_age(&tx.message().recent_blockhash, max_age)
+                    .map_err(|_| {
+                        error_counters.reserve_blockhash += 1;
+                        TransactionError::BlockhashNotFound
+                    }),
+                Err(e) => Err(e),
             })
             .collect()
     }
@@ -925,9 +922,9 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<Result<HashAgeKind>>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<HashAgeKind>> {
         let rcache = self.src.status_cache.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
@@ -967,7 +964,7 @@ impl Bank {
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<HashAgeKind>> {
         let refs_results = self.check_refs(txs, iteration_order, lock_results, &mut error_counters);
         let age_results = self.check_age(
             txs,

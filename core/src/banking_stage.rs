@@ -20,7 +20,10 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
-use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::TransactionBatch};
+use solana_runtime::{
+    accounts_db::ErrorCounters, bank::Bank, blockhash_queue::HashAgeKind,
+    transaction_batch::TransactionBatch,
+};
 use solana_sdk::clock::MAX_TRANSACTION_FORWARDING_DELAY_GPU;
 use solana_sdk::{
     clock::{
@@ -648,7 +651,7 @@ impl BankingStage {
     // This function returns a vector containing index of all valid transactions. A valid
     // transaction has result Ok() as the value
     fn filter_valid_transaction_indexes(
-        valid_txs: &[transaction::Result<()>],
+        valid_txs: &[transaction::Result<HashAgeKind>],
         transaction_indexes: &[usize],
     ) -> Vec<usize> {
         let valid_transactions = valid_txs
@@ -1497,10 +1500,10 @@ mod tests {
                 &vec![
                     Err(TransactionError::BlockhashNotFound),
                     Err(TransactionError::BlockhashNotFound),
-                    Ok(()),
+                    Ok(HashAgeKind::Extant),
                     Err(TransactionError::BlockhashNotFound),
-                    Ok(()),
-                    Ok(())
+                    Ok(HashAgeKind::Extant),
+                    Ok(HashAgeKind::Extant),
                 ],
                 &vec![2, 4, 5, 9, 11, 13]
             ),
@@ -1510,12 +1513,12 @@ mod tests {
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
                 &vec![
-                    Ok(()),
+                    Ok(HashAgeKind::Extant),
                     Err(TransactionError::BlockhashNotFound),
                     Err(TransactionError::BlockhashNotFound),
-                    Ok(()),
-                    Ok(()),
-                    Ok(())
+                    Ok(HashAgeKind::Extant),
+                    Ok(HashAgeKind::Extant),
+                    Ok(HashAgeKind::Extant),
                 ],
                 &vec![1, 6, 7, 9, 31, 43]
             ),

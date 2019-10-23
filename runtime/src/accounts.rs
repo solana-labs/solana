@@ -1,7 +1,7 @@
 use crate::accounts_db::{AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters};
 use crate::accounts_index::AccountsIndex;
 use crate::append_vec::StoredAccount;
-use crate::blockhash_queue::BlockhashQueue;
+use crate::blockhash_queue::{BlockhashQueue, HashAgeKind};
 use crate::message_processor::has_duplicates;
 use crate::rent_collector::RentCollector;
 use log::*;
@@ -225,7 +225,7 @@ impl Accounts {
         ancestors: &HashMap<Slot, usize>,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<Result<HashAgeKind>>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
@@ -237,7 +237,7 @@ impl Accounts {
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
-                (tx, Ok(())) => {
+                (tx, Ok(hash_age_kind)) => {
                     let fee_calculator = hash_queue
                         .get_fee_calculator(&tx.message().recent_blockhash)
                         .ok_or(TransactionError::BlockhashNotFound)?;
@@ -689,6 +689,7 @@ mod tests {
     use super::*;
     use crate::accounts_db::tests::copy_append_vecs;
     use crate::accounts_db::{get_temp_accounts_paths, AccountsDBSerialize};
+    use crate::blockhash_queue::HashAgeKind;
     use bincode::serialize_into;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
@@ -722,7 +723,7 @@ mod tests {
             &ancestors,
             &[tx],
             None,
-            vec![Ok(())],
+            vec![Ok(HashAgeKind::Extant)],
             &hash_queue,
             error_counters,
             &rent_collector,
