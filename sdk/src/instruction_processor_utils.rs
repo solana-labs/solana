@@ -1,4 +1,6 @@
-use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
+use crate::{
+    account::KeyedAccount, instruction::InstructionError, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
+};
 use num_traits::{FromPrimitive, ToPrimitive};
 
 // All native programs export a symbol named process()
@@ -39,6 +41,16 @@ where
 /// Return the next KeyedAccount or a NotEnoughAccountKeys instruction error
 pub fn next_keyed_account<I: Iterator>(iter: &mut I) -> Result<I::Item, InstructionError> {
     iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
+}
+
+pub fn limited_deserialize<T>(data: &[u8]) -> Result<(T), InstructionError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    bincode::config()
+        .limit(PACKET_DATA_SIZE as u64)
+        .deserialize(data)
+        .map_err(|_| InstructionError::InvalidInstructionData)
 }
 
 pub trait DecodeError<E> {

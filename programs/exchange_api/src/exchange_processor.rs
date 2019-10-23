@@ -7,6 +7,7 @@ use log::*;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::limited_deserialize;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 
@@ -432,14 +433,7 @@ pub fn process_instruction(
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
-    let command = bincode::deserialize::<ExchangeInstruction>(data).map_err(|err| {
-        info!("Invalid transaction data: {:?} {:?}", data, err);
-        InstructionError::InvalidInstructionData
-    })?;
-
-    trace!("{:?}", command);
-
-    match command {
+    match limited_deserialize::<ExchangeInstruction>(data)? {
         ExchangeInstruction::AccountRequest => {
             ExchangeProcessor::do_account_request(keyed_accounts)
         }

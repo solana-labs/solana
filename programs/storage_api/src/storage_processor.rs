@@ -5,6 +5,7 @@ use crate::storage_contract::StorageAccount;
 use crate::storage_instruction::StorageInstruction;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::limited_deserialize;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar;
 
@@ -19,7 +20,7 @@ pub fn process_instruction(
     let me_unsigned = me[0].signer_key().is_none();
     let mut storage_account = StorageAccount::new(*me[0].unsigned_key(), &mut me[0].account);
 
-    match bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
+    match limited_deserialize(data)? {
         StorageInstruction::InitializeStorage {
             owner,
             account_type,

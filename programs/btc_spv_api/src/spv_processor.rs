@@ -8,6 +8,7 @@ use hex;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::limited_deserialize;
 use solana_sdk::pubkey::Pubkey;
 
 pub struct SpvProcessor {}
@@ -103,10 +104,7 @@ pub fn process_instruction(
 ) -> Result<(), InstructionError> {
     // solana_logger::setup();
 
-    let command = bincode::deserialize::<SpvInstruction>(data).map_err(|err| {
-        info!("invalid instruction data: {:?} {:?}", data, err);
-        InstructionError::InvalidInstructionData
-    })?;
+    let command = limited_deserialize::<SpvInstruction>(data)?;
 
     trace!("{:?}", command);
 

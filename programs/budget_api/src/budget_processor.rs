@@ -4,11 +4,11 @@ use crate::{
     budget_instruction::{BudgetError, BudgetInstruction},
     budget_state::BudgetState,
 };
-use bincode::deserialize;
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_sdk::{
-    account::KeyedAccount, hash::hash, instruction::InstructionError, pubkey::Pubkey,
+    account::KeyedAccount, hash::hash, instruction::InstructionError,
+    instruction_processor_utils::limited_deserialize, pubkey::Pubkey,
 };
 
 /// Process a Witness Signature. Any payment plans waiting on this signature
@@ -106,10 +106,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    let instruction = deserialize(data).map_err(|err| {
-        info!("Invalid transaction data: {:?} {:?}", data, err);
-        InstructionError::InvalidInstructionData
-    })?;
+    let instruction = limited_deserialize(data)?;
 
     trace!("process_instruction: {:?}", instruction);
 

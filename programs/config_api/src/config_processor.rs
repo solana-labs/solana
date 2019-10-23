@@ -5,7 +5,7 @@ use bincode::deserialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::next_keyed_account;
+use solana_sdk::instruction_processor_utils::{limited_deserialize, next_keyed_account};
 use solana_sdk::pubkey::Pubkey;
 
 pub fn process_instruction(
@@ -13,11 +13,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    let key_list: ConfigKeys = deserialize(data).map_err(|err| {
-        error!("Invalid ConfigKeys data: {:?} {:?}", data, err);
-        InstructionError::InvalidInstructionData
-    })?;
-
+    let key_list: ConfigKeys = limited_deserialize(data)?;
     let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
     let config_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
     let current_data: ConfigKeys =
