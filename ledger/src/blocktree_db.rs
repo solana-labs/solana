@@ -2,22 +2,19 @@ use crate::blocktree_meta;
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
 use log::*;
-
+pub use rocksdb::Direction as IteratorDirection;
+use rocksdb::{
+    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator,
+    IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-
 use solana_sdk::clock::Slot;
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
-
-use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, Direction,
-    IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
-};
 
 // A good value for this is the number of cores on the machine
 const TOTAL_THREADS: i32 = 8;
@@ -71,16 +68,16 @@ impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for BlocktreeError 
     }
 }
 
+impl std::convert::From<rocksdb::Error> for BlocktreeError {
+    fn from(e: rocksdb::Error) -> BlocktreeError {
+        BlocktreeError::RocksDb(e)
+    }
+}
+
 pub enum IteratorMode<Index> {
     Start,
     End,
     From(Index, IteratorDirection),
-}
-
-#[allow(dead_code)]
-pub enum IteratorDirection {
-    Forward,
-    Reverse,
 }
 
 pub mod columns {
@@ -205,26 +202,24 @@ impl Rocks {
         Ok(())
     }
 
-    fn iterator_cf(
+    fn iterator_cf<C>(
         &self,
         cf: ColumnFamily,
-        iterator_mode: IteratorMode<&[u8]>,
-    ) -> Result<DBIterator> {
-        let iter = {
-            match iterator_mode {
-                IteratorMode::Start => self.0.iterator_cf(cf, RocksIteratorMode::Start)?,
-                IteratorMode::End => self.0.iterator_cf(cf, RocksIteratorMode::End)?,
-                IteratorMode::From(start_from, direction) => {
-                    let rocks_direction = match direction {
-                        IteratorDirection::Forward => Direction::Forward,
-                        IteratorDirection::Reverse => Direction::Reverse,
-                    };
-                    self.0
-                        .iterator_cf(cf, RocksIteratorMode::From(start_from, rocks_direction))?
-                }
+        iterator_mode: IteratorMode<C::Index>,
+    ) -> Result<DBIterator>
+    where
+        C: Column,
+    {
+        let start_key;
+        let iterator_mode = match iterator_mode {
+            IteratorMode::From(start_from, direction) => {
+                start_key = C::key(start_from);
+                RocksIteratorMode::From(&start_key, direction)
             }
+            IteratorMode::Start => RocksIteratorMode::Start,
+            IteratorMode::End => RocksIteratorMode::End,
         };
-
+        let iter = self.0.iterator_cf(cf, iterator_mode)?;
         Ok(iter)
     }
 
@@ -513,10 +508,7 @@ impl Database {
     where
         C: TypedColumn,
     {
-        if let Some(serialized_value) = self
-            .backend
-            .get_cf(self.cf_handle::<C>(), C::key(key).borrow())?
-        {
+        if let Some(serialized_value) = self.backend.get_cf(self.cf_handle::<C>(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
 
             Ok(Some(value))
@@ -525,31 +517,15 @@ impl Database {
         }
     }
 
-    pub fn iter<C>(
-        &self,
+    pub fn iter<'a, C>(
+        &'a self,
         iterator_mode: IteratorMode<C::Index>,
-    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)>>
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + 'a>
     where
         C: Column,
     {
-        let iter = {
-            match iterator_mode {
-                IteratorMode::From(start_from, direction) => {
-                    let key = C::key(start_from);
-                    self.backend.iterator_cf(
-                        self.cf_handle::<C>(),
-                        IteratorMode::From(key.borrow(), direction),
-                    )?
-                }
-                IteratorMode::Start => self
-                    .backend
-                    .iterator_cf(self.cf_handle::<C>(), IteratorMode::Start)?,
-                IteratorMode::End => self
-                    .backend
-                    .iterator_cf(self.cf_handle::<C>(), IteratorMode::End)?,
-            }
-        };
-
+        let cf = self.cf_handle::<C>();
+        let iter = self.backend.iterator_cf::<C>(cf, iterator_mode)?;
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
@@ -615,27 +591,15 @@ where
     C: Column,
 {
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
-        self.backend.get_cf(self.handle(), C::key(key).borrow())
+        self.backend.get_cf(self.handle(), &C::key(key))
     }
 
-    pub fn iter(
-        &self,
+    pub fn iter<'a>(
+        &'a self,
         iterator_mode: IteratorMode<C::Index>,
-    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)>> {
-        let iter = {
-            match iterator_mode {
-                IteratorMode::From(start_from, direction) => {
-                    let key = C::key(start_from);
-                    self.backend
-                        .iterator_cf(self.handle(), IteratorMode::From(key.borrow(), direction))?
-                }
-                IteratorMode::Start => self
-                    .backend
-                    .iterator_cf(self.handle(), IteratorMode::Start)?,
-                IteratorMode::End => self.backend.iterator_cf(self.handle(), IteratorMode::End)?,
-            }
-        };
-
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + 'a> {
+        let cf = self.handle();
+        let iter = self.backend.iterator_cf::<C>(cf, iterator_mode)?;
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
@@ -686,8 +650,7 @@ where
     }
 
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
-        self.backend
-            .put_cf(self.handle(), C::key(key).borrow(), value)
+        self.backend.put_cf(self.handle(), &C::key(key), value)
     }
 }
 
@@ -696,7 +659,7 @@ where
     C: TypedColumn,
 {
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
-        if let Some(serialized_value) = self.backend.get_cf(self.handle(), C::key(key).borrow())? {
+        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
 
             Ok(Some(value))
@@ -709,39 +672,33 @@ where
         let serialized_value = serialize(value)?;
 
         self.backend
-            .put_cf(self.handle(), C::key(key).borrow(), &serialized_value)
+            .put_cf(self.handle(), &C::key(key), &serialized_value)
     }
 }
 
 impl WriteBatch {
     pub fn put_bytes<C: Column>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
-            .put_cf(self.get_cf::<C>(), C::key(key).borrow(), bytes)
-            .map_err(|e| e.into())
+            .put_cf(self.get_cf::<C>(), &C::key(key), bytes)?;
+        Ok(())
     }
 
     pub fn delete<C: Column>(&mut self, key: C::Index) -> Result<()> {
         self.write_batch
-            .delete_cf(self.get_cf::<C>(), C::key(key).borrow())
-            .map_err(|e| e.into())
+            .delete_cf(self.get_cf::<C>(), &C::key(key))?;
+        Ok(())
     }
 
     pub fn put<C: TypedColumn>(&mut self, key: C::Index, value: &C::Type) -> Result<()> {
         let serialized_value = serialize(&value)?;
         self.write_batch
-            .put_cf(self.get_cf::<C>(), C::key(key).borrow(), &serialized_value)
-            .map_err(|e| e.into())
+            .put_cf(self.get_cf::<C>(), &C::key(key), &serialized_value)?;
+        Ok(())
     }
 
     #[inline]
     fn get_cf<C: Column>(&self) -> ColumnFamily {
         self.map[C::NAME]
-    }
-}
-
-impl std::convert::From<rocksdb::Error> for BlocktreeError {
-    fn from(e: rocksdb::Error) -> BlocktreeError {
-        BlocktreeError::RocksDb(e)
     }
 }
 
