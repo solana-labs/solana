@@ -140,11 +140,11 @@ fn shred_gpu_pubkeys(
                             let slot_start = size_of::<Signature>() + size_of::<ShredType>();
                             let slot_end = slot_start + size_of::<u64>();
                             if let Ok(slot) = deserialize(packet.data[slot_start..slot_end])
-                            && slot_leaders.contains_key(slot) {
-                            slot
-                        } else {
-                            u64::max()
-                        }
+                                && slot_leaders.contains_key(slot) {
+                                slot
+                            } else {
+                                u64::max()
+                            }
                         })
                         .collect()
                 })
