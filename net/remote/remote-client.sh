@@ -74,6 +74,9 @@ solana-bench-exchange)
       --read-client-keys ./client-accounts.yml \
   "
   ;;
+idle)
+  exit 0
+  ;;
 *)
   echo "Unknown client name: $clientToRun"
   exit 1
