@@ -40,7 +40,7 @@ Transaction status is necessary for the receipt because the state receipt is con
 
 ### Account State Verification
 
-An account's state (balance or other data) can be verified by submitting a transaction with a ___TBD___ Instruction to the cluster. This instruction contains the slot boundary of interest and the expected state hash at that boundary. The client can then use a [Transaction Inclusion Proof](#transaction-inclusion-proof) to verify whether the cluster agrees with the query conditions.
+An account's state (balance or other data) can be verified by submitting a transaction with a ___TBD___ Instruction to the cluster. The client can then use a [Transaction Inclusion Proof](#transaction-inclusion-proof) to verify whether the cluster agrees that the acount has reached the expected state.
 
 ### Validator Votes
 
