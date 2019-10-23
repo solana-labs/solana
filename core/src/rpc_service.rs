@@ -175,7 +175,7 @@ mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-    use crate::rpc::{tests::create_validator_exit, CommitmentParams};
+    use crate::rpc::{tests::create_validator_exit, CommitmentConfig};
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::KeypairUtil;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -220,7 +220,7 @@ mod tests {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_balance(&mint_keypair.pubkey(), CommitmentParams::default())
+                .get_balance(&mint_keypair.pubkey(), CommitmentConfig::default())
         );
         rpc_service.exit();
         rpc_service.join().unwrap();

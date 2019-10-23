@@ -35,6 +35,38 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub const DEFAULT_PERCENT_COMMITMENT: f64 = 0.66667;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CommitmentConfig {
+    confirmations: usize,
+    percentage: f64,
+}
+
+impl CommitmentConfig {
+    pub fn new(confirmations: usize, percentage: f64) -> Self {
+        Self {
+            confirmations,
+            percentage,
+        }
+    }
+    pub fn minimum_depth(&self) -> usize {
+        self.confirmations
+    }
+    pub fn minimum_stake_percentage(&self) -> f64 {
+        self.percentage
+    }
+}
+
+impl Default for CommitmentConfig {
+    fn default() -> Self {
+        CommitmentConfig {
+            confirmations: MAX_LOCKOUT_HISTORY,
+            percentage: DEFAULT_PERCENT_COMMITMENT,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
     pub enable_validator_exit: bool, // Enable the 'validatorExit' command
@@ -50,8 +82,6 @@ impl Default for JsonRpcConfig {
     }
 }
 
-pub const DEFAULT_PERCENT_CONFIDENCE: f64 = 0.66667;
-
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
@@ -62,8 +92,17 @@ pub struct JsonRpcRequestProcessor {
 }
 
 impl JsonRpcRequestProcessor {
-    fn bank(&self) -> Arc<Bank> {
-        self.bank_forks.read().unwrap().working_bank()
+    fn bank(&self, commitment_config: CommitmentConfig) -> Arc<Bank> {
+        debug!("RPC commitment_config: {:?}", commitment_config);
+        self.block_commitment_cache
+            .read()
+            .unwrap()
+            .get_block_with_depth_commitment(commitment_config)
+            .and_then(|block| {
+                debug!("RPC using block: {:?}", block);
+                self.bank_forks.read().unwrap().get(block).cloned()
+            })
+            .unwrap_or_else(|| self.bank_forks.read().unwrap().working_bank())
     }
 
     pub fn new(
@@ -85,9 +124,9 @@ impl JsonRpcRequestProcessor {
     pub fn get_account_info(
         &self,
         pubkey: &Pubkey,
-        commitment_params: CommitmentParams,
+        commitment_config: CommitmentConfig,
     ) -> Result<Account> {
-        self.bank()
+        self.bank(commitment_config)
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
     }
@@ -95,38 +134,42 @@ impl JsonRpcRequestProcessor {
     pub fn get_minimum_balance_for_rent_exemption(
         &self,
         data_len: usize,
-        commitment_params: CommitmentParams,
+        commitment_config: CommitmentConfig,
     ) -> Result<u64> {
-        Ok(self.bank().get_minimum_balance_for_rent_exemption(data_len))
+        Ok(self
+            .bank(commitment_config)
+            .get_minimum_balance_for_rent_exemption(data_len))
     }
 
     pub fn get_program_accounts(
         &self,
         program_id: &Pubkey,
-        commitment_params: CommitmentParams,
+        commitment_config: CommitmentConfig,
     ) -> Result<Vec<(String, Account)>> {
         Ok(self
-            .bank()
+            .bank(commitment_config)
             .get_program_accounts(&program_id)
             .into_iter()
             .map(|(pubkey, account)| (pubkey.to_string(), account))
             .collect())
     }
 
-    pub fn get_inflation(&self, commitment_params: CommitmentParams) -> Result<Inflation> {
-        Ok(self.bank().inflation())
+    pub fn get_inflation(&self, commitment_config: CommitmentConfig) -> Result<Inflation> {
+        Ok(self.bank(commitment_config).inflation())
     }
 
-    pub fn get_epoch_schedule(&self, commitment_params: CommitmentParams) -> Result<EpochSchedule> {
-        Ok(*self.bank().epoch_schedule())
+    pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
+        // Since epoch schedule data comes from the genesis block, default CommitmentConfig should
+        // be sufficient
+        Ok(*self.bank(CommitmentConfig::default()).epoch_schedule())
     }
 
-    pub fn get_balance(&self, pubkey: &Pubkey, commitment_params: CommitmentParams) -> u64 {
-        self.bank().get_balance(&pubkey)
+    pub fn get_balance(&self, pubkey: &Pubkey, commitment_config: CommitmentConfig) -> u64 {
+        self.bank(commitment_config).get_balance(&pubkey)
     }
 
-    fn get_recent_blockhash(&self, commitment_params: CommitmentParams) -> (String, FeeCalculator) {
-        let (blockhash, fee_calculator) = self.bank().confirmed_last_blockhash();
+    fn get_recent_blockhash(&self, commitment_config: CommitmentConfig) -> (String, FeeCalculator) {
+        let (blockhash, fee_calculator) = self.bank(commitment_config).confirmed_last_blockhash();
         (blockhash.to_string(), fee_calculator)
     }
 
@@ -141,32 +184,33 @@ impl JsonRpcRequestProcessor {
     pub fn get_signature_confirmation_status(
         &self,
         signature: Signature,
-        commitment_params: CommitmentParams,
+        commitment_config: CommitmentConfig,
     ) -> Option<(usize, transaction::Result<()>)> {
-        self.bank().get_signature_confirmation_status(&signature)
+        self.bank(commitment_config)
+            .get_signature_confirmation_status(&signature)
     }
 
-    fn get_slot(&self, commitment_params: CommitmentParams) -> Result<u64> {
-        Ok(self.bank().slot())
+    fn get_slot(&self, commitment_config: CommitmentConfig) -> Result<u64> {
+        Ok(self.bank(commitment_config).slot())
     }
 
-    fn get_slot_leader(&self, commitment_params: CommitmentParams) -> Result<String> {
-        Ok(self.bank().collector_id().to_string())
+    fn get_slot_leader(&self, commitment_config: CommitmentConfig) -> Result<String> {
+        Ok(self.bank(commitment_config).collector_id().to_string())
     }
 
-    fn get_transaction_count(&self, commitment_params: CommitmentParams) -> Result<u64> {
-        Ok(self.bank().transaction_count() as u64)
+    fn get_transaction_count(&self, commitment_config: CommitmentConfig) -> Result<u64> {
+        Ok(self.bank(commitment_config).transaction_count() as u64)
     }
 
-    fn get_total_supply(&self, commitment_params: CommitmentParams) -> Result<u64> {
-        Ok(self.bank().capitalization())
+    fn get_total_supply(&self, commitment_config: CommitmentConfig) -> Result<u64> {
+        Ok(self.bank(commitment_config).capitalization())
     }
 
     fn get_vote_accounts(
         &self,
-        commitment_params: CommitmentParams,
+        commitment_config: CommitmentConfig,
     ) -> Result<RpcVoteAccountStatus> {
-        let bank = self.bank();
+        let bank = self.bank(commitment_config);
         let vote_accounts = bank.vote_accounts();
         let epoch_vote_accounts = bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
@@ -209,26 +253,22 @@ impl JsonRpcRequestProcessor {
         })
     }
 
-    fn get_storage_turn_rate(&self, commitment_params: CommitmentParams) -> Result<u64> {
+    fn get_storage_turn_rate(&self) -> Result<u64> {
         Ok(self.storage_state.get_storage_turn_rate())
     }
 
-    fn get_storage_turn(&self, commitment_params: CommitmentParams) -> Result<(String, u64)> {
+    fn get_storage_turn(&self) -> Result<(String, u64)> {
         Ok((
             self.storage_state.get_storage_blockhash().to_string(),
             self.storage_state.get_slot(),
         ))
     }
 
-    fn get_slots_per_segment(&self, commitment_params: CommitmentParams) -> Result<u64> {
-        Ok(self.bank().slots_per_segment())
+    fn get_slots_per_segment(&self, commitment_config: CommitmentConfig) -> Result<u64> {
+        Ok(self.bank(commitment_config).slots_per_segment())
     }
 
-    fn get_storage_pubkeys_for_slot(
-        &self,
-        slot: Slot,
-        commitment_params: CommitmentParams,
-    ) -> Result<Vec<Pubkey>> {
+    fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<Pubkey>> {
         Ok(self
             .storage_state
             .get_pubkeys_for_slot(slot, &self.bank_forks))
@@ -297,50 +337,36 @@ pub enum BankType {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcCommitmentParams {
+pub struct RpcCommitmentConfig {
     bank_type: Option<BankType>,
-    confirmations: Option<u64>,
+    confirmations: Option<usize>,
     percentage: Option<f64>,
 }
 
-pub struct CommitmentParams {
-    confirmations: u64,
-    percentage: f64,
-}
-
-impl Default for CommitmentParams {
-    fn default() -> Self {
-        CommitmentParams {
-            confirmations: MAX_LOCKOUT_HISTORY as u64,
-            percentage: DEFAULT_PERCENT_CONFIDENCE,
-        }
-    }
-}
-
-fn parse_params(params: Option<Params>) -> CommitmentParams {
+fn parse_params(params: Option<Params>) -> CommitmentConfig {
     params
         .and_then(|params| params.parse().ok())
-        .map(|commitment_params: RpcCommitmentParams| {
-            let mut final_params = CommitmentParams::default();
-            if let Some(confirmations) = commitment_params.confirmations {
-                final_params.confirmations = confirmations;
+        .map(|commitment_config: RpcCommitmentConfig| {
+            let mut final_params = CommitmentConfig::default();
+            if let Some(confirmations) = commitment_config.confirmations {
+                final_params.confirmations = confirmations.min(MAX_LOCKOUT_HISTORY).max(1);
             }
-            if let Some(percentage) = commitment_params.percentage {
-                final_params.percentage = percentage;
+            if let Some(percentage) = commitment_config.percentage {
+                final_params.percentage = percentage.min(1.0).max(0.0);
             }
-            if let Some(bank_type) = commitment_params.bank_type {
+            if let Some(bank_type) = commitment_config.bank_type {
                 match bank_type {
                     BankType::Recent => {
-                        final_params.confirmations = 0;
+                        final_params.confirmations = 1;
                     }
                     BankType::Rooted => {
-                        final_params.confirmations = MAX_LOCKOUT_HISTORY as u64;
+                        final_params.confirmations = MAX_LOCKOUT_HISTORY;
                     }
                 }
             }
             final_params
         })
-        .unwrap_or(CommitmentParams::default())
+        .unwrap_or_default()
 }
 
 #[rpc(server)]
@@ -446,6 +472,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         lamports: u64,
+        params: Option<Params>,
     ) -> Result<String>;
 
     #[rpc(meta, name = "sendTransaction")]
@@ -462,25 +489,16 @@ pub trait RpcSol {
     ) -> Result<RpcVoteAccountStatus>;
 
     #[rpc(meta, name = "getStorageTurnRate")]
-    fn get_storage_turn_rate(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64>;
+    fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64>;
 
     #[rpc(meta, name = "getStorageTurn")]
-    fn get_storage_turn(
-        &self,
-        meta: Self::Metadata,
-        params: Option<Params>,
-    ) -> Result<(String, u64)>;
+    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<(String, u64)>;
 
     #[rpc(meta, name = "getSlotsPerSegment")]
     fn get_slots_per_segment(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64>;
 
     #[rpc(meta, name = "getStoragePubkeysForSlot")]
-    fn get_storage_pubkeys_for_slot(
-        &self,
-        meta: Self::Metadata,
-        slot: u64,
-        params: Option<Params>,
-    ) -> Result<Vec<Pubkey>>;
+    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<Pubkey>>;
 
     #[rpc(meta, name = "validatorExit")]
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool>;
@@ -588,17 +606,13 @@ impl RpcSol for RpcSolImpl {
             .unwrap())
     }
 
-    fn get_epoch_schedule(
-        &self,
-        meta: Self::Metadata,
-        params: Option<Params>,
-    ) -> Result<EpochSchedule> {
+    fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule> {
         debug!("get_epoch_schedule rpc request received");
         Ok(meta
             .request_processor
             .read()
             .unwrap()
-            .get_epoch_schedule(parse_params(params))
+            .get_epoch_schedule()
             .unwrap())
     }
 
@@ -645,8 +659,11 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_epoch_info(&self, meta: Self::Metadata, params: Option<Params>) -> Result<RpcEpochInfo> {
-        // TODO: choose bank explicitly based on params
-        let bank = meta.request_processor.read().unwrap().bank();
+        let bank = meta
+            .request_processor
+            .read()
+            .unwrap()
+            .bank(parse_params(params));
         let epoch_schedule = bank.epoch_schedule();
         let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
         let slot = bank.slot();
@@ -680,8 +697,11 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         params: Option<Params>,
     ) -> Result<Option<Vec<String>>> {
-        // TODO: choose bank explicitly based on params
-        let bank = meta.request_processor.read().unwrap().bank();
+        let bank = meta
+            .request_processor
+            .read()
+            .unwrap()
+            .bank(parse_params(params));
         Ok(
             solana_ledger::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
                 |leader_schedule| {
@@ -774,8 +794,11 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         lamports: u64,
+        params: Option<Params>,
     ) -> Result<String> {
         trace!("request_airdrop id={} lamports={}", pubkey_str, lamports);
+
+        let commitment_config = parse_params(params);
 
         let drone_addr = meta
             .request_processor
@@ -790,7 +813,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .bank()
+            .bank(commitment_config.clone())
             .confirmed_last_blockhash()
             .0;
         let transaction = request_airdrop_transaction(&drone_addr, &pubkey, lamports, blockhash)
@@ -821,7 +844,7 @@ impl RpcSol for RpcSolImpl {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_confirmation_status(signature, CommitmentParams::default())
+                .get_signature_confirmation_status(signature, commitment_config.clone())
                 .map(|x| x.1);
 
             if signature_status == Some(Ok(())) {
@@ -884,22 +907,15 @@ impl RpcSol for RpcSolImpl {
             .get_vote_accounts(parse_params(params))
     }
 
-    fn get_storage_turn_rate(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64> {
+    fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_storage_turn_rate(parse_params(params))
+            .get_storage_turn_rate()
     }
 
-    fn get_storage_turn(
-        &self,
-        meta: Self::Metadata,
-        params: Option<Params>,
-    ) -> Result<(String, u64)> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_storage_turn(parse_params(params))
+    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<(String, u64)> {
+        meta.request_processor.read().unwrap().get_storage_turn()
     }
 
     fn get_slots_per_segment(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64> {
@@ -909,16 +925,11 @@ impl RpcSol for RpcSolImpl {
             .get_slots_per_segment(parse_params(params))
     }
 
-    fn get_storage_pubkeys_for_slot(
-        &self,
-        meta: Self::Metadata,
-        slot: Slot,
-        params: Option<Params>,
-    ) -> Result<Vec<Pubkey>> {
+    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Pubkey>> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_storage_pubkeys_for_slot(slot, parse_params(params))
+            .get_storage_pubkeys_for_slot(slot)
     }
 
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool> {
@@ -1037,6 +1048,80 @@ pub mod tests {
     }
 
     #[test]
+    fn test_parse_params() {
+        let params = json!({"bankType": "rooted"});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(
+            parse_params(Some(params)),
+            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
+        );
+
+        let params = json!({"bankType": "recent"});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(
+            parse_params(Some(params)),
+            CommitmentConfig::new(1, DEFAULT_PERCENT_COMMITMENT)
+        );
+
+        // bank_type trumps confirmations arg
+        let params = json!({"bankType": "rooted", "confirmations": 15});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(
+            parse_params(Some(params)),
+            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
+        );
+
+        // bank_type allows percentage configuration
+        let params = json!({"bankType": "rooted", "percentage": 0.5});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(
+            parse_params(Some(params)),
+            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, 0.5)
+        );
+
+        let params = json!({"confirmations": 15});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(
+            parse_params(Some(params)),
+            CommitmentConfig::new(15, DEFAULT_PERCENT_COMMITMENT)
+        );
+
+        let params = json!({"confirmations": 15, "percentage": 0.5});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(parse_params(Some(params)), CommitmentConfig::new(15, 0.5));
+
+        // confirmations bounded by 1 and MAX_LOCKOUT_HISTORY
+        let params = json!({"confirmations": 0});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(
+            parse_params(Some(params)),
+            CommitmentConfig::new(1, DEFAULT_PERCENT_COMMITMENT)
+        );
+        let params = json!({"confirmations": 100});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(
+            parse_params(Some(params)),
+            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
+        );
+
+        // confirmations bounded by 0 and 1
+        let params = json!({"percentage": 1.5});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(
+            parse_params(Some(params)),
+            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, 1.0)
+        );
+        let params = json!({"percentage": -1.5});
+        let params: Params = serde_json::from_value(params).unwrap();
+        assert_eq!(
+            parse_params(Some(params)),
+            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, 0.0)
+        );
+
+        assert_eq!(parse_params(None), CommitmentConfig::default());
+    }
+
+    #[test]
     fn test_rpc_request_processor_new() {
         let bob_pubkey = Pubkey::new_rand();
         let exit = Arc::new(AtomicBool::new(false));
@@ -1060,7 +1145,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             request_processor
-                .get_transaction_count(CommitmentParams::default())
+                .get_transaction_count(CommitmentConfig::default())
                 .unwrap(),
             1
         );
