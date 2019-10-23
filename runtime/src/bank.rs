@@ -1795,7 +1795,7 @@ mod tests {
         for _ in 0..10 {
             let blockhash = bank.last_blockhash();
             let pubkey = Pubkey::new_rand();
-            let tx = system_transaction::transfer_now(&mint_keypair, &pubkey, 0, blockhash);
+            let tx = system_transaction::transfer(&mint_keypair, &pubkey, 0, blockhash);
             bank.process_transaction(&tx).unwrap();
             bank.squash();
             bank = Arc::new(new_from_parent(&bank));
@@ -1808,13 +1808,13 @@ mod tests {
         let bank0 = Arc::new(new_from_parent(&bank));
         let blockhash = bank.last_blockhash();
         let keypair = Keypair::new();
-        let tx = system_transaction::transfer_now(&mint_keypair, &keypair.pubkey(), 10, blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 10, blockhash);
         bank0.process_transaction(&tx).unwrap();
 
         let bank1 = Arc::new(new_from_parent(&bank0));
         let pubkey = Pubkey::new_rand();
         let blockhash = bank.last_blockhash();
-        let tx = system_transaction::transfer_now(&keypair, &pubkey, 10, blockhash);
+        let tx = system_transaction::transfer(&keypair, &pubkey, 10, blockhash);
         bank1.process_transaction(&tx).unwrap();
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
