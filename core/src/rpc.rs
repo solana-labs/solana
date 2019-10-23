@@ -138,24 +138,6 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    pub fn get_signature_status(
-        &self,
-        signature: Signature,
-        commitment_params: Option<CommitmentParams>,
-    ) -> Option<transaction::Result<()>> {
-        self.get_signature_confirmation_status(signature, commitment_params)
-            .map(|x| x.1)
-    }
-
-    pub fn get_signature_confirmations(
-        &self,
-        signature: Signature,
-        commitment_params: Option<CommitmentParams>,
-    ) -> Option<usize> {
-        self.get_signature_confirmation_status(signature, commitment_params)
-            .map(|x| x.0)
-    }
-
     pub fn get_signature_confirmation_status(
         &self,
         signature: Signature,
@@ -839,7 +821,8 @@ impl RpcSol for RpcSolImpl {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_status(signature, CommitmentParams::default());
+                .get_signature_confirmation_status(signature, CommitmentParams::default())
+                .map(|x| x.1);
 
             if signature_status == Some(Ok(())) {
                 info!("airdrop signature ok");
