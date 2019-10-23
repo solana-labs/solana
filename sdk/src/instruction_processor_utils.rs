@@ -47,9 +47,8 @@ where
 {
     #[cfg(not(feature = "program"))]
     let limit = crate::packet::PACKET_DATA_SIZE as u64;
-    #[cfg(not(feature = "program"))]
+    #[cfg(feature = "program")]
     let limit = 1024;
-
     bincode::config()
         .limit(limit)
         .deserialize(data)
