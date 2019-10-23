@@ -239,7 +239,10 @@ impl Blocktree {
         self.orphans_cf.get(slot)
     }
 
-    pub fn slot_meta_iterator(&self, slot: u64) -> Result<impl Iterator<Item = (u64, SlotMeta)>> {
+    pub fn slot_meta_iterator<'a>(
+        &'a self,
+        slot: u64,
+    ) -> Result<impl Iterator<Item = (u64, SlotMeta)> + 'a> {
         let meta_iter = self
             .db
             .iter::<cf::SlotMeta>(IteratorMode::From(slot, IteratorDirection::Forward))?;
@@ -252,10 +255,10 @@ impl Blocktree {
         }))
     }
 
-    pub fn slot_data_iterator(
-        &self,
+    pub fn slot_data_iterator<'a>(
+        &'a self,
         slot: u64,
-    ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)>> {
+    ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + 'a> {
         let slot_iterator = self
             .db
             .iter::<cf::ShredData>(IteratorMode::From((slot, 0), IteratorDirection::Forward))?;

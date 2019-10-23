@@ -517,10 +517,10 @@ impl Database {
         }
     }
 
-    pub fn iter<C>(
-        &self,
+    pub fn iter<'a, C>(
+        &'a self,
         iterator_mode: IteratorMode<C::Index>,
-    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)>>
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + 'a>
     where
         C: Column,
     {
@@ -594,10 +594,10 @@ where
         self.backend.get_cf(self.handle(), &C::key(key))
     }
 
-    pub fn iter(
-        &self,
+    pub fn iter<'a>(
+        &'a self,
         iterator_mode: IteratorMode<C::Index>,
-    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)>> {
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + 'a> {
         let cf = self.handle();
         let iter = self.backend.iterator_cf::<C>(cf, iterator_mode)?;
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
