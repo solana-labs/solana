@@ -1,9 +1,9 @@
 use crate::header_store::*;
 use crate::utils::*;
+use bigint::uint::U256;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use std::{error, fmt};
-use bigint::uint::U256;
 
 pub type BitcoinTxHash = [u8; 32];
 
@@ -89,8 +89,8 @@ impl BlockHeader {
     }
 
     pub fn difficulty(&self) -> u64 {
-            let max_target = U256::from(0xFFFF) << 208;
-            (max_target / self.target()).as_u64()
+        let max_target = U256::from(0xFFFF) << 208;
+        (max_target / self.target()).as_u64()
     }
 
     pub fn target(&self) -> U256 {
@@ -98,17 +98,20 @@ impl BlockHeader {
         let (mant, expt) = {
             let unshifted_expt = bits >> 24;
             if unshifted_expt <= 3 {
-                ((bits & 0xFFFFFF) >> (8 * (3 - unshifted_expt as usize)), 0)
+                (
+                    (bits & 0x00FF_FFFF) >> (8 * (3 - unshifted_expt as usize)),
+                    0,
+                )
             } else {
-                (bits & 0xFFFFFF, 8 * ((bits >> 24) - 3))
+                (bits & 0x00FF_FFFF, 8 * ((bits >> 24) - 3))
             }
         };
 
         // The mantissa is signed but may not be negative
-        if mant > 0x7FFFFF {
+        if mant > 0x007F_FFFF {
             Default::default()
         } else {
-            U256::from((mant as u64) << (expt as usize))
+            U256::from(u64::from(mant)) << (expt as usize)
         }
     }
 }
@@ -487,6 +490,5 @@ mod test {
         let header = BlockHeader::hexnew(testheader, testhash).unwrap();
 
         let target = header.target();
-
     }
 }

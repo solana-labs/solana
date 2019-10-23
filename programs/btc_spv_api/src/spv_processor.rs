@@ -15,29 +15,35 @@ pub struct SpvProcessor {}
 
 impl SpvProcessor {
     pub fn validate_header_chain(
-        headers: &HeaderChain,
+        headers: HeaderChain,
         difficulty: u64,
         confirm_num: u16,
     ) -> Result<(), InstructionError> {
-        let ln       = headers.len();
+        let ln = headers.len();
         // check that the headerchain is the right length
         if ln != (2 + confirm_num as usize) {
             error!("Invalid length for Header Chain");
-            Err(InstructionError::InvalidArgument)? //is this ? necessary?
+            return Err(InstructionError::InvalidArgument);
         }
 
         for bh in 0..ln {
-            let header    = &headers[bh as usize];
-            let parent_header   = &headers[bh-1];
+            let header = &headers[bh as usize];
+            let parent_header = &headers[bh - 1];
             // check that the headerchain is in order and contiguous
             if header.parent != parent_header.blockhash {
-                error!("{}", format!("Invalid Header Chain hash sequence for header index {}", bh));
-                Err(InstructionError::InvalidArgument)?
+                error!(
+                    "{}",
+                    format!("Invalid Header Chain hash sequence for header index {}", bh)
+                );
+                return Err(InstructionError::InvalidArgument);
             }
             //check that block difficulty is above the given threshold
             if header.difficulty() < difficulty {
-                error!("{}", format!("Invalid block difficulty for header index {}", bh));
-                Err(InstructionError::InvalidArgument)?
+                error!(
+                    "{}",
+                    format!("Invalid block difficulty for header index {}", bh)
+                );
+                return Err(InstructionError::InvalidArgument);
             }
         }
         //not done yet, needs difficulty average/variance checking still
@@ -227,6 +233,6 @@ mod test {
         let difficulty: u64 = 10_000_000;
         let confirmations: u16 = 5;
 
-        SpvProcessor::validate_header_chain(&header_chain, difficulty, confirmations).unwrap()
+        SpvProcessor::validate_header_chain(header_chain, difficulty, confirmations);
     }
 }
