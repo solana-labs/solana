@@ -29,6 +29,17 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
+    pub fn purge(&mut self, pubkey: &Pubkey) -> Vec<(Fork, T)> {
+        let mut list = self.account_maps.get(&pubkey).unwrap().write().unwrap();
+        let reclaims = list
+            .iter()
+            .filter(|(fork, _)| self.is_root(*fork))
+            .cloned()
+            .collect();
+        list.retain(|(fork, _)| !self.is_root(*fork));
+        reclaims
+    }
+
     // find the latest fork and T in a list for a given ancestor
     // returns index into 'list' if found, None if not.
     fn latest_fork(&self, ancestors: &HashMap<Fork, usize>, list: &[(Fork, T)]) -> Option<usize> {

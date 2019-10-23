@@ -1403,6 +1403,28 @@ impl Bank {
             .verify_hash_internal_state(self.slot(), &self.ancestors)
     }
 
+    /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
+    /// calculation and could shield other real accounts.
+    pub fn verify_snapshot_bank(&self) -> bool {
+        self.rc
+            .accounts
+            .verify_hash_internal_state(self.slot(), &self.ancestors)
+            && !self.has_accounts_with_zero_lamports()
+    }
+
+    fn has_accounts_with_zero_lamports(&self) -> bool {
+        self.rc.accounts.accounts_db.scan_accounts(
+            &self.ancestors,
+            |collector: &mut bool, option| {
+                if let Some((_, account, _)) = option {
+                    if account.lamports == 0 {
+                        *collector = true;
+                    }
+                }
+            },
+        )
+    }
+
     /// Return the number of ticks per slot
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
@@ -1584,6 +1606,13 @@ impl Bank {
             .accounts
             .commit_credits(&self.ancestors, self.slot());
     }
+
+    pub fn purge_zero_lamport_accounts(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .purge_zero_lamport_accounts(&self.ancestors);
+    }
 }
 
 impl Drop for Bank {
@@ -1751,6 +1780,71 @@ mod tests {
                 .abs()
                 < 1.0 // rounding, truncating
         );
+    }
+
+    fn assert_no_zero_balance_accounts(bank: &Arc<Bank>) {
+        assert!(!bank.has_accounts_with_zero_lamports());
+    }
+
+    // Test that purging 0 lamports accounts works.
+    #[test]
+    fn test_purge_empty_accounts() {
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = create_genesis_block(500_000);
+        let parent = Arc::new(Bank::new(&genesis_block));
+        let mut bank = parent;
+        for _ in 0..10 {
+            let blockhash = bank.last_blockhash();
+            let pubkey = Pubkey::new_rand();
+            let tx = system_transaction::transfer_now(&mint_keypair, &pubkey, 0, blockhash);
+            bank.process_transaction(&tx).unwrap();
+            bank.squash();
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
+        bank.purge_zero_lamport_accounts();
+
+        assert_no_zero_balance_accounts(&bank);
+
+        let bank0 = Arc::new(new_from_parent(&bank));
+        let blockhash = bank.last_blockhash();
+        let keypair = Keypair::new();
+        let tx = system_transaction::transfer_now(&mint_keypair, &keypair.pubkey(), 10, blockhash);
+        bank0.process_transaction(&tx).unwrap();
+
+        let bank1 = Arc::new(new_from_parent(&bank0));
+        let pubkey = Pubkey::new_rand();
+        let blockhash = bank.last_blockhash();
+        let tx = system_transaction::transfer_now(&keypair, &pubkey, 10, blockhash);
+        bank1.process_transaction(&tx).unwrap();
+
+        assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
+        assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+        bank0.purge_zero_lamport_accounts();
+
+        assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
+        assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+        bank1.purge_zero_lamport_accounts();
+
+        assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
+        assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+
+        assert!(bank0.verify_hash_internal_state());
+
+        // Squash and then verify hash_internal value
+        bank0.squash();
+        assert!(bank0.verify_hash_internal_state());
+
+        bank1.squash();
+        assert!(bank1.verify_hash_internal_state());
+
+        // keypair should have 0 tokens on both forks
+        assert_eq!(bank0.get_account(&keypair.pubkey()), None);
+        assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+        bank1.purge_zero_lamport_accounts();
+
+        assert!(bank1.verify_hash_internal_state());
+        assert_no_zero_balance_accounts(&bank1);
     }
 
     #[test]

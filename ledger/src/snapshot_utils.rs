@@ -150,6 +150,7 @@ where
 }
 
 pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
+    bank.purge_zero_lamport_accounts();
     let slot = bank.slot();
     // snapshot_path/slot
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);
@@ -220,7 +221,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         unpacked_accounts_dir,
     )?;
 
-    if !bank.verify_hash_internal_state() {
+    if !bank.verify_snapshot_bank() {
         panic!("Snapshot bank failed to verify");
     }
 
