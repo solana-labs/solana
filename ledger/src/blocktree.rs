@@ -1,7 +1,10 @@
 //! The `blocktree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-use crate::blocktree_db::{self, columns as cf, Column, IteratorDirection, IteratorMode};
+use crate::blocktree_db::{
+    columns as cf, BatchProcessor, Column, Database, IteratorDirection, IteratorMode, LedgerColumn,
+    WriteBatch,
+};
 pub use crate::blocktree_db::{BlocktreeError, Result};
 pub use crate::blocktree_meta::SlotMeta;
 use crate::blocktree_meta::*;
@@ -29,11 +32,6 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
-
-type Database = blocktree_db::Database;
-type LedgerColumn<C> = blocktree_db::LedgerColumn<C>;
-type WriteBatch = blocktree_db::WriteBatch;
-type BatchProcessor = blocktree_db::BatchProcessor;
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 
