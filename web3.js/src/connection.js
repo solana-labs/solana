@@ -68,16 +68,15 @@ type VoteAccountStatus = {
 
 /**
  * Network Inflation parameters
+ * (see https://docs.solana.com/book/v/master/implemented-proposals/ed_overview)
  *
- * @typedef {Object} Inflation TODO - link to book terminology?
- * @property {number} foundation TODO - link to book terminology?
- * @property {number} foundation_term TODO - link to book terminology?
- * @property {number} grant TODO - link to book terminology?
- * @property {number} grant_term TODO - link to book terminology?
- * @property {number} initial TODO - link to book terminology?
- * @property {number} storage TODO - link to book terminology?
- * @property {number} taper TODO - link to book terminology?
- * @property {number} terminal TODO - link to book terminology?
+ * @typedef {Object} Inflation
+ * @property {number} foundation 
+ * @property {number} foundation_term
+ * @property {number} initial
+ * @property {number} storage
+ * @property {number} taper
+ * @property {number} terminal
  */
 const GetInflationResult = struct({
   foundation: 'number',
@@ -86,6 +85,25 @@ const GetInflationResult = struct({
   storage: 'number',
   taper: 'number',
   terminal: 'number',
+});
+
+/**
+ * EpochSchedule parameters
+ * (see https://docs.solana.com/book/v/master/terminology#epoch)
+ * 
+ * @typedef {Object} EpochSchedule
+ * @property {number} slots_per_epoch
+ * @property {number} leader_schedule_slot_offset
+ * @property {boolean} warmup
+ * @property {number} first_normal_epoch
+ * @property {number} first_normal_slot
+ */
+const GetEpochScheduleResult = struct({
+  slots_per_epoch: 'number',
+  leader_schedule_slot_offset: 'number',
+  warmup: 'boolean',
+  first_normal_epoch: 'number',
+  first_normal_slot: 'number',
 });
 
 function createRpcRequest(url): RpcRequest {
@@ -128,6 +146,16 @@ const GetInflationRpcResult = struct({
   id: 'string',
   error: 'any?',
   result: GetInflationResult,
+});
+
+/**
+ * Expected JSON RPC response for the "getEpochSchedule" message
+ */
+const GetEpochScheduleRpcResult = struct({
+  jsonrpc: struct.literal('2.0'),
+  id: 'string',
+  error: 'any?',
+  result: GetEpochScheduleResult,
 });
 
 /**
@@ -678,7 +706,7 @@ export class Connection {
   }
 
   /**
-   * Fetch the cluster Inflation parameters (TODO - book link/terminology?)
+   * Fetch the cluster Inflation parameters
    */
   async getInflation(): Promise<GetInflationRpcResult> {
     const unsafeRes = await this._rpcRequest('getInflation', []);
@@ -688,6 +716,19 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
     return GetInflationResult(res.result);
+  }
+
+  /**
+   * Fetch the Epoch Schedule parameters
+   */
+  async getEpochSchedule(): Promise<GetEpochScheduleRpcResult> {
+    const unsafeRes = await this._rpcRequest('getEpochSchedule', []);
+    const res = GetEpochScheduleRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return GetEpochScheduleResult(res.result);
   }
 
   /**

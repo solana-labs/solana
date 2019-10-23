@@ -86,6 +86,23 @@ declare module '@solana/web3.js' {
     Err: Object,
   |};
 
+  declare export type Inflation = {
+    foundation: number,
+    foundation_term: number,
+    initial: number,
+    storage: number,
+    taper: number,
+    terminal: number,
+  };
+
+  declare export type EpochSchedule = {
+    slots_per_epoch: number,
+    leader_schedule_slot_offset: number,
+    warmup: boolean,
+    first_normal_epoch: number,
+    first_normal_slot: number,
+  };
+
   declare export class Connection {
     constructor(endpoint: string): Connection;
     getAccountInfo(publicKey: PublicKey): Promise<AccountInfo>;
@@ -103,6 +120,8 @@ declare module '@solana/web3.js' {
     ): Promise<SignatureSuccess | TransactionError | null>;
     getTransactionCount(): Promise<number>;
     getTotalSupply(): Promise<number>;
+    getInflation(): Promise<Inflation>;
+    getEpochSchedule(): Promise<EpochSchedule>;
     getRecentBlockhash(): Promise<[Blockhash, FeeCalculator]>;
     requestAirdrop(
       to: PublicKey,
