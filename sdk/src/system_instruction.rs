@@ -69,19 +69,6 @@ pub fn create_account(
     )
 }
 
-/// transfer with to as credit-debit
-pub fn transfer_now(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*from_pubkey, true),
-        AccountMeta::new(*to_pubkey, false),
-    ];
-    Instruction::new(
-        system_program::id(),
-        &SystemInstruction::Transfer { lamports },
-        account_metas,
-    )
-}
-
 pub fn assign(from_pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
     let account_metas = vec![AccountMeta::new(*from_pubkey, true)];
     Instruction::new(

@@ -5,7 +5,6 @@
 use crate::{
     accounts::{Accounts, TransactionLoadResult},
     accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
-    accounts_index::Fork,
     blockhash_queue::BlockhashQueue,
     message_processor::{MessageProcessor, ProcessInstruction},
     rent_collector::RentCollector,
@@ -1315,7 +1314,10 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.rc.accounts.load_slow(&self.ancestors, pubkey)
+        self.rc
+            .accounts
+            .load_slow(&self.ancestors, pubkey)
+            .map(|(acc, _slot)| acc)
     }
 
     pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
@@ -1330,12 +1332,12 @@ impl Bank {
     ) -> Vec<(Pubkey, Account)> {
         self.rc
             .accounts
-            .load_by_program_fork(self.slot(), program_id)
+            .load_by_program_slot(self.slot(), program_id)
     }
 
-    pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Fork)> {
+    pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Slot)> {
         let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
-        self.rc.accounts.accounts_db.load_slow(&just_self, pubkey)
+        self.rc.accounts.load_slow(&just_self, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
@@ -1614,8 +1616,8 @@ impl Bank {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        // For root forks this is a noop
-        self.rc.accounts.purge_fork(self.slot());
+        // For root slots this is a noop
+        self.rc.accounts.purge_slot(self.slot());
     }
 }
 
@@ -2223,18 +2225,10 @@ mod tests {
         let (genesis_block, mint_keypair) = create_genesis_block(2);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
-        let tx0 = system_transaction::transfer_now(
-            &mint_keypair,
-            &keypair.pubkey(),
-            2,
-            genesis_block.hash(),
-        );
-        let tx1 = system_transaction::transfer_now(
-            &keypair,
-            &mint_keypair.pubkey(),
-            1,
-            genesis_block.hash(),
-        );
+        let tx0 =
+            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, genesis_block.hash());
+        let tx1 =
+            system_transaction::transfer(&keypair, &mint_keypair.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
         assert!(results[1].is_err());
@@ -2295,12 +2289,8 @@ mod tests {
         let alice = Keypair::new();
         let bob = Keypair::new();
 
-        let tx1 = system_transaction::transfer_now(
-            &mint_keypair,
-            &alice.pubkey(),
-            1,
-            genesis_block.hash(),
-        );
+        let tx1 =
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_block.hash());
         let pay_alice = vec![tx1];
 
         let lock_result = bank.prepare_batch(&pay_alice, None);
@@ -3099,12 +3089,8 @@ mod tests {
 
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
-        let fail_tx = system_transaction::transfer_now(
-            &keypair1,
-            &keypair2.pubkey(),
-            1,
-            bank.last_blockhash(),
-        );
+        let fail_tx =
+            system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, bank.last_blockhash());
 
         // Should fail with TransactionError::AccountNotFound, which means
         // the account which this tx operated on will not be committed. Thus

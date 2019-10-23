@@ -24,10 +24,10 @@ pub struct EpochSchedule {
     /// whether epochs start short and grow
     pub warmup: bool,
 
-    /// basically: log2(slots_per_epoch) - log2(MINIMUM_SLOT_LEN)
+    /// basically: log2(slots_per_epoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
     pub first_normal_epoch: Epoch,
 
-    /// basically: 2.pow(first_normal_epoch) - MINIMUM_SLOT_LEN
+    /// basically: MINIMUM_SLOTS_PER_EPOCH * (2.pow(first_normal_epoch) - 1)
     pub first_normal_slot: Slot,
 }
 

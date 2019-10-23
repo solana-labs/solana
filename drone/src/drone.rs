@@ -121,11 +121,8 @@ impl Drone {
                     );
                     info!("Requesting airdrop of {} to {:?}", lamports, to);
 
-                    let create_instruction = system_instruction::transfer_now(
-                        &self.mint_keypair.pubkey(),
-                        &to,
-                        lamports,
-                    );
+                    let create_instruction =
+                        system_instruction::transfer(&self.mint_keypair.pubkey(), &to, lamports);
                     let message = Message::new(vec![create_instruction]);
                     Ok(Transaction::new(&[&self.mint_keypair], message, blockhash))
                 } else {
@@ -411,8 +408,7 @@ mod tests {
         bytes.put(&req[..]);
 
         let keypair = Keypair::new();
-        let expected_instruction =
-            system_instruction::transfer_now(&keypair.pubkey(), &to, lamports);
+        let expected_instruction = system_instruction::transfer(&keypair.pubkey(), &to, lamports);
         let message = Message::new(vec![expected_instruction]);
         let expected_tx = Transaction::new(&[&keypair], message, blockhash);
         let expected_bytes = serialize(&expected_tx).unwrap();

@@ -956,7 +956,7 @@ mod test {
                 blockhash,
                 1,
                 vec![
-                    system_transaction::transfer_now(&keypair1, &keypair2.pubkey(), 2, *blockhash), // should be fine,
+                    system_transaction::transfer(&keypair1, &keypair2.pubkey(), 2, *blockhash), // should be fine,
                     system_transaction::transfer(
                         &missing_keypair,
                         &missing_keypair2.pubkey(),
@@ -983,7 +983,7 @@ mod test {
                 // Use wrong blockhash so that the entry causes an entry verification failure
                 &bad_hash,
                 1,
-                vec![system_transaction::transfer_now(
+                vec![system_transaction::transfer(
                     &genesis_keypair,
                     &keypair2.pubkey(),
                     2,

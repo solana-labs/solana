@@ -1,5 +1,5 @@
 use crate::accounts_db::{AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters};
-use crate::accounts_index::{AccountsIndex, Fork};
+use crate::accounts_index::AccountsIndex;
 use crate::append_vec::StoredAccount;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
@@ -9,6 +9,7 @@ use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
+use solana_sdk::clock::Slot;
 use solana_sdk::message::Message;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
@@ -32,6 +33,9 @@ struct CreditOnlyLock {
 /// This structure handles synchronization for db
 #[derive(Default, Debug)]
 pub struct Accounts {
+    /// my slot
+    pub slot: Slot,
+
     /// Single global AccountsDB
     pub accounts_db: Arc<AccountsDB>,
 
@@ -62,15 +66,17 @@ impl Accounts {
         let accounts_db = Arc::new(AccountsDB::new(paths));
 
         Accounts {
+            slot: 0,
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
             credit_only_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
         }
     }
-    pub fn new_from_parent(parent: &Accounts, slot: Fork, parent_slot: Fork) -> Self {
+    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
         accounts_db.set_hash(slot, parent_slot);
         Accounts {
+            slot,
             accounts_db,
             account_locks: Mutex::new(HashSet::new()),
             credit_only_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
@@ -90,7 +96,7 @@ impl Accounts {
     fn load_tx_accounts(
         &self,
         storage: &AccountStorage,
-        ancestors: &HashMap<Fork, usize>,
+        ancestors: &HashMap<Slot, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         tx: &Transaction,
         fee: u64,
@@ -143,7 +149,7 @@ impl Accounts {
 
     fn load_executable_accounts(
         storage: &AccountStorage,
-        ancestors: &HashMap<Fork, usize>,
+        ancestors: &HashMap<Slot, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         program_id: &Pubkey,
         error_counters: &mut ErrorCounters,
@@ -188,7 +194,7 @@ impl Accounts {
     /// For each program_id in the transaction, load its loaders.
     fn load_loaders(
         storage: &AccountStorage,
-        ancestors: &HashMap<Fork, usize>,
+        ancestors: &HashMap<Slot, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         tx: &Transaction,
         error_counters: &mut ErrorCounters,
@@ -216,7 +222,7 @@ impl Accounts {
 
     pub fn load_accounts(
         &self,
-        ancestors: &HashMap<Fork, usize>,
+        ancestors: &HashMap<Slot, usize>,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
         lock_results: Vec<Result<()>>,
@@ -262,32 +268,35 @@ impl Accounts {
     }
 
     /// Slow because lock is held for 1 operation instead of many
-    pub fn load_slow(&self, ancestors: &HashMap<Fork, usize>, pubkey: &Pubkey) -> Option<Account> {
-        let mut account = self
+    pub fn load_slow(
+        &self,
+        ancestors: &HashMap<Slot, usize>,
+        pubkey: &Pubkey,
+    ) -> Option<(Account, Slot)> {
+        let (mut account, slot) = self
             .accounts_db
             .load_slow(ancestors, pubkey)
-            .unwrap_or_default()
-            .0;
+            .unwrap_or((Account::default(), self.slot));
 
         account.lamports += self.credit_only_pending_credits(pubkey);
 
         if account.lamports > 0 {
-            Some(account)
+            Some((account, slot))
         } else {
             None
         }
     }
 
-    /// scans underlying accounts_db for this delta (fork) with a map function
+    /// scans underlying accounts_db for this delta (slot) with a map function
     ///   from StoredAccount to B
-    /// returns only the latest/current version of B for this fork
-    fn scan_fork<F, B>(&self, fork: Fork, func: F) -> Vec<B>
+    /// returns only the latest/current version of B for this slot
+    fn scan_slot<F, B>(&self, slot: Slot, func: F) -> Vec<B>
     where
         F: Fn(&StoredAccount) -> Option<B> + Send + Sync,
         B: Send + Default,
     {
         let accumulator: Vec<Vec<(Pubkey, u64, B)>> = self.accounts_db.scan_account_storage(
-            fork,
+            slot,
             |stored_account: &StoredAccount,
              _id: AppendVecId,
              accum: &mut Vec<(Pubkey, u64, B)>| {
@@ -312,8 +321,8 @@ impl Accounts {
             .collect()
     }
 
-    pub fn load_by_program_fork(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
-        self.scan_fork(fork, |stored_account| {
+    pub fn load_by_program_slot(&self, slot: Slot, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+        self.scan_slot(slot, |stored_account| {
             if stored_account.account_meta.owner == *program_id {
                 Some((stored_account.meta.pubkey, stored_account.clone_account()))
             } else {
@@ -322,13 +331,13 @@ impl Accounts {
         })
     }
 
-    pub fn verify_hash_internal_state(&self, fork: Fork, ancestors: &HashMap<Fork, usize>) -> bool {
-        self.accounts_db.verify_hash_internal_state(fork, ancestors)
+    pub fn verify_hash_internal_state(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {
+        self.accounts_db.verify_hash_internal_state(slot, ancestors)
     }
 
     pub fn load_by_program(
         &self,
-        ancestors: &HashMap<Fork, usize>,
+        ancestors: &HashMap<Slot, usize>,
         program_id: &Pubkey,
     ) -> Vec<(Pubkey, Account)> {
         self.accounts_db.scan_accounts(
@@ -336,7 +345,7 @@ impl Accounts {
             |collector: &mut Vec<(Pubkey, Account)>, option| {
                 if let Some(data) = option
                     .filter(|(_, account, _)| account.owner == *program_id && account.lamports != 0)
-                    .map(|(pubkey, account, _fork)| (*pubkey, account))
+                    .map(|(pubkey, account, _slot)| (*pubkey, account))
                 {
                     collector.push(data)
                 }
@@ -345,8 +354,8 @@ impl Accounts {
     }
 
     /// Slow because lock is held for 1 operation instead of many
-    pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
-        self.accounts_db.store(fork, &[(pubkey, account)]);
+    pub fn store_slow(&self, slot: Slot, pubkey: &Pubkey, account: &Account) {
+        self.accounts_db.store(slot, &[(pubkey, account)]);
     }
 
     fn take_credit_only(&self) -> Result<HashMap<Pubkey, CreditOnlyLock>> {
@@ -477,11 +486,11 @@ impl Accounts {
         }
     }
 
-    pub fn hash_internal_state(&self, fork_id: Fork) -> Option<BankHash> {
-        let fork_hashes = self.accounts_db.fork_hashes.read().unwrap();
-        let fork_hash = fork_hashes.get(&fork_id)?;
-        if fork_hash.0 {
-            Some(fork_hash.1)
+    pub fn hash_internal_state(&self, slot_id: Slot) -> Option<BankHash> {
+        let slot_hashes = self.accounts_db.slot_hashes.read().unwrap();
+        let slot_hash = slot_hashes.get(&slot_id)?;
+        if slot_hash.0 {
+            Some(slot_hash.1)
         } else {
             None
         }
@@ -532,14 +541,14 @@ impl Accounts {
             .for_each(|(tx, result)| self.unlock_account(tx, result, &mut account_locks));
     }
 
-    pub fn has_accounts(&self, fork: Fork) -> bool {
-        self.accounts_db.has_accounts(fork)
+    pub fn has_accounts(&self, slot: Slot) -> bool {
+        self.accounts_db.has_accounts(slot)
     }
 
     /// Store the accounts into the DB
     pub fn store_accounts(
         &self,
-        fork: Fork,
+        slot: Slot,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
         res: &[Result<()>],
@@ -547,17 +556,17 @@ impl Accounts {
     ) {
         let accounts_to_store =
             self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded);
-        self.accounts_db.store(fork, &accounts_to_store);
+        self.accounts_db.store(slot, &accounts_to_store);
     }
 
-    /// Purge a fork if it is not a root
-    /// Root forks cannot be purged
-    pub fn purge_fork(&self, fork: Fork) {
-        self.accounts_db.purge_fork(fork);
+    /// Purge a slot if it is not a root
+    /// Root slots cannot be purged
+    pub fn purge_slot(&self, slot: Slot) {
+        self.accounts_db.purge_slot(slot);
     }
-    /// Add a fork to root.  Root forks cannot be purged
-    pub fn add_root(&self, fork: Fork) {
-        self.accounts_db.add_root(fork)
+    /// Add a slot to root.  Root slots cannot be purged
+    pub fn add_root(&self, slot: Slot) {
+        self.accounts_db.add_root(slot)
     }
 
     /// Commit remaining credit-only changes, regardless of reference count
@@ -570,30 +579,30 @@ impl Accounts {
     //     so will fail the lock
     //  2) Any transaction that grabs a lock and then commit_credits clears the HashMap will find
     //     the HashMap is None on unlock_accounts, and will perform a no-op.
-    pub fn commit_credits(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) {
+    pub fn commit_credits(&self, ancestors: &HashMap<Slot, usize>, slot: Slot) {
         // Clear the credit only hashmap so that no further transactions can modify it
         let credit_only_locks = self
             .take_credit_only()
             .expect("Credit only locks didn't exist in commit_credits");
-        self.store_credit_only_credits(credit_only_locks, ancestors, fork);
+        self.store_credit_only_credits(credit_only_locks, ancestors, slot);
     }
 
     /// Used only for tests to store credit-only accounts after every transaction
-    pub fn commit_credits_unsafe(&self, ancestors: &HashMap<Fork, usize>, fork: Fork) {
+    pub fn commit_credits_unsafe(&self, ancestors: &HashMap<Slot, usize>, slot: Slot) {
         // Clear the credit only hashmap so that no further transactions can modify it
         let mut credit_only_locks = self.credit_only_locks.write().unwrap();
         let credit_only_locks = credit_only_locks
             .as_mut()
             .expect("Credit only locks didn't exist in commit_credits");
 
-        self.store_credit_only_credits(credit_only_locks.drain(), ancestors, fork);
+        self.store_credit_only_credits(credit_only_locks.drain(), ancestors, slot);
     }
 
     fn store_credit_only_credits<I>(
         &self,
         credit_only_locks: I,
-        ancestors: &HashMap<Fork, usize>,
-        fork: Fork,
+        ancestors: &HashMap<Slot, usize>,
+        slot: Slot,
     ) where
         I: IntoIterator<Item = (Pubkey, CreditOnlyLock)>,
     {
@@ -607,12 +616,12 @@ impl Accounts {
             }
             let credit = lock.credits.load(Ordering::Relaxed);
             if credit > 0 {
-                let (mut account, _fork) = self
+                let (mut account, _slot) = self
                     .accounts_db
                     .load_slow(ancestors, &pubkey)
                     .unwrap_or_default();
                 account.lamports += credit;
-                self.store_slow(fork, &pubkey, &account);
+                self.store_slow(slot, &pubkey, &account);
             }
         }
     }
@@ -664,11 +673,11 @@ impl Accounts {
     }
 }
 
-pub fn create_test_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize, fork: u64) {
+pub fn create_test_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize, slot: u64) {
     for t in 0..num {
         let pubkey = Pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
-        accounts.store_slow(fork, &pubkey, &account);
+        accounts.store_slow(slot, &pubkey, &account);
         pubkeys.push(pubkey);
     }
 }
@@ -1146,7 +1155,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_by_program_fork() {
+    fn test_load_by_program_slot() {
         let accounts = Accounts::new(None);
 
         // Load accounts owned by various programs into AccountsDB
@@ -1160,11 +1169,11 @@ mod tests {
         let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
         accounts.store_slow(0, &pubkey2, &account2);
 
-        let loaded = accounts.load_by_program_fork(0, &Pubkey::new(&[2; 32]));
+        let loaded = accounts.load_by_program_slot(0, &Pubkey::new(&[2; 32]));
         assert_eq!(loaded.len(), 2);
-        let loaded = accounts.load_by_program_fork(0, &Pubkey::new(&[3; 32]));
+        let loaded = accounts.load_by_program_slot(0, &Pubkey::new(&[3; 32]));
         assert_eq!(loaded, vec![(pubkey2, account2)]);
-        let loaded = accounts.load_by_program_fork(0, &Pubkey::new(&[4; 32]));
+        let loaded = accounts.load_by_program_slot(0, &Pubkey::new(&[4; 32]));
         assert_eq!(loaded, vec![]);
     }
 
@@ -1202,7 +1211,10 @@ mod tests {
             let idx = thread_rng().gen_range(0, num - 1);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account = accounts.load_slow(&ancestors, &pubkeys[idx]);
-            let account1 = Some(Account::new((idx + 1) as u64, 0, &Account::default().owner));
+            let account1 = Some((
+                Account::new((idx + 1) as u64, 0, &Account::default().owner),
+                0,
+            ));
             assert_eq!(account, account1);
         }
     }
@@ -1476,17 +1488,17 @@ mod tests {
 
         // No change when CreditOnlyLock credits are 0
         assert_eq!(
-            accounts.load_slow(&ancestors, &pubkey0).unwrap().lamports,
+            accounts.load_slow(&ancestors, &pubkey0).unwrap().0.lamports,
             1
         );
         // New balance should equal previous balance plus CreditOnlyLock credits
         assert_eq!(
-            accounts.load_slow(&ancestors, &pubkey1).unwrap().lamports,
+            accounts.load_slow(&ancestors, &pubkey1).unwrap().0.lamports,
             7
         );
         // New account should be created
         assert_eq!(
-            accounts.load_slow(&ancestors, &pubkey2).unwrap().lamports,
+            accounts.load_slow(&ancestors, &pubkey2).unwrap().0.lamports,
             10
         );
         // Account locks should be cleared
@@ -1511,7 +1523,7 @@ mod tests {
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(
-            accounts.load_slow(&ancestors, &pubkey).unwrap().lamports,
+            accounts.load_slow(&ancestors, &pubkey).unwrap().0.lamports,
             11
         );
         assert_eq!(

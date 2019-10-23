@@ -426,7 +426,7 @@ impl LocalCluster {
         trace!("getting leader blockhash");
         let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
         let mut tx =
-            system_transaction::transfer_now(&source_keypair, dest_pubkey, lamports, blockhash);
+            system_transaction::transfer(&source_keypair, dest_pubkey, lamports, blockhash);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,

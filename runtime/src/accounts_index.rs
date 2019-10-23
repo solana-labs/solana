@@ -2,53 +2,53 @@ use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 use std::sync::{RwLock, RwLockReadGuard};
 
-pub type Fork = u64;
-type ForkList<T> = Vec<(Fork, T)>;
+pub type Slot = u64;
+type SlotList<T> = Vec<(Slot, T)>;
 
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
-    pub account_maps: HashMap<Pubkey, RwLock<ForkList<T>>>,
+    pub account_maps: HashMap<Pubkey, RwLock<SlotList<T>>>,
 
-    pub roots: HashSet<Fork>,
+    pub roots: HashSet<Slot>,
 
     //This value that needs to be stored to recover the index from AppendVec
-    pub last_root: Fork,
+    pub last_root: Slot,
 }
 
 impl<T: Clone> AccountsIndex<T> {
     /// call func with every pubkey and index visible from a given set of ancestors
-    pub fn scan_accounts<F>(&self, ancestors: &HashMap<Fork, usize>, mut func: F)
+    pub fn scan_accounts<F>(&self, ancestors: &HashMap<Slot, usize>, mut func: F)
     where
-        F: FnMut(&Pubkey, (&T, Fork)) -> (),
+        F: FnMut(&Pubkey, (&T, Slot)) -> (),
     {
         for (pubkey, list) in self.account_maps.iter() {
             let list_r = list.read().unwrap();
-            if let Some(index) = self.latest_fork(ancestors, &list_r) {
+            if let Some(index) = self.latest_slot(ancestors, &list_r) {
                 func(pubkey, (&list_r[index].1, list_r[index].0));
             }
         }
     }
 
-    pub fn purge(&mut self, pubkey: &Pubkey) -> Vec<(Fork, T)> {
+    pub fn purge(&mut self, pubkey: &Pubkey) -> Vec<(Slot, T)> {
         let mut list = self.account_maps.get(&pubkey).unwrap().write().unwrap();
         let reclaims = list
             .iter()
-            .filter(|(fork, _)| self.is_root(*fork))
+            .filter(|(slot, _)| self.is_root(*slot))
             .cloned()
             .collect();
-        list.retain(|(fork, _)| !self.is_root(*fork));
+        list.retain(|(slot, _)| !self.is_root(*slot));
         reclaims
     }
 
-    // find the latest fork and T in a list for a given ancestor
+    // find the latest slot and T in a list for a given ancestor
     // returns index into 'list' if found, None if not.
-    fn latest_fork(&self, ancestors: &HashMap<Fork, usize>, list: &[(Fork, T)]) -> Option<usize> {
+    fn latest_slot(&self, ancestors: &HashMap<Slot, usize>, list: &[(Slot, T)]) -> Option<usize> {
         let mut max = 0;
         let mut rv = None;
-        for (i, (fork, _t)) in list.iter().rev().enumerate() {
-            if *fork >= max && (ancestors.get(fork).is_some() || self.is_root(*fork)) {
+        for (i, (slot, _t)) in list.iter().rev().enumerate() {
+            if *slot >= max && (ancestors.get(slot).is_some() || self.is_root(*slot)) {
                 rv = Some((list.len() - 1) - i);
-                max = *fork;
+                max = *slot;
             }
         }
         rv
@@ -59,11 +59,11 @@ impl<T: Clone> AccountsIndex<T> {
     pub fn get(
         &self,
         pubkey: &Pubkey,
-        ancestors: &HashMap<Fork, usize>,
-    ) -> Option<(RwLockReadGuard<ForkList<T>>, usize)> {
+        ancestors: &HashMap<Slot, usize>,
+    ) -> Option<(RwLockReadGuard<SlotList<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
             let lock = list.read().unwrap();
-            if let Some(found_index) = self.latest_fork(ancestors, &lock) {
+            if let Some(found_index) = self.latest_slot(ancestors, &lock) {
                 Some((lock, found_index))
             } else {
                 None
@@ -71,9 +71,9 @@ impl<T: Clone> AccountsIndex<T> {
         })
     }
 
-    pub fn get_max_root(roots: &HashSet<Fork>, fork_vec: &[(Fork, T)]) -> Fork {
+    pub fn get_max_root(roots: &HashSet<Slot>, slot_vec: &[(Slot, T)]) -> Slot {
         let mut max_root = 0;
-        for (f, _) in fork_vec.iter() {
+        for (f, _) in slot_vec.iter() {
             if *f > max_root && roots.contains(f) {
                 max_root = *f;
             }
@@ -83,16 +83,16 @@ impl<T: Clone> AccountsIndex<T> {
 
     pub fn insert(
         &mut self,
-        fork: Fork,
+        slot: Slot,
         pubkey: &Pubkey,
         account_info: T,
-        reclaims: &mut Vec<(Fork, T)>,
+        reclaims: &mut Vec<(Slot, T)>,
     ) {
-        let _fork_vec = self
+        let _slot_vec = self
             .account_maps
             .entry(*pubkey)
             .or_insert_with(|| RwLock::new(Vec::with_capacity(32)));
-        self.update(fork, pubkey, account_info, reclaims);
+        self.update(slot, pubkey, account_info, reclaims);
     }
 
     // Try to update an item in account_maps. If the account is not
@@ -101,30 +101,30 @@ impl<T: Clone> AccountsIndex<T> {
     // It returns None if the item is already present and thus successfully updated.
     pub fn update(
         &self,
-        fork: Fork,
+        slot: Slot,
         pubkey: &Pubkey,
         account_info: T,
-        reclaims: &mut Vec<(Fork, T)>,
+        reclaims: &mut Vec<(Slot, T)>,
     ) -> Option<T> {
         let roots = &self.roots;
         if let Some(lock) = self.account_maps.get(pubkey) {
-            let mut fork_vec = lock.write().unwrap();
+            let mut slot_vec = lock.write().unwrap();
             // filter out old entries
-            reclaims.extend(fork_vec.iter().filter(|(f, _)| *f == fork).cloned());
-            fork_vec.retain(|(f, _)| *f != fork);
+            reclaims.extend(slot_vec.iter().filter(|(f, _)| *f == slot).cloned());
+            slot_vec.retain(|(f, _)| *f != slot);
 
             // add the new entry
-            fork_vec.push((fork, account_info));
+            slot_vec.push((slot, account_info));
 
-            let max_root = Self::get_max_root(roots, &fork_vec);
+            let max_root = Self::get_max_root(roots, &slot_vec);
 
             reclaims.extend(
-                fork_vec
+                slot_vec
                     .iter()
-                    .filter(|(fork, _)| Self::can_purge(max_root, *fork))
+                    .filter(|(slot, _)| Self::can_purge(max_root, *slot))
                     .cloned(),
             );
-            fork_vec.retain(|(fork, _)| !Self::can_purge(max_root, *fork));
+            slot_vec.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
 
             None
         } else {
@@ -132,38 +132,38 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
-    pub fn add_index(&mut self, fork: Fork, pubkey: &Pubkey, account_info: T) {
+    pub fn add_index(&mut self, slot: Slot, pubkey: &Pubkey, account_info: T) {
         let entry = self
             .account_maps
             .entry(*pubkey)
             .or_insert_with(|| RwLock::new(vec![]));
-        entry.write().unwrap().push((fork, account_info));
+        entry.write().unwrap().push((slot, account_info));
     }
 
-    pub fn is_purged(&self, fork: Fork) -> bool {
-        fork < self.last_root
+    pub fn is_purged(&self, slot: Slot) -> bool {
+        slot < self.last_root
     }
 
-    pub fn can_purge(max_root: Fork, fork: Fork) -> bool {
-        fork < max_root
+    pub fn can_purge(max_root: Slot, slot: Slot) -> bool {
+        slot < max_root
     }
 
-    pub fn is_root(&self, fork: Fork) -> bool {
-        self.roots.contains(&fork)
+    pub fn is_root(&self, slot: Slot) -> bool {
+        self.roots.contains(&slot)
     }
 
-    pub fn add_root(&mut self, fork: Fork) {
+    pub fn add_root(&mut self, slot: Slot) {
         assert!(
-            (self.last_root == 0 && fork == 0) || (fork >= self.last_root),
+            (self.last_root == 0 && slot == 0) || (slot >= self.last_root),
             "new roots must be increasing"
         );
-        self.last_root = fork;
-        self.roots.insert(fork);
+        self.last_root = slot;
+        self.roots.insert(slot);
     }
-    /// Remove the fork when the storage for the fork is freed
-    /// Accounts no longer reference this fork.
-    pub fn cleanup_dead_fork(&mut self, fork: Fork) {
-        self.roots.remove(&fork);
+    /// Remove the slot when the storage for the slot is freed
+    /// Accounts no longer reference this slot.
+    pub fn cleanup_dead_slot(&mut self, slot: Slot) {
+        self.roots.remove(&slot);
     }
 }
 
@@ -290,18 +290,18 @@ mod tests {
         let mut index = AccountsIndex::<bool>::default();
         index.add_root(0);
         index.add_root(1);
-        index.cleanup_dead_fork(0);
+        index.cleanup_dead_slot(0);
         assert!(index.is_root(1));
         assert!(!index.is_root(0));
     }
 
     #[test]
     fn test_cleanup_last() {
-        //this behavior might be undefined, clean up should only occur on older forks
+        //this behavior might be undefined, clean up should only occur on older slots
         let mut index = AccountsIndex::<bool>::default();
         index.add_root(0);
         index.add_root(1);
-        index.cleanup_dead_fork(1);
+        index.cleanup_dead_slot(1);
         assert!(!index.is_root(1));
         assert!(index.is_root(0));
     }
@@ -326,7 +326,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_new_fork() {
+    fn test_update_new_slot() {
         solana_logger::setup();
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
@@ -344,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_gc_purged_fork() {
+    fn test_update_gc_purged_slot() {
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();

@@ -87,7 +87,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         .rc
         .get_storage_entries()
         .into_iter()
-        .filter(|x| x.fork_id() <= bank.slot())
+        .filter(|x| x.slot_id() <= bank.slot())
         .collect();
 
     // Create a snapshot package

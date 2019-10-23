@@ -101,7 +101,7 @@ mod tests {
                 Entry::new_mut(
                     &mut id,
                     &mut num_hashes,
-                    vec![system_transaction::transfer_now(
+                    vec![system_transaction::transfer(
                         &keypair,
                         &keypair.pubkey(),
                         1,

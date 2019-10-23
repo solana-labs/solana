@@ -12,13 +12,13 @@
 //! The only required in memory data structure with a write lock is the index,
 //! which should be fast to update.
 //!
-//! AppendVec's only store accounts for single forks.  To bootstrap the
+//! AppendVec's only store accounts for single slots.  To bootstrap the
 //! index from a persistent store of AppendVec's, the entries include
 //! a "write_version".  A single global atomic `AccountsDB::write_version`
 //! tracks the number of commits to the entire data store. So the latest
-//! commit for each fork entry would be indexed.
+//! commit for each slot entry would be indexed.
 
-use crate::accounts_index::{AccountsIndex, Fork};
+use crate::accounts_index::AccountsIndex;
 use crate::append_vec::{AppendVec, StoredAccount, StoredMeta};
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
@@ -34,6 +34,7 @@ use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
+use solana_sdk::clock::Slot;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar;
@@ -81,8 +82,8 @@ pub struct AccountInfo {
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
 
-// Each fork has a set of storage entries.
-type ForkStores = HashMap<usize, Arc<AccountStorageEntry>>;
+// Each slot has a set of storage entries.
+type SlotStores = HashMap<usize, Arc<AccountStorageEntry>>;
 
 struct AccountStorageVisitor;
 
@@ -99,12 +100,12 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
         M: MapAccess<'de>,
     {
         let mut map = HashMap::new();
-        while let Some((fork_id, storage_entries)) = access.next_entry()? {
+        while let Some((slot_id, storage_entries)) = access.next_entry()? {
             let storage_entries: Vec<AccountStorageEntry> = storage_entries;
-            let storage_fork_map = map.entry(fork_id).or_insert_with(HashMap::new);
+            let storage_slot_map = map.entry(slot_id).or_insert_with(HashMap::new);
             for mut storage in storage_entries {
-                storage.fork_id = fork_id;
-                storage_fork_map.insert(storage.id, Arc::new(storage));
+                storage.slot_id = slot_id;
+                storage_slot_map.insert(storage.id, Arc::new(storage));
             }
         }
 
@@ -131,19 +132,19 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
         S: Serializer,
     {
         let mut len: usize = 0;
-        for fork_id in self.account_storage.0.keys() {
-            if *fork_id <= self.slot {
+        for slot_id in self.account_storage.0.keys() {
+            if *slot_id <= self.slot {
                 len += 1;
             }
         }
         let mut map = serializer.serialize_map(Some(len))?;
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        for (fork_id, fork_storage) in &self.account_storage.0 {
-            if *fork_id <= self.slot {
-                let storage_entries: Vec<_> = fork_storage.values().collect();
-                map.serialize_entry(&fork_id, &storage_entries)?;
-                count += fork_storage.len();
+        for (slot_id, slot_storage) in &self.account_storage.0 {
+            if *slot_id <= self.slot {
+                let storage_entries: Vec<_> = slot_storage.values().collect();
+                map.serialize_entry(&slot_id, &storage_entries)?;
+                count += slot_storage.len();
             }
         }
         serialize_account_storage_timer.stop();
@@ -157,7 +158,7 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
 }
 
 #[derive(Clone, Default, Debug)]
-pub struct AccountStorage(pub HashMap<Fork, ForkStores>);
+pub struct AccountStorage(pub HashMap<Slot, SlotStores>);
 impl<'de> Deserialize<'de> for AccountStorage {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -180,7 +181,7 @@ pub struct AccountStorageEntry {
     id: AppendVecId,
 
     #[serde(skip)]
-    fork_id: Fork,
+    slot_id: Slot,
 
     /// storage holding the accounts
     accounts: AppendVec,
@@ -194,14 +195,14 @@ pub struct AccountStorageEntry {
 }
 
 impl AccountStorageEntry {
-    pub fn new(path: &Path, fork_id: Fork, id: usize, file_size: u64) -> Self {
-        let tail = AppendVec::new_relative_path(fork_id, id);
+    pub fn new(path: &Path, slot_id: Slot, id: usize, file_size: u64) -> Self {
+        let tail = AppendVec::new_relative_path(slot_id, id);
         let path = Path::new(path).join(&tail);
         let accounts = AppendVec::new(&path, true, file_size as usize);
 
         AccountStorageEntry {
             id,
-            fork_id,
+            slot_id,
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
         }
@@ -236,8 +237,8 @@ impl AccountStorageEntry {
         self.count_and_status.read().unwrap().0
     }
 
-    pub fn fork_id(&self) -> Fork {
-        self.fork_id
+    pub fn slot_id(&self) -> Slot {
+        self.slot_id
     }
 
     pub fn append_vec_id(&self) -> AppendVecId {
@@ -288,7 +289,7 @@ impl AccountStorageEntry {
         if count > 0 {
             *count_and_status = (count - 1, status);
         } else {
-            warn!("count value 0 for fork {}", self.fork_id);
+            warn!("count value 0 for slot {}", self.slot_id);
         }
         count_and_status.0
     }
@@ -343,10 +344,10 @@ impl<'a> Serialize for AccountsDBSerialize<'a> {
         let account_storage_serialize = AccountStorageSerialize::new(&*storage, self.slot);
         serialize_into(&mut wr, &account_storage_serialize).map_err(Error::custom)?;
         serialize_into(&mut wr, &version).map_err(Error::custom)?;
-        let fork_hashes = self.accounts_db.fork_hashes.read().unwrap();
+        let slot_hashes = self.accounts_db.slot_hashes.read().unwrap();
         serialize_into(
             &mut wr,
-            &(self.slot, &*fork_hashes.get(&self.slot).unwrap()),
+            &(self.slot, &*slot_hashes.get(&self.slot).unwrap()),
         )
         .map_err(Error::custom)?;
         let len = wr.position() as usize;
@@ -357,7 +358,7 @@ impl<'a> Serialize for AccountsDBSerialize<'a> {
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDB {
-    /// Keeps tracks of index into AppendVec on a per fork basis
+    /// Keeps tracks of index into AppendVec on a per slot basis
     pub accounts_index: RwLock<AccountsIndex<AccountInfo>>,
 
     /// Account storage
@@ -385,8 +386,8 @@ pub struct AccountsDB {
     /// the accounts
     min_num_stores: usize,
 
-    /// fork to BankHash and a status flag to indicate if the hash has been initialized or not
-    pub fork_hashes: RwLock<HashMap<Fork, (bool, BankHash)>>,
+    /// slot to BankHash and a status flag to indicate if the hash has been initialized or not
+    pub slot_hashes: RwLock<HashMap<Slot, (bool, BankHash)>>,
 }
 
 impl Default for AccountsDB {
@@ -406,7 +407,7 @@ impl Default for AccountsDB {
                 .build()
                 .unwrap(),
             min_num_stores: num_threads,
-            fork_hashes: RwLock::new(HashMap::default()),
+            slot_hashes: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -467,12 +468,12 @@ impl AccountsDB {
 
         // Remap the deserialized AppendVec paths to point to correct local paths
         let local_account_paths = get_paths_vec(&local_account_paths);
-        let new_storage_map: Result<HashMap<Fork, ForkStores>, IOError> = storage
+        let new_storage_map: Result<HashMap<Slot, SlotStores>, IOError> = storage
             .0
             .into_iter()
-            .map(|(fork_id, mut fork_storage)| {
-                let mut new_fork_storage = HashMap::new();
-                for (id, storage_entry) in fork_storage.drain() {
+            .map(|(slot_id, mut slot_storage)| {
+                let mut new_slot_storage = HashMap::new();
+                for (id, storage_entry) in slot_storage.drain() {
                     let path_index = thread_rng().gen_range(0, local_account_paths.len());
                     let local_dir = &local_account_paths[path_index];
 
@@ -481,7 +482,7 @@ impl AccountsDB {
                     // Move the corresponding AppendVec from the snapshot into the directory pointed
                     // at by `local_dir`
                     let append_vec_relative_path =
-                        AppendVec::new_relative_path(fork_id, storage_entry.id);
+                        AppendVec::new_relative_path(slot_id, storage_entry.id);
                     let append_vec_abs_path =
                         append_vecs_path.as_ref().join(&append_vec_relative_path);
                     let mut copy_options = CopyOptions::new();
@@ -500,9 +501,9 @@ impl AccountsDB {
                     u_storage_entry
                         .set_file(local_path)
                         .map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
-                    new_fork_storage.insert(id, Arc::new(u_storage_entry));
+                    new_slot_storage.insert(id, Arc::new(u_storage_entry));
                 }
-                Ok((fork_id, new_fork_storage))
+                Ok((slot_id, new_slot_storage))
             })
             .collect();
 
@@ -511,12 +512,12 @@ impl AccountsDB {
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
 
-        let fork_hash: (Fork, (bool, BankHash)) = deserialize_from(&mut stream)
-            .map_err(|_| AccountsDB::get_io_error("fork hashes deserialize error"))?;
-        self.fork_hashes
+        let slot_hash: (Slot, (bool, BankHash)) = deserialize_from(&mut stream)
+            .map_err(|_| AccountsDB::get_io_error("slot hashes deserialize error"))?;
+        self.slot_hashes
             .write()
             .unwrap()
-            .insert(fork_hash.0, fork_hash.1);
+            .insert(slot_hash.0, slot_hash.1);
 
         // Process deserialized data, set necessary fields in self
         *self.paths.write().unwrap() = local_account_paths;
@@ -539,18 +540,18 @@ impl AccountsDB {
         Ok(())
     }
 
-    fn new_storage_entry(&self, fork_id: Fork, path: &Path, size: u64) -> AccountStorageEntry {
+    fn new_storage_entry(&self, slot_id: Slot, path: &Path, size: u64) -> AccountStorageEntry {
         AccountStorageEntry::new(
             path,
-            fork_id,
+            slot_id,
             self.next_id.fetch_add(1, Ordering::Relaxed),
             size,
         )
     }
 
-    pub fn has_accounts(&self, fork: Fork) -> bool {
-        if let Some(storage_forks) = self.storage.read().unwrap().0.get(&fork) {
-            for x in storage_forks.values() {
+    pub fn has_accounts(&self, slot: Slot) -> bool {
+        if let Some(storage_slots) = self.storage.read().unwrap().0.get(&slot) {
+            for x in storage_slots.values() {
                 if x.count() > 0 {
                     return true;
                 }
@@ -562,8 +563,8 @@ impl AccountsDB {
     pub fn purge_zero_lamport_accounts(&self, ancestors: &HashMap<u64, usize>) {
         let accounts_index = self.accounts_index.read().unwrap();
         let mut purges = Vec::new();
-        accounts_index.scan_accounts(ancestors, |pubkey, (account_info, fork)| {
-            if account_info.lamports == 0 && accounts_index.is_root(fork) {
+        accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
+            if account_info.lamports == 0 && accounts_index.is_root(slot) {
                 purges.push(*pubkey);
             }
         });
@@ -575,24 +576,24 @@ impl AccountsDB {
         }
         let last_root = accounts_index.last_root;
         drop(accounts_index);
-        let mut dead_forks = self.remove_dead_accounts(reclaims);
-        self.cleanup_dead_forks(&mut dead_forks, last_root);
+        let mut dead_slots = self.remove_dead_accounts(reclaims);
+        self.cleanup_dead_slots(&mut dead_slots, last_root);
     }
 
-    pub fn scan_accounts<F, A>(&self, ancestors: &HashMap<Fork, usize>, scan_func: F) -> A
+    pub fn scan_accounts<F, A>(&self, ancestors: &HashMap<Slot, usize>, scan_func: F) -> A
     where
-        F: Fn(&mut A, Option<(&Pubkey, Account, Fork)>) -> (),
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
         A: Default,
     {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();
         let storage = self.storage.read().unwrap();
-        accounts_index.scan_accounts(ancestors, |pubkey, (account_info, fork)| {
+        accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
             scan_func(
                 &mut collector,
                 storage
                     .0
-                    .get(&fork)
+                    .get(&slot)
                     .and_then(|storage_map| storage_map.get(&account_info.id))
                     .and_then(|store| {
                         Some(
@@ -603,15 +604,15 @@ impl AccountsDB {
                                 .clone_account(),
                         )
                     })
-                    .map(|account| (pubkey, account, fork)),
+                    .map(|account| (pubkey, account, slot)),
             )
         });
         collector
     }
 
-    /// Scan a specific fork through all the account storage in parallel with sequential read
+    /// Scan a specific slot through all the account storage in parallel with sequential read
     // PERF: Sequentially read each storage entry in parallel
-    pub fn scan_account_storage<F, B>(&self, fork_id: Fork, scan_func: F) -> Vec<B>
+    pub fn scan_account_storage<F, B>(&self, slot_id: Slot, scan_func: F) -> Vec<B>
     where
         F: Fn(&StoredAccount, AppendVecId, &mut B) -> () + Send + Sync,
         B: Send + Default,
@@ -621,7 +622,7 @@ impl AccountsDB {
             .read()
             .unwrap()
             .0
-            .get(&fork_id)
+            .get(&slot_id)
             .unwrap_or(&HashMap::new())
             .values()
             .cloned()
@@ -641,29 +642,29 @@ impl AccountsDB {
         })
     }
 
-    pub fn set_hash(&self, slot: Fork, parent_slot: Fork) {
-        let mut fork_hashes = self.fork_hashes.write().unwrap();
-        let hash = *fork_hashes
+    pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
+        let mut slot_hashes = self.slot_hashes.write().unwrap();
+        let hash = *slot_hashes
             .get(&parent_slot)
             .expect("accounts_db::set_hash::no parent slot");
-        fork_hashes.insert(slot, (false, hash.1));
+        slot_hashes.insert(slot, (false, hash.1));
     }
 
     pub fn load(
         storage: &AccountStorage,
-        ancestors: &HashMap<Fork, usize>,
+        ancestors: &HashMap<Slot, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
-    ) -> Option<(Account, Fork)> {
+    ) -> Option<(Account, Slot)> {
         let (lock, index) = accounts_index.get(pubkey, ancestors)?;
-        let fork = lock[index].0;
+        let slot = lock[index].0;
         //TODO: thread this as a ref
-        if let Some(fork_storage) = storage.0.get(&fork) {
+        if let Some(slot_storage) = storage.0.get(&slot) {
             let info = &lock[index].1;
-            fork_storage
+            slot_storage
                 .get(&info.id)
                 .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
-                .map(|account| (account, fork))
+                .map(|account| (account, slot))
         } else {
             None
         }
@@ -671,46 +672,46 @@ impl AccountsDB {
 
     pub fn load_slow(
         &self,
-        ancestors: &HashMap<Fork, usize>,
+        ancestors: &HashMap<Slot, usize>,
         pubkey: &Pubkey,
-    ) -> Option<(Account, Fork)> {
+    ) -> Option<(Account, Slot)> {
         let accounts_index = self.accounts_index.read().unwrap();
         let storage = self.storage.read().unwrap();
         Self::load(&storage, ancestors, &accounts_index, pubkey)
     }
 
-    fn find_storage_candidate(&self, fork_id: Fork) -> Arc<AccountStorageEntry> {
+    fn find_storage_candidate(&self, slot_id: Slot) -> Arc<AccountStorageEntry> {
         let mut create_extra = false;
         let stores = self.storage.read().unwrap();
 
-        if let Some(fork_stores) = stores.0.get(&fork_id) {
-            if !fork_stores.is_empty() {
-                if fork_stores.len() <= self.min_num_stores {
+        if let Some(slot_stores) = stores.0.get(&slot_id) {
+            if !slot_stores.is_empty() {
+                if slot_stores.len() <= self.min_num_stores {
                     let mut total_accounts = 0;
-                    for store in fork_stores.values() {
+                    for store in slot_stores.values() {
                         total_accounts += store.count_and_status.read().unwrap().0;
                     }
 
                     // Create more stores so that when scanning the storage all CPUs have work
-                    if (total_accounts / 16) >= fork_stores.len() {
+                    if (total_accounts / 16) >= slot_stores.len() {
                         create_extra = true;
                     }
                 }
 
                 // pick an available store at random by iterating from a random point
-                let to_skip = thread_rng().gen_range(0, fork_stores.len());
+                let to_skip = thread_rng().gen_range(0, slot_stores.len());
 
-                for (i, store) in fork_stores.values().cycle().skip(to_skip).enumerate() {
+                for (i, store) in slot_stores.values().cycle().skip(to_skip).enumerate() {
                     if store.try_available() {
                         let ret = store.clone();
                         drop(stores);
                         if create_extra {
-                            self.create_and_insert_store(fork_id, self.file_size);
+                            self.create_and_insert_store(slot_id, self.file_size);
                         }
                         return ret;
                     }
                     // looked at every store, bail...
-                    if i == fork_stores.len() {
+                    if i == slot_stores.len() {
                         break;
                     }
                 }
@@ -719,53 +720,53 @@ impl AccountsDB {
 
         drop(stores);
 
-        let store = self.create_and_insert_store(fork_id, self.file_size);
+        let store = self.create_and_insert_store(slot_id, self.file_size);
         store.try_available();
         store
     }
 
-    fn create_and_insert_store(&self, fork_id: Fork, size: u64) -> Arc<AccountStorageEntry> {
+    fn create_and_insert_store(&self, slot_id: Slot, size: u64) -> Arc<AccountStorageEntry> {
         let mut stores = self.storage.write().unwrap();
-        let fork_storage = stores.0.entry(fork_id).or_insert_with(HashMap::new);
+        let slot_storage = stores.0.entry(slot_id).or_insert_with(HashMap::new);
 
-        self.create_store(fork_id, fork_storage, size)
+        self.create_store(slot_id, slot_storage, size)
     }
 
     fn create_store(
         &self,
-        fork_id: Fork,
-        fork_storage: &mut ForkStores,
+        slot_id: Slot,
+        slot_storage: &mut SlotStores,
         size: u64,
     ) -> Arc<AccountStorageEntry> {
         let paths = self.paths.read().unwrap();
         let path_index = thread_rng().gen_range(0, paths.len());
-        let store = Arc::new(self.new_storage_entry(fork_id, &Path::new(&paths[path_index]), size));
-        fork_storage.insert(store.id, store.clone());
+        let store = Arc::new(self.new_storage_entry(slot_id, &Path::new(&paths[path_index]), size));
+        slot_storage.insert(store.id, store.clone());
         store
     }
 
-    pub fn purge_fork(&self, fork: Fork) {
+    pub fn purge_slot(&self, slot: Slot) {
         //add_root should be called first
-        let is_root = self.accounts_index.read().unwrap().is_root(fork);
+        let is_root = self.accounts_index.read().unwrap().is_root(slot);
         if !is_root {
-            self.storage.write().unwrap().0.remove(&fork);
+            self.storage.write().unwrap().0.remove(&slot);
         }
     }
 
-    pub fn hash_stored_account(fork: Fork, account: &StoredAccount) -> Hash {
+    pub fn hash_stored_account(slot: Slot, account: &StoredAccount) -> Hash {
         Self::hash_account_data(
-            fork,
+            slot,
             account.account_meta.lamports,
             account.data,
             &account.meta.pubkey,
         )
     }
 
-    pub fn hash_account(fork: Fork, account: &Account, pubkey: &Pubkey) -> Hash {
-        Self::hash_account_data(fork, account.lamports, &account.data, pubkey)
+    pub fn hash_account(slot: Slot, account: &Account, pubkey: &Pubkey) -> Hash {
+        Self::hash_account_data(slot, account.lamports, &account.data, pubkey)
     }
 
-    pub fn hash_account_data(fork: Fork, lamports: u64, data: &[u8], pubkey: &Pubkey) -> Hash {
+    pub fn hash_account_data(slot: Slot, lamports: u64, data: &[u8], pubkey: &Pubkey) -> Hash {
         if lamports == 0 {
             return Hash::default();
         }
@@ -776,7 +777,7 @@ impl AccountsDB {
         LittleEndian::write_u64(&mut buf[..], lamports);
         hasher.hash(&buf);
 
-        LittleEndian::write_u64(&mut buf[..], fork);
+        LittleEndian::write_u64(&mut buf[..], slot);
         hasher.hash(&buf);
 
         hasher.hash(&data);
@@ -788,7 +789,7 @@ impl AccountsDB {
 
     fn store_accounts(
         &self,
-        fork_id: Fork,
+        slot_id: Slot,
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
     ) -> Vec<AccountInfo> {
@@ -812,7 +813,7 @@ impl AccountsDB {
             .collect();
         let mut infos: Vec<AccountInfo> = vec![];
         while infos.len() < with_meta.len() {
-            let storage = self.find_storage_candidate(fork_id);
+            let storage = self.find_storage_candidate(slot_id);
             let rvs = storage
                 .accounts
                 .append_accounts(&with_meta[infos.len()..], &hashes);
@@ -822,7 +823,7 @@ impl AccountsDB {
                 // See if an account overflows the default append vec size.
                 let data_len = (with_meta[infos.len()].1.data.len() + 4096) as u64;
                 if data_len > self.file_size {
-                    self.create_and_insert_store(fork_id, data_len * 2);
+                    self.create_and_insert_store(slot_id, data_len * 2);
                 }
                 continue;
             }
@@ -840,14 +841,14 @@ impl AccountsDB {
         infos
     }
 
-    pub fn verify_hash_internal_state(&self, fork: Fork, ancestors: &HashMap<Fork, usize>) -> bool {
+    pub fn verify_hash_internal_state(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {
         let mut hash_state = BankHash::default();
         let hashes: Vec<_> = self.scan_accounts(
             ancestors,
-            |collector: &mut Vec<BankHash>, option: Option<(&Pubkey, Account, Fork)>| {
-                if let Some((pubkey, account, fork)) = option {
+            |collector: &mut Vec<BankHash>, option: Option<(&Pubkey, Account, Slot)>| {
+                if let Some((pubkey, account, slot)) = option {
                     if !sysvar::check_id(&account.owner) {
-                        let hash = BankHash::from_hash(&Self::hash_account(fork, &account, pubkey));
+                        let hash = BankHash::from_hash(&Self::hash_account(slot, &account, pubkey));
                         debug!("xoring..{} key: {}", hash, pubkey);
                         collector.push(hash);
                     }
@@ -857,36 +858,36 @@ impl AccountsDB {
         for hash in hashes {
             hash_state.xor(hash);
         }
-        let fork_hashes = self.fork_hashes.read().unwrap();
-        if let Some((_, state)) = fork_hashes.get(&fork) {
+        let slot_hashes = self.slot_hashes.read().unwrap();
+        if let Some((_, state)) = slot_hashes.get(&slot) {
             hash_state == *state
         } else {
             false
         }
     }
 
-    pub fn xor_in_hash_state(&self, fork_id: Fork, hash: BankHash) {
-        let mut fork_hashes = self.fork_hashes.write().unwrap();
-        let fork_hash_state = fork_hashes
-            .entry(fork_id)
+    pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash) {
+        let mut slot_hashes = self.slot_hashes.write().unwrap();
+        let slot_hash_state = slot_hashes
+            .entry(slot_id)
             .or_insert((false, BankHash::default()));
-        fork_hash_state.1.xor(hash);
-        fork_hash_state.0 = true;
+        slot_hash_state.1.xor(hash);
+        slot_hash_state.0 = true;
     }
 
     fn update_index(
         &self,
-        fork_id: Fork,
+        slot_id: Slot,
         infos: Vec<AccountInfo>,
         accounts: &[(&Pubkey, &Account)],
-    ) -> (Vec<(Fork, AccountInfo)>, u64) {
-        let mut reclaims: Vec<(Fork, AccountInfo)> = Vec::with_capacity(infos.len() * 2);
+    ) -> (Vec<(Slot, AccountInfo)>, u64) {
+        let mut reclaims: Vec<(Slot, AccountInfo)> = Vec::with_capacity(infos.len() * 2);
         let mut inserts = vec![];
         let index = self.accounts_index.read().unwrap();
         let mut update_index_work = Measure::start("update_index_work");
         for (info, pubkey_account) in infos.into_iter().zip(accounts.iter()) {
             let pubkey = pubkey_account.0;
-            if let Some(info) = index.update(fork_id, pubkey, info, &mut reclaims) {
+            if let Some(info) = index.update(slot_id, pubkey, info, &mut reclaims) {
                 inserts.push((pubkey, info));
             }
         }
@@ -895,34 +896,34 @@ impl AccountsDB {
         if !inserts.is_empty() {
             let mut index = self.accounts_index.write().unwrap();
             for (pubkey, info) in inserts {
-                index.insert(fork_id, pubkey, info, &mut reclaims);
+                index.insert(slot_id, pubkey, info, &mut reclaims);
             }
         }
         update_index_work.stop();
         (reclaims, last_root)
     }
 
-    fn remove_dead_accounts(&self, reclaims: Vec<(Fork, AccountInfo)>) -> HashSet<Fork> {
+    fn remove_dead_accounts(&self, reclaims: Vec<(Slot, AccountInfo)>) -> HashSet<Slot> {
         let storage = self.storage.read().unwrap();
-        let mut dead_forks = HashSet::new();
-        for (fork_id, account_info) in reclaims {
-            if let Some(fork_storage) = storage.0.get(&fork_id) {
-                if let Some(store) = fork_storage.get(&account_info.id) {
+        let mut dead_slots = HashSet::new();
+        for (slot_id, account_info) in reclaims {
+            if let Some(slot_storage) = storage.0.get(&slot_id) {
+                if let Some(store) = slot_storage.get(&account_info.id) {
                     assert_eq!(
-                        fork_id, store.fork_id,
-                        "AccountDB::accounts_index corrupted. Storage should only point to one fork"
+                        slot_id, store.slot_id,
+                        "AccountDB::accounts_index corrupted. Storage should only point to one slot"
                     );
                     let count = store.remove_account();
                     if count == 0 {
-                        dead_forks.insert(fork_id);
+                        dead_slots.insert(slot_id);
                     }
                 }
             }
         }
 
-        dead_forks.retain(|fork| {
-            if let Some(fork_storage) = storage.0.get(&fork) {
-                for x in fork_storage.values() {
+        dead_slots.retain(|slot| {
+            if let Some(slot_storage) = storage.0.get(&slot) {
+                for x in slot_storage.values() {
                     if x.count() != 0 {
                         return false;
                     }
@@ -931,36 +932,36 @@ impl AccountsDB {
             true
         });
 
-        dead_forks
+        dead_slots
     }
 
-    fn cleanup_dead_forks(&self, dead_forks: &mut HashSet<Fork>, last_root: u64) {
-        // a fork is not totally dead until it is older than the root
-        dead_forks.retain(|fork| *fork < last_root);
-        if !dead_forks.is_empty() {
+    fn cleanup_dead_slots(&self, dead_slots: &mut HashSet<Slot>, last_root: u64) {
+        // a slot is not totally dead until it is older than the root
+        dead_slots.retain(|slot| *slot < last_root);
+        if !dead_slots.is_empty() {
             {
                 let mut index = self.accounts_index.write().unwrap();
-                for fork in dead_forks.iter() {
-                    index.cleanup_dead_fork(*fork);
+                for slot in dead_slots.iter() {
+                    index.cleanup_dead_slot(*slot);
                 }
             }
             {
-                let mut fork_hashes = self.fork_hashes.write().unwrap();
-                for fork in dead_forks.iter() {
-                    fork_hashes.remove(fork);
+                let mut slot_hashes = self.slot_hashes.write().unwrap();
+                for slot in dead_slots.iter() {
+                    slot_hashes.remove(slot);
                 }
             }
         }
     }
 
-    fn hash_accounts(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account)]) -> Vec<Hash> {
+    fn hash_accounts(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) -> Vec<Hash> {
         let mut hashes = vec![];
         let mut hash_state = BankHash::default();
         let mut had_account = false;
         for (pubkey, account) in accounts {
             if !sysvar::check_id(&account.owner) {
                 let hash = BankHash::from_hash(&account.hash);
-                let new_hash = Self::hash_account(fork_id, account, pubkey);
+                let new_hash = Self::hash_account(slot_id, account, pubkey);
                 let new_bank_hash = BankHash::from_hash(&new_hash);
                 debug!(
                     "hash_accounts: key: {} xor {} current: {}",
@@ -980,43 +981,43 @@ impl AccountsDB {
         }
 
         if had_account {
-            self.xor_in_hash_state(fork_id, hash_state);
+            self.xor_in_hash_state(slot_id, hash_state);
         }
         hashes
     }
 
     /// Store the account update.
-    pub fn store(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account)]) {
-        let hashes = self.hash_accounts(fork_id, accounts);
+    pub fn store(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) {
+        let hashes = self.hash_accounts(slot_id, accounts);
 
         let mut store_accounts = Measure::start("store::store_accounts");
-        let infos = self.store_accounts(fork_id, accounts, &hashes);
+        let infos = self.store_accounts(slot_id, accounts, &hashes);
         store_accounts.stop();
 
         let mut update_index = Measure::start("store::update_index");
-        let (reclaims, last_root) = self.update_index(fork_id, infos, accounts);
+        let (reclaims, last_root) = self.update_index(slot_id, infos, accounts);
         update_index.stop();
         trace!("reclaim: {}", reclaims.len());
 
         let mut remove_dead_accounts = Measure::start("store::remove_dead");
-        let mut dead_forks = self.remove_dead_accounts(reclaims);
+        let mut dead_slots = self.remove_dead_accounts(reclaims);
         remove_dead_accounts.stop();
-        trace!("dead_forks: {}", dead_forks.len());
+        trace!("dead_slots: {}", dead_slots.len());
 
-        let mut cleanup_dead_forks = Measure::start("store::cleanup_dead_forks");
-        self.cleanup_dead_forks(&mut dead_forks, last_root);
-        cleanup_dead_forks.stop();
-        trace!("purge_forks: {}", dead_forks.len());
+        let mut cleanup_dead_slots = Measure::start("store::cleanup_dead_slots");
+        self.cleanup_dead_slots(&mut dead_slots, last_root);
+        cleanup_dead_slots.stop();
+        trace!("purge_slots: {}", dead_slots.len());
 
-        let mut purge_forks = Measure::start("store::purge_forks");
-        for fork in dead_forks {
-            self.purge_fork(fork);
+        let mut purge_slots = Measure::start("store::purge_slots");
+        for slot in dead_slots {
+            self.purge_slot(slot);
         }
-        purge_forks.stop();
+        purge_slots.stop();
     }
 
-    pub fn add_root(&self, fork: Fork) {
-        self.accounts_index.write().unwrap().add_root(fork)
+    pub fn add_root(&self, slot: Slot) {
+        self.accounts_index.write().unwrap().add_root(slot)
     }
 
     pub fn get_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {
@@ -1024,7 +1025,7 @@ impl AccountsDB {
         r_storage
             .0
             .values()
-            .flat_map(|fork_store| fork_store.values().cloned())
+            .flat_map(|slot_store| slot_store.values().cloned())
             .collect()
     }
 
@@ -1049,13 +1050,13 @@ impl AccountsDB {
 
     fn generate_index(&self) {
         let storage = self.storage.read().unwrap();
-        let mut forks: Vec<Fork> = storage.0.keys().cloned().collect();
-        forks.sort();
+        let mut slots: Vec<Slot> = storage.0.keys().cloned().collect();
+        slots.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
-        for fork_id in forks.iter() {
+        for slot_id in slots.iter() {
             let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
                 .scan_account_storage(
-                    *fork_id,
+                    *slot_id,
                     |stored_account: &StoredAccount,
                      id: AppendVecId,
                      accum: &mut HashMap<Pubkey, (u64, AccountInfo)>| {
@@ -1076,10 +1077,10 @@ impl AccountsDB {
                 AccountsDB::merge(&mut account_maps, &maps);
             }
             if !account_maps.is_empty() {
-                accounts_index.roots.insert(*fork_id);
+                accounts_index.roots.insert(*slot_id);
                 let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
                 for (pubkey, (_, account_info)) in account_maps.iter() {
-                    accounts_index.insert(*fork_id, pubkey, account_info.clone(), &mut _reclaims);
+                    accounts_index.insert(*slot_id, pubkey, account_info.clone(), &mut _reclaims);
                 }
             }
         }
@@ -1157,7 +1158,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accountsdb_root_one_fork() {
+    fn test_accountsdb_root_one_slot() {
         solana_logger::setup();
         let db = AccountsDB::new(None);
 
@@ -1172,8 +1173,8 @@ pub mod tests {
         //                       root0 -> key.lamports==1
         //                        / \
         //                       /   \
-        //  key.lamports==0 <- fork1    \
-        //                             fork2 -> key.lamports==1
+        //  key.lamports==0 <- slot1    \
+        //                             slot2 -> key.lamports==1
         //                                       (via root0)
 
         // store value 0 in one child
@@ -1186,7 +1187,7 @@ pub mod tests {
         let ancestors = vec![(0, 0), (1, 1)].into_iter().collect();
         assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
 
-        // we should see 1 token in fork 2
+        // we should see 1 token in slot 2
         let ancestors = vec![(0, 0), (2, 2)].into_iter().collect();
         assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account0);
 
@@ -1244,22 +1245,22 @@ pub mod tests {
         db.store(1, &[(&pubkeys[0], &account)]);
         {
             let stores = db.storage.read().unwrap();
-            let fork_0_stores = &stores.0.get(&0).unwrap();
-            let fork_1_stores = &stores.0.get(&1).unwrap();
-            assert_eq!(fork_0_stores.len(), 1);
-            assert_eq!(fork_1_stores.len(), 1);
-            assert_eq!(fork_0_stores[&0].count(), 2);
-            assert_eq!(fork_1_stores[&1].count(), 2);
+            let slot_0_stores = &stores.0.get(&0).unwrap();
+            let slot_1_stores = &stores.0.get(&1).unwrap();
+            assert_eq!(slot_0_stores.len(), 1);
+            assert_eq!(slot_1_stores.len(), 1);
+            assert_eq!(slot_0_stores[&0].count(), 2);
+            assert_eq!(slot_1_stores[&1].count(), 2);
         }
         db.add_root(1);
         {
             let stores = db.storage.read().unwrap();
-            let fork_0_stores = &stores.0.get(&0).unwrap();
-            let fork_1_stores = &stores.0.get(&1).unwrap();
-            assert_eq!(fork_0_stores.len(), 1);
-            assert_eq!(fork_1_stores.len(), 1);
-            assert_eq!(fork_0_stores[&0].count(), 2);
-            assert_eq!(fork_1_stores[&1].count(), 2);
+            let slot_0_stores = &stores.0.get(&0).unwrap();
+            let slot_1_stores = &stores.0.get(&1).unwrap();
+            assert_eq!(slot_0_stores.len(), 1);
+            assert_eq!(slot_1_stores.len(), 1);
+            assert_eq!(slot_0_stores[&0].count(), 2);
+            assert_eq!(slot_1_stores[&1].count(), 2);
         }
     }
 
@@ -1287,38 +1288,38 @@ pub mod tests {
     fn create_account(
         accounts: &AccountsDB,
         pubkeys: &mut Vec<Pubkey>,
-        fork: Fork,
+        slot: Slot,
         num: usize,
         space: usize,
         num_vote: usize,
     ) {
-        let ancestors = vec![(fork, 0)].into_iter().collect();
+        let ancestors = vec![(slot, 0)].into_iter().collect();
         for t in 0..num {
             let pubkey = Pubkey::new_rand();
             let account = Account::new((t + 1) as u64, space, &Account::default().owner);
             pubkeys.push(pubkey.clone());
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
-            accounts.store(fork, &[(&pubkey, &account)]);
+            accounts.store(slot, &[(&pubkey, &account)]);
         }
         for t in 0..num_vote {
             let pubkey = Pubkey::new_rand();
             let account = Account::new((num + t + 1) as u64, space, &solana_vote_api::id());
             pubkeys.push(pubkey.clone());
-            let ancestors = vec![(fork, 0)].into_iter().collect();
+            let ancestors = vec![(slot, 0)].into_iter().collect();
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
-            accounts.store(fork, &[(&pubkey, &account)]);
+            accounts.store(slot, &[(&pubkey, &account)]);
         }
     }
 
-    fn update_accounts(accounts: &AccountsDB, pubkeys: &Vec<Pubkey>, fork: Fork, range: usize) {
+    fn update_accounts(accounts: &AccountsDB, pubkeys: &Vec<Pubkey>, slot: Slot, range: usize) {
         for _ in 1..1000 {
             let idx = thread_rng().gen_range(0, range);
-            let ancestors = vec![(fork, 0)].into_iter().collect();
+            let ancestors = vec![(slot, 0)].into_iter().collect();
             if let Some((mut account, _)) = accounts.load_slow(&ancestors, &pubkeys[idx]) {
                 account.lamports = account.lamports + 1;
-                accounts.store(fork, &[(&pubkeys[idx], &account)]);
+                accounts.store(slot, &[(&pubkeys[idx], &account)]);
                 if account.lamports == 0 {
-                    let ancestors = vec![(fork, 0)].into_iter().collect();
+                    let ancestors = vec![(slot, 0)].into_iter().collect();
                     assert!(accounts.load_slow(&ancestors, &pubkeys[idx]).is_none());
                 } else {
                     let mut default_account = Account::default();
@@ -1329,12 +1330,12 @@ pub mod tests {
         }
     }
 
-    fn check_storage(accounts: &AccountsDB, fork: Fork, count: usize) -> bool {
+    fn check_storage(accounts: &AccountsDB, slot: Slot, count: usize) -> bool {
         let storage = accounts.storage.read().unwrap();
-        assert_eq!(storage.0[&fork].len(), 1);
-        let fork_storage = storage.0.get(&fork).unwrap();
+        assert_eq!(storage.0[&slot].len(), 1);
+        let slot_storage = storage.0.get(&slot).unwrap();
         let mut total_count: usize = 0;
-        for store in fork_storage.values() {
+        for store in slot_storage.values() {
             assert_eq!(store.status(), AccountStorageStatus::Available);
             total_count += store.count();
         }
@@ -1345,17 +1346,17 @@ pub mod tests {
     fn check_accounts(
         accounts: &AccountsDB,
         pubkeys: &Vec<Pubkey>,
-        fork: Fork,
+        slot: Slot,
         num: usize,
         count: usize,
     ) {
-        let ancestors = vec![(fork, 0)].into_iter().collect();
+        let ancestors = vec![(slot, 0)].into_iter().collect();
         for _ in 0..num {
             let idx = thread_rng().gen_range(0, num);
             let account = accounts.load_slow(&ancestors, &pubkeys[idx]);
             let account1 = Some((
                 Account::new((idx + count) as u64, 0, &Account::default().owner),
-                fork,
+                slot,
             ));
             assert_eq!(account, account1);
         }
@@ -1364,13 +1365,13 @@ pub mod tests {
     fn modify_accounts(
         accounts: &AccountsDB,
         pubkeys: &Vec<Pubkey>,
-        fork: Fork,
+        slot: Slot,
         num: usize,
         count: usize,
     ) {
         for idx in 0..num {
             let account = Account::new((idx + count) as u64, 0, &Account::default().owner);
-            accounts.store(fork, &[(&pubkeys[idx], &account)]);
+            accounts.store(slot, &[(&pubkeys[idx], &account)]);
         }
     }
 
@@ -1434,7 +1435,7 @@ pub mod tests {
             .values()
             .flat_map(|x| x.values())
         {
-            *append_vec_histogram.entry(storage.fork_id).or_insert(0) += 1;
+            *append_vec_histogram.entry(storage.slot_id).or_insert(0) += 1;
         }
         for count in append_vec_histogram.values() {
             assert!(*count >= 2);
@@ -1507,31 +1508,31 @@ pub mod tests {
     }
 
     #[test]
-    fn test_purge_fork_not_root() {
+    fn test_purge_slot_not_root() {
         let accounts = AccountsDB::new(None);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_some());
-        accounts.purge_fork(0);
+        accounts.purge_slot(0);
         assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_none());
     }
 
     #[test]
-    fn test_purge_fork_after_root() {
+    fn test_purge_slot_after_root() {
         let accounts = AccountsDB::new(None);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
         accounts.add_root(0);
-        accounts.purge_fork(0);
+        accounts.purge_slot(0);
         assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_some());
     }
 
     #[test]
-    fn test_lazy_gc_fork() {
+    fn test_lazy_gc_slot() {
         //This test is pedantic
-        //A fork is purged when a non root bank is cleaned up.  If a fork is behind root but it is
+        //A slot is purged when a non root bank is cleaned up.  If a slot is behind root but it is
         //not root, it means we are retaining dead banks.
         let accounts = AccountsDB::new(None);
         let pubkey = Pubkey::new_rand();
@@ -1544,17 +1545,17 @@ pub mod tests {
             let (list, idx) = index.get(&pubkey, &ancestors).unwrap();
             list[idx].1.id
         };
-        //fork 0 is behind root, but it is not root, therefore it is purged
+        //slot 0 is behind root, but it is not root, therefore it is purged
         accounts.add_root(1);
         assert!(accounts.accounts_index.read().unwrap().is_purged(0));
 
-        //fork is still there, since gc is lazy
+        //slot is still there, since gc is lazy
         assert!(accounts.storage.read().unwrap().0[&0].get(&id).is_some());
 
         //store causes cleanup
         accounts.store(1, &[(&pubkey, &account)]);
 
-        //fork is gone
+        //slot is gone
         assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
 
         //new value is there
@@ -1575,13 +1576,13 @@ pub mod tests {
         accounts.add_root(0);
 
         let mut pubkeys1: Vec<Pubkey> = vec![];
-        let latest_fork = 1;
-        create_account(&accounts, &mut pubkeys1, latest_fork, 10, 0, 0);
+        let latest_slot = 1;
+        create_account(&accounts, &mut pubkeys1, latest_slot, 10, 0, 0);
 
         let mut writer = Cursor::new(vec![]);
         serialize_into(
             &mut writer,
-            &AccountsDBSerialize::new(&accounts, latest_fork),
+            &AccountsDBSerialize::new(&accounts, latest_slot),
         )
         .unwrap();
         assert!(check_storage(&accounts, 0, 100));
@@ -1611,12 +1612,12 @@ pub mod tests {
             accounts.next_id.load(Ordering::Relaxed)
         );
 
-        // Get the hash for the latest fork, which should be the only hash in the
-        // fork_hashes map on the deserializied AccountsDb
-        assert_eq!(daccounts.fork_hashes.read().unwrap().len(), 1);
+        // Get the hash for the latest slot, which should be the only hash in the
+        // slot_hashes map on the deserializied AccountsDb
+        assert_eq!(daccounts.slot_hashes.read().unwrap().len(), 1);
         assert_eq!(
-            daccounts.fork_hashes.read().unwrap().get(&latest_fork),
-            accounts.fork_hashes.read().unwrap().get(&latest_fork)
+            daccounts.slot_hashes.read().unwrap().get(&latest_slot),
+            accounts.slot_hashes.read().unwrap().get(&latest_slot)
         );
         check_accounts(&daccounts, &pubkeys, 0, 100, 2);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
@@ -1627,7 +1628,7 @@ pub mod tests {
     #[test]
     #[ignore]
     fn test_store_account_stress() {
-        let fork_id = 42;
+        let slot_id = 42;
         let num_threads = 2;
 
         let min_file_bytes = std::mem::size_of::<StoredMeta>()
@@ -1635,7 +1636,7 @@ pub mod tests {
 
         let db = Arc::new(AccountsDB::new_sized(None, min_file_bytes as u64));
 
-        db.add_root(fork_id);
+        db.add_root(slot_id);
         let thread_hdls: Vec<_> = (0..num_threads)
             .into_iter()
             .map(|_| {
@@ -1649,11 +1650,11 @@ pub mod tests {
                         loop {
                             let account_bal = thread_rng().gen_range(1, 99);
                             account.lamports = account_bal;
-                            db.store(fork_id, &[(&pubkey, &account)]);
-                            let (account, fork) = db.load_slow(&HashMap::new(), &pubkey).expect(
+                            db.store(slot_id, &[(&pubkey, &account)]);
+                            let (account, slot) = db.load_slow(&HashMap::new(), &pubkey).expect(
                                 &format!("Could not fetch stored account {}, iter {}", pubkey, i),
                             );
-                            assert_eq!(fork, fork_id);
+                            assert_eq!(slot, slot_id);
                             assert_eq!(account.lamports, account_bal);
                             i += 1;
                         }
