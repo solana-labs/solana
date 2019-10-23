@@ -1,6 +1,4 @@
-use crate::{
-    account::KeyedAccount, instruction::InstructionError, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
-};
+use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
 use num_traits::{FromPrimitive, ToPrimitive};
 
 // All native programs export a symbol named process()
@@ -47,8 +45,13 @@ pub fn limited_deserialize<T>(data: &[u8]) -> Result<(T), InstructionError>
 where
     T: serde::de::DeserializeOwned,
 {
+    #[cfg(not(feature = "program"))]
+    let limit = crate::packet::PACKET_DATA_SIZE as u64;
+    #[cfg(not(feature = "program"))]
+    let limit = 1024;
+
     bincode::config()
-        .limit(PACKET_DATA_SIZE as u64)
+        .limit(limit)
         .deserialize(data)
         .map_err(|_| InstructionError::InvalidInstructionData)
 }
