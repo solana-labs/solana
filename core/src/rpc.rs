@@ -10,7 +10,7 @@ use crate::{
     version::VERSION,
 };
 use bincode::{deserialize, serialize};
-use jsonrpc_core::{Error, Metadata, Result};
+use jsonrpc_core::{Error, Metadata, Params, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
 use solana_drone::drone::request_airdrop_transaction;
@@ -50,6 +50,8 @@ impl Default for JsonRpcConfig {
     }
 }
 
+pub const DEFAULT_PERCENT_CONFIDENCE: f64 = 0.66667;
+
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
@@ -80,17 +82,29 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_account_info(&self, pubkey: &Pubkey) -> Result<Account> {
+    pub fn get_account_info(
+        &self,
+        pubkey: &Pubkey,
+        commitment_params: CommitmentParams,
+    ) -> Result<Account> {
         self.bank()
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
     }
 
-    pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> Result<u64> {
+    pub fn get_minimum_balance_for_rent_exemption(
+        &self,
+        data_len: usize,
+        commitment_params: CommitmentParams,
+    ) -> Result<u64> {
         Ok(self.bank().get_minimum_balance_for_rent_exemption(data_len))
     }
 
-    pub fn get_program_accounts(&self, program_id: &Pubkey) -> Result<Vec<(String, Account)>> {
+    pub fn get_program_accounts(
+        &self,
+        program_id: &Pubkey,
+        commitment_params: CommitmentParams,
+    ) -> Result<Vec<(String, Account)>> {
         Ok(self
             .bank()
             .get_program_accounts(&program_id)
@@ -99,19 +113,19 @@ impl JsonRpcRequestProcessor {
             .collect())
     }
 
-    pub fn get_inflation(&self) -> Result<Inflation> {
+    pub fn get_inflation(&self, commitment_params: CommitmentParams) -> Result<Inflation> {
         Ok(self.bank().inflation())
     }
 
-    pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
+    pub fn get_epoch_schedule(&self, commitment_params: CommitmentParams) -> Result<EpochSchedule> {
         Ok(*self.bank().epoch_schedule())
     }
 
-    pub fn get_balance(&self, pubkey: &Pubkey) -> u64 {
+    pub fn get_balance(&self, pubkey: &Pubkey, commitment_params: CommitmentParams) -> u64 {
         self.bank().get_balance(&pubkey)
     }
 
-    fn get_recent_blockhash(&self) -> (String, FeeCalculator) {
+    fn get_recent_blockhash(&self, commitment_params: CommitmentParams) -> (String, FeeCalculator) {
         let (blockhash, fee_calculator) = self.bank().confirmed_last_blockhash();
         (blockhash.to_string(), fee_calculator)
     }
@@ -124,40 +138,52 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    pub fn get_signature_status(&self, signature: Signature) -> Option<transaction::Result<()>> {
-        self.get_signature_confirmation_status(signature)
+    pub fn get_signature_status(
+        &self,
+        signature: Signature,
+        commitment_params: Option<CommitmentParams>,
+    ) -> Option<transaction::Result<()>> {
+        self.get_signature_confirmation_status(signature, commitment_params)
             .map(|x| x.1)
     }
 
-    pub fn get_signature_confirmations(&self, signature: Signature) -> Option<usize> {
-        self.get_signature_confirmation_status(signature)
+    pub fn get_signature_confirmations(
+        &self,
+        signature: Signature,
+        commitment_params: Option<CommitmentParams>,
+    ) -> Option<usize> {
+        self.get_signature_confirmation_status(signature, commitment_params)
             .map(|x| x.0)
     }
 
     pub fn get_signature_confirmation_status(
         &self,
         signature: Signature,
+        commitment_params: CommitmentParams,
     ) -> Option<(usize, transaction::Result<()>)> {
         self.bank().get_signature_confirmation_status(&signature)
     }
 
-    fn get_slot(&self) -> Result<u64> {
+    fn get_slot(&self, commitment_params: CommitmentParams) -> Result<u64> {
         Ok(self.bank().slot())
     }
 
-    fn get_slot_leader(&self) -> Result<String> {
+    fn get_slot_leader(&self, commitment_params: CommitmentParams) -> Result<String> {
         Ok(self.bank().collector_id().to_string())
     }
 
-    fn get_transaction_count(&self) -> Result<u64> {
+    fn get_transaction_count(&self, commitment_params: CommitmentParams) -> Result<u64> {
         Ok(self.bank().transaction_count() as u64)
     }
 
-    fn get_total_supply(&self) -> Result<u64> {
+    fn get_total_supply(&self, commitment_params: CommitmentParams) -> Result<u64> {
         Ok(self.bank().capitalization())
     }
 
-    fn get_vote_accounts(&self) -> Result<RpcVoteAccountStatus> {
+    fn get_vote_accounts(
+        &self,
+        commitment_params: CommitmentParams,
+    ) -> Result<RpcVoteAccountStatus> {
         let bank = self.bank();
         let vote_accounts = bank.vote_accounts();
         let epoch_vote_accounts = bank
@@ -201,22 +227,26 @@ impl JsonRpcRequestProcessor {
         })
     }
 
-    fn get_storage_turn_rate(&self) -> Result<u64> {
+    fn get_storage_turn_rate(&self, commitment_params: CommitmentParams) -> Result<u64> {
         Ok(self.storage_state.get_storage_turn_rate())
     }
 
-    fn get_storage_turn(&self) -> Result<(String, u64)> {
+    fn get_storage_turn(&self, commitment_params: CommitmentParams) -> Result<(String, u64)> {
         Ok((
             self.storage_state.get_storage_blockhash().to_string(),
             self.storage_state.get_slot(),
         ))
     }
 
-    fn get_slots_per_segment(&self) -> Result<u64> {
+    fn get_slots_per_segment(&self, commitment_params: CommitmentParams) -> Result<u64> {
         Ok(self.bank().slots_per_segment())
     }
 
-    fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<Pubkey>> {
+    fn get_storage_pubkeys_for_slot(
+        &self,
+        slot: Slot,
+        commitment_params: CommitmentParams,
+    ) -> Result<Vec<Pubkey>> {
         Ok(self
             .storage_state
             .get_pubkeys_for_slot(slot, &self.bank_forks))
@@ -276,21 +306,87 @@ pub struct RpcVersionInfo {
     pub solana_core: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum BankType {
+    Recent,
+    Rooted,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcCommitmentParams {
+    bank_type: Option<BankType>,
+    confirmations: Option<u64>,
+    percentage: Option<f64>,
+}
+
+pub struct CommitmentParams {
+    confirmations: u64,
+    percentage: f64,
+}
+
+impl Default for CommitmentParams {
+    fn default() -> Self {
+        CommitmentParams {
+            confirmations: MAX_LOCKOUT_HISTORY as u64,
+            percentage: DEFAULT_PERCENT_CONFIDENCE,
+        }
+    }
+}
+
+fn parse_params(params: Option<Params>) -> CommitmentParams {
+    params
+        .and_then(|params| params.parse().ok())
+        .map(|commitment_params: RpcCommitmentParams| {
+            let mut final_params = CommitmentParams::default();
+            if let Some(confirmations) = commitment_params.confirmations {
+                final_params.confirmations = confirmations;
+            }
+            if let Some(percentage) = commitment_params.percentage {
+                final_params.percentage = percentage;
+            }
+            if let Some(bank_type) = commitment_params.bank_type {
+                match bank_type {
+                    BankType::Recent => {
+                        final_params.confirmations = 0;
+                    }
+                    BankType::Rooted => {
+                        final_params.confirmations = MAX_LOCKOUT_HISTORY as u64;
+                    }
+                }
+            }
+            final_params
+        })
+        .unwrap_or(CommitmentParams::default())
+}
+
 #[rpc(server)]
 pub trait RpcSol {
     type Metadata;
 
     #[rpc(meta, name = "confirmTransaction")]
-    fn confirm_transaction(&self, meta: Self::Metadata, signature_str: String) -> Result<bool>;
+    fn confirm_transaction(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        params: Option<Params>,
+    ) -> Result<bool>;
 
     #[rpc(meta, name = "getAccountInfo")]
-    fn get_account_info(&self, meta: Self::Metadata, pubkey_str: String) -> Result<Account>;
+    fn get_account_info(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        params: Option<Params>,
+    ) -> Result<Account>;
 
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(
         &self,
         meta: Self::Metadata,
         program_id_str: String,
+        params: Option<Params>,
     ) -> Result<Vec<(String, Account)>>;
 
     #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
@@ -298,22 +394,28 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         data_len: usize,
+        params: Option<Params>,
     ) -> Result<u64>;
 
     #[rpc(meta, name = "getInflation")]
-    fn get_inflation(&self, meta: Self::Metadata) -> Result<Inflation>;
+    fn get_inflation(&self, meta: Self::Metadata, params: Option<Params>) -> Result<Inflation>;
 
     #[rpc(meta, name = "getEpochSchedule")]
     fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule>;
 
     #[rpc(meta, name = "getBalance")]
-    fn get_balance(&self, meta: Self::Metadata, pubkey_str: String) -> Result<u64>;
+    fn get_balance(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        params: Option<Params>,
+    ) -> Result<u64>;
 
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
 
     #[rpc(meta, name = "getEpochInfo")]
-    fn get_epoch_info(&self, meta: Self::Metadata) -> Result<RpcEpochInfo>;
+    fn get_epoch_info(&self, meta: Self::Metadata, params: Option<Params>) -> Result<RpcEpochInfo>;
 
     #[rpc(meta, name = "getBlockCommitment")]
     fn get_block_commitment(
@@ -326,26 +428,35 @@ pub trait RpcSol {
     fn get_genesis_blockhash(&self, meta: Self::Metadata) -> Result<String>;
 
     #[rpc(meta, name = "getLeaderSchedule")]
-    fn get_leader_schedule(&self, meta: Self::Metadata) -> Result<Option<Vec<String>>>;
+    fn get_leader_schedule(
+        &self,
+        meta: Self::Metadata,
+        params: Option<Params>,
+    ) -> Result<Option<Vec<String>>>;
 
     #[rpc(meta, name = "getRecentBlockhash")]
-    fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<(String, FeeCalculator)>;
+    fn get_recent_blockhash(
+        &self,
+        meta: Self::Metadata,
+        params: Option<Params>,
+    ) -> Result<(String, FeeCalculator)>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
         &self,
         meta: Self::Metadata,
         signature_str: String,
+        params: Option<Params>,
     ) -> Result<Option<transaction::Result<()>>>;
 
     #[rpc(meta, name = "getSlot")]
-    fn get_slot(&self, meta: Self::Metadata) -> Result<u64>;
+    fn get_slot(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64>;
 
     #[rpc(meta, name = "getTransactionCount")]
-    fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64>;
+    fn get_transaction_count(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64>;
 
     #[rpc(meta, name = "getTotalSupply")]
-    fn get_total_supply(&self, meta: Self::Metadata) -> Result<u64>;
+    fn get_total_supply(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64>;
 
     #[rpc(meta, name = "requestAirdrop")]
     fn request_airdrop(
@@ -359,22 +470,35 @@ pub trait RpcSol {
     fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String>;
 
     #[rpc(meta, name = "getSlotLeader")]
-    fn get_slot_leader(&self, meta: Self::Metadata) -> Result<String>;
+    fn get_slot_leader(&self, meta: Self::Metadata, params: Option<Params>) -> Result<String>;
 
     #[rpc(meta, name = "getVoteAccounts")]
-    fn get_vote_accounts(&self, meta: Self::Metadata) -> Result<RpcVoteAccountStatus>;
+    fn get_vote_accounts(
+        &self,
+        meta: Self::Metadata,
+        params: Option<Params>,
+    ) -> Result<RpcVoteAccountStatus>;
 
     #[rpc(meta, name = "getStorageTurnRate")]
-    fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64>;
+    fn get_storage_turn_rate(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64>;
 
     #[rpc(meta, name = "getStorageTurn")]
-    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<(String, u64)>;
+    fn get_storage_turn(
+        &self,
+        meta: Self::Metadata,
+        params: Option<Params>,
+    ) -> Result<(String, u64)>;
 
     #[rpc(meta, name = "getSlotsPerSegment")]
-    fn get_slots_per_segment(&self, meta: Self::Metadata) -> Result<u64>;
+    fn get_slots_per_segment(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64>;
 
     #[rpc(meta, name = "getStoragePubkeysForSlot")]
-    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<Pubkey>>;
+    fn get_storage_pubkeys_for_slot(
+        &self,
+        meta: Self::Metadata,
+        slot: u64,
+        params: Option<Params>,
+    ) -> Result<Vec<Pubkey>>;
 
     #[rpc(meta, name = "validatorExit")]
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool>;
@@ -384,6 +508,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         signature_str: String,
+        params: Option<Params>,
     ) -> Result<Option<usize>>;
 
     #[rpc(meta, name = "getSignatureConfirmation")]
@@ -391,6 +516,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         signature_str: String,
+        params: Option<Params>,
     ) -> Result<Option<(usize, transaction::Result<()>)>>;
 
     #[rpc(meta, name = "getVersion")]
@@ -404,12 +530,17 @@ pub struct RpcSolImpl;
 impl RpcSol for RpcSolImpl {
     type Metadata = Meta;
 
-    fn confirm_transaction(&self, meta: Self::Metadata, signature_str: String) -> Result<bool> {
+    fn confirm_transaction(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        params: Option<Params>,
+    ) -> Result<bool> {
         debug!(
             "confirm_transaction rpc request received: {:?}",
             signature_str
         );
-        self.get_signature_status(meta, signature_str)
+        self.get_signature_status(meta, signature_str, params)
             .map(|status_option| {
                 if status_option.is_none() {
                     return false;
@@ -418,19 +549,25 @@ impl RpcSol for RpcSolImpl {
             })
     }
 
-    fn get_account_info(&self, meta: Self::Metadata, pubkey_str: String) -> Result<Account> {
+    fn get_account_info(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        params: Option<Params>,
+    ) -> Result<Account> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
         meta.request_processor
             .read()
             .unwrap()
-            .get_account_info(&pubkey)
+            .get_account_info(&pubkey, parse_params(params))
     }
 
     fn get_minimum_balance_for_rent_exemption(
         &self,
         meta: Self::Metadata,
         data_len: usize,
+        params: Option<Params>,
     ) -> Result<u64> {
         debug!(
             "get_minimum_balance_for_rent_exemption rpc request received: {:?}",
@@ -439,13 +576,14 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_minimum_balance_for_rent_exemption(data_len)
+            .get_minimum_balance_for_rent_exemption(data_len, parse_params(params))
     }
 
     fn get_program_accounts(
         &self,
         meta: Self::Metadata,
         program_id_str: String,
+        params: Option<Params>,
     ) -> Result<Vec<(String, Account)>> {
         debug!(
             "get_program_accounts rpc request received: {:?}",
@@ -455,33 +593,46 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_program_accounts(&program_id)
+            .get_program_accounts(&program_id, parse_params(params))
     }
 
-    fn get_inflation(&self, meta: Self::Metadata) -> Result<Inflation> {
+    fn get_inflation(&self, meta: Self::Metadata, params: Option<Params>) -> Result<Inflation> {
         debug!("get_inflation rpc request received");
         Ok(meta
             .request_processor
             .read()
             .unwrap()
-            .get_inflation()
+            .get_inflation(parse_params(params))
             .unwrap())
     }
 
-    fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule> {
+    fn get_epoch_schedule(
+        &self,
+        meta: Self::Metadata,
+        params: Option<Params>,
+    ) -> Result<EpochSchedule> {
         debug!("get_epoch_schedule rpc request received");
         Ok(meta
             .request_processor
             .read()
             .unwrap()
-            .get_epoch_schedule()
+            .get_epoch_schedule(parse_params(params))
             .unwrap())
     }
 
-    fn get_balance(&self, meta: Self::Metadata, pubkey_str: String) -> Result<u64> {
+    fn get_balance(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        params: Option<Params>,
+    ) -> Result<u64> {
         debug!("get_balance rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
-        Ok(meta.request_processor.read().unwrap().get_balance(&pubkey))
+        Ok(meta
+            .request_processor
+            .read()
+            .unwrap()
+            .get_balance(&pubkey, parse_params(params)))
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
@@ -511,7 +662,8 @@ impl RpcSol for RpcSolImpl {
             .collect())
     }
 
-    fn get_epoch_info(&self, meta: Self::Metadata) -> Result<RpcEpochInfo> {
+    fn get_epoch_info(&self, meta: Self::Metadata, params: Option<Params>) -> Result<RpcEpochInfo> {
+        // TODO: choose bank explicitly based on params
         let bank = meta.request_processor.read().unwrap().bank();
         let epoch_schedule = bank.epoch_schedule();
         let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
@@ -541,7 +693,12 @@ impl RpcSol for RpcSolImpl {
         Ok(meta.genesis_blockhash.to_string())
     }
 
-    fn get_leader_schedule(&self, meta: Self::Metadata) -> Result<Option<Vec<String>>> {
+    fn get_leader_schedule(
+        &self,
+        meta: Self::Metadata,
+        params: Option<Params>,
+    ) -> Result<Option<Vec<String>>> {
+        // TODO: choose bank explicitly based on params
         let bank = meta.request_processor.read().unwrap().bank();
         Ok(
             solana_ledger::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
@@ -556,34 +713,43 @@ impl RpcSol for RpcSolImpl {
         )
     }
 
-    fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<(String, FeeCalculator)> {
+    fn get_recent_blockhash(
+        &self,
+        meta: Self::Metadata,
+        params: Option<Params>,
+    ) -> Result<(String, FeeCalculator)> {
         debug!("get_recent_blockhash rpc request received");
         Ok(meta
             .request_processor
             .read()
             .unwrap()
-            .get_recent_blockhash())
+            .get_recent_blockhash(parse_params(params)))
     }
 
     fn get_signature_status(
         &self,
         meta: Self::Metadata,
         signature_str: String,
+        params: Option<Params>,
     ) -> Result<Option<transaction::Result<()>>> {
-        self.get_signature_confirmation(meta, signature_str)
+        self.get_signature_confirmation(meta, signature_str, params)
             .map(|res| res.map(|x| x.1))
     }
 
-    fn get_slot(&self, meta: Self::Metadata) -> Result<u64> {
-        meta.request_processor.read().unwrap().get_slot()
+    fn get_slot(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_slot(parse_params(params))
     }
 
     fn get_num_blocks_since_signature_confirmation(
         &self,
         meta: Self::Metadata,
         signature_str: String,
+        params: Option<Params>,
     ) -> Result<Option<usize>> {
-        self.get_signature_confirmation(meta, signature_str)
+        self.get_signature_confirmation(meta, signature_str, params)
             .map(|res| res.map(|x| x.0))
     }
 
@@ -591,6 +757,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         signature_str: String,
+        params: Option<Params>,
     ) -> Result<Option<(usize, transaction::Result<()>)>> {
         debug!(
             "get_signature_confirmation rpc request received: {:?}",
@@ -601,20 +768,23 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .get_signature_confirmation_status(signature))
+            .get_signature_confirmation_status(signature, parse_params(params)))
     }
 
-    fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
+    fn get_transaction_count(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64> {
         debug!("get_transaction_count rpc request received");
         meta.request_processor
             .read()
             .unwrap()
-            .get_transaction_count()
+            .get_transaction_count(parse_params(params))
     }
 
-    fn get_total_supply(&self, meta: Self::Metadata) -> Result<u64> {
+    fn get_total_supply(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64> {
         debug!("get_total_supply rpc request received");
-        meta.request_processor.read().unwrap().get_total_supply()
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_total_supply(parse_params(params))
     }
 
     fn request_airdrop(
@@ -669,7 +839,7 @@ impl RpcSol for RpcSolImpl {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_status(signature);
+                .get_signature_status(signature, CommitmentParams::default());
 
             if signature_status == Some(Ok(())) {
                 info!("airdrop signature ok");
@@ -713,41 +883,59 @@ impl RpcSol for RpcSolImpl {
         Ok(signature)
     }
 
-    fn get_slot_leader(&self, meta: Self::Metadata) -> Result<String> {
-        meta.request_processor.read().unwrap().get_slot_leader()
-    }
-
-    fn get_vote_accounts(&self, meta: Self::Metadata) -> Result<RpcVoteAccountStatus> {
-        meta.request_processor.read().unwrap().get_vote_accounts()
-    }
-
-    fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64> {
+    fn get_slot_leader(&self, meta: Self::Metadata, params: Option<Params>) -> Result<String> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_storage_turn_rate()
+            .get_slot_leader(parse_params(params))
     }
 
-    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<(String, u64)> {
-        meta.request_processor.read().unwrap().get_storage_turn()
-    }
-
-    fn get_slots_per_segment(&self, meta: Self::Metadata) -> Result<u64> {
+    fn get_vote_accounts(
+        &self,
+        meta: Self::Metadata,
+        params: Option<Params>,
+    ) -> Result<RpcVoteAccountStatus> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_slots_per_segment()
+            .get_vote_accounts(parse_params(params))
+    }
+
+    fn get_storage_turn_rate(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_storage_turn_rate(parse_params(params))
+    }
+
+    fn get_storage_turn(
+        &self,
+        meta: Self::Metadata,
+        params: Option<Params>,
+    ) -> Result<(String, u64)> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_storage_turn(parse_params(params))
+    }
+
+    fn get_slots_per_segment(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_slots_per_segment(parse_params(params))
     }
 
     fn get_storage_pubkeys_for_slot(
         &self,
         meta: Self::Metadata,
         slot: Slot,
+        params: Option<Params>,
     ) -> Result<Vec<Pubkey>> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_storage_pubkeys_for_slot(slot)
+            .get_storage_pubkeys_for_slot(slot, parse_params(params))
     }
 
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool> {
@@ -887,7 +1075,12 @@ pub mod tests {
         })
         .join()
         .unwrap();
-        assert_eq!(request_processor.get_transaction_count().unwrap(), 1);
+        assert_eq!(
+            request_processor
+                .get_transaction_count(CommitmentParams::default())
+                .unwrap(),
+            1
+        );
     }
 
     #[test]
