@@ -32,7 +32,7 @@ A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the bloc
 
 A Bank-Hash is the hash of the concatenation of the Block-Merkle and Accounts-Hash
 
-<img alt="Bank Merkle Diagram" src="img/spv-bank-merkle.svg" class="center"/>
+<img alt="Bank Hash Diagram" src="img/spv-bank-hash.svg" class="center"/>
 
 An Accounts-Hash is the hash of the concatentation of the state hashes of each account modified during the current slot.
 
