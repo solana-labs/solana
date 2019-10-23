@@ -1,7 +1,8 @@
 # Commitment
 
-The commitment metric aims to give clients a measure of the network
-confirmation and stake levels on a particular block.
+The commitment metric aims to give clients a measure of the network confirmation
+and stake levels on a particular block. Clients can then use this information to 
+derive their own measures of confidence.
 
 # Calculation RPC
 
@@ -14,18 +15,8 @@ contains the signature `s` as of the last block `M` that the validator voted on.
 An entry `s` at index `i` in the `BlockCommitment` array implies that the
 validator observed `s` total stake in the cluster reaching `i` confirmations on
 block `N` as observed in some block `M`. There will be `MAX_CONFIRMATIONS` elements in
-this array, representing all the possible number of confirmations from 1 and to
+this array, representing all the possible number of confirmations from 1 to
 `MAX_CONFIRMATIONS`.
-
-From here, we can calculate commitment in terms of stake-weighted lockouts,
-where the total equals:
-
-```
-    let stake_weighted_lockouts: u128;
-    for (i, s) in bank_commitment.iter().enumerate() {
-        stake_weighted_lockouts += 2.pow(i) * s;
-    }
-```
 
 # Computation of commitment metric
 
