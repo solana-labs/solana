@@ -1,2 +1,6 @@
 #!/usr/bin/env bash
-nvidia-smi -pm ENABLED || true
+
+echo "--- Enabling nvidia persistence mode"
+if ! nvidia-smi -pm ENABLED; then
+  echo "^^^ +++"
+fi
