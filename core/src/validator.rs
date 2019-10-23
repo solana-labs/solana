@@ -393,6 +393,12 @@ fn get_bank_forks(
     verify_ledger: bool,
     dev_halt_at_slot: Option<Slot>,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
+    let process_options = blocktree_processor::ProcessOptions {
+        verify_ledger,
+        dev_halt_at_slot,
+        ..blocktree_processor::ProcessOptions::default()
+    };
+
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
             "Initializing snapshot path: {:?}",
@@ -417,13 +423,10 @@ fn get_bank_forks(
             .expect("Load from snapshot failed");
 
             return blocktree_processor::process_blocktree_from_root(
+                genesis_block,
                 blocktree,
                 Arc::new(deserialized_bank),
-                &blocktree_processor::ProcessOptions {
-                    verify_ledger,
-                    dev_halt_at_slot,
-                    ..blocktree_processor::ProcessOptions::default()
-                },
+                &process_options,
             )
             .expect("processing blocktree after loading snapshot failed");
         } else {
@@ -438,11 +441,7 @@ fn get_bank_forks(
         &genesis_block,
         &blocktree,
         account_paths,
-        blocktree_processor::ProcessOptions {
-            verify_ledger,
-            dev_halt_at_slot,
-            ..blocktree_processor::ProcessOptions::default()
-        },
+        process_options,
     )
     .expect("process_blocktree failed")
 }

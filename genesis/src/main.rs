@@ -9,7 +9,7 @@ use solana_sdk::{
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
-    genesis_block::GenesisBlock,
+    genesis_block::{GenesisBlock, OperatingMode},
     native_token::sol_to_lamports,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -285,6 +285,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .help("The location of keypairs for primordial accounts and balance"),
         )
+        .arg(
+            Arg::with_name("development")
+                .long("dev")
+                .help("Configure the cluster for development mode where all features are available at epoch 0"),
+        )
         .get_matches();
 
     let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
@@ -376,14 +381,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
+    let operating_mode = if matches.is_present("development") {
+        OperatingMode::Development
+    } else {
+        OperatingMode::SoftLaunch
+    };
+    let native_instruction_processors = solana_genesis_programs::get(operating_mode, 0).unwrap();
     let mut genesis_block = GenesisBlock {
         accounts,
-        native_instruction_processors: solana_genesis_programs::get(),
+        native_instruction_processors,
         ticks_per_slot,
         epoch_schedule,
         fee_calculator,
         rent_calculator,
         poh_config,
+        operating_mode,
         ..GenesisBlock::default()
     };
 

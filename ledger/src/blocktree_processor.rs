@@ -206,13 +206,14 @@ pub fn process_blocktree(
 
     // Setup bank for slot 0
     let bank0 = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
-    info!("processing ledger from bank 0...");
+    info!("processing ledger for bank 0...");
     process_bank_0(&bank0, blocktree, &opts)?;
-    process_blocktree_from_root(blocktree, bank0, &opts)
+    process_blocktree_from_root(genesis_block, blocktree, bank0, &opts)
 }
 
 // Process blocktree from a known root bank
 pub fn process_blocktree_from_root(
+    genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     bank: Arc<Bank>,
     opts: &ProcessOptions,
@@ -223,6 +224,10 @@ pub fn process_blocktree_from_root(
     let start_slot = bank.slot();
     let now = Instant::now();
     let mut rooted_path = vec![start_slot];
+
+    bank.set_entered_epoch_callback(solana_genesis_programs::get_entered_epoch_callback(
+        genesis_block.operating_mode,
+    ));
 
     blocktree
         .set_roots(&[start_slot])
@@ -1699,7 +1704,7 @@ pub mod tests {
 
         // Test process_blocktree_from_root() from slot 1 onwards
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree_from_root(&blocktree, bank1, &opts).unwrap();
+            process_blocktree_from_root(&genesis_block, &blocktree, bank1, &opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // One fork
         assert_eq!(

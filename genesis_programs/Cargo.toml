@@ -9,6 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
+log = { version = "0.4.8" }
 solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.20.0" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.20.0" }
 solana-budget-api = { path = "../programs/budget_api", version = "0.20.0" }
@@ -19,6 +20,7 @@ solana-exchange-api = { path = "../programs/exchange_api", version = "0.20.0" }
 solana-exchange-program = { path = "../programs/exchange_program", version = "0.20.0" }
 solana-move-loader-program = { path = "../programs/move_loader_program", version = "0.20.0", optional = true }
 solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.20.0", optional = true }
+solana-runtime = { path = "../runtime", version = "0.20.0" }
 solana-sdk = { path = "../sdk", version = "0.20.0" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.20.0" }
 solana-stake-program = { path = "../programs/stake_program", version = "0.20.0" }
