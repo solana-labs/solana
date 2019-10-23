@@ -449,7 +449,9 @@ startBootstrapLeader() {
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
+         \"$GEOLOCATION_API_KEY\" \
       "
+
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -514,6 +516,7 @@ startNode() {
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
+         \"$GEOLOCATION_API_KEY\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!

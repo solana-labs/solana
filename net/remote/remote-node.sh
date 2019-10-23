@@ -25,6 +25,7 @@ benchExchangeExtraArgs="${16}"
 genesisOptions="${17}"
 extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
+GEOLOCATION_API_KEY="${20}"
 set +x
 
 # Use a very large stake (relative to the default multinode-demo/ stake of 42)
@@ -302,6 +303,8 @@ EOF
       cat > ~/solana/restart-explorer <<EOF
 #!/bin/bash -ex
       cd ~/solana
+
+      export GEOLOCATION_API_KEY=$GEOLOCATION_API_KEY
 
       if [[ -f blockexplorer.pid ]]; then
         pgid=\$(ps opgid= \$(cat blockexplorer.pid) | tr -d '[:space:]')
