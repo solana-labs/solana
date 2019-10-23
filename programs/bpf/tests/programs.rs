@@ -117,10 +117,8 @@ mod bpf {
                 } = create_genesis_block(50);
                 let bank = Arc::new(Bank::new(&genesis_block));
                 // Create bank with specific slot, used by solana_bpf_rust_sysvar test
-                dbg!(bank.epoch());
                 let bank =
                     Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);
-                dbg!(bank.epoch());
                 let bank_client = BankClient::new(bank);
 
                 // Call user program

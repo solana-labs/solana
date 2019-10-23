@@ -887,7 +887,8 @@ pub mod tests {
             // Add a second Transaction that will produce a
             // InstructionError<0, ResultWithNegativeLamports> error when processed
             let keypair2 = Keypair::new();
-            let tx = system_transaction::transfer(&keypair, &keypair2.pubkey(), 42, blockhash);
+            let tx =
+                system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 101, blockhash);
             let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
             last_entry_hash = entry.hash;
             entries.push(entry);
