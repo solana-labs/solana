@@ -434,7 +434,7 @@ impl LocalCluster {
             *dest_pubkey
         );
         client
-            .retry_transfer(&source_keypair, &mut tx, 5)
+            .retry_transfer(&source_keypair, &mut tx, 10)
             .expect("client transfer");
         client
             .wait_for_balance(dest_pubkey, Some(lamports))
@@ -472,7 +472,7 @@ impl LocalCluster {
                 client.get_recent_blockhash().unwrap().0,
             );
             client
-                .retry_transfer(&from_account, &mut transaction, 5)
+                .retry_transfer(&from_account, &mut transaction, 10)
                 .expect("fund vote");
             client
                 .wait_for_balance(&vote_account_pubkey, Some(amount))
@@ -571,7 +571,7 @@ impl LocalCluster {
         let blockhash = client.get_recent_blockhash().unwrap().0;
         let mut transaction = Transaction::new(&signer_keys, message, blockhash);
         client
-            .retry_transfer(&from_keypair, &mut transaction, 5)
+            .retry_transfer(&from_keypair, &mut transaction, 10)
             .map(|_signature| ())
     }
 }

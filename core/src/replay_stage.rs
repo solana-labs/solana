@@ -16,6 +16,7 @@ use solana_ledger::blocktree_processor;
 use solana_ledger::entry::{Entry, EntrySlice};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::snapshot_package::SnapshotPackageSender;
+use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
@@ -764,13 +765,17 @@ impl ReplayStage {
         shred_index: usize,
         bank_progress: &mut ForkProgress,
     ) -> Result<()> {
-        let now = Instant::now();
-        let last_entry = &bank_progress.last_entry;
         datapoint_info!("verify-batch-size", ("size", entries.len() as i64, i64));
-        let verify_result = entries.verify(last_entry);
-        let verify_entries_elapsed = now.elapsed().as_micros();
-        bank_progress.stats.entry_verification_elapsed += verify_entries_elapsed as u64;
-        if !verify_result {
+        let mut verify_total = Measure::start("verify_and_process_entries");
+        let last_entry = &bank_progress.last_entry;
+        let mut entry_state = entries.start_verify(last_entry);
+
+        let mut replay_elapsed = Measure::start("replay_elapsed");
+        let res = blocktree_processor::process_entries(bank, entries, true);
+        replay_elapsed.stop();
+        bank_progress.stats.replay_elapsed += replay_elapsed.as_us();
+
+        if !entry_state.finish_verify(entries) {
             info!(
                 "entry verification failed, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}",
                 bank.slot(),
@@ -788,11 +793,9 @@ impl ReplayStage {
             );
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
-
-        let now = Instant::now();
-        let res = blocktree_processor::process_entries(bank, entries, true);
-        let replay_elapsed = now.elapsed().as_micros();
-        bank_progress.stats.replay_elapsed += replay_elapsed as u64;
+        verify_total.stop();
+        bank_progress.stats.entry_verification_elapsed =
+            verify_total.as_us() - replay_elapsed.as_us();
 
         res?;
         Ok(())
@@ -948,7 +951,7 @@ mod test {
         let missing_keypair = Keypair::new();
         let missing_keypair2 = Keypair::new();
 
-        let res = check_dead_fork(|blockhash, slot| {
+        let res = check_dead_fork(|_keypair, blockhash, slot| {
             let entry = entry::next_entry(
                 blockhash,
                 1,
@@ -973,16 +976,15 @@ mod test {
 
     #[test]
     fn test_dead_fork_entry_verification_failure() {
-        let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
-        let res = check_dead_fork(|blockhash, slot| {
+        let res = check_dead_fork(|genesis_keypair, blockhash, slot| {
             let bad_hash = hash(&[2; 30]);
             let entry = entry::next_entry(
-                // User wrong blockhash so that the entry causes an entry verification failure
+                // Use wrong blockhash so that the entry causes an entry verification failure
                 &bad_hash,
                 1,
                 vec![system_transaction::transfer_now(
-                    &keypair1,
+                    &genesis_keypair,
                     &keypair2.pubkey(),
                     2,
                     *blockhash,
@@ -997,7 +999,7 @@ mod test {
     #[test]
     fn test_dead_fork_entry_deserialize_failure() {
         // Insert entry that causes deserialization failure
-        let res = check_dead_fork(|_, _| {
+        let res = check_dead_fork(|_, _, _| {
             let payload_len = SIZE_OF_DATA_SHRED_PAYLOAD;
             let gibberish = [0xa5u8; PACKET_DATA_SIZE];
             let mut data_header = DataShredHeader::default();
@@ -1025,19 +1027,23 @@ mod test {
     // marked as dead. Returns the error for caller to verify.
     fn check_dead_fork<F>(shred_to_insert: F) -> Result<()>
     where
-        F: Fn(&Hash, u64) -> Vec<Shred>,
+        F: Fn(&Keypair, &Hash, u64) -> Vec<Shred>,
     {
         let ledger_path = get_tmp_ledger_path!();
         let res = {
             let blocktree = Arc::new(
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
-            let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(1000);
+            let GenesisBlockInfo {
+                genesis_block,
+                mint_keypair,
+                ..
+            } = create_genesis_block(1000);
             let bank0 = Arc::new(Bank::new(&genesis_block));
             let mut progress = HashMap::new();
             let last_blockhash = bank0.last_blockhash();
             progress.insert(bank0.slot(), ForkProgress::new(0, last_blockhash));
-            let shreds = shred_to_insert(&last_blockhash, bank0.slot());
+            let shreds = shred_to_insert(&mint_keypair, &last_blockhash, bank0.slot());
             blocktree.insert_shreds(shreds, None).unwrap();
             let (res, _tx_count) =
                 ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut progress);

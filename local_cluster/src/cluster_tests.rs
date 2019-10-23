@@ -57,7 +57,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
             system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
         let sig = client
-            .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 5, confs)
+            .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 10, confs)
             .unwrap();
         for validator in &cluster_nodes {
             if ignore_nodes.contains(&validator.id) {

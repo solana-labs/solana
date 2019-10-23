@@ -21,7 +21,6 @@ use std::result;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub const NUM_THREADS: u32 = 10;
 use solana_rayon_threadlimit::get_thread_count;
 use std::cell::RefCell;
 
@@ -109,12 +108,11 @@ fn process_entries_with_callback(
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
+    let mut tick_hashes = vec![];
     for entry in entries {
         if entry.is_tick() {
-            // if its a tick, execute the group and register the tick
-            execute_batches(bank, &batches, entry_callback)?;
-            batches.clear();
-            bank.register_tick(&entry.hash);
+            // if its a tick, save it for later
+            tick_hashes.push(entry.hash);
             continue;
         }
         // else loop on processing the entry
@@ -164,6 +162,9 @@ fn process_entries_with_callback(
         }
     }
     execute_batches(bank, &batches, entry_callback)?;
+    for hash in tick_hashes {
+        bank.register_tick(&hash);
+    }
     Ok(())
 }
 
