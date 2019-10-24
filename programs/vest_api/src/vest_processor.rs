@@ -4,13 +4,12 @@ use crate::{
     vest_instruction::{VestError, VestInstruction},
     vest_state::VestState,
 };
-use bincode::deserialize;
 use chrono::prelude::*;
 use solana_config_api::get_config_data;
 use solana_sdk::{
     account::{Account, KeyedAccount},
     instruction::InstructionError,
-    instruction_processor_utils::next_keyed_account,
+    instruction_processor_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
 };
 
@@ -62,7 +61,7 @@ pub fn process_instruction(
     let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
     let contract_account = &mut next_keyed_account(keyed_accounts_iter)?.account;
 
-    let instruction = deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)?;
+    let instruction = limited_deserialize(data)?;
 
     let mut vest_state = if let VestInstruction::InitializeAccount {
         terminator_pubkey,

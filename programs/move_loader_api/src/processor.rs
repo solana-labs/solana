@@ -6,7 +6,8 @@ use bytecode_verifier::{VerifiedModule, VerifiedScript};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::KeyedAccount, instruction::InstructionError, loader_instruction::LoaderInstruction,
+    account::KeyedAccount, instruction::InstructionError,
+    instruction_processor_utils::limited_deserialize, loader_instruction::LoaderInstruction,
     pubkey::Pubkey, sysvar::rent,
 };
 use types::{
@@ -36,14 +37,7 @@ pub fn process_instruction(
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
-    let command = bincode::deserialize::<LoaderInstruction>(data).map_err(|err| {
-        info!("Invalid instruction: {:?} {:?}", data, err);
-        InstructionError::InvalidInstructionData
-    })?;
-
-    trace!("{:?}", command);
-
-    match command {
+    match limited_deserialize(data)? {
         LoaderInstruction::Write { offset, bytes } => {
             MoveProcessor::do_write(keyed_accounts, offset, &bytes)
         }
@@ -138,7 +132,7 @@ impl MoveProcessor {
     fn deserialize_compiled_program(
         data: &[u8],
     ) -> Result<(CompiledScript, Vec<CompiledModule>), InstructionError> {
-        match bincode::deserialize(data).map_err(map_data_error)? {
+        match limited_deserialize(data)? {
             LibraAccountState::CompiledProgram(string) => {
                 let program: Program = serde_json::from_str(&string).map_err(map_json_error)?;
 
@@ -163,7 +157,7 @@ impl MoveProcessor {
     fn deserialize_verified_program(
         data: &[u8],
     ) -> Result<(VerifiedScript, Vec<VerifiedModule>), InstructionError> {
-        match bincode::deserialize(data).map_err(map_data_error)? {
+        match limited_deserialize(data)? {
             LibraAccountState::VerifiedProgram {
                 script_bytes,
                 modules_bytes,
@@ -234,7 +228,7 @@ impl MoveProcessor {
     ) -> Result<DataStore, InstructionError> {
         let mut data_store = DataStore::default();
         for keyed_account in keyed_accounts {
-            match bincode::deserialize(&keyed_account.account.data).map_err(map_data_error)? {
+            match limited_deserialize(&keyed_account.account.data)? {
                 LibraAccountState::Genesis(write_set) => data_store.apply_write_set(&write_set),
                 LibraAccountState::User(owner, write_set) => {
                     if owner != *genesis_key {
@@ -349,7 +343,7 @@ impl MoveProcessor {
         keyed_accounts: &mut [KeyedAccount],
         data: &[u8],
     ) -> Result<(), InstructionError> {
-        match bincode::deserialize(&data).map_err(map_data_error)? {
+        match limited_deserialize(&data)? {
             InvokeCommand::CreateGenesis(amount) => {
                 if keyed_accounts.is_empty() {
                     debug!("Error: Requires an unallocated account");
@@ -360,9 +354,7 @@ impl MoveProcessor {
                     return Err(InstructionError::InvalidArgument);
                 }
 
-                match bincode::deserialize(&keyed_accounts[0].account.data)
-                    .map_err(map_data_error)?
-                {
+                match limited_deserialize(&keyed_accounts[0].account.data)? {
                     LibraAccountState::Unallocated => Self::serialize_and_enforce_length(
                         &LibraAccountState::create_genesis(amount)?,
                         &mut keyed_accounts[0].account.data,

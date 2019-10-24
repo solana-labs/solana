@@ -18,6 +18,7 @@ use log::*;
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::limited_deserialize;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::rent;
@@ -89,7 +90,7 @@ pub fn process_instruction(
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
-    if let Ok(instruction) = bincode::deserialize(ix_data) {
+    if let Ok(instruction) = limited_deserialize(ix_data) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
                 if keyed_accounts[0].signer_key().is_none() {

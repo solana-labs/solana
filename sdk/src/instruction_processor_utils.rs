@@ -41,6 +41,20 @@ pub fn next_keyed_account<I: Iterator>(iter: &mut I) -> Result<I::Item, Instruct
     iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
 }
 
+pub fn limited_deserialize<T>(data: &[u8]) -> Result<(T), InstructionError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    #[cfg(not(feature = "program"))]
+    let limit = crate::packet::PACKET_DATA_SIZE as u64;
+    #[cfg(feature = "program")]
+    let limit = 1024;
+    bincode::config()
+        .limit(limit)
+        .deserialize(data)
+        .map_err(|_| InstructionError::InvalidInstructionData)
+}
+
 pub trait DecodeError<E> {
     fn decode_custom_error_to_enum(custom: u32) -> Option<E>
     where

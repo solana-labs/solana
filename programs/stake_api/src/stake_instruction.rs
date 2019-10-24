@@ -2,14 +2,13 @@ use crate::{
     config, id,
     stake_state::{Authorized, Lockup, StakeAccount, StakeAuthorize, StakeState},
 };
-use bincode::deserialize;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
     instruction::{AccountMeta, Instruction, InstructionError},
-    instruction_processor_utils::{next_keyed_account, DecodeError},
+    instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction, sysvar,
     sysvar::rent,
@@ -275,7 +274,7 @@ pub fn process_instruction(
     let me = &mut next_keyed_account(keyed_accounts)?;
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
-    match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
+    match limited_deserialize(data)? {
         StakeInstruction::Initialize(authorized, lockup) => {
             rent::verify_rent_exemption(me, next_keyed_account(keyed_accounts)?)?;
             me.initialize(&authorized, &lockup)

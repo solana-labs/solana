@@ -5,7 +5,6 @@ use crate::{
     id,
     vote_state::{self, Vote, VoteAuthorize, VoteInit, VoteState},
 };
-use bincode::deserialize;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
@@ -13,7 +12,7 @@ use solana_metrics::datapoint_debug;
 use solana_sdk::{
     account::KeyedAccount,
     instruction::{AccountMeta, Instruction, InstructionError},
-    instruction_processor_utils::DecodeError,
+    instruction_processor_utils::{limited_deserialize, DecodeError},
     pubkey::Pubkey,
     system_instruction,
     sysvar::{self, rent},
@@ -178,7 +177,7 @@ pub fn process_instruction(
     let me = &mut me[0];
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
-    match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
+    match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             if rest.is_empty() {
                 return Err(InstructionError::InvalidInstructionData);
