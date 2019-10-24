@@ -4,6 +4,7 @@ pub mod bpf_loader;
 pub mod clock;
 pub mod epoch_schedule;
 pub mod fee_calculator;
+#[macro_use]
 pub mod hash;
 pub mod inflation;
 pub mod instruction;

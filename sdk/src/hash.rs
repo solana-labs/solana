@@ -1,11 +1,12 @@
 //! The `hash` module provides functions for creating SHA-256 hashes.
 
-use bs58;
 use sha2::{Digest, Sha256};
 use std::convert::TryFrom;
 use std::fmt;
 use std::mem;
 use std::str::FromStr;
+
+pub use bs58;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
@@ -95,6 +96,44 @@ pub fn extend_and_hash(id: &Hash, val: &[u8]) -> Hash {
     hash_data.extend_from_slice(val);
     hash(&hash_data)
 }
+
+// TODO: Merge this logic with pubkey::solana{,_name}_id
+#[macro_export]
+macro_rules! cardinal_hash(
+    ($hash:ident) => (
+
+        pub fn check_hash(hash: &$crate::hash::Hash) -> bool {
+            hash.as_ref() == $hash
+        }
+
+        pub fn hash() -> $crate::hash::Hash {
+            $crate::hash::Hash::new(&$hash)
+        }
+
+        #[cfg(test)]
+        #[test]
+        fn test_hash() {
+            assert!(check_hash(&hash()));
+        }
+
+    )
+);
+
+#[macro_export]
+macro_rules! cardinal_name_hash(
+    ($hash:ident, $name:expr) => (
+
+        $crate::cardinal_hash!($hash);
+
+        #[cfg(test)]
+        #[test]
+        fn test_name_hash() {
+            if hash().to_string() != $name {
+                panic!("id for `{}` should be `{:?}`", $name, $crate::hash::bs58::decode($name).into_vec().unwrap());
+            }
+        }
+    )
+);
 
 #[cfg(test)]
 mod tests {
