@@ -9,6 +9,9 @@ use crate::packet::{Packet, Packets};
 use crate::recycler::Recycler;
 use bincode::deserialize_from;
 use bincode::serialized_size;
+use crate::recycler::Reset;
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 use solana_ledger::perf_libs;
 use solana_ledger::shred::ShredType;
@@ -80,10 +83,17 @@ pub fn init() {
         }
     }
 }
-
+ 
+impl Reset for PinnedVec<Pubkey> {
+    fn reset(&mut self) {
+        self.resize(0, Pubkey::default());
+    }
+}
+ 
 /// Assuming layout is
 /// signature: Signature
-/// msg: {
+/// signed_msg: {
+///   type: ShredType
 ///   slot: u64,
 ///   ...
 /// }
@@ -95,13 +105,13 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, Pubkey>) -> Opt
     let slot_end = sig_end + size_of::<u64>();
     let msg_start = sig_end;
     let msg_end = packet.data.len() - sig_end;
-    let slot: u64 = deserialize_from(packet.data[slot_start..slot_end]).ok()?;
-    let pubkey: &Pubkey = slot_leaders.get(&slot).ok()?;
+    let slot: u64 = deserialize_from(&packet.data[slot_start..slot_end]).ok()?;
+    let pubkey: &Pubkey = slot_leaders.get(&slot)?;
     let signature = Signature::new(&packet.data[sig_start..sig_end]);
-    if !signature.verify(&pubkey, &packet.data[msg_start..msg_end]) {
-        return 0;
+    if !signature.verify(pubkey.as_ref(), &packet.data[msg_start..msg_end]) {
+        return Some(0);
     }
-    return 1;
+    return Some(1);
 }
 
 pub fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, Pubkey>) -> Vec<Vec<u8>> {
@@ -129,9 +139,9 @@ fn shred_gpu_pubkeys(
     batches: &[Packets],
     slot_leaders: &HashMap<u64, Pubkey>,
     recycler_offsets: &Recycler<TxOffset>,
-    recycler_pubkeys: &Recycler<Pubkey>,
+    recycler_pubkeys: &Recycler<PinnedVec<Pubkey>>,
 ) -> (PinnedVec<Pubkey>, TxOffset) {
-    assert_eq!(slot_leaders.get(u64::max()), Some(Pubkey::default()));
+    assert_eq!(slot_leaders.get(&std::u64::MAX), Some(&Pubkey::default()));
     let slots: Vec<Vec<u64>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches
@@ -142,10 +152,12 @@ fn shred_gpu_pubkeys(
                         .map(|packet| {
                             let slot_start = size_of::<Signature>() + size_of::<ShredType>();
                             let slot_end = slot_start + size_of::<u64>();
-                            deserialize_from(packet.data[slot_start..slot_end])
-                                .ok()
-                                .then(|slot| slot_leaders.get(slot).map(|_| slot))
-                                .unwrap_or(u64::max())
+                            let slot: Option<u64> = deserialize_from(&packet.data[slot_start..slot_end]).ok();
+                            if slot.is_some() && slot_leaders.get(&slot.unwrap()).is_some() {
+                                slot.unwrap()
+                            } else {
+                                std::u64::MAX
+                            }
                         })
                         .collect()
                 })
@@ -156,13 +168,13 @@ fn shred_gpu_pubkeys(
     for batch in slots.iter() {
         for slot in batch.iter() {
             let key = slot_leaders.get(slot).unwrap();
-            keys.entry(key).or_insert(vec![]).append(slot);
+            keys.entry(*key).or_insert(vec![]).push(*slot);
         }
     }
-    let mut pubkeys = recycler_pubkeys.allocate();
+    let mut pubkeys: PinnedVec<Pubkey> = recycler_pubkeys.allocate("shred_gpu_pubkeys");
     let mut slot_to_key_ix = HashMap::new();
-    for ((k, slots), i) in keys.enumerate() {
-        pubkeys.append(keys);
+    for ((k, slots), i) in keys.iter().enumerate() {
+        pubkeys.push(keys);
         for s in slots {
             slot_to_key_ix.insert(s, i);
         }
@@ -218,7 +230,7 @@ pub fn verify_shreds_gpu(
     batches: &[Packets],
     slot_leaders: &HashMap<u64, Pubkey>,
     recycler_offsets: &Recycler<TxOffset>,
-    recycler_pubkeys: &Recycler<Pubkey>,
+    recycler_pubkeys: &Recycler<PinnedVec<Pubkey>>,
     recycler_out: &Recycler<PinnedVec<u8>>,
 ) -> Vec<Vec<u8>> {
     let mut elems = Vec::new();
