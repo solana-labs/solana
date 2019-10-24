@@ -10,7 +10,7 @@ use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::Blocktree;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, SocketAddr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
@@ -70,11 +70,13 @@ pub fn discover(
     gossip_addr: Option<&SocketAddr>,
 ) -> std::io::Result<(Vec<ContactInfo>, Vec<ContactInfo>)> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, spy_ref) = make_gossip_node(entry_point, &exit, gossip_addr);
+    let (gossip_service, ip_echo, spy_ref) = make_gossip_node(entry_point, &exit, gossip_addr);
 
     let id = spy_ref.read().unwrap().keypair.pubkey();
     info!("Gossip entry point: {:?}", entry_point);
     info!("Spy node id: {:?}", id);
+
+    let _ip_echo_server = ip_echo.map(solana_netutil::ip_echo_server);
 
     let (met_criteria, secs, tvu_peers, archivers) = spy(
         spy_ref.clone(),
@@ -247,9 +249,9 @@ fn make_gossip_node(
     entry_point: &SocketAddr,
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
-) -> (GossipService, Arc<RwLock<ClusterInfo>>) {
+) -> (GossipService, Option<TcpListener>, Arc<RwLock<ClusterInfo>>) {
     let keypair = Arc::new(Keypair::new());
-    let (node, gossip_socket) = if let Some(gossip_addr) = gossip_addr {
+    let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
         ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr)
     } else {
         ClusterInfo::spy_node(&keypair.pubkey())
@@ -259,7 +261,7 @@ fn make_gossip_node(
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let gossip_service =
         GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);
-    (gossip_service, cluster_info)
+    (gossip_service, ip_echo, cluster_info)
 }
 
 impl Service for GossipService {
