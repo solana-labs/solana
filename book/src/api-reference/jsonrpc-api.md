@@ -20,8 +20,11 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getBlockConfidence](jsonrpc-api.md#getblockconfidence)
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
+* [getEpochSchedule](jsonrpc-api.md#getepochschedule)
 * [getGenesisBlockhash](jsonrpc-api.md#getgenesisblockhash)
 * [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
+* [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
+* [getNumBlocksSinceSignatureConfirmation](jsonrpc-api.md#getnumblockssincesignatureconfirmation)
 * [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 * [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
 * [getSignatureStatus](jsonrpc-api.md#getsignaturestatus)
@@ -30,8 +33,6 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getSlotsPerSegment](jsonrpc-api.md#getslotspersegment)
 * [getStorageTurn](jsonrpc-api.md#getstorageturn)
 * [getStorageTurnRate](jsonrpc-api.md#getstorageturnrate)
-* [getNumBlocksSinceSignatureConfirmation](jsonrpc-api.md#getnumblockssincesignatureconfirmation)
-* [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 * [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 * [getTotalSupply](jsonrpc-api.md#gettotalsupply)
 * [getVersion](jsonrpc-api.md#getversion)
@@ -231,6 +232,34 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":{"epoch":3,"slotIndex":126,"slotsInEpoch":256},"id":1}
 ```
 
+### getEpochSchedule
+
+Returns epoch schedule information from this cluster's genesis block
+
+#### Parameters:
+
+None
+
+#### Results:
+
+The result field will be an object with the following fields:
+
+* `slots_per_epoch`, the maximum number of slots in each epoch
+* `leader_schedule_slot_offset`, the number of slots before beginning of an epoch to calculate a leader schedule for that epoch
+* `warmup`, whether epochs start short and grow
+* `first_normal_epoch`, first normal-length epoch, log2(slots_per_epoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
+* `first_normal_slot`, MINIMUM_SLOTS_PER_EPOCH * (2.pow(first_normal_epoch) - 1)
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"first_normal_epoch":8,"first_normal_slot":8160,"leader_schedule_slot_offset":8192,"slots_per_epoch":8192,"warmup":true},"id":1}
+```
+
 ### getGenesisBlockhash
 
 Returns the genesis block hash
@@ -273,6 +302,50 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":[...],"id":1}
+```
+
+### getMinimumBalanceForRentExemption
+
+Returns minimum balance required to make account rent exempt.
+
+#### Parameters:
+
+* `integer` - account data length, as unsigned integer
+
+#### Results:
+
+* `integer` - minimum lamports required in account, as unsigned 64-bit integer
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMinimumBalanceForRentExemption", "params":[50]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":500,"id":1}
+```
+
+### getNumBlocksSinceSignatureConfirmation
+
+Returns the current number of blocks since signature has been confirmed.
+
+#### Parameters:
+
+* `string` - Signature of Transaction to confirm, as base-58 encoded string
+
+#### Results:
+
+* `integer` - count, as unsigned 64-bit integer
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getNumBlocksSinceSignatureConfirmation", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":8,"id":1}
 ```
 
 ### getProgramAccounts
@@ -461,50 +534,6 @@ None
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurnRate"}' http://localhost:8899
  // Result
 {"jsonrpc":"2.0","result":"1024","id":1}
-```
-
-### getNumBlocksSinceSignatureConfirmation
-
-Returns the current number of blocks since signature has been confirmed.
-
-#### Parameters:
-
-* `string` - Signature of Transaction to confirm, as base-58 encoded string
-
-#### Results:
-
-* `integer` - count, as unsigned 64-bit integer
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getNumBlocksSinceSignatureConfirmation", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":8,"id":1}
-```
-
-### getMinimumBalanceForRentExemption
-
-Returns minimum balance required to make account rent exempt.
-
-#### Parameters:
-
-* `integer` - account data length, as unsigned integer
-
-#### Results:
-
-* `integer` - minimum lamports required in account, as unsigned 64-bit integer
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMinimumBalanceForRentExemption", "params":[50]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":500,"id":1}
 ```
 
 ### getTransactionCount
