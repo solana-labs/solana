@@ -77,7 +77,7 @@ function launchTestnet() {
       net/gce.sh create \
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
-        "$maybeMachineType" "$VALIDATOR_NODE_MACHINE_TYPE" "$maybeEnableGpu" \
+        $maybeCustomMachineType $VALIDATOR_NODE_MACHINE_TYPE "$maybeEnableGpu" \
         -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/"-z "} ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     colo)
