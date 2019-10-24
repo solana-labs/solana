@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-# TODO: Make sure a dB named $TESTNET_TAG exists in the influxDB host, or can be created
-[[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
-[[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
-
-# TODO: Remove all default values, force explicitness in the testcase definition
-[[ -n $TEST_DURATION_SECONDS ]] || TEST_DURATION_SECONDS=300
-[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=0
-[[ -n $NUMBER_OF_VALIDATOR_NODES ]] || NUMBER_OF_VALIDATOR_NODES=2
-[[ -n $NUMBER_OF_CLIENT_NODES ]] || NUMBER_OF_CLIENT_NODES=1
-
 function collect_logs {
   echo --- collect logs from remote nodes
   rm -rf net/log
@@ -75,7 +65,7 @@ EOF
 }
 trap cleanup_testnet EXIT
 
-launchTestnet() {
+function launchTestnet() {
   set -x
 
   # shellcheck disable=SC2068
@@ -164,6 +154,26 @@ launchTestnet() {
 
 cd "$(dirname "$0")/../.."
 
+# TODO: Make sure a dB named $TESTNET_TAG exists in the influxDB host, or can be created
+[[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
+[[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
+[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=0
+
+if [[ -z $TEST_DURATION_SECONDS ]] ; then
+  echo TEST_DURATION_SECONDS not defined
+  exit 1
+fi
+
+if [[ -z $NUMBER_OF_VALIDATOR_NODES ]] ; then
+  echo NUMBER_OF_VALIDATOR_NODES not defined
+  exit 1
+fi
+
+if [[ -z $NUMBER_OF_CLIENT_NODES ]] ; then
+  echo NUMBER_OF_CLIENT_NODES not defined
+  exit 1
+fi
+
 if [[ -z $SOLANA_METRICS_CONFIG ]]; then
   if [[ -z $SOLANA_METRICS_PARTIAL_CONFIG ]]; then
     echo SOLANA_METRICS_PARTIAL_CONFIG not defined
@@ -188,7 +198,7 @@ maybeMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"-G"}
 IFS=, read -r -a TESTNET_CLOUD_ZONES <<<"${TESTNET_ZONES}"
 
 RESULT_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$NUMBER_OF_VALIDATOR_NODES".log
-rm -f $RESULT_FILE
+rm -f "$RESULT_FILE"
 RESULT_DETAILS="Test failed to finish"
 
 TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
