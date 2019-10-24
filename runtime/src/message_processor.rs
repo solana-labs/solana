@@ -58,7 +58,7 @@ fn get_subset_unchecked_mut<'a, T>(
         .collect())
 }
 
-fn verify_instruction(
+pub fn verify_instruction(
     is_debitable: bool,
     program_id: &Pubkey,
     pre: &Account,
@@ -70,26 +70,22 @@ fn verify_instruction(
     //   only if the account is credit-debit and
     //   only if the data is zero-initialized or empty
     if pre.owner != post.owner
-        && (!is_debitable
-            // line coverage used to get branch coverage
-            || *program_id != pre.owner
-            // line coverage used to get branch coverage
+        && (!is_debitable // line coverage used to get branch coverage
+            || *program_id != pre.owner // line coverage used to get branch coverage
             || !is_zeroed(&post.data))
     {
         return Err(InstructionError::ModifiedProgramId);
     }
 
     // An account not assigned to the program cannot have its balance decrease.
-    if *program_id != pre.owner
-        // line coverage used to get branch coverage
+    if *program_id != pre.owner // line coverage used to get branch coverage
         && pre.lamports > post.lamports
     {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
 
     // The balance of credit-only accounts may only increase.
-    if !is_debitable
-        // line coverage used to get branch coverage
+    if !is_debitable // line coverage used to get branch coverage
         && pre.lamports > post.lamports
     {
         return Err(InstructionError::CreditOnlyLamportSpend);
@@ -98,32 +94,50 @@ fn verify_instruction(
     // Only the system program can change the size of the data
     //  and only if the system program owns the account
     if pre.data.len() != post.data.len()
-        && (!system_program::check_id(program_id)
-            // line coverage used to get branch coverage
+        && (!system_program::check_id(program_id) // line coverage used to get branch coverage
             || !system_program::check_id(&pre.owner))
     {
         return Err(InstructionError::AccountDataSizeChanged);
     }
 
-    // Verify data...
-    if pre.data != post.data {
-        // Credit-only account data may not change.
-        if !is_debitable {
-            return Err(InstructionError::CreditOnlyDataModified);
+    enum DataChanged {
+        Unchecked,
+        Checked(bool),
+    };
+
+    // Verify data, remember answer because comparing
+    //   a megabyte costs us multiple microseconds...
+    let mut data_changed = DataChanged::Unchecked;
+    let mut data_changed = || -> bool {
+        match data_changed {
+            DataChanged::Unchecked => {
+                let changed = pre.data != post.data;
+                data_changed = DataChanged::Checked(changed);
+                changed
+            }
+            DataChanged::Checked(changed) => changed,
         }
-        // For accounts not assigned to the program, the data may not change.
-        if *program_id != pre.owner {
-            return Err(InstructionError::ExternalAccountDataModified);
-        }
+    };
+
+    // For accounts not assigned to the program, the data may not change.
+    if *program_id != pre.owner // line coverage used to get branch coverage
+        && data_changed()
+    {
+        return Err(InstructionError::ExternalAccountDataModified);
+    }
+
+    // Credit-only account data may not change.
+    if !is_debitable // line coverage used to get branch coverage
+        && data_changed()
+    {
+        return Err(InstructionError::CreditOnlyDataModified);
     }
 
     // executable is one-way (false->true) and
     //  only system or the account owner may modify.
     if pre.executable != post.executable
-        && (!is_debitable
-            // line coverage used to get branch coverage
-            || pre.executable
-            // line coverage used to get branch coverage
+        && (!is_debitable // line coverage used to get branch coverage
+            || pre.executable // line coverage used to get branch coverage
             || *program_id != pre.owner)
     {
         return Err(InstructionError::ExecutableModified);
@@ -589,7 +603,6 @@ mod tests {
                 verify_instruction(is_debitable, &program_id, &pre, &post)
             };
 
-        let system_program_id = system_program::id();
         let mallory_program_id = Pubkey::new_rand();
 
         assert_eq!(
@@ -600,13 +613,13 @@ mod tests {
         assert_eq!(
             change_data(&mallory_program_id, true),
             Err(InstructionError::ExternalAccountDataModified),
-            "malicious Mallory should not be able to change the account data"
+            "non-owner mallory should not be able to change the account data"
         );
 
         assert_eq!(
-            change_data(&system_program_id, false),
+            change_data(&alice_program_id, false),
             Err(InstructionError::CreditOnlyDataModified),
-            "system program should not be able to change the data if credit-only"
+            "alice isn't allowed to touch a CO account"
         );
     }
 
@@ -641,7 +654,7 @@ mod tests {
         assert_eq!(
             verify_instruction(true, &alice_program_id, &pre, &post),
             Ok(()),
-            "alice should be able to deduct lamports and the account to bob if the data is zeroed",
+            "alice should be able to deduct lamports and give the account to bob if the data is zeroed",
         );
     }
 
