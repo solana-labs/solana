@@ -66,16 +66,19 @@ fn verify_instruction(
 ) -> Result<(), InstructionError> {
     // Verify the transaction
 
-    // Only the system program may change owner and
+    // Only the owner of the account may change owner and
     //   only if the account is credit-debit and
-    //   only if the system program owns the account
+    //   only if the data is zero-initialized or empty
     if pre.owner != post.owner
         && (!is_debitable
-            || !system_program::check_id(program_id)
-            || !system_program::check_id(&pre.owner))
+            // line coverage used to get branch coverage
+            || *program_id != pre.owner
+            // line coverage used to get branch coverage
+            || !is_zeroed(&post.data))
     {
         return Err(InstructionError::ModifiedProgramId);
     }
+
     // An account not assigned to the program cannot have its balance decrease.
     if *program_id != pre.owner
         // line coverage used to get branch coverage
@@ -83,6 +86,7 @@ fn verify_instruction(
     {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
+
     // The balance of credit-only accounts may only increase.
     if !is_debitable
         // line coverage used to get branch coverage
@@ -90,13 +94,17 @@ fn verify_instruction(
     {
         return Err(InstructionError::CreditOnlyLamportSpend);
     }
+
     // Only the system program can change the size of the data
     //  and only if the system program owns the account
     if pre.data.len() != post.data.len()
-        && (!system_program::check_id(program_id) || !system_program::check_id(&pre.owner))
+        && (!system_program::check_id(program_id)
+            // line coverage used to get branch coverage
+            || !system_program::check_id(&pre.owner))
     {
         return Err(InstructionError::AccountDataSizeChanged);
     }
+
     // Verify data...
     if pre.data != post.data {
         // Credit-only account data may not change.
@@ -104,10 +112,7 @@ fn verify_instruction(
             return Err(InstructionError::CreditOnlyDataModified);
         }
         // For accounts not assigned to the program, the data may not change.
-        if *program_id != pre.owner
-             // line coverage used to get branch coverage
-             && !system_program::check_id(program_id)
-        {
+        if *program_id != pre.owner {
             return Err(InstructionError::ExternalAccountDataModified);
         }
     }
@@ -345,12 +350,42 @@ impl MessageProcessor {
     }
 }
 
+pub const ZEROS_LEN: usize = 1024;
+static ZEROS: [u8; ZEROS_LEN] = [0; ZEROS_LEN];
+pub fn is_zeroed(buf: &[u8]) -> bool {
+    let mut chunks = buf.chunks_exact(ZEROS_LEN);
+
+    chunks.all(|chunk| chunk == &ZEROS[..])
+        && chunks.remainder() == &ZEROS[..chunks.remainder().len()]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
     use solana_sdk::message::Message;
     use solana_sdk::native_loader::create_loadable_account;
+
+    #[test]
+    fn test_is_zeroed() {
+        let mut buf = [0; ZEROS_LEN];
+        assert_eq!(is_zeroed(&buf), true);
+        buf[0] = 1;
+        assert_eq!(is_zeroed(&buf), false);
+
+        let mut buf = [0; ZEROS_LEN - 1];
+        assert_eq!(is_zeroed(&buf), true);
+        buf[0] = 1;
+        assert_eq!(is_zeroed(&buf), false);
+
+        let mut buf = [0; ZEROS_LEN + 1];
+        assert_eq!(is_zeroed(&buf), true);
+        buf[0] = 1;
+        assert_eq!(is_zeroed(&buf), false);
+
+        let buf = vec![];
+        assert_eq!(is_zeroed(&buf), true);
+    }
 
     #[test]
     fn test_has_duplicates() {
@@ -439,8 +474,29 @@ mod tests {
                 &alice_program_id,
                 true
             ),
+            Ok(()),
+            "mallory should be able to change the account owner, if she leaves clear data"
+        );
+
+        assert_eq!(
+            verify_instruction(
+                true,
+                &mallory_program_id,
+                &Account::new_data(0, &[42], &mallory_program_id,).unwrap(),
+                &Account::new_data(0, &[0], &alice_program_id,).unwrap(),
+            ),
+            Ok(()),
+            "mallory should be able to change the account owner, if she leaves clear data"
+        );
+        assert_eq!(
+            verify_instruction(
+                true,
+                &mallory_program_id,
+                &Account::new_data(0, &[42], &mallory_program_id,).unwrap(),
+                &Account::new_data(0, &[42], &alice_program_id,).unwrap(),
+            ),
             Err(InstructionError::ModifiedProgramId),
-            "malicious Mallory should not be able to change the account owner, even if she owns the account"
+            "mallory should not be able to inject data into the alice program"
         );
     }
 
@@ -497,6 +553,32 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_instruction_change_data_len() {
+        assert_eq!(
+            verify_instruction(
+                true,
+                &system_program::id(),
+                &Account::new_data(0, &[0], &system_program::id()).unwrap(),
+                &Account::new_data(0, &[0, 0], &system_program::id()).unwrap(),
+            ),
+            Ok(()),
+            "system program should be able to change the data len"
+        );
+        let alice_program_id = Pubkey::new_rand();
+
+        assert_eq!(
+            verify_instruction(
+                true,
+                &system_program::id(),
+                &Account::new_data(0, &[0], &alice_program_id).unwrap(),
+                &Account::new_data(0, &[0, 0], &alice_program_id).unwrap(),
+            ),
+            Err(InstructionError::AccountDataSizeChanged),
+            "system program should not be able to change the data length of accounts it does not own"
+        );
+    }
+
+    #[test]
     fn test_verify_instruction_change_data() {
         let alice_program_id = Pubkey::new_rand();
 
@@ -510,11 +592,6 @@ mod tests {
         let system_program_id = system_program::id();
         let mallory_program_id = Pubkey::new_rand();
 
-        assert_eq!(
-            change_data(&system_program_id, true),
-            Ok(()),
-            "system program should be able to change the data"
-        );
         assert_eq!(
             change_data(&alice_program_id, true),
             Ok(()),
@@ -554,6 +631,21 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_instruction_deduct_lamports_and_reassign_account() {
+        let alice_program_id = Pubkey::new_rand();
+        let bob_program_id = Pubkey::new_rand();
+        let pre = Account::new_data(42, &[42], &alice_program_id).unwrap();
+        let post = Account::new_data(1, &[0], &bob_program_id).unwrap();
+
+        // positive test of this capability
+        assert_eq!(
+            verify_instruction(true, &alice_program_id, &pre, &post),
+            Ok(()),
+            "alice should be able to deduct lamports and the account to bob if the data is zeroed",
+        );
+    }
+
+    #[test]
     fn test_verify_instruction_change_lamports() {
         let alice_program_id = Pubkey::new_rand();
         let pre = Account::new(42, 0, &alice_program_id);
@@ -575,7 +667,6 @@ mod tests {
         assert_eq!(
             verify_instruction(true, &system_program::id(), &pre, &post),
             Err(InstructionError::ModifiedProgramId),
-            //            Err(InstructionError::ExternalAccountLamportSpend), <== if arbitrary owner changes were permitted
             "system program can't debit the account unless it was the pre.owner"
         );
 
@@ -591,8 +682,8 @@ mod tests {
     #[test]
     fn test_verify_instruction_data_size_changed() {
         let alice_program_id = Pubkey::new_rand();
-        let pre = Account::new_data(42, &[42], &alice_program_id).unwrap();
-        let post = Account::new_data(42, &[42, 42], &alice_program_id).unwrap();
+        let pre = Account::new_data(42, &[0], &alice_program_id).unwrap();
+        let post = Account::new_data(42, &[0, 0], &alice_program_id).unwrap();
         assert_eq!(
             verify_instruction(true, &system_program::id(), &pre, &post),
             Err(InstructionError::AccountDataSizeChanged),
@@ -603,7 +694,7 @@ mod tests {
             Err(InstructionError::AccountDataSizeChanged),
             "non-system programs cannot change their data size"
         );
-        let pre = Account::new_data(42, &[42], &system_program::id()).unwrap();
+        let pre = Account::new_data(42, &[0], &system_program::id()).unwrap();
         assert_eq!(
             verify_instruction(true, &system_program::id(), &pre, &post),
             Ok(()),
