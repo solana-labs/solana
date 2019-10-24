@@ -66,9 +66,14 @@ fn verify_instruction(
 ) -> Result<(), InstructionError> {
     // Verify the transaction
 
-    // Make sure that program_id is still the same or this was just re-assigned by
-    //  the owner program
-    if pre.owner != post.owner && (!is_debitable || *program_id != pre.owner) {
+    // Only the system program may change owner and
+    //   only if the account is credit-debit and
+    //   only if the system program owns the account
+    if pre.owner != post.owner
+        && (!is_debitable
+            || !system_program::check_id(program_id)
+            || !system_program::check_id(&pre.owner))
+    {
         return Err(InstructionError::ModifiedProgramId);
     }
     // An account not assigned to the program cannot have its balance decrease.
@@ -365,8 +370,8 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_instruction_change_program_id() {
-        fn change_program_id(
+    fn test_verify_instruction_change_owner() {
+        fn change_owner(
             ix: &Pubkey,
             pre: &Pubkey,
             post: &Pubkey,
@@ -385,7 +390,7 @@ mod tests {
         let mallory_program_id = Pubkey::new_rand();
 
         assert_eq!(
-            change_program_id(
+            change_owner(
                 &system_program_id,
                 &system_program_id,
                 &alice_program_id,
@@ -395,12 +400,12 @@ mod tests {
             "system program should be able to change the account owner"
         );
         assert_eq!(
-            change_program_id(&system_program_id, &system_program_id, &alice_program_id, false),
+            change_owner(&system_program_id, &system_program_id, &alice_program_id, false),
             Err(InstructionError::ModifiedProgramId),
             "system program should not be able to change the account owner of a credit only account"
         );
         assert_eq!(
-            change_program_id(
+            change_owner(
                 &system_program_id,
                 &mallory_program_id,
                 &alice_program_id,
@@ -411,14 +416,14 @@ mod tests {
         );
 
         assert_eq!(
-            change_program_id(
+            change_owner(
                 &mallory_program_id,
-                &system_program_id,
+                &mallory_program_id,
                 &alice_program_id,
                 true
             ),
             Err(InstructionError::ModifiedProgramId),
-            "malicious Mallory should not be able to change the account owner"
+            "malicious Mallory should not be able to change the account owner, even if she owns the account"
         );
     }
 
