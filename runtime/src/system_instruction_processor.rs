@@ -62,10 +62,6 @@ fn assign_account_to_program(
     account: &mut KeyedAccount,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    if !system_program::check_id(&account.account.owner) {
-        return Err(InstructionError::IncorrectProgramId);
-    }
-
     if account.signer_key().is_none() {
         debug!("Assign: account must sign");
         return Err(InstructionError::MissingRequiredSignature);
@@ -394,20 +390,6 @@ mod tests {
             ),
             Ok(())
         );
-
-        let from_owner = from_account.owner;
-        assert_eq!(from_owner, new_program_owner);
-
-        // Attempt to assign account not owned by system program
-        let another_program_owner = Pubkey::new(&[8; 32]);
-        let mut keyed_accounts = [KeyedAccount::new(&from, true, &mut from_account)];
-        let instruction = SystemInstruction::Assign {
-            program_id: another_program_owner,
-        };
-        let data = serialize(&instruction).unwrap();
-        let result = process_instruction(&system_program::id(), &mut keyed_accounts, &data);
-        assert_eq!(result, Err(InstructionError::IncorrectProgramId));
-        assert_eq!(from_account.owner, new_program_owner);
     }
 
     #[test]

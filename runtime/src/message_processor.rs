@@ -66,13 +66,13 @@ fn verify_instruction(
 ) -> Result<(), InstructionError> {
     // Verify the transaction
 
-    // Make sure that program_id is still the same or this was just assigned by the system program,
-    //  but even the system program can't touch a credit-only account.
-    if pre.owner != post.owner && (!is_debitable || !system_program::check_id(&program_id)) {
+    // Make sure that program_id is still the same or this was just re-assigned by
+    //  the owner program
+    if pre.owner != post.owner && (!is_debitable || *program_id != pre.owner) {
         return Err(InstructionError::ModifiedProgramId);
     }
     // An account not assigned to the program cannot have its balance decrease.
-    if *program_id != post.owner && pre.lamports > post.lamports {
+    if *program_id != pre.owner && pre.lamports > post.lamports {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
     // The balance of credit-only accounts may only increase.
@@ -80,24 +80,25 @@ fn verify_instruction(
         return Err(InstructionError::CreditOnlyLamportSpend);
     }
     // Only system accounts can change the size of the data.
-    if !system_program::check_id(&program_id) && pre.data.len() != post.data.len() {
+    if pre.data.len() != post.data.len() && !system_program::check_id(program_id) {
         return Err(InstructionError::AccountDataSizeChanged);
     }
-    // For accounts unassigned to the program, the data may not change.
-    if *program_id != post.owner && !system_program::check_id(&program_id) && pre.data != post.data
-    {
-        return Err(InstructionError::ExternalAccountDataModified);
+    // Verify data...
+    if pre.data != post.data {
+        // Credit-only account data may not change.
+        if !is_debitable {
+            return Err(InstructionError::CreditOnlyDataModified);
+        }
+        // For accounts not assigned to the program, the data may not change.
+        if *program_id != pre.owner && !system_program::check_id(program_id) {
+            return Err(InstructionError::ExternalAccountDataModified);
+        }
     }
-    // Credit-only account data may not change.
-    if !is_debitable && pre.data != post.data {
-        return Err(InstructionError::CreditOnlyDataModified);
-    }
+
     // executable is one-way (false->true) and
     //  only system or the account owner may modify.
     if pre.executable != post.executable
-        && (!is_debitable
-            || pre.executable
-            || *program_id != post.owner && !system_program::check_id(&program_id))
+        && (!is_debitable || pre.executable || *program_id != pre.owner)
     {
         return Err(InstructionError::ExecutableModified);
     }
@@ -398,6 +399,16 @@ mod tests {
             Err(InstructionError::ModifiedProgramId),
             "system program should not be able to change the account owner of a credit only account"
         );
+        assert_eq!(
+            change_program_id(
+                &system_program_id,
+                &mallory_program_id,
+                &alice_program_id,
+                true
+            ),
+            Err(InstructionError::ModifiedProgramId),
+            "system program should not be able to change the account owner of a non-system account"
+        );
 
         assert_eq!(
             change_program_id(
@@ -413,20 +424,20 @@ mod tests {
 
     #[test]
     fn test_verify_instruction_change_executable() {
-        let alice_program_id = Pubkey::new_rand();
+        let owner = Pubkey::new_rand();
         let change_executable = |program_id: &Pubkey,
                                  is_debitable: bool,
                                  pre_executable: bool,
                                  post_executable: bool|
          -> Result<(), InstructionError> {
             let pre = Account {
-                owner: alice_program_id,
+                owner,
                 executable: pre_executable,
                 ..Account::default()
             };
 
             let post = Account {
-                owner: alice_program_id,
+                owner,
                 executable: post_executable,
                 ..Account::default()
             };
@@ -438,21 +449,21 @@ mod tests {
 
         assert_eq!(
             change_executable(&system_program_id, true, false, true),
-            Ok(()),
-            "system program should be able to change executable"
+            Err(InstructionError::ExecutableModified),
+            "system program can't change executable if system doesn't own the account"
         );
         assert_eq!(
-            change_executable(&alice_program_id, true, false, true),
+            change_executable(&owner, true, false, true),
             Ok(()),
             "alice program should be able to change executable"
         );
         assert_eq!(
-            change_executable(&system_program_id, false, false, true),
+            change_executable(&owner, false, false, true),
             Err(InstructionError::ExecutableModified),
             "system program can't modify executable of credit-only accounts"
         );
         assert_eq!(
-            change_executable(&system_program_id, true, true, false),
+            change_executable(&owner, true, true, false),
             Err(InstructionError::ExecutableModified),
             "system program can't reverse executable"
         );
