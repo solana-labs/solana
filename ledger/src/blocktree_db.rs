@@ -19,7 +19,6 @@ use std::sync::Arc;
 // A good value for this is the number of cores on the machine
 const TOTAL_THREADS: i32 = 8;
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
-const MIN_WRITE_BUFFER_SIZE: u64 = 64 * 1024; // 64KB
 
 // Column family for metadata about a leader slot
 const META_CF: &str = "meta";
@@ -129,22 +128,18 @@ impl Rocks {
         let db_options = get_db_options();
 
         // Column family names
-        let meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options(SlotMeta::NAME));
+        let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
         let dead_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options(DeadSlots::NAME));
+            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options());
         let erasure_meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options(ErasureMeta::NAME));
-        let orphans_cf_descriptor =
-            ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options(Orphans::NAME));
-        let root_cf_descriptor =
-            ColumnFamilyDescriptor::new(Root::NAME, get_cf_options(Root::NAME));
-        let index_cf_descriptor =
-            ColumnFamilyDescriptor::new(Index::NAME, get_cf_options(Index::NAME));
+            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
+        let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
+        let root_cf_descriptor = ColumnFamilyDescriptor::new(Root::NAME, get_cf_options());
+        let index_cf_descriptor = ColumnFamilyDescriptor::new(Index::NAME, get_cf_options());
         let shred_data_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options(ShredData::NAME));
+            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options());
         let shred_code_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options(ShredCode::NAME));
+            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options());
 
         let cfs = vec![
             meta_cf_descriptor,
@@ -679,27 +674,13 @@ impl<'a> WriteBatch<'a> {
     }
 }
 
-fn get_cf_options(name: &'static str) -> Options {
-    use columns::{ErasureMeta, Index, ShredCode, ShredData};
-
+fn get_cf_options() -> Options {
     let mut options = Options::default();
-    match name {
-        ShredCode::NAME | ShredData::NAME | Index::NAME | ErasureMeta::NAME => {
-            // 512MB * 8 = 4GB. 2 of these columns should take no more than 8GB of RAM
-            options.set_max_write_buffer_number(8);
-            options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
-            options.set_target_file_size_base(MAX_WRITE_BUFFER_SIZE / 10);
-            options.set_max_bytes_for_level_base(MAX_WRITE_BUFFER_SIZE);
-        }
-        _ => {
-            // We want smaller CFs to flush faster. This results in more WAL files but lowers
-            // overall WAL space utilization and increases flush frequency
-            options.set_write_buffer_size(MIN_WRITE_BUFFER_SIZE as usize);
-            options.set_target_file_size_base(MIN_WRITE_BUFFER_SIZE);
-            options.set_max_bytes_for_level_base(MIN_WRITE_BUFFER_SIZE);
-            options.set_level_zero_file_num_compaction_trigger(1);
-        }
-    }
+    // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
+    options.set_max_write_buffer_number(8);
+    options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
+    options.set_target_file_size_base(MAX_WRITE_BUFFER_SIZE / 10);
+    options.set_max_bytes_for_level_base(MAX_WRITE_BUFFER_SIZE);
     options
 }
 
