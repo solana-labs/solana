@@ -14,8 +14,6 @@ gce)
 
   cpuBootstrapLeaderMachineType="--custom-cpu 12 --custom-memory 32GB --min-cpu-platform Intel%20Skylake"
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=1,type=nvidia-tesla-p100"
-  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
-  validatorMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
   blockstreamerMachineType="--machine-type n1-standard-8"
   archiverMachineType="--custom-cpu 4 --custom-memory 16GB"
@@ -30,8 +28,6 @@ ec2)
   #       AVX-512 support.  The default, p2.xlarge, does not support
   #       AVX-512
   gpuBootstrapLeaderMachineType=p2.xlarge
-  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
-  validatorMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=c5.2xlarge
   blockstreamerMachineType=c5.2xlarge
   archiverMachineType=c5.xlarge
@@ -43,8 +39,6 @@ azure)
   # TODO: Dial in machine types for Azure
   cpuBootstrapLeaderMachineType=Standard_D16s_v3
   gpuBootstrapLeaderMachineType=Standard_NC12
-  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
-  validatorMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=Standard_D16s_v3
   blockstreamerMachineType=Standard_D16s_v3
   archiverMachineType=Standard_D4s_v3
@@ -55,8 +49,6 @@ colo)
 
   cpuBootstrapLeaderMachineType=0
   gpuBootstrapLeaderMachineType=1
-  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
-  validatorMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=0
   blockstreamerMachineType=0
   archiverMachineType=0
@@ -84,6 +76,7 @@ evalInfo=false
 publicNetwork=false
 letsEncryptDomainName=
 enableGpu=false
+customMachineType=
 customAddress=
 zones=()
 
@@ -131,8 +124,9 @@ Manage testnet instances
    -r [number]      - Number of archiver nodes (default: $archiverNodeCount)
    -u               - Include a Blockstreamer (default: $blockstreamer)
    -P               - Use public network IP addresses (default: $publicNetwork)
-   -g               - Enable GPU (default: $enableGpu)
-   -G               - Enable GPU, and set count/type of GPUs to use
+   -g               - Enable GPU and automatically set validator machine types to $gpuBootstrapLeaderMachineType
+                      (default: $enableGpu)
+   -G               - Enable GPU, and set custom GPU machine type to use
                       (e.g $gpuBootstrapLeaderMachineType)
    -a [address]     - Address to be be assigned to the Blockstreamer if present,
                       otherwise the bootstrap validator.
@@ -141,9 +135,14 @@ Manage testnet instances
                       * For EC2, [address] is the "allocation ID" of the desired
                         Elastic IP.
    -d [disk-type]   - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
-   --letsencrypt [dns name] - Attempt to generate a TLS certificate using this
-                              DNS name (useful only when the -a and -P options
-                              are also provided)
+   --letsencrypt [dns name]
+                    - Attempt to generate a TLS certificate using this
+                      DNS name (useful only when the -a and -P options
+                      are also provided)
+   --custom-machine-type
+                    - Set a custom machine type without assuming whether or not
+                      GPU is enabled.  Set this explicitly with --enable-gpu/-g to call out the presence of GPUs.
+   --enable-gpu     - Use with --custom-machine-type to specify whether or not GPUs should be used/enabled
    --validator-additional-disk-size-gb [number]
                     - Add an additional [number] GB SSD to all validators to store the config directory.
                       If not set, config will be written to the boot disk by default.
@@ -195,6 +194,12 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --eval ]]; then
       evalInfo=true
       shift
+    elif [[ $1 == --enable-gpu ]]; then
+      enableGpu=true
+      shift
+    elif [[ $1 = --custom-machine-type ]]; then
+      customMachineType="$2"
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -230,15 +235,10 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
     ;;
   g)
     enableGpu=true
-    bootstrapLeaderMachineType=$gpuBootstrapLeaderMachineType
-    validatorMachineType=$bootstrapLeaderMachineType
-    blockstreamerMachineType=$bootstrapLeaderMachineType
     ;;
   G)
     enableGpu=true
-    bootstrapLeaderMachineType="$OPTARG"
-    validatorMachineType=$bootstrapLeaderMachineType
-    blockstreamerMachineType=$bootstrapLeaderMachineType
+    customMachineType="$OPTARG"
     ;;
   a)
     customAddress=$OPTARG
@@ -257,6 +257,16 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
     ;;
   esac
 done
+
+if [[ -n "$customMachineType" ]] ; then
+  bootstrapLeaderMachineType="$customMachineType"
+elif [[ "$enableGpu" = "true" ]] ; then
+  bootstrapLeaderMachineType="$gpuBootstrapLeaderMachineType"
+else
+  bootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType"
+fi
+validatorMachineType=$bootstrapLeaderMachineType
+blockstreamerMachineType=$bootstrapLeaderMachineType
 
 [[ ${#zones[@]} -gt 0 ]] || zones+=("$(cloud_DefaultZone)")
 

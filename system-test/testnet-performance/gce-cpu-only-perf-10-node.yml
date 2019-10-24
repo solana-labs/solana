@@ -8,6 +8,7 @@ steps:
       RAMP_UP_TIME: 60
       TEST_DURATION_SECONDS: 300
       NUMBER_OF_VALIDATOR_NODES: 10
+      ENABLE_GPU: "false"
       VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
       NUMBER_OF_CLIENT_NODES: 1
       CLIENT_OPTIONS: "bench-tps=1=--tx_count 80000 --thread-batch-sleep-ms 1000"
