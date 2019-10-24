@@ -153,7 +153,6 @@ EOF
     set -x
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
-      setup_secondary_mount
 
       if [[ -n $internalNodesLamports ]]; then
         echo "---" >> config/validator-balances.yml
@@ -250,7 +249,6 @@ EOF
     fi
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
-      setup_secondary_mount
       [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
       "$entrypointIp":~/solana/config/validator-"$nodeIndex"-identity.json config/validator-identity.json
     fi
@@ -286,7 +284,7 @@ EOF
     # like bench-tps and add to blocktreamers to run a drone
     scp "$entrypointIp":~/solana/config/mint-keypair.json config/
     if [[ $nodeType = blockstreamer ]]; then
-      # Run another drone with the mint keypair on the blockstreamer node. 
+      # Run another drone with the mint keypair on the blockstreamer node.
       # Typically the blockstreamer node has a static IP/DNS name for hosting
       # the blockexplorer web app, and is a location that somebody would expect
       # to be able to airdrop from
