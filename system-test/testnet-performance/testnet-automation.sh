@@ -200,7 +200,7 @@ source ci/upload-ci-artifact.sh
 source system-test/testnet-performance/upload_results_to_slack.sh
 
 maybeClientOptions=${CLIENT_OPTIONS:+"-c"}
-maybeMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"-G"}
+maybeCustomMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"--custom-machine-type"}
 
 IFS=, read -r -a TESTNET_CLOUD_ZONES <<<"${TESTNET_ZONES}"
 
