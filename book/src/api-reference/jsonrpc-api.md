@@ -78,6 +78,24 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 * Signature: An Ed25519 signature of a chunk of data.
 * Transaction: A Solana instruction signed by a client key-pair.
 
+## Configuring State Commitment
+
+Solana nodes choose which bank state to query based on a commitment requirement
+set by the client. Clients may specify either:
+* `{"commitment":"max"}` - the node will query the most recent bank having reached `MAX_LOCKOUT_HISTORY` confirmations
+* `{"commitment":"recent"}` - the node will query its most recent bank state
+
+The commitment parameter should be included as the last element in the `params` array:
+
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri",{"commitment":"max"}]}' 192.168.1.88:8899
+```
+
+#### Default:
+If commitment configuration is not provided, the node will default to `"commitment":"max"`
+
+Only methods that query bank state accept the commitment parameter. They are indicated in the API Reference below.
+
 ## JSON RPC API Reference
 
 ### confirmTransaction
@@ -91,6 +109,7 @@ Returns a transaction receipt
 #### Results:
 
 * `boolean` - Transaction status, true if Transaction is confirmed
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Example:
 
@@ -109,6 +128,7 @@ Returns all information associated with the account of provided Pubkey
 #### Parameters:
 
 * `string` - Pubkey of account to query, as base-58 encoded string
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -136,6 +156,7 @@ Returns the balance of the account of provided Pubkey
 #### Parameters:
 
 * `string` - Pubkey of account to query, as base-58 encoded string
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -212,7 +233,7 @@ Returns information about the current epoch
 
 #### Parameters:
 
-None
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -288,7 +309,7 @@ Returns the leader schedule for the current epoch
 
 #### Parameters:
 
-None
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -311,6 +332,7 @@ Returns minimum balance required to make account rent exempt.
 #### Parameters:
 
 * `integer` - account data length, as unsigned integer
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -333,6 +355,7 @@ Returns the current number of blocks since signature has been confirmed.
 #### Parameters:
 
 * `string` - Signature of Transaction to confirm, as base-58 encoded string
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -355,6 +378,7 @@ Returns all accounts owned by the provided program Pubkey
 #### Parameters:
 
 * `string` - Pubkey of program, as base-58 encoded string
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -382,7 +406,7 @@ Returns a recent block hash from the ledger, and a fee schedule that can be used
 
 #### Parameters:
 
-None
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -408,6 +432,7 @@ Returns the status of a given signature. This method is similar to [confirmTrans
 #### Parameters:
 
 * `string` - Signature of Transaction to confirm, as base-58 encoded string
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -432,7 +457,7 @@ Returns the current slot the node is processing
 
 #### Parameters:
 
-None
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -454,7 +479,7 @@ Returns the current slot leader
 
 #### Parameters:
 
-None
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -476,7 +501,7 @@ Returns the current storage segment size in terms of slots
 
 #### Parameters:
 
-None
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -542,7 +567,7 @@ Returns the current Transaction count from the ledger
 
 #### Parameters:
 
-None
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -569,6 +594,7 @@ None
 #### Results:
 
 * `integer` - Total supply, as unsigned 64-bit integer
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Example:
 
@@ -609,7 +635,7 @@ Returns the account info and associated stake for all the voting accounts in the
 
 #### Parameters:
 
-None
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -640,6 +666,7 @@ Requests an airdrop of lamports to a Pubkey
 
 * `string` - Pubkey of account to receive lamports, as base-58 encoded string
 * `integer` - lamports, as a signed 64-bit integer
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash and verifying airdrop success)
 
 #### Results:
 
