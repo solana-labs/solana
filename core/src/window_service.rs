@@ -127,7 +127,16 @@ where
         }
     }
 
+    let num_shreds = shreds.len();
+    let now = Instant::now();
     blocktree.insert_shreds(shreds, Some(leader_schedule_cache))?;
+    let elapsed = now.elapsed.as_millis();
+
+    datapoint_info!(
+        "recv-window",
+        ("num_shreds", num_shreds i64, i64),
+        ("insert_time", elapsed as i64, i64),
+    );
 
     trace!(
         "Elapsed processing time in recv_window(): {}",
