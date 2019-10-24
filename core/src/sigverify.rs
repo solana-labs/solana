@@ -175,7 +175,7 @@ fn shred_gpu_pubkeys(
     let mut pubkeys: PinnedVec<Pubkey> = recycler_pubkeys.allocate("shred_gpu_pubkeys");
     let mut slot_to_key_ix = HashMap::new();
     for ((k, slots), i) in keys.iter().enumerate() {
-        pubkeys.push(keys);
+        pubkeys.push(k);
         for s in slots {
             slot_to_key_ix.insert(s, i);
         }
