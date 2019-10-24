@@ -67,15 +67,24 @@ fn retransmit(
         .unwrap()
         .sorted_retransmit_peers_and_stakes(stakes.as_ref());
     let me = cluster_info.read().unwrap().my_data().clone();
+    let mut discard_total = 0;
+    let mut repair_total = 0;
     let mut retransmit_total = 0;
     let mut compute_turbine_peers_total = 0;
     for mut packets in packet_v {
         for packet in packets.packets.iter_mut() {
             // skip discarded packets and repair packets
-            if packet.meta.discard || packet.meta.repair {
+            if packet.meta.discard {
                 total_packets -= 1;
+                discard_total += 1;
                 continue;
             }
+            if packet.meta.repair {
+                total_packets -= 1;
+                repair_total += 1;
+                continue;
+            }
+
             let mut compute_turbine_peers = Measure::start("turbine_start");
             let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &me.id,
@@ -126,6 +135,8 @@ fn retransmit(
         ("total_packets", total_packets as i64, i64),
         ("retransmit_total", retransmit_total as i64, i64),
         ("compute_turbine", compute_turbine_peers_total as i64, i64),
+        ("repair_total", i64::from(repair_total), i64),
+        ("discard_total", i64::from(discard_total), i64),
     );
     Ok(())
 }
