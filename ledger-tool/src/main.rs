@@ -99,6 +99,7 @@ fn main() {
                 .required(true)
                 .help("The slot to print"),
         ))
+        .subcommand(SubCommand::with_name("bounds").about("Print lowest and highest non-empty slots. Note: This ignores gaps in slots"))
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format").arg(&starting_slot_arg))
         .subcommand(SubCommand::with_name("verify").about("Verify the ledger's PoH"))
         .subcommand(SubCommand::with_name("prune").about("Prune the ledger at the block height").arg(
@@ -192,11 +193,11 @@ fn main() {
                     RootedSlotIterator::new(0, &blocktree).expect("Failed to get rooted slot");
 
                 let potential_hashes: Vec<_> = iter
-                    .filter_map(|(slot, meta)| {
+                    .filter_map(|(slot, _meta)| {
                         let blockhash = blocktree
-                            .get_slot_entries(slot, meta.last_index, Some(1))
+                            .get_slot_entries(slot, 0, None)
                             .unwrap()
-                            .first()
+                            .last()
                             .unwrap()
                             .hash
                             .to_string();
@@ -233,12 +234,12 @@ fn main() {
             let iter = RootedSlotIterator::new(0, &blocktree).expect("Failed to get rooted slot");
 
             let slot_hash: Vec<_> = iter
-                .filter_map(|(slot, meta)| {
+                .filter_map(|(slot, _meta)| {
                     if slot <= max_height as u64 {
                         let blockhash = blocktree
-                            .get_slot_entries(slot, meta.last_index, Some(1))
+                            .get_slot_entries(slot, 0, None)
                             .unwrap()
-                            .first()
+                            .last()
                             .unwrap()
                             .hash;
                         Some((slot, blockhash))
@@ -270,6 +271,30 @@ fn main() {
                     }
                 });
         }
+        ("bounds", _) => match blocktree.slot_meta_iterator(0) {
+            Ok(metas) => {
+                println!("Collecting Ledger information...");
+                let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+                if slots.is_empty() {
+                    println!("Ledger is empty. No slots found.");
+                } else {
+                    let first = slots.first().unwrap();
+                    let last = slots.last().unwrap_or_else(|| first);
+                    if first != last {
+                        println!(
+                            "Ledger contains some data for slots {:?} to {:?}",
+                            first, last
+                        );
+                    } else {
+                        println!("Ledger only contains some data for slot {:?}", first);
+                    }
+                }
+            }
+            Err(err) => {
+                eprintln!("Unable to read the Ledger: {:?}", err);
+                exit(1);
+            }
+        },
         ("", _) => {
             eprintln!("{}", matches.usage());
             exit(1);
