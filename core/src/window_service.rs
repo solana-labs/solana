@@ -85,7 +85,7 @@ where
         total_packets += more_packets.packets.len();
         packets.push(more_packets)
     }
-    let now = Instant::now();
+    
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
 
     let last_root = blocktree.last_root();
@@ -130,12 +130,12 @@ where
     let num_shreds = shreds.len();
     let now = Instant::now();
     blocktree.insert_shreds(shreds, Some(leader_schedule_cache))?;
-    let elapsed = now.elapsed.as_millis();
+    let elapsed = now.elapsed().as_millis();
 
     datapoint_info!(
         "recv-window",
-        ("num_shreds", num_shreds i64, i64),
-        ("insert_time", elapsed as i64, i64),
+        ("num_shreds", num_shreds as i64, i64),
+        ("elapsed", elapsed as i64, i64)
     );
 
     trace!(
