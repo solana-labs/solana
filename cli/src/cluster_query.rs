@@ -8,7 +8,7 @@ use crate::{
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use serde_json::Value;
-use solana_client::rpc_client::RpcClient;
+use solana_client::{rpc_client::RpcClient, rpc_request::RpcVoteAccountInfo};
 use solana_sdk::{
     clock,
     hash::Hash,
@@ -22,6 +22,7 @@ use std::{
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 static CROSS_MARK: Emoji = Emoji("❌ ", "");
+static WARNING: Emoji = Emoji("⚠️", "!");
 
 pub trait ClusterQuerySubCommands {
     fn cluster_query_subcommands(self) -> Self;
@@ -303,17 +304,48 @@ pub fn process_ping(
 
 pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) -> ProcessResult {
     let vote_accounts = rpc_client.get_vote_accounts()?;
-    let total_activate_stake = vote_accounts
+    let total_active_stake = vote_accounts
         .current
         .iter()
         .chain(vote_accounts.delinquent.iter())
         .fold(0, |acc, vote_account| acc + vote_account.activated_stake)
         as f64;
 
+    let total_deliquent_stake = vote_accounts
+        .delinquent
+        .iter()
+        .fold(0, |acc, vote_account| acc + vote_account.activated_stake)
+        as f64;
+    let total_current_stake = total_active_stake - total_deliquent_stake;
+
+    println_name_value(
+        "Active Stake:",
+        &build_balance_message(total_active_stake as u64, use_lamports_unit),
+    );
+    if total_deliquent_stake > 0. {
+        println_name_value(
+            "Current Stake:",
+            &format!(
+                "{} ({:0.2}%)",
+                &build_balance_message(total_current_stake as u64, use_lamports_unit),
+                100. * total_current_stake / total_active_stake
+            ),
+        );
+        println_name_value(
+            "Delinquent Stake:",
+            &format!(
+                "{} ({:0.2}%)",
+                &build_balance_message(total_deliquent_stake as u64, use_lamports_unit),
+                100. * total_deliquent_stake / total_active_stake
+            ),
+        );
+    }
+    println!();
+
     println!(
         "{}",
         style(format!(
-            "{:<44}  {:<44}  {:<11}  {:>10}  {:>11}  {}",
+            "  {:<44}  {:<44}  {:<11}  {:>10}  {:>11}  {}",
             "Identity Pubkey",
             "Vote Account Pubkey",
             "Commission",
@@ -324,11 +356,12 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
         .bold()
     );
 
-    for vote_account in vote_accounts
-        .current
-        .iter()
-        .chain(vote_accounts.delinquent.iter())
-    {
+    fn print_vote_account(
+        vote_account: &RpcVoteAccountInfo,
+        total_active_stake: f64,
+        use_lamports_unit: bool,
+        delinquent: bool,
+    ) {
         fn non_zero_or_dash(v: u64) -> String {
             if v == 0 {
                 "-".into()
@@ -336,9 +369,13 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
                 format!("{}", v)
             }
         }
-
         println!(
-            "{:<44}  {:<44}  {:>3} ({:>4.1}%)  {:>10}  {:>11}  {:>11}",
+            "{} {:<44}  {:<44}  {:>3} ({:>4.1}%)  {:>10}  {:>11}  {:>11}",
+            if delinquent {
+                WARNING.to_string()
+            } else {
+                " ".to_string()
+            },
             vote_account.node_pubkey,
             vote_account.vote_pubkey,
             vote_account.commission,
@@ -349,12 +386,19 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
                 format!(
                     "{} ({:.2}%)",
                     build_balance_message(vote_account.activated_stake, use_lamports_unit),
-                    100. * vote_account.activated_stake as f64 / total_activate_stake
+                    100. * vote_account.activated_stake as f64 / total_active_stake
                 )
             } else {
                 "-".into()
             },
         );
+    }
+
+    for vote_account in vote_accounts.current.iter() {
+        print_vote_account(vote_account, total_active_stake, use_lamports_unit, false);
+    }
+    for vote_account in vote_accounts.delinquent.iter() {
+        print_vote_account(vote_account, total_active_stake, use_lamports_unit, true);
     }
 
     Ok("".to_string())
