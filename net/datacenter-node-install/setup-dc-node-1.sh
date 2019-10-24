@@ -23,7 +23,7 @@ set -xe
 
 apt update
 apt upgrade -y
-apt install -y build-essential pkg-config clang
+apt install -y build-essential pkg-config clang cmake
 
 "$HERE"/../scripts/install-docker.sh
 usermod -aG docker "$SETUP_USER"
