@@ -46,6 +46,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             SubCommand::with_name("get-rpc-url")
                 .about("Get an RPC URL for the cluster")
                 .arg(
+                    Arg::with_name("all")
+                        .long("all")
+                        .takes_value(false)
+                        .help("Return all RPC URLs"),
+                )
+                .arg(
                     Arg::with_name("timeout")
                         .long("timeout")
                         .value_name("SECONDS")
@@ -194,18 +200,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 gossip_addr.as_ref(),
             )?;
 
-            let rpc_addr = nodes
+            let rpc_addrs: Vec<_> = nodes
                 .iter()
                 .filter_map(ContactInfo::valid_client_facing_addr)
                 .map(|addrs| addrs.0)
-                .find(|rpc_addr| rpc_addr.ip() == entrypoint_addr.ip());
+                .filter(|rpc_addr| {
+                    matches.is_present("all") || rpc_addr.ip() == entrypoint_addr.ip()
+                })
+                .collect();
 
-            if rpc_addr.is_none() {
+            if rpc_addrs.is_empty() {
                 eprintln!("No RPC URL found");
                 exit(1);
             }
 
-            println!("http://{}", rpc_addr.unwrap());
+            for rpc_addr in rpc_addrs {
+                println!("http://{}", rpc_addr);
+            }
         }
         ("stop", Some(matches)) => {
             let pubkey = matches
