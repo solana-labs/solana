@@ -22,7 +22,7 @@ rules for duplicate transmissions (for instance if `T'` is a subset of `T`),
 then the cluster must handle the possibility of both transmissions being live.
 
 Thus this means we cannot mark the erronenous transmission `T` as dead because
-the cluster may have reached consensus on `T`. These cases necessitate a 
+the cluster may have reached consensus on `T'`. These cases necessitate a 
 slashing proof to punish this bad behavior.
 
 2) Otherwise, we can simply mark the slot as dead and not playable. A slashing
@@ -39,6 +39,10 @@ and `s'` constitute a slashing proof.
 2) Blocktree has already received a shred `s'` marked as `LAST_SHRED_IN_SLOT`
 with index `i`. If `s.index > i`, then together `s` and `s'`constitute a 
 slashing proof. In this case, blocktree will also not insert `s`.
+
+3) Duplicate shreds for the same index are ignored. Non-duplicate shreds for
+the same index are a slashable condition. Details for this case are covered
+in the `Leader Duplicate Block Slashing` section.
 
 
 # Replaying and validating ticks
