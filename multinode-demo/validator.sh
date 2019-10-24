@@ -185,8 +185,6 @@ if [[ -z "$ledger_dir" ]]; then
 fi
 mkdir -p "$ledger_dir"
 
-setup_secondary_mount
-
 if [[ -n $gossip_entrypoint ]]; then
   # Prefer the --entrypoint argument if supplied...
   if [[ ${#positional_args[@]} -gt 0 ]]; then

@@ -100,7 +100,7 @@ SOLANA_CONFIG_DIR=$SOLANA_ROOT/config
 clear_config_dir() {
   declare config_dir="$1"
 
-  setup_secondary_mount
+  _setup_secondary_mount
 
   (
     set -x
@@ -108,10 +108,12 @@ clear_config_dir() {
     rm -rf "$config_dir"
     mkdir -p "$config_dir"
   )
+
+  _setup_secondary_mount
 }
 
 SECONDARY_DISK_MOUNT_POINT=/mnt/extra-disk
-setup_secondary_mount() {
+_setup_secondary_mount() {
   # If there is a secondary disk, symlink the config/ dir there
   (
     set -x

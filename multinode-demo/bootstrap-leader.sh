@@ -54,8 +54,6 @@ if [[ -z $CI ]]; then # Skip in CI
   source "$here"/../scripts/tune-system.sh
 fi
 
-setup_secondary_mount
-
 # These keypairs are created by ./setup.sh and included in the genesis block
 identity_keypair=$SOLANA_CONFIG_DIR/bootstrap-leader/identity-keypair.json
 vote_keypair="$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
