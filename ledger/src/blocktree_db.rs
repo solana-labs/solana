@@ -485,10 +485,10 @@ where
     column: PhantomData<C>,
 }
 
-pub struct WriteBatch {
+pub struct WriteBatch<'a> {
     write_batch: RWriteBatch,
     backend: PhantomData<Rocks>,
-    map: HashMap<&'static str, ColumnFamily>,
+    map: HashMap<&'static str, ColumnFamily<'a>>,
 }
 
 impl Database {
@@ -676,7 +676,7 @@ where
     }
 }
 
-impl WriteBatch {
+impl<'a> WriteBatch<'a> {
     pub fn put_bytes<C: Column>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
             .put_cf(self.get_cf::<C>(), &C::key(key), bytes)?;
@@ -697,7 +697,7 @@ impl WriteBatch {
     }
 
     #[inline]
-    fn get_cf<C: Column>(&self) -> ColumnFamily {
+    fn get_cf<C: Column>(&self) -> ColumnFamily<'a> {
         self.map[C::NAME]
     }
 }

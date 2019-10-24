@@ -43,7 +43,7 @@ tempfile = "3.1.0"
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
 # when also using the bzip2 crate
-version = "0.11.0"
+version = "0.12.4"
 default-features = false
 features = ["lz4"]
 
