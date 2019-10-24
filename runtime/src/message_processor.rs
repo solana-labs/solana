@@ -77,15 +77,24 @@ fn verify_instruction(
         return Err(InstructionError::ModifiedProgramId);
     }
     // An account not assigned to the program cannot have its balance decrease.
-    if *program_id != pre.owner && pre.lamports > post.lamports {
+    if *program_id != pre.owner
+        // line coverage used to get branch coverage
+        && pre.lamports > post.lamports
+    {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
     // The balance of credit-only accounts may only increase.
-    if !is_debitable && pre.lamports > post.lamports {
+    if !is_debitable
+        // line coverage used to get branch coverage
+        && pre.lamports > post.lamports
+    {
         return Err(InstructionError::CreditOnlyLamportSpend);
     }
-    // Only system accounts can change the size of the data.
-    if pre.data.len() != post.data.len() && !system_program::check_id(program_id) {
+    // Only the system program can change the size of the data
+    //  and only if the system program owns the account
+    if pre.data.len() != post.data.len()
+        && (!system_program::check_id(program_id) || !system_program::check_id(&pre.owner))
+    {
         return Err(InstructionError::AccountDataSizeChanged);
     }
     // Verify data...
@@ -95,7 +104,10 @@ fn verify_instruction(
             return Err(InstructionError::CreditOnlyDataModified);
         }
         // For accounts not assigned to the program, the data may not change.
-        if *program_id != pre.owner && !system_program::check_id(program_id) {
+        if *program_id != pre.owner
+             // line coverage used to get branch coverage
+             && !system_program::check_id(program_id)
+        {
             return Err(InstructionError::ExternalAccountDataModified);
         }
     }
@@ -103,10 +115,15 @@ fn verify_instruction(
     // executable is one-way (false->true) and
     //  only system or the account owner may modify.
     if pre.executable != post.executable
-        && (!is_debitable || pre.executable || *program_id != pre.owner)
+        && (!is_debitable
+            // line coverage used to get branch coverage
+            || pre.executable
+            // line coverage used to get branch coverage
+            || *program_id != pre.owner)
     {
         return Err(InstructionError::ExecutableModified);
     }
+
     // No one modifies rent_epoch (yet).
     if pre.rent_epoch != post.rent_epoch {
         return Err(InstructionError::RentEpochModified);
@@ -537,10 +554,11 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_instruction_credit_only() {
+    fn test_verify_instruction_change_lamports() {
         let alice_program_id = Pubkey::new_rand();
         let pre = Account::new(42, 0, &alice_program_id);
         let post = Account::new(0, 0, &alice_program_id);
+
         assert_eq!(
             verify_instruction(false, &system_program::id(), &pre, &post),
             Err(InstructionError::ExternalAccountLamportSpend),
@@ -551,6 +569,23 @@ mod tests {
             Err(InstructionError::CreditOnlyLamportSpend),
             "debit should fail, even if owning program"
         );
+
+        let pre = Account::new(42, 0, &alice_program_id);
+        let post = Account::new(0, 0, &system_program::id());
+        assert_eq!(
+            verify_instruction(true, &system_program::id(), &pre, &post),
+            Err(InstructionError::ModifiedProgramId),
+            //            Err(InstructionError::ExternalAccountLamportSpend), <== if arbitrary owner changes were permitted
+            "system program can't debit the account unless it was the pre.owner"
+        );
+
+        let pre = Account::new(42, 0, &system_program::id());
+        let post = Account::new(0, 0, &alice_program_id);
+        assert_eq!(
+            verify_instruction(true, &system_program::id(), &pre, &post),
+            Ok(()),
+            "system can spend (and change owner)"
+        );
     }
 
     #[test]
@@ -560,13 +595,19 @@ mod tests {
         let post = Account::new_data(42, &[42, 42], &alice_program_id).unwrap();
         assert_eq!(
             verify_instruction(true, &system_program::id(), &pre, &post),
-            Ok(()),
-            "system program should be able to change account data size"
+            Err(InstructionError::AccountDataSizeChanged),
+            "system program should not be able to change another program's account data size"
         );
         assert_eq!(
             verify_instruction(true, &alice_program_id, &pre, &post),
             Err(InstructionError::AccountDataSizeChanged),
             "non-system programs cannot change their data size"
+        );
+        let pre = Account::new_data(42, &[42], &system_program::id()).unwrap();
+        assert_eq!(
+            verify_instruction(true, &system_program::id(), &pre, &post),
+            Ok(()),
+            "system program should be able to change acount data size"
         );
     }
 
