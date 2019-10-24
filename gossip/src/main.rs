@@ -1,15 +1,11 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
-#[macro_use]
-extern crate solana_core;
-
 use clap::{
     crate_description, crate_name, crate_version, value_t_or_exit, App, AppSettings, Arg,
     SubCommand,
 };
 use solana_client::rpc_client::RpcClient;
-use solana_core::contact_info::ContactInfo;
-use solana_core::gossip_service::discover;
+use solana_core::{contact_info::ContactInfo, gossip_service::discover};
 use solana_sdk::pubkey::Pubkey;
 use std::error;
 use std::net::SocketAddr;
@@ -66,6 +62,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Monitor the gossip entrypoint")
                 .setting(AppSettings::DisableVersion)
                 .arg(
+                    clap::Arg::with_name("gossip_port")
+                        .long("gossip-port")
+                        .value_name("PORT")
+                        .takes_value(true)
+                        .default_value("0")
+                        .help("Gossip port number for the node"),
+                )
+                .arg(
                     Arg::with_name("num_nodes")
                         .short("N")
                         .long("num-nodes")
@@ -121,17 +125,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         });
     }
 
-    let gossip_addr = {
-        let mut addr = socketaddr_any!();
-        addr.set_ip(
-            solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-                eprintln!("failed to contact {}: {}", entrypoint_addr, err);
-                exit(1);
-            }),
-        );
-        Some(addr)
-    };
-
     match matches.subcommand() {
         ("spy", Some(matches)) => {
             let num_nodes_exactly = matches
@@ -148,13 +141,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_of("node_pubkey")
                 .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
 
+            let gossip_addr = SocketAddr::new(
+                solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                    eprintln!("failed to contact {}: {}", entrypoint_addr, err);
+                    exit(1);
+                }),
+                value_t_or_exit!(matches, "gossip_port", u16),
+            );
+
             let (nodes, _archivers) = discover(
                 &entrypoint_addr,
                 num_nodes,
                 timeout,
                 pubkey,
                 None,
-                gossip_addr.as_ref(),
+                Some(&gossip_addr),
             )?;
 
             if timeout.is_some() {
@@ -197,7 +198,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 Some(timeout),
                 None,
                 Some(entrypoint_addr.ip()),
-                gossip_addr.as_ref(),
+                None,
             )?;
 
             let rpc_addrs: Vec<_> = nodes
@@ -224,14 +225,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .unwrap()
                 .parse::<Pubkey>()
                 .unwrap();
-            let (nodes, _archivers) = discover(
-                &entrypoint_addr,
-                None,
-                None,
-                Some(pubkey),
-                None,
-                gossip_addr.as_ref(),
-            )?;
+            let (nodes, _archivers) =
+                discover(&entrypoint_addr, None, None, Some(pubkey), None, None)?;
             let node = nodes.iter().find(|x| x.id == pubkey).unwrap();
 
             if !ContactInfo::is_valid_address(&node.rpc) {

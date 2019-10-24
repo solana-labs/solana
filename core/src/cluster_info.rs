@@ -1491,8 +1491,12 @@ impl ClusterInfo {
     }
 
     /// An alternative to Spy Node that has a valid gossip address and fully participate in Gossip.
-    pub fn gossip_node(id: &Pubkey, gossip_addr: &SocketAddr) -> (ContactInfo, UdpSocket) {
-        let (port, (gossip_socket, _)) = Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE);
+    pub fn gossip_node(
+        id: &Pubkey,
+        gossip_addr: &SocketAddr,
+    ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
+        let (port, (gossip_socket, ip_echo)) =
+            Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE);
         let daddr = socketaddr_any!();
 
         let node = ContactInfo::new(
@@ -1507,11 +1511,11 @@ impl ClusterInfo {
             daddr,
             timestamp(),
         );
-        (node, gossip_socket)
+        (node, gossip_socket, Some(ip_echo))
     }
 
     /// A Node with invalid ports to spy on gossip via pull requests
-    pub fn spy_node(id: &Pubkey) -> (ContactInfo, UdpSocket) {
+    pub fn spy_node(id: &Pubkey) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let (_, gossip_socket) = bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
         let daddr = socketaddr_any!();
 
@@ -1527,7 +1531,7 @@ impl ClusterInfo {
             daddr,
             timestamp(),
         );
-        (node, gossip_socket)
+        (node, gossip_socket, None)
     }
 }
 
@@ -1800,9 +1804,9 @@ mod tests {
     #[test]
     fn test_gossip_node() {
         //check that a gossip nodes always show up as spies
-        let (node, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
+        let (node, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
         assert!(ClusterInfo::is_spy_node(&node));
-        let (node, _) =
+        let (node, _, _) =
             ClusterInfo::gossip_node(&Pubkey::new_rand(), &"1.1.1.1:1111".parse().unwrap());
         assert!(ClusterInfo::is_spy_node(&node));
     }
@@ -1811,7 +1815,7 @@ mod tests {
     fn test_cluster_spy_gossip() {
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
-        let (spy, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
+        let (spy, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             node.info,
         )));
