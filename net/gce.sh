@@ -258,9 +258,9 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
   esac
 done
 
-if [[ -n $customMachineType ]] ; then
+if [[ -n "$customMachineType" ]] ; then
   bootstrapLeaderMachineType="$customMachineType"
-elif [[ -n $enableGpu ]] ; then
+elif [[ "$enableGpu" = "true" ]] ; then
   bootstrapLeaderMachineType="$gpuBootstrapLeaderMachineType"
 else
   bootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType"
