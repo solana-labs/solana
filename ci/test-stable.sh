@@ -80,7 +80,7 @@ test-stable-perf)
   fi
 
   _ cargo +"$rust_stable" build --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --package solana-core --lib ${V:+--verbose} -- --nocapture
   ;;
 test-local-cluster)
   echo "Executing $testName"

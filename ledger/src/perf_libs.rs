@@ -159,6 +159,7 @@ pub fn init_cuda() {
 }
 
 pub fn api() -> Option<&'static Container<Api<'static>>> {
+    #[cfg(test)]
     {
         static INIT_HOOK: Once = Once::new();
         INIT_HOOK.call_once(|| {
