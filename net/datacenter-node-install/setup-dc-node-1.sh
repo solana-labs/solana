@@ -23,7 +23,8 @@ set -xe
 
 apt update
 apt upgrade -y
-apt install -y build-essential pkg-config clang cmake sysstat
+apt install -y build-essential pkg-config clang cmake sysstat perf \
+  linux-generic-hwe-18.04-edge linux-tools-generic-hwe-18.04-edge
 
 "$HERE"/../scripts/install-docker.sh
 usermod -aG docker "$SETUP_USER"
