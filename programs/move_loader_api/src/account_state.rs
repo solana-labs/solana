@@ -123,9 +123,7 @@ impl LibraAccountState {
         let arena = Arena::new();
         let state_view = DataStore::default();
         let vm_cache = VMModuleCache::new(&arena);
-        // Libra enforces the mint address to be 0x0 (see Libra's `mint_to_address` function)
         let genesis_addr = account_config::association_address();
-        //        let mint_address = AccountAddress::default();
         // TODO: Need this?
         let genesis_auth_key = ByteArray::new(genesis_addr.to_vec());
 
@@ -140,17 +138,17 @@ impl LibraAccountState {
 
             let mut txn_executor = TransactionExecutor::new(&block_cache, &data_cache, txn_data);
             txn_executor.create_account(genesis_addr).unwrap();
-            //            txn_executor
-            //                .create_account(account_config::core_code_address())
-            //                .map_err(map_err_vm_status)?;
-            //            txn_executor
-            //                .execute_function(
-            //                    &BLOCK_MODULE,
-            //                    &Identifier::new("initialize").unwrap(),
-            //                    vec![],
-            //                )
-            //                .map_err(map_err_vm_status)?;
-            txn_executor //////////////////////////////////////////////////////////
+            txn_executor
+                .create_account(account_config::core_code_address())
+                .map_err(map_err_vm_status)?;
+            txn_executor
+                .execute_function(
+                    &BLOCK_MODULE,
+                    &Identifier::new("initialize").unwrap(),
+                    vec![],
+                )
+                .map_err(map_err_vm_status)?;
+            txn_executor
                 .execute_function(
                     &COIN_MODULE,
                     &Identifier::new("initialize").unwrap(),
@@ -175,7 +173,7 @@ impl LibraAccountState {
                 .map_err(map_err_vm_status)?;
 
             // Bump the sequence number for the Association account. If we don't do this and a
-            // subsequent transaction (e.g., minting) is sent from the Assocation account, a problem
+            // subsequent transaction (e.g., minting) is sent from the Association account, a problem
             // arises: both the genesis transaction and the subsequent transaction have sequence
             // number 0
             txn_executor

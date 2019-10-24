@@ -10,7 +10,6 @@ use solana_sdk::{
     instruction_processor_utils::limited_deserialize, loader_instruction::LoaderInstruction,
     pubkey::Pubkey, sysvar::rent,
 };
-use std::str::FromStr;
 use types::{
     account_address::AccountAddress,
     account_config,
@@ -258,14 +257,14 @@ impl MoveProcessor {
             .into_write_sets()
             .map_err(|_| InstructionError::GenericError)?;
 
-        // Genesis account holds both mint and stdlib under address 0x0
+        // Genesis account holds both mint and stdlib
         let genesis_key = *keyed_accounts[GENESIS_INDEX].unsigned_key();
         let mut write_set = write_sets
             .remove(&account_config::association_address())
             .ok_or_else(Self::missing_account)?
             .into_mut();
         for (access_path, write_op) in write_sets
-            .remove(&AccountAddress::default())
+            .remove(&account_config::core_code_address())
             .ok_or_else(Self::missing_account)?
             .into_iter()
         {
@@ -905,9 +904,8 @@ mod tests {
                 owner: id(),
                 ..Account::default()
             };
-            //let mut genesis = Self::new(Pubkey::default(), account);
             let mut genesis = Self::new(
-                Pubkey::from_str("1111111111111111111111111111GKSfy").unwrap(),
+                Pubkey::new(&account_config::association_address().to_vec()),
                 account,
             );
             let pre_data = LibraAccountState::create_genesis(amount).unwrap();
