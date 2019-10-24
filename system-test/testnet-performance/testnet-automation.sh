@@ -77,13 +77,13 @@ function launchTestnet() {
       net/gce.sh create \
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
-        "$maybeMachineType" "$VALIDATOR_NODE_MACHINE_TYPE" \
+        "$maybeMachineType" "$VALIDATOR_NODE_MACHINE_TYPE" "$maybeEnableGpu" \
         -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/"-z "} ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     colo)
     # shellcheck disable=SC2068
       net/colo.sh create \
-        -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" -g \
+        -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" "$maybeEnableGpu" \
         -p "$TESTNET_TAG" ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     *)
@@ -169,6 +169,13 @@ if [[ -z $NUMBER_OF_VALIDATOR_NODES ]] ; then
   exit 1
 fi
 
+if [[ -z $ENABLE_GPU ]] ; then
+  ENABLE_GPU=false
+fi
+if [[ "$ENABLE_GPU" = "true" ]] ; then
+  maybeEnableGpu="--enable-gpu"
+fi
+
 if [[ -z $NUMBER_OF_CLIENT_NODES ]] ; then
   echo NUMBER_OF_CLIENT_NODES not defined
   exit 1
@@ -203,6 +210,7 @@ RESULT_DETAILS="Test failed to finish"
 
 TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         NUMBER_OF_VALIDATOR_NODES \
+                        ENABLE_GPU \
                         VALIDATOR_NODE_MACHINE_TYPE \
                         NUMBER_OF_CLIENT_NODES \
                         CLIENT_OPTIONS \

@@ -131,11 +131,10 @@ Manage testnet instances
    -r [number]      - Number of archiver nodes (default: $archiverNodeCount)
    -u               - Include a Blockstreamer (default: $blockstreamer)
    -P               - Use public network IP addresses (default: $publicNetwork)
-   -g               - Enable GPU (default: $enableGpu)
+   -g               - Enable GPU and automatically set validator machine types to $gpuBootstrapLeaderMachineType
+                      (default: $enableGpu)
    -G               - Enable GPU, and set count/type of GPUs to use
                       (e.g $gpuBootstrapLeaderMachineType)
-   -M               - Set a custom machine type without assuming whether or not
-                      GPU is enabled.  Set this explicitly with `-g` to call out the presence of GPUs.
    -a [address]     - Address to be be assigned to the Blockstreamer if present,
                       otherwise the bootstrap validator.
                       * For GCE, [address] is the "name" of the desired External
@@ -143,9 +142,14 @@ Manage testnet instances
                       * For EC2, [address] is the "allocation ID" of the desired
                         Elastic IP.
    -d [disk-type]   - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
-   --letsencrypt [dns name] - Attempt to generate a TLS certificate using this
-                              DNS name (useful only when the -a and -P options
-                              are also provided)
+   --letsencrypt [dns name]
+                    - Attempt to generate a TLS certificate using this
+                      DNS name (useful only when the -a and -P options
+                      are also provided)
+   --custom-machine-type
+                    - Set a custom machine type without assuming whether or not
+                      GPU is enabled.  Set this explicitly with --enable-gpu to call out the presence of GPUs.
+   --enable-gpu     - Use with --custom-machine-type to specify whether or not GPUs should be used/enabled
    --validator-additional-disk-size-gb [number]
                     - Add an additional [number] GB SSD to all validators to store the config directory.
                       If not set, config will be written to the boot disk by default.
@@ -197,6 +201,14 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --eval ]]; then
       evalInfo=true
       shift
+    elif [[ $1 == --enable-gpu ]]; then
+      enableGpu=true
+      shift
+    elif [[ $1 = --custom-machine-type ]]; then
+      bootstrapLeaderMachineType="$2"
+      validatorMachineType=$bootstrapLeaderMachineType
+      blockstreamerMachineType=$bootstrapLeaderMachineType
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -238,11 +250,6 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
     ;;
   G)
     enableGpu=true
-    bootstrapLeaderMachineType="$OPTARG"
-    validatorMachineType=$bootstrapLeaderMachineType
-    blockstreamerMachineType=$bootstrapLeaderMachineType
-    ;;
-  M)
     bootstrapLeaderMachineType="$OPTARG"
     validatorMachineType=$bootstrapLeaderMachineType
     blockstreamerMachineType=$bootstrapLeaderMachineType
