@@ -134,6 +134,8 @@ Manage testnet instances
    -g               - Enable GPU (default: $enableGpu)
    -G               - Enable GPU, and set count/type of GPUs to use
                       (e.g $gpuBootstrapLeaderMachineType)
+   -M               - Set a custom machine type without assuming whether or not
+                      GPU is enabled.  Set this explicitly with `-g` to call out the presence of GPUs.
    -a [address]     - Address to be be assigned to the Blockstreamer if present,
                       otherwise the bootstrap validator.
                       * For GCE, [address] is the "name" of the desired External
@@ -236,6 +238,11 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
     ;;
   G)
     enableGpu=true
+    bootstrapLeaderMachineType="$OPTARG"
+    validatorMachineType=$bootstrapLeaderMachineType
+    blockstreamerMachineType=$bootstrapLeaderMachineType
+    ;;
+  M)
     bootstrapLeaderMachineType="$OPTARG"
     validatorMachineType=$bootstrapLeaderMachineType
     blockstreamerMachineType=$bootstrapLeaderMachineType
