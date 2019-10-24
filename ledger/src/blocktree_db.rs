@@ -472,11 +472,6 @@ pub struct Database {
 }
 
 #[derive(Debug, Clone)]
-pub struct BatchProcessor {
-    backend: Arc<Rocks>,
-}
-
-#[derive(Debug, Clone)]
 pub struct LedgerColumn<C>
 where
     C: Column,
@@ -485,10 +480,9 @@ where
     column: PhantomData<C>,
 }
 
-pub struct WriteBatch {
+pub struct WriteBatch<'a> {
     write_batch: RWriteBatch,
-    backend: PhantomData<Rocks>,
-    map: HashMap<&'static str, ColumnFamily>,
+    map: HashMap<&'static str, ColumnFamily<'a>>,
 }
 
 impl Database {
@@ -552,21 +546,8 @@ impl Database {
         self.backend.raw_iterator_cf(cf)
     }
 
-    // Note this returns an object that can be used to directly write to multiple column families.
-    // This circumvents the synchronization around APIs that in Blocktree that use
-    // blocktree.batch_processor, so this API should only be used if the caller is sure they
-    // are writing to data in columns that will not be corrupted by any simultaneous blocktree
-    // operations.
-    pub unsafe fn batch_processor(&self) -> BatchProcessor {
-        BatchProcessor {
-            backend: Arc::clone(&self.backend),
-        }
-    }
-}
-
-impl BatchProcessor {
-    pub fn batch(&mut self) -> Result<WriteBatch> {
-        let db_write_batch = self.backend.batch()?;
+    pub fn batch(&self) -> Result<WriteBatch> {
+        let write_batch = self.backend.batch()?;
         let map = self
             .backend
             .columns()
@@ -574,14 +555,10 @@ impl BatchProcessor {
             .map(|desc| (desc, self.backend.cf_handle(desc)))
             .collect();
 
-        Ok(WriteBatch {
-            write_batch: db_write_batch,
-            backend: PhantomData,
-            map,
-        })
+        Ok(WriteBatch { write_batch, map })
     }
 
-    pub fn write(&mut self, batch: WriteBatch) -> Result<()> {
+    pub fn write(&self, batch: WriteBatch) -> Result<()> {
         self.backend.write(batch.write_batch)
     }
 }
@@ -676,7 +653,7 @@ where
     }
 }
 
-impl WriteBatch {
+impl<'a> WriteBatch<'a> {
     pub fn put_bytes<C: Column>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
             .put_cf(self.get_cf::<C>(), &C::key(key), bytes)?;
@@ -697,7 +674,7 @@ impl WriteBatch {
     }
 
     #[inline]
-    fn get_cf<C: Column>(&self) -> ColumnFamily {
+    fn get_cf<C: Column>(&self) -> ColumnFamily<'a> {
         self.map[C::NAME]
     }
 }
