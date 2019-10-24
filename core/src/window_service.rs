@@ -129,13 +129,44 @@ where
 
     let num_shreds = shreds.len();
     let now = Instant::now();
-    blocktree.insert_shreds(shreds, Some(leader_schedule_cache))?;
+    let metrics = blocktree.insert_shreds(shreds, Some(leader_schedule_cache))?;
     let elapsed = now.elapsed().as_millis();
 
     datapoint_info!(
         "recv-window",
         ("num_shreds", num_shreds as i64, i64),
-        ("elapsed", elapsed as i64, i64)
+        ("elapsed", elapsed as i64, i64),
+        (
+            "insert_lock_elapsed",
+            metrics.insert_lock_elapsed as i64,
+            i64
+        ),
+        (
+            "insert_shreds_elapsed",
+            metrics.insert_shreds_elapsed as i64,
+            i64
+        ),
+        (
+            "shred_recovery_elapsed",
+            metrics.shred_recovery_elapsed as i64,
+            i64
+        ),
+        ("chaining_elapsed", metrics.chaining_elapsed as i64, i64),
+        (
+            "commit_working_sets_elapsed",
+            metrics.commit_working_sets_elapsed as i64,
+            i64
+        ),
+        (
+            "write_batch_elapsed",
+            metrics.write_batch_elapsed as i64,
+            i64
+        ),
+        (
+            "total_insert_bytes_time",
+            metrics.total_insert_bytes_time as i64,
+            i64
+        ),
     );
 
     trace!(
