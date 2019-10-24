@@ -64,6 +64,9 @@ pub enum TransactionError {
 
     /// Transaction contains an invalid account reference
     InvalidAccountIndex,
+
+    /// Fee account fo transaction marked "full spend" would still carry a balance
+    ExcessBalance,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;

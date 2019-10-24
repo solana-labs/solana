@@ -102,6 +102,7 @@ impl Accounts {
         fee: u64,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
+        hash_age_kind: HashAgeKind,
     ) -> Result<(TransactionAccounts, TransactionRents)> {
         // Copy all the accounts
         let message = tx.message();
@@ -141,8 +142,15 @@ impl Accounts {
                 error_counters.insufficient_funds += 1;
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
-                accounts[0].lamports -= fee;
-                Ok((accounts, rents))
+                match hash_age_kind {
+                    HashAgeKind::FullSpend if accounts[0].lamports != fee => {
+                        Err(TransactionError::ExcessBalance)
+                    }
+                    _ => {
+                        accounts[0].lamports -= fee;
+                        Ok((accounts, rents))
+                    }
+                }
             }
         }
     }
@@ -251,6 +259,7 @@ impl Accounts {
                         fee,
                         error_counters,
                         rent_collector,
+                        hash_age_kind,
                     )?;
                     let loaders = Self::load_loaders(
                         &storage,
