@@ -633,7 +633,7 @@ fn trader<T>(
     }
 }
 
-fn verify_transfer<T>(sync_client: &T, tx: &Transaction) -> bool
+fn verify_transaction<T>(sync_client: &T, tx: &Transaction) -> bool
 where
     T: SyncClient + ?Sized,
 {
@@ -657,9 +657,11 @@ fn verify_funding_transfer<T: SyncClient + ?Sized>(
     tx: &Transaction,
     amount: u64,
 ) -> bool {
-    for a in &tx.message().account_keys[1..] {
-        if client.get_balance(a).unwrap_or(0) >= amount {
-            return true;
+    if verify_transaction(client, tx) {
+        for a in &tx.message().account_keys[1..] {
+            if client.get_balance(a).unwrap_or(0) >= amount {
+                return true;
+            }
         }
     }
 
@@ -830,11 +832,11 @@ pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], acco
                 let mut waits = 0;
                 while !to_create_txs.is_empty() {
                     sleep(Duration::from_millis(200));
-                    to_create_txs.retain(|(_, tx)| !verify_transfer(client, &tx));
+                    to_create_txs.retain(|(_, tx)| !verify_transaction(client, &tx));
                     if to_create_txs.is_empty() {
                         break;
                     }
-                    debug!(
+                    info!(
                         "    {} transactions outstanding, waits {:?}",
                         to_create_txs.len(),
                         waits
@@ -847,7 +849,7 @@ pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], acco
 
                 if !to_create_txs.is_empty() {
                     retries += 1;
-                    debug!("  Retry {:?}", retries);
+                    info!("  Retry {:?} {} txes left", retries, to_create_txs.len());
                     if retries >= 20 {
                         error!(
                             "create_token_accounts: Too many retries ({}), give up",

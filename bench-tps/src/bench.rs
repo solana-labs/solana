@@ -306,7 +306,7 @@ fn generate_system_txs(
         .par_iter()
         .map(|(from, to)| {
             (
-                system_transaction::transfer_now(from, &to.pubkey(), 1, *blockhash),
+                system_transaction::transfer(from, &to.pubkey(), 1, *blockhash),
                 timestamp(),
             )
         })
@@ -634,15 +634,22 @@ pub fn airdrop_lamports<T: Client>(
         let (blockhash, _fee_calculator) = get_recent_blockhash(client);
         match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
-                let signature = client.async_send_transaction(transaction).unwrap();
-                client
-                    .poll_for_signature_confirmation(&signature, 1)
-                    .unwrap_or_else(|_| {
+                let mut tries = 0;
+                loop {
+                    tries += 1;
+                    let signature = client.async_send_transaction(transaction.clone()).unwrap();
+                    let result = client.poll_for_signature_confirmation(&signature, 1);
+
+                    if result.is_ok() {
+                        break;
+                    }
+                    if tries >= 5 {
                         panic!(
-                            "Error requesting airdrop: to addr: {:?} amount: {}",
-                            drone_addr, airdrop_amount
+                            "Error requesting airdrop: to addr: {:?} amount: {} {:?}",
+                            drone_addr, airdrop_amount, result
                         )
-                    })
+                    }
+                }
             }
             Err(err) => {
                 panic!(

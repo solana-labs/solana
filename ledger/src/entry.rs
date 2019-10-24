@@ -412,8 +412,8 @@ mod tests {
 
         // First, verify entries
         let keypair = Keypair::new();
-        let tx0 = system_transaction::transfer_now(&keypair, &keypair.pubkey(), 0, zero);
-        let tx1 = system_transaction::transfer_now(&keypair, &keypair.pubkey(), 1, zero);
+        let tx0 = system_transaction::transfer(&keypair, &keypair.pubkey(), 0, zero);
+        let tx1 = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
@@ -463,7 +463,7 @@ mod tests {
     fn test_next_entry_panic() {
         let zero = Hash::default();
         let keypair = Keypair::new();
-        let tx = system_transaction::transfer_now(&keypair, &keypair.pubkey(), 0, zero);
+        let tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 0, zero);
         next_entry(&zero, 0, vec![tx]);
     }
 

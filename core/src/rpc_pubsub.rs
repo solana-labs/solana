@@ -391,7 +391,7 @@ mod tests {
             None,
         );
 
-        let tx = system_transaction::transfer_now(&alice, &contract_funds.pubkey(), 51, blockhash);
+        let tx = system_transaction::transfer(&alice, &contract_funds.pubkey(), 51, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
 
         let ixs = budget_instruction::when_signed(
@@ -435,7 +435,7 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        let tx = system_transaction::transfer_now(&alice, &witness.pubkey(), 1, blockhash);
+        let tx = system_transaction::transfer(&alice, &witness.pubkey(), 1, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
         let ix = budget_instruction::apply_signature(

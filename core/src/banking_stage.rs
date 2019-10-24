@@ -1096,21 +1096,21 @@ mod tests {
             // fund another account so we can send 2 good transactions in a single batch.
             let keypair = Keypair::new();
             let fund_tx =
-                system_transaction::transfer_now(&mint_keypair, &keypair.pubkey(), 2, start_hash);
+                system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash);
             bank.process_transaction(&fund_tx).unwrap();
 
             // good tx
             let to = Pubkey::new_rand();
-            let tx = system_transaction::transfer_now(&mint_keypair, &to, 1, start_hash);
+            let tx = system_transaction::transfer(&mint_keypair, &to, 1, start_hash);
 
             // good tx, but no verify
             let to2 = Pubkey::new_rand();
-            let tx_no_ver = system_transaction::transfer_now(&keypair, &to2, 2, start_hash);
+            let tx_no_ver = system_transaction::transfer(&keypair, &to2, 2, start_hash);
 
             // bad tx, AccountNotFound
             let keypair = Keypair::new();
             let to3 = Pubkey::new_rand();
-            let tx_anf = system_transaction::transfer_now(&keypair, &to3, 1, start_hash);
+            let tx_anf = system_transaction::transfer(&keypair, &to3, 1, start_hash);
 
             // send 'em over
             let packets = to_packets(&[tx_no_ver, tx_anf, tx]);
@@ -1186,12 +1186,8 @@ mod tests {
 
         // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
-        let tx = system_transaction::transfer_now(
-            &mint_keypair,
-            &alice.pubkey(),
-            2,
-            genesis_block.hash(),
-        );
+        let tx =
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 2, genesis_block.hash());
 
         let packets = to_packets(&[tx]);
         let packets = packets
@@ -1200,13 +1196,9 @@ mod tests {
             .collect();
         verified_sender.send(packets).unwrap();
 
-        // Process a second batch that spends one of those lamports.
-        let tx = system_transaction::transfer_now(
-            &alice,
-            &mint_keypair.pubkey(),
-            1,
-            genesis_block.hash(),
-        );
+        // Process a second batch that uses the same from account, so conflicts with above TX
+        let tx =
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_block.hash());
         let packets = to_packets(&[tx]);
         let packets = packets
             .into_iter()
@@ -1241,7 +1233,7 @@ mod tests {
                 );
 
                 // wait for banking_stage to eat the packets
-                while bank.get_balance(&alice.pubkey()) != 1 {
+                while bank.get_balance(&alice.pubkey()) < 2 {
                     sleep(Duration::from_millis(100));
                 }
                 exit.store(true, Ordering::Relaxed);
@@ -1265,10 +1257,10 @@ mod tests {
                     .for_each(|x| assert_eq!(*x, Ok(())));
             }
 
-            // Assert the user holds one lamport, not two. If the stage only outputs one
+            // Assert the user holds two lamports, not three. If the stage only outputs one
             // entry, then the second transaction will be rejected, because it drives
             // the account balance below zero before the credit is added.
-            assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+            assert_eq!(bank.get_balance(&alice.pubkey()), 2);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
@@ -1607,7 +1599,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Pubkey::new_rand();
 
-        let transactions = vec![system_transaction::transfer_now(
+        let transactions = vec![system_transaction::transfer(
             &mint_keypair,
             &pubkey,
             1,

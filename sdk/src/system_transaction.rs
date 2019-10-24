@@ -24,19 +24,6 @@ pub fn create_account(
     Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
 }
 
-/// Create and sign new system_instruction::Transfer transaction, but don't use a CO "to"
-pub fn transfer_now(
-    from_keypair: &Keypair,
-    to: &Pubkey,
-    lamports: u64,
-    recent_blockhash: Hash,
-) -> Transaction {
-    let from_pubkey = from_keypair.pubkey();
-    let transfer_instruction = system_instruction::transfer_now(&from_pubkey, to, lamports);
-    let instructions = vec![transfer_instruction];
-    Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
-}
-
 /// Create and sign new system_instruction::Assign transaction
 pub fn assign(from_keypair: &Keypair, recent_blockhash: Hash, program_id: &Pubkey) -> Transaction {
     let from_pubkey = from_keypair.pubkey();

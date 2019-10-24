@@ -842,7 +842,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let keypair = Keypair::new();
         let slot_entries = create_ticks(genesis_block.ticks_per_slot, genesis_block.hash());
-        let tx = system_transaction::transfer_now(
+        let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair.pubkey(),
             1,
@@ -879,8 +879,7 @@ pub mod tests {
         for _ in 0..deducted_from_mint {
             // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
-            let tx =
-                system_transaction::transfer_now(&mint_keypair, &keypair.pubkey(), 1, blockhash);
+            let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 1, blockhash);
             let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
             last_entry_hash = entry.hash;
             entries.push(entry);
@@ -888,7 +887,8 @@ pub mod tests {
             // Add a second Transaction that will produce a
             // InstructionError<0, ResultWithNegativeLamports> error when processed
             let keypair2 = Keypair::new();
-            let tx = system_transaction::transfer_now(&keypair, &keypair2.pubkey(), 42, blockhash);
+            let tx =
+                system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 101, blockhash);
             let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
             last_entry_hash = entry.hash;
             entries.push(entry);
@@ -997,12 +997,10 @@ pub mod tests {
         let blockhash = genesis_block.hash();
         let keypairs = [Keypair::new(), Keypair::new(), Keypair::new()];
 
-        let tx =
-            system_transaction::transfer_now(&mint_keypair, &keypairs[0].pubkey(), 1, blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &keypairs[0].pubkey(), 1, blockhash);
         let entry_1 = next_entry(&last_entry_hash, 1, vec![tx]);
 
-        let tx =
-            system_transaction::transfer_now(&mint_keypair, &keypairs[1].pubkey(), 1, blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &keypairs[1].pubkey(), 1, blockhash);
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
 
         let mut entries = vec![entry_1, entry_2];
@@ -1067,14 +1065,14 @@ pub mod tests {
         let blockhash = bank.last_blockhash();
 
         // ensure bank can process 2 entries that have a common account and no tick is registered
-        let tx = system_transaction::transfer_now(
+        let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair1.pubkey(),
             2,
             bank.last_blockhash(),
         );
         let entry_1 = next_entry(&blockhash, 1, vec![tx]);
-        let tx = system_transaction::transfer_now(
+        let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair2.pubkey(),
             2,
@@ -1107,7 +1105,7 @@ pub mod tests {
         let entry_1_to_mint = next_entry(
             &bank.last_blockhash(),
             1,
-            vec![system_transaction::transfer_now(
+            vec![system_transaction::transfer(
                 &keypair1,
                 &mint_keypair.pubkey(),
                 1,
@@ -1119,13 +1117,13 @@ pub mod tests {
             &entry_1_to_mint.hash,
             1,
             vec![
-                system_transaction::transfer_now(
+                system_transaction::transfer(
                     &keypair2,
                     &keypair3.pubkey(),
                     2,
                     bank.last_blockhash(),
                 ), // should be fine
-                system_transaction::transfer_now(
+                system_transaction::transfer(
                     &keypair1,
                     &mint_keypair.pubkey(),
                     2,
@@ -1167,7 +1165,7 @@ pub mod tests {
             &bank.last_blockhash(),
             1,
             vec![
-                system_transaction::transfer_now(
+                system_transaction::transfer(
                     &keypair1,
                     &mint_keypair.pubkey(),
                     1,
@@ -1186,13 +1184,13 @@ pub mod tests {
             &entry_1_to_mint.hash,
             1,
             vec![
-                system_transaction::transfer_now(
+                system_transaction::transfer(
                     &keypair2,
                     &keypair3.pubkey(),
                     2,
                     bank.last_blockhash(),
                 ), // should be fine
-                system_transaction::transfer_now(
+                system_transaction::transfer(
                     &keypair1,
                     &mint_keypair.pubkey(),
                     2,
@@ -1265,7 +1263,7 @@ pub mod tests {
             &entry_1_to_mint.hash,
             1,
             vec![
-                system_transaction::transfer_now(
+                system_transaction::transfer(
                     &keypair2,
                     &keypair3.pubkey(),
                     2,
@@ -1338,14 +1336,14 @@ pub mod tests {
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = system_transaction::transfer_now(
+        let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair1.pubkey(),
             1,
             bank.last_blockhash(),
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = system_transaction::transfer_now(
+        let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair2.pubkey(),
             1,
@@ -1355,19 +1353,11 @@ pub mod tests {
 
         // ensure bank can process 2 entries that do not have a common account and no tick is registered
         let blockhash = bank.last_blockhash();
-        let tx = system_transaction::transfer_now(
-            &keypair1,
-            &keypair3.pubkey(),
-            1,
-            bank.last_blockhash(),
-        );
+        let tx =
+            system_transaction::transfer(&keypair1, &keypair3.pubkey(), 1, bank.last_blockhash());
         let entry_1 = next_entry(&blockhash, 1, vec![tx]);
-        let tx = system_transaction::transfer_now(
-            &keypair2,
-            &keypair4.pubkey(),
-            1,
-            bank.last_blockhash(),
-        );
+        let tx =
+            system_transaction::transfer(&keypair2, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(process_entries(&bank, &[entry_1, entry_2], true), Ok(()));
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -1448,7 +1438,7 @@ pub mod tests {
 
         for _ in 0..num_accounts {
             let keypair = Keypair::new();
-            let create_account_tx = system_transaction::transfer_now(
+            let create_account_tx = system_transaction::transfer(
                 &mint_keypair,
                 &keypair.pubkey(),
                 0,
@@ -1516,14 +1506,14 @@ pub mod tests {
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = system_transaction::transfer_now(
+        let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair1.pubkey(),
             1,
             bank.last_blockhash(),
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = system_transaction::transfer_now(
+        let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair2.pubkey(),
             1,
@@ -1537,15 +1527,11 @@ pub mod tests {
         }
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
-        let tx = system_transaction::transfer_now(&keypair2, &keypair3.pubkey(), 1, blockhash);
+        let tx = system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, blockhash);
         let entry_1 = next_entry(&blockhash, 1, vec![tx]);
         let tick = next_entry(&entry_1.hash, 1, vec![]);
-        let tx = system_transaction::transfer_now(
-            &keypair1,
-            &keypair4.pubkey(),
-            1,
-            bank.last_blockhash(),
-        );
+        let tx =
+            system_transaction::transfer(&keypair1, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
             process_entries(
@@ -1559,12 +1545,8 @@ pub mod tests {
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
 
         // ensure that an error is returned for an empty account (keypair2)
-        let tx = system_transaction::transfer_now(
-            &keypair2,
-            &keypair3.pubkey(),
-            1,
-            bank.last_blockhash(),
-        );
+        let tx =
+            system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, bank.last_blockhash());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
             process_entries(&bank, &[entry_3], true),
@@ -1598,7 +1580,7 @@ pub mod tests {
         );
 
         // Make sure other errors don't update the signature cache
-        let tx = system_transaction::transfer_now(&mint_keypair, &pubkey, 1000, Hash::default());
+        let tx = system_transaction::transfer(&mint_keypair, &pubkey, 1000, Hash::default());
         let signature = tx.signatures[0];
 
         // Should fail with blockhash not found
@@ -1624,13 +1606,13 @@ pub mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
-        let success_tx = system_transaction::transfer_now(
+        let success_tx = system_transaction::transfer(
             &mint_keypair,
             &keypair1.pubkey(),
             1,
             bank.last_blockhash(),
         );
-        let fail_tx = system_transaction::transfer_now(
+        let fail_tx = system_transaction::transfer(
             &mint_keypair,
             &keypair2.pubkey(),
             2,

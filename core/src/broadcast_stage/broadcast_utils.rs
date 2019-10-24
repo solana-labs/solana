@@ -87,7 +87,7 @@ mod tests {
             ..
         } = create_genesis_block(2);
         let bank0 = Arc::new(Bank::new(&genesis_block));
-        let tx = system_transaction::transfer_now(
+        let tx = system_transaction::transfer(
             &mint_keypair,
             &Pubkey::new_rand(),
             1,

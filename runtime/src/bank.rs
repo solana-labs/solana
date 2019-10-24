@@ -5,7 +5,6 @@
 use crate::{
     accounts::{Accounts, TransactionLoadResult},
     accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
-    accounts_index::Fork,
     blockhash_queue::BlockhashQueue,
     message_processor::{MessageProcessor, ProcessInstruction},
     rent_collector::RentCollector,
@@ -1318,7 +1317,7 @@ impl Bank {
         self.rc
             .accounts
             .load_slow(&self.ancestors, pubkey)
-            .map(|(account, _)| account)
+            .map(|(acc, _slot)| acc)
     }
 
     pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
@@ -1333,10 +1332,10 @@ impl Bank {
     ) -> Vec<(Pubkey, Account)> {
         self.rc
             .accounts
-            .load_by_program_fork(self.slot(), program_id)
+            .load_by_program_slot(self.slot(), program_id)
     }
 
-    pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Fork)> {
+    pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Slot)> {
         let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
         self.rc.accounts.load_slow(&just_self, pubkey)
     }
@@ -1617,8 +1616,8 @@ impl Bank {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        // For root forks this is a noop
-        self.rc.accounts.purge_fork(self.slot());
+        // For root slots this is a noop
+        self.rc.accounts.purge_slot(self.slot());
     }
 }
 
@@ -1796,7 +1795,7 @@ mod tests {
         for _ in 0..10 {
             let blockhash = bank.last_blockhash();
             let pubkey = Pubkey::new_rand();
-            let tx = system_transaction::transfer_now(&mint_keypair, &pubkey, 0, blockhash);
+            let tx = system_transaction::transfer(&mint_keypair, &pubkey, 0, blockhash);
             bank.process_transaction(&tx).unwrap();
             bank.squash();
             bank = Arc::new(new_from_parent(&bank));
@@ -1809,13 +1808,13 @@ mod tests {
         let bank0 = Arc::new(new_from_parent(&bank));
         let blockhash = bank.last_blockhash();
         let keypair = Keypair::new();
-        let tx = system_transaction::transfer_now(&mint_keypair, &keypair.pubkey(), 10, blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 10, blockhash);
         bank0.process_transaction(&tx).unwrap();
 
         let bank1 = Arc::new(new_from_parent(&bank0));
         let pubkey = Pubkey::new_rand();
         let blockhash = bank.last_blockhash();
-        let tx = system_transaction::transfer_now(&keypair, &pubkey, 10, blockhash);
+        let tx = system_transaction::transfer(&keypair, &pubkey, 10, blockhash);
         bank1.process_transaction(&tx).unwrap();
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
@@ -1941,12 +1940,8 @@ mod tests {
         let dest = Keypair::new();
 
         // source with 0 program context
-        let tx = system_transaction::transfer_now(
-            &mint_keypair,
-            &dest.pubkey(),
-            2,
-            genesis_block.hash(),
-        );
+        let tx =
+            system_transaction::transfer(&mint_keypair, &dest.pubkey(), 2, genesis_block.hash());
         let signature = tx.signatures[0];
         assert!(!bank.has_signature(&signature));
 
@@ -2230,18 +2225,10 @@ mod tests {
         let (genesis_block, mint_keypair) = create_genesis_block(2);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
-        let tx0 = system_transaction::transfer_now(
-            &mint_keypair,
-            &keypair.pubkey(),
-            2,
-            genesis_block.hash(),
-        );
-        let tx1 = system_transaction::transfer_now(
-            &keypair,
-            &mint_keypair.pubkey(),
-            1,
-            genesis_block.hash(),
-        );
+        let tx0 =
+            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, genesis_block.hash());
+        let tx1 =
+            system_transaction::transfer(&keypair, &mint_keypair.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
         assert!(results[1].is_err());
@@ -2272,9 +2259,6 @@ mod tests {
             system_transaction::transfer(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
-        bank.rc
-            .accounts
-            .commit_credits_unsafe(&bank.ancestors, bank.slot());
 
         // If multiple transactions attempt to deposit into the same account, they should succeed,
         // since System Transfer `To` accounts are given credit-only handling
@@ -2293,9 +2277,6 @@ mod tests {
             system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
-        bank.rc
-            .accounts
-            .commit_credits_unsafe(&bank.ancestors, bank.slot());
         // However, an account may not be locked as credit-only and credit-debit at the same time.
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));
@@ -2308,12 +2289,8 @@ mod tests {
         let alice = Keypair::new();
         let bob = Keypair::new();
 
-        let tx1 = system_transaction::transfer_now(
-            &mint_keypair,
-            &alice.pubkey(),
-            1,
-            genesis_block.hash(),
-        );
+        let tx1 =
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_block.hash());
         let pay_alice = vec![tx1];
 
         let lock_result = bank.prepare_batch(&pay_alice, None);
@@ -3112,12 +3089,8 @@ mod tests {
 
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
-        let fail_tx = system_transaction::transfer_now(
-            &keypair1,
-            &keypair2.pubkey(),
-            1,
-            bank.last_blockhash(),
-        );
+        let fail_tx =
+            system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, bank.last_blockhash());
 
         // Should fail with TransactionError::AccountNotFound, which means
         // the account which this tx operated on will not be committed. Thus
