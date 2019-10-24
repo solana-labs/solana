@@ -75,6 +75,8 @@ solana-bench-exchange)
   "
   ;;
 idle)
+  # Add the mint keypair to idle clients for convenience
+  scp "$entrypointIp":~/solana/config/mint-keypair.json config/
   exit 0
   ;;
 *)
