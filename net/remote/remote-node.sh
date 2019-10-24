@@ -282,11 +282,14 @@ EOF
     fi
 
     set -x
+    # Add the mint keypair to validators for convenient access from tools
+    # like bench-tps and add to blocktreamers to run a drone
+    scp "$entrypointIp":~/solana/config/mint-keypair.json config/
     if [[ $nodeType = blockstreamer ]]; then
-      # Sneak the mint-keypair.json from the bootstrap leader and run another drone
-      # with it on the blockstreamer node.  Typically the blockstreamer node has
-      # a static IP/DNS name for hosting the blockexplorer web app, and is
-      # a location that somebody would expect to be able to airdrop from
+      # Run another drone with the mint keypair on the blockstreamer node. 
+      # Typically the blockstreamer node has a static IP/DNS name for hosting
+      # the blockexplorer web app, and is a location that somebody would expect
+      # to be able to airdrop from
       scp "$entrypointIp":~/solana/config/mint-keypair.json config/
       if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
@@ -405,4 +408,3 @@ EOF
   echo "Unknown deployment method: $deployMethod"
   exit 1
 esac
-
