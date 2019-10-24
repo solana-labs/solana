@@ -74,6 +74,7 @@ function launchTestnet() {
   case $CLOUD_PROVIDER in
     gce)
     # shellcheck disable=SC2068
+    # shellcheck disable=SC2086
       net/gce.sh create \
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
@@ -82,6 +83,7 @@ function launchTestnet() {
       ;;
     colo)
     # shellcheck disable=SC2068
+    # shellcheck disable=SC2086
       net/colo.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" "$maybeEnableGpu" \
         -p "$TESTNET_TAG" ${ADDITIONAL_FLAGS[@]/#/" "}
