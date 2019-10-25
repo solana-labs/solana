@@ -7,14 +7,9 @@
 use crate::cuda_runtime::PinnedVec;
 use crate::packet::{Packet, Packets};
 use crate::recycler::Recycler;
-use crate::recycler::Reset;
-use bincode::deserialize_from;
 use bincode::serialized_size;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 use solana_ledger::perf_libs;
-use solana_ledger::shred::ShredType;
 use solana_metrics::inc_new_counter_debug;
 use solana_sdk::message::MessageHeader;
 use solana_sdk::pubkey::Pubkey;
@@ -22,7 +17,6 @@ use solana_sdk::short_vec::decode_len;
 use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
-use std::collections::HashMap;
 use std::mem::size_of;
 
 use solana_rayon_threadlimit::get_thread_count;
@@ -30,6 +24,7 @@ use std::cell::RefCell;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
+                    .thread_name(|ix| format!("sigverify_{}", ix))
                     .build()
                     .unwrap()));
 
@@ -84,248 +79,6 @@ pub fn init() {
     }
 }
 
-impl Reset for PinnedVec<Pubkey> {
-    fn reset(&mut self) {
-        self.resize(0, Pubkey::default());
-    }
-}
-
-/// Assuming layout is
-/// signature: Signature
-/// signed_msg: {
-///   type: ShredType
-///   slot: u64,
-///   ...
-/// }
-/// Signature is the first thing in the packet, and slot is the first thing in the signed message.
-fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, Pubkey>) -> Option<u8> {
-    let sig_start = 0;
-    let sig_end = size_of::<Signature>();
-    let slot_start = sig_end + size_of::<ShredType>();
-    let slot_end = sig_end + size_of::<u64>();
-    let msg_start = sig_end;
-    let msg_end = packet.data.len() - sig_end;
-    let slot: u64 = deserialize_from(&packet.data[slot_start..slot_end]).ok()?;
-    let pubkey: &Pubkey = slot_leaders.get(&slot)?;
-    let signature = Signature::new(&packet.data[sig_start..sig_end]);
-    if !signature.verify(pubkey.as_ref(), &packet.data[msg_start..msg_end]) {
-        return Some(0);
-    }
-    return Some(1);
-}
-
-pub fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, Pubkey>) -> Vec<Vec<u8>> {
-    use rayon::prelude::*;
-    let count = batch_size(batches);
-    debug!("CPU SHRED ECDSA for {}", count);
-    let rv = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map(|p| {
-                    p.packets
-                        .par_iter()
-                        .map(|p| verify_shred_cpu(p, slot_leaders).unwrap_or(0))
-                        .collect()
-                })
-                .collect()
-        })
-    });
-    inc_new_counter_debug!("ed25519_shred_verify_cpu", count);
-    rv
-}
-
-fn shred_gpu_pubkeys(
-    batches: &[Packets],
-    slot_leaders: &HashMap<u64, Pubkey>,
-    recycler_offsets: &Recycler<TxOffset>,
-    recycler_pubkeys: &Recycler<PinnedVec<Pubkey>>,
-) -> (PinnedVec<Pubkey>, TxOffset) {
-    assert_eq!(slot_leaders.get(&std::u64::MAX), Some(&Pubkey::default()));
-    let slots: Vec<Vec<u64>> = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map(|p| {
-                    p.packets
-                        .iter()
-                        .map(|packet| {
-                            let slot_start = size_of::<Signature>() + size_of::<ShredType>();
-                            let slot_end = slot_start + size_of::<u64>();
-                            let slot: Option<u64> =
-                                deserialize_from(&packet.data[slot_start..slot_end]).ok();
-                            if slot.is_some() && slot_leaders.get(&slot.unwrap()).is_some() {
-                                slot.unwrap()
-                            } else {
-                                std::u64::MAX
-                            }
-                        })
-                        .collect()
-                })
-                .collect()
-        })
-    });
-    let mut keys: HashMap<Pubkey, Vec<u64>> = HashMap::new();
-    for batch in slots.iter() {
-        for slot in batch.iter() {
-            let key = slot_leaders.get(slot).unwrap();
-            keys.entry(*key).or_insert(vec![]).push(*slot);
-        }
-    }
-    let mut pubkeys: PinnedVec<Pubkey> = recycler_pubkeys.allocate("shred_gpu_pubkeys");
-    let mut slot_to_key_ix = HashMap::new();
-    for (i, (k, slots)) in keys.iter().enumerate() {
-        pubkeys.push(*k);
-        for s in slots {
-            slot_to_key_ix.insert(s, i);
-        }
-    }
-    let mut offsets = recycler_offsets.allocate("shred_offsets");
-    slots.iter().for_each(|packet_slots| {
-        packet_slots.iter().for_each(|slot| {
-            offsets.push((slot_to_key_ix.get(slot).unwrap() * size_of::<Pubkey>()) as u32);
-        });
-    });
-    //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
-    //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
-    //Pad the Pubkeys buffer such that it is bigger than a buffer of Packet sized elems
-    let num = pubkeys.len() * size_of::<Pubkey>() / size_of::<Packet>();
-    let missing = pubkeys.len() * size_of::<Pubkey>() - num * size_of::<Packet>();
-    let extra = (missing + size_of::<Packet>() - 1) / size_of::<Packet>();
-    for _ in 0..extra {
-        pubkeys.push(Pubkey::default());
-    }
-    assert!(num <= pubkeys.len() * size_of::<Pubkey>() / size_of::<Packet>());
-    (pubkeys, offsets)
-}
-
-fn shred_gpu_offsets(
-    mut pubkeys_end: u32,
-    batches: &[Packets],
-    recycler_offsets: &Recycler<TxOffset>,
-) -> (TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>) {
-    let mut signature_offsets = recycler_offsets.allocate("shred_signatures");
-    let mut msg_start_offsets = recycler_offsets.allocate("shred_msg_starts");
-    let mut msg_sizes = recycler_offsets.allocate("shred_msg_sizes");
-    let mut v_sig_lens = vec![];
-    for batch in batches {
-        let mut sig_lens = Vec::new();
-        for packet in &batch.packets {
-            let sig_start = pubkeys_end;
-            let sig_end = sig_start + size_of::<Signature>() as u32;
-            let msg_start = sig_end;
-            let msg_end = packet.data.len() as u32 - sig_start;
-            signature_offsets.push(sig_start);
-            msg_start_offsets.push(msg_start);
-            msg_sizes.push(msg_end - msg_start);
-            sig_lens.push(1);
-            pubkeys_end += size_of::<Packet>() as u32;
-        }
-        v_sig_lens.push(sig_lens);
-    }
-    (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens)
-}
-
-pub fn verify_shreds_gpu(
-    batches: &[Packets],
-    slot_leaders: &HashMap<u64, Pubkey>,
-    recycler_offsets: &Recycler<TxOffset>,
-    recycler_pubkeys: &Recycler<PinnedVec<Pubkey>>,
-    recycler_out: &Recycler<PinnedVec<u8>>,
-) -> Vec<Vec<u8>> {
-    let api = perf_libs::api();
-    if api.is_none() {
-        return verify_shreds_cpu(batches, slot_leaders);
-    }
-    let api = api.unwrap();
-
-    let mut elems = Vec::new();
-    let mut rvs = Vec::new();
-    let count = batch_size(batches);
-    let (pubkeys, pubkey_offsets) =
-        shred_gpu_pubkeys(batches, slot_leaders, recycler_offsets, recycler_pubkeys);
-    //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
-    //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
-    let num_packets = pubkeys.len() * size_of::<Pubkey>() / size_of::<Packet>();
-    let pubkeys_len = (num_packets * size_of::<Packet>()) as u32;
-    let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
-        shred_gpu_offsets(pubkeys_len, batches, recycler_offsets);
-    let mut out = recycler_out.allocate("out_buffer");
-    out.set_pinnable();
-    elems.push(perf_libs::Elems {
-        elems: pubkeys.as_ptr() as *const solana_sdk::packet::Packet,
-        num: num_packets as u32,
-    });
-
-    let mut num_packets = 0;
-    for p in batches {
-        elems.push(perf_libs::Elems {
-            elems: p.packets.as_ptr(),
-            num: p.packets.len() as u32,
-        });
-        let mut v = Vec::new();
-        v.resize(p.packets.len(), 0);
-        rvs.push(v);
-        num_packets += p.packets.len();
-    }
-    out.resize(signature_offsets.len(), 0);
-
-    use crate::packet::PACKET_DATA_SIZE;
-    trace!("Starting verify num packets: {}", num_packets);
-    trace!("elem len: {}", elems.len() as u32);
-    trace!("packet sizeof: {}", size_of::<Packet>() as u32);
-    trace!("len offset: {}", PACKET_DATA_SIZE as u32);
-    const USE_NON_DEFAULT_STREAM: u8 = 1;
-    unsafe {
-        let res = (api.ed25519_verify_many)(
-            elems.as_ptr(),
-            elems.len() as u32,
-            size_of::<Packet>() as u32,
-            num_packets as u32,
-            signature_offsets.len() as u32,
-            msg_sizes.as_ptr(),
-            pubkey_offsets.as_ptr(),
-            signature_offsets.as_ptr(),
-            msg_start_offsets.as_ptr(),
-            out.as_mut_ptr(),
-            USE_NON_DEFAULT_STREAM,
-        );
-        if res != 0 {
-            trace!("RETURN!!!: {}", res);
-        }
-    }
-    trace!("done verify");
-
-    let mut num = 0;
-    for (vs, sig_vs) in rvs.iter_mut().zip(v_sig_lens.iter()) {
-        for (v, sig_v) in vs.iter_mut().zip(sig_vs.iter()) {
-            if *sig_v == 0 {
-                *v = 0;
-            } else {
-                let mut vout = 1;
-                for _ in 0..*sig_v {
-                    if 0 == out[num] {
-                        vout = 0;
-                    }
-                    num += 1;
-                }
-                *v = vout;
-            }
-            if *v != 0 {
-                trace!("VERIFIED SHRED!!!!!");
-            }
-        }
-    }
-    inc_new_counter_debug!("ed25519_shred_verify_gpu", count);
-    recycler_out.recycle(out);
-    recycler_offsets.recycle(signature_offsets);
-    recycler_offsets.recycle(pubkey_offsets);
-    recycler_offsets.recycle(msg_sizes);
-    recycler_offsets.recycle(msg_start_offsets);
-    recycler_pubkeys.recycle(pubkeys);
-    rvs
-}
-
 fn verify_packet(packet: &Packet) -> u8 {
     let packet_offsets = get_packet_offsets(packet, 0);
     let mut sig_start = packet_offsets.sig_start as usize;
@@ -362,7 +115,7 @@ fn verify_packet(packet: &Packet) -> u8 {
     1
 }
 
-fn batch_size(batches: &[Packets]) -> usize {
+pub fn batch_size(batches: &[Packets]) -> usize {
     batches.iter().map(|p| p.packets.len()).sum()
 }
 
