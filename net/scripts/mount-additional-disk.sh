@@ -6,7 +6,7 @@ disk=sdb
 if ! lsblk | grep -q ${disk} ; then
   echo "${disk} does not exist"
 else
-  sudo mount /dev/"$disk" "$mount_point"
+  sudo mount /dev/"$disk" "$mount_point" || true
   if mount | grep -q ${disk} ; then
     echo "${disk} is mounted"
   else
