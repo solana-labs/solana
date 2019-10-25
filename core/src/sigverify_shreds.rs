@@ -3,7 +3,7 @@ use crate::packet::{Packet, Packets};
 use crate::recycler::Recycler;
 use crate::recycler::Reset;
 use crate::sigverify::{batch_size, TxOffset};
-use bincode::deserialize_from;
+use bincode::deserialize;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
@@ -42,12 +42,15 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, Pubkey>) -> Opt
     let sig_start = 0;
     let sig_end = size_of::<Signature>();
     let slot_start = sig_end + size_of::<ShredType>();
-    let slot_end = sig_end + size_of::<u64>();
+    let slot_end = slot_start + size_of::<u64>();
     let msg_start = sig_end;
-    let msg_end = packet.data.len() - sig_end;
-    let slot: u64 = deserialize_from(&packet.data[slot_start..slot_end]).ok()?;
+    let msg_end = packet.meta.size - sig_end;
+    trace!("slot start and end {} {}", slot_start, slot_end);
+    let slot: u64 = deserialize(&packet.data[slot_start..slot_end]).ok()?;
+    trace!("slot {}", slot);
     let pubkey: &Pubkey = slot_leaders.get(&slot)?;
     let signature = Signature::new(&packet.data[sig_start..sig_end]);
+    trace!("signature {}", signature);
     if !signature.verify(pubkey.as_ref(), &packet.data[msg_start..msg_end]) {
         return Some(0);
     }
@@ -93,7 +96,7 @@ fn shred_gpu_pubkeys(
                             let slot_start = size_of::<Signature>() + size_of::<ShredType>();
                             let slot_end = slot_start + size_of::<u64>();
                             let slot: Option<u64> =
-                                deserialize_from(&packet.data[slot_start..slot_end]).ok();
+                                deserialize(&packet.data[slot_start..slot_end]).ok();
                             if slot.is_some() && slot_leaders.get(&slot.unwrap()).is_some() {
                                 slot.unwrap()
                             } else {
@@ -272,44 +275,51 @@ pub mod tests {
     use solana_ledger::shred::{Shred, Shredder};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     #[test]
-    fn test_sigverify_shred_cpu_valid() {
+    fn test_sigverify_shred_cpu() {
+        solana_logger::setup();
         let mut packet = Packet::default();
-        let mut shred = Shred::new_empty_data_shred();
+        let slot = 0xdeadc0de;
+        let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1,2,3,4]), true, true);
+        assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
+        trace!("signature {}", shred.common_header.signature);
         packet.data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        packet.meta.size = shred.payload.len();
 
         let mut leader_slots: HashMap<u64, Pubkey> = HashMap::new();
-        leader_slots.insert(0u64, keypair.pubkey());
+        leader_slots.insert(slot, keypair.pubkey());
         let rv = verify_shred_cpu(&packet, &leader_slots);
         assert_eq!(rv, Some(1));
 
         let wrong_keypair = Keypair::new();
-        leader_slots.insert(0u64, wrong_keypair.pubkey());
+        leader_slots.insert(slot, wrong_keypair.pubkey());
         let rv = verify_shred_cpu(&packet, &leader_slots);
         assert_eq!(rv, Some(0));
 
-        leader_slots.remove(&0u64);
+        leader_slots.remove(&slot);
         let rv = verify_shred_cpu(&packet, &leader_slots);
         assert_eq!(rv, None);
     }
 
     #[test]
-    fn test_sigverify_shreds_cpu_valid() {
+    fn test_sigverify_shreds_cpu() {
         let mut batch = [Packets::default()];
-        let mut shred = Shred::new_empty_data_shred();
+        let slot = 0xdeadc0de;
+        let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1,2,3,4]), true, true);
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
         batch[0].packets.resize(1, Packet::default());
         batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batch[0].packets[0].meta.size = shred.payload.len();
 
         let mut leader_slots: HashMap<u64, Pubkey> = HashMap::new();
-        leader_slots.insert(0u64, keypair.pubkey());
+        leader_slots.insert(slot, keypair.pubkey());
         let rv = verify_shreds_cpu(&batch, &leader_slots);
         assert_eq!(rv, vec![vec![1]]);
 
         let wrong_keypair = Keypair::new();
-        leader_slots.insert(0u64, wrong_keypair.pubkey());
+        leader_slots.insert(slot, wrong_keypair.pubkey());
         let rv = verify_shreds_cpu(&batch, &leader_slots);
         assert_eq!(rv, vec![vec![0]]);
     }
