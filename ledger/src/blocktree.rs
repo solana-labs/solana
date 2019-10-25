@@ -890,11 +890,12 @@ impl Blocktree {
         keypair: &Arc<Keypair>,
         entries: Vec<Entry>,
     ) -> Result<usize> {
-        assert!(num_ticks_in_start_slot < ticks_per_slot);
-        let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
+        let mut parent_slot = parent.map_or(start_slot.saturating_sub(1), |v| v);
+        let num_slots = (start_slot - parent_slot).max(1); // Note: slot 0 has parent slot 0
+        assert!(num_ticks_in_start_slot < num_slots * ticks_per_slot);
+        let mut remaining_ticks_in_slot = num_slots * ticks_per_slot - num_ticks_in_start_slot;
 
         let mut current_slot = start_slot;
-        let mut parent_slot = parent.map_or(current_slot.saturating_sub(1), |v| v);
         let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
             .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];

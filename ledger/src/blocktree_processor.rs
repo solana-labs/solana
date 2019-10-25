@@ -296,7 +296,9 @@ fn verify_and_process_slot_entries(
     assert!(!entries.is_empty());
 
     if opts.verify_ledger {
-        if bank.ticks_per_slot() != entries.tick_count() {
+        let next_bank_tick_height = bank.tick_height() + entries.tick_count();
+        let max_bank_tick_height = bank.max_tick_height();
+        if next_bank_tick_height != max_bank_tick_height {
             warn!(
                 "Invalid number of entry ticks found in slot: {}",
                 bank.slot()
@@ -491,7 +493,8 @@ pub fn fill_blocktree_slot_with_ticks(
     parent_slot: u64,
     last_entry_hash: Hash,
 ) -> Hash {
-    let entries = create_ticks(ticks_per_slot, 0, last_entry_hash);
+    let num_slots = (slot - parent_slot).max(1); // Note: slot 0 has parent slot 0
+    let entries = create_ticks(num_slots * ticks_per_slot, 0, last_entry_hash);
     let last_entry_hash = entries.last().unwrap().hash;
 
     blocktree
