@@ -269,27 +269,26 @@ pub fn verify_shreds_gpu(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use bincode::serialize;
     use solana_ledger::shred::{Shred, Shredder};
     use solana_sdk::signature::{Keypair, KeypairUtil};
 
-    fn test_verify_shreds_cpu_valid() {
-        let mut batch = Packets::default();
+    #[test]
+    fn test_sigverify_shreds_cpu_valid() {
+        let mut batch = [Packets::default()];
         let mut shred = Shred::new_empty_data_shred();
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
-        batch.packets.resize(1, Packet::default());
-        let data = serialize(&shred).unwrap();
-        batch.packets[0].data[0..data.len()].copy_from_slice(&data);
+        batch[0].packets.resize(1, Packet::default());
+        batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
 
-        let mut leader_slots = HashMap::new();
-        leader_slots[&0u64] = keypair.pubkey();
-        let rv = verify_shreds_cpu(&[batch], &leader_slots);
+        let mut leader_slots: HashMap<u64, Pubkey> = HashMap::new();
+        leader_slots.insert(0u64, keypair.pubkey());
+        let rv = verify_shreds_cpu(&batch, &leader_slots);
         assert_eq!(rv, vec![vec![1]]);
 
         let wrong_keypair = Keypair::new();
-        leader_slots[&0u64] = wrong_keypair.pubkey();
-        let rv = verify_shreds_cpu(&[batch], &leader_slots);
+        leader_slots.insert(0u64, wrong_keypair.pubkey());
+        let rv = verify_shreds_cpu(&batch, &leader_slots);
         assert_eq!(rv, vec![vec![0]]);
     }
 }
