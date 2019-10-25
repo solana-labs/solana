@@ -55,6 +55,7 @@ pub struct Blocktree {
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     last_root: Arc<RwLock<u64>>,
+    insert_shreds_lock: Arc<Mutex<bool>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
 }
@@ -106,6 +107,7 @@ impl Blocktree {
             code_shred_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
+            insert_shreds_lock: Arc::new(Mutex::new(true)),
             last_root,
         })
     }
@@ -359,6 +361,7 @@ impl Blocktree {
         shreds: Vec<Shred>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
     ) -> Result<()> {
+        let lock = self.insert_shreds_lock.lock().unwrap();
         let db = &*self.db;
         let mut write_batch = db.batch()?;
 
@@ -3659,5 +3662,42 @@ pub mod tests {
                 .expect("Expected successful write of shreds");
             assert!(blocktree.get_slot_entries(slot, 0, None).is_err());
         }
+    }
+
+    #[test]
+    fn test_multiple_threads_insert_shred() {
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        let num_threads = 10;
+
+        // Create `num_threads` different ticks in slots 1..num_therads + 1, all
+        // with parent = slot 0
+        let threads: Vec<_> = (0..num_threads)
+            .map(|i| {
+                let entries = create_ticks(1, Hash::default());
+                let shreds = entries_to_test_shreds(entries, i + 1, 0, false);
+                Builder::new()
+                    .name("blocktree-writer".to_string())
+                    .spawn(move || {
+                        blocktree.insert_shreds(shreds, None).unwrap();
+                    })
+                    .unwrap()
+            })
+            .collect();
+
+        for t in threads {
+            t.join().unwrap()
+        }
+
+        // Check slot 0 has the correct children
+        let mut meta0 = blocktree.meta(0).unwrap();
+        let meta0_next_slots = meta0.next_slots.sort();
+        let expected_next_slots: Vec<_> = (1..num_threads + 1).collect();
+        assert_eq!(meta0_next_slots, expected_next_slots);
+
+        // Cleanup
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 }
