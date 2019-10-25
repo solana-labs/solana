@@ -214,9 +214,10 @@ fn shred_gpu_offsets(
         for packet in &batch.packets {
             let sig_start = pubkeys_end;
             let sig_end = sig_start + size_of::<Signature>() as u32;
-            let msg_start = sig_start;
+            let msg_start = sig_end;
             let msg_end = packet.data.len() as u32 - sig_start;
             signature_offsets.push(sig_start);
+            msg_start_offsets.push(msg_start);
             msg_sizes.push(msg_end - msg_start);
             sig_lens.push(1);
             pubkeys_end += size_of::<Packet>() as u32;
@@ -233,6 +234,12 @@ pub fn verify_shreds_gpu(
     recycler_pubkeys: &Recycler<PinnedVec<Pubkey>>,
     recycler_out: &Recycler<PinnedVec<u8>>,
 ) -> Vec<Vec<u8>> {
+    let api = perf_libs::api();
+    if api.is_none() {
+        return verify_shreds_cpu(batches, slot_leaders);
+    }
+    let api = api.unwrap();
+
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
     let count = batch_size(batches);
@@ -270,7 +277,6 @@ pub fn verify_shreds_gpu(
     trace!("packet sizeof: {}", size_of::<Packet>() as u32);
     trace!("len offset: {}", PACKET_DATA_SIZE as u32);
     const USE_NON_DEFAULT_STREAM: u8 = 1;
-    let api = perf_libs::api();
     unsafe {
         let res = (api.ed25519_verify_many)(
             elems.as_ptr(),
@@ -317,7 +323,7 @@ pub fn verify_shreds_gpu(
     recycler_offsets.recycle(pubkey_offsets);
     recycler_offsets.recycle(msg_sizes);
     recycler_offsets.recycle(msg_start_offsets);
-    recycler_pubkeys.recycler_pubkeys(pubkeys);
+    recycler_pubkeys.recycle(pubkeys);
     rvs
 }
 
