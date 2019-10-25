@@ -105,7 +105,7 @@ waitForNodeToInit() {
   echo "--- waiting for $hostname to boot up"
   SECONDS=
   while [[ ! -r $initCompleteFile ]]; do
-    if [[ $SECONDS -ge 120 ]]; then
+    if [[ $SECONDS -ge 240 ]]; then
       echo "^^^ +++"
       echo "Error: $initCompleteFile not found in $SECONDS seconds"
       exit 1
