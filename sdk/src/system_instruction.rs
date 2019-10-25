@@ -56,7 +56,7 @@ pub fn create_account(
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
-        AccountMeta::new(*to_pubkey, false),
+        AccountMeta::new(*to_pubkey, true),
     ];
     Instruction::new(
         system_program::id(),

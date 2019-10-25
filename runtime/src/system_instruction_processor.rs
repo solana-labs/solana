@@ -20,6 +20,11 @@ fn create_system_account(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
+    if to.signer_key().is_none() {
+        debug!("CreateAccount: to must sign");
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
     // if it looks like the to account is already in use, bail
     if to.account.lamports != 0
         || !to.account.data.is_empty()
