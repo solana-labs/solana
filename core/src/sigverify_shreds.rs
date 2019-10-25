@@ -44,7 +44,7 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, Pubkey>) -> Opt
     let slot_start = sig_end + size_of::<ShredType>();
     let slot_end = slot_start + size_of::<u64>();
     let msg_start = sig_end;
-    let msg_end = packet.meta.size - sig_end;
+    let msg_end = packet.meta.size;
     trace!("slot start and end {} {}", slot_start, slot_end);
     let slot: u64 = deserialize(&packet.data[slot_start..slot_end]).ok()?;
     trace!("slot {}", slot);
@@ -157,7 +157,7 @@ fn shred_gpu_offsets(
             let sig_start = pubkeys_end;
             let sig_end = sig_start + size_of::<Signature>() as u32;
             let msg_start = sig_end;
-            let msg_end = packet.data.len() as u32 - sig_start;
+            let msg_end = packet.meta.size as u32;
             signature_offsets.push(sig_start);
             msg_start_offsets.push(msg_start);
             msg_sizes.push(msg_end - msg_start);
