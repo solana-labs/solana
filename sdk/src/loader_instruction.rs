@@ -1,8 +1,6 @@
 use crate::instruction::{AccountMeta, Instruction};
 use crate::pubkey::Pubkey;
 use crate::sysvar::rent;
-use bincode::serialize;
-use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum LoaderInstruction {
@@ -36,7 +34,6 @@ pub enum LoaderInstruction {
     },
 }
 
-/// Create an instruction to write program data into an account
 pub fn write(
     account_pubkey: &Pubkey,
     program_id: &Pubkey,
@@ -51,23 +48,10 @@ pub fn write(
     )
 }
 
-/// Create an instruction to finalize a program data account, once finalized it can no longer be modified
 pub fn finalize(account_pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*account_pubkey, true),
         AccountMeta::new(rent::id(), false),
     ];
     Instruction::new(*program_id, &LoaderInstruction::Finalize, account_metas)
-}
-
-// Create an instruction to Invoke a program's "main" entrypoint with the given data
-pub fn invoke_main<T: Serialize>(
-    program_id: &Pubkey,
-    data: &T,
-    account_metas: Vec<AccountMeta>,
-) -> Instruction {
-    let ix_data = LoaderInstruction::InvokeMain {
-        data: serialize(data).unwrap().to_vec(),
-    };
-    Instruction::new(*program_id, &ix_data, account_metas)
 }

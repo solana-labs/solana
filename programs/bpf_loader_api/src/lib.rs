@@ -167,12 +167,8 @@ pub fn process_instruction(
             }
         }
     } else {
-        warn!(
-            "Invalid instruction data ({:?}): {:?}",
-            ix_data.len(),
-            ix_data
-        );
-        return Err(InstructionError::InvalidInstructionData);
+        warn!("Invalid instruction data: {:?}", ix_data);
+        return Err(InstructionError::GenericError);
     }
     Ok(())
 }
