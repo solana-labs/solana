@@ -5,12 +5,13 @@ extern crate test;
 use log::*;
 use solana_runtime::bank::*;
 use solana_runtime::bank_client::BankClient;
-use solana_runtime::loader_utils::create_invoke_instruction;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::AsyncClient;
 use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_block::create_genesis_block;
+use solana_sdk::instruction::AccountMeta;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::loader_instruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
@@ -52,7 +53,8 @@ pub fn create_builtin_transactions(
                 .transfer(10_000, &mint_keypair, &rando0.pubkey())
                 .expect(&format!("{}:{}", line!(), file!()));
 
-            let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
+            let account_metas = vec![AccountMeta::new(rando0.pubkey(), true)];
+            let instruction = loader_instruction::invoke_main(&program_id, &1u8, account_metas);
             let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
             Transaction::new_signed_instructions(&[&rando0], vec![instruction], blockhash)
         })
@@ -74,7 +76,8 @@ pub fn create_native_loader_transactions(
                 .transfer(10_000, &mint_keypair, &rando0.pubkey())
                 .expect(&format!("{}:{}", line!(), file!()));
 
-            let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
+            let account_metas = vec![AccountMeta::new(rando0.pubkey(), true)];
+            let instruction = loader_instruction::invoke_main(&program_id, &1u8, account_metas);
             let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
             Transaction::new_signed_instructions(&[&rando0], vec![instruction], blockhash)
         })

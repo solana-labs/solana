@@ -1,11 +1,12 @@
 use serde::Serialize;
 use solana_sdk::client::Client;
-use solana_sdk::instruction::{AccountMeta, Instruction};
+use solana_sdk::instruction::AccountMeta;
 use solana_sdk::loader_instruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction;
+use solana_sdk::transport::Result;
 
 pub fn load_program<T: Client>(
     bank_client: &T,
@@ -27,7 +28,7 @@ pub fn load_program<T: Client>(
         .send_instruction(&from_keypair, instruction)
         .unwrap();
 
-    let chunk_size = 256; // Size of chunk just needs to fit into tx
+    let chunk_size = 256; // Size of the chunk needs to fit into the transaction
     let mut offset = 0;
     for chunk in program.chunks(chunk_size) {
         let instruction =
@@ -48,13 +49,13 @@ pub fn load_program<T: Client>(
     program_pubkey
 }
 
-// Return an Instruction that invokes `program_id` with `data` and required
-// a signature from `from_pubkey`.
-pub fn create_invoke_instruction<T: Serialize>(
-    from_pubkey: Pubkey,
-    program_id: Pubkey,
-    data: &T,
-) -> Instruction {
-    let account_metas = vec![AccountMeta::new(from_pubkey, true)];
-    Instruction::new(program_id, data, account_metas)
+pub fn run_program<T: Client, D: Serialize>(
+    bank_client: &T,
+    from_keypair: &Keypair,
+    loader_pubkey: &Pubkey,
+    account_metas: Vec<AccountMeta>,
+    data: &D,
+) -> Result<Signature> {
+    let instruction = loader_instruction::invoke_main(loader_pubkey, data, account_metas);
+    bank_client.send_instruction(from_keypair, instruction)
 }
