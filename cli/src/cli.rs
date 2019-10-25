@@ -73,6 +73,9 @@ pub enum CliCommand {
     DeactivateStake(Pubkey),
     DelegateStake(Pubkey, Pubkey, bool),
     RedeemVoteCredits(Pubkey, Pubkey),
+    ShowStakeHistory {
+        use_lamports_unit: bool,
+    },
     ShowStakeAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
@@ -252,6 +255,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         }
         ("redeem-vote-credits", Some(matches)) => parse_redeem_vote_credits(matches),
         ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
+        ("show-stake-history", Some(matches)) => parse_show_stake_history(matches),
         // Storage Commands
         ("create-archiver-storage-account", Some(matches)) => {
             parse_storage_create_archiver_account(matches)
@@ -486,7 +490,7 @@ fn process_airdrop(
 ) -> ProcessResult {
     println!(
         "Requesting airdrop of {} from {}",
-        build_balance_message(lamports, use_lamports_unit),
+        build_balance_message(lamports, use_lamports_unit, true),
         drone_addr
     );
     let previous_balance = match rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)? {
@@ -505,7 +509,11 @@ fn process_airdrop(
         .retry_get_balance(&config.keypair.pubkey(), 5)?
         .unwrap_or(previous_balance);
 
-    Ok(build_balance_message(current_balance, use_lamports_unit))
+    Ok(build_balance_message(
+        current_balance,
+        use_lamports_unit,
+        true,
+    ))
 }
 
 fn process_balance(
@@ -517,7 +525,7 @@ fn process_balance(
     let pubkey = pubkey.unwrap_or(config.keypair.pubkey());
     let balance = rpc_client.retry_get_balance(&pubkey, 5)?;
     match balance {
-        Some(lamports) => Ok(build_balance_message(lamports, use_lamports_unit)),
+        Some(lamports) => Ok(build_balance_message(lamports, use_lamports_unit, true)),
         None => Err(
             CliError::RpcRequestError("Received result of an unexpected type".to_string()).into(),
         ),
@@ -553,7 +561,7 @@ fn process_show_account(
     println_name_value("Public Key:", &account_pubkey.to_string());
     println_name_value(
         "Balance:",
-        &build_balance_message(account.lamports, use_lamports_unit),
+        &build_balance_message(account.lamports, use_lamports_unit, true),
     );
     println_name_value("Owner:", &account.owner.to_string());
     println_name_value("Executable:", &account.executable.to_string());
@@ -877,6 +885,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &stake_account_pubkey,
             *use_lamports_unit,
         ),
+        CliCommand::ShowStakeHistory { use_lamports_unit } => {
+            process_show_stake_history(&rpc_client, config, *use_lamports_unit)
+        }
         CliCommand::StakeAuthorize(
             stake_account_pubkey,
             new_authorized_pubkey,
@@ -1151,15 +1162,25 @@ where
     }
 }
 
-pub(crate) fn build_balance_message(lamports: u64, use_lamports_unit: bool) -> String {
+pub(crate) fn build_balance_message(
+    lamports: u64,
+    use_lamports_unit: bool,
+    show_unit: bool,
+) -> String {
     if use_lamports_unit {
         let ess = if lamports == 1 { "" } else { "s" };
-        format!("{:?} lamport{}", lamports, ess)
+        let unit = if show_unit {
+            format!(" lamport{}", ess)
+        } else {
+            "".to_string()
+        };
+        format!("{:?}{}", lamports, unit)
     } else {
         let sol = lamports_to_sol(lamports);
         let sol_str = format!("{:.8}", sol);
         let pretty_sol = sol_str.trim_end_matches('0').trim_end_matches('.');
-        format!("{} SOL", pretty_sol)
+        let unit = if show_unit { " SOL" } else { "" };
+        format!("{}{}", pretty_sol, unit)
     }
 }
 

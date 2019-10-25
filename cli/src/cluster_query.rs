@@ -320,14 +320,14 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
 
     println_name_value(
         "Active Stake:",
-        &build_balance_message(total_active_stake as u64, use_lamports_unit),
+        &build_balance_message(total_active_stake as u64, use_lamports_unit, true),
     );
     if total_deliquent_stake > 0. {
         println_name_value(
             "Current Stake:",
             &format!(
                 "{} ({:0.2}%)",
-                &build_balance_message(total_current_stake as u64, use_lamports_unit),
+                &build_balance_message(total_current_stake as u64, use_lamports_unit, true),
                 100. * total_current_stake / total_active_stake
             ),
         );
@@ -335,7 +335,7 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
             "Delinquent Stake:",
             &format!(
                 "{} ({:0.2}%)",
-                &build_balance_message(total_deliquent_stake as u64, use_lamports_unit),
+                &build_balance_message(total_deliquent_stake as u64, use_lamports_unit, true),
                 100. * total_deliquent_stake / total_active_stake
             ),
         );
@@ -385,7 +385,7 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
             if vote_account.activated_stake > 0 {
                 format!(
                     "{} ({:.2}%)",
-                    build_balance_message(vote_account.activated_stake, use_lamports_unit),
+                    build_balance_message(vote_account.activated_stake, use_lamports_unit, true),
                     100. * vote_account.activated_stake as f64 / total_active_stake
                 )
             } else {

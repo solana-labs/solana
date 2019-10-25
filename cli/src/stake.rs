@@ -8,9 +8,14 @@ use crate::{
     input_validators::*,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
+use console::style;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    account_utils::State, pubkey::Pubkey, signature::KeypairUtil, system_instruction::SystemError,
+    account_utils::State,
+    pubkey::Pubkey,
+    signature::KeypairUtil,
+    system_instruction::SystemError,
+    sysvar::stake_history::{self, StakeHistory},
     transaction::Transaction,
 };
 use solana_stake_api::{
@@ -18,6 +23,7 @@ use solana_stake_api::{
     stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
 };
 use solana_vote_api::vote_state::VoteState;
+use std::ops::Deref;
 
 pub trait StakeSubCommands {
     fn stake_subcommands(self) -> Self;
@@ -249,6 +255,16 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Display balance in lamports instead of SOL")
                 )
         )
+        .subcommand(
+            SubCommand::with_name("show-stake-history")
+                .about("Show the stake history")
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL")
+                )
+        )
     }
 }
 
@@ -340,6 +356,14 @@ pub fn parse_show_stake_account(matches: &ArgMatches<'_>) -> Result<CliCommandIn
             pubkey: stake_account_pubkey,
             use_lamports_unit,
         },
+        require_keypair: false,
+    })
+}
+
+pub fn parse_show_stake_history(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let use_lamports_unit = matches.is_present("lamports");
+    Ok(CliCommandInfo {
+        command: CliCommand::ShowStakeHistory { use_lamports_unit },
         require_keypair: false,
     })
 }
@@ -527,12 +551,12 @@ pub fn process_show_stake_account(
         Ok(StakeState::Stake(authorized, lockup, stake)) => {
             println!(
                 "total stake: {}",
-                build_balance_message(stake_account.lamports, use_lamports_unit)
+                build_balance_message(stake_account.lamports, use_lamports_unit, true)
             );
             println!("credits observed: {}", stake.credits_observed);
             println!(
                 "delegated stake: {}",
-                build_balance_message(stake.stake, use_lamports_unit)
+                build_balance_message(stake.stake, use_lamports_unit, true)
             );
             if stake.voter_pubkey != Pubkey::default() {
                 println!("delegated voter pubkey: {}", stake.voter_pubkey);
@@ -565,6 +589,37 @@ pub fn process_show_stake_account(
         ))
         .into()),
     }
+}
+
+pub fn process_show_stake_history(
+    rpc_client: &RpcClient,
+    _config: &CliConfig,
+    use_lamports_unit: bool,
+) -> ProcessResult {
+    let stake_history_account = rpc_client.get_account(&stake_history::id())?;
+    let stake_history = StakeHistory::from_account(&stake_history_account).unwrap();
+
+    println!();
+    println!(
+        "{}",
+        style(format!(
+            "  {:<5}  {:>15}  {:>16}  {:>18}",
+            "Epoch", "Effective Stake", "Activating Stake", "Deactivating Stake",
+        ))
+        .bold()
+    );
+
+    for (epoch, entry) in stake_history.deref() {
+        println!(
+            "  {:>5}  {:>15}  {:>16}  {:>18} {}",
+            epoch,
+            build_balance_message(entry.effective, use_lamports_unit, false),
+            build_balance_message(entry.activating, use_lamports_unit, false),
+            build_balance_message(entry.deactivating, use_lamports_unit, false),
+            if use_lamports_unit { "lamports" } else { "SOL" }
+        );
+    }
+    Ok("".to_string())
 }
 
 pub fn process_delegate_stake(

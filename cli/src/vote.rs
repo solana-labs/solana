@@ -334,7 +334,7 @@ pub fn process_show_vote_account(
 
     println!(
         "account balance: {}",
-        build_balance_message(vote_account.lamports, use_lamports_unit)
+        build_balance_message(vote_account.lamports, use_lamports_unit, true)
     );
     println!("node id: {}", vote_state.node_pubkey);
     println!("authorized voter: {}", vote_state.authorized_voter);
