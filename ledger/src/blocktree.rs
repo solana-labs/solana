@@ -70,6 +70,8 @@ pub struct BlocktreeInsertionMetrics {
     pub commit_working_sets_elapsed: u64,
     pub write_batch_elapsed: u64,
     pub total_elapsed: u64,
+    pub num_inserted: u64,
+    pub num_recovered: usize,
 }
 
 impl BlocktreeInsertionMetrics {
@@ -96,6 +98,8 @@ impl BlocktreeInsertionMetrics {
                 i64
             ),
             ("write_batch_elapsed", self.write_batch_elapsed as i64, i64),
+            ("num_inserted", self.num_inserted as i64, i64),
+            ("num_recovered", self.num_recovered as i64, i64),
         );
     }
 }
@@ -400,12 +404,13 @@ impl Blocktree {
         &self,
         shreds: Vec<Shred>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
-    ) -> Result<BlocktreeInsertionMetrics>  {
+    ) -> Result<BlocktreeInsertionMetrics> {
+        let mut total_start = Measure::start("Total elapsed");
         let mut start = Measure::start("Blocktree lock");
         let _lock = self.insert_shreds_lock.lock().unwrap();
         start.stop();
         let insert_lock_elapsed = start.as_us();
-        
+
         let db = &*self.db;
         let mut write_batch = db.batch()?;
 
@@ -417,29 +422,38 @@ impl Blocktree {
 
         let num_shreds = shreds.len();
         let mut start = Measure::start("Shred insertion");
+        let mut num_inserted = 0;
         shreds.into_iter().for_each(|shred| {
-            if shred.is_data() {
-                self.check_insert_data_shred(
-                    shred,
-                    &mut index_working_set,
-                    &mut slot_meta_working_set,
-                    &mut write_batch,
-                    &mut just_inserted_data_shreds,
-                );
-            } else if shred.is_code() {
-                self.check_insert_coding_shred(
-                    shred,
-                    &mut erasure_metas,
-                    &mut index_working_set,
-                    &mut write_batch,
-                    &mut just_inserted_coding_shreds,
-                );
+            let insert_success = {
+                if shred.is_data() {
+                    self.check_insert_data_shred(
+                        shred,
+                        &mut index_working_set,
+                        &mut slot_meta_working_set,
+                        &mut write_batch,
+                        &mut just_inserted_data_shreds,
+                    )
+                } else if shred.is_code() {
+                    self.check_insert_coding_shred(
+                        shred,
+                        &mut erasure_metas,
+                        &mut index_working_set,
+                        &mut write_batch,
+                        &mut just_inserted_coding_shreds,
+                    )
+                } else {
+                    panic!("There should be no other case");
+                }
+            };
+            if insert_success {
+                num_inserted += 1;
             }
         });
         start.stop();
         let insert_shreds_elapsed = start.as_us();
 
         let mut start = Measure::start("Shred recovery");
+        let mut num_recovered = 0;
         if let Some(leader_schedule_cache) = leader_schedule {
             let recovered_data = Self::try_shred_recovery(
                 &db,
@@ -449,6 +463,7 @@ impl Blocktree {
                 &mut just_inserted_coding_shreds,
             );
 
+            num_recovered = recovered_data.len();
             recovered_data.into_iter().for_each(|shred| {
                 if let Some(leader) = leader_schedule_cache.slot_leader_at(shred.slot(), None) {
                     if shred.verify(&leader) {
@@ -458,7 +473,7 @@ impl Blocktree {
                             &mut slot_meta_working_set,
                             &mut write_batch,
                             &mut just_inserted_coding_shreds,
-                        )
+                        );
                     }
                 }
             });
@@ -518,6 +533,8 @@ impl Blocktree {
             chaining_elapsed,
             commit_working_sets_elapsed,
             write_batch_elapsed,
+            num_inserted,
+            num_recovered,
         })
     }
 
@@ -528,7 +545,7 @@ impl Blocktree {
         index_working_set: &mut HashMap<u64, Index>,
         write_batch: &mut WriteBatch,
         just_inserted_coding_shreds: &mut HashMap<(u64, u64), Shred>,
-    ) {
+    ) -> bool {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
 
@@ -539,13 +556,16 @@ impl Blocktree {
         // This gives the index of first coding shred in this FEC block
         // So, all coding shreds in a given FEC block will have the same set index
         if Blocktree::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root) {
-            if let Ok(()) = self.insert_coding_shred(erasure_metas, index_meta, &shred, write_batch)
-            {
-                just_inserted_coding_shreds
-                    .entry((slot, shred_index))
-                    .or_insert_with(|| shred);
-                new_index_meta.map(|n| index_working_set.insert(slot, n));
-            }
+            self.insert_coding_shred(erasure_metas, index_meta, &shred, write_batch)
+                .map(|_| {
+                    just_inserted_coding_shreds
+                        .entry((slot, shred_index))
+                        .or_insert_with(|| shred);
+                    new_index_meta.map(|n| index_working_set.insert(slot, n))
+                })
+                .is_ok()
+        } else {
+            false
         }
     }
 
@@ -556,7 +576,7 @@ impl Blocktree {
         slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
         just_inserted_data_shreds: &mut HashMap<(u64, u64), Shred>,
-    ) {
+    ) -> bool {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
         let (index_meta, mut new_index_meta) =
@@ -595,6 +615,8 @@ impl Blocktree {
         if insert_success {
             new_slot_meta_entry.map(|n| slot_meta_working_set.insert(slot, n));
         }
+
+        insert_success
     }
 
     fn should_insert_coding_shred(
