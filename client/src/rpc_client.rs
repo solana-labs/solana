@@ -203,7 +203,7 @@ impl RpcClient {
     ) -> Result<String, ClientError> {
         let mut send_retries = 20;
         loop {
-            let mut status_retries = 4;
+            let mut status_retries = 15;
             let signature_str = self.send_transaction(transaction)?;
             let status = loop {
                 let status = self.get_signature_status(&signature_str)?;
@@ -216,10 +216,8 @@ impl RpcClient {
                     break status;
                 }
                 if cfg!(not(test)) {
-                    // Retry ~twice during a slot
-                    sleep(Duration::from_millis(
-                        500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
-                    ));
+                    // Retry twice a second
+                    sleep(Duration::from_millis(500));
                 }
             };
             send_retries = if let Some(result) = status.clone() {
@@ -252,7 +250,7 @@ impl RpcClient {
     ) -> Result<(), Box<dyn error::Error>> {
         let mut send_retries = 5;
         loop {
-            let mut status_retries = 4;
+            let mut status_retries = 15;
 
             // Send all transactions
             let mut transactions_signatures = vec![];
@@ -273,10 +271,8 @@ impl RpcClient {
                 status_retries -= 1;
 
                 if cfg!(not(test)) {
-                    // Retry ~twice during a slot
-                    sleep(Duration::from_millis(
-                        500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
-                    ));
+                    // Retry twice a second
+                    sleep(Duration::from_millis(500));
                 }
 
                 transactions_signatures = transactions_signatures
