@@ -1,6 +1,5 @@
 use crate::{
     result::{Error, Result},
-    rpc::CommitmentConfig,
     service::Service,
 };
 use solana_runtime::bank::Bank;
@@ -16,6 +15,8 @@ use std::{
     thread::{self, Builder, JoinHandle},
     time::Duration,
 };
+
+pub const DEFAULT_PERCENT_COMMITMENT: f64 = 0.66667;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BlockCommitment {
@@ -68,12 +69,12 @@ impl BlockCommitmentCache {
             .iter()
             .filter(|&(_, block_commitment)| {
                 let block_stake_minimum_depth: u64 = block_commitment.commitment
-                    [commitment_config.minimum_depth() - 1..]
+                    [commitment_config.confirmations - 1..]
                     .iter()
                     .cloned()
                     .sum();
                 block_stake_minimum_depth as f64 / self.total_stake as f64
-                    >= commitment_config.minimum_stake_percentage()
+                    >= commitment_config.percentage
             })
             .map(|(slot, _)| *slot)
             .max()
@@ -236,6 +237,30 @@ impl Service for AggregateCommitmentService {
 
     fn join(self) -> thread::Result<()> {
         self.t_commitment.join()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CommitmentConfig {
+    pub confirmations: usize,
+    pub percentage: f64,
+}
+
+impl CommitmentConfig {
+    pub fn new(confirmations: usize, percentage: f64) -> Self {
+        Self {
+            confirmations,
+            percentage,
+        }
+    }
+}
+
+impl Default for CommitmentConfig {
+    fn default() -> Self {
+        CommitmentConfig {
+            confirmations: MAX_LOCKOUT_HISTORY,
+            percentage: DEFAULT_PERCENT_COMMITMENT,
+        }
     }
 }
 

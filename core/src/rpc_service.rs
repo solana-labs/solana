@@ -173,13 +173,18 @@ impl Service for JsonRpcService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contact_info::ContactInfo;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-    use crate::rpc::{tests::create_validator_exit, CommitmentConfig};
+    use crate::{
+        commitment::CommitmentConfig,
+        contact_info::ContactInfo,
+        genesis_utils::{create_genesis_block, GenesisBlockInfo},
+        rpc::tests::create_validator_exit,
+    };
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::KeypairUtil;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use std::sync::atomic::AtomicBool;
+    use std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        sync::atomic::AtomicBool,
+    };
 
     #[test]
     fn test_rpc_new() {

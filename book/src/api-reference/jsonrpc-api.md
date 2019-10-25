@@ -103,7 +103,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 #### Defaults:
 Used if commitment configuration is not provided, or for missing parameters
 * `confirmations`: MAX_LOCKOUT_HISTORY
-* `percentage`: DEFAULT_PERCENT_CONFIDENCE
+* `percentage`: DEFAULT_PERCENT_COMMITMENT
 
 Only methods that query bank state accept the commitment parameter. They are indicated in the API Reference below.
 

@@ -2,7 +2,7 @@
 
 use crate::{
     cluster_info::ClusterInfo,
-    commitment::{BlockCommitment, BlockCommitmentCache},
+    commitment::{BlockCommitment, CommitmentConfig, BlockCommitmentCache},
     contact_info::ContactInfo,
     packet::PACKET_DATA_SIZE,
     storage_stage::StorageState,
@@ -34,38 +34,6 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
-
-pub const DEFAULT_PERCENT_COMMITMENT: f64 = 0.66667;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct CommitmentConfig {
-    confirmations: usize,
-    percentage: f64,
-}
-
-impl CommitmentConfig {
-    pub fn new(confirmations: usize, percentage: f64) -> Self {
-        Self {
-            confirmations,
-            percentage,
-        }
-    }
-    pub fn minimum_depth(&self) -> usize {
-        self.confirmations
-    }
-    pub fn minimum_stake_percentage(&self) -> f64 {
-        self.percentage
-    }
-}
-
-impl Default for CommitmentConfig {
-    fn default() -> Self {
-        CommitmentConfig {
-            confirmations: MAX_LOCKOUT_HISTORY,
-            percentage: DEFAULT_PERCENT_COMMITMENT,
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
@@ -952,6 +920,7 @@ impl RpcSol for RpcSolImpl {
 pub mod tests {
     use super::*;
     use crate::{
+        commitment::DEFAULT_PERCENT_COMMITMENT,
         contact_info::ContactInfo,
         genesis_utils::{create_genesis_block, GenesisBlockInfo},
     };
