@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-cli"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.20.0"
+version = "0.21.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -26,23 +26,23 @@ serde = "1.0.101"
 serde_derive = "1.0.101"
 serde_json = "1.0.41"
 serde_yaml = "0.8.11"
-solana-budget-api = { path = "../programs/budget_api", version = "0.20.0" }
-solana-client = { path = "../client", version = "0.20.0" }
-solana-config-api = { path = "../programs/config_api", version = "0.20.0" }
-solana-drone = { path = "../drone", version = "0.20.0" }
-solana-logger = { path = "../logger", version = "0.20.0" }
-solana-netutil = { path = "../netutil", version = "0.20.0" }
-solana-runtime = { path = "../runtime", version = "0.20.0" }
-solana-sdk = { path = "../sdk", version = "0.20.0" }
-solana-stake-api = { path = "../programs/stake_api", version = "0.20.0" }
-solana-storage-api = { path = "../programs/storage_api", version = "0.20.0" }
-solana-vote-api = { path = "../programs/vote_api", version = "0.20.0" }
-solana-vote-signer = { path = "../vote-signer", version = "0.20.0" }
+solana-budget-api = { path = "../programs/budget_api", version = "0.21.0" }
+solana-client = { path = "../client", version = "0.21.0" }
+solana-config-api = { path = "../programs/config_api", version = "0.21.0" }
+solana-drone = { path = "../drone", version = "0.21.0" }
+solana-logger = { path = "../logger", version = "0.21.0" }
+solana-netutil = { path = "../netutil", version = "0.21.0" }
+solana-runtime = { path = "../runtime", version = "0.21.0" }
+solana-sdk = { path = "../sdk", version = "0.21.0" }
+solana-stake-api = { path = "../programs/stake_api", version = "0.21.0" }
+solana-storage-api = { path = "../programs/storage_api", version = "0.21.0" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.21.0" }
+solana-vote-signer = { path = "../vote-signer", version = "0.21.0" }
 url = "2.1.0"
 
 [dev-dependencies]
-solana-core = { path = "../core", version = "0.20.0" }
-solana-budget-program = { path = "../programs/budget_program", version = "0.20.0" }
+solana-core = { path = "../core", version = "0.21.0" }
+solana-budget-program = { path = "../programs/budget_program", version = "0.21.0" }
 
 [[bin]]
 name = "solana"

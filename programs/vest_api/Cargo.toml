@@ -1,6 +1,6 @@
 [package]
 name = "solana-vest-api"
-version = "0.20.0"
+version = "0.21.0"
 description = "Solana Vest program API"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -16,11 +16,11 @@ num-derive = "0.2"
 num-traits = "0.2"
 serde = "1.0.100"
 serde_derive = "1.0.100"
-solana-sdk = { path = "../../sdk", version = "0.20.0-pre0" }
-solana-config-api = { path = "../config_api", version = "0.20.0-pre0" }
+solana-sdk = { path = "../../sdk", version = "0.21.0" }
+solana-config-api = { path = "../config_api", version = "0.21.0" }
 
 [dev-dependencies]
-solana-runtime = { path = "../../runtime", version = "0.20.0-pre0" }
+solana-runtime = { path = "../../runtime", version = "0.21.0" }
 
 [lib]
 crate-type = ["lib"]
