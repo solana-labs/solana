@@ -62,12 +62,42 @@ pub struct Blocktree {
 }
 
 pub struct BlocktreeInsertionMetrics {
+    pub num_shreds: usize,
     pub insert_lock_elapsed: u64,
     pub insert_shreds_elapsed: u64,
     pub shred_recovery_elapsed: u64,
     pub chaining_elapsed: u64,
     pub commit_working_sets_elapsed: u64,
     pub write_batch_elapsed: u64,
+    pub total_elapsed: u64,
+}
+
+impl BlocktreeInsertionMetrics {
+    pub fn report_metrics(&self, metric_name: &'static str) {
+        datapoint_info!(
+            metric_name,
+            ("num_shreds", self.num_shreds as i64, i64),
+            ("total_elapsed", self.total_elapsed as i64, i64),
+            ("insert_lock_elapsed", self.insert_lock_elapsed as i64, i64),
+            (
+                "insert_shreds_elapsed",
+                self.insert_shreds_elapsed as i64,
+                i64
+            ),
+            (
+                "shred_recovery_elapsed",
+                self.shred_recovery_elapsed as i64,
+                i64
+            ),
+            ("chaining_elapsed", self.chaining_elapsed as i64, i64),
+            (
+                "commit_working_sets_elapsed",
+                self.commit_working_sets_elapsed as i64,
+                i64
+            ),
+            ("write_batch_elapsed", self.write_batch_elapsed as i64, i64),
+        );
+    }
 }
 
 impl Blocktree {
@@ -375,6 +405,7 @@ impl Blocktree {
         let _lock = self.insert_shreds_lock.lock().unwrap();
         start.stop();
         let insert_lock_elapsed = start.as_us();
+        
         let db = &*self.db;
         let mut write_batch = db.batch()?;
 
@@ -384,6 +415,7 @@ impl Blocktree {
         let mut slot_meta_working_set = HashMap::new();
         let mut index_working_set = HashMap::new();
 
+        let num_shreds = shreds.len();
         let mut start = Measure::start("Shred insertion");
         shreds.into_iter().for_each(|shred| {
             if shred.is_data() {
@@ -475,7 +507,11 @@ impl Blocktree {
             newly_completed_slots,
         )?;
 
+        total_start.stop();
+
         Ok(BlocktreeInsertionMetrics {
+            num_shreds,
+            total_elapsed: total_start.as_us(),
             insert_lock_elapsed,
             insert_shreds_elapsed,
             shred_recovery_elapsed,
