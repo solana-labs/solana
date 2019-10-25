@@ -82,7 +82,7 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 
 Solana nodes choose which bank state to query based on commitment requirements
 set by the client. Clients may specify two parameters:
-* confirmations - how many confirmed blocks the node should require
+* confirmations - how many confirmed blocks the node should require, up to `MAX_LOCKOUT_HISTORY`
 * percentage - how much of the cluster stake must have registered `confirmations`, as a decimal between 0.0 and 1.0
 
 The commitment parameter should be included as the last element in the `params` array:
@@ -91,19 +91,17 @@ The commitment parameter should be included as the last element in the `params` 
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri",{"confirmations":15,"percentage":0.60}]}' 192.168.1.88:8899
 ```
 
-For convenience, the confidence configuration can include a `bankType` of either
-`rooted` or `recent`.
-* `rooted` sets confirmations to `MAX_LOCKOUT_HISTORY`
-* `recent` sets confirmations to `1`, which means the node will query its most recent bank state
+For convenience, the confirmations parameter can be set to `max`, which defaults
+to `MAX_LOCKOUT_HISTORY`
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri",{"bankType":"rooted"}]}' 192.168.1.88:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri",{"confirmations":"max"}]}' 192.168.1.88:8899
 ```
 
 #### Defaults:
 Used if commitment configuration is not provided, or for missing parameters
 * `confirmations`: MAX_LOCKOUT_HISTORY
-* `percentage`: DEFAULT_PERCENT_COMMITMENT
+* `percentage`: DEFAULT_PERCENT_COMMITMENT (2/3 of the total cluster stake + 1)
 
 Only methods that query bank state accept the commitment parameter. They are indicated in the API Reference below.
 

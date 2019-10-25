@@ -12,6 +12,7 @@ use crate::{
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Params, Result};
 use jsonrpc_derive::rpc;
+use serde_json::Value;
 use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
 use solana_drone::drone::request_airdrop_transaction;
 use solana_ledger::bank_forks::BankForks;
@@ -296,18 +297,10 @@ pub struct RpcVersionInfo {
     pub solana_core: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub enum BankType {
-    Recent,
-    Rooted,
-}
-
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcCommitmentConfig {
-    bank_type: Option<BankType>,
-    confirmations: Option<usize>,
+    confirmations: Option<Value>,
     percentage: Option<f64>,
 }
 
@@ -318,9 +311,26 @@ fn parse_params(params: Option<Params>) -> Result<CommitmentConfig> {
         })?;
         let mut final_config = CommitmentConfig::default();
         if let Some(confirmations) = commitment_config.confirmations {
+            let confirmations = if let Some(integer) = confirmations.as_u64() {
+                Ok(integer as usize)
+            } else if let Some(str) = confirmations.as_str() {
+                if str == "max" {
+                    Ok(MAX_LOCKOUT_HISTORY)
+                } else {
+                    Err(Error::invalid_params(format!(
+                        "confirmations value not recognized: {}",
+                        str
+                    )))
+                }
+            } else {
+                Err(Error::invalid_params(format!(
+                    "confirmations param could not be parsed: {}",
+                    confirmations
+                )))
+            }?;
             if confirmations < 1 || confirmations > MAX_LOCKOUT_HISTORY {
                 return Err(Error::invalid_params(format!(
-                    "confirmations `{}` out of bounds",
+                    "confirmations out of bounds: {}",
                     confirmations
                 )));
             }
@@ -329,21 +339,11 @@ fn parse_params(params: Option<Params>) -> Result<CommitmentConfig> {
         if let Some(percentage) = commitment_config.percentage {
             if percentage < 0.0 || percentage > 1.0 {
                 return Err(Error::invalid_params(format!(
-                    "percentage `{}` out of bounds",
+                    "percentage out of bounds: {}",
                     percentage
                 )));
             }
             final_config.percentage = percentage;
-        }
-        if let Some(bank_type) = commitment_config.bank_type {
-            match bank_type {
-                BankType::Recent => {
-                    final_config.confirmations = 1;
-                }
-                BankType::Rooted => {
-                    final_config.confirmations = MAX_LOCKOUT_HISTORY;
-                }
-            }
         }
         Ok(final_config)
     } else {
@@ -1032,30 +1032,21 @@ pub mod tests {
 
     #[test]
     fn test_parse_params() {
-        let params = json!({"bankType": "rooted"});
+        let params = json!({"confirmations": "max"});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
             parse_params(Some(params)).unwrap(),
             CommitmentConfig::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
         );
 
-        let params = json!({"bankType": "recent"});
+        let params = json!({"confirmations": "something"});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)).unwrap(),
-            CommitmentConfig::new(1, DEFAULT_PERCENT_COMMITMENT)
+            parse_params(Some(params)).unwrap_err().code,
+            ErrorCode::InvalidParams
         );
 
-        // bank_type trumps confirmations arg
-        let params = json!({"bankType": "rooted", "confirmations": 15});
-        let params: Params = serde_json::from_value(params).unwrap();
-        assert_eq!(
-            parse_params(Some(params)).unwrap(),
-            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
-        );
-
-        // bank_type allows percentage configuration
-        let params = json!({"bankType": "rooted", "percentage": 0.5});
+        let params = json!({"confirmations": "max", "percentage": 0.5});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
             parse_params(Some(params)).unwrap(),
