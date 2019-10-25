@@ -159,7 +159,7 @@ fn shred_gpu_offsets(
             let sig_start = pubkeys_end;
             let sig_end = sig_start + size_of::<Signature>() as u32;
             let msg_start = sig_end;
-            let msg_end = packet.meta.size as u32;
+            let msg_end = sig_start + packet.meta.size as u32;
             signature_offsets.push(sig_start);
             msg_start_offsets.push(msg_start);
             msg_sizes.push(msg_end - msg_start);
@@ -192,7 +192,8 @@ pub fn verify_shreds_gpu(
         shred_gpu_pubkeys(batches, slot_leaders, recycler_offsets, recycler_pubkeys);
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
-    let num_packets = pubkeys.len() * size_of::<Pubkey>() / size_of::<Packet>();
+    let mut num_packets =
+        (pubkeys.len() * size_of::<Pubkey>() + size_of::<Packet>() - 1) / size_of::<Packet>();
     let pubkeys_len = (num_packets * size_of::<Packet>()) as u32;
     let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
         shred_gpu_offsets(pubkeys_len, batches, recycler_offsets);
@@ -203,7 +204,6 @@ pub fn verify_shreds_gpu(
         num: num_packets as u32,
     });
 
-    let mut num_packets = 0;
     for p in batches {
         elems.push(perf_libs::Elems {
             elems: p.packets.as_ptr(),
