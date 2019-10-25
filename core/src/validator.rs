@@ -318,6 +318,7 @@ impl Validator {
             &exit,
             completed_slots_receiver,
             fork_confidence_cache,
+            config.dev_sigverify_disabled,
         );
 
         if config.dev_sigverify_disabled {

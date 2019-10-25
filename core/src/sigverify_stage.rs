@@ -5,13 +5,10 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if perf-libs are available
 
-use crate::cuda_runtime::PinnedVec;
 use crate::packet::Packets;
-use crate::recycler::Recycler;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify;
-use crate::sigverify::TxOffset;
 use crate::streamer::{self, PacketReceiver};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_ledger::perf_libs;
@@ -31,40 +28,36 @@ pub struct SigVerifyStage {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
+pub trait SigVerifier {
+    fn verify_batch(&self, batch: Vec<Packets>) -> VerifiedPackets;
+}
+
+#[derive(Default, Clone)]
+pub struct DisabledSigVerifier {}
+
+impl SigVerifier for DisabledSigVerifier {
+    fn verify_batch(&self, batch: Vec<Packets>) -> VerifiedPackets {
+        let r = sigverify::ed25519_verify_disabled(&batch);
+        batch.into_iter().zip(r).collect()
+    }
+}
+
 impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(
+    pub fn new<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: Receiver<Packets>,
-        sigverify_disabled: bool,
         verified_sender: CrossbeamSender<VerifiedPackets>,
+        verifier: T,
     ) -> Self {
-        sigverify::init();
-        let thread_hdls =
-            Self::verifier_services(packet_receiver, verified_sender, sigverify_disabled);
+        let thread_hdls = Self::verifier_services(packet_receiver, verified_sender, verifier);
         Self { thread_hdls }
     }
 
-    fn verify_batch(
-        batch: Vec<Packets>,
-        sigverify_disabled: bool,
-        recycler: &Recycler<TxOffset>,
-        recycler_out: &Recycler<PinnedVec<u8>>,
-    ) -> VerifiedPackets {
-        let r = if sigverify_disabled {
-            sigverify::ed25519_verify_disabled(&batch)
-        } else {
-            sigverify::ed25519_verify(&batch, recycler, recycler_out)
-        };
-        batch.into_iter().zip(r).collect()
-    }
-
-    fn verifier(
+    fn verifier<T: SigVerifier>(
         recvr: &Arc<Mutex<PacketReceiver>>,
         sendr: &CrossbeamSender<VerifiedPackets>,
-        sigverify_disabled: bool,
         id: usize,
-        recycler: &Recycler<TxOffset>,
-        recycler_out: &Recycler<PinnedVec<u8>>,
+        verifier: &T,
     ) -> Result<()> {
         let (batch, len, recv_time) = streamer::recv_batch(
             &recvr.lock().expect("'recvr' lock in fn verifier"),
@@ -85,7 +78,7 @@ impl SigVerifyStage {
             id
         );
 
-        let verified_batch = Self::verify_batch(batch, sigverify_disabled, recycler, recycler_out);
+        let verified_batch = verifier.verify_batch(batch);
         inc_new_counter_info!("sigverify_stage-verified_packets_send", len);
 
         for v in verified_batch {
@@ -120,54 +113,39 @@ impl SigVerifyStage {
         Ok(())
     }
 
-    fn verifier_service(
+    fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: Arc<Mutex<PacketReceiver>>,
         verified_sender: CrossbeamSender<VerifiedPackets>,
-        sigverify_disabled: bool,
         id: usize,
+        verifier: &T,
     ) -> JoinHandle<()> {
+        let verifier = verifier.clone();
         Builder::new()
             .name(format!("solana-verifier-{}", id))
-            .spawn(move || {
-                let recycler = Recycler::default();
-                let recycler_out = Recycler::default();
-                loop {
-                    if let Err(e) = Self::verifier(
-                        &packet_receiver,
-                        &verified_sender,
-                        sigverify_disabled,
-                        id,
-                        &recycler,
-                        &recycler_out,
-                    ) {
-                        match e {
-                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                            Error::SendError => {
-                                break;
-                            }
-                            _ => error!("{:?}", e),
+            .spawn(move || loop {
+                if let Err(e) = Self::verifier(&packet_receiver, &verified_sender, id, &verifier) {
+                    match e {
+                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        Error::SendError => {
+                            break;
                         }
+                        _ => error!("{:?}", e),
                     }
                 }
             })
             .unwrap()
     }
 
-    fn verifier_services(
+    fn verifier_services<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: PacketReceiver,
         verified_sender: CrossbeamSender<VerifiedPackets>,
-        sigverify_disabled: bool,
+        verifier: T,
     ) -> Vec<JoinHandle<()>> {
         let receiver = Arc::new(Mutex::new(packet_receiver));
         (0..4)
             .map(|id| {
-                Self::verifier_service(
-                    receiver.clone(),
-                    verified_sender.clone(),
-                    sigverify_disabled,
-                    id,
-                )
+                Self::verifier_service(receiver.clone(), verified_sender.clone(), id, &verifier)
             })
             .collect()
     }

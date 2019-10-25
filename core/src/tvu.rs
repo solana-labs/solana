@@ -22,8 +22,11 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::shred_fetch_stage::ShredFetchStage;
+use crate::sigverify_shreds::ShredSigVerifier;
+use crate::sigverify_stage::{DisabledSigVerifier, SigVerifyStage};
 use crate::snapshot_packager_service::SnapshotPackagerService;
 use crate::storage_stage::{StorageStage, StorageState};
+use crossbeam_channel::unbounded;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
@@ -38,6 +41,7 @@ use std::thread;
 
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
+    sigverify_stage: SigVerifyStage,
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
     blockstream_service: Option<BlockstreamService>,
@@ -79,6 +83,7 @@ impl Tvu {
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
+        sigverify_disabled: bool,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -110,9 +115,21 @@ impl Tvu {
             &exit,
         );
 
-        //TODO
-        //the packets coming out of blob_receiver need to be sent to the GPU and verified
-        //then sent to the window, which does the erasure coding reconstruction
+        let (verified_sender, verified_receiver) = unbounded();
+        let sigverify_stage = if !sigverify_disabled {
+            SigVerifyStage::new(
+                fetch_receiver,
+                verified_sender.clone(),
+                ShredSigVerifier::new(bank_forks.clone(), leader_schedule_cache.clone()),
+            )
+        } else {
+            SigVerifyStage::new(
+                fetch_receiver,
+                verified_sender.clone(),
+                DisabledSigVerifier::default(),
+            )
+        };
+
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
             leader_schedule_cache,
@@ -120,7 +137,7 @@ impl Tvu {
             &cluster_info,
             Arc::new(retransmit_sockets),
             repair_socket,
-            fetch_receiver,
+            verified_receiver,
             &exit,
             completed_slots_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
@@ -191,6 +208,7 @@ impl Tvu {
 
         Tvu {
             fetch_stage,
+            sigverify_stage,
             retransmit_stage,
             replay_stage,
             blockstream_service,
@@ -207,6 +225,7 @@ impl Service for Tvu {
     fn join(self) -> thread::Result<()> {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
+        self.sigverify_stage.join()?;
         self.storage_stage.join()?;
         if self.blockstream_service.is_some() {
             self.blockstream_service.unwrap().join()?;
@@ -286,6 +305,7 @@ pub mod tests {
             &exit,
             completed_slots_receiver,
             fork_confidence_cache,
+            false,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

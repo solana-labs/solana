@@ -5,9 +5,11 @@ use crate::{
     repair_service::RepairStrategy,
     result::{Error, Result},
     service::Service,
+    sigverify_stage::VerifiedPackets,
     streamer::PacketReceiver,
     window_service::{should_retransmit_and_persist, WindowService},
 };
+use crossbeam_channel::Receiver as CrossbeamReceiver;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_ledger::{
@@ -208,7 +210,7 @@ impl RetransmitStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        fetch_stage_receiver: PacketReceiver,
+        verified_receiver: CrossbeamReceiver<VerifiedPackets>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
@@ -233,7 +235,7 @@ impl RetransmitStage {
         let window_service = WindowService::new(
             blocktree,
             cluster_info.clone(),
-            fetch_stage_receiver,
+            verified_receiver,
             retransmit_sender,
             repair_socket,
             exit,

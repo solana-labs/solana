@@ -9,10 +9,12 @@ use crate::repair_service::{RepairService, RepairSlotRange, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::shred_fetch_stage::ShredFetchStage;
+use crate::sigverify_stage::{DisabledSigVerifier, SigVerifyStage};
 use crate::storage_stage::NUM_STORAGE_SAMPLES;
 use crate::streamer::{receiver, responder, PacketReceiver};
 use crate::window_service::WindowService;
 use bincode::deserialize;
+use crossbeam_channel::unbounded;
 use rand::thread_rng;
 use rand::Rng;
 use rand::SeedableRng;
@@ -463,10 +465,18 @@ impl Archiver {
 
         let (retransmit_sender, _) = channel();
 
+        let (verified_sender, verified_receiver) = unbounded();
+
+        let _sigverify_stage = SigVerifyStage::new(
+            blob_fetch_receiver,
+            verified_sender.clone(),
+            DisabledSigVerifier::default(),
+        );
+
         let window_service = WindowService::new(
             blocktree.clone(),
             cluster_info.clone(),
-            blob_fetch_receiver,
+            verified_receiver,
             retransmit_sender,
             repair_socket,
             &exit,
