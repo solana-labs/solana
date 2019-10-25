@@ -11,7 +11,7 @@
 RC=false
 if [ -f "$SOLANA_LOCK_FILE" ]; then
   exec 9<>"$SOLANA_LOCK_FILE"
-  flock -x -n 9 || exit 1
+  flock -x -n 9 || ( echo "Failed to acquire lock!" 1>&2 && exit 1 )
   . "$SOLANA_LOCK_FILE"
   if [ "\$SOLANA_LOCK_USER" = "\$SOLANA_USER" ]; then
     # Begin running process cleanup
@@ -105,6 +105,8 @@ EOAK
     fi
     # End filesystem cleanup
     RC=true
+  else
+    echo "Invalid user: expected \\\"\$SOLANA_LOCK_USER\\\" got \\\"\$SOLANA_USER\\\""
   fi
   9>&-
 fi
