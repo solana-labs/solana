@@ -667,6 +667,10 @@ if [[ -f /solana-scratch/.instance-startup-complete ]]; then
     if "$enableGpu"; then
       cat enable-nvidia-persistence-mode.sh
     fi
+
+    if [[ -n $validatorAdditionalDiskSizeInGb ]]; then
+      cat mount-additional-disk.sh
+    fi
   )
 
   # Skip most setup on instance reboot

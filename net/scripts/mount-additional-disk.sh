@@ -6,8 +6,9 @@ disk=sdb
 if ! lsblk | grep -q ${disk} ; then
   echo "${disk} does not exist"
 else
+  sudo mount /dev/"$disk" "$mount_point"
   if mount | grep -q ${disk} ; then
-    echo "${disk} is already mounted"
+    echo "${disk} is mounted"
   else
     sudo mkfs.ext4 -F /dev/"$disk"
     sudo mkdir -p "$mount_point"
