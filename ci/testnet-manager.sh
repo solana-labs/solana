@@ -479,7 +479,7 @@ deploy() {
       fi
 
       if [[ -z $INTERNAL_NODES_STAKE_LAMPORTS ]]; then
-        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports 1000000000000"
+        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports 17179869184"
       elif [[ $INTERNAL_NODES_STAKE_LAMPORTS == skip ]]; then
         maybeInternalNodesStakeLamports=""
       else
@@ -487,7 +487,7 @@ deploy() {
       fi
 
       if [[ -z $INTERNAL_NODES_LAMPORTS ]]; then
-        maybeInternalNodesLamports="--internal-nodes-lamports 2000000000000"
+        maybeInternalNodesLamports="--internal-nodes-lamports 17179869184"
       elif [[ $INTERNAL_NODES_LAMPORTS == skip ]]; then
         maybeInternalNodesLamports=""
       else
@@ -546,6 +546,8 @@ deploy() {
         ${maybeInternalNodesLamports} \
         ${maybeExternalAccountsFile} \
         ${maybeLamports} \
+        --target-lamports-per-signature 1 \
+        --slots-per-epoch 4096 \
         ${maybeAdditionalDisk}
     )
     ;;
