@@ -271,6 +271,28 @@ pub mod tests {
     use super::*;
     use solana_ledger::shred::{Shred, Shredder};
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    #[test]
+    fn test_sigverify_shred_cpu_valid() {
+        let mut packet = Packet::default();
+        let mut shred = Shred::new_empty_data_shred();
+        let keypair = Keypair::new();
+        Shredder::sign_shred(&keypair, &mut shred);
+        packet.data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+
+        let mut leader_slots: HashMap<u64, Pubkey> = HashMap::new();
+        leader_slots.insert(0u64, keypair.pubkey());
+        let rv = verify_shred_cpu(&packet, &leader_slots);
+        assert_eq!(rv, Some(1));
+
+        let wrong_keypair = Keypair::new();
+        leader_slots.insert(0u64, wrong_keypair.pubkey());
+        let rv = verify_shred_cpu(&packet, &leader_slots);
+        assert_eq!(rv, Some(0));
+
+        leader_slots.remove(&0u64);
+        let rv = verify_shred_cpu(&packet, &leader_slots);
+        assert_eq!(rv, None);
+    }
 
     #[test]
     fn test_sigverify_shreds_cpu_valid() {
