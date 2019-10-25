@@ -133,14 +133,21 @@ fn shred_gpu_pubkeys(
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
     //Pad the Pubkeys buffer such that it is bigger than a buffer of Packet sized elems
-    let num = pubkeys.len() * size_of::<Pubkey>() / size_of::<Packet>();
-    let missing = pubkeys.len() * size_of::<Pubkey>() - num * size_of::<Packet>();
-    let extra = (missing + size_of::<Packet>() - 1) / size_of::<Packet>();
+    let num_in_packets = (pubkeys.len() * size_of::<Pubkey>() + (size_of::<Packet>() - 1)) / size_of::<Packet>();
+    trace!("num_in_packets {}", num_in_packets);
+    //number of bytes missing
+    let missing = num_in_packets * size_of::<Packet>() - pubkeys.len() * size_of::<Pubkey>();
+    trace!("missing {}", missing);
+    //extra Pubkeys needed to fill the buffer
+    let extra = (missing + size_of::<Pubkey>() - 1) / size_of::<Pubkey>();
+    trace!("extra {}", extra);
+    trace!("pubkeys {}", pubkeys.len());
     for _ in 0..extra {
         pubkeys.push(Pubkey::default());
+        trace!("pubkeys {}", pubkeys.len());
     }
     trace!("pubkeys {:?}", pubkeys);
-    assert!(num <= pubkeys.len() * size_of::<Pubkey>() / size_of::<Packet>());
+    trace!("offsets {:?}", offsets);
     (pubkeys, offsets)
 }
 
@@ -195,6 +202,8 @@ pub fn verify_shreds_gpu(
     let mut num_packets =
         (pubkeys.len() * size_of::<Pubkey>() + size_of::<Packet>() - 1) / size_of::<Packet>();
     let pubkeys_len = (num_packets * size_of::<Packet>()) as u32;
+    trace!("num_packets: {}", num_packets);
+    trace!("pubkeys_len: {}", pubkeys_len);
     let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
         shred_gpu_offsets(pubkeys_len, batches, recycler_offsets);
     let mut out = recycler_out.allocate("out_buffer");
