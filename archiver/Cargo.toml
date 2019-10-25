@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-archiver"
-version = "0.20.0"
+version = "0.21.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -10,9 +10,9 @@ homepage = "https://solana.com/"
 [dependencies]
 clap = "2.33.0"
 console = "0.9.0"
-solana-core = { path = "../core", version = "0.20.0" }
-solana-logger = { path = "../logger", version = "0.20.0" }
-solana-metrics = { path = "../metrics", version = "0.20.0" }
-solana-netutil = { path = "../netutil", version = "0.20.0" }
-solana-sdk = { path = "../sdk", version = "0.20.0" }
+solana-core = { path = "../core", version = "0.21.0" }
+solana-logger = { path = "../logger", version = "0.21.0" }
+solana-metrics = { path = "../metrics", version = "0.21.0" }
+solana-netutil = { path = "../netutil", version = "0.21.0" }
+solana-sdk = { path = "../sdk", version = "0.21.0" }
 
