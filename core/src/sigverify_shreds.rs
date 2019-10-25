@@ -2,19 +2,19 @@ use crate::cuda_runtime::PinnedVec;
 use crate::packet::{Packet, Packets};
 use crate::recycler::Recycler;
 use crate::recycler::Reset;
+use crate::sigverify::{batch_size, TxOffset};
 use bincode::deserialize_from;
-use rayon::ThreadPool;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
+use rayon::ThreadPool;
 use solana_ledger::perf_libs;
 use solana_ledger::shred::ShredType;
 use solana_metrics::inc_new_counter_debug;
+use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::HashMap;
 use std::mem::size_of;
-use crate::sigverify::{TxOffset, batch_size};
-use solana_rayon_threadlimit::get_thread_count;
 
 use std::cell::RefCell;
 
@@ -23,7 +23,6 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
                     .thread_name(|ix| format!("sigverify_shreds_{}", ix))
                     .build()
                     .unwrap()));
-
 
 impl Reset for PinnedVec<Pubkey> {
     fn reset(&mut self) {
@@ -266,5 +265,3 @@ pub fn verify_shreds_gpu(
     recycler_pubkeys.recycle(pubkeys);
     rvs
 }
-
-
