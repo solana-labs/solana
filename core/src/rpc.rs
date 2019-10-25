@@ -311,30 +311,44 @@ pub struct RpcCommitmentConfig {
     percentage: Option<f64>,
 }
 
-fn parse_params(params: Option<Params>) -> CommitmentConfig {
-    params
-        .and_then(|params| params.parse().ok())
-        .map(|commitment_config: RpcCommitmentConfig| {
-            let mut final_params = CommitmentConfig::default();
-            if let Some(confirmations) = commitment_config.confirmations {
-                final_params.confirmations = confirmations.min(MAX_LOCKOUT_HISTORY).max(1);
+fn parse_params(params: Option<Params>) -> Result<CommitmentConfig> {
+    if let Some(params) = params {
+        let commitment_config: RpcCommitmentConfig = params.parse().map_err(|err| {
+            Error::invalid_params(format!("commitment config could not be parsed: {}", err))
+        })?;
+        let mut final_config = CommitmentConfig::default();
+        if let Some(confirmations) = commitment_config.confirmations {
+            if confirmations < 1 || confirmations > MAX_LOCKOUT_HISTORY {
+                return Err(Error::invalid_params(format!(
+                    "confirmations `{}` out of bounds",
+                    confirmations
+                )));
             }
-            if let Some(percentage) = commitment_config.percentage {
-                final_params.percentage = percentage.min(1.0).max(0.0);
+            final_config.confirmations = confirmations;
+        }
+        if let Some(percentage) = commitment_config.percentage {
+            if percentage < 0.0 || percentage > 1.0 {
+                return Err(Error::invalid_params(format!(
+                    "percentage `{}` out of bounds",
+                    percentage
+                )));
             }
-            if let Some(bank_type) = commitment_config.bank_type {
-                match bank_type {
-                    BankType::Recent => {
-                        final_params.confirmations = 1;
-                    }
-                    BankType::Rooted => {
-                        final_params.confirmations = MAX_LOCKOUT_HISTORY;
-                    }
+            final_config.percentage = percentage;
+        }
+        if let Some(bank_type) = commitment_config.bank_type {
+            match bank_type {
+                BankType::Recent => {
+                    final_config.confirmations = 1;
+                }
+                BankType::Rooted => {
+                    final_config.confirmations = MAX_LOCKOUT_HISTORY;
                 }
             }
-            final_params
-        })
-        .unwrap_or_default()
+        }
+        Ok(final_config)
+    } else {
+        Ok(CommitmentConfig::default())
+    }
 }
 
 #[rpc(server)]
@@ -528,7 +542,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_account_info(&pubkey, parse_params(params))
+            .get_account_info(&pubkey, parse_params(params)?)
     }
 
     fn get_minimum_balance_for_rent_exemption(
@@ -544,7 +558,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_minimum_balance_for_rent_exemption(data_len, parse_params(params))
+            .get_minimum_balance_for_rent_exemption(data_len, parse_params(params)?)
     }
 
     fn get_program_accounts(
@@ -561,7 +575,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_program_accounts(&program_id, parse_params(params))
+            .get_program_accounts(&program_id, parse_params(params)?)
     }
 
     fn get_inflation(&self, meta: Self::Metadata, params: Option<Params>) -> Result<Inflation> {
@@ -570,7 +584,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .get_inflation(parse_params(params))
+            .get_inflation(parse_params(params)?)
             .unwrap())
     }
 
@@ -596,7 +610,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .get_balance(&pubkey, parse_params(params)))
+            .get_balance(&pubkey, parse_params(params)?))
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
@@ -631,7 +645,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .bank(parse_params(params));
+            .bank(parse_params(params)?);
         let epoch_schedule = bank.epoch_schedule();
         let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
         let slot = bank.slot();
@@ -669,7 +683,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .bank(parse_params(params));
+            .bank(parse_params(params)?);
         Ok(
             solana_ledger::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
                 |leader_schedule| {
@@ -693,7 +707,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .get_recent_blockhash(parse_params(params)))
+            .get_recent_blockhash(parse_params(params)?))
     }
 
     fn get_signature_status(
@@ -710,7 +724,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_slot(parse_params(params))
+            .get_slot(parse_params(params)?)
     }
 
     fn get_num_blocks_since_signature_confirmation(
@@ -738,7 +752,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .get_signature_confirmation_status(signature, parse_params(params)))
+            .get_signature_confirmation_status(signature, parse_params(params)?))
     }
 
     fn get_transaction_count(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64> {
@@ -746,7 +760,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_transaction_count(parse_params(params))
+            .get_transaction_count(parse_params(params)?)
     }
 
     fn get_total_supply(&self, meta: Self::Metadata, params: Option<Params>) -> Result<u64> {
@@ -754,7 +768,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_total_supply(parse_params(params))
+            .get_total_supply(parse_params(params)?)
     }
 
     fn request_airdrop(
@@ -766,7 +780,7 @@ impl RpcSol for RpcSolImpl {
     ) -> Result<String> {
         trace!("request_airdrop id={} lamports={}", pubkey_str, lamports);
 
-        let commitment_config = parse_params(params);
+        let commitment_config = parse_params(params)?;
 
         let drone_addr = meta
             .request_processor
@@ -861,7 +875,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_slot_leader(parse_params(params))
+            .get_slot_leader(parse_params(params)?)
     }
 
     fn get_vote_accounts(
@@ -872,7 +886,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_vote_accounts(parse_params(params))
+            .get_vote_accounts(parse_params(params)?)
     }
 
     fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64> {
@@ -890,7 +904,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_slots_per_segment(parse_params(params))
+            .get_slots_per_segment(parse_params(params)?)
     }
 
     fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Pubkey>> {
@@ -924,7 +938,7 @@ pub mod tests {
         contact_info::ContactInfo,
         genesis_utils::{create_genesis_block, GenesisBlockInfo},
     };
-    use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
+    use jsonrpc_core::{ErrorCode, MetaIoHandler, Output, Response, Value};
     use solana_sdk::{
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
@@ -1021,14 +1035,14 @@ pub mod tests {
         let params = json!({"bankType": "rooted"});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)),
+            parse_params(Some(params)).unwrap(),
             CommitmentConfig::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
         );
 
         let params = json!({"bankType": "recent"});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)),
+            parse_params(Some(params)).unwrap(),
             CommitmentConfig::new(1, DEFAULT_PERCENT_COMMITMENT)
         );
 
@@ -1036,7 +1050,7 @@ pub mod tests {
         let params = json!({"bankType": "rooted", "confirmations": 15});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)),
+            parse_params(Some(params)).unwrap(),
             CommitmentConfig::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
         );
 
@@ -1044,50 +1058,53 @@ pub mod tests {
         let params = json!({"bankType": "rooted", "percentage": 0.5});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)),
+            parse_params(Some(params)).unwrap(),
             CommitmentConfig::new(MAX_LOCKOUT_HISTORY, 0.5)
         );
 
         let params = json!({"confirmations": 15});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)),
+            parse_params(Some(params)).unwrap(),
             CommitmentConfig::new(15, DEFAULT_PERCENT_COMMITMENT)
         );
 
         let params = json!({"confirmations": 15, "percentage": 0.5});
         let params: Params = serde_json::from_value(params).unwrap();
-        assert_eq!(parse_params(Some(params)), CommitmentConfig::new(15, 0.5));
+        assert_eq!(
+            parse_params(Some(params)).unwrap(),
+            CommitmentConfig::new(15, 0.5)
+        );
 
         // confirmations bounded by 1 and MAX_LOCKOUT_HISTORY
         let params = json!({"confirmations": 0});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)),
-            CommitmentConfig::new(1, DEFAULT_PERCENT_COMMITMENT)
+            parse_params(Some(params)).unwrap_err().code,
+            ErrorCode::InvalidParams
         );
         let params = json!({"confirmations": 100});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)),
-            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
+            parse_params(Some(params)).unwrap_err().code,
+            ErrorCode::InvalidParams
         );
 
         // confirmations bounded by 0 and 1
         let params = json!({"percentage": 1.5});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)),
-            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, 1.0)
+            parse_params(Some(params)).unwrap_err().code,
+            ErrorCode::InvalidParams
         );
         let params = json!({"percentage": -1.5});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
-            parse_params(Some(params)),
-            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, 0.0)
+            parse_params(Some(params)).unwrap_err().code,
+            ErrorCode::InvalidParams
         );
 
-        assert_eq!(parse_params(None), CommitmentConfig::default());
+        assert_eq!(parse_params(None).unwrap(), CommitmentConfig::default());
     }
 
     #[test]
