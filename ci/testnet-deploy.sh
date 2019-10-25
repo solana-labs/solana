@@ -29,6 +29,9 @@ maybeInternalNodesStakeLamports=
 maybeInternalNodesLamports=
 maybeExternalPrimordialAccountsFile=
 maybeLamports=
+maybeSlotsPerEpoch=
+maybeTargetLamportsPerSignature=
+maybeSlotsPerEpoch=
 maybeLetsEncrypt=
 maybeValidatorAdditionalDiskSize=
 maybeNoSnapshot=
@@ -108,8 +111,14 @@ while [[ -n $1 ]]; do
     if [[ $1 = --hashes-per-tick ]]; then
       maybeHashesPerTick="$1 $2"
       shift 2
+    elif [[ $1 = --slots-per-epoch ]]; then
+      maybeSlotsPerEpoch="$1 $2"
+      shift 2
     elif [[ $1 = --lamports ]]; then
       maybeLamports="$1 $2"
+      shift 2
+    elif [[ $1 = --target-lamports-per-signature ]]; then
+      maybeTargetLamportsPerSignature="$1 $2"
       shift 2
     elif [[ $1 = --no-airdrop ]]; then
       maybeDisableAirdrops=$1
@@ -394,6 +403,8 @@ if ! $skipStart; then
       $maybeInternalNodesLamports
       $maybeExternalPrimordialAccountsFile
       $maybeLamports
+      $maybeSlotsPerEpoch
+      $maybeTargetLamportsPerSignature
       $maybeNoSnapshot
       $maybeLimitLedgerSize
     )
