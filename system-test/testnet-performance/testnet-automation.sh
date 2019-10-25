@@ -73,12 +73,16 @@ function launchTestnet() {
 
   case $CLOUD_PROVIDER in
     gce)
+      if [[ -z $VALIDATOR_NODE_MACHINE_TYPE ]] ; then
+        echo VALIDATOR_NODE_MACHINE_TYPE not defined
+        exit 1
+      fi
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
       net/gce.sh create \
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
-        $maybeCustomMachineType $VALIDATOR_NODE_MACHINE_TYPE "$maybeEnableGpu" \
+        $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
         -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/"-z "} ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     colo)
