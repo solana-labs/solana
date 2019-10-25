@@ -84,6 +84,7 @@ fn shred_gpu_pubkeys(
     recycler_offsets: &Recycler<TxOffset>,
     recycler_pubkeys: &Recycler<PinnedVec<Pubkey>>,
 ) -> (PinnedVec<Pubkey>, TxOffset) {
+    //TODO: mark Pubkey::default shreds as failed after the GPU returns
     assert_eq!(slot_leaders.get(&std::u64::MAX), Some(&Pubkey::default()));
     let slots: Vec<Vec<u64>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
@@ -279,7 +280,7 @@ pub mod tests {
         solana_logger::setup();
         let mut packet = Packet::default();
         let slot = 0xdeadc0de;
-        let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1,2,3,4]), true, true);
+        let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true);
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
@@ -306,7 +307,7 @@ pub mod tests {
     fn test_sigverify_shreds_cpu() {
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
-        let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1,2,3,4]), true, true);
+        let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true);
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
         batch[0].packets.resize(1, Packet::default());
@@ -321,6 +322,59 @@ pub mod tests {
         let wrong_keypair = Keypair::new();
         leader_slots.insert(slot, wrong_keypair.pubkey());
         let rv = verify_shreds_cpu(&batch, &leader_slots);
+        assert_eq!(rv, vec![vec![0]]);
+
+        leader_slots.remove(&slot);
+        let rv = verify_shreds_cpu(&batch, &leader_slots);
+        assert_eq!(rv, vec![vec![0]]);
+    }
+
+    #[test]
+    fn test_sigverify_shreds_gpu() {
+        let recycler_offsets = Recycler::default();
+        let recycler_pubkeys = Recycler::default();
+        let recycler_out = Recycler::default();
+        let mut leader_slots: HashMap<u64, Pubkey> = HashMap::new();
+        leader_slots.insert(std::u64::MAX, Pubkey::default());
+
+        let mut batch = [Packets::default()];
+        let slot = 0xdeadc0de;
+        let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true);
+        let keypair = Keypair::new();
+        Shredder::sign_shred(&keypair, &mut shred);
+        batch[0].packets.resize(1, Packet::default());
+        batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batch[0].packets[0].meta.size = shred.payload.len();
+
+        leader_slots.insert(slot, keypair.pubkey());
+        let rv = verify_shreds_gpu(
+            &batch,
+            &leader_slots,
+            &recycler_offsets,
+            &recycler_pubkeys,
+            &recycler_out,
+        );
+        assert_eq!(rv, vec![vec![1]]);
+
+        let wrong_keypair = Keypair::new();
+        leader_slots.insert(slot, wrong_keypair.pubkey());
+        let rv = verify_shreds_gpu(
+            &batch,
+            &leader_slots,
+            &recycler_offsets,
+            &recycler_pubkeys,
+            &recycler_out,
+        );
+        assert_eq!(rv, vec![vec![0]]);
+
+        leader_slots.remove(&slot);
+        let rv = verify_shreds_gpu(
+            &batch,
+            &leader_slots,
+            &recycler_offsets,
+            &recycler_pubkeys,
+            &recycler_out,
+        );
         assert_eq!(rv, vec![vec![0]]);
     }
 }
