@@ -1587,7 +1587,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-ws-server"
-version = "14.0.1"
+version = "14.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3312,7 +3312,7 @@ dependencies = [
  "jsonrpc-derive 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-http-server 14.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-pubsub 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-ws-server 14.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-ws-server 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5613,7 +5613,7 @@ dependencies = [
 "checksum jsonrpc-http-server 14.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dd3d54c822dc67707f21b15f13995b24eb090501c8ad67782b5484c9be36255b"
 "checksum jsonrpc-pubsub 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "3ee1b8da0b9219a231c4b7cbc7110bfdb457cbcd8d90a6224d0b3cab8aae8443"
 "checksum jsonrpc-server-utils 14.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "56ca64eeb4463722c49dd526e0a87dfc0cdecda9348a4b6f5720f25abc4fcc89"
-"checksum jsonrpc-ws-server 14.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "338664631e75cf752468a0d8ec3ba82df4caaacd942b4c34ea67db2556308e20"
+"checksum jsonrpc-ws-server 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "af36a129cef77a9db8028ac7552d927e1bb7b6928cd96b23dd25cc38bff974ab"
 "checksum keccak 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "67c21572b4949434e4fc1e1978b99c5f77064153c59d998bf13ecd96fb5ecba7"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum lalrpop 0.16.3 (registry+https://github.com/rust-lang/crates.io-index)" = "4e2e80bee40b22bca46665b4ef1f3cd88ed0fb043c971407eac17a0712c02572"
