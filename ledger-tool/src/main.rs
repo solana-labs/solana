@@ -149,7 +149,7 @@ fn main() {
     let blocktree = match Blocktree::open(&ledger_path) {
         Ok(blocktree) => blocktree,
         Err(err) => {
-            eprintln!("Failed to open ledger at {:?}: {}", ledger_path, err);
+            eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
             exit(1);
         }
     };
