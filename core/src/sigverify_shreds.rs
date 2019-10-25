@@ -139,6 +139,7 @@ fn shred_gpu_pubkeys(
     for _ in 0..extra {
         pubkeys.push(Pubkey::default());
     }
+    trace!("pubkeys {:?}", pubkeys);
     assert!(num <= pubkeys.len() * size_of::<Pubkey>() / size_of::<Packet>());
     (pubkeys, offsets)
 }
@@ -178,6 +179,7 @@ pub fn verify_shreds_gpu(
     recycler_out: &Recycler<PinnedVec<u8>>,
 ) -> Vec<Vec<u8>> {
     let api = perf_libs::api();
+    assert!(api.is_some());
     if api.is_none() {
         return verify_shreds_cpu(batches, slot_leaders);
     }
@@ -239,6 +241,7 @@ pub fn verify_shreds_gpu(
         }
     }
     trace!("done verify");
+    trace!("out buf {:?}", out);
 
     let mut num = 0;
     for (vs, sig_vs) in rvs.iter_mut().zip(v_sig_lens.iter()) {
@@ -305,6 +308,7 @@ pub mod tests {
 
     #[test]
     fn test_sigverify_shreds_cpu() {
+        solana_logger::setup();
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
         let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true);
@@ -331,6 +335,7 @@ pub mod tests {
 
     #[test]
     fn test_sigverify_shreds_gpu() {
+        solana_logger::setup();
         let recycler_offsets = Recycler::default();
         let recycler_pubkeys = Recycler::default();
         let recycler_out = Recycler::default();
