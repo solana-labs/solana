@@ -48,7 +48,7 @@ fn recv_loop(
         }
         if recv_count > 1024 {
             datapoint_debug!(
-                "receiver-stats",
+                name,
                 ("received", recv_count as i64, i64),
                 ("call_count", i64::from(call_count), i64),
                 ("elapsed", now.elapsed().as_millis() as i64, i64),
