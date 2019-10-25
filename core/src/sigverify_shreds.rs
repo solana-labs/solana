@@ -133,7 +133,8 @@ fn shred_gpu_pubkeys(
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
     //Pad the Pubkeys buffer such that it is bigger than a buffer of Packet sized elems
-    let num_in_packets = (pubkeys.len() * size_of::<Pubkey>() + (size_of::<Packet>() - 1)) / size_of::<Packet>();
+    let num_in_packets =
+        (pubkeys.len() * size_of::<Pubkey>() + (size_of::<Packet>() - 1)) / size_of::<Packet>();
     trace!("num_in_packets {}", num_in_packets);
     //number of bytes missing
     let missing = num_in_packets * size_of::<Packet>() - pubkeys.len() * size_of::<Pubkey>();
