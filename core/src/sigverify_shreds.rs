@@ -54,7 +54,7 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, Pubkey>) -> Opt
     if !signature.verify(pubkey.as_ref(), &packet.data[msg_start..msg_end]) {
         return Some(0);
     }
-    return Some(1);
+    Some(1)
 }
 
 pub fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, Pubkey>) -> Vec<Vec<u8>> {
