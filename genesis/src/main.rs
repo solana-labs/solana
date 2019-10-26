@@ -310,16 +310,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_keypair = read_keypair_file(bootstrap_storage_keypair_file)?;
     let mint_keypair = read_keypair_file(mint_keypair_file)?;
 
-    let vote_account = vote_state::create_account(
+    let bootstrap_leader_vote_account = vote_state::create_account(
         &bootstrap_vote_keypair.pubkey(),
         &bootstrap_leader_keypair.pubkey(),
         0,
         1,
     );
-    let stake_account = stake_state::create_account(
-        &bootstrap_stake_keypair.pubkey(),
+    let bootstrap_leader_stake_account = stake_state::create_account(
+        &bootstrap_leader_keypair.pubkey(),
         &bootstrap_vote_keypair.pubkey(),
-        &vote_account,
+        &bootstrap_leader_vote_account,
         bootstrap_leader_stake_lamports,
     );
 
@@ -335,9 +335,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Account::new(bootstrap_leader_lamports, 0, &system_program::id()),
         ),
         // where votes go to
-        (bootstrap_vote_keypair.pubkey(), vote_account),
+        (
+            bootstrap_vote_keypair.pubkey(),
+            bootstrap_leader_vote_account,
+        ),
         // passive bootstrap leader stake
-        (bootstrap_stake_keypair.pubkey(), stake_account),
+        (
+            bootstrap_stake_keypair.pubkey(),
+            bootstrap_leader_stake_account,
+        ),
         (
             bootstrap_storage_keypair.pubkey(),
             storage_contract::create_validator_storage_account(
