@@ -8,6 +8,7 @@ use crate::short_vec;
 use crate::signature::{KeypairUtil, Signature};
 use crate::system_instruction;
 use bincode::serialize;
+use std::convert::TryInto;
 use std::result;
 use thiserror::Error;
 
@@ -119,6 +120,23 @@ impl Transaction {
     pub fn new_unsigned_instructions(instructions: Vec<Instruction>) -> Self {
         let message = Message::new(instructions);
         Self::new_unsigned(message)
+    }
+
+    pub fn new_signed_instructions_random(
+        instructions: Vec<Instruction>,
+        recent_blockhash: Hash,
+    ) -> Self {
+        let mut tx = Self::new_unsigned_instructions(instructions);
+        tx.signatures = vec![
+            Signature::new_rand();
+            tx.message
+                .header
+                .num_required_signatures
+                .try_into()
+                .unwrap()
+        ];
+        tx.message.recent_blockhash = recent_blockhash;
+        tx
     }
 
     pub fn new<T: KeypairUtil>(

@@ -28,6 +28,12 @@ impl Signature {
         Self(GenericArray::clone_from_slice(&signature_slice))
     }
 
+    pub fn new_rand() -> Self {
+        let mut random_signature_bytes = [0u8; 64];
+        random_signature_bytes[0..20].copy_from_slice(&rand::random::<[u8; 20]>());
+        Self::new(&random_signature_bytes) // same as status cache!
+    }
+
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
         let pubkey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes);
         let signature = ed25519_dalek::Signature::from_bytes(self.0.as_slice());

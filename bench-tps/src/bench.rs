@@ -80,6 +80,7 @@ where
         duration,
         tx_count,
         sustained,
+        dummy_sig,
         ..
     } = config;
 
@@ -177,6 +178,7 @@ where
             threads,
             reclaim_lamports_back_to_source_account,
             &libra_args,
+            dummy_sig,
         );
 
         // In sustained mode, overlap the transfers with generation. This has higher average
@@ -301,6 +303,7 @@ fn generate_system_txs(
     dest: &VecDeque<&Keypair>,
     reclaim: bool,
     blockhash: &Hash,
+    dummy_sig: bool,
 ) -> Vec<(Transaction, u64)> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
@@ -312,7 +315,11 @@ fn generate_system_txs(
         .par_iter()
         .map(|(from, to)| {
             (
-                system_transaction::transfer(from, &to.pubkey(), 1, *blockhash),
+                if !dummy_sig {
+                    system_transaction::transfer(from, &to.pubkey(), 1, *blockhash)
+                } else {
+                    system_transaction::transfer_with_dummy_sig(from, &to.pubkey(), 1, *blockhash)
+                },
                 timestamp(),
             )
         })
@@ -327,6 +334,7 @@ fn generate_txs(
     threads: usize,
     reclaim: bool,
     libra_args: &Option<LibraKeys>,
+    dummy_sig: bool,
 ) {
     let blockhash = *blockhash.read().unwrap();
     let tx_count = source.len();
@@ -361,7 +369,7 @@ fn generate_txs(
             )
         }
     } else {
-        generate_system_txs(source, dest, reclaim, &blockhash)
+        generate_system_txs(source, dest, reclaim, &blockhash, dummy_sig)
     };
 
     let duration = signing_start.elapsed();
