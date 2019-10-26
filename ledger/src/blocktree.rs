@@ -30,7 +30,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 
@@ -55,6 +55,7 @@ pub struct Blocktree {
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     last_root: Arc<RwLock<u64>>,
+    insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
 }
@@ -106,6 +107,7 @@ impl Blocktree {
             code_shred_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
+            insert_shreds_lock: Arc::new(Mutex::new(())),
             last_root,
         })
     }
@@ -359,6 +361,7 @@ impl Blocktree {
         shreds: Vec<Shred>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
     ) -> Result<()> {
+        let _lock = self.insert_shreds_lock.lock().unwrap();
         let db = &*self.db;
         let mut write_batch = db.batch()?;
 
