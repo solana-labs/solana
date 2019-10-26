@@ -262,6 +262,7 @@ EOF
       args+=(
         --blockstream /tmp/solana-blockstream.sock
         --no-voting
+        --dev-no-sigverify
       )
     else
       args+=(--enable-rpc-exit)
