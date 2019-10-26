@@ -819,7 +819,12 @@ info)
     printf "  %-16s | %-15s | %-15s | %s\n" "$nodeType" "$ip" "$ipPrivate" "$zone"
   }
 
-  if ! $evalInfo; then
+  if $evalInfo; then
+    echo "NET_NUM_VALIDATORS=${#validatorIpList[@]}"
+    echo "NET_NUM_CLIENTS=${#clientIpList[@]}"
+    echo "NET_NUM_BLOCKSTREAMERS=${#blockstreamerIpList[@]}"
+    echo "NET_NUM_ARCHIVERS=${#archiverIpList[@]}"
+  else
     printNode "Node Type" "Public IP" "Private IP" "Zone"
     echo "-------------------+-----------------+-----------------+--------------"
   fi
