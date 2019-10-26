@@ -85,6 +85,7 @@ where
         total_packets += more_packets.packets.len();
         packets.push(more_packets)
     }
+
     let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
 
@@ -127,7 +128,8 @@ where
         }
     }
 
-    blocktree.insert_shreds(shreds, Some(leader_schedule_cache))?;
+    let blocktree_insert_metrics = blocktree.insert_shreds(shreds, Some(leader_schedule_cache))?;
+    blocktree_insert_metrics.report_metrics("recv-window-insert-shreds");
 
     trace!(
         "Elapsed processing time in recv_window(): {}",
