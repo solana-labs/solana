@@ -714,6 +714,7 @@ $(
     add-testnet-solana-user-authorized_keys.sh \
     install-certbot.sh \
     install-earlyoom.sh \
+    install-iftop.sh \
     install-libssl-compatability.sh \
     install-nodejs.sh \
     install-redis.sh \
