@@ -272,7 +272,7 @@ pub fn ed25519_verify_disabled(batches: &[Packets]) -> Vec<Vec<u8>> {
     rv
 }
 
-pub fn copy_return_values(sig_lens: &Vec<Vec<u32>>, out: &PinnedVec<u8>, rvs: &mut Vec<Vec<u8>>) {
+pub fn copy_return_values(sig_lens: &[Vec<u32>], out: &PinnedVec<u8>, rvs: &mut Vec<Vec<u8>>) {
     let mut num = 0;
     for (vs, sig_vs) in rvs.iter_mut().zip(sig_lens.iter()) {
         for (v, sig_v) in vs.iter_mut().zip(sig_vs.iter()) {
