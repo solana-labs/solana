@@ -76,7 +76,6 @@ now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 ln -sfT validator.log.\$now validator.log
 EOF
 chmod +x ~/solana/on-reboot
-echo "@reboot ~/solana/on-reboot" | crontab -
 
 GPU_CUDA_OK=false
 GPU_FAIL_IF_NONE=false
