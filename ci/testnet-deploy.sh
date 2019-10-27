@@ -288,11 +288,15 @@ if ! $skipCreate; then
   echo "--- $cloudProvider.sh create"
   create_args=(
     -p "$netName"
-    -a "$bootstrapValidatorAddress"
     -c "$clientNodeCount"
     -n "$additionalValidatorCount"
     --dedicated
   )
+
+  if [[ -n $bootstrapValidatorAddress ]]; then
+    create_args+=(-a "$bootstrapValidatorAddress")
+  fi
+
   # shellcheck disable=SC2206
   create_args+=(${zone_args[@]})
 
