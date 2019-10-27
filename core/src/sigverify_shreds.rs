@@ -338,6 +338,11 @@ pub mod tests {
         leader_slots.remove(&slot);
         let rv = verify_shreds_cpu(&batch, &leader_slots);
         assert_eq!(rv, vec![vec![0]]);
+
+        leader_slots.insert(slot, keypair.pubkey());
+        batch[0].packets[0].meta.size = 0;
+        let rv = verify_shreds_cpu(&batch, &leader_slots);
+        assert_eq!(rv, vec![vec![0]]);
     }
 
     #[test]
@@ -380,6 +385,17 @@ pub mod tests {
         assert_eq!(rv, vec![vec![0]]);
 
         leader_slots.remove(&slot);
+        let rv = verify_shreds_gpu(
+            &batch,
+            &leader_slots,
+            &recycler_offsets,
+            &recycler_pubkeys,
+            &recycler_out,
+        );
+        assert_eq!(rv, vec![vec![0]]);
+
+        batch[0].packets[0].meta.size = 0;
+        leader_slots.insert(slot, keypair.pubkey());
         let rv = verify_shreds_gpu(
             &batch,
             &leader_slots,
