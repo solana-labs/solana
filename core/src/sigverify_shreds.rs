@@ -204,7 +204,6 @@ pub fn verify_shreds_gpu(
     recycler_out: &Recycler<PinnedVec<u8>>,
 ) -> Vec<Vec<u8>> {
     let api = perf_libs::api();
-    assert!(api.is_some());
     if api.is_none() {
         return verify_shreds_cpu(batches, slot_leaders);
     }
