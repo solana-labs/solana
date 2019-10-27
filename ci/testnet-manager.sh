@@ -535,7 +535,6 @@ deploy() {
         -c ${TDS_CLIENT_COUNT} \
         --idle-clients \
         -P -u \
-        -a tds-solana-com --letsencrypt tds.solana.com \
         ${maybeHashesPerTick} \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
