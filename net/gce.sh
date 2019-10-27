@@ -662,6 +662,7 @@ EOF
 set -ex
 
 if [[ -f /solana-scratch/.instance-startup-complete ]]; then
+  echo reboot
   $(
     cd "$here"/scripts/
     if "$enableGpu"; then
@@ -672,6 +673,9 @@ if [[ -f /solana-scratch/.instance-startup-complete ]]; then
       cat mount-additional-disk.sh
     fi
   )
+  if [[ -x ~solana/solana/on-reboot ]]; then
+    sudo -u solana ~solana/solana/on-reboot
+  fi
 
   # Skip most setup on instance reboot
   exit 0
@@ -733,6 +737,8 @@ $(
 )
 
 cat > /etc/motd <<EOM
+See startup script log messages in /var/log/syslog for status:
+  $ sudo cat /var/log/syslog | egrep \\(startup-script\\|cloud-init\)
 $(printNetworkInfo)
 $(creationInfo)
 EOM
