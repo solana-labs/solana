@@ -10,12 +10,12 @@
 
 if [ ! -f "$SOLANA_LOCK_FILE" ]; then
   exec 9>>"$SOLANA_LOCK_FILE"
-  flock -x -n 9 || exit 1
+  flock -x -n 9 || ( echo "Failed to acquire lock!" 1>&2 && exit 1 )
   [ -n "\$SOLANA_USER" ] && {
     echo "export SOLANA_LOCK_USER=\$SOLANA_USER"
     echo "export SOLANA_LOCK_INSTANCENAME=$INSTANCE_NAME"
     echo "[ -v SSH_TTY -a -f \"\${HOME}/.solana-motd\" ] && cat \"\${HOME}/.solana-motd\" 1>&2"
-  } >&9 || ( rm "$SOLANA_LOCK_FILE" && false )
+  } >&9 || ( rm "$SOLANA_LOCK_FILE" && echo "SOLANA_USER undefined" 1>&2 && false )
   9>&-
   cat > /solana-scratch/id_ecdsa <<EOK
 $(cat "$SSH_PRIVATE_KEY")
@@ -41,5 +41,7 @@ EOM
   # XXX: Stamp creation MUST be last!
   touch /solana-scratch/.instance-startup-complete
 else
+  exec 9<"$SOLANA_LOCK_FILE" && flock -s 9 && . "$SOLANA_LOCK_FILE" && exec 9>&-
+  echo "${INSTANCE_NAME} candidate is already \${SOLANA_LOCK_INSTANCENAME}" 1>&2
   false
 fi
