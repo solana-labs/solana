@@ -69,7 +69,8 @@ solana-genesis \
   --bootstrap-vote-keypair "$dataDir"/leader-vote-account-keypair.json \
   --bootstrap-stake-keypair "$dataDir"/leader-stake-account-keypair.json \
   --bootstrap-storage-keypair "$dataDir"/leader-storage-account-keypair.json \
-  --ledger "$ledgerDir"
+  --ledger "$ledgerDir" \
+  --dev
 
 abort() {
   set +e
