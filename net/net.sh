@@ -722,11 +722,7 @@ deploy() {
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
       # it can handle.
-      if ((nodeIndex % 3 == 0)); then
-        sleep 2
-      elif ((nodeIndex % 3 == 1)); then
-        sleep 4
-      fi
+      sleep 2
     fi
   done
 

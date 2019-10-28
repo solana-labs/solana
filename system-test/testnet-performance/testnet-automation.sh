@@ -83,7 +83,9 @@ function launchTestnet() {
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
-        -p "$TESTNET_TAG" ${TESTNET_CLOUD_ZONES[@]/#/"-z "} ${ADDITIONAL_FLAGS[@]/#/" "}
+        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures \
+        ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
+        ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     colo)
     # shellcheck disable=SC2068
@@ -102,9 +104,13 @@ function launchTestnet() {
 
   echo --- start "$NUMBER_OF_VALIDATOR_NODES" node test
   if [[ -n $CHANNEL ]]; then
-    net/net.sh restart -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS"
+    # shellcheck disable=SC2068
+    # shellcheck disable=SC2086
+    net/net.sh restart -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures
   else
-    net/net.sh restart -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS"
+    # shellcheck disable=SC2068
+    # shellcheck disable=SC2086
+    net/net.sh restart -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures
   fi
 
   echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
@@ -196,6 +202,14 @@ if [[ -z $SOLANA_METRICS_CONFIG ]]; then
 fi
 echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
 
+if [[ -z $ALLOW_BOOT_FAILURES ]] ; then
+  ALLOW_BOOT_FAILURES=false
+fi
+if [[ "$ALLOW_BOOT_FAILURES" = "true" ]] ; then
+  maybeCreateAllowBootFailures="--allow-boot-failures"
+  maybeStartAllowBootFailures="-F"
+fi
+
 if [[ -z $CHANNEL ]]; then
   echo --- downloading tar from build artifacts
   buildkite-agent artifact download "solana-release*.tar.bz2" .
@@ -222,6 +236,7 @@ TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         CLIENT_OPTIONS \
                         TESTNET_ZONES \
                         TEST_DURATION_SECONDS \
+                        ALLOW_BOOT_FAILURES \
                         ADDITIONAL_FLAGS)
 
 TEST_CONFIGURATION=
