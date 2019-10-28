@@ -82,16 +82,14 @@ impl StandardBroadcastRun {
     ) -> Vec<Shred> {
         if let Some(shred) = last_unfinished_slot_shred {
             data_shreds
-                .iter()
-                .chain(coding_shreds.iter())
-                .cloned()
+                .into_iter()
+                .chain(coding_shreds.into_iter())
                 .chain(std::iter::once(shred))
                 .collect::<Vec<_>>()
         } else {
             data_shreds
-                .iter()
-                .chain(coding_shreds.iter())
-                .cloned()
+                .into_iter()
+                .chain(coding_shreds.into_iter())
                 .collect::<Vec<_>>()
         }
     }
