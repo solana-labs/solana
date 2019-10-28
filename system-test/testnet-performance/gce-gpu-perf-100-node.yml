@@ -1,13 +1,13 @@
 steps:
   - command: "system-test/testnet-performance/testnet-automation.sh"
-    label: "GCE - GPU Enabled 50 Nodes"
+    label: "GCE - GPU Enabled 100 Nodes"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "gce-edge-perf-gpu-enabled"
       RAMP_UP_TIME: 0
       TEST_DURATION_SECONDS: 600
-      NUMBER_OF_VALIDATOR_NODES: 50
+      NUMBER_OF_VALIDATOR_NODES: 100
       ENABLE_GPU: "true"
       VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
       NUMBER_OF_CLIENT_NODES: 2
