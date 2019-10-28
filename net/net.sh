@@ -722,7 +722,7 @@ deploy() {
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
       # it can handle.
-      sleep 4
+      sleep 2
     fi
   done
 
