@@ -15,7 +15,7 @@ log = "0.4.8"
 rand = "0.6.5"
 num-derive = "0.3"
 num-traits = "0.2"
-serde = "1.0.101"
+serde = "1.0.102"
 serde_derive = "1.0.102"
 solana-logger = { path = "../../logger", version = "0.21.0" }
 solana-sdk = { path = "../../sdk", version = "0.21.0" }
