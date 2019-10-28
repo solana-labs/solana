@@ -17,7 +17,7 @@ dir-diff = "0.3.2"
 dlopen = "0.1.8"
 dlopen_derive = "0.1.4"
 fs_extra = "1.1.0"
-itertools = "0.8.0"
+itertools = "0.8.1"
 lazy_static = "1.4.0"
 log = { version = "0.4.8" }
 rand = "0.6.5"
