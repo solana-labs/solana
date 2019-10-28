@@ -7,6 +7,7 @@
 use crate::cuda_runtime::PinnedVec;
 use crate::packet::{Packet, Packets};
 use crate::recycler::Recycler;
+use crate::sigverify_stage::{SigVerifier, VerifiedPackets};
 use bincode::serialized_size;
 use rayon::ThreadPool;
 use solana_ledger::perf_libs;
@@ -18,6 +19,29 @@ use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
 use std::mem::size_of;
+
+#[derive(Clone)]
+pub struct TransactionSigVerifier {
+    recycler: Recycler<TxOffset>,
+    recycler_out: Recycler<PinnedVec<u8>>,
+}
+
+impl Default for TransactionSigVerifier {
+    fn default() -> Self {
+        init();
+        Self {
+            recycler: Recycler::default(),
+            recycler_out: Recycler::default(),
+        }
+    }
+}
+
+impl SigVerifier for TransactionSigVerifier {
+    fn verify_batch(&self, batch: Vec<Packets>) -> VerifiedPackets {
+        let r = ed25519_verify(&batch, &self.recycler, &self.recycler_out);
+        batch.into_iter().zip(r).collect()
+    }
+}
 
 use solana_rayon_threadlimit::get_thread_count;
 use std::cell::RefCell;

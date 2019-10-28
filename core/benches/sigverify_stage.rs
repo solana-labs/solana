@@ -8,6 +8,7 @@ use log::*;
 use rand::{thread_rng, Rng};
 use solana_core::packet::to_packets_chunked;
 use solana_core::service::Service;
+use solana_core::sigverify::TransactionSigVerifier;
 use solana_core::sigverify_stage::SigVerifyStage;
 use solana_core::test_tx::test_tx;
 use solana_sdk::hash::Hash;
@@ -23,8 +24,8 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     solana_logger::setup();
     let (packet_s, packet_r) = channel();
     let (verified_s, verified_r) = unbounded();
-    let sigverify_disabled = false;
-    let stage = SigVerifyStage::new(packet_r, sigverify_disabled, verified_s);
+    let verifier = TransactionSigVerifier::default();
+    let stage = SigVerifyStage::new(packet_r, verified_s, verifier);
 
     let now = Instant::now();
     let len = 4096;

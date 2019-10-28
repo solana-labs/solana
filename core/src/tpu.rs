@@ -8,7 +8,8 @@ use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
 use crate::poh_recorder::{PohRecorder, WorkingBankEntry};
 use crate::service::Service;
-use crate::sigverify_stage::SigVerifyStage;
+use crate::sigverify::TransactionSigVerifier;
+use crate::sigverify_stage::{DisabledSigVerifier, SigVerifyStage};
 use crossbeam_channel::unbounded;
 use solana_ledger::blocktree::Blocktree;
 use std::net::UdpSocket;
@@ -49,8 +50,13 @@ impl Tpu {
         );
         let (verified_sender, verified_receiver) = unbounded();
 
-        let sigverify_stage =
-            SigVerifyStage::new(packet_receiver, sigverify_disabled, verified_sender.clone());
+        let sigverify_stage = if !sigverify_disabled {
+            let verifier = TransactionSigVerifier::default();
+            SigVerifyStage::new(packet_receiver, verified_sender.clone(), verifier)
+        } else {
+            let verifier = DisabledSigVerifier::default();
+            SigVerifyStage::new(packet_receiver, verified_sender.clone(), verifier)
+        };
 
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
