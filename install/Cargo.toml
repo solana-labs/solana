@@ -26,7 +26,7 @@ nix = "0.15.0"
 reqwest = { version = "0.9.22", default-features = false, features = ["rustls-tls"] }
 semver = "0.9.0"
 serde = "1.0.101"
-serde_derive = "1.0.101"
+serde_derive = "1.0.102"
 serde_yaml = "0.8.11"
 sha2 = "0.8.0"
 solana-client = { path = "../client", version = "0.21.0" }
