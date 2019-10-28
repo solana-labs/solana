@@ -227,7 +227,6 @@ impl StandardBroadcastRun {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn update_broadcast_stats(&mut self, stats: BroadcastStats) {
         self.stats.receive_elapsed += stats.receive_elapsed;
         self.stats.shredding_elapsed += stats.shredding_elapsed;
