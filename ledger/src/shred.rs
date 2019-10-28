@@ -442,7 +442,7 @@ impl Shredder {
         (data_shreds, coding_shreds, last_shred_index + 1)
     }
 
-    pub fn sign_shred(signer: &Arc<Keypair>, shred: &mut Shred) {
+    pub fn sign_shred(signer: &Keypair, shred: &mut Shred) {
         let signature = signer.sign_message(&shred.payload[SIZE_OF_SIGNATURE..]);
         bincode::serialize_into(&mut shred.payload[..SIZE_OF_SIGNATURE], &signature)
             .expect("Failed to generate serialized signature");
