@@ -241,7 +241,7 @@ fn shred_gpu_keys(
 }
 
 fn shred_gpu_offsets(
-    mut pubkeys_end: u32,
+    mut pubkeys_end: usize,
     batches: &[Packets],
     recycler_offsets: &Recycler<TxOffset>,
 ) -> (TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>) {
@@ -253,19 +253,19 @@ fn shred_gpu_offsets(
         let mut sig_lens = Vec::new();
         for packet in &batch.packets {
             let sig_start = pubkeys_end;
-            let sig_end = sig_start + size_of::<Signature>() as u32;
+            let sig_end = sig_start + size_of::<Signature>();
             let msg_start = sig_end;
-            let msg_end = sig_start + packet.meta.size as u32;
-            signature_offsets.push(sig_start);
-            msg_start_offsets.push(msg_start);
+            let msg_end = sig_start + packet.meta.size;
+            signature_offsets.push(sig_start as u32);
+            msg_start_offsets.push(msg_start as u32);
             let msg_size = if msg_end < msg_start {
                 0
             } else {
                 msg_end - msg_start
             };
-            msg_sizes.push(msg_size);
+            msg_sizes.push(msg_size as u32);
             sig_lens.push(1);
-            pubkeys_end += size_of::<Packet>() as u32;
+            pubkeys_end += size_of::<Packet>();
         }
         v_sig_lens.push(sig_lens);
     }
@@ -292,7 +292,7 @@ fn verify_shreds_gpu(
         shred_gpu_keys(0, batches, slot_leaders, recycler_offsets, recycler_pubkeys);
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
-    let pubkeys_len = (num_packets * size_of::<Packet>()) as u32;
+    let pubkeys_len = num_packets * size_of::<Packet>();
     trace!("num_packets: {}", num_packets);
     trace!("pubkeys_len: {}", pubkeys_len);
     let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
@@ -366,7 +366,7 @@ fn verify_shreds_gpu(
 /// Signature is the first thing in the packet, and slot is the first thing in the signed message.
 fn sign_shred_cpu(packet: &mut Packet, slot_leaders_pubkeys: &HashMap<u64, [u8;32]>, slot_leaders_privkeys: &HashMap<u64, [u8;32]>) {
     let sig_start = 0;
-    let sig_end = size_of::<Signature>();
+    let sig_end = sig_start + size_of::<Signature>();
     let slot_start = sig_end + size_of::<ShredType>();
     let slot_end = slot_start + size_of::<u64>();
     let msg_start = sig_end;
@@ -397,8 +397,8 @@ fn sign_shreds_cpu(batches: &mut [Packets], slot_leaders_pubkeys: &HashMap<u64, 
                 .par_iter_mut()
                 .for_each(|p| {
                     p.packets
-                        .iter()
-                        .for_each(|p| sign_shred_cpu(&mut p, slot_leaders_pubkeys, slot_leaders_privkeys));
+                        .iter_mut()
+                        .for_each(|mut p| sign_shred_cpu(&mut p, slot_leaders_pubkeys, slot_leaders_privkeys));
                 });
         })
     });
@@ -412,7 +412,6 @@ pub fn sign_shreds_gpu(
     slot_leaders_privkeys: &HashMap<u64, [u8;32]>,
     recycler_offsets: &Recycler<TxOffset>,
     recycler_pubkeys: &Recycler<PinnedVec<[u8;32]>>,
-    recycler_out: &Recycler<PinnedVec<u8>>,
 ) {
     let api = perf_libs::api();
     if api.is_none() {
@@ -422,7 +421,7 @@ pub fn sign_shreds_gpu(
 
     let mut elems = Vec::new();
     let count = sigverify::batch_size(batches);
-    let mut offset = 0;
+    let mut offset: usize = 0;
     let mut num_packets = 0;
     let (pubkeys, pubkey_offsets, num_pubkey_packets) =
         shred_gpu_keys(offset, batches, slot_leaders_pubkeys, recycler_offsets, recycler_pubkeys);
@@ -436,7 +435,7 @@ pub fn sign_shreds_gpu(
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
     trace!("offset: {}", offset);
-    let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
+    let (signature_offsets, msg_start_offsets, msg_sizes, _v_sig_lens) =
         shred_gpu_offsets(offset, batches, recycler_offsets);
     elems.push(
         perf_libs::Elems {
@@ -470,7 +469,7 @@ pub fn sign_shreds_gpu(
     const USE_NON_DEFAULT_STREAM: u8 = 1;
     unsafe {
         let res = (api.ed25519_sign_many)(
-            elems.as_ptr(),
+            elems.as_mut_ptr(),
             elems.len() as u32,
             size_of::<Packet>() as u32,
             num_packets as u32,
