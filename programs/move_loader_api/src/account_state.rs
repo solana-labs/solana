@@ -8,7 +8,9 @@ use std::convert::TryInto;
 use stdlib::stdlib_modules;
 use types::{
     account_address::AccountAddress,
+    account_config,
     byte_array::ByteArray,
+    identifier::Identifier,
     transaction::Program,
     write_set::{WriteOp, WriteSet},
 };
@@ -22,9 +24,9 @@ use vm_runtime::{
         module_cache::{BlockModuleCache, VMModuleCache},
     },
     data_cache::BlockDataCache,
-    txn_executor::{TransactionExecutor, ACCOUNT_MODULE, COIN_MODULE},
-    value::Local,
+    txn_executor::{TransactionExecutor, ACCOUNT_MODULE, BLOCK_MODULE, COIN_MODULE},
 };
+use vm_runtime_types::value::Value;
 
 // Helper function that converts a Solana Pubkey to a Libra AccountAddress (WIP)
 pub fn pubkey_to_address(key: &Pubkey) -> AccountAddress {
@@ -87,11 +89,12 @@ impl LibraAccountState {
 
         let compiler = Compiler {
             address: *sender_address,
-            code,
             extra_deps,
             ..Compiler::default()
         };
-        let compiled_program = compiler.into_compiled_program().expect("Failed to compile");
+        let compiled_program = compiler
+            .into_compiled_program(code)
+            .expect("Failed to compile");
 
         let mut script_bytes = vec![];
         compiled_program
@@ -120,10 +123,9 @@ impl LibraAccountState {
         let arena = Arena::new();
         let state_view = DataStore::default();
         let vm_cache = VMModuleCache::new(&arena);
-        // Libra enforces the mint address to be 0x0 (see Libra's `mint_to_address` function)
-        let mint_address = AccountAddress::default();
+        let genesis_addr = account_config::association_address();
         // TODO: Need this?
-        let genesis_auth_key = ByteArray::new(mint_address.to_vec());
+        let genesis_auth_key = ByteArray::new(genesis_addr.to_vec());
 
         let write_set = {
             let fake_fetcher =
@@ -132,35 +134,55 @@ impl LibraAccountState {
             let block_cache = BlockModuleCache::new(&vm_cache, fake_fetcher);
 
             let mut txn_data = TransactionMetadata::default();
-            txn_data.sender = mint_address;
+            txn_data.sender = genesis_addr;
 
             let mut txn_executor = TransactionExecutor::new(&block_cache, &data_cache, txn_data);
+            txn_executor.create_account(genesis_addr).unwrap();
             txn_executor
-                .create_account(mint_address)
-                .map_err(map_vm_invariant_violation_error)?
-                .map_err(map_vm_runtime_error)?;
+                .create_account(account_config::core_code_address())
+                .map_err(map_err_vm_status)?;
             txn_executor
-                .execute_function(&COIN_MODULE, "initialize", vec![])
-                .map_err(map_vm_invariant_violation_error)?
-                .map_err(map_vm_runtime_error)?;
+                .execute_function(
+                    &BLOCK_MODULE,
+                    &Identifier::new("initialize").unwrap(),
+                    vec![],
+                )
+                .map_err(map_err_vm_status)?;
+            txn_executor
+                .execute_function(
+                    &COIN_MODULE,
+                    &Identifier::new("initialize").unwrap(),
+                    vec![],
+                )
+                .map_err(map_err_vm_status)?;
 
             txn_executor
                 .execute_function(
                     &ACCOUNT_MODULE,
-                    "mint_to_address",
-                    vec![Local::address(mint_address), Local::u64(mint_balance)],
+                    &Identifier::new("mint_to_address").unwrap(),
+                    vec![Value::address(genesis_addr), Value::u64(mint_balance)],
                 )
-                .map_err(map_vm_invariant_violation_error)?
-                .map_err(map_vm_runtime_error)?;
+                .map_err(map_err_vm_status)?;
 
             txn_executor
                 .execute_function(
                     &ACCOUNT_MODULE,
-                    "rotate_authentication_key",
-                    vec![Local::bytearray(genesis_auth_key)],
+                    &Identifier::new("rotate_authentication_key").unwrap(),
+                    vec![Value::byte_array(genesis_auth_key)],
                 )
-                .map_err(map_vm_invariant_violation_error)?
-                .map_err(map_vm_runtime_error)?;
+                .map_err(map_err_vm_status)?;
+
+            // Bump the sequence number for the Association account. If we don't do this and a
+            // subsequent transaction (e.g., minting) is sent from the Association account, a problem
+            // arises: both the genesis transaction and the subsequent transaction have sequence
+            // number 0
+            txn_executor
+                .execute_function(
+                    &ACCOUNT_MODULE,
+                    &Identifier::new("epilogue").unwrap(),
+                    vec![],
+                )
+                .map_err(map_err_vm_status)?;
 
             let mut stdlib_modules = vec![];
             for module in modules.iter() {
@@ -170,8 +192,8 @@ impl LibraAccountState {
             }
 
             txn_executor
-                .make_write_set(stdlib_modules, Ok(Ok(())))
-                .map_err(map_vm_runtime_error)?
+                .make_write_set(stdlib_modules, Ok(()))
+                .map_err(map_err_vm_status)?
                 .write_set()
                 .clone()
                 .into_mut()

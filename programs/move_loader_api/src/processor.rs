@@ -2,7 +2,7 @@ use crate::account_state::{pubkey_to_address, LibraAccountState, ModuleBytes};
 use crate::data_store::DataStore;
 use crate::error_mappers::*;
 use crate::id;
-use bytecode_verifier::{VerifiedModule, VerifiedScript};
+use bytecode_verifier::verifier::{VerifiedModule, VerifiedScript};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
@@ -12,6 +12,8 @@ use solana_sdk::{
 };
 use types::{
     account_address::AccountAddress,
+    account_config,
+    identifier::Identifier,
     transaction::{Program, TransactionArgument, TransactionOutput},
 };
 use vm::{
@@ -19,6 +21,7 @@ use vm::{
     file_format::{CompiledModule, CompiledScript},
     gas_schedule::{MAXIMUM_NUMBER_OF_GAS_UNITS, MAX_PRICE_PER_GAS_UNIT},
     transaction_metadata::TransactionMetadata,
+    vm_string::VMString,
 };
 use vm_cache_map::Arena;
 use vm_runtime::{
@@ -27,8 +30,8 @@ use vm_runtime::{
         module_cache::{BlockModuleCache, ModuleCache, VMModuleCache},
     },
     txn_executor::TransactionExecutor,
-    value::Local,
 };
+use vm_runtime_types::value::Value;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -76,14 +79,14 @@ impl MoveProcessor {
         InstructionError::InvalidAccountData
     }
 
-    fn arguments_to_locals(args: Vec<TransactionArgument>) -> Vec<Local> {
+    fn arguments_to_values(args: Vec<TransactionArgument>) -> Vec<Value> {
         let mut locals = vec![];
         for arg in args {
             locals.push(match arg {
-                TransactionArgument::U64(i) => Local::u64(i),
-                TransactionArgument::Address(a) => Local::address(a),
-                TransactionArgument::ByteArray(b) => Local::bytearray(b),
-                TransactionArgument::String(s) => Local::string(s),
+                TransactionArgument::U64(i) => Value::u64(i),
+                TransactionArgument::Address(a) => Value::address(a),
+                TransactionArgument::ByteArray(b) => Value::byte_array(b),
+                TransactionArgument::String(s) => Value::string(VMString::new(s)),
             });
         }
         locals
@@ -137,13 +140,13 @@ impl MoveProcessor {
                 let program: Program = serde_json::from_str(&string).map_err(map_json_error)?;
 
                 let script =
-                    CompiledScript::deserialize(&program.code()).map_err(map_vm_binary_error)?;
+                    CompiledScript::deserialize(&program.code()).map_err(map_err_vm_status)?;
                 let modules = program
                     .modules()
                     .iter()
                     .map(|bytes| CompiledModule::deserialize(&bytes))
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(map_vm_binary_error)?;
+                    .map_err(map_err_vm_status)?;
 
                 Ok((script, modules))
             }
@@ -163,12 +166,12 @@ impl MoveProcessor {
                 modules_bytes,
             } => {
                 let script =
-                    VerifiedScript::deserialize(&script_bytes).map_err(map_vm_binary_error)?;
+                    VerifiedScript::deserialize(&script_bytes).map_err(map_err_vm_status)?;
                 let modules = modules_bytes
                     .iter()
                     .map(|module_bytes| VerifiedModule::deserialize(&module_bytes.bytes))
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(map_vm_binary_error)?;
+                    .map_err(map_err_vm_status)?;
 
                 Ok((script, modules))
             }
@@ -213,13 +216,16 @@ impl MoveProcessor {
         txn_metadata.gas_unit_price = *MAX_PRICE_PER_GAS_UNIT;
 
         let mut vm = TransactionExecutor::new(&module_cache, data_store, txn_metadata);
-        vm.execute_function(&module_id, &function_name, Self::arguments_to_locals(args))
-            .map_err(map_vm_invariant_violation_error)?
-            .map_err(map_vm_runtime_error)?;
+        vm.execute_function(
+            &module_id,
+            &Identifier::new(function_name).unwrap(),
+            Self::arguments_to_values(args),
+        )
+        .map_err(map_err_vm_status)?;
 
         Ok(vm
-            .make_write_set(modules_to_publish, Ok(Ok(())))
-            .map_err(map_vm_runtime_error)?)
+            .make_write_set(modules_to_publish, Ok(()))
+            .map_err(map_err_vm_status)?)
     }
 
     fn keyed_accounts_to_data_store(
@@ -251,11 +257,20 @@ impl MoveProcessor {
             .into_write_sets()
             .map_err(|_| InstructionError::GenericError)?;
 
-        // Genesis account holds both mint and stdlib under address 0x0
+        // Genesis account holds both mint and stdlib
         let genesis_key = *keyed_accounts[GENESIS_INDEX].unsigned_key();
-        let write_set = write_sets
-            .remove(&AccountAddress::default())
-            .ok_or_else(Self::missing_account)?;
+        let mut write_set = write_sets
+            .remove(&account_config::association_address())
+            .ok_or_else(Self::missing_account)?
+            .into_mut();
+        for (access_path, write_op) in write_sets
+            .remove(&account_config::core_code_address())
+            .ok_or_else(Self::missing_account)?
+            .into_iter()
+        {
+            write_set.push((access_path, write_op));
+        }
+        let write_set = write_set.freeze().unwrap();
         Self::serialize_and_enforce_length(
             &LibraAccountState::Genesis(write_set),
             &mut keyed_accounts[GENESIS_INDEX].account.data,
@@ -413,12 +428,11 @@ impl MoveProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use language_e2e_tests::account::AccountResource;
     use solana_sdk::account::Account;
     use solana_sdk::rent_calculator::RentCalculator;
     use solana_sdk::sysvar::rent;
 
-    const BIG_ENOUGH: usize = 6_000;
+    const BIG_ENOUGH: usize = 10_000;
 
     #[test]
     fn test_account_size() {
@@ -564,7 +578,7 @@ mod tests {
                 })
                 .unwrap(),
             ),
-            Err(InstructionError::InsufficientFunds)
+            Err(InstructionError::CustomError(4002))
         );
     }
 
@@ -589,8 +603,8 @@ mod tests {
             .read_account_resource(&accounts[GENESIS_INDEX + 1].address)
             .unwrap();
 
-        assert_eq!(amount, AccountResource::read_balance(&payee_resource));
-        assert_eq!(0, AccountResource::read_sequence_number(&payee_resource));
+        assert_eq!(amount, payee_resource.balance());
+        assert_eq!(0, payee_resource.sequence_number());
     }
 
     #[test]
@@ -655,13 +669,10 @@ mod tests {
         let sender_resource = data_store.read_account_resource(&sender.address).unwrap();
         let payee_resource = data_store.read_account_resource(&payee.address).unwrap();
 
-        assert_eq!(
-            amount_to_mint - amount,
-            AccountResource::read_balance(&sender_resource)
-        );
-        assert_eq!(0, AccountResource::read_sequence_number(&sender_resource));
-        assert_eq!(amount, AccountResource::read_balance(&payee_resource));
-        assert_eq!(0, AccountResource::read_sequence_number(&payee_resource));
+        assert_eq!(amount_to_mint - amount, sender_resource.balance());
+        assert_eq!(0, sender_resource.sequence_number());
+        assert_eq!(amount, payee_resource.balance());
+        assert_eq!(0, payee_resource.sequence_number());
     }
 
     #[test]
@@ -893,9 +904,13 @@ mod tests {
                 owner: id(),
                 ..Account::default()
             };
-            let mut genesis = Self::new(Pubkey::default(), account);
-            genesis.account.data =
-                bincode::serialize(&LibraAccountState::create_genesis(amount).unwrap()).unwrap();
+            let mut genesis = Self::new(
+                Pubkey::new(&account_config::association_address().to_vec()),
+                account,
+            );
+            let pre_data = LibraAccountState::create_genesis(amount).unwrap();
+            let _hi = "hello";
+            genesis.account.data = bincode::serialize(&pre_data).unwrap();
             genesis
         }
 

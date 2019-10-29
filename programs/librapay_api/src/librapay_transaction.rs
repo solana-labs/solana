@@ -1,5 +1,4 @@
 use crate::librapay_instruction;
-use language_e2e_tests::account::AccountResource;
 use log::*;
 use solana_move_loader_api::account_state::{pubkey_to_address, LibraAccountState};
 use solana_move_loader_api::data_store::DataStore;
@@ -75,7 +74,7 @@ pub fn create_accounts(
                 &from.pubkey(),
                 to,
                 lamports,
-                200,
+                400,
                 &solana_move_loader_api::id(),
             )
         })
@@ -128,7 +127,7 @@ pub fn get_libra_balance<T: Client>(
             .read_account_resource(&pubkey_to_address(account_address))
             .unwrap();
 
-        let res = AccountResource::read_balance(&resource);
+        let res = resource.balance();
         Ok(res)
     } else {
         Ok(0)
