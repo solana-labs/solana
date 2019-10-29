@@ -112,7 +112,7 @@ A [public key](terminology.md#public-key) and corresponding [private key](termin
 
 ## lamport
 
-A fractional [native token](terminology.md#native-token) with the value of approximately 0.0000000000582 [sol](terminology.md#sol) \(2^-34\).
+A fractional [native token](terminology.md#native-token) with the value of 0.000000001 [sol](terminology.md#sol).
 
 ## loader
 
@@ -293,4 +293,3 @@ A reward tally for validators. A vote credit is awarded to a validator in its vo
 ## warmup period
 
 Some number of epochs after stake has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
-

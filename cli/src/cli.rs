@@ -1177,7 +1177,7 @@ pub(crate) fn build_balance_message(
         format!("{:?}{}", lamports, unit)
     } else {
         let sol = lamports_to_sol(lamports);
-        let sol_str = format!("{:.8}", sol);
+        let sol_str = format!("{:.9}", sol);
         let pretty_sol = sol_str.trim_end_matches('0').trim_end_matches('.');
         let unit = if show_unit { " SOL" } else { "" };
         format!("{}{}", pretty_sol, unit)
@@ -1773,7 +1773,7 @@ mod tests {
             pubkey: None,
             use_lamports_unit: false,
         };
-        assert_eq!(process_command(&config).unwrap(), "0 SOL");
+        assert_eq!(process_command(&config).unwrap(), "0.00000005 SOL");
 
         let process_id = Pubkey::new_rand();
         config.command = CliCommand::Cancel(process_id);
