@@ -170,6 +170,34 @@ test('get inflation', async () => {
   }
 });
 
+test('get epoch info', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getEpochInfo',
+      params: [],
+    },
+    {
+      error: null,
+      result: {
+        epoch: 1,
+        slotIndex: 1,
+        slotsInEpoch: 8192,
+        absoluteSlot: 1,
+      },
+    },
+  ]);
+
+  const epochInfo = await connection.getEpochInfo();
+
+  for (const key of ['epoch', 'slotIndex', 'slotsInEpoch', 'absoluteSlot']) {
+    expect(epochInfo).toHaveProperty(key);
+    expect(epochInfo[key]).toBeGreaterThan(0);
+  }
+});
+
 test('get epoch schedule', async () => {
   const connection = new Connection(url);
 

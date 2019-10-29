@@ -71,7 +71,7 @@ type VoteAccountStatus = {
  * (see https://docs.solana.com/book/v/master/implemented-proposals/ed_overview)
  *
  * @typedef {Object} Inflation
- * @property {number} foundation 
+ * @property {number} foundation
  * @property {number} foundation_term
  * @property {number} initial
  * @property {number} storage
@@ -88,9 +88,26 @@ const GetInflationResult = struct({
 });
 
 /**
+ * EpochInfo parameters
+ * (see https://docs.solana.com/book/v/master/terminology#epoch)
+ *
+ * @typedef {Object} EpochInfo
+ * @property {number} epoch
+ * @property {number} slotIndex
+ * @property {number} slotsInEpoch
+ * @property {number} absoluteSlot
+ */
+const GetEpochInfoResult = struct({
+  epoch: 'number',
+  slotIndex: 'number',
+  slotsInEpoch: 'number',
+  absoluteSlot: 'number',
+});
+
+/**
  * EpochSchedule parameters
  * (see https://docs.solana.com/book/v/master/terminology#epoch)
- * 
+ *
  * @typedef {Object} EpochSchedule
  * @property {number} slots_per_epoch
  * @property {number} leader_schedule_slot_offset
@@ -146,6 +163,16 @@ const GetInflationRpcResult = struct({
   id: 'string',
   error: 'any?',
   result: GetInflationResult,
+});
+
+/**
+ * Expected JSON RPC response for the "getEpochInfo" message
+ */
+const GetEpochInfoRpcResult = struct({
+  jsonrpc: struct.literal('2.0'),
+  id: 'string',
+  error: 'any?',
+  result: GetEpochInfoResult,
 });
 
 /**
@@ -716,6 +743,19 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
     return GetInflationResult(res.result);
+  }
+
+  /**
+   * Fetch the Epoch Info parameters
+   */
+  async getEpochInfo(): Promise<GetEpochInfoRpcResult> {
+    const unsafeRes = await this._rpcRequest('getEpochInfo', []);
+    const res = GetEpochInfoRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return GetEpochInfoResult(res.result);
   }
 
   /**
