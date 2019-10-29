@@ -815,7 +815,7 @@ fn fund_move_keys<T: Client>(
     let create_len = 8;
     let mut funding_time = Measure::start("funding_time");
     for (i, keys) in keypairs.chunks(create_len).enumerate() {
-        if client.get_balance(&keys[0].pubkey()).unwrap_or(0) > 0 {
+        if client.get_balance_now(&keys[0].pubkey()).unwrap_or(0) > 0 {
             // already created these accounts.
             break;
         }
@@ -853,7 +853,7 @@ fn fund_move_keys<T: Client>(
     client.send_message(&[funding_key], tx.message).unwrap();
     let mut balance = 0;
     for _ in 0..20 {
-        if let Ok(balance_) = client.get_balance(&funding_keys[0].pubkey()) {
+        if let Ok(balance_) = client.get_balance_now(&funding_keys[0].pubkey()) {
             if balance_ > 0 {
                 balance = balance_;
                 break;
