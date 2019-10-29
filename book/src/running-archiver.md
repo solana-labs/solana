@@ -47,11 +47,7 @@ The `solana-install` tool can be used to easily install and upgrade the cluster 
 #### Linux and mac OS
 
 ```bash
-<<<<<<< HEAD
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.20.1/install/solana-install-init.sh | sh -s
-=======
-curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s
->>>>>>> 4156cea70... Fixup running-validator docs (#6607)
+curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.20.1/install/solana-install-init.sh | sh -s
 ```
 
 Alternatively build the `solana-install` program from source and run the following command to obtain the same result:
