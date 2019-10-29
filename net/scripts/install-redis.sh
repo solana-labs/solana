@@ -6,3 +6,5 @@ set -ex
 
 add-apt-repository -y ppa:chris-lea/redis-server
 apt-get --assume-yes install redis
+
+systemctl enable redis-server.service
