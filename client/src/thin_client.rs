@@ -328,6 +328,11 @@ impl SyncClient for ThinClient {
         Ok(balance)
     }
 
+    fn get_balance_now(&self, pubkey: &Pubkey) -> TransportResult<u64> {
+        let balance = self.rpc_client().get_balance_now(pubkey)?;
+        Ok(balance)
+    }
+
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
         let index = self.optimizer.experiment();
         let now = Instant::now();
@@ -360,6 +365,22 @@ impl SyncClient for ThinClient {
         Ok(status)
     }
 
+    fn get_signature_status_now(
+        &self,
+        signature: &Signature,
+    ) -> TransportResult<Option<transaction::Result<()>>> {
+        let status = self
+            .rpc_client()
+            .get_signature_status_now(&signature.to_string())
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("send_transaction failed with error {:?}", err),
+                )
+            })?;
+        Ok(status)
+    }
+
     fn get_slot(&self) -> TransportResult<u64> {
         let slot = self.rpc_client().get_slot().map_err(|err| {
             io::Error::new(
@@ -374,6 +395,21 @@ impl SyncClient for ThinClient {
         let index = self.optimizer.experiment();
         let now = Instant::now();
         match self.rpc_client().get_transaction_count() {
+            Ok(transaction_count) => {
+                self.optimizer.report(index, duration_as_ms(&now.elapsed()));
+                Ok(transaction_count)
+            }
+            Err(e) => {
+                self.optimizer.report(index, std::u64::MAX);
+                Err(e.into())
+            }
+        }
+    }
+
+    fn get_transaction_count_now(&self) -> TransportResult<u64> {
+        let index = self.optimizer.experiment();
+        let now = Instant::now();
+        match self.rpc_client().get_transaction_count_now() {
             Ok(transaction_count) => {
                 self.optimizer.report(index, duration_as_ms(&now.elapsed()));
                 Ok(transaction_count)

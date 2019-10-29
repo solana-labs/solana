@@ -1,8 +1,10 @@
-use crate::client_error::ClientError;
-use crate::generic_rpc_client_request::GenericRpcClientRequest;
-use crate::mock_rpc_client_request::MockRpcClientRequest;
-use crate::rpc_client_request::RpcClientRequest;
-use crate::rpc_request::{RpcEpochInfo, RpcRequest, RpcVoteAccountStatus};
+use crate::{
+    client_error::ClientError,
+    generic_rpc_client_request::GenericRpcClientRequest,
+    mock_rpc_client_request::MockRpcClientRequest,
+    rpc_client_request::RpcClientRequest,
+    rpc_request::{RpcCommitmentConfig, RpcEpochInfo, RpcRequest, RpcVoteAccountStatus},
+};
 use bincode::serialize;
 use log::*;
 use serde_json::{json, Value};
@@ -69,17 +71,39 @@ impl RpcClient {
         }
     }
 
+    fn get_signature_status_with_commitment(
+        &self,
+        signature: &str,
+        commitment_config: Option<RpcCommitmentConfig>,
+    ) -> Result<Option<transaction::Result<()>>, ClientError> {
+        let params = json!(signature.to_string());
+        let signature_status = self.client.send(
+            &RpcRequest::GetSignatureStatus,
+            Some(params),
+            5,
+            commitment_config,
+        )?;
+        let result: Option<transaction::Result<()>> =
+            serde_json::from_value(signature_status).unwrap();
+        Ok(result)
+    }
+
     pub fn get_signature_status(
         &self,
         signature: &str,
     ) -> Result<Option<transaction::Result<()>>, ClientError> {
-        let params = json!(signature.to_string());
-        let signature_status =
-            self.client
-                .send(&RpcRequest::GetSignatureStatus, Some(params), 5, None)?;
-        let result: Option<transaction::Result<()>> =
-            serde_json::from_value(signature_status).unwrap();
-        Ok(result)
+        self.get_signature_status_with_commitment(signature, None)
+    }
+
+    pub fn get_signature_status_now(
+        &self,
+        signature: &str,
+    ) -> Result<Option<transaction::Result<()>>, ClientError> {
+        let commitment_config = RpcCommitmentConfig {
+            confirmations: Some(1.into()),
+            percentage: None,
+        };
+        self.get_signature_status_with_commitment(signature, Some(commitment_config))
     }
 
     pub fn get_slot(&self) -> io::Result<Slot> {
@@ -337,11 +361,18 @@ impl RpcClient {
         Ok(res)
     }
 
-    pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
+    fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: Option<RpcCommitmentConfig>,
+    ) -> io::Result<Account> {
         let params = json!(format!("{}", pubkey));
-        let response = self
-            .client
-            .send(&RpcRequest::GetAccountInfo, Some(params), 0, None);
+        let response = self.client.send(
+            &RpcRequest::GetAccountInfo,
+            Some(params),
+            0,
+            commitment_config,
+        );
 
         response
             .and_then(|account_json| {
@@ -355,6 +386,18 @@ impl RpcClient {
                     format!("AccountNotFound: pubkey={}: {}", pubkey, err),
                 )
             })
+    }
+
+    pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
+        self.get_account_with_commitment(pubkey, None)
+    }
+
+    pub fn get_account_now(&self, pubkey: &Pubkey) -> io::Result<Account> {
+        let commitment_config = RpcCommitmentConfig {
+            confirmations: Some(1.into()),
+            percentage: None,
+        };
+        self.get_account_with_commitment(pubkey, Some(commitment_config))
     }
 
     pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
@@ -402,6 +445,10 @@ impl RpcClient {
         self.get_account(pubkey).map(|account| account.lamports)
     }
 
+    pub fn get_balance_now(&self, pubkey: &Pubkey) -> io::Result<u64> {
+        self.get_account_now(pubkey).map(|account| account.lamports)
+    }
+
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> io::Result<Vec<(Pubkey, Account)>> {
         let params = json!(format!("{}", pubkey));
         let response = self
@@ -435,12 +482,13 @@ impl RpcClient {
         Ok(pubkey_accounts)
     }
 
-    /// Request the transaction count.  If the response packet is dropped by the network,
-    /// this method will try again 5 times.
-    pub fn get_transaction_count(&self) -> io::Result<u64> {
+    fn get_transaction_count_with_commitment(
+        &self,
+        commitment_config: Option<RpcCommitmentConfig>,
+    ) -> io::Result<u64> {
         let response = self
             .client
-            .send(&RpcRequest::GetTransactionCount, None, 0, None)
+            .send(&RpcRequest::GetTransactionCount, None, 0, commitment_config)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -454,6 +502,19 @@ impl RpcClient {
                 format!("GetTransactionCount parse failure: {}", err),
             )
         })
+    }
+
+    /// Request the transaction count.
+    pub fn get_transaction_count(&self) -> io::Result<u64> {
+        self.get_transaction_count_with_commitment(None)
+    }
+
+    pub fn get_transaction_count_now(&self) -> io::Result<u64> {
+        let commitment_config = RpcCommitmentConfig {
+            confirmations: Some(1.into()),
+            percentage: None,
+        };
+        self.get_transaction_count_with_commitment(Some(commitment_config))
     }
 
     pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {
@@ -607,9 +668,12 @@ impl RpcClient {
         let params = json!(format!("{}", signature));
 
         for _ in 0..30 {
-            let response =
-                self.client
-                    .send(&RpcRequest::ConfirmTransaction, Some(params.clone()), 0, None);
+            let response = self.client.send(
+                &RpcRequest::ConfirmTransaction,
+                Some(params.clone()),
+                0,
+                None,
+            );
 
             match response {
                 Ok(confirmation) => {
@@ -663,7 +727,7 @@ impl RpcClient {
                     debug!("check_confirmations request failed: {:?}", err);
                 }
             };
-            if now.elapsed().as_secs() > 15 {
+            if now.elapsed().as_secs() > 20 {
                 info!(
                     "signature {} confirmed {} out of {} failed after {} ms",
                     signature,

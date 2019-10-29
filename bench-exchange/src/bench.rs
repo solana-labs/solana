@@ -659,7 +659,7 @@ fn verify_funding_transfer<T: SyncClient + ?Sized>(
 ) -> bool {
     if verify_transaction(client, tx) {
         for a in &tx.message().account_keys[1..] {
-            if client.get_balance(a).unwrap_or(0) >= amount {
+            if client.get_balance_now(a).unwrap_or(0) >= amount {
                 return true;
             }
         }
@@ -945,12 +945,12 @@ pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypa
                 let signature = client.async_send_transaction(transaction).unwrap();
 
                 for _ in 0..30 {
-                    if let Ok(Some(_)) = client.get_signature_status(&signature) {
+                    if let Ok(Some(_)) = client.get_signature_status_now(&signature) {
                         break;
                     }
                     sleep(Duration::from_millis(100));
                 }
-                if client.get_balance(&id.pubkey()).unwrap_or(0) >= amount {
+                if client.get_balance_now(&id.pubkey()).unwrap_or(0) >= amount {
                     break;
                 }
             }

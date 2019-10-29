@@ -451,7 +451,7 @@ fn do_tx_transfers<T: Client>(
 
 fn verify_funding_transfer<T: Client>(client: &T, tx: &Transaction, amount: u64) -> bool {
     for a in &tx.message().account_keys[1..] {
-        if client.get_balance(a).unwrap_or(0) >= amount {
+        if client.get_balance_now(a).unwrap_or(0) >= amount {
             return true;
         }
     }
@@ -645,7 +645,7 @@ pub fn airdrop_lamports<T: Client>(
                 loop {
                     tries += 1;
                     let signature = client.async_send_transaction(transaction.clone()).unwrap();
-                    let result = client.poll_for_signature_confirmation(&signature, 1);
+                    let result = client.poll_for_signature_confirmation(&signature, 31);
 
                     if result.is_ok() {
                         break;
@@ -666,7 +666,7 @@ pub fn airdrop_lamports<T: Client>(
             }
         };
 
-        let current_balance = client.get_balance(&id.pubkey()).unwrap_or_else(|e| {
+        let current_balance = client.get_balance_now(&id.pubkey()).unwrap_or_else(|e| {
             info!("airdrop error {}", e);
             starting_balance
         });

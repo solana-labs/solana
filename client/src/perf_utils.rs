@@ -29,7 +29,9 @@ pub fn sample_txs<T>(
     let mut total_txs;
     let mut now = Instant::now();
     let start_time = now;
-    let initial_txs = client.get_transaction_count().expect("transaction count");
+    let initial_txs = client
+        .get_transaction_count_now()
+        .expect("transaction count");
     let mut last_txs = initial_txs;
 
     loop {
@@ -37,7 +39,7 @@ pub fn sample_txs<T>(
         let elapsed = now.elapsed();
         now = Instant::now();
         let mut txs;
-        match client.get_transaction_count() {
+        match client.get_transaction_count_now() {
             Err(e) => {
                 // ThinClient with multiple options should pick a better one now.
                 info!("Couldn't get transaction count {:?}", e);
