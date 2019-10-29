@@ -24,5 +24,5 @@ solana-sdk = { path = "../sdk", version = "0.21.0" }
 
 [dev-dependencies]
 jsonrpc-core = "14.0.3"
-jsonrpc-http-server = "14.0.1"
+jsonrpc-http-server = "14.0.3"
 solana-logger = { path = "../logger", version = "0.21.0" }
