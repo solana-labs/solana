@@ -1,4 +1,5 @@
 use rand::{thread_rng, Rng};
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -40,9 +41,37 @@ impl<T: Default> Clone for Recycler<T> {
 
 pub trait Reset {
     fn reset(&mut self);
+    fn warm(&mut self, size_hint: usize);
+}
+
+lazy_static! {
+    static ref WARM_RECYCLERS: AtomicBool = AtomicBool::new(false);
+}
+
+pub fn enable_recycler_warming() {
+    WARM_RECYCLERS.store(true, Ordering::Relaxed);
+}
+
+fn warm_recyclers() -> bool {
+    WARM_RECYCLERS.load(Ordering::Relaxed)
 }
 
 impl<T: Default + Reset> Recycler<T> {
+    pub fn warmed(num: usize, size_hint: usize) -> Self {
+        let new = Self::default();
+        if warm_recyclers() {
+            let warmed_items: Vec<_> = (0..num)
+                .map(|_| {
+                    let mut item = new.allocate("warming");
+                    item.warm(size_hint);
+                    item
+                })
+                .collect();
+            warmed_items.into_iter().for_each(|i| new.recycle(i));
+        }
+        new
+    }
+
     pub fn allocate(&self, name: &'static str) -> T {
         let new = self
             .gc
@@ -93,6 +122,7 @@ mod tests {
         fn reset(&mut self) {
             *self = 10;
         }
+        fn warm(&mut self, _size_hint: usize) {}
     }
 
     #[test]

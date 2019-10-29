@@ -16,6 +16,7 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
+use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::perf_libs;
 use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::TransactionBatch};
 use solana_sdk::{
@@ -789,7 +790,7 @@ impl BankingStage {
         filtered_unprocessed_packet_indexes
     }
 
-    fn generate_packet_indexes(vers: &[Packet]) -> Vec<usize> {
+    fn generate_packet_indexes(vers: &PinnedVec<Packet>) -> Vec<usize> {
         vers.iter()
             .enumerate()
             .filter_map(

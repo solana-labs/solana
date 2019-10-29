@@ -7,51 +7,47 @@
 
 use crate::perf_libs;
 use crate::recycler::Reset;
-use std::ops::{Deref, DerefMut};
+use rand::seq::SliceRandom;
+use rand::Rng;
+use rayon::prelude::*;
+use std::ops::{Index, IndexMut};
+use std::slice::SliceIndex;
 
-#[cfg(feature = "pin_gpu_memory")]
 use std::os::raw::c_int;
 
-#[cfg(feature = "pin_gpu_memory")]
 const CUDA_SUCCESS: c_int = 0;
 
 pub fn pin<T>(_mem: &mut Vec<T>) {
-    #[cfg(feature = "pin_gpu_memory")]
-    {
-        if let Some(api) = perf_libs::api() {
-            unsafe {
-                use core::ffi::c_void;
-                use std::mem::size_of;
+    if let Some(api) = perf_libs::api() {
+        unsafe {
+            use core::ffi::c_void;
+            use std::mem::size_of;
 
-                let err = (api.cuda_host_register)(
-                    _mem.as_mut_ptr() as *mut c_void,
-                    _mem.capacity() * size_of::<T>(),
-                    0,
+            let err = (api.cuda_host_register)(
+                _mem.as_mut_ptr() as *mut c_void,
+                _mem.capacity() * size_of::<T>(),
+                0,
+            );
+            if err != CUDA_SUCCESS {
+                panic!(
+                    "cudaHostRegister error: {} ptr: {:?} bytes: {}",
+                    err,
+                    _mem.as_ptr(),
+                    _mem.capacity() * size_of::<T>()
                 );
-                if err != CUDA_SUCCESS {
-                    error!(
-                        "cudaHostRegister error: {} ptr: {:?} bytes: {}",
-                        err,
-                        _mem.as_ptr(),
-                        _mem.capacity() * size_of::<T>()
-                    );
-                }
             }
         }
     }
 }
 
 pub fn unpin<T>(_mem: *mut T) {
-    #[cfg(feature = "pin_gpu_memory")]
-    {
-        if let Some(api) = perf_libs::api() {
-            unsafe {
-                use core::ffi::c_void;
+    if let Some(api) = perf_libs::api() {
+        unsafe {
+            use core::ffi::c_void;
 
-                let err = (api.cuda_host_unregister)(_mem as *mut c_void);
-                if err != CUDA_SUCCESS {
-                    error!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
-                }
+            let err = (api.cuda_host_unregister)(_mem as *mut c_void);
+            if err != CUDA_SUCCESS {
+                panic!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
             }
         }
     }
@@ -71,6 +67,11 @@ impl<T: Default + Clone> Reset for PinnedVec<T> {
     fn reset(&mut self) {
         self.resize(0, T::default());
     }
+
+    fn warm(&mut self, size_hint: usize) {
+        self.set_pinnable();
+        self.resize(size_hint, T::default());
+    }
 }
 
 impl<T: Clone> Default for PinnedVec<T> {
@@ -80,20 +81,6 @@ impl<T: Clone> Default for PinnedVec<T> {
             pinned: false,
             pinnable: false,
         }
-    }
-}
-
-impl<T> Deref for PinnedVec<T> {
-    type Target = Vec<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.x
-    }
-}
-
-impl<T> DerefMut for PinnedVec<T> {
-    fn deref_mut(&mut self) -> &mut Vec<T> {
-        &mut self.x
     }
 }
 
@@ -122,7 +109,7 @@ impl<'a, T> IntoIterator for &'a mut PinnedVec<T> {
     type IntoIter = PinnedIter<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        PinnedIter(self.iter())
+        PinnedIter(self.x.iter())
     }
 }
 
@@ -131,7 +118,41 @@ impl<'a, T> IntoIterator for &'a PinnedVec<T> {
     type IntoIter = PinnedIter<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        PinnedIter(self.iter())
+        PinnedIter(self.x.iter())
+    }
+}
+
+impl<T, I: SliceIndex<[T]>> Index<I> for PinnedVec<T> {
+    type Output = I::Output;
+
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        &self.x[index]
+    }
+}
+
+impl<T, I: SliceIndex<[T]>> IndexMut<I> for PinnedVec<T> {
+    #[inline]
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        &mut self.x[index]
+    }
+}
+
+impl<T> PinnedVec<T> {
+    pub fn iter(&self) -> PinnedIter<T> {
+        PinnedIter(self.x.iter())
+    }
+
+    pub fn iter_mut(&mut self) -> PinnedIterMut<T> {
+        PinnedIterMut(self.x.iter_mut())
+    }
+}
+
+impl<'a, T: Send + Sync> IntoParallelIterator for &'a PinnedVec<T> {
+    type Iter = rayon::slice::Iter<'a, T>;
+    type Item = &'a T;
+    fn into_par_iter(self) -> Self::Iter {
+        self.x.par_iter()
     }
 }
 
@@ -172,14 +193,6 @@ impl<T: Clone> PinnedVec<T> {
         }
     }
 
-    pub fn iter(&self) -> PinnedIter<T> {
-        PinnedIter(self.x.iter())
-    }
-
-    pub fn iter_mut(&mut self) -> PinnedIterMut<T> {
-        PinnedIterMut(self.x.iter_mut())
-    }
-
     pub fn is_empty(&self) -> bool {
         self.x.is_empty()
     }
@@ -196,28 +209,47 @@ impl<T: Clone> PinnedVec<T> {
         self.x.as_mut_ptr()
     }
 
-    pub fn push(&mut self, x: T) {
+    fn prepare_realloc(&mut self, new_size: usize) -> (*mut T, usize) {
         let old_ptr = self.x.as_mut_ptr();
         let old_capacity = self.x.capacity();
-        // Predict realloc and unpin
-        if self.pinned && self.x.capacity() == self.x.len() {
+        // Predict realloc and unpin.
+        if self.pinned && self.x.capacity() < new_size {
             unpin(old_ptr);
             self.pinned = false;
         }
+        (old_ptr, old_capacity)
+    }
+
+    pub fn push(&mut self, x: T) {
+        let (old_ptr, old_capacity) = self.prepare_realloc(self.x.len() + 1);
         self.x.push(x);
         self.check_ptr(old_ptr, old_capacity, "push");
     }
 
+    pub fn truncate(&mut self, size: usize) {
+        self.x.truncate(size);
+    }
+
     pub fn resize(&mut self, size: usize, elem: T) {
-        let old_ptr = self.x.as_mut_ptr();
-        let old_capacity = self.x.capacity();
-        // Predict realloc and unpin.
-        if self.pinned && self.x.capacity() < size {
-            unpin(old_ptr);
-            self.pinned = false;
-        }
+        let (old_ptr, old_capacity) = self.prepare_realloc(size);
         self.x.resize(size, elem);
         self.check_ptr(old_ptr, old_capacity, "resize");
+    }
+
+    pub fn append(&mut self, other: &mut Vec<T>) {
+        let (old_ptr, old_capacity) = self.prepare_realloc(self.x.len() + other.len());
+        self.x.append(other);
+        self.check_ptr(old_ptr, old_capacity, "resize");
+    }
+
+    pub fn append_pinned(&mut self, other: &mut Self) {
+        let (old_ptr, old_capacity) = self.prepare_realloc(self.x.len() + other.len());
+        self.x.append(&mut other.x);
+        self.check_ptr(old_ptr, old_capacity, "resize");
+    }
+
+    pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
+        self.x.shuffle(rng)
     }
 
     fn check_ptr(&mut self, _old_ptr: *mut T, _old_capacity: usize, _from: &'static str) {

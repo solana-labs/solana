@@ -287,7 +287,7 @@ mod test {
         service::Service,
     };
     use crossbeam_channel::unbounded;
-    use rand::{seq::SliceRandom, thread_rng};
+    use rand::thread_rng;
     use solana_ledger::shred::DataShredHeader;
     use solana_ledger::{
         blocktree::{get_tmp_ledger_path, make_many_slot_entries, Blocktree},

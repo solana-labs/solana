@@ -6,6 +6,9 @@ pub mod sigverify;
 pub mod test_tx;
 
 #[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
 extern crate log;
 
 #[cfg(test)]

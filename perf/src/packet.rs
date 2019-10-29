@@ -33,6 +33,11 @@ impl Reset for Packets {
     fn reset(&mut self) {
         self.packets.resize(0, Packet::default());
     }
+
+    fn warm(&mut self, size_hint: usize) {
+        self.packets.set_pinnable();
+        self.packets.resize(size_hint, Packet::default());
+    }
 }
 
 //auto derive doesn't support large arrays
