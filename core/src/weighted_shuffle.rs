@@ -9,11 +9,10 @@ use std::ops::Div;
 
 /// Returns a list of indexes shuffled based on the input weights
 /// Note - The sum of all weights must not exceed `u64::MAX`
-pub fn weighted_shuffle<T>(weights: Vec<T>, rng: ChaChaRng) -> Vec<usize>
+pub fn weighted_shuffle<T>(weights: Vec<T>, mut rng: ChaChaRng) -> Vec<usize>
 where
     T: Copy + PartialOrd + iter::Sum + Div<T, Output = T> + FromPrimitive + ToPrimitive,
 {
-    let mut rng = rng;
     let total_weight: T = weights.clone().into_iter().sum();
     weights
         .into_iter()
@@ -37,8 +36,7 @@ where
 
 /// Returns the highest index after computing a weighted shuffle.
 /// Saves doing any sorting for O(n) max calculation.
-pub fn weighted_best(weights_and_indexes: &[(u64, usize)], rng: ChaChaRng) -> usize {
-    let mut rng = rng;
+pub fn weighted_best(weights_and_indexes: &[(u64, usize)], mut rng: ChaChaRng) -> usize {
     if weights_and_indexes.is_empty() {
         return 0;
     }
