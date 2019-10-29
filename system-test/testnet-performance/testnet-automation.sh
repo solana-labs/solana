@@ -89,6 +89,7 @@ function launchTestnet() {
       ;;
     ec2)
     # shellcheck disable=SC2068
+    # shellcheck disable=SC2086
       net/ec2.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
