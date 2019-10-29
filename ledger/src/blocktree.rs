@@ -777,7 +777,6 @@ impl Blocktree {
     ) -> Result<()> {
         let slot = shred.slot();
         let index = u64::from(shred.index());
-        let parent = shred.parent();
 
         let last_in_slot = if shred.last_in_slot() {
             debug!("got last in slot");
@@ -793,9 +792,8 @@ impl Blocktree {
             false
         };
 
-        if is_orphan(slot_meta) {
-            slot_meta.parent_slot = parent;
-        }
+        // Parent for slot meta should have been set by this point
+        assert!(!is_orphan(slot_meta));
 
         let data_cf = self.db.column::<cf::ShredData>();
 
