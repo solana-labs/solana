@@ -793,6 +793,7 @@ export class Connection {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
+    await sleep(500);
     return res.result;
   }
 
