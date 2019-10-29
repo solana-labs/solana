@@ -29,7 +29,7 @@ Before starting an archiver node, sanity check that the cluster is accessible to
 Fetch the current transaction count over JSON RPC:
 
 ```bash
-$ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://testnet.solana.com:8899
+curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://testnet.solana.com:8899
 ```
 
 Inspect the blockexplorer at [http://testnet.solana.com/](http://testnet.solana.com/) for activity.
@@ -47,13 +47,17 @@ The `solana-install` tool can be used to easily install and upgrade the cluster 
 #### Linux and mac OS
 
 ```bash
+<<<<<<< HEAD
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.20.1/install/solana-install-init.sh | sh -s
+=======
+curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s
+>>>>>>> 4156cea70... Fixup running-validator docs (#6607)
 ```
 
 Alternatively build the `solana-install` program from source and run the following command to obtain the same result:
 
 ```bash
-$ solana-install init
+solana-install init
 ```
 
 #### Windows
@@ -71,9 +75,9 @@ If you would rather not use `solana-install` to manage the install, you can manu
 Download the binaries by navigating to [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest), download **solana-release-x86\_64-unknown-linux-gnu.tar.bz2**, then extract the archive:
 
 ```bash
-$ tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
-$ cd solana-release/
-$ export PATH=$PWD/bin:$PATH
+tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
+cd solana-release/
+export PATH=$PWD/bin:$PATH
 ```
 
 #### mac OS
@@ -81,9 +85,9 @@ $ export PATH=$PWD/bin:$PATH
 Download the binaries by navigating to [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest), download **solana-release-x86\_64-apple-darwin.tar.bz2**, then extract the archive:
 
 ```bash
-$ tar jxf solana-release-x86_64-apple-darwin.tar.bz2
-$ cd solana-release/
-$ export PATH=$PWD/bin:$PATH
+tar jxf solana-release-x86_64-apple-darwin.tar.bz2
+cd solana-release/
+export PATH=$PWD/bin:$PATH
 ```
 
 #### Windows
@@ -95,7 +99,7 @@ Download the binaries by navigating to [https://github.com/solana-labs/solana/re
 Try running following command to join the gossip network and view all the other nodes in the cluster:
 
 ```bash
-$ solana-gossip --entrypoint testnet.solana.com:8001 spy
+solana-gossip --entrypoint testnet.solana.com:8001 spy
 # Press ^C to exit
 ```
 
@@ -104,8 +108,8 @@ Now configure the keypairs for your archiver by running:
 Navigate to the solana install location and open a cmd prompt
 
 ```bash
-$ solana-keygen new -o archiver-keypair.json
-$ solana-keygen new -o storage-keypair.json
+solana-keygen new -o archiver-keypair.json
+solana-keygen new -o storage-keypair.json
 ```
 
 Use solana-keygen to show the public keys for each of the keypairs, they will be needed in the next step:
@@ -114,23 +118,23 @@ Use solana-keygen to show the public keys for each of the keypairs, they will be
 
   ```bash
   # The archiver's identity
-  $ solana-keygen pubkey archiver-keypair.json
-  $ solana-keygen pubkey storage-keypair.json
+  solana-keygen pubkey archiver-keypair.json
+  solana-keygen pubkey storage-keypair.json
   ```
 
 * Linux and mac OS
 
   \`\`\`bash
 
-  $ export ARCHIVER\_IDENTITY=$\(solana-keygen pubkey archiver-keypair.json\)
+  export ARCHIVER\_IDENTITY=$\(solana-keygen pubkey archiver-keypair.json\)
 
-  $ export STORAGE\_IDENTITY=$\(solana-keygen pubkey storage-keypair.json\)
+  export STORAGE\_IDENTITY=$\(solana-keygen pubkey storage-keypair.json\)
 
 ```text
 Then set up the storage accounts for your archiver by running:
 ```bash
-$ solana --keypair archiver-keypair.json airdrop 100000 lamports
-$ solana --keypair archiver-keypair.json create-archiver-storage-account $ARCHIVER_IDENTITY $STORAGE_IDENTITY
+solana --keypair archiver-keypair.json airdrop 100000 lamports
+solana --keypair archiver-keypair.json create-archiver-storage-account $ARCHIVER_IDENTITY $STORAGE_IDENTITY
 ```
 
 Note: Every time the testnet restarts, run the steps to setup the archiver accounts again.
@@ -138,7 +142,7 @@ Note: Every time the testnet restarts, run the steps to setup the archiver accou
 To start the archiver:
 
 ```bash
-$ solana-archiver --entrypoint testnet.solana.com:8001 --identity archiver-keypair.json --storage-keypair storage-keypair.json --ledger archiver-ledger
+solana-archiver --entrypoint testnet.solana.com:8001 --identity archiver-keypair.json --storage-keypair storage-keypair.json --ledger archiver-ledger
 ```
 
 ## Verify Archiver Setup
@@ -146,12 +150,11 @@ $ solana-archiver --entrypoint testnet.solana.com:8001 --identity archiver-keypa
 From another console, confirm the IP address and **identity pubkey** of your archiver is visible in the gossip network by running:
 
 ```bash
-$ solana-gossip --entrypoint testnet.solana.com:8001 spy
+solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
 Provide the **storage account pubkey** to the `solana show-storage-account` command to view the recent mining activity from your archiver:
 
 ```bash
-$ solana --keypair storage-keypair.json show-storage-account $STORAGE_IDENTITY
+solana --keypair storage-keypair.json show-storage-account $STORAGE_IDENTITY
 ```
-
