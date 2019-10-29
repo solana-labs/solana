@@ -12,8 +12,7 @@ use crate::{
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Params, Result};
 use jsonrpc_derive::rpc;
-use serde_json::Value;
-use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
+use solana_client::rpc_request::{RpcCommitmentConfig, RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
 use solana_drone::drone::request_airdrop_transaction;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
@@ -295,13 +294,6 @@ pub struct RpcContactInfo {
 pub struct RpcVersionInfo {
     /// The current version of solana-core
     pub solana_core: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcCommitmentConfig {
-    confirmations: Option<Value>,
-    percentage: Option<f64>,
 }
 
 fn parse_params(params: Option<Params>) -> Result<CommitmentConfig> {

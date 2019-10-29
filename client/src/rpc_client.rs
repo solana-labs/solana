@@ -54,10 +54,10 @@ impl RpcClient {
 
     pub fn send_transaction(&self, transaction: &Transaction) -> Result<String, ClientError> {
         let serialized = serialize(transaction).unwrap();
-        let params = json!([serialized]);
+        let params = json!(serialized);
         let signature = self
             .client
-            .send(&RpcRequest::SendTransaction, Some(params), 5)?;
+            .send(&RpcRequest::SendTransaction, Some(params), 5, None)?;
         if signature.as_str().is_none() {
             Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -73,10 +73,10 @@ impl RpcClient {
         &self,
         signature: &str,
     ) -> Result<Option<transaction::Result<()>>, ClientError> {
-        let params = json!([signature.to_string()]);
+        let params = json!(signature.to_string());
         let signature_status =
             self.client
-                .send(&RpcRequest::GetSignatureStatus, Some(params), 5)?;
+                .send(&RpcRequest::GetSignatureStatus, Some(params), 5, None)?;
         let result: Option<transaction::Result<()>> =
             serde_json::from_value(signature_status).unwrap();
         Ok(result)
@@ -85,7 +85,7 @@ impl RpcClient {
     pub fn get_slot(&self) -> io::Result<Slot> {
         let response = self
             .client
-            .send(&RpcRequest::GetSlot, None, 0)
+            .send(&RpcRequest::GetSlot, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -104,7 +104,7 @@ impl RpcClient {
     pub fn get_vote_accounts(&self) -> io::Result<RpcVoteAccountStatus> {
         let response = self
             .client
-            .send(&RpcRequest::GetVoteAccounts, None, 0)
+            .send(&RpcRequest::GetVoteAccounts, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -123,7 +123,7 @@ impl RpcClient {
     pub fn get_epoch_info(&self) -> io::Result<RpcEpochInfo> {
         let response = self
             .client
-            .send(&RpcRequest::GetEpochInfo, None, 0)
+            .send(&RpcRequest::GetEpochInfo, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -142,7 +142,7 @@ impl RpcClient {
     pub fn get_epoch_schedule(&self) -> io::Result<EpochSchedule> {
         let response = self
             .client
-            .send(&RpcRequest::GetEpochSchedule, None, 0)
+            .send(&RpcRequest::GetEpochSchedule, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -161,7 +161,7 @@ impl RpcClient {
     pub fn get_inflation(&self) -> io::Result<Inflation> {
         let response = self
             .client
-            .send(&RpcRequest::GetInflation, None, 0)
+            .send(&RpcRequest::GetInflation, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -180,7 +180,7 @@ impl RpcClient {
     pub fn get_version(&self) -> io::Result<String> {
         let response = self
             .client
-            .send(&RpcRequest::GetVersion, None, 0)
+            .send(&RpcRequest::GetVersion, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -329,19 +329,19 @@ impl RpcClient {
         pubkey: &Pubkey,
         retries: usize,
     ) -> Result<Option<u64>, Box<dyn error::Error>> {
-        let params = json!([format!("{}", pubkey)]);
+        let params = json!(format!("{}", pubkey));
         let res = self
             .client
-            .send(&RpcRequest::GetBalance, Some(params), retries)?
+            .send(&RpcRequest::GetBalance, Some(params), retries, None)?
             .as_u64();
         Ok(res)
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
-        let params = json!([format!("{}", pubkey)]);
+        let params = json!(format!("{}", pubkey));
         let response = self
             .client
-            .send(&RpcRequest::GetAccountInfo, Some(params), 0);
+            .send(&RpcRequest::GetAccountInfo, Some(params), 0, None);
 
         response
             .and_then(|account_json| {
@@ -362,13 +362,14 @@ impl RpcClient {
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> io::Result<u64> {
-        let params = json!([data_len]);
+        let params = json!(data_len);
         let minimum_balance_json = self
             .client
             .send(
                 &RpcRequest::GetMinimumBalanceForRentExemption,
                 Some(params),
                 0,
+                None,
             )
             .map_err(|err| {
                 io::Error::new(
@@ -402,10 +403,10 @@ impl RpcClient {
     }
 
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> io::Result<Vec<(Pubkey, Account)>> {
-        let params = json!([format!("{}", pubkey)]);
+        let params = json!(format!("{}", pubkey));
         let response = self
             .client
-            .send(&RpcRequest::GetProgramAccounts, Some(params), 0)
+            .send(&RpcRequest::GetProgramAccounts, Some(params), 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -439,7 +440,7 @@ impl RpcClient {
     pub fn get_transaction_count(&self) -> io::Result<u64> {
         let response = self
             .client
-            .send(&RpcRequest::GetTransactionCount, None, 0)
+            .send(&RpcRequest::GetTransactionCount, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -458,7 +459,7 @@ impl RpcClient {
     pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {
         let response = self
             .client
-            .send(&RpcRequest::GetRecentBlockhash, None, 0)
+            .send(&RpcRequest::GetRecentBlockhash, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -514,7 +515,7 @@ impl RpcClient {
     pub fn get_genesis_blockhash(&self) -> io::Result<Hash> {
         let response = self
             .client
-            .send(&RpcRequest::GetGenesisBlockhash, None, 0)
+            .send(&RpcRequest::GetGenesisBlockhash, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -603,12 +604,12 @@ impl RpcClient {
     /// Check a signature in the bank.
     pub fn check_signature(&self, signature: &Signature) -> bool {
         trace!("check_signature: {:?}", signature);
-        let params = json!([format!("{}", signature)]);
+        let params = json!(format!("{}", signature));
 
         for _ in 0..30 {
             let response =
                 self.client
-                    .send(&RpcRequest::ConfirmTransaction, Some(params.clone()), 0);
+                    .send(&RpcRequest::ConfirmTransaction, Some(params.clone()), 0, None);
 
             match response {
                 Ok(confirmation) => {
@@ -686,13 +687,14 @@ impl RpcClient {
         &self,
         sig: &Signature,
     ) -> io::Result<usize> {
-        let params = json!([format!("{}", sig)]);
+        let params = json!(format!("{}", sig));
         let response = self
             .client
             .send(
                 &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
                 Some(params.clone()),
                 1,
+                None,
             )
             .map_err(|err| {
                 io::Error::new(
@@ -717,7 +719,7 @@ impl RpcClient {
     pub fn validator_exit(&self) -> io::Result<bool> {
         let response = self
             .client
-            .send(&RpcRequest::ValidatorExit, None, 0)
+            .send(&RpcRequest::ValidatorExit, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -739,7 +741,7 @@ impl RpcClient {
         params: Option<Value>,
         retries: usize,
     ) -> Result<Value, ClientError> {
-        self.client.send(request, params, retries)
+        self.client.send(request, params, retries, None)
     }
 }
 

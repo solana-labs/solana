@@ -57,7 +57,7 @@ fn test_cli_deploy_program() {
         .as_str()
         .unwrap();
 
-    let params = json!([program_id_str]);
+    let params = json!(program_id_str);
     let account_info = rpc_client
         .retry_make_rpc_request(&RpcRequest::GetAccountInfo, Some(params), 0)
         .unwrap();

@@ -1,6 +1,6 @@
 use crate::client_error::ClientError;
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
-use crate::rpc_request::{RpcError, RpcRequest};
+use crate::rpc_request::{RpcCommitmentConfig, RpcError, RpcRequest};
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
 use solana_sdk::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
@@ -36,11 +36,12 @@ impl GenericRpcClientRequest for RpcClientRequest {
         request: &RpcRequest,
         params: Option<serde_json::Value>,
         mut retries: usize,
+        commitment_config: Option<RpcCommitmentConfig>,
     ) -> Result<serde_json::Value, ClientError> {
         // Concurrent requests are not supported so reuse the same request id for all requests
         let request_id = 1;
 
-        let request_json = request.build_request_json(request_id, params);
+        let request_json = request.build_request_json(request_id, params, commitment_config);
 
         loop {
             match self

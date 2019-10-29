@@ -1,6 +1,6 @@
 use crate::client_error::ClientError;
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
-use crate::rpc_request::RpcRequest;
+use crate::rpc_request::{RpcCommitmentConfig, RpcRequest};
 use serde_json::{Number, Value};
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::transaction::{self, TransactionError};
@@ -25,6 +25,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
         request: &RpcRequest,
         params: Option<serde_json::Value>,
         _retries: usize,
+        _commitment_config: Option<RpcCommitmentConfig>,
     ) -> Result<serde_json::Value, ClientError> {
         if self.url == "fails" {
             return Ok(Value::Null);
