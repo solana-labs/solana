@@ -45,6 +45,19 @@ function cleanup_testnet {
 EOF
   ) | buildkite-agent pipeline upload
   ;;
+  ec2)
+  (
+    cat <<EOF
+- wait: ~
+  continue_on_failure: true
+
+- command: "net/ec2.sh delete -p ${TESTNET_TAG}"
+  label: "Delete Testnet"
+  agents:
+    - "queue=testnet-deploy"
+EOF
+  ) | buildkite-agent pipeline upload
+  ;;
   colo)
     (
     cat <<EOF

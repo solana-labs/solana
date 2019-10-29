@@ -1,0 +1,19 @@
+steps:
+  - command: "system-test/testnet-performance/testnet-automation.sh"
+    label: "AWS - CPU Only 5 Node"
+    env:
+      UPLOAD_RESULTS_TO_SLACK: "true"
+      CLOUD_PROVIDER: "ec2"
+      TESTNET_TAG: "aws-perf-cpu-only"
+      RAMP_UP_TIME: 0
+      TEST_DURATION_SECONDS: 300
+      NUMBER_OF_VALIDATOR_NODES: 5
+      ENABLE_GPU: "false"
+      # Up to 3.1 GHz Intel Xeon® Platinum 8175, 16 vCPU, 64GB RAM
+      VALIDATOR_NODE_MACHINE_TYPE: "m5.4xlarge"
+      NUMBER_OF_CLIENT_NODES: 2
+      CLIENT_OPTIONS: "bench-tps=2=--tx_count 15000 --thread-batch-sleep-ms 250"
+      TESTNET_ZONES: "us-west-1a"
+      ADDITIONAL_FLAGS: ""
+    agents:
+      - "queue=testnet-deploy"
