@@ -1,6 +1,6 @@
 use solana_sdk::{
-    clock::Epoch, genesis_block::OperatingMode, pubkey::Pubkey,
-    system_program::solana_system_program,
+    clock::Epoch, genesis_block::OperatingMode, move_loader::solana_move_loader_program,
+    pubkey::Pubkey, system_program::solana_system_program,
 };
 
 #[macro_use]
@@ -11,9 +11,6 @@ extern crate solana_budget_program;
 extern crate solana_config_program;
 #[macro_use]
 extern crate solana_exchange_program;
-#[cfg(feature = "move")]
-#[macro_use]
-extern crate solana_move_loader_program;
 #[macro_use]
 extern crate solana_stake_program;
 #[macro_use]
@@ -42,8 +39,7 @@ pub fn get(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(String, P
                     // Programs that are only available in Development mode
                     solana_budget_program!(),
                     solana_exchange_program!(),
-                    #[cfg(feature = "move")]
-                    solana_move_loader_program!(),
+                    solana_move_loader_program(),
                 ])
             } else {
                 None
@@ -107,7 +103,7 @@ mod tests {
 
     #[test]
     fn test_development_programs() {
-        assert_eq!(get(OperatingMode::Development, 0).unwrap().len(), 9);
+        assert_eq!(get(OperatingMode::Development, 0).unwrap().len(), 10);
         assert_eq!(get(OperatingMode::Development, 1), None);
     }
 

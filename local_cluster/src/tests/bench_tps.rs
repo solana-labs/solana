@@ -7,14 +7,14 @@ use solana_core::cluster_info::VALIDATOR_PORT_RANGE;
 use solana_core::validator::ValidatorConfig;
 use solana_drone::drone::run_local_drone;
 #[cfg(feature = "move")]
-use solana_move_loader_program;
+use solana_sdk::move_loader::solana_move_loader_program;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
 fn test_bench_tps_local_cluster(config: Config) {
     #[cfg(feature = "move")]
-    let native_instruction_processors = vec![solana_move_loader_program!()];
+    let native_instruction_processors = vec![solana_move_loader_program()];
 
     #[cfg(not(feature = "move"))]
     let native_instruction_processors = vec![];

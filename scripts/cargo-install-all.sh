@@ -37,6 +37,9 @@ SECONDS=0
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
   $cargo $rust_version build $maybeReleaseFlag
+
+  # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+  $cargo $rust_version build $maybeReleaseFlag --manifest-path programs/move_loader_program/Cargo.toml
 )
 
 BINS=(

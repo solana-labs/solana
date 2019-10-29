@@ -13,7 +13,7 @@ pub fn genesis(genesis_pubkey: &Pubkey, microlibras: u64) -> Instruction {
 
     let accounts = vec![AccountMeta::new(*genesis_pubkey, true)];
 
-    Instruction::new(solana_move_loader_api::id(), &ix_data, accounts)
+    Instruction::new(solana_sdk::move_loader::id(), &ix_data, accounts)
 }
 
 pub fn mint(
@@ -41,7 +41,7 @@ pub fn mint(
         AccountMeta::new(*to_pubkey, false),
     ];
 
-    Instruction::new(solana_move_loader_api::id(), &ix_data, accounts)
+    Instruction::new(solana_sdk::move_loader::id(), &ix_data, accounts)
 }
 
 pub fn transfer(
@@ -71,7 +71,7 @@ pub fn transfer(
         AccountMeta::new(*to_pubkey, false),
     ];
 
-    Instruction::new(solana_move_loader_api::id(), &ix_data, accounts)
+    Instruction::new(solana_sdk::move_loader::id(), &ix_data, accounts)
 }
 
 #[cfg(test)]
