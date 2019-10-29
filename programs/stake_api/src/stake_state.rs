@@ -103,7 +103,7 @@ pub struct Stake {
     pub config: Config,
     /// history of prior delegates and the epoch ranges for which
     ///  they were set, circular buffer
-    pub prior_delegates: [(Pubkey, Epoch, Epoch); MAX_PRIOR_DELEGATES],
+    pub prior_delegates: [(Pubkey, Epoch, Epoch, Slot); MAX_PRIOR_DELEGATES],
     /// next pointer
     pub prior_delegates_idx: usize,
 }
@@ -120,7 +120,7 @@ impl Default for Stake {
             activation_epoch: 0,
             deactivation_epoch: std::u64::MAX,
             config: Config::default(),
-            prior_delegates: <[(Pubkey, Epoch, Epoch); MAX_PRIOR_DELEGATES]>::default(),
+            prior_delegates: <[(Pubkey, Epoch, Epoch, Slot); MAX_PRIOR_DELEGATES]>::default(),
             prior_delegates_idx: MAX_PRIOR_DELEGATES - 1,
         }
     }
@@ -167,17 +167,6 @@ impl Stake {
 
     pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
         self.stake_activating_and_deactivating(epoch, history).0
-    }
-
-    pub fn voter_pubkey(&self, epoch: Epoch) -> &Pubkey {
-        let prior_delegate_pubkey = &self.prior_delegates[self.prior_delegates_idx].0;
-        // next epoch from re-delegation, or no redelegations
-        if epoch > self.voter_pubkey_epoch || *prior_delegate_pubkey == Pubkey::default() {
-            &self.voter_pubkey
-        } else {
-            assert!(epoch <= self.prior_delegates[self.prior_delegates_idx].2);
-            prior_delegate_pubkey
-        }
     }
 
     fn stake_activating_and_deactivating(
@@ -362,18 +351,26 @@ impl Stake {
         &mut self,
         voter_pubkey: &Pubkey,
         vote_state: &VoteState,
-        epoch: Epoch,
+        clock: &sysvar::clock::Clock,
     ) -> Result<(), StakeError> {
-        // remember old delegate,
-        if epoch != self.voter_pubkey_epoch {
-            self.prior_delegates_idx += 1;
-            self.prior_delegates_idx %= MAX_PRIOR_DELEGATES;
-
-            self.prior_delegates[self.prior_delegates_idx] =
-                (self.voter_pubkey, self.voter_pubkey_epoch, epoch);
+        // only one re-delegation supported per epoch
+        if self.voter_pubkey_epoch == clock.epoch {
+            return Err(StakeError::TooSoonToRedelegate);
         }
+
+        // remember prior delegate and when we switched, to support later slashing
+        self.prior_delegates_idx += 1;
+        self.prior_delegates_idx %= MAX_PRIOR_DELEGATES;
+
+        self.prior_delegates[self.prior_delegates_idx] = (
+            self.voter_pubkey,
+            self.voter_pubkey_epoch,
+            clock.epoch,
+            clock.slot,
+        );
+
         self.voter_pubkey = *voter_pubkey;
-        self.voter_pubkey_epoch = epoch;
+        self.voter_pubkey_epoch = clock.epoch;
         self.credits_observed = vote_state.credits();
         Ok(())
     }
@@ -500,11 +497,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             self.set_state(&StakeState::Stake(authorized, lockup, stake))
         } else if let StakeState::Stake(authorized, lockup, mut stake) = self.state()? {
             authorized.check(signers, StakeAuthorize::Staker)?;
-            stake.redelegate(
-                vote_account.unsigned_key(),
-                &vote_account.state()?,
-                clock.epoch,
-            )?;
+            stake.redelegate(vote_account.unsigned_key(), &vote_account.state()?, &clock)?;
             self.set_state(&StakeState::Stake(authorized, lockup, stake))
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -711,7 +704,7 @@ mod tests {
 
     #[test]
     fn test_stake_delegate_stake() {
-        let clock = sysvar::clock::Clock {
+        let mut clock = sysvar::clock::Clock {
             epoch: 1,
             ..sysvar::clock::Clock::default()
         };
@@ -792,12 +785,18 @@ mod tests {
                 ..Stake::default()
             }
         );
+        // verify that delegate_stake can be called twice, 2nd is redelegate
+        assert_eq!(
+            stake_keyed_account.delegate_stake(
+                &vote_keyed_account,
+                &clock,
+                &Config::default(),
+                &signers
+            ),
+            Err(StakeError::TooSoonToRedelegate.into())
+        );
 
-        // verify that voter_pubkey() is right for all epochs, even ones that don't count (like 0)
-        for epoch in 0..=clock.epoch + 1 {
-            assert_eq!(stake.voter_pubkey(epoch), &vote_pubkey);
-        }
-
+        clock.epoch += 1;
         // verify that delegate_stake can be called twice, 2nd is redelegate
         assert!(stake_keyed_account
             .delegate_stake(&vote_keyed_account, &clock, &Config::default(), &signers)
@@ -820,33 +819,34 @@ mod tests {
             voter_pubkey_epoch: 0,
             ..Stake::default()
         };
-        // verify that redelegation any number of times since first delegation works just fine,
-        //  and that the stake is delegated to the most recent vote account
-        for epoch in 0..=MAX_PRIOR_DELEGATES + 1 {
+        // verify that redelegation works when epoch is changing, that
+        //  wraparound works, and that the stake is delegated
+        //  to the most recent vote account
+        for epoch in 1..=MAX_PRIOR_DELEGATES + 2 {
             let voter_pubkey = Pubkey::new_rand();
-            let _ignored = stake.redelegate(&voter_pubkey, &VoteState::default(), 0);
-            assert_eq!(stake.voter_pubkey(epoch as u64), &voter_pubkey);
-        }
-
-        // get a new voter_pubkey
-        let voter_pubkey = Pubkey::new_rand();
-        // save off old voter_pubkey
-        let prior_voter_pubkey = stake.voter_pubkey;
-
-        // actually redelegate in epoch 1
-        let _ignored = stake.redelegate(&voter_pubkey, &VoteState::default(), 1);
-        // verify that delegation is delayed
-        assert_eq!(stake.voter_pubkey(0 as u64), &prior_voter_pubkey);
-        assert_eq!(stake.voter_pubkey(1 as u64), &prior_voter_pubkey);
-        assert_eq!(stake.voter_pubkey(2 as u64), &voter_pubkey);
-
-        // verify that prior_delegates wraps around safely...
-        for epoch in 0..=MAX_PRIOR_DELEGATES + 1 {
-            let voter_pubkey = Pubkey::new_rand();
-            let prior_voter_pubkey = stake.voter_pubkey;
-            let _ignored = stake.redelegate(&voter_pubkey, &VoteState::default(), epoch as u64);
-            assert_eq!(stake.voter_pubkey(epoch as u64), &prior_voter_pubkey);
-            assert_eq!(stake.voter_pubkey((epoch + 1) as u64), &voter_pubkey);
+            assert_eq!(
+                stake.redelegate(
+                    &voter_pubkey,
+                    &VoteState::default(),
+                    &sysvar::clock::Clock {
+                        epoch: epoch as u64,
+                        ..sysvar::clock::Clock::default()
+                    },
+                ),
+                Ok(())
+            );
+            assert_eq!(
+                stake.redelegate(
+                    &voter_pubkey,
+                    &VoteState::default(),
+                    &sysvar::clock::Clock {
+                        epoch: epoch as u64,
+                        ..sysvar::clock::Clock::default()
+                    },
+                ),
+                Err(StakeError::TooSoonToRedelegate)
+            );
+            assert_eq!(stake.voter_pubkey, voter_pubkey);
         }
     }
 
@@ -1908,7 +1908,7 @@ mod tests {
         )
         .expect("stake_account");
 
-        let clock = sysvar::clock::Clock::default();
+        let mut clock = sysvar::clock::Clock::default();
 
         let vote_pubkey = Pubkey::new_rand();
         let mut vote_account =
@@ -1943,6 +1943,8 @@ mod tests {
             KeyedAccount::new(&new_voter_pubkey, false, &mut new_vote_account);
         new_vote_keyed_account.set_state(&vote_state).unwrap();
 
+        // time passes, so we can re-delegate
+        clock.epoch += 1;
         // Random other account should fail
         assert_eq!(
             stake_keyed_account.delegate_stake(
@@ -1966,7 +1968,7 @@ mod tests {
             Ok(())
         );
         let stake = StakeState::stake_from(&stake_keyed_account.account).unwrap();
-        assert_eq!(stake.voter_pubkey(0), &new_voter_pubkey);
+        assert_eq!(stake.voter_pubkey, new_voter_pubkey);
 
         // Test another staking action
         assert_eq!(

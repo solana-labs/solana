@@ -19,7 +19,7 @@ $ solana delegate-stake ~/validator-config/stake-keypair.json ~/validator-vote-k
 
 Note that stakes need to warm up, and warmup increments are applied at Epoch boundaries, so it can take an hour or more for the change to fully take effect.
 
-Stakes can be re-delegated to another node at any time with the same command:
+Stakes can be re-delegated to another node at any time with the same command, but only one re-delegation is permitted per epoch:
 
 ```bash
 $ solana delegate-stake ~/validator-config/stake-keypair.json ~/some-other-validator-vote-keypair.json
@@ -44,4 +44,3 @@ The stake will cool down, deactivate over time. While cooling down, your stake w
 Note that a stake account may only be used once, so after deactivation, use the cli's `withdraw-stake` command to recover the previously staked lamports.
 
 Be sure and redeem your credits before withdrawing all your lamports. Once the account is fully withdrawn, the account is destroyed.
-
