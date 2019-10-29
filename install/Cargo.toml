@@ -7,7 +7,6 @@ version = "0.21.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-default-run = "solana-install"
 
 [dependencies]
 atty = "0.2.11"
