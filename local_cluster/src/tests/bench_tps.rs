@@ -76,7 +76,7 @@ fn test_bench_tps_local_cluster_solana() {
 fn test_bench_tps_local_cluster_move() {
     let mut config = Config::default();
     config.tx_count = 100;
-    config.duration = Duration::from_secs(20);
+    config.duration = Duration::from_secs(25);
     config.use_move = true;
 
     test_bench_tps_local_cluster(config);

@@ -1,3 +1,4 @@
+use canonical_serialization::SimpleDeserializer;
 use failure::prelude::*;
 use indexmap::IndexMap;
 use log::*;
@@ -5,17 +6,12 @@ use state_view::StateView;
 use types::{
     access_path::AccessPath,
     account_address::AccountAddress,
-    account_config,
+    account_config::{self, AccountResource},
     language_storage::ModuleId,
     write_set::{WriteOp, WriteSet, WriteSetMut},
 };
-use vm::{errors::VMInvariantViolation, CompiledModule};
-use vm_runtime::{
-    data_cache::RemoteCache,
-    identifier::create_access_path,
-    loaded_data::{struct_def::StructDef, types::Type},
-    value::Value,
-};
+use vm::{errors::VMResult, CompiledModule};
+use vm_runtime::{data_cache::RemoteCache, identifier::create_access_path};
 
 /// An in-memory implementation of [`StateView`] and [`RemoteCache`] for the VM.
 #[derive(Debug, Default)]
@@ -66,17 +62,11 @@ impl DataStore {
     }
 
     /// Read an account's resource
-    pub fn read_account_resource(&self, addr: &AccountAddress) -> Option<Value> {
+    pub fn read_account_resource(&self, addr: &AccountAddress) -> Option<AccountResource> {
         let access_path = create_access_path(&addr, account_config::account_struct_tag());
         match self.data.get(&access_path) {
             None => None,
-            Some(blob) => {
-                let account_type = get_account_struct_def();
-                match Value::simple_deserialize(blob, account_type) {
-                    Ok(account) => Some(account),
-                    Err(_) => None,
-                }
-            }
+            Some(blob) => SimpleDeserializer::deserialize(blob).ok(),
         }
     }
 
@@ -134,30 +124,9 @@ impl StateView for DataStore {
 }
 
 impl RemoteCache for DataStore {
-    fn get(
-        &self,
-        access_path: &AccessPath,
-    ) -> ::std::result::Result<Option<Vec<u8>>, VMInvariantViolation> {
+    fn get(&self, access_path: &AccessPath) -> VMResult<Option<Vec<u8>>> {
         Ok(StateView::get(self, access_path).expect("it should not error"))
     }
-}
-
-// TODO: internal Libra function and very likely to break soon, need something better
-fn get_account_struct_def() -> StructDef {
-    // STRUCT DEF StructDef(StructDefInner { field_definitions: [ByteArray,
-    // Struct(StructDef(StructDefInner { field_definitions: [U64] })), U64, U64,
-    // U64] }) let coin = StructDef(StructDefInner { field_definitions:
-    // [Type::U64] })
-    let int_type = Type::U64;
-    let byte_array_type = Type::ByteArray;
-    let coin = Type::Struct(StructDef::new(vec![int_type.clone()]));
-    StructDef::new(vec![
-        byte_array_type,
-        coin,
-        int_type.clone(),
-        int_type.clone(),
-        int_type.clone(),
-    ])
 }
 
 #[cfg(test)]

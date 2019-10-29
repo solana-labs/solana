@@ -23,7 +23,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction;
 
-use types::account_address::AccountAddress;
+use types::account_config;
 
 pub fn create_genesis<T: Client>(from_key: &Keypair, client: &T, amount: u64) -> Keypair {
     let libra_genesis_key = Keypair::new();
@@ -48,7 +48,7 @@ pub fn create_genesis<T: Client>(from_key: &Keypair, client: &T, amount: u64) ->
 }
 
 pub fn upload_move_program<T: Client>(from: &Keypair, client: &T, code: &str) -> Pubkey {
-    let address = AccountAddress::default();
+    let address = account_config::association_address();
     let account_state = LibraAccountState::create_program(&address, code, vec![]);
     let program_bytes = bincode::serialize(&account_state).unwrap();
 

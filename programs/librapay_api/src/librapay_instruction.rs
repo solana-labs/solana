@@ -4,7 +4,7 @@ use solana_move_loader_api::processor::InvokeCommand;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
-use types::account_address::AccountAddress;
+use types::account_config;
 use types::transaction::TransactionArgument;
 
 pub fn genesis(genesis_pubkey: &Pubkey, microlibras: u64) -> Instruction {
@@ -28,7 +28,7 @@ pub fn mint(
     ];
 
     let data = bincode::serialize(&InvokeCommand::RunProgram {
-        sender_address: AccountAddress::default(),
+        sender_address: account_config::association_address(),
         function_name: "main".to_string(),
         args,
     })
