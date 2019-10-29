@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 1038,
-  "iteration": 1571342384471,
+  "id": 1069,
+  "iteration": 1572390574899,
   "links": [
     {
       "asDropdown": true,
@@ -4454,12 +4454,97 @@
       }
     },
     {
+      "columns": [],
+      "datasource": "$datasource",
+      "fontSize": "100%",
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "id": 68,
+      "links": [],
+      "pageSize": null,
+      "scroll": true,
+      "showHeader": true,
+      "sort": {
+        "col": null,
+        "desc": false
+      },
+      "styles": [
+        {
+          "alias": "Time",
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "pattern": "Time",
+          "type": "date"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "decimals": 2,
+          "pattern": "/.*/",
+          "thresholds": [],
+          "type": "number",
+          "unit": "short"
+        }
+      ],
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT * FROM \"$testnet\".\"autogen\".\"ramp-tps\"  WHERE $timeFilter ORDER BY time DESC ",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Ramp TPS Events",
+      "transform": "table",
+      "type": "table"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 55
       },
       "id": 38,
       "panels": [],
@@ -4477,7 +4562,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 51
+        "y": 56
       },
       "id": 39,
       "legend": {
@@ -4628,7 +4713,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 51
+        "y": 56
       },
       "id": 40,
       "legend": {
@@ -4811,7 +4896,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 61
       },
       "id": 41,
       "panels": [],
@@ -4829,9 +4914,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 57
+        "y": 62
       },
-      "id": 50,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5148,9 +5233,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 57
+        "y": 62
       },
-      "id": 47,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5506,7 +5591,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 57
+        "y": 62
       },
       "id": 44,
       "legend": {
@@ -5818,9 +5903,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 63
+        "y": 68
       },
-      "id": 42,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6248,7 +6333,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 63
+        "y": 68
       },
       "id": 46,
       "legend": {
@@ -6437,9 +6522,9 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 63
+        "y": 68
       },
-      "id": 56,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6558,9 +6643,9 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 68
+        "y": 73
       },
-      "id": 55,
+      "id": 48,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6714,9 +6799,9 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 69
+        "y": 74
       },
-      "id": 48,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6870,9 +6955,9 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 69
+        "y": 74
       },
-      "id": 49,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6985,9 +7070,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 73
+        "y": 78
       },
-      "id": 53,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7189,9 +7274,9 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 74
+        "y": 79
       },
-      "id": 45,
+      "id": 52,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7491,9 +7576,9 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 74
+        "y": 79
       },
-      "id": 51,
+      "id": 53,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7639,9 +7724,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 84
       },
-      "id": 57,
+      "id": 54,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -7662,9 +7747,9 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 80
+        "y": 85
       },
-      "id": 58,
+      "id": 55,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7822,9 +7907,9 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 80
+        "y": 85
       },
-      "id": 54,
+      "id": 56,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7982,9 +8067,9 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 80
+        "y": 85
       },
-      "id": 59,
+      "id": 57,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8167,9 +8252,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 85
+        "y": 90
       },
-      "id": 60,
+      "id": 58,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -8186,9 +8271,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 86
+        "y": 91
       },
-      "id": 61,
+      "id": 59,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8419,9 +8504,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 86
+        "y": 91
       },
-      "id": 62,
+      "id": 60,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8572,9 +8657,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 91
+        "y": 96
       },
-      "id": 63,
+      "id": 61,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -8590,9 +8675,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 92
+        "y": 97
       },
-      "id": 64,
+      "id": 62,
       "legend": {
         "avg": false,
         "current": false,
@@ -8711,9 +8796,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 92
+        "y": 97
       },
-      "id": 65,
+      "id": 63,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8860,9 +8945,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 97
+        "y": 102
       },
-      "id": 66,
+      "id": 64,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -8878,9 +8963,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 98
+        "y": 103
       },
-      "id": 67,
+      "id": 65,
       "legend": {
         "avg": false,
         "current": false,
@@ -9070,9 +9155,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 98
+        "y": 103
       },
-      "id": 68,
+      "id": 66,
       "legend": {
         "avg": false,
         "current": false,
@@ -9262,9 +9347,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 98
+        "y": 103
       },
-      "id": 69,
+      "id": 67,
       "legend": {
         "avg": false,
         "current": false,
@@ -9543,5 +9628,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 6
+  "version": 2
 }
