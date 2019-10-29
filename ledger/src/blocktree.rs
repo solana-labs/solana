@@ -1444,9 +1444,8 @@ fn commit_slot_meta_working_set(
     // Check if any metadata was changed, if so, insert the new version of the
     // metadata into the write batch
     for (slot, slot_meta_entry) in slot_meta_working_set.iter() {
-        if !slot_meta_entry.did_insert_occur {
-            continue;
-        }
+        // Any slot that wasn't written to should have been filtered out by now.
+        assert!(slot_meta_entry.did_insert_occur);
         let meta: &SlotMeta = &RefCell::borrow(&*slot_meta_entry.new_slot_meta);
         let meta_backup = &slot_meta_entry.old_slot_meta;
         if !completed_slots_senders.is_empty() && is_newly_completed_slot(meta, meta_backup) {
@@ -3784,5 +3783,37 @@ pub mod tests {
                 .expect("Expected successful write of shreds");
             assert!(blocktree.get_slot_entries(slot, 0, None).is_err());
         }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_no_insert_but_modify_slot_meta() {
+        // This tests correctness of the SlotMeta in various cases in which a shred
+        // that gets filtered out by checks
+        let (shreds0, _) = make_slot_entries(0, 0, 200);
+        let blocktree_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+            // Insert the first 5 shreds, we don't have a "is_last" shred yet
+            blocktree
+                .insert_shreds(shreds0[0..5].to_vec(), None)
+                .unwrap();
+
+            // Insert a repetitive shred for slot 's', should get ignored, but also
+            // insert shreds that chains to 's', should see the update in the SlotMeta
+            // for 's'.
+            let (mut shreds2, _) = make_slot_entries(2, 0, 200);
+            let (mut shreds3, _) = make_slot_entries(3, 0, 200);
+            shreds2.push(shreds0[1].clone());
+            shreds3.insert(0, shreds0[1].clone());
+            blocktree.insert_shreds(shreds2, None).unwrap();
+            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            assert_eq!(slot_meta.next_slots, vec![2]);
+            blocktree.insert_shreds(shreds3, None).unwrap();
+            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            assert_eq!(slot_meta.next_slots, vec![2, 3]);
+        }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 }
