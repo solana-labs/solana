@@ -5,13 +5,13 @@
 The **identity pubkey** for your validator can also be found by running:
 
 ```bash
-$ solana-keygen pubkey ~/validator-keypair.json
+solana-keygen pubkey ~/validator-keypair.json
 ```
 
 From another console, confirm the IP address and **identity pubkey** of your validator is visible in the gossip network by running:
 
 ```bash
-$ solana-gossip --entrypoint testnet.solana.com:8001 spy
+solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
 ## Check Vote Activity
@@ -19,13 +19,13 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 The vote pubkey for the validator can be found by running:
 
 ```bash
-$ solana-keygen pubkey ~/validator-vote-keypair.json
+solana-keygen pubkey ~/validator-vote-keypair.json
 ```
 
 Provide the **vote pubkey** to the `solana show-vote-account` command to view the recent voting activity from your validator:
 
 ```bash
-$ solana show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
+solana show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 ```
 
 ## Check Your Balance
@@ -33,7 +33,7 @@ $ solana show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 Your account balance should decrease by the transaction fee amount as your validator submits votes, and increase after serving as the leader. Pass the `--lamports` are to observe in finer detail:
 
 ```bash
-$ solana balance --lamports
+solana balance --lamports
 ```
 
 ## Check Slot Number
@@ -41,13 +41,13 @@ $ solana balance --lamports
 After your validator boots, it may take some time to catch up with the cluster. Use the `get-slot` command to view the current slot that the cluster is processing:
 
 ```bash
-$ solana get-slot
+solana get-slot
 ```
 
 The current slot that your validator is processing can then been seen with:
 
 ```bash
-$ solana --url http://127.0.0.1:8899 get-slot
+solana --url http://127.0.0.1:8899 get-slot
 ```
 
 Until your validator has caught up, it will not be able to vote successfully and stake cannot be delegated to it.
@@ -60,11 +60,11 @@ There are several useful JSON-RPC endpoints for monitoring your validator on the
 
 ```bash
 # Similar to solana-gossip, you should see your validator in the list of cluster nodes
-$ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getClusterNodes"}' http://testnet.solana.com:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getClusterNodes"}' http://testnet.solana.com:8899
 # If your validator is properly voting, it should appear in the list of `current` vote accounts. If staked, `stake` should be > 0
-$ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://testnet.solana.com:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://testnet.solana.com:8899
 # Returns the current leader schedule
-$ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://testnet.solana.com:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://testnet.solana.com:8899
 # Returns info about the current epoch. slotIndex should progress on subsequent calls.
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://testnet.solana.com:8899
 ```
@@ -76,9 +76,9 @@ Metrics are available for local monitoring of your validator.
 Docker must be installed and the current user added to the docker group. Then download `solana-metrics.tar.bz2` from the Github Release and run
 
 ```bash
-$ tar jxf solana-metrics.tar.bz2
-$ cd solana-metrics/
-$ ./start.sh
+tar jxf solana-metrics.tar.bz2
+cd solana-metrics/
+./start.sh
 ```
 
 A local InfluxDB and Grafana instance is now running on your machine. Define `SOLANA_METRICS_CONFIG` in your environment as described at the end of the `start.sh` output and restart your validator.
@@ -92,6 +92,5 @@ Log messages emitted by your validator include a timestamp. When sharing logs wi
 To make it easier to compare logs between different sources we request that everybody use Pacific Time on their validator nodes. In Linux this can be accomplished by running:
 
 ```bash
-$ sudo ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
+sudo ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
 ```
-

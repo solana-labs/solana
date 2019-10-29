@@ -7,13 +7,13 @@ You can publish your validator information to the chain to be publicly visible t
 Run the solana CLI to populate a validator info account:
 
 ```bash
-$ solana validator-info publish --keypair ~/validator-keypair.json <VALIDATOR_INFO_ARGS> <VALIDATOR_NAME>
+solana validator-info publish --keypair ~/validator-keypair.json <VALIDATOR_INFO_ARGS> <VALIDATOR_NAME>
 ```
 
 For details about optional fields for VALIDATOR\_INFO\_ARGS:
 
 ```bash
-$ solana validator-info publish --help
+solana validator-info publish --help
 ```
 
 ## Keybase
@@ -33,4 +33,3 @@ Including a Keybase username allows client applications \(like the Solana Networ
 3. Add or update your `solana validator-info` with your Keybase username. The
 
    CLI will verify the `validator-<PUBKEY>` file
-
