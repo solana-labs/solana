@@ -679,6 +679,30 @@ pub mod tests {
         );
         assert_eq!(rv, vec![vec![0]]);
     }
+    
+    #[test]
+    fn test_sigverify_shreds_sign_gpu() {
+        solana_logger::setup();
+        let recycler_offsets = Recycler::default();
+        let recycler_pubkeys = Recycler::default();
+
+        let mut batch = [Packets::default()];
+        let slot = 0xdeadc0de;
+        let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true);
+        let keypair = Keypair::new();
+        batch[0].packets.resize(1, Packet::default());
+        batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batch[0].packets[0].meta.size = shred.payload.len();
+        let pubkeys = [
+            (slot, keypair.pubkey().to_array()),
+            (std::u64::MAX, [0u8; 32]),
+        ];
+        let privkeys = [
+            (slot, keypair.secret().to_array()),
+            (std::u64::MAX, [0u8; 32]),
+        ];
+        sigverify_sign_shreds_gpu(&mut batch, &pubkeys, &privkeys, &recycler_offsets, &recycler_pubkeys);
+    }
 
     #[test]
     fn test_sigverify_shreds_read_slots() {
