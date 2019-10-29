@@ -51,24 +51,24 @@ $ solana set --keypair ~/validator-keypair.json
 **All following solana commands assume you have set `--keypair` config to** your validator identity keypair.\*\* If you haven't, you will need to add the `--keypair` argument to each command, like:
 
 ```bash
-$ solana --keypair ~/validator-keypair.json airdrop 1000 lamports
+$ solana --keypair ~/validator-keypair.json airdrop 10
 ```
 
 \(You can always override the set configuration by explicitly passing the `--keypair` argument with a command.\)
 
 ### Validator Start
 
-Airdrop yourself some lamports to get started:
+Airdrop yourself some SOL to get started:
 
 ```bash
-$ solana airdrop 1000 lamports
+$ solana airdrop 10
 ```
 
 Your validator will need a vote account. Create it now with the following commands:
 
 ```bash
 $ solana-keygen new -o ~/validator-vote-keypair.json
-$ solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json 1 lamports
+$ solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json
 ```
 
 Then use one of the following commands, depending on your installation choice, to start the node:
@@ -110,4 +110,3 @@ By default the validator will dynamically select available network ports in the 
 ### Limiting ledger size to conserve disk space
 
 By default the validator will retain the full ledger. To conserve disk space start the validator with the `--limit-ledger-size`, which will instruct the validator to only retain the last couple hours of ledger.
-
