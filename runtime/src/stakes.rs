@@ -85,7 +85,7 @@ impl Stakes {
             .iter()
             .map(|(_, stake_account)| {
                 StakeState::stake_from(stake_account).map_or(0, |stake| {
-                    if stake.voter_pubkey(epoch) == voter_pubkey {
+                    if &stake.voter_pubkey == voter_pubkey {
                         stake.stake(epoch, stake_history)
                     } else {
                         0
@@ -129,7 +129,7 @@ impl Stakes {
             let old_stake = self.stake_accounts.get(pubkey).and_then(|old_account| {
                 StakeState::stake_from(old_account).map(|stake| {
                     (
-                        *stake.voter_pubkey(self.epoch),
+                        stake.voter_pubkey,
                         stake.stake(self.epoch, Some(&self.stake_history)),
                     )
                 })
@@ -137,7 +137,7 @@ impl Stakes {
 
             let stake = StakeState::stake_from(account).map(|stake| {
                 (
-                    *stake.voter_pubkey(self.epoch),
+                    stake.voter_pubkey,
                     if account.lamports != 0 {
                         stake.stake(self.epoch, Some(&self.stake_history))
                     } else {
