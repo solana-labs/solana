@@ -149,7 +149,7 @@ fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, Pubkey>) -
                 .into_par_iter()
                 .map(|p| {
                     p.packets
-                        .par_iter()
+                        .iter()
                         .map(|p| verify_shred_cpu(p, slot_leaders).unwrap_or(0))
                         .collect()
                 })
@@ -160,14 +160,15 @@ fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, Pubkey>) -
     rv
 }
 
-fn shred_gpu_pubkeys(
+fn shred_gpu_keys(
+    offset_start: usize,
     batches: &[Packets],
-    slot_leaders: &HashMap<u64, Pubkey>,
+    slot_leaders: &HashMap<u64, [u8; 32]>,
     recycler_offsets: &Recycler<TxOffset>,
-    recycler_pubkeys: &Recycler<PinnedVec<Pubkey>>,
-) -> (PinnedVec<Pubkey>, TxOffset, usize) {
+    recycler_pubkeys: &Recycler<PinnedVec<[u8; 32]>>,
+) -> (PinnedVec<[u8; 32]>, TxOffset, usize) {
     //TODO: mark Pubkey::default shreds as failed after the GPU returns
-    assert_eq!(slot_leaders.get(&std::u64::MAX), Some(&Pubkey::default()));
+    assert_eq!(slot_leaders.get(&std::u64::MAX), Some(&[0u8; 32]));
     let slots: Vec<Vec<u64>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches
@@ -214,7 +215,7 @@ fn shred_gpu_pubkeys(
     let mut offsets = recycler_offsets.allocate("shred_offsets");
     slots.iter().for_each(|packet_slots| {
         packet_slots.iter().for_each(|slot| {
-            offsets.push((slot_to_key_ix.get(slot).unwrap() * size_of::<Pubkey>()) as u32);
+            offsets.push(offset_start + (slot_to_key_ix.get(slot).unwrap() * size_of::<Pubkey>()) as u32);
         });
     });
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
@@ -273,9 +274,9 @@ fn shred_gpu_offsets(
 
 fn verify_shreds_gpu(
     batches: &[Packets],
-    slot_leaders: &HashMap<u64, Pubkey>,
+    slot_leaders: &HashMap<u64, [u8;32]>,
     recycler_offsets: &Recycler<TxOffset>,
-    recycler_pubkeys: &Recycler<PinnedVec<Pubkey>>,
+    recycler_pubkeys: &Recycler<PinnedVec<[u8;32]>>,
     recycler_out: &Recycler<PinnedVec<u8>>,
 ) -> Vec<Vec<u8>> {
     let api = perf_libs::api();
@@ -288,7 +289,7 @@ fn verify_shreds_gpu(
     let mut rvs = Vec::new();
     let count = sigverify::batch_size(batches);
     let (pubkeys, pubkey_offsets, mut num_packets) =
-        shred_gpu_pubkeys(batches, slot_leaders, recycler_offsets, recycler_pubkeys);
+        shred_gpu_keys(0, batches, slot_leaders, recycler_offsets, recycler_pubkeys);
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
     let pubkeys_len = (num_packets * size_of::<Packet>()) as u32;
@@ -353,6 +354,144 @@ fn verify_shreds_gpu(
     recycler_offsets.recycle(msg_start_offsets);
     recycler_pubkeys.recycle(pubkeys);
     rvs
+}
+
+/// Assuming layout is
+/// signature: Signature
+/// signed_msg: {
+///   type: ShredType
+///   slot: u64,
+///   ...
+/// }
+/// Signature is the first thing in the packet, and slot is the first thing in the signed message.
+fn sign_shred_cpu(packet: &mut Packet, slot_leaders_pubkeys: &HashMap<u64, [u8;32]>, slot_leaders_privkeys: &HashMap<u64, [u8;32]>) {
+    let sig_start = 0;
+    let sig_end = size_of::<Signature>();
+    let slot_start = sig_end + size_of::<ShredType>();
+    let slot_end = slot_start + size_of::<u64>();
+    let msg_start = sig_end;
+    let msg_end = packet.meta.size;
+    trace!("slot start and end {} {}", slot_start, slot_end);
+    assert!(packet.meta.size >= slot_end, "packet is not large enough for a slot");
+    let slot: u64 = deserialize(&packet.data[slot_start..slot_end]).ok()?;
+    trace!("slot {}", slot);
+    let pubkey = slot_leaders_pubkeys.get(&slot).expect("slot pubkey missing");
+    let privkey = slot_leaders_privkeys.get(&slot).expect("slot privkey missing");
+    let keypair = Keypair {
+        secret: SecretKey::from_bytes(&privkey),
+        public: PublicKey::from_bytes(&pubkey),
+    };
+    assert!(packet.meta.size >= sig_end, "packet is not large enough for a signature");
+    let signature = keypair.sign(&packet.data[msg_start..msg_end]);
+    trace!("signature {}", signature);
+    packet.data[0..sig_end].copy_from_slice(signature.to_bytes());
+}
+
+fn sign_shreds_cpu(batches: &mut [Packets], slot_leaders_pubkeys: &HashMap<u64, [u8;32]>, slot_leaders_privkeys: &HashMap<u64, [u8;32]>) {
+    use rayon::prelude::*;
+    let count = sigverify::batch_size(batches);
+    debug!("CPU SHRED ECDSA for {}", count);
+    let rv = PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            batches
+                .into_par_iter_mut()
+                .for_each(|p| {
+                    p.packets
+                        .iter()
+                        .for_each(|p| sign_shred_cpu(p, slot_leaders_pubkeys, slot_leaders_privkeys));
+                });
+        })
+    });
+    inc_new_counter_debug!("ed25519_shred_verify_cpu", count);
+    rv
+}
+
+pub fn sign_shreds_gpu(
+    batches: &mut [Packets],
+    slot_leaders_pubkeys: &HashMap<u64, [u8;32]>,
+    slot_leaders_privkeys: &HashMap<u64, [u8;32]>,
+    recycler_offsets: &Recycler<TxOffset>,
+    recycler_pubkeys: &Recycler<PinnedVec<[u8;32]>>,
+    recycler_out: &Recycler<PinnedVec<u8>>,
+) -> {
+    let api = perf_libs::api();
+    if api.is_none() {
+        return sign_shreds_cpu(batches, slot_leaders_pubkeys, slot_leaders_privkeys);
+    }
+    let api = api.unwrap();
+
+    let mut elems = Vec::new();
+    let count = sigverify::batch_size(batches);
+    let mut offset = 0;
+    let (pubkeys, pubkey_offsets, mut num_pubkeys_packets) =
+        shred_gpu_keys(offset, batches, slot_leaders_pubkeys, recycler_offsets, recycler_pubkeys);
+    offset += (num_pubkeys_packets * size_of::<Packet>()) as u32;
+    let (privkeys, privkey_offsets, mut num_privkey_packets) =
+        shred_gpu_keys(offset, batches, slot_leaders_privkeys, recycler_offsets, recycler_pubkeys);
+    offset += (num_privkey_packets * size_of::<Packet>()) as u32;
+    //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
+    //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
+    trace!("num_packets: {}", num_packets);
+    trace!("pubkeys_len: {}", pubkeys_len);
+    let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
+        shred_gpu_offsets(offset, batches, recycler_offsets);
+    elems.push(
+        perf_libs::Elems {
+            #![allow(clippy::cast_ptr_alignment)]
+            elems: pubkeys.as_ptr() as *const solana_sdk::packet::Packet,
+            num: num_pubkeys_packets as u32,
+        },
+    );
+
+    elems.push(
+        perf_libs::Elems {
+            #![allow(clippy::cast_ptr_alignment)]
+            elems: privkeys.as_ptr() as *const solana_sdk::packet::Packet,
+            num: num_privkeys_packets as u32,
+        },
+    );
+
+    for p in batches {
+        elems.push(perf_libs::Elems {
+            elems: p.packets.as_ptr(),
+            num: p.packets.len() as u32,
+        });
+        let mut v = Vec::new();
+        v.resize(p.packets.len(), 0);
+        num_packets += p.packets.len();
+    }
+
+    trace!("Starting verify num packets: {}", num_packets);
+    trace!("elem len: {}", elems.len() as u32);
+    trace!("packet sizeof: {}", size_of::<Packet>() as u32);
+    const USE_NON_DEFAULT_STREAM: u8 = 1;
+    unsafe {
+        let res = (api.ed25519_sign_many)(
+            elems.as_ptr(),
+            elems.len() as u32,
+            size_of::<Packet>() as u32,
+            num_packets as u32,
+            signature_offsets.len() as u32,
+            msg_sizes.as_ptr(),
+            pubkey_offsets.as_ptr(),
+            privkey_offsets.as_ptr(),
+            signature_offsets.as_ptr(),
+            msg_start_offsets.as_ptr(),
+            USE_NON_DEFAULT_STREAM,
+        );
+        if res != 0 {
+            trace!("RETURN!!!: {}", res);
+        }
+    }
+    trace!("done verify");
+
+    inc_new_counter_debug!("ed25519_shred_sign_gpu", count);
+    recycler_out.recycle(out);
+    recycler_offsets.recycle(signature_offsets);
+    recycler_offsets.recycle(pubkey_offsets);
+    recycler_offsets.recycle(msg_sizes);
+    recycler_offsets.recycle(msg_start_offsets);
+    recycler_pubkeys.recycle(pubkeys);
 }
 
 #[cfg(test)]
