@@ -672,6 +672,8 @@ if [[ -f /solana-scratch/.instance-startup-complete ]]; then
     if [[ -n $validatorAdditionalDiskSizeInGb ]]; then
       cat mount-additional-disk.sh
     fi
+
+    cat ../../scripts/ulimit-n.sh
   )
   if [[ -x ~solana/solana/on-reboot ]]; then
     sudo -u solana ~solana/solana/on-reboot
