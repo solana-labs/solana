@@ -16,7 +16,7 @@ use std::{
     time::Duration,
 };
 
-pub const DEFAULT_PERCENT_COMMITMENT: f64 = 0.66667;
+pub const DEFAULT_PERCENT_COMMITMENT: f64 = 2_f64 / 3_f64;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BlockCommitment {
@@ -74,7 +74,7 @@ impl BlockCommitmentCache {
                     .cloned()
                     .sum();
                 block_stake_minimum_depth as f64 / self.total_stake as f64
-                    >= commitment_config.percentage
+                    > commitment_config.percentage
             })
             .map(|(slot, _)| *slot)
             .max()
@@ -287,11 +287,11 @@ mod tests {
         // Build BlockCommitmentCache with votes at depths 0 and 1 for 2 slots
         let mut cache0 = BlockCommitment::default();
         cache0.increase_confirmation_stake(1, 15);
-        cache0.increase_confirmation_stake(2, 25);
+        cache0.increase_confirmation_stake(2, 26);
 
         let mut cache1 = BlockCommitment::default();
         cache1.increase_confirmation_stake(1, 10);
-        cache1.increase_confirmation_stake(2, 20);
+        cache1.increase_confirmation_stake(2, 21);
 
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
