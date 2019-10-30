@@ -22,6 +22,14 @@ fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
 }
 
 #[bench]
+fn bench_has_duplicates(bencher: &mut Bencher) {
+    bencher.iter(|| {
+        let data = test::black_box([1, 2, 3]);
+        assert!(!Accounts::has_duplicates(&data));
+    })
+}
+
+#[bench]
 fn test_accounts_create(bencher: &mut Bencher) {
     let (genesis_config, _) = create_genesis_config(10_000);
     let bank0 = Bank::new_with_paths(&genesis_config, vec![PathBuf::from("bench_a0")]);

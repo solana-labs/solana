@@ -35,7 +35,7 @@ pub fn process_instruction(
     let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
     let account_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
     let mut account_owner_pubkey: Pubkey =
-        limited_deserialize(&account_keyed_account.account.data)?;
+        limited_deserialize(&account_keyed_account.try_account_ref()?.data)?;
 
     if account_owner_pubkey == Pubkey::default() {
         account_owner_pubkey = new_owner_pubkey;
@@ -48,11 +48,9 @@ pub fn process_instruction(
         )?;
     }
 
-    serialize_into(
-        &mut account_keyed_account.account.data[..],
-        &account_owner_pubkey,
-    )
-    .map_err(|_| InstructionError::AccountDataTooSmall)
+    let mut account = account_keyed_account.try_account_ref_mut()?;
+    serialize_into(&mut account.data[..], &account_owner_pubkey)
+        .map_err(|_| InstructionError::AccountDataTooSmall)
 }
 
 #[cfg(test)]
@@ -156,7 +154,7 @@ mod tests {
         let mut account_owner_pubkey = Pubkey::new_rand();
         let owner_pubkey = account_owner_pubkey;
         let new_owner_pubkey = Pubkey::new_rand();
-        let mut account = Account::new(1, 0, &system_program::id());
+        let mut account = Account::new_ref(1, 0, &system_program::id());
         let owner_keyed_account = KeyedAccount::new(&owner_pubkey, false, &mut account); // <-- Attack! Setting owner without the original owner's signature.
         let err = set_owner(
             &mut account_owner_pubkey,
@@ -171,7 +169,7 @@ mod tests {
     fn test_ownable_incorrect_owner() {
         let mut account_owner_pubkey = Pubkey::new_rand();
         let new_owner_pubkey = Pubkey::new_rand();
-        let mut account = Account::new(1, 0, &system_program::id());
+        let mut account = Account::new_ref(1, 0, &system_program::id());
         let mallory_pubkey = Pubkey::new_rand(); // <-- Attack! Signing with wrong pubkey
         let owner_keyed_account = KeyedAccount::new(&mallory_pubkey, true, &mut account);
         let err = set_owner(

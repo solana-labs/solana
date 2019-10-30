@@ -196,14 +196,20 @@ mod tests {
             nonce_account
                 .nonce_initialize(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
-            assert!(verify_nonce(&nonce_account.account, &recent_blockhashes[0]));
+            assert!(verify_nonce(
+                &nonce_account.account.borrow(),
+                &recent_blockhashes[0]
+            ));
         });
     }
 
     #[test]
     fn verify_nonce_bad_acc_state_fail() {
         with_test_keyed_account(42, true, |nonce_account| {
-            assert!(!verify_nonce(&nonce_account.account, &Hash::default()));
+            assert!(!verify_nonce(
+                &nonce_account.account.borrow(),
+                &Hash::default()
+            ));
         });
     }
 
@@ -221,7 +227,7 @@ mod tests {
                 .nonce_initialize(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
             assert!(!verify_nonce(
-                &nonce_account.account,
+                &nonce_account.account.borrow(),
                 &recent_blockhashes[1]
             ));
         });

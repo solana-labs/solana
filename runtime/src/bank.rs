@@ -51,9 +51,11 @@ use solana_sdk::{
 use solana_stake_program::stake_state::Delegation;
 use solana_vote_program::vote_state::VoteState;
 use std::{
+    cell::RefCell,
     collections::HashMap,
     io::{BufReader, Cursor, Error as IOError, Read},
     path::{Path, PathBuf},
+    rc::Rc,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::{Arc, RwLock, RwLockReadGuard},
 };
@@ -1221,14 +1223,47 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 (Err(e), hash_age_kind) => (Err(e.clone()), hash_age_kind.clone()),
                 (Ok((accounts, loaders, _rents)), hash_age_kind) => {
+                    // Into RefCells
+                    let mut account_ref_cells: Vec<_> = accounts
+                        .drain(..)
+                        .map(|account| Rc::new(RefCell::new(account)))
+                        .collect();
+                    let mut loader_ref_cells: Vec<Vec<_>> = loaders
+                        .iter_mut()
+                        .map(|v| {
+                            v.drain(..)
+                                .map(|(pubkey, account)| (pubkey, RefCell::new(account)))
+                                .collect()
+                        })
+                        .collect();
+
                     signature_count += u64::from(tx.message().header.num_required_signatures);
-                    let process_result =
-                        self.message_processor
-                            .process_message(tx.message(), loaders, accounts);
-                    if let Err(TransactionError::InstructionError(_, _)) = &process_result {
-                        error_counters.instruction_error += 1;
-                    }
-                    (process_result, hash_age_kind.clone())
+
+                    let result = {
+                        let process_result = self.message_processor.process_message(
+                            tx.message(),
+                            &mut loader_ref_cells,
+                            &mut account_ref_cells,
+                        );
+                        if let Err(TransactionError::InstructionError(_, _)) = &process_result {
+                            error_counters.instruction_error += 1;
+                        }
+                        (process_result, hash_age_kind.clone())
+                    };
+
+                    // Back from RefCells
+                    account_ref_cells.drain(..).for_each(|account_ref_cell| {
+                        accounts.push(Rc::try_unwrap(account_ref_cell).unwrap().into_inner())
+                    });
+                    loaders
+                        .iter_mut()
+                        .zip(loader_ref_cells)
+                        .for_each(|(ls, mut lrcs)| {
+                            lrcs.drain(..)
+                                .for_each(|(pubkey, lrc)| ls.push((pubkey, lrc.into_inner())))
+                        });
+
+                    result
                 }
             })
             .collect();
@@ -2285,8 +2320,8 @@ mod tests {
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
                 MockInstruction::Deduction => {
-                    keyed_accounts[1].account.lamports += 1;
-                    keyed_accounts[2].account.lamports -= 1;
+                    keyed_accounts[1].account.borrow_mut().lamports += 1;
+                    keyed_accounts[2].account.borrow_mut().lamports -= 1;
                     Ok(())
                 }
             }
@@ -2872,8 +2907,8 @@ mod tests {
 
         // set up stakes, vote, and storage accounts
         bank.store_account(&stake.0, &stake.1);
-        bank.store_account(&validator_id, &validator_account);
-        bank.store_account(&archiver_id, &archiver_account);
+        bank.store_account(&validator_id, &validator_account.borrow());
+        bank.store_account(&archiver_id, &archiver_account.borrow());
 
         // generate some rewards
         let mut vote_state = VoteState::from(&vote_account).unwrap();
@@ -5134,5 +5169,57 @@ mod tests {
         assert!(transaction_results.processing_results[2].0.is_err());
         assert_eq!(transaction_balances_set.pre_balances[2], vec![9, 0, 1]);
         assert_eq!(transaction_balances_set.post_balances[2], vec![8, 0, 1]);
+    }
+
+    #[test]
+    fn test_transaction_with_duplicate_accounts_in_instruction() {
+        let (genesis_config, mint_keypair) = create_genesis_config(500);
+        let mut bank = Bank::new(&genesis_config);
+
+        fn mock_process_instruction(
+            _program_id: &Pubkey,
+            keyed_accounts: &mut [KeyedAccount],
+            data: &[u8],
+        ) -> result::Result<(), InstructionError> {
+            let lamports = data[0] as u64;
+            {
+                let mut to_account = keyed_accounts[1].try_account_ref_mut()?;
+                let mut dup_account = keyed_accounts[2].try_account_ref_mut()?;
+                dup_account.lamports -= lamports;
+                to_account.lamports += lamports;
+            }
+            keyed_accounts[0].try_account_ref_mut()?.lamports -= lamports;
+            keyed_accounts[1].try_account_ref_mut()?.lamports += lamports;
+            Ok(())
+        }
+
+        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        bank.add_instruction_processor(mock_program_id, mock_process_instruction);
+
+        let from_pubkey = Pubkey::new_rand();
+        let to_pubkey = Pubkey::new_rand();
+        let dup_pubkey = from_pubkey.clone();
+        let from_account = Account::new(100, 1, &mock_program_id);
+        let to_account = Account::new(0, 1, &mock_program_id);
+        bank.store_account(&from_pubkey, &from_account);
+        bank.store_account(&to_pubkey, &to_account);
+
+        let account_metas = vec![
+            AccountMeta::new(from_pubkey, false),
+            AccountMeta::new(to_pubkey, false),
+            AccountMeta::new(dup_pubkey, false),
+        ];
+        let instruction = Instruction::new(mock_program_id, &10, account_metas);
+        let tx = Transaction::new_signed_with_payer(
+            vec![instruction],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            bank.last_blockhash(),
+        );
+
+        let result = bank.process_transaction(&tx);
+        assert_eq!(result, Ok(()));
+        assert_eq!(bank.get_balance(&from_pubkey), 80);
+        assert_eq!(bank.get_balance(&to_pubkey), 20);
     }
 }

@@ -421,13 +421,13 @@ fn check_redeemable(
     owner: &mut StorageAccount,
 ) -> Result<(), InstructionError> {
     let rewards = (credits.redeemable as f64 * storage_point_value) as u64;
-    if rewards_pool.account.lamports < rewards {
+    if rewards_pool.lamports()? < rewards {
         Err(InstructionError::CustomError(
             StorageError::RewardPoolDepleted as u32,
         ))
     } else {
         if rewards >= 1 {
-            rewards_pool.account.lamports -= rewards;
+            rewards_pool.try_account_ref_mut()?.lamports -= rewards;
             owner.account.lamports += rewards;
             //clear credits
             credits.redeemable = 0;
@@ -503,7 +503,7 @@ fn count_valid_proofs(
 mod tests {
     use super::*;
     use crate::{id, rewards_pools};
-    use std::collections::BTreeMap;
+    use std::{cell::RefCell, collections::BTreeMap};
 
     #[test]
     fn test_account_data() {
@@ -617,7 +617,7 @@ mod tests {
             lamports: 1,
             ..Account::default()
         };
-        let mut rewards_pool = create_rewards_pool();
+        let mut rewards_pool = RefCell::new(create_rewards_pool());
         let pool_id = rewards_pools::id();
         let mut keyed_pool_account = KeyedAccount::new(&pool_id, false, &mut rewards_pool);
         let mut owner = StorageAccount {
@@ -626,7 +626,7 @@ mod tests {
         };
 
         // check that redeeming from depleted pools fails
-        keyed_pool_account.account.lamports = 0;
+        keyed_pool_account.account.borrow_mut().lamports = 0;
         assert_eq!(
             check_redeemable(&mut credits, 1.0, &mut keyed_pool_account, &mut owner),
             Err(InstructionError::CustomError(
@@ -635,7 +635,7 @@ mod tests {
         );
         assert_eq!(owner.account.lamports, 1);
 
-        keyed_pool_account.account.lamports = 200;
+        keyed_pool_account.account.borrow_mut().lamports = 200;
         assert_eq!(
             check_redeemable(&mut credits, 1.0, &mut keyed_pool_account, &mut owner),
             Ok(())

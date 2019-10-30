@@ -8,14 +8,6 @@ use solana_sdk::{account::Account, pubkey::Pubkey};
 use test::Bencher;
 
 #[bench]
-fn bench_has_duplicates(bencher: &mut Bencher) {
-    bencher.iter(|| {
-        let data = test::black_box([1, 2, 3]);
-        assert!(!has_duplicates(&data));
-    })
-}
-
-#[bench]
 fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     solana_logger::setup();
 

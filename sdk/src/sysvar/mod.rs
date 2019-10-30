@@ -80,7 +80,8 @@ pub trait Sysvar:
         if !Self::check_id(keyed_account.unsigned_key()) {
             return Err(InstructionError::InvalidArgument);
         }
-        Self::from_account(keyed_account.account).ok_or(InstructionError::InvalidArgument)
+        Self::from_account(&*keyed_account.try_account_ref()?)
+            .ok_or(InstructionError::InvalidArgument)
     }
     fn create_account(&self, lamports: u64) -> Account {
         let data_len = Self::size_of().max(bincode::serialized_size(self).unwrap() as usize);
