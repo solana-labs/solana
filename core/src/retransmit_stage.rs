@@ -10,8 +10,6 @@ use crate::{
     window_service::{should_retransmit_and_persist, WindowService},
 };
 use crossbeam_channel::Receiver as CrossbeamReceiver;
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
 use solana_ledger::{
     bank_forks::BankForks,
     blocktree::{Blocktree, CompletedSlotsReceiver},
@@ -92,7 +90,7 @@ fn retransmit(
                 &me.id,
                 &peers,
                 &stakes_and_index,
-                ChaChaRng::from_seed(packet.meta.seed),
+                packet.meta.seed,
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
             shuffled_stakes_and_index.remove(my_index);
