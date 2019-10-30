@@ -9,7 +9,7 @@ use crate::{
     inflation::Inflation,
     poh_config::PohConfig,
     pubkey::Pubkey,
-    rent_calculator::RentCalculator,
+    rent::Rent,
     signature::{Keypair, KeypairUtil},
     system_program::{self, solana_system_program},
 };
@@ -36,7 +36,7 @@ pub struct GenesisBlock {
     pub slots_per_segment: u64,
     pub poh_config: PohConfig,
     pub fee_calculator: FeeCalculator,
-    pub rent_calculator: RentCalculator,
+    pub rent: Rent,
     pub inflation: Inflation,
     pub epoch_schedule: EpochSchedule,
     pub operating_mode: OperatingMode,
@@ -68,7 +68,7 @@ impl Default for GenesisBlock {
             poh_config: PohConfig::default(),
             inflation: Inflation::default(),
             fee_calculator: FeeCalculator::default(),
-            rent_calculator: RentCalculator::default(),
+            rent: Rent::default(),
             epoch_schedule: EpochSchedule::default(),
             operating_mode: OperatingMode::Development,
         }

@@ -13,7 +13,7 @@ use solana_sdk::{
     native_token::sol_to_lamports,
     poh_config::PohConfig,
     pubkey::Pubkey,
-    rent_calculator::RentCalculator,
+    rent::Rent,
     signature::{read_keypair_file, Keypair, KeypairUtil},
     system_program, timing,
 };
@@ -86,11 +86,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let default_target_signatures_per_slot = &FeeCalculator::default()
         .target_signatures_per_slot
         .to_string();
-    let default_lamports_per_byte_year =
-        &RentCalculator::default().lamports_per_byte_year.to_string();
-    let default_rent_exemption_threshold =
-        &RentCalculator::default().exemption_threshold.to_string();
-    let default_rent_burn_percentage = &RentCalculator::default().burn_percent.to_string();
+    let (
+        default_lamports_per_byte_year,
+        default_rent_exemption_threshold,
+        default_rent_burn_percentage,
+    ) = {
+        let rent = Rent::default();
+        (
+            &rent.lamports_per_byte_year.to_string(),
+            &rent.exemption_threshold.to_string(),
+            &rent.burn_percent.to_string(),
+        )
+    };
     let default_target_tick_duration =
         &timing::duration_as_ms(&PohConfig::default().target_tick_duration).to_string();
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
@@ -362,7 +369,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         value_t_or_exit!(matches, "target_signatures_per_slot", usize),
     );
 
-    let rent_calculator = RentCalculator {
+    let rent = Rent {
         lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
         exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
         burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
@@ -399,7 +406,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ticks_per_slot,
         epoch_schedule,
         fee_calculator,
-        rent_calculator,
+        rent,
         poh_config,
         operating_mode,
         ..GenesisBlock::default()

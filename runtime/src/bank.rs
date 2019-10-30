@@ -473,7 +473,7 @@ impl Bank {
     fn update_rent(&self) {
         self.store_account(
             &sysvar::rent::id(),
-            &sysvar::rent::create_account(1, &self.rent_collector.rent_calculator),
+            &sysvar::rent::create_account(1, &self.rent_collector.rent),
         );
     }
 
@@ -679,12 +679,11 @@ impl Bank {
 
         self.inflation = genesis_block.inflation;
 
-        let rent_calculator = genesis_block.rent_calculator;
         self.rent_collector = RentCollector::new(
             self.epoch,
             &self.epoch_schedule,
             self.slots_per_year,
-            &rent_calculator,
+            &genesis_block.rent,
         );
 
         // Add additional native programs specified in the genesis block
@@ -705,9 +704,7 @@ impl Bank {
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> u64 {
-        self.rent_collector
-            .rent_calculator
-            .minimum_balance(data_len)
+        self.rent_collector.rent.minimum_balance(data_len)
     }
 
     pub fn last_blockhash_with_fee_calculator(&self) -> (Hash, FeeCalculator) {
@@ -1641,7 +1638,7 @@ mod tests {
         hash,
         instruction::InstructionError,
         poh_config::PohConfig,
-        rent_calculator::RentCalculator,
+        rent::Rent,
         signature::{Keypair, KeypairUtil},
         system_instruction, system_transaction,
         sysvar::{fees::Fees, rewards::Rewards},
@@ -1669,7 +1666,7 @@ mod tests {
             &dummy_leader_pubkey,
             dummy_leader_lamports,
         );
-        genesis_block.rent_calculator = RentCalculator {
+        genesis_block.rent = Rent {
             lamports_per_byte_year: 5,
             exemption_threshold: 1.2,
             burn_percent: 5,
@@ -1685,9 +1682,9 @@ mod tests {
         let rent_account = bank.get_account(&sysvar::rent::id()).unwrap();
         let rent = sysvar::rent::Rent::from_account(&rent_account).unwrap();
 
-        assert_eq!(rent.rent_calculator.burn_percent, 5);
-        assert_eq!(rent.rent_calculator.exemption_threshold, 1.2);
-        assert_eq!(rent.rent_calculator.lamports_per_byte_year, 5);
+        assert_eq!(rent.burn_percent, 5);
+        assert_eq!(rent.exemption_threshold, 1.2);
+        assert_eq!(rent.lamports_per_byte_year, 5);
     }
 
     #[test]
