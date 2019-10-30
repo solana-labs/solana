@@ -889,11 +889,7 @@ impl AccountsDB {
             .zip(accounts.iter())
             .filter_map(|(info, pubkey_account)| {
                 let pubkey = pubkey_account.0;
-                if let Some(info) = index.update(slot_id, pubkey, info, &mut reclaims) {
-                    Some((pubkey, info))
-                } else {
-                    None
-                }
+                index.update(slot_id, pubkey, info, &mut reclaims).map(|info| (pubkey, info))
             })
             .collect();
 
