@@ -528,8 +528,8 @@ impl LocalCluster {
         }
         info!("Checking for vote account registration of {}", node_pubkey);
         match (
-            client.get_account(&stake_account_pubkey),
-            client.get_account(&vote_account_pubkey),
+            client.get_account_now(&stake_account_pubkey),
+            client.get_account_now(&vote_account_pubkey),
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (

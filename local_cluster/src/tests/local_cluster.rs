@@ -329,7 +329,7 @@ fn test_softlaunch_operating_mode() {
     .iter()
     {
         assert_eq!(
-            (program_id, client.get_account(program_id).unwrap()),
+            (program_id, client.get_account_now(program_id).unwrap()),
             (program_id, None)
         );
     }

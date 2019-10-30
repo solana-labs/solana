@@ -100,6 +100,10 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_account(pubkey))
     }
 
+    fn get_account_now(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
+        Ok(self.bank.get_account(pubkey))
+    }
+
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {
         Ok(self.bank.get_balance(pubkey))
     }

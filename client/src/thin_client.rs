@@ -358,6 +358,13 @@ impl SyncClient for ThinClient {
         Ok(self.rpc_client().get_account(pubkey).ok())
     }
 
+    fn get_account_now(&self, pubkey: &Pubkey) -> TransportResult<Option<Account>> {
+        Ok(self
+            .rpc_client()
+            .get_account_with_confidence(pubkey, RpcConfidenceConfig::recent())
+            .ok())
+    }
+
     fn get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
         let balance = self.rpc_client().get_balance(pubkey)?;
         Ok(balance)

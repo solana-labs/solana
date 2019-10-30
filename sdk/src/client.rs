@@ -44,6 +44,9 @@ pub trait SyncClient {
     /// Get an account or None if not found.
     fn get_account(&self, pubkey: &Pubkey) -> Result<Option<Account>>;
 
+    /// Get an account or None if not found.  Does not wait for default confirmations.
+    fn get_account_now(&self, pubkey: &Pubkey) -> Result<Option<Account>>;
+
     /// Get account balance or 0 if not found.
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64>;
 

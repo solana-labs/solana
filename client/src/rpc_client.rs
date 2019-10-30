@@ -350,7 +350,11 @@ impl RpcClient {
         Ok(res)
     }
 
+<<<<<<< HEAD
     fn get_account_with_commitment(
+=======
+    pub fn get_account_with_confidence(
+>>>>>>> Add get_account_now method to client
         &self,
         pubkey: &Pubkey,
         commitment_config: RpcCommitmentConfig,
