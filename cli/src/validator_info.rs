@@ -9,7 +9,7 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use solana_client::rpc_client::RpcClient;
+use solana_client::{rpc_client::RpcClient, rpc_request::RpcConfidenceConfig};
 use solana_config_api::{config_instruction, get_config_data, ConfigKeys, ConfigState};
 use solana_sdk::account::Account;
 use solana_sdk::message::Message;
@@ -297,7 +297,9 @@ pub fn process_set_validator_info(
     };
 
     // Check existence of validator-info account
-    let balance = rpc_client.poll_get_balance(&info_pubkey).unwrap_or(0);
+    let balance = rpc_client
+        .poll_get_balance_with_confidence(&info_pubkey, RpcConfidenceConfig::default())
+        .unwrap_or(0);
 
     let keys = vec![(id(), false), (config.keypair.pubkey(), true)];
     let (message, signers): (Message, Vec<&Keypair>) = if balance == 0 {

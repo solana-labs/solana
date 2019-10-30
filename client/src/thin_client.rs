@@ -254,12 +254,26 @@ impl ThinClient {
         polling_frequency: &Duration,
         timeout: &Duration,
     ) -> io::Result<u64> {
-        self.rpc_client()
-            .poll_balance_with_timeout(pubkey, polling_frequency, timeout)
+        self.rpc_client().poll_balance_with_timeout_and_confidence(
+            pubkey,
+            polling_frequency,
+            timeout,
+            RpcConfidenceConfig::default(),
+        )
     }
 
     pub fn poll_get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.rpc_client().poll_get_balance(pubkey)
+        self.rpc_client()
+            .poll_get_balance_with_confidence(pubkey, RpcConfidenceConfig::default())
+    }
+
+    pub fn poll_get_balance_with_confidence(
+        &self,
+        pubkey: &Pubkey,
+        confidence_config: RpcConfidenceConfig,
+    ) -> io::Result<u64> {
+        self.rpc_client()
+            .poll_get_balance_with_confidence(pubkey, confidence_config)
     }
 
     pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {

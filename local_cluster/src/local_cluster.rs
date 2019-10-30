@@ -1,5 +1,8 @@
 use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
-use solana_client::thin_client::{create_client, ThinClient};
+use solana_client::{
+    rpc_request::RpcConfidenceConfig,
+    thin_client::{create_client, ThinClient},
+};
 use solana_core::{
     archiver::Archiver,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
@@ -453,7 +456,11 @@ impl LocalCluster {
         let stake_account_pubkey = stake_account_keypair.pubkey();
 
         // Create the vote account if necessary
-        if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
+        if client
+            .poll_get_balance_with_confidence(&vote_account_pubkey, RpcConfidenceConfig::recent())
+            .unwrap_or(0)
+            == 0
+        {
             // 1) Create vote account
 
             let mut transaction = Transaction::new_signed_instructions(

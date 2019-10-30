@@ -583,15 +583,16 @@ impl RpcClient {
         Ok(blockhash)
     }
 
-    pub fn poll_balance_with_timeout(
+    pub fn poll_balance_with_timeout_and_confidence(
         &self,
         pubkey: &Pubkey,
         polling_frequency: &Duration,
         timeout: &Duration,
+        confidence_config: RpcConfidenceConfig,
     ) -> io::Result<u64> {
         let now = Instant::now();
         loop {
-            match self.get_balance(&pubkey) {
+            match self.get_balance_with_confidence(&pubkey, confidence_config.clone()) {
                 Ok(bal) => {
                     return Ok(bal);
                 }
@@ -605,14 +606,24 @@ impl RpcClient {
         }
     }
 
-    pub fn poll_get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.poll_balance_with_timeout(pubkey, &Duration::from_millis(100), &Duration::from_secs(1))
+    pub fn poll_get_balance_with_confidence(
+        &self,
+        pubkey: &Pubkey,
+        confidence_config: RpcConfidenceConfig,
+    ) -> io::Result<u64> {
+        self.poll_balance_with_timeout_and_confidence(
+            pubkey,
+            &Duration::from_millis(100),
+            &Duration::from_secs(1),
+            confidence_config,
+        )
     }
 
     pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
         const LAST: usize = 30;
         for run in 0..LAST {
-            let balance_result = self.poll_get_balance(pubkey);
+            let balance_result =
+                self.poll_get_balance_with_confidence(pubkey, RpcConfidenceConfig::default());
             if expected_balance.is_none() {
                 return balance_result.ok();
             }
