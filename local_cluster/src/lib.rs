@@ -29,7 +29,6 @@ extern crate solana_drone;
 extern crate solana_exchange_program;
 
 #[cfg(feature = "move")]
-#[macro_use]
 #[cfg(test)]
 extern crate solana_move_loader_program;
 

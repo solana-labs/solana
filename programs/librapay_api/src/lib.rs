@@ -34,7 +34,7 @@ pub fn create_genesis<T: Client>(from_key: &Keypair, client: &T, amount: u64) ->
         1,
         bincode::serialized_size(&LibraAccountState::create_genesis(amount).unwrap()).unwrap()
             as u64,
-        &solana_move_loader_api::id(),
+        &solana_sdk::move_loader::id(),
     );
     client.send_instruction(&from_key, instruction).unwrap();
 
@@ -52,7 +52,12 @@ pub fn upload_move_program<T: Client>(from: &Keypair, client: &T, code: &str) ->
     let account_state = LibraAccountState::create_program(&address, code, vec![]);
     let program_bytes = bincode::serialize(&account_state).unwrap();
 
-    load_program(client, &from, &solana_move_loader_api::id(), program_bytes)
+    load_program(
+        client,
+        &from,
+        &solana_sdk::move_loader::id(),
+        program_bytes,
+    )
 }
 
 pub fn upload_mint_program<T: Client>(from: &Keypair, client: &T) -> Pubkey {

@@ -10,6 +10,7 @@ pub mod instruction;
 pub mod instruction_processor_utils;
 pub mod loader_instruction;
 pub mod message;
+pub mod move_loader;
 pub mod native_loader;
 pub mod native_token;
 pub mod poh_config;
