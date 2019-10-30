@@ -645,7 +645,7 @@ pub fn airdrop_lamports<T: Client>(
                 loop {
                     tries += 1;
                     let signature = client.async_send_transaction(transaction.clone()).unwrap();
-                    let result = client.poll_for_signature_confirmation(&signature, 31);
+                    let result = client.poll_for_signature_confirmation(&signature, 1);
 
                     if result.is_ok() {
                         break;

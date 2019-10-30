@@ -761,7 +761,7 @@ impl RpcClient {
                 &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
                 Some(params.clone()),
                 1,
-                None,
+                RpcConfidenceConfig::recent().ok(),
             )
             .map_err(|err| {
                 io::Error::new(
