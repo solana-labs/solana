@@ -1,14 +1,13 @@
 use crate::account_state::{pubkey_to_address, LibraAccountState, ModuleBytes};
 use crate::data_store::DataStore;
 use crate::error_mappers::*;
-use crate::id;
 use bytecode_verifier::verifier::{VerifiedModule, VerifiedScript};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount, instruction::InstructionError,
     instruction_processor_utils::limited_deserialize, loader_instruction::LoaderInstruction,
-    pubkey::Pubkey, sysvar::rent,
+    move_loader::id, pubkey::Pubkey, sysvar::rent,
 };
 use types::{
     account_address::AccountAddress,
