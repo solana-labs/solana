@@ -306,7 +306,7 @@ mod tests {
         let rent_calculator = solana_sdk::rent_calculator::RentCalculator::default();
         let minimum_balance = rent_calculator.minimum_balance(VoteState::size_of());
         // vote state cheaper than "my $0.02" ;)
-        assert!(minimum_balance as f64 / 2f64.powf(34.0) < 0.02)
+        assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.02)
     }
 
     #[test]

@@ -34,4 +34,4 @@ A cluster is a set of computers that work together and can be viewed from the ou
 
 ## What are SOLs?
 
-A SOL is the name of Solana's native token, which can be passed to nodes in a Solana cluster in exchange for running an on-chain program or validating its output. The system may perform micropayments of fractional SOLs and a SOL may be split as many as 34 times. The fractional sol is called a _lamport_. It is named in honor of Solana's biggest technical influence, [Leslie Lamport](https://en.wikipedia.org/wiki/Leslie_Lamport). A lamport has a value of 0.000000001 sol.
+A SOL is the name of Solana's native token, which can be passed to nodes in a Solana cluster in exchange for running an on-chain program or validating its output. The system may perform micropayments of fractional SOLs, which are called _lamports_. They are named in honor of Solana's biggest technical influence, [Leslie Lamport](https://en.wikipedia.org/wiki/Leslie_Lamport). A lamport has a value of 0.000000001 SOL.
