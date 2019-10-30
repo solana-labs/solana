@@ -233,13 +233,12 @@ cloud_CreateInstances() {
     for nodeName in "${nodes[@]}"; do
       az vm create --name "$nodeName" "${args[@]}" --no-wait
     done
+    for nodeName in "${nodes[@]}"; do
+      az vm wait --created --name "$nodeName" --resource-group "$networkName" --verbose --timeout 300
+    done
 
-    # 3. If GPU is to be enabled, wait until nodes are created, then install the appropriate extension
+    # 3. If GPU is to be enabled, install the appropriate extension
     if $enableGpu; then
-      for nodeName in "${nodes[@]}"; do
-        az vm wait --created --name "$nodeName" --resource-group "$networkName" --verbose --timeout 600
-      done
-
       for nodeName in "${nodes[@]}"; do
         az vm extension set \
         --resource-group "$networkName" \
