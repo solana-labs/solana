@@ -1,5 +1,3 @@
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::*;
 use serial_test_derive::serial;
@@ -120,7 +118,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                 &cluster_info.id(),
                 &peers,
                 &stakes_and_index,
-                ChaChaRng::from_seed(seed),
+                seed,
             );
             let peers = shuffled_stakes_and_indexes
                 .into_iter()
