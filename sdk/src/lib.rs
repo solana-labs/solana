@@ -15,7 +15,7 @@ pub mod native_loader;
 pub mod native_token;
 pub mod poh_config;
 pub mod pubkey;
-pub mod rent_calculator;
+pub mod rent;
 pub mod rpc_port;
 pub mod short_vec;
 pub mod slot_hashes;

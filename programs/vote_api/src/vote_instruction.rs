@@ -219,7 +219,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use solana_sdk::account::Account;
-    use solana_sdk::rent_calculator::RentCalculator;
+    use solana_sdk::rent::Rent;
 
     // these are for 100% coverage in this file
     #[test]
@@ -240,7 +240,7 @@ mod tests {
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
                     sysvar::slot_hashes::create_account(1, &[])
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    sysvar::rent::create_account(1, &RentCalculator::default())
+                    sysvar::rent::create_account(1, &Rent::default())
                 } else {
                     Account::default()
                 }
@@ -303,8 +303,8 @@ mod tests {
 
     #[test]
     fn test_minimum_balance() {
-        let rent_calculator = solana_sdk::rent_calculator::RentCalculator::default();
-        let minimum_balance = rent_calculator.minimum_balance(VoteState::size_of());
+        let rent = solana_sdk::rent::Rent::default();
+        let minimum_balance = rent.minimum_balance(VoteState::size_of());
         // vote state cheaper than "my $0.02" ;)
         assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.02)
     }

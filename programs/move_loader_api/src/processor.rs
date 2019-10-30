@@ -428,7 +428,7 @@ impl MoveProcessor {
 mod tests {
     use super::*;
     use solana_sdk::account::Account;
-    use solana_sdk::rent_calculator::RentCalculator;
+    use solana_sdk::rent::Rent;
     use solana_sdk::sysvar::rent;
 
     const BIG_ENOUGH: usize = 10_000;
@@ -467,7 +467,7 @@ mod tests {
         let sender_address = AccountAddress::default();
         let mut program = LibraAccount::create_program(&sender_address, code, vec![]);
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -514,7 +514,7 @@ mod tests {
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -554,7 +554,7 @@ mod tests {
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -629,7 +629,7 @@ mod tests {
         let sender = &mut sender[0];
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -701,7 +701,7 @@ mod tests {
         let mut program = LibraAccount::create_program(&payee.address, code, vec![]);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -747,7 +747,7 @@ mod tests {
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -791,7 +791,7 @@ mod tests {
             LibraAccount::create_program(&module.address, &code, vec![&module.account.data]);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -833,7 +833,7 @@ mod tests {
         let mut payee = LibraAccount::create_unallocated();
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &RentCalculator::default());
+        let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&program.key, true, &mut program.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),

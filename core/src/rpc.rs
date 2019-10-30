@@ -1327,8 +1327,8 @@ pub mod tests {
             ..
         } = create_genesis_block(TEST_MINT_LAMPORTS);
 
-        genesis_block.rent_calculator.lamports_per_byte_year = 50;
-        genesis_block.rent_calculator.exemption_threshold = 2.0;
+        genesis_block.rent.lamports_per_byte_year = 50;
+        genesis_block.rent.exemption_threshold = 2.0;
 
         let bank = Bank::new(&genesis_block);
         (

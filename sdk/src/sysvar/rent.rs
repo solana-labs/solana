@@ -1,10 +1,11 @@
 //! This account contains the current cluster rent
 //!
+pub use crate::rent::Rent;
+
 use crate::{
     account::{Account, KeyedAccount},
     account_info::AccountInfo,
     instruction::InstructionError,
-    rent_calculator::RentCalculator,
     sysvar,
 };
 use bincode::serialized_size;
@@ -16,12 +17,6 @@ const ID: [u8; 32] = [
 ];
 
 crate::solana_sysvar_id!(ID, "SysvarRent111111111111111111111111111111111");
-
-#[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct Rent {
-    pub rent_calculator: RentCalculator,
-}
 
 impl Rent {
     pub fn from_account(account: &Account) -> Option<Self> {
@@ -41,15 +36,8 @@ impl Rent {
     }
 }
 
-pub fn create_account(lamports: u64, rent_calculator: &RentCalculator) -> Account {
-    Account::new_data(
-        lamports,
-        &Rent {
-            rent_calculator: *rent_calculator,
-        },
-        &sysvar::id(),
-    )
-    .unwrap()
+pub fn create_account(lamports: u64, rent: &Rent) -> Account {
+    Account::new_data(lamports, rent, &sysvar::id()).unwrap()
 }
 
 pub fn from_keyed_account(account: &KeyedAccount) -> Result<Rent, InstructionError> {
@@ -64,7 +52,6 @@ pub fn verify_rent_exemption(
     rent_sysvar_account: &KeyedAccount,
 ) -> Result<(), InstructionError> {
     if !from_keyed_account(rent_sysvar_account)?
-        .rent_calculator
         .is_exempt(account.account.lamports, account.account.data.len())
     {
         Err(InstructionError::InsufficientFunds)
@@ -80,8 +67,8 @@ mod tests {
     #[test]
     fn test_rent_create_account() {
         let lamports = 42;
-        let account = create_account(lamports, &RentCalculator::default());
+        let account = create_account(lamports, &Rent::default());
         let rent = Rent::from_account(&account).unwrap();
-        assert_eq!(rent.rent_calculator, RentCalculator::default());
+        assert_eq!(rent, Rent::default());
     }
 }

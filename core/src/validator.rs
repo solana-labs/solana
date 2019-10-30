@@ -591,8 +591,8 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
         .native_instruction_processors
         .push(solana_budget_program!());
 
-    genesis_block.rent_calculator.lamports_per_byte_year = 1;
-    genesis_block.rent_calculator.exemption_threshold = 1.0;
+    genesis_block.rent.lamports_per_byte_year = 1;
+    genesis_block.rent.exemption_threshold = 1.0;
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
