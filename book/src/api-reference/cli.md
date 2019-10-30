@@ -177,7 +177,7 @@ $ solana send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 ## Usage
 ### solana-cli
 ```text
-solana-cli 0.20.1
+solana-cli 0.20.2
 Blockchain, Rebuilt for Scale
 
 USAGE:
