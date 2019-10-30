@@ -77,7 +77,7 @@ impl SigVerifier for ShredSigVerifier {
                 let key = self
                     .leader_schedule_cache
                     .slot_leader_at(slot, Some(&r_bank))?;
-                Some((slot, key.to_array()))
+                Some((slot, key.to_bytes()))
             })
             .collect();
         leader_slots.insert(std::u64::MAX, [0u8; 32]);
@@ -543,7 +543,7 @@ pub mod tests {
         packet.data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         packet.meta.size = shred.payload.len();
 
-        let leader_slots = [(slot, keypair.pubkey().to_array())]
+        let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
             .cloned()
             .collect();
@@ -551,7 +551,7 @@ pub mod tests {
         assert_eq!(rv, Some(1));
 
         let wrong_keypair = Keypair::new();
-        let leader_slots = [(slot, wrong_keypair.pubkey().to_array())]
+        let leader_slots = [(slot, wrong_keypair.pubkey().to_bytes())]
             .iter()
             .cloned()
             .collect();
@@ -575,7 +575,7 @@ pub mod tests {
         batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batch[0].packets[0].meta.size = shred.payload.len();
 
-        let leader_slots = [(slot, keypair.pubkey().to_array())]
+        let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
             .cloned()
             .collect();
@@ -583,7 +583,7 @@ pub mod tests {
         assert_eq!(rv, vec![vec![1]]);
 
         let wrong_keypair = Keypair::new();
-        let leader_slots = [(slot, wrong_keypair.pubkey().to_array())]
+        let leader_slots = [(slot, wrong_keypair.pubkey().to_bytes())]
             .iter()
             .cloned()
             .collect();
@@ -594,7 +594,7 @@ pub mod tests {
         let rv = verify_shreds_cpu(&batch, &leader_slots);
         assert_eq!(rv, vec![vec![0]]);
 
-        let leader_slots = [(slot, keypair.pubkey().to_array())]
+        let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
             .cloned()
             .collect();
@@ -620,7 +620,7 @@ pub mod tests {
         batch[0].packets[0].meta.size = shred.payload.len();
 
         let leader_slots = [
-            (slot, keypair.pubkey().to_array()),
+            (slot, keypair.pubkey().to_bytes()),
             (std::u64::MAX, [0u8; 32]),
         ]
         .iter()
@@ -637,7 +637,7 @@ pub mod tests {
 
         let wrong_keypair = Keypair::new();
         let leader_slots = [
-            (slot, wrong_keypair.pubkey().to_array()),
+            (slot, wrong_keypair.pubkey().to_bytes()),
             (std::u64::MAX, [0u8; 32]),
         ]
         .iter()
@@ -664,7 +664,7 @@ pub mod tests {
 
         batch[0].packets[0].meta.size = 0;
         let leader_slots = [
-            (slot, keypair.pubkey().to_array()),
+            (slot, keypair.pubkey().to_bytes()),
             (std::u64::MAX, [0u8; 32]),
         ]
         .iter()
@@ -685,23 +685,25 @@ pub mod tests {
         solana_logger::setup();
         let recycler_offsets = Recycler::default();
         let recycler_pubkeys = Recycler::default();
+        let recycler_out = Recycler::default();
 
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
-        let mut shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true);
         let keypair = Keypair::new();
         batch[0].packets.resize(1, Packet::default());
         batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batch[0].packets[0].meta.size = shred.payload.len();
         let pubkeys = [
-            (slot, keypair.pubkey().to_array()),
+            (slot, keypair.pubkey().to_bytes()),
             (std::u64::MAX, [0u8; 32]),
-        ];
+        ].iter().cloned().collect();
         let privkeys = [
-            (slot, keypair.secret().to_array()),
+            (slot, keypair.secret.to_bytes()),
             (std::u64::MAX, [0u8; 32]),
-        ];
-        sigverify_sign_shreds_gpu(&mut batch, &pubkeys, &privkeys, &recycler_offsets, &recycler_pubkeys);
+        ].iter().cloned().collect();
+        sign_shreds_gpu(&mut batch, &pubkeys, &privkeys, &recycler_offsets, &recycler_pubkeys);
+        let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_offsets, &recycler_pubkeys, &recycler_out);
+        assert_eq!(rv, vec![vec![1]]);
     }
 
     #[test]
