@@ -440,7 +440,11 @@ impl LocalCluster {
             .retry_transfer(&source_keypair, &mut tx, 10)
             .expect("client transfer");
         client
-            .wait_for_balance(dest_pubkey, Some(lamports))
+            .wait_for_balance_with_confidence(
+                dest_pubkey,
+                Some(lamports),
+                RpcConfidenceConfig::recent(),
+            )
             .expect("get balance")
     }
 
@@ -482,7 +486,11 @@ impl LocalCluster {
                 .retry_transfer(&from_account, &mut transaction, 10)
                 .expect("fund vote");
             client
-                .wait_for_balance(&vote_account_pubkey, Some(amount))
+                .wait_for_balance_with_confidence(
+                    &vote_account_pubkey,
+                    Some(amount),
+                    RpcConfidenceConfig::recent(),
+                )
                 .expect("get balance");
 
             let mut transaction = Transaction::new_signed_instructions(
@@ -506,7 +514,11 @@ impl LocalCluster {
                 )
                 .expect("delegate stake");
             client
-                .wait_for_balance(&stake_account_pubkey, Some(amount))
+                .wait_for_balance_with_confidence(
+                    &stake_account_pubkey,
+                    Some(amount),
+                    RpcConfidenceConfig::recent(),
+                )
                 .expect("get balance");
         } else {
             warn!(

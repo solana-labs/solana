@@ -277,7 +277,24 @@ impl ThinClient {
     }
 
     pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
-        self.rpc_client().wait_for_balance(pubkey, expected_balance)
+        self.rpc_client().wait_for_balance_with_confidence(
+            pubkey,
+            expected_balance,
+            RpcConfidenceConfig::default(),
+        )
+    }
+
+    pub fn wait_for_balance_with_confidence(
+        &self,
+        pubkey: &Pubkey,
+        expected_balance: Option<u64>,
+        confidence_config: RpcConfidenceConfig,
+    ) -> Option<u64> {
+        self.rpc_client().wait_for_balance_with_confidence(
+            pubkey,
+            expected_balance,
+            confidence_config,
+        )
     }
 
     /// Check a signature in the bank. This method blocks

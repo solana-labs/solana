@@ -619,11 +619,16 @@ impl RpcClient {
         )
     }
 
-    pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
+    pub fn wait_for_balance_with_confidence(
+        &self,
+        pubkey: &Pubkey,
+        expected_balance: Option<u64>,
+        confidence_config: RpcConfidenceConfig,
+    ) -> Option<u64> {
         const LAST: usize = 30;
         for run in 0..LAST {
             let balance_result =
-                self.poll_get_balance_with_confidence(pubkey, RpcConfidenceConfig::default());
+                self.poll_get_balance_with_confidence(pubkey, confidence_config.clone());
             if expected_balance.is_none() {
                 return balance_result.ok();
             }
