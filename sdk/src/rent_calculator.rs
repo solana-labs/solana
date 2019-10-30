@@ -13,8 +13,8 @@ pub struct RentCalculator {
 }
 
 /// default rental rate in lamports/byte-year, based on:
-///  10^9 lamports per Sol
-///  $1 per Sol
+///  10^9 lamports per SOL
+///  $1 per SOL
 ///  $0.01 per megabyte day
 ///  $3.65 per megabyte year
 pub const DEFAULT_LAMPORTS_PER_BYTE_YEAR: u64 = 0; //1_000_000_000 / 100 * 365 / (1024 * 1024);
