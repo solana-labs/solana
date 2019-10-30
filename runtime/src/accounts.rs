@@ -116,8 +116,8 @@ impl Accounts {
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let mut accounts: TransactionAccounts = vec![];
-            let mut rents: TransactionRents = vec![];
+            let mut accounts: TransactionAccounts = Vec::with_capacity(message.account_keys.len());
+            let mut rents: TransactionRents = Vec::with_capacity(message.account_keys.len());
             for key in message
                 .account_keys
                 .iter()
@@ -633,7 +633,7 @@ impl Accounts {
         res: &'a [Result<()>],
         loaded: &'a mut [Result<TransactionLoadResult>],
     ) -> Vec<(&'a Pubkey, &'a Account)> {
-        let mut accounts = Vec::new();
+        let mut accounts = Vec::with_capacity(loaded.len());
         for (i, (raccs, tx)) in loaded
             .iter_mut()
             .zip(OrderedIterator::new(txs, txs_iteration_order))
