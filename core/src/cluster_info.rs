@@ -26,9 +26,7 @@ use crate::weighted_shuffle::{weighted_best, weighted_shuffle};
 use bincode::{deserialize, serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
-use rand::SeedableRng;
 use rand::{thread_rng, Rng};
-use rand_chacha::ChaChaRng;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::Blocktree;
 use solana_ledger::staking_utils;
@@ -510,11 +508,11 @@ impl ClusterInfo {
 
     fn stake_weighted_shuffle(
         stakes_and_index: &[(u64, usize)],
-        rng: ChaChaRng,
+        seed: [u8; 32],
     ) -> Vec<(u64, usize)> {
         let stake_weights = stakes_and_index.iter().map(|(w, _)| *w).collect();
 
-        let shuffle = weighted_shuffle(stake_weights, rng);
+        let shuffle = weighted_shuffle(stake_weights, seed);
 
         shuffle.iter().map(|x| stakes_and_index[*x]).collect()
     }
@@ -536,9 +534,9 @@ impl ClusterInfo {
         id: &Pubkey,
         peers: &[ContactInfo],
         stakes_and_index: &[(u64, usize)],
-        rng: ChaChaRng,
+        seed: [u8; 32],
     ) -> (usize, Vec<(u64, usize)>) {
-        let shuffled_stakes_and_index = ClusterInfo::stake_weighted_shuffle(stakes_and_index, rng);
+        let shuffled_stakes_and_index = ClusterInfo::stake_weighted_shuffle(stakes_and_index, seed);
         let mut self_index = 0;
         shuffled_stakes_and_index
             .iter()
@@ -723,7 +721,7 @@ impl ClusterInfo {
             .into_iter()
             .zip(seeds)
             .map(|(shred, seed)| {
-                let broadcast_index = weighted_best(&peers_and_stakes, ChaChaRng::from_seed(*seed));
+                let broadcast_index = weighted_best(&peers_and_stakes, *seed);
 
                 (shred, &peers[broadcast_index].tvu)
             })

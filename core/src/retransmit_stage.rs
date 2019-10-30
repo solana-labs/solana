@@ -8,8 +8,12 @@ use crate::{
     streamer::PacketReceiver,
     window_service::{should_retransmit_and_persist, WindowService},
 };
+<<<<<<< HEAD
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+=======
+use crossbeam_channel::Receiver as CrossbeamReceiver;
+>>>>>>> 801337a42... Refactor Weighted Shuffle (#6614)
 use solana_ledger::{
     bank_forks::BankForks,
     blocktree::{Blocktree, CompletedSlotsReceiver},
@@ -90,7 +94,7 @@ fn retransmit(
                 &me.id,
                 &peers,
                 &stakes_and_index,
-                ChaChaRng::from_seed(packet.meta.seed),
+                packet.meta.seed,
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
             shuffled_stakes_and_index.remove(my_index);

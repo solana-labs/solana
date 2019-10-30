@@ -20,8 +20,7 @@ use indexmap::map::IndexMap;
 use itertools::Itertools;
 use rand;
 use rand::seq::SliceRandom;
-use rand::{thread_rng, RngCore, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand::{thread_rng, RngCore};
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -106,7 +105,7 @@ impl CrdsGossipPush {
         seed[0..8].copy_from_slice(&thread_rng().next_u64().to_le_bytes());
         let shuffle = weighted_shuffle(
             staked_peers.iter().map(|(_, stake)| *stake).collect_vec(),
-            ChaChaRng::from_seed(seed),
+            seed,
         );
 
         let mut keep = HashSet::new();
@@ -244,7 +243,7 @@ impl CrdsGossipPush {
         seed[0..8].copy_from_slice(&thread_rng().next_u64().to_le_bytes());
         let mut shuffle = weighted_shuffle(
             options.iter().map(|weighted| weighted.0).collect_vec(),
-            ChaChaRng::from_seed(seed),
+            seed,
         )
         .into_iter();
 
