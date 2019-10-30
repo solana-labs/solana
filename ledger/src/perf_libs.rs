@@ -50,8 +50,8 @@ pub struct Api<'a> {
             message_lens: *const u32,
             pubkey_offsets: *const u32,
             privkey_offsets: *const u32,
-            signature_offsets: *const u32,
             signed_message_offsets: *const u32,
+            sgnatures_out: *mut u8, //combined length of all the items in vecs
             use_non_default_stream: u8,
         ) -> u32,
     >,

@@ -5,9 +5,11 @@ use crate::recycler::Recycler;
 use crate::recycler::Reset;
 use crate::sigverify::{self, TxOffset};
 use crate::sigverify_stage::SigVerifier;
+use rayon::iter::IndexedParallelIterator;
 use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use rayon::iter::IntoParallelIterator;
+use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 use solana_ed25519_dalek::{Keypair, PublicKey, SecretKey};
@@ -430,7 +432,9 @@ pub fn sign_shreds_gpu(
     slot_leaders_privkeys: &HashMap<u64, [u8; 32]>,
     recycler_offsets: &Recycler<TxOffset>,
     recycler_pubkeys: &Recycler<PinnedVec<[u8; 32]>>,
+    recycler_out: &Recycler<PinnedVec<u8>>,
 ) {
+    let sig_size = 64;
     let api = perf_libs::api();
     if api.is_none() {
         return sign_shreds_cpu(batches, slot_leaders_pubkeys, slot_leaders_privkeys);
@@ -465,6 +469,9 @@ pub fn sign_shreds_gpu(
     trace!("offset: {}", offset);
     let (signature_offsets, msg_start_offsets, msg_sizes, _v_sig_lens) =
         shred_gpu_offsets(offset, batches, recycler_offsets);
+    let total_sigs = signature_offsets.len();
+    let mut signatures_out = recycler_out.allocate("ed25519 signatures");
+    signatures_out.resize(total_sigs * sig_size, 0);
     elems.push(
         perf_libs::Elems {
             #![allow(clippy::cast_ptr_alignment)]
@@ -481,7 +488,7 @@ pub fn sign_shreds_gpu(
         },
     );
 
-    for p in batches {
+    for p in batches.iter() {
         elems.push(perf_libs::Elems {
             elems: p.packets.as_ptr(),
             num: p.packets.len() as u32,
@@ -501,12 +508,12 @@ pub fn sign_shreds_gpu(
             elems.len() as u32,
             size_of::<Packet>() as u32,
             num_packets as u32,
-            signature_offsets.len() as u32,
+            total_sigs as u32,
             msg_sizes.as_ptr(),
             pubkey_offsets.as_ptr(),
             privkey_offsets.as_ptr(),
-            signature_offsets.as_ptr(),
             msg_start_offsets.as_ptr(),
+            signatures_out.as_mut_ptr(),
             USE_NON_DEFAULT_STREAM,
         );
         if res != 0 {
@@ -514,8 +521,31 @@ pub fn sign_shreds_gpu(
         }
     }
     trace!("done sign");
-
+    let mut sizes: Vec<usize> = vec![0];
+    sizes.extend(batches.iter().map(|b| b.packets.len()));
+    PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            batches
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(batch_ix, batch)| {
+                    let num_packets = sizes[batch_ix];
+                    batch
+                        .packets
+                        .iter_mut()
+                        .enumerate()
+                        .for_each(|(packet_ix, packet)| {
+                            let sig_ix = packet_ix + num_packets;
+                            let sig_start = sig_ix * sig_size;
+                            let sig_end = sig_start + sig_size;
+                            packet.data[0..sig_size]
+                                .copy_from_slice(&signatures_out[sig_start..sig_end]);
+                        });
+                });
+        });
+    });
     inc_new_counter_debug!("ed25519_shred_sign_gpu", count);
+    recycler_out.recycle(signatures_out);
     recycler_offsets.recycle(signature_offsets);
     recycler_offsets.recycle(pubkey_offsets);
     recycler_offsets.recycle(msg_sizes);
@@ -724,6 +754,7 @@ pub mod tests {
             &privkeys,
             &recycler_offsets,
             &recycler_pubkeys,
+            &recycler_out,
         );
         let rv = verify_shreds_gpu(
             &batch,
