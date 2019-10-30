@@ -71,17 +71,17 @@ impl RpcClient {
         }
     }
 
-    fn get_signature_status_with_commitment(
+    pub fn get_signature_status_with_commitment(
         &self,
         signature: &str,
-        commitment_config: Option<RpcCommitmentConfig>,
+        commitment_config: RpcCommitmentConfig,
     ) -> Result<Option<transaction::Result<()>>, ClientError> {
         let params = json!(signature.to_string());
         let signature_status = self.client.send(
             &RpcRequest::GetSignatureStatus,
             Some(params),
             5,
-            commitment_config,
+            commitment_config.ok(),
         )?;
         let result: Option<transaction::Result<()>> =
             serde_json::from_value(signature_status).unwrap();
@@ -92,18 +92,7 @@ impl RpcClient {
         &self,
         signature: &str,
     ) -> Result<Option<transaction::Result<()>>, ClientError> {
-        self.get_signature_status_with_commitment(signature, None)
-    }
-
-    pub fn get_signature_status_now(
-        &self,
-        signature: &str,
-    ) -> Result<Option<transaction::Result<()>>, ClientError> {
-        let commitment_config = RpcCommitmentConfig {
-            confirmations: Some(1.into()),
-            percentage: None,
-        };
-        self.get_signature_status_with_commitment(signature, Some(commitment_config))
+        self.get_signature_status_with_commitment(signature, RpcCommitmentConfig::default())
     }
 
     pub fn get_slot(&self) -> io::Result<Slot> {
@@ -364,14 +353,14 @@ impl RpcClient {
     fn get_account_with_commitment(
         &self,
         pubkey: &Pubkey,
-        commitment_config: Option<RpcCommitmentConfig>,
+        commitment_config: RpcCommitmentConfig,
     ) -> io::Result<Account> {
         let params = json!(format!("{}", pubkey));
         let response = self.client.send(
             &RpcRequest::GetAccountInfo,
             Some(params),
             0,
-            commitment_config,
+            commitment_config.ok(),
         );
 
         response
@@ -389,15 +378,7 @@ impl RpcClient {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
-        self.get_account_with_commitment(pubkey, None)
-    }
-
-    pub fn get_account_now(&self, pubkey: &Pubkey) -> io::Result<Account> {
-        let commitment_config = RpcCommitmentConfig {
-            confirmations: Some(1.into()),
-            percentage: None,
-        };
-        self.get_account_with_commitment(pubkey, Some(commitment_config))
+        self.get_account_with_commitment(pubkey, RpcCommitmentConfig::default())
     }
 
     pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
@@ -442,11 +423,16 @@ impl RpcClient {
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
     pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.get_account(pubkey).map(|account| account.lamports)
+        self.get_balance_with_confidence(pubkey, RpcConfidenceConfig::default())
     }
 
-    pub fn get_balance_now(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.get_account_now(pubkey).map(|account| account.lamports)
+    pub fn get_balance_with_confidence(
+        &self,
+        pubkey: &Pubkey,
+        confidence_config: RpcConfidenceConfig,
+    ) -> io::Result<u64> {
+        self.get_account_with_confidence(pubkey, confidence_config)
+            .map(|account| account.lamports)
     }
 
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> io::Result<Vec<(Pubkey, Account)>> {
@@ -482,13 +468,18 @@ impl RpcClient {
         Ok(pubkey_accounts)
     }
 
-    fn get_transaction_count_with_commitment(
+    pub fn get_transaction_count_with_confidence(
         &self,
-        commitment_config: Option<RpcCommitmentConfig>,
+        commitment_config: RpcCommitmentConfig,
     ) -> io::Result<u64> {
         let response = self
             .client
-            .send(&RpcRequest::GetTransactionCount, None, 0, commitment_config)
+            .send(
+                &RpcRequest::GetTransactionCount,
+                None,
+                0,
+                commitment_config.ok(),
+            )
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -506,15 +497,7 @@ impl RpcClient {
 
     /// Request the transaction count.
     pub fn get_transaction_count(&self) -> io::Result<u64> {
-        self.get_transaction_count_with_commitment(None)
-    }
-
-    pub fn get_transaction_count_now(&self) -> io::Result<u64> {
-        let commitment_config = RpcCommitmentConfig {
-            confirmations: Some(1.into()),
-            percentage: None,
-        };
-        self.get_transaction_count_with_commitment(Some(commitment_config))
+        self.get_transaction_count_with_commitment(RpcCommitmentConfig::default())
     }
 
     pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {

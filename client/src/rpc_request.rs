@@ -2,11 +2,28 @@ use serde_json::{json, Value};
 use solana_sdk::clock::{Epoch, Slot};
 use std::{error, fmt};
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcCommitmentConfig {
     pub confirmations: Option<Value>,
     pub percentage: Option<f64>,
+}
+
+impl RpcConfidenceConfig {
+    pub fn recent() -> Self {
+        Self {
+            confirmations: Some(1.into()),
+            percentage: None,
+        }
+    }
+
+    pub fn ok(&self) -> Option<Self> {
+        if self == &Self::default() {
+            None
+        } else {
+            Some(self.clone())
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

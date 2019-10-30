@@ -3,28 +3,32 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::rpc_client::RpcClient;
+use crate::{rpc_client::RpcClient, rpc_request::RpcConfidenceConfig};
 use bincode::{serialize_into, serialized_size};
 use log::*;
-use solana_sdk::account::Account;
-use solana_sdk::client::{AsyncClient, Client, SyncClient};
-use solana_sdk::clock::MAX_PROCESSING_AGE;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::instruction::Instruction;
-use solana_sdk::message::Message;
-use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_instruction;
-use solana_sdk::timing::duration_as_ms;
-use solana_sdk::transaction::{self, Transaction};
-use solana_sdk::transport::Result as TransportResult;
-use std::io;
-use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::RwLock;
-use std::time::{Duration, Instant};
+use solana_sdk::{
+    account::Account,
+    client::{AsyncClient, Client, SyncClient},
+    clock::MAX_PROCESSING_AGE,
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    instruction::Instruction,
+    message::Message,
+    packet::PACKET_DATA_SIZE,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil, Signature},
+    system_instruction,
+    timing::duration_as_ms,
+    transaction::{self, Transaction},
+    transport::Result as TransportResult,
+};
+use std::{
+    io,
+    net::{SocketAddr, UdpSocket},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::RwLock,
+    time::{Duration, Instant},
+};
 
 struct ClientOptimizer {
     cur_index: AtomicUsize,
@@ -329,7 +333,9 @@ impl SyncClient for ThinClient {
     }
 
     fn get_balance_now(&self, pubkey: &Pubkey) -> TransportResult<u64> {
-        let balance = self.rpc_client().get_balance_now(pubkey)?;
+        let balance = self
+            .rpc_client()
+            .get_balance_with_confidence(pubkey, RpcConfidenceConfig::recent())?;
         Ok(balance)
     }
 
@@ -371,7 +377,10 @@ impl SyncClient for ThinClient {
     ) -> TransportResult<Option<transaction::Result<()>>> {
         let status = self
             .rpc_client()
-            .get_signature_status_now(&signature.to_string())
+            .get_signature_status_with_confidence(
+                &signature.to_string(),
+                RpcConfidenceConfig::recent(),
+            )
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -409,7 +418,10 @@ impl SyncClient for ThinClient {
     fn get_transaction_count_now(&self) -> TransportResult<u64> {
         let index = self.optimizer.experiment();
         let now = Instant::now();
-        match self.rpc_client().get_transaction_count_now() {
+        match self
+            .rpc_client()
+            .get_transaction_count_with_confidence(RpcConfidenceConfig::recent())
+        {
             Ok(transaction_count) => {
                 self.optimizer.report(index, duration_as_ms(&now.elapsed()));
                 Ok(transaction_count)
