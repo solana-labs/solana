@@ -31,6 +31,7 @@ testName=$(basename "$0" .sh)
 case $testName in
 test-stable)
   echo "Executing $testName"
+  _ cargo +"$rust_stable" test --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   _ cargo +"$rust_stable" test --manifest-path local_cluster/Cargo.toml --features=move ${V:+--verbose} test_bench_tps_local_cluster_move -- --nocapture
   _ cargo +"$rust_stable" test --manifest-path programs/move_loader_api/Cargo.toml ${V:+--verbose} -- --nocapture
   _ cargo +"$rust_stable" test --manifest-path programs/move_loader_program/Cargo.toml ${V:+--verbose} -- --nocapture
