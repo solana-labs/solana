@@ -5,9 +5,9 @@ use crate::recycler::Recycler;
 use crate::recycler::Reset;
 use crate::sigverify::{self, TxOffset};
 use crate::sigverify_stage::SigVerifier;
-use rayon::iter::IndexedParallelIterator;
 use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
+use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
@@ -413,7 +413,7 @@ fn sign_shreds_cpu(
     use rayon::prelude::*;
     let count = sigverify::batch_size(batches);
     debug!("CPU SHRED ECDSA for {}", count);
-    let rv = PAR_THREAD_POOL.with(|thread_pool| {
+    PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches.par_iter_mut().for_each(|p| {
                 p.packets.iter_mut().for_each(|mut p| {
@@ -423,7 +423,6 @@ fn sign_shreds_cpu(
         })
     });
     inc_new_counter_debug!("ed25519_shred_verify_cpu", count);
-    rv
 }
 
 pub fn sign_shreds_gpu(

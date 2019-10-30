@@ -39,6 +39,7 @@ pub struct Api<'a> {
         ) -> u32,
     >,
 
+    #[allow(clippy::type_complexity)]
     pub ed25519_sign_many: Symbol<
         'a,
         unsafe extern "C" fn(
