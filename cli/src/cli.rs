@@ -329,7 +329,6 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         }
         ("balance", Some(matches)) => {
             let pubkey = pubkey_of(&matches, "pubkey");
-            println!("{:?}", pubkey);
             Ok(CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey,
