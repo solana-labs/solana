@@ -21,6 +21,7 @@ pub struct Config {
     pub write_to_client_file: bool,
     pub read_from_client_file: bool,
     pub target_lamports_per_signature: u64,
+    pub multi_client: bool,
     pub use_move: bool,
     pub num_lamports_per_account: u64,
 }
@@ -41,6 +42,7 @@ impl Default for Config {
             write_to_client_file: false,
             read_from_client_file: false,
             target_lamports_per_signature: FeeCalculator::default().target_lamports_per_signature,
+            multi_client: true,
             use_move: false,
             num_lamports_per_account: NUM_LAMPORTS_PER_ACCOUNT_DEFAULT,
         }
@@ -107,6 +109,11 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
             Arg::with_name("use-move")
                 .long("use-move")
                 .help("Use Move language transactions to perform transfers."),
+        )
+        .arg(
+            Arg::with_name("no-multi-client")
+                .long("no-multi-client")
+                .help("Disable multi-client support, only transact with the entrypoint."),
         )
         .arg(
             Arg::with_name("tx_count")
@@ -229,6 +236,7 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     }
 
     args.use_move = matches.is_present("use-move");
+    args.multi_client = !matches.is_present("no-multi-client");
 
     if let Some(v) = matches.value_of("num_lamports_per_account") {
         args.num_lamports_per_account = v.to_string().parse().expect("can't parse lamports");

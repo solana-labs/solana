@@ -1,7 +1,7 @@
 use log::*;
 use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
 use solana_bench_tps::cli;
-use solana_core::gossip_service::{discover_cluster, get_multi_client};
+use solana_core::gossip_service::{discover_cluster, get_client, get_multi_client};
 use solana_genesis::Base64Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -29,6 +29,7 @@ fn main() {
         read_from_client_file,
         target_lamports_per_signature,
         use_move,
+        multi_client,
         num_lamports_per_account,
         ..
     } = &cli_config;
@@ -70,15 +71,19 @@ fn main() {
             exit(1);
         });
 
-    let (client, num_clients) = get_multi_client(&nodes);
-
-    if nodes.len() < num_clients {
-        eprintln!(
-            "Error: Insufficient nodes discovered.  Expecting {} or more",
-            num_nodes
-        );
-        exit(1);
-    }
+    let client = if *multi_client {
+        let (client, num_clients) = get_multi_client(&nodes);
+        if nodes.len() < num_clients {
+            eprintln!(
+                "Error: Insufficient nodes discovered.  Expecting {} or more",
+                num_nodes
+            );
+            exit(1);
+        }
+        client
+    } else {
+        get_client(&nodes)
+    };
 
     let (keypairs, move_keypairs, keypair_balance) = if *read_from_client_file && !use_move {
         let path = Path::new(&client_ids_and_stake_file);
