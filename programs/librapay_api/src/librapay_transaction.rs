@@ -75,7 +75,7 @@ pub fn create_accounts(
                 to,
                 lamports,
                 400,
-                &solana_move_loader_api::id(),
+                &solana_sdk::move_loader::id(),
             )
         })
         .collect();
@@ -148,7 +148,7 @@ mod tests {
         let (genesis_block, mint_keypair) = create_genesis_block(lamports);
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(
-            solana_move_loader_api::id(),
+            solana_sdk::move_loader::id(),
             solana_move_loader_api::processor::process_instruction,
         );
         let shared_bank = Arc::new(bank);
