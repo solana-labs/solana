@@ -85,7 +85,7 @@ Deploys a CD testnet
    --hashes-per-tick NUM_HASHES|sleep|auto
                         - Override the default --hashes-per-tick for the cluster
    --lamports NUM_LAMPORTS
-                        - Specify the number of lamports to mint (default 100000000000000)
+                        - Specify the number of lamports to mint (default 500000000000000000)
    --skip-deploy-update
                         - If set, will skip software update deployment
    --skip-remote-log-retrieval

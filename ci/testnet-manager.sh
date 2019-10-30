@@ -479,7 +479,7 @@ deploy() {
       fi
 
       if [[ -z $INTERNAL_NODES_STAKE_LAMPORTS ]]; then
-        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports 17179869184" # 1 SOL
+        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports 1000000000" # 1 SOL
       elif [[ $INTERNAL_NODES_STAKE_LAMPORTS == skip ]]; then
         maybeInternalNodesStakeLamports=""
       else
@@ -487,7 +487,7 @@ deploy() {
       fi
 
       if [[ -z $INTERNAL_NODES_LAMPORTS ]]; then
-        maybeInternalNodesLamports="--internal-nodes-lamports 34359738368" # 2 SOL
+        maybeInternalNodesLamports="--internal-nodes-lamports 2000000000" # 2 SOL
       elif [[ $INTERNAL_NODES_LAMPORTS == skip ]]; then
         maybeInternalNodesLamports=""
       else
@@ -507,7 +507,7 @@ deploy() {
       fi
 
       if [[ -z $LAMPORTS ]]; then
-        maybeLamports="--lamports 8589934592000000000"
+        maybeLamports="--lamports 500000000000000000"
       elif [[ $LAMPORTS == skip ]]; then
         maybeLamports=""
       else
