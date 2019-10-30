@@ -8,7 +8,8 @@
 /target/
 
 **/*.rs.bk
-.cargo
+.cargo/*
+!.cargo/config
 
 /config/
 
