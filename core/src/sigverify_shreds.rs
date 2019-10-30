@@ -736,6 +736,40 @@ pub mod tests {
     }
 
     #[test]
+    fn test_sigverify_shreds_sign_cpu() {
+        solana_logger::setup();
+
+        let mut batch = [Packets::default()];
+        let slot = 0xdeadc0de;
+        let keypair = Keypair::new();
+        let shred = Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true);
+        batch[0].packets.resize(1, Packet::default());
+        batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batch[0].packets[0].meta.size = shred.payload.len();
+        let pubkeys = [
+            (slot, keypair.pubkey().to_bytes()),
+            (std::u64::MAX, [0u8; 32]),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        let privkeys = [
+            (slot, keypair.secret.to_bytes()),
+            (std::u64::MAX, [0u8; 32]),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        //unsigned
+        let rv = verify_shreds_cpu(&batch, &pubkeys);
+        assert_eq!(rv, vec![vec![0]]);
+        //signed
+        sign_shreds_cpu(&mut batch, &pubkeys, &privkeys);
+        let rv = verify_shreds_cpu(&batch, &pubkeys);
+        assert_eq!(rv, vec![vec![1]]);
+    }
+
+    #[test]
     fn test_sigverify_shreds_read_slots() {
         solana_logger::setup();
         let mut shred =
