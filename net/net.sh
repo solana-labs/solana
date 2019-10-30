@@ -62,7 +62,7 @@ Operate a configured testnet
    --no-airdrop
                                       - If set, disables airdrops.  Nodes must be funded in genesis block when airdrops are disabled.
    --lamports NUM_LAMPORTS_TO_MINT
-                                      - Override the default 100000000000000 lamports minted in genesis
+                                      - Override the default 500000000000000000 lamports minted in genesis
    --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE
                                       - Amount to stake internal nodes.
    --internal-nodes-lamports NUM_LAMPORTS_PER_NODE

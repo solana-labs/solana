@@ -8,7 +8,7 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-stake_lamports=8589934592   # default number of lamports to assign as stake (0.5 SOL)
+stake_lamports=500000000   # default number of lamports to assign as stake (0.5 SOL)
 url=http://127.0.0.1:8899   # default RPC url
 
 usage() {
