@@ -9,7 +9,7 @@ pub struct RpcCommitmentConfig {
     pub percentage: Option<f64>,
 }
 
-impl RpcConfidenceConfig {
+impl RpcCommitmentConfig {
     pub fn recent() -> Self {
         Self {
             confirmations: Some(1.into()),

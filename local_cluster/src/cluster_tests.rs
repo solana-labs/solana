@@ -3,7 +3,7 @@
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
 use rand::{thread_rng, Rng};
-use solana_client::{rpc_request::RpcConfidenceConfig, thin_client::create_client};
+use solana_client::{rpc_request::RpcCommitmentConfig, thin_client::create_client};
 use solana_core::{
     cluster_info::VALIDATOR_PORT_RANGE, consensus::VOTE_THRESHOLD_DEPTH, contact_info::ContactInfo,
     gossip_service::discover_cluster,
@@ -49,9 +49,9 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
         let random_keypair = Keypair::new();
         let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         let bal = client
-            .poll_get_balance_with_confidence(
+            .poll_get_balance_with_commitment(
                 &funding_keypair.pubkey(),
-                RpcConfidenceConfig::recent(),
+                RpcCommitmentConfig::recent(),
             )
             .expect("balance in source");
         assert!(bal > 0);
@@ -79,7 +79,7 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
     let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
     for (pk, b) in expected_balances {
         let bal = client
-            .poll_get_balance_with_confidence(&pk, RpcConfidenceConfig::recent())
+            .poll_get_balance_with_commitment(&pk, RpcCommitmentConfig::recent())
             .expect("balance in source");
         assert_eq!(bal, b);
     }
@@ -96,9 +96,9 @@ pub fn send_many_transactions(
     for _ in 0..num_txs {
         let random_keypair = Keypair::new();
         let bal = client
-            .poll_get_balance_with_confidence(
+            .poll_get_balance_with_commitment(
                 &funding_keypair.pubkey(),
-                RpcConfidenceConfig::recent(),
+                RpcCommitmentConfig::recent(),
             )
             .expect("balance in source");
         assert!(bal > 0);
@@ -196,7 +196,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
 
     for ingress_node in &cluster_nodes {
         client
-            .poll_get_balance_with_confidence(&ingress_node.id, RpcConfidenceConfig::recent())
+            .poll_get_balance_with_commitment(&ingress_node.id, RpcCommitmentConfig::recent())
             .unwrap_or_else(|err| panic!("Node {} has no balance: {}", ingress_node.id, err));
     }
 
@@ -220,9 +220,9 @@ pub fn kill_entry_and_spend_and_verify_rest(
 
         let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         let balance = client
-            .poll_get_balance_with_confidence(
+            .poll_get_balance_with_commitment(
                 &funding_keypair.pubkey(),
-                RpcConfidenceConfig::recent(),
+                RpcCommitmentConfig::recent(),
             )
             .expect("balance in source");
         assert_ne!(balance, 0);

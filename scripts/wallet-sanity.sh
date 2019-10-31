@@ -19,9 +19,9 @@ $solana_keygen new -f
 
 node_readiness=false
 timeout=60
+set +e
 while [[ $timeout -gt 0 ]]; do
-  output=$($solana_cli "${args[@]}" get-transaction-count)
-  if [[ -n $output ]]; then
+  if $solana_cli "${args[@]}" get-transaction-count; then
     node_readiness=true
     break
   fi
@@ -33,6 +33,7 @@ if ! "$node_readiness"; then
   exit 1
 fi
 
+set -e
 (
   set -x
   $solana_cli "${args[@]}" address

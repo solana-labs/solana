@@ -1,6 +1,6 @@
 use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
 use solana_client::{
-    rpc_request::RpcConfidenceConfig,
+    rpc_request::RpcCommitmentConfig,
     thin_client::{create_client, ThinClient},
 };
 use solana_core::{
@@ -440,10 +440,10 @@ impl LocalCluster {
             .retry_transfer(&source_keypair, &mut tx, 10)
             .expect("client transfer");
         client
-            .wait_for_balance_with_confidence(
+            .wait_for_balance_with_commitment(
                 dest_pubkey,
                 Some(lamports),
-                RpcConfidenceConfig::recent(),
+                RpcCommitmentConfig::recent(),
             )
             .expect("get balance")
     }
@@ -461,7 +461,7 @@ impl LocalCluster {
 
         // Create the vote account if necessary
         if client
-            .poll_get_balance_with_confidence(&vote_account_pubkey, RpcConfidenceConfig::recent())
+            .poll_get_balance_with_commitment(&vote_account_pubkey, RpcCommitmentConfig::recent())
             .unwrap_or(0)
             == 0
         {
@@ -486,10 +486,10 @@ impl LocalCluster {
                 .retry_transfer(&from_account, &mut transaction, 10)
                 .expect("fund vote");
             client
-                .wait_for_balance_with_confidence(
+                .wait_for_balance_with_commitment(
                     &vote_account_pubkey,
                     Some(amount),
-                    RpcConfidenceConfig::recent(),
+                    RpcCommitmentConfig::recent(),
                 )
                 .expect("get balance");
 
@@ -514,10 +514,10 @@ impl LocalCluster {
                 )
                 .expect("delegate stake");
             client
-                .wait_for_balance_with_confidence(
+                .wait_for_balance_with_commitment(
                     &stake_account_pubkey,
                     Some(amount),
-                    RpcConfidenceConfig::recent(),
+                    RpcCommitmentConfig::recent(),
                 )
                 .expect("get balance");
         } else {

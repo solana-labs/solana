@@ -265,7 +265,7 @@ impl Default for CommitmentConfig {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use solana_sdk::pubkey::Pubkey;
@@ -323,6 +323,19 @@ mod tests {
             block_commitment_cache.get_block_with_depth_commitment(CommitmentConfig::new(1, 0.9)),
             None
         );
+    }
+
+    pub fn get_full_block_commitment_cache() -> BlockCommitmentCache {
+        let stake = 42;
+        let mut block_commitment_map: HashMap<u64, BlockCommitment> = HashMap::new();
+        for i in 1..MAX_LOCKOUT_HISTORY + 1 {
+            let mut commitment = BlockCommitment::default();
+            commitment.increase_confirmation_stake(i, stake);
+            block_commitment_map
+                .entry((MAX_LOCKOUT_HISTORY - i) as u64)
+                .or_insert(commitment);
+        }
+        BlockCommitmentCache::new(block_commitment_map, stake)
     }
 
     #[test]

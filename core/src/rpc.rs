@@ -62,17 +62,25 @@ pub struct JsonRpcRequestProcessor {
 }
 
 impl JsonRpcRequestProcessor {
-    fn bank(&self, commitment_config: CommitmentConfig) -> Arc<Bank> {
+    fn bank(&self, commitment_config: CommitmentConfig) -> Result<Arc<Bank>> {
         debug!("RPC commitment_config: {:?}", commitment_config);
         self.block_commitment_cache
             .read()
             .unwrap()
-            .get_block_with_depth_commitment(commitment_config)
+            .get_block_with_depth_commitment(commitment_config.clone())
+            .ok_or_else(|| {
+                Error::invalid_params(format!(
+                    "Could not find block with minimum commitment: {:?}",
+                    commitment_config
+                ))
+            })
             .and_then(|block| {
                 debug!("RPC using block: {:?}", block);
-                self.bank_forks.read().unwrap().get(block).cloned()
+                self.bank_forks.read().unwrap().get(block).cloned().ok_or_else(|| {
+                    // Should not happen
+                    Error::invalid_params("Could not load selected block; bank_forks and block_commitment_cache are out of sync")
+                })
             })
-            .unwrap_or_else(|| self.bank_forks.read().unwrap().working_bank())
     }
 
     pub fn new(
@@ -96,7 +104,7 @@ impl JsonRpcRequestProcessor {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> Result<Account> {
-        self.bank(commitment_config)
+        self.bank(commitment_config)?
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
     }
@@ -107,7 +115,7 @@ impl JsonRpcRequestProcessor {
         commitment_config: CommitmentConfig,
     ) -> Result<u64> {
         Ok(self
-            .bank(commitment_config)
+            .bank(commitment_config)?
             .get_minimum_balance_for_rent_exemption(data_len))
     }
 
@@ -117,7 +125,7 @@ impl JsonRpcRequestProcessor {
         commitment_config: CommitmentConfig,
     ) -> Result<Vec<(String, Account)>> {
         Ok(self
-            .bank(commitment_config)
+            .bank(commitment_config)?
             .get_program_accounts(&program_id)
             .into_iter()
             .map(|(pubkey, account)| (pubkey.to_string(), account))
@@ -125,22 +133,25 @@ impl JsonRpcRequestProcessor {
     }
 
     pub fn get_inflation(&self, commitment_config: CommitmentConfig) -> Result<Inflation> {
-        Ok(self.bank(commitment_config).inflation())
+        Ok(self.bank(commitment_config)?.inflation())
     }
 
     pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
         // Since epoch schedule data comes from the genesis block, default CommitmentConfig should
         // be sufficient
-        Ok(*self.bank(CommitmentConfig::default()).epoch_schedule())
+        Ok(*self.bank(CommitmentConfig::default())?.epoch_schedule())
     }
 
-    pub fn get_balance(&self, pubkey: &Pubkey, commitment_config: CommitmentConfig) -> u64 {
-        self.bank(commitment_config).get_balance(&pubkey)
+    pub fn get_balance(&self, pubkey: &Pubkey, commitment_config: CommitmentConfig) -> Result<u64> {
+        Ok(self.bank(commitment_config)?.get_balance(&pubkey))
     }
 
-    fn get_recent_blockhash(&self, commitment_config: CommitmentConfig) -> (String, FeeCalculator) {
-        let (blockhash, fee_calculator) = self.bank(commitment_config).confirmed_last_blockhash();
-        (blockhash.to_string(), fee_calculator)
+    fn get_recent_blockhash(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> Result<(String, FeeCalculator)> {
+        let (blockhash, fee_calculator) = self.bank(commitment_config)?.confirmed_last_blockhash();
+        Ok((blockhash.to_string(), fee_calculator))
     }
 
     fn get_block_commitment(&self, block: Slot) -> (Option<BlockCommitment>, u64) {
@@ -157,30 +168,31 @@ impl JsonRpcRequestProcessor {
         commitment_config: CommitmentConfig,
     ) -> Option<(usize, transaction::Result<()>)> {
         self.bank(commitment_config)
-            .get_signature_confirmation_status(&signature)
+            .ok()
+            .and_then(|bank| bank.get_signature_confirmation_status(&signature))
     }
 
     fn get_slot(&self, commitment_config: CommitmentConfig) -> Result<u64> {
-        Ok(self.bank(commitment_config).slot())
+        Ok(self.bank(commitment_config)?.slot())
     }
 
     fn get_slot_leader(&self, commitment_config: CommitmentConfig) -> Result<String> {
-        Ok(self.bank(commitment_config).collector_id().to_string())
+        Ok(self.bank(commitment_config)?.collector_id().to_string())
     }
 
     fn get_transaction_count(&self, commitment_config: CommitmentConfig) -> Result<u64> {
-        Ok(self.bank(commitment_config).transaction_count() as u64)
+        Ok(self.bank(commitment_config)?.transaction_count() as u64)
     }
 
     fn get_total_supply(&self, commitment_config: CommitmentConfig) -> Result<u64> {
-        Ok(self.bank(commitment_config).capitalization())
+        Ok(self.bank(commitment_config)?.capitalization())
     }
 
     fn get_vote_accounts(
         &self,
         commitment_config: CommitmentConfig,
     ) -> Result<RpcVoteAccountStatus> {
-        let bank = self.bank(commitment_config);
+        let bank = self.bank(commitment_config)?;
         let vote_accounts = bank.vote_accounts();
         let epoch_vote_accounts = bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
@@ -235,7 +247,7 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_slots_per_segment(&self, commitment_config: CommitmentConfig) -> Result<u64> {
-        Ok(self.bank(commitment_config).slots_per_segment())
+        Ok(self.bank(commitment_config)?.slots_per_segment())
     }
 
     fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<Pubkey>> {
@@ -600,11 +612,10 @@ impl RpcSol for RpcSolImpl {
     ) -> Result<u64> {
         debug!("get_balance rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
-        Ok(meta
-            .request_processor
+        meta.request_processor
             .read()
             .unwrap()
-            .get_balance(&pubkey, parse_params(params)?))
+            .get_balance(&pubkey, parse_params(params)?)
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
@@ -639,7 +650,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .bank(parse_params(params)?);
+            .bank(parse_params(params)?)?;
         let epoch_schedule = bank.epoch_schedule();
         let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
         let slot = bank.slot();
@@ -677,7 +688,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .bank(parse_params(params)?);
+            .bank(parse_params(params)?)?;
         Ok(
             solana_ledger::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
                 |leader_schedule| {
@@ -697,11 +708,10 @@ impl RpcSol for RpcSolImpl {
         params: Option<Params>,
     ) -> Result<(String, FeeCalculator)> {
         debug!("get_recent_blockhash rpc request received");
-        Ok(meta
-            .request_processor
+        meta.request_processor
             .read()
             .unwrap()
-            .get_recent_blockhash(parse_params(params)?))
+            .get_recent_blockhash(parse_params(params)?)
     }
 
     fn get_signature_status(
@@ -789,7 +799,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .bank(commitment_config.clone())
+            .bank(commitment_config.clone())?
             .confirmed_last_blockhash()
             .0;
         let transaction = request_airdrop_transaction(&drone_addr, &pubkey, lamports, blockhash)
@@ -928,7 +938,7 @@ impl RpcSol for RpcSolImpl {
 pub mod tests {
     use super::*;
     use crate::{
-        commitment::DEFAULT_PERCENT_COMMITMENT,
+        commitment::{tests::get_full_block_commitment_cache, DEFAULT_PERCENT_COMMITMENT},
         contact_info::ContactInfo,
         genesis_utils::{create_genesis_block, GenesisBlockInfo},
     };
@@ -963,17 +973,7 @@ pub mod tests {
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
 
-        let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
-        let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY]);
-        let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
-        block_commitment
-            .entry(0)
-            .or_insert(commitment_slot0.clone());
-        block_commitment
-            .entry(1)
-            .or_insert(commitment_slot1.clone());
-        let block_commitment_cache =
-            Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
+        let block_commitment_cache = Arc::new(RwLock::new(get_full_block_commitment_cache()));
 
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
@@ -1099,7 +1099,7 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(get_full_block_commitment_cache()));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
@@ -1740,7 +1740,7 @@ pub mod tests {
         assert_eq!(total_staked, 42);
 
         let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[2]}}"#);
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[32]}}"#);
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");

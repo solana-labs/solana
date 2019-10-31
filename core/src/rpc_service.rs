@@ -174,7 +174,7 @@ impl Service for JsonRpcService {
 mod tests {
     use super::*;
     use crate::{
-        commitment::CommitmentConfig,
+        commitment::{tests::get_full_block_commitment_cache, CommitmentConfig},
         contact_info::ContactInfo,
         genesis_utils::{create_genesis_block, GenesisBlockInfo},
         rpc::tests::create_validator_exit,
@@ -204,7 +204,7 @@ mod tests {
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(get_full_block_commitment_cache()));
         let mut rpc_service = JsonRpcService::new(
             &cluster_info,
             rpc_addr,
@@ -226,6 +226,7 @@ mod tests {
                 .read()
                 .unwrap()
                 .get_balance(&mint_keypair.pubkey(), CommitmentConfig::default())
+                .unwrap()
         );
         rpc_service.exit();
         rpc_service.join().unwrap();

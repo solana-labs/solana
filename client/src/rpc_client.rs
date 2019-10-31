@@ -350,11 +350,7 @@ impl RpcClient {
         Ok(res)
     }
 
-<<<<<<< HEAD
-    fn get_account_with_commitment(
-=======
-    pub fn get_account_with_confidence(
->>>>>>> Add get_account_now method to client
+    pub fn get_account_with_commitment(
         &self,
         pubkey: &Pubkey,
         commitment_config: RpcCommitmentConfig,
@@ -427,15 +423,15 @@ impl RpcClient {
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
     pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.get_balance_with_confidence(pubkey, RpcConfidenceConfig::default())
+        self.get_balance_with_commitment(pubkey, RpcCommitmentConfig::default())
     }
 
-    pub fn get_balance_with_confidence(
+    pub fn get_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
-        confidence_config: RpcConfidenceConfig,
+        commitment_config: RpcCommitmentConfig,
     ) -> io::Result<u64> {
-        self.get_account_with_confidence(pubkey, confidence_config)
+        self.get_account_with_commitment(pubkey, commitment_config)
             .map(|account| account.lamports)
     }
 
@@ -472,7 +468,7 @@ impl RpcClient {
         Ok(pubkey_accounts)
     }
 
-    pub fn get_transaction_count_with_confidence(
+    pub fn get_transaction_count_with_commitment(
         &self,
         commitment_config: RpcCommitmentConfig,
     ) -> io::Result<u64> {
@@ -587,16 +583,16 @@ impl RpcClient {
         Ok(blockhash)
     }
 
-    pub fn poll_balance_with_timeout_and_confidence(
+    pub fn poll_balance_with_timeout_and_commitment(
         &self,
         pubkey: &Pubkey,
         polling_frequency: &Duration,
         timeout: &Duration,
-        confidence_config: RpcConfidenceConfig,
+        commitment_config: RpcCommitmentConfig,
     ) -> io::Result<u64> {
         let now = Instant::now();
         loop {
-            match self.get_balance_with_confidence(&pubkey, confidence_config.clone()) {
+            match self.get_balance_with_commitment(&pubkey, commitment_config.clone()) {
                 Ok(bal) => {
                     return Ok(bal);
                 }
@@ -610,29 +606,29 @@ impl RpcClient {
         }
     }
 
-    pub fn poll_get_balance_with_confidence(
+    pub fn poll_get_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
-        confidence_config: RpcConfidenceConfig,
+        commitment_config: RpcCommitmentConfig,
     ) -> io::Result<u64> {
-        self.poll_balance_with_timeout_and_confidence(
+        self.poll_balance_with_timeout_and_commitment(
             pubkey,
             &Duration::from_millis(100),
             &Duration::from_secs(1),
-            confidence_config,
+            commitment_config,
         )
     }
 
-    pub fn wait_for_balance_with_confidence(
+    pub fn wait_for_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
         expected_balance: Option<u64>,
-        confidence_config: RpcConfidenceConfig,
+        commitment_config: RpcCommitmentConfig,
     ) -> Option<u64> {
         const LAST: usize = 30;
         for run in 0..LAST {
             let balance_result =
-                self.poll_get_balance_with_confidence(pubkey, confidence_config.clone());
+                self.poll_get_balance_with_commitment(pubkey, commitment_config.clone());
             if expected_balance.is_none() {
                 return balance_result.ok();
             }
@@ -761,7 +757,7 @@ impl RpcClient {
                 &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
                 Some(params.clone()),
                 1,
-                RpcConfidenceConfig::recent().ok(),
+                None,
             )
             .map_err(|err| {
                 io::Error::new(

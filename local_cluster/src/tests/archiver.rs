@@ -1,6 +1,6 @@
 use crate::local_cluster::{ClusterConfig, LocalCluster};
 use serial_test_derive::serial;
-use solana_client::{rpc_request::RpcConfidenceConfig, thin_client::create_client};
+use solana_client::{rpc_request::RpcCommitmentConfig, thin_client::create_client};
 use solana_core::archiver::Archiver;
 use solana_core::cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
@@ -168,9 +168,9 @@ fn test_account_setup() {
     cluster.archiver_infos.iter().for_each(|(_, value)| {
         assert_eq!(
             client
-                .poll_get_balance_with_confidence(
+                .poll_get_balance_with_commitment(
                     &value.archiver_storage_pubkey,
-                    RpcConfidenceConfig::recent()
+                    RpcCommitmentConfig::recent()
                 )
                 .unwrap(),
             1

@@ -3,7 +3,7 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::{rpc_client::RpcClient, rpc_request::RpcConfidenceConfig};
+use crate::{rpc_client::RpcClient, rpc_request::RpcCommitmentConfig};
 use bincode::{serialize_into, serialized_size};
 use log::*;
 use solana_sdk::{
@@ -254,46 +254,46 @@ impl ThinClient {
         polling_frequency: &Duration,
         timeout: &Duration,
     ) -> io::Result<u64> {
-        self.rpc_client().poll_balance_with_timeout_and_confidence(
+        self.rpc_client().poll_balance_with_timeout_and_commitment(
             pubkey,
             polling_frequency,
             timeout,
-            RpcConfidenceConfig::default(),
+            RpcCommitmentConfig::default(),
         )
     }
 
     pub fn poll_get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
         self.rpc_client()
-            .poll_get_balance_with_confidence(pubkey, RpcConfidenceConfig::default())
+            .poll_get_balance_with_commitment(pubkey, RpcCommitmentConfig::default())
     }
 
-    pub fn poll_get_balance_with_confidence(
+    pub fn poll_get_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
-        confidence_config: RpcConfidenceConfig,
+        commitment_config: RpcCommitmentConfig,
     ) -> io::Result<u64> {
         self.rpc_client()
-            .poll_get_balance_with_confidence(pubkey, confidence_config)
+            .poll_get_balance_with_commitment(pubkey, commitment_config)
     }
 
     pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
-        self.rpc_client().wait_for_balance_with_confidence(
+        self.rpc_client().wait_for_balance_with_commitment(
             pubkey,
             expected_balance,
-            RpcConfidenceConfig::default(),
+            RpcCommitmentConfig::default(),
         )
     }
 
-    pub fn wait_for_balance_with_confidence(
+    pub fn wait_for_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
         expected_balance: Option<u64>,
-        confidence_config: RpcConfidenceConfig,
+        commitment_config: RpcCommitmentConfig,
     ) -> Option<u64> {
-        self.rpc_client().wait_for_balance_with_confidence(
+        self.rpc_client().wait_for_balance_with_commitment(
             pubkey,
             expected_balance,
-            confidence_config,
+            commitment_config,
         )
     }
 
@@ -361,7 +361,7 @@ impl SyncClient for ThinClient {
     fn get_account_now(&self, pubkey: &Pubkey) -> TransportResult<Option<Account>> {
         Ok(self
             .rpc_client()
-            .get_account_with_confidence(pubkey, RpcConfidenceConfig::recent())
+            .get_account_with_commitment(pubkey, RpcCommitmentConfig::recent())
             .ok())
     }
 
@@ -373,7 +373,7 @@ impl SyncClient for ThinClient {
     fn get_balance_now(&self, pubkey: &Pubkey) -> TransportResult<u64> {
         let balance = self
             .rpc_client()
-            .get_balance_with_confidence(pubkey, RpcConfidenceConfig::recent())?;
+            .get_balance_with_commitment(pubkey, RpcCommitmentConfig::recent())?;
         Ok(balance)
     }
 
@@ -415,9 +415,9 @@ impl SyncClient for ThinClient {
     ) -> TransportResult<Option<transaction::Result<()>>> {
         let status = self
             .rpc_client()
-            .get_signature_status_with_confidence(
+            .get_signature_status_with_commitment(
                 &signature.to_string(),
-                RpcConfidenceConfig::recent(),
+                RpcCommitmentConfig::recent(),
             )
             .map_err(|err| {
                 io::Error::new(
@@ -458,7 +458,7 @@ impl SyncClient for ThinClient {
         let now = Instant::now();
         match self
             .rpc_client()
-            .get_transaction_count_with_confidence(RpcConfidenceConfig::recent())
+            .get_transaction_count_with_commitment(RpcCommitmentConfig::recent())
         {
             Ok(transaction_count) => {
                 self.optimizer.report(index, duration_as_ms(&now.elapsed()));
