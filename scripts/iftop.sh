@@ -8,9 +8,11 @@ set -e
 
 cd "$(dirname "$0")"
 
-sudo iftop -i "$(ifconfig | grep mtu | grep -iv loopback | grep -i running | awk 'BEGIN { FS = ":" } ; {print $1}')" -nNbBP  -t \
-	| awk '{ if ($3 ~ "=>") { print $2, $7 } else if ($2 ~ "<=") { print $1, $6 }} ' \
-	| awk 'NR%2{printf "%s ",$0;next;}1' \
-	| awk '{ print $1, "<=>", $3, ":",  $2, $4 }'
+Sudo=
+if sudo true; then
+Sudo="sudo -n"
+fi
+
+$Sudo iftop -i "$(ifconfig | grep mtu | grep -iv loopback | grep -i running | awk 'BEGIN { FS = ":" } ; {print $1}')" -nNbBP  -t
 
 exit 1
