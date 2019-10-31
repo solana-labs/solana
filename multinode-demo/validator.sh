@@ -311,6 +311,12 @@ while true; do
   [[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
   [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
 
+  while true; do
+    if wallet get-transaction-count; then
+      break
+    fi
+  done
+
   setup_validator_accounts "$node_lamports"
   echo "$PS4$program ${args[*]}"
 
