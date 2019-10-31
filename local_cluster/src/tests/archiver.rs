@@ -1,5 +1,5 @@
 use crate::local_cluster::{ClusterConfig, LocalCluster};
-use serial_test_derive::serial;
+// use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
 use solana_core::archiver::Archiver;
 use solana_core::cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE};
@@ -61,19 +61,19 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
 }
 
 #[test]
-#[serial]
+#[ignore]
 fn test_archiver_startup_1_node() {
     run_archiver_startup_basic(1, 1);
 }
 
 #[test]
-#[serial]
+#[ignore]
 fn test_archiver_startup_2_nodes() {
     run_archiver_startup_basic(2, 1);
 }
 
 #[test]
-#[serial]
+#[ignore]
 fn test_archiver_startup_leader_hang() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -112,7 +112,7 @@ fn test_archiver_startup_leader_hang() {
 }
 
 #[test]
-#[serial]
+#[ignore]
 fn test_archiver_startup_ledger_hang() {
     solana_logger::setup();
     info!("starting archiver test");
@@ -141,7 +141,7 @@ fn test_archiver_startup_ledger_hang() {
 }
 
 #[test]
-#[serial]
+#[ignore]
 fn test_account_setup() {
     let num_nodes = 1;
     let num_archivers = 1;

@@ -712,7 +712,7 @@ mod test {
         validator_config.rpc_config.enable_validator_exit = true;
         validator_config.storage_slots_per_turn = SLOTS_PER_TURN_TEST;
         const NUM_NODES: usize = 1;
-        let num_archivers = 1;
+        let num_archivers = 0;
         let config = ClusterConfig {
             validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
             num_archivers,
