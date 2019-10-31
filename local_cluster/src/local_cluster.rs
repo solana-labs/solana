@@ -596,7 +596,8 @@ impl LocalCluster {
             ),
             Some(&from_keypair.pubkey()),
         );
-        let signer_keys = vec![from_keypair.as_ref()];
+
+        let signer_keys = vec![from_keypair.as_ref(), &storage_keypair];
         let blockhash = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap()
