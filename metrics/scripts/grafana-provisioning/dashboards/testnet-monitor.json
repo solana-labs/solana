@@ -4317,7 +4317,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT \"duration\" / 1000 as \"Generation Time\" FROM  \"$testnet\".\"autogen\".\"bench-tps-generate_txs\" WHERE $timeFilter fill(null)\n\n\n\n\n",
+          "query": "SELECT mean(\"duration\") as \"Generation Time\" FROM  \"$testnet\".\"autogen\".\"bench-tps-generate_txs\" WHERE $timeFilter GROUP BY time(1s)\n\n\n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -4354,7 +4354,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT \"duration\" / 1000 as \"Transmit Time\" FROM  \"$testnet\".\"autogen\".\"bench-tps-do_tx_transfers\" WHERE $timeFilter fill(null)",
+          "query": "SELECT mean(\"duration\")  as \"Transmit Time\" FROM  \"$testnet\".\"autogen\".\"bench-tps-do_tx_transfers\" WHERE $timeFilter GROUP BY time(1s)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -4391,9 +4391,46 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT \"duration\" / 1000 as \"Barrier Transaction Confirmation Time\" FROM  \"$testnet\".\"autogen\".\"bench-tps-send_barrier_transaction\" WHERE $timeFilter fill(null)",
+          "query": "SELECT mean(\"duration\") as \"Get Blockhash\" FROM  \"$testnet\".\"autogen\".\"bench-tps-get_blockhash\" WHERE $timeFilter GROUP BY time(1s)",
           "rawQuery": true,
           "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"duration\") as \"Get Balance\" FROM  \"$testnet\".\"autogen\".\"bench-tps-get_balance\" WHERE $timeFilter GROUP BY time(1s)",
+          "rawQuery": true,
+          "refId": "D",
           "resultFormat": "time_series",
           "select": [
             [
@@ -4432,7 +4469,7 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
