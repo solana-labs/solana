@@ -73,6 +73,24 @@ pub struct Api<'a> {
         Symbol<'a, unsafe extern "C" fn(ptr: *mut c_void, size: usize, flags: c_uint) -> c_int>,
 
     pub cuda_host_unregister: Symbol<'a, unsafe extern "C" fn(ptr: *mut c_void) -> c_int>,
+
+    #[allow(clippy::type_complexity)]
+    pub ed25519_sign_many: Symbol<
+        'a,
+        unsafe extern "C" fn(
+            vecs: *const Elems,
+            num: u32,          //number of vecs
+            message_size: u32, //size of each element inside the elems field of the vec
+            total_packets: u32,
+            total_signatures: u32,
+            message_lens: *const u32,
+            pubkey_offsets: *const u32,
+            privkey_offsets: *const u32,
+            signed_message_offsets: *const u32,
+            signatures_out: *mut u8, //combined length of all the items in vecs
+            use_non_default_stream: u8,
+        ) -> u32,
+    >,
 }
 
 static mut API: Option<Container<Api>> = None;
