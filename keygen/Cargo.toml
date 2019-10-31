@@ -8,10 +8,8 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 edition = "2018"
 
-
-
-
 [dependencies]
+bs58 = "0.3.0"
 clap = "2.33"
 dirs = "2.0.2"
 rpassword = "4.0"

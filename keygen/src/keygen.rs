@@ -1,4 +1,5 @@
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
+use bs58;
 use clap::{
     crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
@@ -64,6 +65,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .short("s")
                         .long("silent")
                         .help("Do not display mnemonic phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
+                )
+                .arg(
+                    Arg::with_name("starts_with")
+                        .long("starts-with")
+                        .value_name("BASE58 PREFIX")
+                        .takes_value(true)
+                        .validator(|value| {
+                            bs58::decode(value).into_vec()
+                                .map(|_| ())
+                                .map_err(|err| format!("{:?}", err))
+                        })
+                        .help("Grind a keypair with public key starting with this prefix"),
                 ),
         )
         .subcommand(
@@ -150,19 +163,37 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(&outfile, &matches);
             }
 
-            let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-            let phrase: &str = mnemonic.phrase();
-            let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
-            let keypair = keypair_from_seed(seed.as_bytes())?;
+            let mut attempts = 0;
+            let (pubkey, keypair, mnemonic) = loop {
+                let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+                let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
+                let keypair = keypair_from_seed(seed.as_bytes())?;
+                let pubkey = bs58::encode(keypair.pubkey()).into_string();
+
+                if let Some(prefix) = matches.value_of("starts_with") {
+                    if !pubkey.starts_with(prefix) {
+                        if attempts % 10_000 == 0 {
+                            println!(
+                                "Searching for pubkey prefix of {} ({} attempts)",
+                                prefix, attempts
+                            );
+                        }
+                        attempts += 1;
+                        continue;
+                    }
+                }
+                break (pubkey, keypair, mnemonic);
+            };
 
             output_keypair(&keypair, &outfile, "new")?;
 
             let silent = matches.is_present("silent");
             if !silent {
+                let phrase: &str = mnemonic.phrase();
                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                 eprintln!(
-                    "{}\nSave this mnemonic phrase to recover your new keypair:\n{}\n{}",
-                    &divider, phrase, &divider
+                    "{}\npubkey: {}\n{}\nSave this mnemonic phrase to recover your new keypair:\n{}\n{}",
+                    &divider, pubkey, &divider, phrase, &divider
                 );
             }
         }

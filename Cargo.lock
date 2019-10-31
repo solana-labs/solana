@@ -3503,6 +3503,7 @@ dependencies = [
 name = "solana-keygen"
 version = "0.21.0"
 dependencies = [
+ "bs58 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rpassword 4.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
