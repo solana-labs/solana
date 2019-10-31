@@ -43,8 +43,8 @@ impl LeaderScheduleCache {
         cache.set_root(root_bank);
 
         // Calculate the schedule for all epochs between 0 and leader_schedule_epoch(root)
-        let stakers_epoch = epoch_schedule.get_leader_schedule_epoch(root_bank.slot());
-        for epoch in 0..stakers_epoch {
+        let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(root_bank.slot());
+        for epoch in 0..leader_schedule_epoch {
             let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
             cache.slot_leader_at(first_slot_in_epoch, Some(root_bank));
         }
@@ -254,22 +254,22 @@ mod tests {
         assert_eq!(cache.max_schedules(), MAX_SCHEDULES);
 
         // Epoch schedule for all epochs in the range:
-        // [0, stakers_epoch(bank.slot())] should
+        // [0, leader_schedule_epoch(bank.slot())] should
         // be calculated by constructor
         let epoch_schedule = bank.epoch_schedule();
-        let stakers_epoch = bank.get_leader_schedule_epoch(bank.slot());
-        for epoch in 0..=stakers_epoch {
-            let first_slot_in_stakers_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
-            let last_slot_in_stakers_epoch = epoch_schedule.get_last_slot_in_epoch(epoch);
+        let leader_schedule_epoch = bank.get_leader_schedule_epoch(bank.slot());
+        for epoch in 0..=leader_schedule_epoch {
+            let first_slot_in_leader_schedule_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
+            let last_slot_in_leader_schedule_epoch = epoch_schedule.get_last_slot_in_epoch(epoch);
             assert!(cache
-                .slot_leader_at(first_slot_in_stakers_epoch, None)
+                .slot_leader_at(first_slot_in_leader_schedule_epoch, None)
                 .is_some());
             assert!(cache
-                .slot_leader_at(last_slot_in_stakers_epoch, None)
+                .slot_leader_at(last_slot_in_leader_schedule_epoch, None)
                 .is_some());
-            if epoch == stakers_epoch {
+            if epoch == leader_schedule_epoch {
                 assert!(cache
-                    .slot_leader_at(last_slot_in_stakers_epoch + 1, None)
+                    .slot_leader_at(last_slot_in_leader_schedule_epoch + 1, None)
                     .is_none());
             }
         }
@@ -277,7 +277,7 @@ mod tests {
         // Should be a schedule for every epoch just checked
         assert_eq!(
             cache.cached_schedules.read().unwrap().0.len() as u64,
-            stakers_epoch + 1
+            leader_schedule_epoch + 1
         );
     }
 

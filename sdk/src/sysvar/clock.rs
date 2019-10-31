@@ -1,4 +1,4 @@
-//! This account contains the clock slot, epoch, and stakers_epoch
+//! This account contains the clock slot, epoch, and leader_schedule_epoch
 //!
 pub use crate::clock::Clock;
 
@@ -40,7 +40,7 @@ pub fn new_account(
     slot: Slot,
     segment: Segment,
     epoch: Epoch,
-    stakers_epoch: Epoch,
+    leader_schedule_epoch: Epoch,
 ) -> Account {
     Account::new_data(
         lamports,
@@ -48,7 +48,7 @@ pub fn new_account(
             slot,
             segment,
             epoch,
-            stakers_epoch,
+            leader_schedule_epoch,
         },
         &sysvar::id(),
     )

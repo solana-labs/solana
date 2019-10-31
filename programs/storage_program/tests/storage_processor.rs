@@ -137,7 +137,7 @@ fn test_proof_bounds() {
             slot: DEFAULT_SLOTS_PER_SEGMENT * 2,
             segment: 2,
             epoch: 0,
-            stakers_epoch: 0,
+            leader_schedule_epoch: 0,
         },
         &mut clock_account,
     );
@@ -190,7 +190,7 @@ fn test_invalid_accounts_len() {
             slot: 16,
             segment: 1,
             epoch: 0,
-            stakers_epoch: 0,
+            leader_schedule_epoch: 0,
         },
         &mut clock_account,
     );
@@ -250,7 +250,7 @@ fn test_submit_mining_ok() {
             slot: DEFAULT_SLOTS_PER_SEGMENT,
             segment: 1,
             epoch: 0,
-            stakers_epoch: 0,
+            leader_schedule_epoch: 0,
         },
         &mut clock_account,
     );
