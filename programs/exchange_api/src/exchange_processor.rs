@@ -458,6 +458,7 @@ mod test {
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction;
     use std::mem;
@@ -557,18 +558,20 @@ mod test {
     }
 
     fn create_account(client: &BankClient, owner: &Keypair) -> Pubkey {
-        let new = Pubkey::new_rand();
+        let new = Keypair::new();
+
         let instruction = system_instruction::create_account(
             &owner.pubkey(),
-            &new,
+            &new.pubkey(),
             1,
             mem::size_of::<ExchangeState>() as u64,
             &id(),
         );
+
         client
-            .send_instruction(&owner, instruction)
+            .send_message(&[owner, &new], Message::new(vec![instruction]))
             .expect(&format!("{}:{}", line!(), file!()));
-        new
+        new.pubkey()
     }
 
     fn create_token_account(client: &BankClient, owner: &Keypair) -> Pubkey {
