@@ -543,10 +543,13 @@ impl Bank {
             .read()
             .unwrap()
             .get_recent_blockhashes(sysvar::recent_blockhashes::MAX_ENTRIES);
-        self.store_account(
-            &sysvar::recent_blockhashes::id(),
-            &sysvar::recent_blockhashes::create_account(1, recent_blockhashes),
-        );
+        let id = sysvar::recent_blockhashes::id();
+        let mut account = self
+            .get_account(&id)
+            .or_else(|| Some(sysvar::recent_blockhashes::create_account(1)))
+            .unwrap();
+        sysvar::recent_blockhashes::update_account(&mut account, recent_blockhashes).unwrap();
+        self.store_account(&id, &account);
     }
 
     // If the point values are not `normal`, bring them back into range and
@@ -3360,17 +3363,13 @@ mod tests {
     fn test_recent_blockhashes_sysvar() {
         let (genesis_block, _mint_keypair) = create_genesis_block(500);
         let mut bank = Arc::new(Bank::new(&genesis_block));
-        let bhq_account = bank
-            .get_account(&sysvar::recent_blockhashes::id())
-            .unwrap();
+        let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
         let recent_blockhashes =
             sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
         assert_eq!(recent_blockhashes.len(), 1);
         goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
         let bank = Arc::new(new_from_parent(&bank));
-        let bhq_account = bank
-            .get_account(&sysvar::recent_blockhashes::id())
-            .unwrap();
+        let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
         let recent_blockhashes =
             sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
         assert_eq!(recent_blockhashes.len(), 2);

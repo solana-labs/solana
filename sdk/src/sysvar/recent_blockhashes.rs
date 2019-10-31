@@ -46,10 +46,18 @@ impl Deref for RecentBlockhashes {
     }
 }
 
-pub fn create_account(lamports: u64, recent_blockhashes: Vec<Hash>) -> Account {
-    let mut account = Account::new(lamports, RecentBlockhashes::size_of(), &sysvar::id());
+pub fn create_account(lamports: u64) -> Account {
+    Account::new(lamports, RecentBlockhashes::size_of(), &sysvar::id())
+}
+
+pub fn update_account(account: &mut Account, recent_blockhashes: Vec<Hash>) -> Option<()> {
     let recent_blockhashes = RecentBlockhashes(recent_blockhashes);
-    recent_blockhashes.to_account(&mut account).unwrap();
+    recent_blockhashes.to_account(account)
+}
+
+pub fn create_account_with_data(lamports: u64, recent_blockhashes: Vec<Hash>) -> Account {
+    let mut account = create_account(lamports);
+    update_account(&mut account, recent_blockhashes).unwrap();
     account
 }
 
@@ -60,14 +68,14 @@ mod tests {
 
     #[test]
     fn test_create_account_empty() {
-        let account = create_account(42, vec![]);
+        let account = create_account_with_data(42, vec![]);
         let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
         assert_eq!(recent_blockhashes, RecentBlockhashes::default());
     }
 
     #[test]
     fn test_create_account_full() {
-        let account = create_account(42, vec![Hash::default(); MAX_ENTRIES]);
+        let account = create_account_with_data(42, vec![Hash::default(); MAX_ENTRIES]);
         let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
         assert_eq!(recent_blockhashes.len(), MAX_ENTRIES);
     }
@@ -75,7 +83,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_create_account_too_big() {
-        let account = create_account(42, vec![Hash::default(); MAX_ENTRIES + 1]);
+        let account = create_account_with_data(42, vec![Hash::default(); MAX_ENTRIES + 1]);
         RecentBlockhashes::from_account(&account).unwrap();
     }
 }
