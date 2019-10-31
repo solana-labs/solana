@@ -72,7 +72,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("timeout")
                         .value_name("SECONDS")
                         .takes_value(true)
-                        .default_value("10")
+                        .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 ),
         )
