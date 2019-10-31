@@ -71,8 +71,8 @@ fn test_bench_tps_local_cluster_solana() {
     test_bench_tps_local_cluster(config);
 }
 
+#[ignore]
 #[test]
-#[serial]
 fn test_bench_tps_local_cluster_move() {
     let mut config = Config::default();
     config.tx_count = 100;
