@@ -117,6 +117,7 @@ mod tests {
             &next_bank,
             &entry::create_ticks(
                 DEFAULT_TICKS_PER_SLOT * next_bank.slots_per_segment() + 1,
+                0,
                 bank.last_blockhash(),
             ),
             true,
@@ -207,7 +208,7 @@ mod tests {
                 let bank = Arc::new(Bank::new_from_parent(&last_bank, &keypair.pubkey(), i));
                 blocktree_processor::process_entries(
                     &bank,
-                    &entry::create_ticks(64, bank.last_blockhash()),
+                    &entry::create_ticks(64, 0, bank.last_blockhash()),
                     true,
                 )
                 .expect("failed process entries");

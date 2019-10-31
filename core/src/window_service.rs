@@ -326,7 +326,7 @@ mod test {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(Blocktree::open(&blocktree_path).unwrap());
         let num_entries = 10;
-        let original_entries = create_ticks(num_entries, Hash::default());
+        let original_entries = create_ticks(num_entries, 0, Hash::default());
         let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Arc::new(Keypair::new()));
         shreds.reverse();
         blocktree

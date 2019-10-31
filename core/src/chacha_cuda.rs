@@ -131,7 +131,7 @@ mod tests {
         }
 
         let slots_per_segment = 32;
-        let entries = create_ticks(slots_per_segment, Hash::default());
+        let entries = create_ticks(slots_per_segment, 0, Hash::default());
         let ledger_dir = "test_encrypt_file_many_keys_single";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
@@ -196,7 +196,7 @@ mod tests {
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 90;
-        let entries = create_ticks(2 * ticks_per_slot, Hash::default());
+        let entries = create_ticks(2 * ticks_per_slot, 0, Hash::default());
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         blocktree
             .write_entries(

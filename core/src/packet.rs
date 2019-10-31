@@ -160,14 +160,6 @@ impl fmt::Debug for Blob {
     }
 }
 
-#[derive(Debug)]
-pub enum BlobError {
-    /// the Blob's meta and data are not self-consistent
-    BadState,
-    /// Blob verification failed
-    VerificationFailed,
-}
-
 impl Packets {
     pub fn recv_from(&mut self, socket: &UdpSocket) -> Result<usize> {
         let mut i = 0;

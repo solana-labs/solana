@@ -197,6 +197,9 @@ pub struct Bank {
     // Bank max_tick_height
     max_tick_height: u64,
 
+    /// The number of hashes in each tick. None value means hashing is disabled.
+    hashes_per_tick: Option<u64>,
+
     /// The number of ticks in each slot.
     ticks_per_slot: u64,
 
@@ -319,6 +322,7 @@ impl Bank {
             blockhash_queue: RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
 
             // TODO: clean this up, soo much special-case copying...
+            hashes_per_tick: parent.hashes_per_tick,
             ticks_per_slot: parent.ticks_per_slot,
             slots_per_segment: parent.slots_per_segment,
             slots_per_year: parent.slots_per_year,
@@ -662,6 +666,7 @@ impl Bank {
             .unwrap()
             .genesis_hash(&genesis_block.hash(), &self.fee_calculator);
 
+        self.hashes_per_tick = genesis_block.poh_config.hashes_per_tick;
         self.ticks_per_slot = genesis_block.ticks_per_slot;
         self.slots_per_segment = genesis_block.slots_per_segment;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
@@ -1421,6 +1426,11 @@ impl Bank {
         )
     }
 
+    /// Return the number of hashes per tick
+    pub fn hashes_per_tick(&self) -> &Option<u64> {
+        &self.hashes_per_tick
+    }
+
     /// Return the number of ticks per slot
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
@@ -1564,6 +1574,7 @@ impl Bank {
         assert_eq!(self.slot, dbank.slot);
         assert_eq!(self.collector_id, dbank.collector_id);
         assert_eq!(self.epoch_schedule, dbank.epoch_schedule);
+        assert_eq!(self.hashes_per_tick, dbank.hashes_per_tick);
         assert_eq!(self.ticks_per_slot, dbank.ticks_per_slot);
         assert_eq!(self.parent_hash, dbank.parent_hash);
         assert_eq!(

@@ -1,4 +1,5 @@
 use crate::bank_forks::BankForks;
+use crate::block_error::BlockError;
 use crate::blocktree::Blocktree;
 use crate::blocktree_meta::SlotMeta;
 use crate::entry::{create_ticks, Entry, EntrySlice};
@@ -173,9 +174,18 @@ pub struct BankForksInfo {
     pub bank_slot: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum BlocktreeProcessorError {
-    LedgerVerificationFailed,
+    FailedToLoadEntries,
+    FailedToLoadMeta,
+    InvalidBlock(BlockError),
+    InvalidTransaction,
+}
+
+impl From<BlockError> for BlocktreeProcessorError {
+    fn from(block_error: BlockError) -> Self {
+        BlocktreeProcessorError::InvalidBlock(block_error)
+    }
 }
 
 /// Callback for accessing bank state while processing the blocktree
@@ -277,7 +287,7 @@ pub fn process_blocktree_from_root(
     Ok((bank_forks, bank_forks_info, leader_schedule_cache))
 }
 
-fn verify_and_process_entries(
+fn verify_and_process_slot_entries(
     bank: &Arc<Bank>,
     entries: &[Entry],
     last_entry_hash: Hash,
@@ -285,9 +295,34 @@ fn verify_and_process_entries(
 ) -> result::Result<Hash, BlocktreeProcessorError> {
     assert!(!entries.is_empty());
 
-    if opts.verify_ledger && !entries.verify(&last_entry_hash) {
-        warn!("Ledger proof of history failed at slot: {}", bank.slot());
-        return Err(BlocktreeProcessorError::LedgerVerificationFailed);
+    if opts.verify_ledger {
+        let next_bank_tick_height = bank.tick_height() + entries.tick_count();
+        let max_bank_tick_height = bank.max_tick_height();
+        if next_bank_tick_height != max_bank_tick_height {
+            warn!(
+                "Invalid number of entry ticks found in slot: {}",
+                bank.slot()
+            );
+            return Err(BlockError::InvalidTickCount.into());
+        } else if !entries.last().unwrap().is_tick() {
+            warn!("Slot: {} did not end with a tick entry", bank.slot());
+            return Err(BlockError::TrailingEntry.into());
+        }
+
+        if let Some(hashes_per_tick) = bank.hashes_per_tick() {
+            if !entries.verify_tick_hash_count(&mut 0, *hashes_per_tick) {
+                warn!(
+                    "Tick with invalid number of hashes found in slot: {}",
+                    bank.slot()
+                );
+                return Err(BlockError::InvalidTickHashCount.into());
+            }
+        }
+
+        if !entries.verify(&last_entry_hash) {
+            warn!("Ledger proof of history failed at slot: {}", bank.slot());
+            return Err(BlockError::InvalidEntryHash.into());
+        }
     }
 
     process_entries_with_callback(bank, &entries, true, opts.entry_callback.as_ref()).map_err(
@@ -297,7 +332,7 @@ fn verify_and_process_entries(
                 bank.slot(),
                 err
             );
-            BlocktreeProcessorError::LedgerVerificationFailed
+            BlocktreeProcessorError::InvalidTransaction
         },
     )?;
 
@@ -315,15 +350,10 @@ fn process_bank_0(
     // Fetch all entries for this slot
     let entries = blocktree.get_slot_entries(0, 0, None).map_err(|err| {
         warn!("Failed to load entries for slot 0, err: {:?}", err);
-        BlocktreeProcessorError::LedgerVerificationFailed
+        BlocktreeProcessorError::FailedToLoadEntries
     })?;
 
-    if entries.is_empty() {
-        warn!("entry0 not present");
-        return Err(BlocktreeProcessorError::LedgerVerificationFailed);
-    }
-
-    verify_and_process_entries(bank0, &entries, bank0.last_blockhash(), opts)?;
+    verify_and_process_slot_entries(bank0, &entries, bank0.last_blockhash(), opts)?;
 
     bank0.freeze();
 
@@ -355,7 +385,7 @@ fn process_next_slots(
             .meta(*next_slot)
             .map_err(|err| {
                 warn!("Failed to load meta for slot {}: {:?}", next_slot, err);
-                BlocktreeProcessorError::LedgerVerificationFailed
+                BlocktreeProcessorError::FailedToLoadMeta
             })?
             .unwrap();
 
@@ -419,10 +449,10 @@ fn process_pending_slots(
         // Fetch all entries for this slot
         let entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
             warn!("Failed to load entries for slot {}: {:?}", slot, err);
-            BlocktreeProcessorError::LedgerVerificationFailed
+            BlocktreeProcessorError::FailedToLoadEntries
         })?;
 
-        verify_and_process_entries(&bank, &entries, last_entry_hash, opts)?;
+        verify_and_process_slot_entries(&bank, &entries, last_entry_hash, opts)?;
 
         bank.freeze(); // all banks handled by this routine are created from complete slots
 
@@ -463,7 +493,8 @@ pub fn fill_blocktree_slot_with_ticks(
     parent_slot: u64,
     last_entry_hash: Hash,
 ) -> Hash {
-    let entries = create_ticks(ticks_per_slot, last_entry_hash);
+    let num_slots = (slot - parent_slot).max(1); // Note: slot 0 has parent slot 0
+    let entries = create_ticks(num_slots * ticks_per_slot, 0, last_entry_hash);
     let last_entry_hash = entries.last().unwrap().hash;
 
     blocktree
@@ -486,7 +517,7 @@ pub fn fill_blocktree_slot_with_ticks(
 pub mod tests {
     use super::*;
     use crate::blocktree::create_new_tmp_ledger;
-    use crate::entry::{create_ticks, next_entry, next_entry_mut, Entry};
+    use crate::entry::{create_ticks, next_entry, next_entry_mut};
     use crate::genesis_utils::{
         create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
     };
@@ -502,6 +533,140 @@ pub mod tests {
         transaction::{Transaction, TransactionError},
     };
     use std::sync::RwLock;
+
+    #[test]
+    fn test_process_blocktree_with_missing_hashes() {
+        solana_logger::setup();
+
+        let hashes_per_tick = 2;
+        let GenesisBlockInfo {
+            mut genesis_block, ..
+        } = create_genesis_block(10_000);
+        genesis_block.poh_config.hashes_per_tick = Some(hashes_per_tick);
+        let ticks_per_slot = genesis_block.ticks_per_slot;
+
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let blocktree =
+            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+
+        let parent_slot = 0;
+        let slot = 1;
+        let entries = create_ticks(ticks_per_slot, hashes_per_tick - 1, blockhash);
+        blocktree
+            .write_entries(
+                slot,
+                0,
+                0,
+                ticks_per_slot,
+                Some(parent_slot),
+                true,
+                &Arc::new(Keypair::new()),
+                entries,
+            )
+            .expect("Expected to write shredded entries to blocktree");
+
+        let opts = ProcessOptions {
+            verify_ledger: true,
+            ..ProcessOptions::default()
+        };
+        assert_eq!(
+            process_blocktree(&genesis_block, &blocktree, None, opts).err(),
+            Some(BlocktreeProcessorError::InvalidBlock(
+                BlockError::InvalidTickHashCount
+            )),
+        );
+    }
+
+    #[test]
+    fn test_process_blocktree_with_invalid_slot_tick_count() {
+        solana_logger::setup();
+
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
+        let ticks_per_slot = genesis_block.ticks_per_slot;
+
+        // Create a new ledger with slot 0 full of ticks
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+
+        // Write slot 1 with one tick missing
+        let parent_slot = 0;
+        let slot = 1;
+        let entries = create_ticks(ticks_per_slot - 1, 0, blockhash);
+        blocktree
+            .write_entries(
+                slot,
+                0,
+                0,
+                ticks_per_slot,
+                Some(parent_slot),
+                true,
+                &Arc::new(Keypair::new()),
+                entries,
+            )
+            .expect("Expected to write shredded entries to blocktree");
+
+        let opts = ProcessOptions {
+            verify_ledger: true,
+            ..ProcessOptions::default()
+        };
+        assert_eq!(
+            process_blocktree(&genesis_block, &blocktree, None, opts).err(),
+            Some(BlocktreeProcessorError::InvalidBlock(
+                BlockError::InvalidTickCount
+            )),
+        );
+    }
+
+    #[test]
+    fn test_process_blocktree_with_slot_with_trailing_entry() {
+        solana_logger::setup();
+
+        let GenesisBlockInfo {
+            mint_keypair,
+            genesis_block,
+            ..
+        } = create_genesis_block(10_000);
+        let ticks_per_slot = genesis_block.ticks_per_slot;
+
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+
+        let mut entries = create_ticks(ticks_per_slot, 0, blockhash);
+        let trailing_entry = {
+            let keypair = Keypair::new();
+            let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 1, blockhash);
+            next_entry(&blockhash, 1, vec![tx])
+        };
+        entries.push(trailing_entry);
+
+        // Tricks blocktree into writing the trailing entry by lying that there is one more tick
+        // per slot.
+        let parent_slot = 0;
+        let slot = 1;
+        blocktree
+            .write_entries(
+                slot,
+                0,
+                0,
+                ticks_per_slot + 1,
+                Some(parent_slot),
+                true,
+                &Arc::new(Keypair::new()),
+                entries,
+            )
+            .expect("Expected to write shredded entries to blocktree");
+
+        let opts = ProcessOptions {
+            verify_ledger: true,
+            ..ProcessOptions::default()
+        };
+        assert_eq!(
+            process_blocktree(&genesis_block, &blocktree, None, opts).err(),
+            Some(BlocktreeProcessorError::InvalidBlock(
+                BlockError::TrailingEntry
+            )),
+        );
+    }
 
     #[test]
     fn test_process_blocktree_with_incomplete_slot() {
@@ -534,7 +699,7 @@ pub mod tests {
         {
             let parent_slot = 0;
             let slot = 1;
-            let mut entries = create_ticks(ticks_per_slot, blockhash);
+            let mut entries = create_ticks(ticks_per_slot, 0, blockhash);
             blockhash = entries.last().unwrap().hash;
 
             // throw away last one
@@ -841,7 +1006,7 @@ pub mod tests {
         } = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let keypair = Keypair::new();
-        let slot_entries = create_ticks(genesis_block.ticks_per_slot, genesis_block.hash());
+        let slot_entries = create_ticks(genesis_block.ticks_per_slot, 1, genesis_block.hash());
         let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair.pubkey(),
@@ -865,11 +1030,13 @@ pub mod tests {
         solana_logger::setup();
         let leader_pubkey = Pubkey::new_rand();
         let mint = 100;
+        let hashes_per_tick = 10;
         let GenesisBlockInfo {
-            genesis_block,
+            mut genesis_block,
             mint_keypair,
             ..
         } = create_genesis_block_with_leader(mint, &leader_pubkey, 50);
+        genesis_block.poh_config.hashes_per_tick = Some(hashes_per_tick);
         let (ledger_path, mut last_entry_hash) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);
 
@@ -880,8 +1047,7 @@ pub mod tests {
             // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
             let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 1, blockhash);
-            let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
-            last_entry_hash = entry.hash;
+            let entry = next_entry_mut(&mut last_entry_hash, 1, vec![tx]);
             entries.push(entry);
 
             // Add a second Transaction that will produce a
@@ -889,14 +1055,22 @@ pub mod tests {
             let keypair2 = Keypair::new();
             let tx =
                 system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 101, blockhash);
-            let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
-            last_entry_hash = entry.hash;
+            let entry = next_entry_mut(&mut last_entry_hash, 1, vec![tx]);
             entries.push(entry);
         }
 
+        let remaining_hashes = hashes_per_tick - entries.len() as u64;
+        let tick_entry = next_entry_mut(&mut last_entry_hash, remaining_hashes, vec![]);
+        entries.push(tick_entry);
+
         // Fill up the rest of slot 1 with ticks
-        entries.extend(create_ticks(genesis_block.ticks_per_slot, last_entry_hash));
+        entries.extend(create_ticks(
+            genesis_block.ticks_per_slot - 1,
+            genesis_block.poh_config.hashes_per_tick.unwrap(),
+            last_entry_hash,
+        ));
         let last_blockhash = entries.last().unwrap().hash;
+
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
         blocktree
@@ -1004,7 +1178,11 @@ pub mod tests {
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
 
         let mut entries = vec![entry_1, entry_2];
-        entries.extend(create_ticks(genesis_block.ticks_per_slot, last_entry_hash));
+        entries.extend(create_ticks(
+            genesis_block.ticks_per_slot,
+            0,
+            last_entry_hash,
+        ));
         blocktree
             .write_entries(
                 1,
@@ -1683,7 +1861,8 @@ pub mod tests {
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
         bank1.squash();
         let slot1_entries = blocktree.get_slot_entries(1, 0, None).unwrap();
-        verify_and_process_entries(&bank1, &slot1_entries, bank0.last_blockhash(), &opts).unwrap();
+        verify_and_process_slot_entries(&bank1, &slot1_entries, bank0.last_blockhash(), &opts)
+            .unwrap();
 
         // Test process_blocktree_from_root() from slot 1 onwards
         let (bank_forks, bank_forks_info, _) =

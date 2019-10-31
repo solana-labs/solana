@@ -61,32 +61,18 @@ pub struct Entry {
 
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
-    pub fn new(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
-        if num_hashes == 0 && transactions.is_empty() {
-            Entry {
-                num_hashes: 0,
-                hash: *prev_hash,
-                transactions,
-            }
-        } else if num_hashes == 0 {
-            // If you passed in transactions, but passed in num_hashes == 0, then
-            // next_hash will generate the next hash and set num_hashes == 1
-            let hash = next_hash(prev_hash, 1, &transactions);
-            Entry {
-                num_hashes: 1,
-                hash,
-                transactions,
-            }
-        } else {
-            // Otherwise, the next Entry `num_hashes` after `start_hash`.
-            // If you wanted a tick for instance, then pass in num_hashes = 1
-            // and transactions = empty
-            let hash = next_hash(prev_hash, num_hashes, &transactions);
-            Entry {
-                num_hashes,
-                hash,
-                transactions,
-            }
+    pub fn new(prev_hash: &Hash, mut num_hashes: u64, transactions: Vec<Transaction>) -> Self {
+        // If you passed in transactions, but passed in num_hashes == 0, then
+        // next_hash will generate the next hash and set num_hashes == 1
+        if num_hashes == 0 && !transactions.is_empty() {
+            num_hashes = 1;
+        }
+
+        let hash = next_hash(prev_hash, num_hashes, &transactions);
+        Entry {
+            num_hashes,
+            hash,
+            transactions,
         }
     }
 
@@ -219,6 +205,12 @@ pub trait EntrySlice {
     fn verify_cpu(&self, start_hash: &Hash) -> EntryVerifyState;
     fn start_verify(&self, start_hash: &Hash) -> EntryVerifyState;
     fn verify(&self, start_hash: &Hash) -> bool;
+    /// Checks that each entry tick has the correct number of hashes. Entry slices do not
+    /// necessarily end in a tick, so `tick_hash_count` is used to carry over the hash count
+    /// for the next entry slice.
+    fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool;
+    /// Counts tick entries
+    fn tick_count(&self) -> u64;
 }
 
 impl EntrySlice for [Entry] {
@@ -338,6 +330,34 @@ impl EntrySlice for [Entry] {
             hashes: Some(hashes),
         }
     }
+
+    fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool {
+        // When hashes_per_tick is 0, hashing is disabled.
+        if hashes_per_tick == 0 {
+            return true;
+        }
+
+        for entry in self {
+            *tick_hash_count += entry.num_hashes;
+            if entry.is_tick() {
+                if *tick_hash_count != hashes_per_tick {
+                    warn!(
+                        "invalid tick hash count!: entry: {:#?}, tick_hash_count: {}, hashes_per_tick: {}",
+                        entry,
+                        tick_hash_count,
+                        hashes_per_tick
+                    );
+                    return false;
+                }
+                *tick_hash_count = 0;
+            }
+        }
+        *tick_hash_count < hashes_per_tick
+    }
+
+    fn tick_count(&self) -> u64 {
+        self.iter().filter(|e| e.is_tick()).count() as u64
+    }
 }
 
 pub fn next_entry_mut(start: &mut Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
@@ -346,10 +366,10 @@ pub fn next_entry_mut(start: &mut Hash, num_hashes: u64, transactions: Vec<Trans
     entry
 }
 
-pub fn create_ticks(num_ticks: u64, mut hash: Hash) -> Vec<Entry> {
+pub fn create_ticks(num_ticks: u64, hashes_per_tick: u64, mut hash: Hash) -> Vec<Entry> {
     let mut ticks = Vec::with_capacity(num_ticks as usize);
     for _ in 0..num_ticks {
-        let new_tick = next_entry_mut(&mut hash, 1, vec![]);
+        let new_tick = next_entry_mut(&mut hash, hashes_per_tick, vec![]);
         ticks.push(new_tick);
     }
 
@@ -373,9 +393,11 @@ mod tests {
     use chrono::prelude::Utc;
     use solana_budget_api::budget_instruction;
     use solana_sdk::{
-        hash::hash,
+        hash::{hash, Hash},
+        message::Message,
         signature::{Keypair, KeypairUtil},
         system_transaction,
+        transaction::Transaction,
     };
 
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
@@ -527,5 +549,59 @@ mod tests {
         bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![tx1]));
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&one)); // inductive step, bad
+    }
+
+    #[test]
+    fn test_verify_tick_hash_count() {
+        let hashes_per_tick = 10;
+        let keypairs: Vec<&Keypair> = Vec::new();
+        let tx: Transaction =
+            Transaction::new(&keypairs, Message::new(Vec::new()), Hash::default());
+        let tx_entry = Entry::new(&Hash::default(), 1, vec![tx]);
+        let full_tick_entry = Entry::new_tick(hashes_per_tick, &Hash::default());
+        let partial_tick_entry = Entry::new_tick(hashes_per_tick - 1, &Hash::default());
+        let no_hash_tick_entry = Entry::new_tick(0, &Hash::default());
+        let single_hash_tick_entry = Entry::new_tick(1, &Hash::default());
+
+        let no_ticks = vec![];
+        let mut tick_hash_count = 0;
+        assert!(no_ticks.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
+        assert_eq!(tick_hash_count, 0);
+
+        // validation is disabled when hashes_per_tick == 0
+        let no_hash_tick = vec![no_hash_tick_entry.clone()];
+        assert!(no_hash_tick.verify_tick_hash_count(&mut tick_hash_count, 0));
+        assert_eq!(tick_hash_count, 0);
+
+        // validation is disabled when hashes_per_tick == 0
+        let tx_and_no_hash_tick = vec![tx_entry.clone(), no_hash_tick_entry];
+        assert!(tx_and_no_hash_tick.verify_tick_hash_count(&mut tick_hash_count, 0));
+        assert_eq!(tick_hash_count, 0);
+
+        let single_tick = vec![full_tick_entry.clone()];
+        assert!(single_tick.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
+        assert_eq!(tick_hash_count, 0);
+        assert!(!single_tick.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick - 1));
+        assert_eq!(tick_hash_count, hashes_per_tick);
+        tick_hash_count = 0;
+
+        let ticks_and_txs = vec![tx_entry.clone(), partial_tick_entry.clone()];
+        assert!(ticks_and_txs.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
+        assert_eq!(tick_hash_count, 0);
+
+        let partial_tick = vec![partial_tick_entry.clone()];
+        assert!(!partial_tick.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
+        assert_eq!(tick_hash_count, hashes_per_tick - 1);
+        tick_hash_count = 0;
+
+        let tx_entries: Vec<Entry> = (0..hashes_per_tick - 1).map(|_| tx_entry.clone()).collect();
+        let tx_entries_and_tick = [tx_entries, vec![single_hash_tick_entry]].concat();
+        assert!(tx_entries_and_tick.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
+        assert_eq!(tick_hash_count, 0);
+
+        let too_many_tx_entries: Vec<Entry> =
+            (0..hashes_per_tick).map(|_| tx_entry.clone()).collect();
+        assert!(!too_many_tx_entries.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
+        assert_eq!(tick_hash_count, hashes_per_tick);
     }
 }

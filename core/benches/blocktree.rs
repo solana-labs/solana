@@ -33,7 +33,11 @@ fn setup_read_bench(
     slot: u64,
 ) {
     // Make some big and small entries
-    let entries = create_ticks(num_large_shreds * 4 + num_small_shreds * 2, Hash::default());
+    let entries = create_ticks(
+        num_large_shreds * 4 + num_small_shreds * 2,
+        0,
+        Hash::default(),
+    );
 
     // Convert the entries to shreds, write the shreds to the ledger
     let shreds = entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true);
@@ -48,7 +52,7 @@ fn setup_read_bench(
 fn bench_write_small(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path!();
     let num_entries = 32 * 1024;
-    let entries = create_ticks(num_entries, Hash::default());
+    let entries = create_ticks(num_entries, 0, Hash::default());
     bench_write_shreds(bench, entries, &ledger_path);
 }
 
@@ -58,7 +62,7 @@ fn bench_write_small(bench: &mut Bencher) {
 fn bench_write_big(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path!();
     let num_entries = 32 * 1024;
-    let entries = create_ticks(num_entries, Hash::default());
+    let entries = create_ticks(num_entries, 0, Hash::default());
     bench_write_shreds(bench, entries, &ledger_path);
 }
 
@@ -127,7 +131,7 @@ fn bench_insert_data_shred_small(bench: &mut Bencher) {
     let blocktree =
         Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
-    let entries = create_ticks(num_entries, Hash::default());
+    let entries = create_ticks(num_entries, 0, Hash::default());
     bench.iter(move || {
         let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true);
         blocktree.insert_shreds(shreds, None).unwrap();
@@ -142,7 +146,7 @@ fn bench_insert_data_shred_big(bench: &mut Bencher) {
     let blocktree =
         Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
-    let entries = create_ticks(num_entries, Hash::default());
+    let entries = create_ticks(num_entries, 0, Hash::default());
     bench.iter(move || {
         let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true);
         blocktree.insert_shreds(shreds, None).unwrap();

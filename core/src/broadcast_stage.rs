@@ -281,7 +281,7 @@ mod test {
                 max_tick_height = bank.max_tick_height();
                 ticks_per_slot = bank.ticks_per_slot();
                 slot = bank.slot();
-                let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
+                let ticks = create_ticks(max_tick_height - start_tick_height, 0, Hash::default());
                 for (i, tick) in ticks.into_iter().enumerate() {
                     entry_sender
                         .send((bank.clone(), (tick, i as u64 + 1)))

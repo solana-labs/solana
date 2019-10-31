@@ -134,7 +134,7 @@ mod test {
         let (slot_full_sender, slot_full_receiver) = channel();
 
         // Create entries - 4 ticks + 1 populated entry + 1 tick
-        let mut entries = create_ticks(4, Hash::default());
+        let mut entries = create_ticks(4, 0, Hash::default());
 
         let keypair = Keypair::new();
         let mut blockhash = entries[3].hash;
@@ -142,7 +142,7 @@ mod test {
         let entry = Entry::new(&mut blockhash, 1, vec![tx]);
         blockhash = entry.hash;
         entries.push(entry);
-        let final_tick = create_ticks(1, blockhash);
+        let final_tick = create_ticks(1, 0, blockhash);
         entries.extend_from_slice(&final_tick);
 
         let expected_entries = entries.clone();
