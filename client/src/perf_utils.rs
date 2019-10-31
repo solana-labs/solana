@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SampleStats {
     /// Maximum TPS reported by this node
     pub tps: f32,

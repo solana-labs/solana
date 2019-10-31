@@ -232,6 +232,8 @@ where
         total_tx_sent_count.load(Ordering::Relaxed),
     );
 
+    println!("MAXES({:#?})", maxes.read().unwrap());
+
     let r_maxes = maxes.read().unwrap();
     r_maxes.first().unwrap().1.txs
 }

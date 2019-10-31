@@ -9,6 +9,7 @@ use solana_drone::drone::run_local_drone;
 #[cfg(feature = "move")]
 use solana_sdk::move_loader::solana_move_loader_program;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use std::process::Command;
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
@@ -21,7 +22,7 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     solana_logger::setup();
     const NUM_NODES: usize = 1;
-    let cluster = LocalCluster::new(&ClusterConfig {
+    let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![999_990; NUM_NODES],
         cluster_lamports: 200_000_000,
         validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
@@ -58,6 +59,41 @@ fn test_bench_tps_local_cluster(config: Config) {
     .unwrap();
 
     let total = do_bench_tps(vec![client], config, keypairs, 0, move_keypairs);
+
+    cluster.close_preserve_ledgers();
+
+    println!(
+        "Called from {}",
+        String::from_utf8(
+            Command::new("pwd")
+                .output()
+                .expect("Failed to run pwd")
+                .stdout
+        )
+        .expect("Not UTF8 pwd")
+    );
+
+    for (pubkey, info) in &cluster.validator_infos {
+        let output = Command::new("cargo")
+            .args(&[
+                "run",
+                "--manifest-path",
+                "../ledger-tool/Cargo.toml",
+                "--",
+                "-l",
+                info.info.ledger_path.as_os_str().to_str().unwrap(),
+                "print",
+            ])
+            .output()
+            .expect("Failed to run ledger-tool");
+        println!(
+            "Validator {}:\nSTDERR:\n{}\n\nSTDOUT:\n{}",
+            pubkey,
+            String::from_utf8(output.stderr).expect("Not UTF8 stderr"),
+            String::from_utf8(output.stdout).expect("Not UTF8 stdout")
+        );
+    }
+
     assert!(total > 100);
 }
 
@@ -71,8 +107,9 @@ fn test_bench_tps_local_cluster_solana() {
     test_bench_tps_local_cluster(config);
 }
 
-#[ignore]
+//#[ignore]
 #[test]
+#[serial]
 fn test_bench_tps_local_cluster_move() {
     let mut config = Config::default();
     config.tx_count = 100;
