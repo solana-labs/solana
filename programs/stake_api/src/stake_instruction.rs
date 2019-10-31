@@ -20,7 +20,6 @@ pub enum StakeError {
     LockupInForce,
     AlreadyDeactivated,
     TooSoonToRedelegate,
-    SplitMismatch,
     InsufficientStake,
 }
 impl<E> DecodeError<E> for StakeError {
@@ -34,13 +33,7 @@ impl std::fmt::Display for StakeError {
             StakeError::NoCreditsToRedeem => write!(f, "not enough credits to redeem"),
             StakeError::LockupInForce => write!(f, "lockup has not yet expired"),
             StakeError::AlreadyDeactivated => write!(f, "stake already deactivated"),
-            StakeError::TooSoonToRedelegate => {
-                write!(f, "only one redelegation permitted per epoch")
-            }
-            StakeError::SplitMismatch => write!(
-                f,
-                "split lockup or authorized does not match the source stake"
-            ),
+            StakeError::TooSoonToRedelegate => write!(f, "one re-delegation permitted per epoch"),
             StakeError::InsufficientStake => write!(f, "split amount is more than is staked"),
         }
     }
@@ -168,20 +161,29 @@ pub fn create_stake_account_with_lockup(
 pub fn split(
     stake_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
-    split: u64,
+    lamports: u64,
     split_stake_pubkey: &Pubkey,
-) -> Instruction {
-    Instruction::new(
-        id(),
-        &StakeInstruction::Split(split),
-        metas_with_signer(
-            &[
-                AccountMeta::new(*stake_pubkey, false),
-                AccountMeta::new(*split_stake_pubkey, false),
-            ],
-            authorized_pubkey,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account(
+            stake_pubkey,
+            split_stake_pubkey,
+            0, // creates an ephemeral, uninitialized Stake
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
         ),
-    )
+        Instruction::new(
+            id(),
+            &StakeInstruction::Split(lamports),
+            metas_with_signer(
+                &[
+                    AccountMeta::new(*stake_pubkey, false),
+                    AccountMeta::new(*split_stake_pubkey, false),
+                ],
+                authorized_pubkey,
+            ),
+        ),
+    ]
 }
 
 pub fn create_stake_account(
@@ -325,10 +327,11 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match limited_deserialize(data)? {
-        StakeInstruction::Initialize(authorized, lockup) => {
-            sysvar::rent::verify_rent_exemption(me, next_keyed_account(keyed_accounts)?)?;
-            me.initialize(&authorized, &lockup)
-        }
+        StakeInstruction::Initialize(authorized, lockup) => me.initialize(
+            &authorized,
+            &lockup,
+            &sysvar::rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+        ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&authorized_pubkey, stake_authorize, &signers)
         }
@@ -437,12 +440,14 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&split(
-                &Pubkey::default(),
-                &Pubkey::default(),
-                100,
-                &Pubkey::default()
-            )),
+            process_instruction(
+                &split(
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                    100,
+                    &Pubkey::default()
+                )[1]
+            ),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
@@ -519,37 +524,6 @@ mod tests {
                 .unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
-        );
-
-        // not enough rent
-        assert_eq!(
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(
-                        &Pubkey::default(),
-                        false,
-                        &mut Account::new(0, 100, &Pubkey::default())
-                    ),
-                    KeyedAccount::new(
-                        &sysvar::rent::id(),
-                        false,
-                        &mut sysvar::rent::create_account(
-                            0,
-                            &Rent {
-                                lamports_per_byte_year: 42,
-                                ..Rent::default()
-                            }
-                        )
-                    )
-                ],
-                &serialize(&StakeInstruction::Initialize(
-                    Authorized::default(),
-                    Lockup::default()
-                ))
-                .unwrap(),
-            ),
-            Err(InstructionError::InsufficientFunds),
         );
 
         // fails to deserialize stake state

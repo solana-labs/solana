@@ -72,6 +72,15 @@ pub type Segment = u64;
 ///  some number of Slots.
 pub type Epoch = u64;
 
+#[repr(C)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+pub struct Clock {
+    pub slot: Slot,
+    pub segment: Segment,
+    pub epoch: Epoch,
+    pub stakers_epoch: Epoch,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

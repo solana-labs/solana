@@ -111,7 +111,7 @@ fn test_stake_account_delegate() {
     // Test that correct lamports are staked
     let account = bank.get_account(&staker_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(_authorized, _lockup, stake) = stake_state {
+    if let StakeState::Stake(_meta, stake) = stake_state {
         assert_eq!(stake.stake, 1_000_000);
     } else {
         assert!(false, "wrong account type found")
@@ -134,7 +134,7 @@ fn test_stake_account_delegate() {
     // Test that lamports are still staked
     let account = bank.get_account(&staker_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
-    if let StakeState::Stake(_authorized, _lockup, stake) = stake_state {
+    if let StakeState::Stake(_meta, stake) = stake_state {
         assert_eq!(stake.stake, 1_000_000);
     } else {
         assert!(false, "wrong account type found")

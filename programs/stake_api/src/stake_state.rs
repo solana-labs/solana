@@ -8,9 +8,10 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
-    clock::{Epoch, Slot},
+    clock::{Clock, Epoch, Slot},
     instruction::InstructionError,
     pubkey::Pubkey,
+    rent::Rent,
     sysvar::{
         self,
         stake_history::{StakeHistory, StakeHistoryEntry},
@@ -23,8 +24,8 @@ use std::collections::HashSet;
 #[allow(clippy::large_enum_variant)]
 pub enum StakeState {
     Uninitialized,
-    Initialized(Authorized, Lockup),
-    Stake(Authorized, Lockup, Stake),
+    Initialized(Meta),
+    Stake(Meta, Stake),
     RewardsPool,
 }
 
@@ -50,13 +51,14 @@ impl StakeState {
 
     pub fn stake(&self) -> Option<Stake> {
         match self {
-            StakeState::Stake(_authorized, _lockup, stake) => Some(*stake),
+            StakeState::Stake(_meta, stake) => Some(*stake),
             _ => None,
         }
     }
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
-            StakeState::Stake(authorized, _lockup, _stake) => Some(*authorized),
+            StakeState::Stake(meta, _stake) => Some(meta.authorized),
+            StakeState::Initialized(meta) => Some(meta.authorized),
             _ => None,
         }
     }
@@ -83,6 +85,23 @@ pub struct Lockup {
 pub struct Authorized {
     pub staker: Pubkey,
     pub withdrawer: Pubkey,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+pub struct Meta {
+    pub rent_exempt_reserve: u64,
+    pub authorized: Authorized,
+    pub lockup: Lockup,
+}
+
+impl Meta {
+    pub fn auto(authorized: &Pubkey) -> Self {
+        Self {
+            authorized: Authorized::auto(authorized),
+            rent_exempt_reserve: Rent::default().minimum_balance(std::mem::size_of::<StakeState>()),
+            ..Meta::default()
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -351,7 +370,7 @@ impl Stake {
         &mut self,
         voter_pubkey: &Pubkey,
         vote_state: &VoteState,
-        clock: &sysvar::clock::Clock,
+        clock: &Clock,
     ) -> Result<(), StakeError> {
         // only one re-delegation supported per epoch
         if self.voter_pubkey_epoch == clock.epoch {
@@ -420,6 +439,7 @@ pub trait StakeAccount {
         &mut self,
         authorized: &Authorized,
         lockup: &Lockup,
+        rent: &Rent,
     ) -> Result<(), InstructionError>;
     fn authorize(
         &mut self,
@@ -467,13 +487,25 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         &mut self,
         authorized: &Authorized,
         lockup: &Lockup,
+        rent: &Rent,
     ) -> Result<(), InstructionError> {
         if let StakeState::Uninitialized = self.state()? {
-            self.set_state(&StakeState::Initialized(*authorized, *lockup))
+            let rent_exempt_reserve = rent.minimum_balance(self.account.data.len());
+
+            if rent_exempt_reserve < self.account.lamports {
+                self.set_state(&StakeState::Initialized(Meta {
+                    rent_exempt_reserve,
+                    authorized: *authorized,
+                    lockup: *lockup,
+                }))
+            } else {
+                Err(InstructionError::InsufficientFunds)
+            }
         } else {
             Err(InstructionError::InvalidAccountData)
         }
     }
+
     /// Authorize the given pubkey to manage stake (deactivate, withdraw). This may be called
     /// multiple times, but will implicitly withdraw authorization from the previously authorized
     /// staker. The default staker is the owner of the stake account's pubkey.
@@ -484,13 +516,15 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
         match self.state()? {
-            StakeState::Stake(mut authorized, lockup, stake) => {
-                authorized.authorize(signers, authority, stake_authorize)?;
-                self.set_state(&StakeState::Stake(authorized, lockup, stake))
+            StakeState::Stake(mut meta, stake) => {
+                meta.authorized
+                    .authorize(signers, authority, stake_authorize)?;
+                self.set_state(&StakeState::Stake(meta, stake))
             }
-            StakeState::Initialized(mut authorized, lockup) => {
-                authorized.authorize(signers, authority, stake_authorize)?;
-                self.set_state(&StakeState::Initialized(authorized, lockup))
+            StakeState::Initialized(mut meta) => {
+                meta.authorized
+                    .authorize(signers, authority, stake_authorize)?;
+                self.set_state(&StakeState::Initialized(meta))
             }
             _ => Err(InstructionError::InvalidAccountData),
         }
@@ -503,21 +537,23 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
         match self.state()? {
-            StakeState::Initialized(authorized, lockup) => {
-                authorized.check(signers, StakeAuthorize::Staker)?;
+            StakeState::Initialized(meta) => {
+                meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 let stake = Stake::new(
-                    self.account.lamports,
+                    self.account
+                        .lamports
+                        .saturating_sub(meta.rent_exempt_reserve), // can't stake the rent ;)
                     vote_account.unsigned_key(),
                     &vote_account.state()?,
                     clock.epoch,
                     config,
                 );
-                self.set_state(&StakeState::Stake(authorized, lockup, stake))
+                self.set_state(&StakeState::Stake(meta, stake))
             }
-            StakeState::Stake(authorized, lockup, mut stake) => {
-                authorized.check(signers, StakeAuthorize::Staker)?;
+            StakeState::Stake(meta, mut stake) => {
+                meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 stake.redelegate(vote_account.unsigned_key(), &vote_account.state()?, &clock)?;
-                self.set_state(&StakeState::Stake(authorized, lockup, stake))
+                self.set_state(&StakeState::Stake(meta, stake))
             }
             _ => Err(InstructionError::InvalidAccountData),
         }
@@ -527,11 +563,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         clock: &sysvar::clock::Clock,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
-        if let StakeState::Stake(authorized, lockup, mut stake) = self.state()? {
-            authorized.check(signers, StakeAuthorize::Staker)?;
+        if let StakeState::Stake(meta, mut stake) = self.state()? {
+            meta.authorized.check(signers, StakeAuthorize::Staker)?;
             stake.deactivate(clock.epoch)?;
 
-            self.set_state(&StakeState::Stake(authorized, lockup, stake))
+            self.set_state(&StakeState::Stake(meta, stake))
         } else {
             Err(InstructionError::InvalidAccountData)
         }
@@ -543,7 +579,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         rewards: &sysvar::rewards::Rewards,
         stake_history: &sysvar::stake_history::StakeHistory,
     ) -> Result<(), InstructionError> {
-        if let (StakeState::Stake(authorized, lockup, mut stake), StakeState::RewardsPool) =
+        if let (StakeState::Stake(meta, mut stake), StakeState::RewardsPool) =
             (self.state()?, rewards_account.state()?)
         {
             let vote_state: VoteState = vote_account.state()?;
@@ -572,7 +608,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 stake.credits_observed = credits_observed;
                 stake.stake += stakers_reward;
 
-                self.set_state(&StakeState::Stake(authorized, lockup, stake))
+                self.set_state(&StakeState::Stake(meta, stake))
             } else {
                 // not worth collecting
                 Err(StakeError::NoCreditsToRedeem.into())
@@ -588,33 +624,55 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         split: &mut KeyedAccount,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
-        if let StakeState::Initialized(split_authorized, split_lockup) = split.state()? {
+        if let StakeState::Uninitialized = split.state()? {
+            // verify enough account lamports
             if lamports > self.account.lamports {
                 return Err(InstructionError::InsufficientFunds);
             }
 
             match self.state()? {
-                StakeState::Stake(authorized, lockup, mut stake) => {
-                    authorized.check(signers, StakeAuthorize::Staker)?;
+                StakeState::Stake(meta, mut stake) => {
+                    meta.authorized.check(signers, StakeAuthorize::Staker)?;
 
-                    if split_authorized != authorized || split_lockup != lockup {
-                        return Err(StakeError::SplitMismatch.into());
+                    // verify enough lamports for rent in new stake with the split
+                    if split.account.lamports + lamports < meta.rent_exempt_reserve
+                        // verify enough lamports left in previous stake
+                        || lamports + meta.rent_exempt_reserve > self.account.lamports
+                    {
+                        return Err(InstructionError::InsufficientFunds);
                     }
 
-                    let split_stake = stake.split(lamports)?;
+                    // split the stake, subtract rent_exempt_balance unless
+                    //  the destination account already has those lamports
+                    //  in place.
+                    // this could represent a small loss of staked lamports
+                    //  if the split account starts out with a zero balance
+                    let split_stake = stake.split(
+                        lamports
+                            - meta
+                                .rent_exempt_reserve
+                                .saturating_sub(split.account.lamports),
+                    )?;
 
-                    self.set_state(&StakeState::Stake(authorized, lockup, stake))?;
-                    split.set_state(&StakeState::Stake(
-                        split_authorized,
-                        split_lockup,
-                        split_stake,
-                    ))?;
+                    self.set_state(&StakeState::Stake(meta, stake))?;
+                    split.set_state(&StakeState::Stake(meta, split_stake))?;
                 }
-                StakeState::Initialized(authorized, lockup) => {
-                    authorized.check(signers, StakeAuthorize::Staker)?;
+                StakeState::Initialized(meta) => {
+                    meta.authorized.check(signers, StakeAuthorize::Staker)?;
 
-                    if split_authorized != authorized || split_lockup != lockup {
-                        return Err(StakeError::SplitMismatch.into());
+                    // enough lamports for rent in new stake
+                    if lamports < meta.rent_exempt_reserve
+                    // verify enough lamports left in previous stake
+                        || lamports + meta.rent_exempt_reserve > self.account.lamports
+                    {
+                        return Err(InstructionError::InsufficientFunds);
+                    }
+
+                    split.set_state(&StakeState::Initialized(meta))?;
+                }
+                StakeState::Uninitialized => {
+                    if !signers.contains(&self.unsigned_key()) {
+                        return Err(InstructionError::MissingRequiredSignature);
                     }
                 }
                 _ => return Err(InstructionError::InvalidAccountData),
@@ -627,6 +685,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             Err(InstructionError::InvalidAccountData)
         }
     }
+
     fn withdraw(
         &mut self,
         lamports: u64,
@@ -635,9 +694,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_history: &sysvar::stake_history::StakeHistory,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
-        let lockup = match self.state()? {
-            StakeState::Stake(authorized, lockup, stake) => {
-                authorized.check(signers, StakeAuthorize::Withdrawer)?;
+        let (lockup, reserve, is_staked) = match self.state()? {
+            StakeState::Stake(meta, stake) => {
+                meta.authorized.check(signers, StakeAuthorize::Withdrawer)?;
                 // if we have a deactivation epoch and we're in cooldown
                 let staked = if clock.epoch >= stake.deactivation_epoch {
                     stake.stake(clock.epoch, Some(stake_history))
@@ -648,28 +707,39 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     stake.stake
                 };
 
-                if lamports > self.account.lamports.saturating_sub(staked) {
-                    return Err(InstructionError::InsufficientFunds);
-                }
-                lockup
+                (meta.lockup, staked + meta.rent_exempt_reserve, staked != 0)
             }
-            StakeState::Initialized(authorized, lockup) => {
-                authorized.check(signers, StakeAuthorize::Withdrawer)?;
-                lockup
+            StakeState::Initialized(meta) => {
+                meta.authorized.check(signers, StakeAuthorize::Withdrawer)?;
+
+                (meta.lockup, meta.rent_exempt_reserve, false)
             }
             StakeState::Uninitialized => {
-                if self.signer_key().is_none() {
+                if !signers.contains(&self.unsigned_key()) {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                Lockup::default() // no lockup
+                (Lockup::default(), 0, false) // no lockup, no restrictions
             }
             _ => return Err(InstructionError::InvalidAccountData),
         };
 
+        // verify that lockup has expired or that the withdrawal is going back
+        //   to the custodian
         if lockup.slot > clock.slot && lockup.custodian != *to.unsigned_key() {
             return Err(StakeError::LockupInForce.into());
         }
-        if lamports > self.account.lamports {
+
+        // if the stake is active, we mustn't allow the account to go away
+        if is_staked // line coverage for branch coverage
+            && lamports + reserve > self.account.lamports
+        {
+            return Err(InstructionError::InsufficientFunds);
+        }
+
+        if lamports != self.account.lamports // not a full withdrawal
+            && lamports + reserve > self.account.lamports
+        {
+            assert!(!is_staked);
             return Err(InstructionError::InsufficientFunds);
         }
 
@@ -717,11 +787,15 @@ pub fn create_account(
 
     stake_account
         .set_state(&StakeState::Stake(
-            Authorized {
-                staker: *authorized,
-                withdrawer: *authorized,
+            Meta {
+                rent_exempt_reserve: Rent::default()
+                    .minimum_balance(std::mem::size_of::<StakeState>()),
+                authorized: Authorized {
+                    staker: *authorized,
+                    withdrawer: *authorized,
+                },
+                lockup: Lockup::default(),
             },
-            Lockup::default(),
             Stake::new_bootstrap(lamports, voter_pubkey, &vote_state),
         ))
         .expect("set_state");
@@ -789,13 +863,13 @@ mod tests {
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(
-                Authorized {
+            &StakeState::Initialized(Meta {
+                authorized: Authorized {
                     staker: stake_pubkey,
                     withdrawer: stake_pubkey,
                 },
-                Lockup::default(),
-            ),
+                ..Meta::default()
+            }),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -808,13 +882,13 @@ mod tests {
             let stake_state: StakeState = stake_keyed_account.state().unwrap();
             assert_eq!(
                 stake_state,
-                StakeState::Initialized(
-                    Authorized {
+                StakeState::Initialized(Meta {
+                    authorized: Authorized {
                         staker: stake_pubkey,
                         withdrawer: stake_pubkey,
                     },
-                    Lockup::default(),
-                )
+                    ..Meta::default()
+                })
             );
         }
 
@@ -1227,7 +1301,7 @@ mod tests {
     }
 
     #[test]
-    fn test_stake_lockup() {
+    fn test_stake_initialize() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
         let mut stake_account =
@@ -1236,32 +1310,45 @@ mod tests {
         // unsigned keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         let custodian = Pubkey::new_rand();
+
+        // not enough balance for rent...
         assert_eq!(
             stake_keyed_account.initialize(
-                &Authorized {
-                    staker: stake_pubkey,
-                    withdrawer: stake_pubkey
-                },
-                &Lockup { slot: 1, custodian }
+                &Authorized::default(),
+                &Lockup::default(),
+                &Rent {
+                    lamports_per_byte_year: 42,
+                    ..Rent::default()
+                }
+            ),
+            Err(InstructionError::InsufficientFunds)
+        );
+
+        // this one works, as is uninit
+        assert_eq!(
+            stake_keyed_account.initialize(
+                &Authorized::auto(&stake_pubkey),
+                &Lockup { slot: 1, custodian },
+                &Rent::default(),
             ),
             Ok(())
         );
-
-        // first time works, as is uninit
+        // check that we see what we expect
         assert_eq!(
             StakeState::from(&stake_keyed_account.account).unwrap(),
-            StakeState::Initialized(
-                Authorized {
-                    staker: stake_pubkey,
-                    withdrawer: stake_pubkey
-                },
-                Lockup { slot: 1, custodian }
-            )
+            StakeState::Initialized(Meta {
+                lockup: Lockup { slot: 1, custodian },
+                ..Meta::auto(&stake_pubkey)
+            })
         );
 
-        // 2nd time fails, can't move it from anything other than uninit->lockup
+        // 2nd time fails, can't move it from anything other than uninit->init
         assert_eq!(
-            stake_keyed_account.initialize(&Authorized::default(), &Lockup::default()),
+            stake_keyed_account.initialize(
+                &Authorized::default(),
+                &Lockup::default(),
+                &Rent::default()
+            ),
             Err(InstructionError::InvalidAccountData)
         );
     }
@@ -1272,7 +1359,7 @@ mod tests {
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Authorized::auto(&stake_pubkey), Lockup::default()),
+            &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -1385,6 +1472,7 @@ mod tests {
             .initialize(
                 &Authorized::auto(&stake_pubkey),
                 &Lockup { slot: 0, custodian },
+                &Rent::default(),
             )
             .unwrap();
 
@@ -1493,7 +1581,7 @@ mod tests {
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
             total_lamports,
-            &StakeState::Initialized(Authorized::auto(&stake_pubkey), Lockup::default()),
+            &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -1581,10 +1669,10 @@ mod tests {
         let total_lamports = 100;
         let mut stake_account = Account::new_data_with_space(
             total_lamports,
-            &StakeState::Initialized(
-                Authorized::auto(&stake_pubkey),
-                Lockup { slot: 1, custodian },
-            ),
+            &StakeState::Initialized(Meta {
+                lockup: Lockup { slot: 1, custodian },
+                ..Meta::auto(&stake_pubkey)
+            }),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -1739,7 +1827,7 @@ mod tests {
         let stake_lamports = 100;
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Authorized::auto(&stake_pubkey), Lockup::default()),
+            &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -1890,7 +1978,7 @@ mod tests {
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Authorized::auto(&stake_pubkey), Lockup::default()),
+            &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -1913,7 +2001,7 @@ mod tests {
             stake_keyed_account.authorize(&stake_pubkey0, StakeAuthorize::Withdrawer, &signers),
             Ok(())
         );
-        if let StakeState::Initialized(authorized, _lockup) =
+        if let StakeState::Initialized(Meta { authorized, .. }) =
             StakeState::from(&stake_keyed_account.account).unwrap()
         {
             assert_eq!(authorized.staker, stake_pubkey0);
@@ -1937,7 +2025,7 @@ mod tests {
             stake_keyed_account.authorize(&stake_pubkey2, StakeAuthorize::Staker, &signers0),
             Ok(())
         );
-        if let StakeState::Initialized(authorized, _lockup) =
+        if let StakeState::Initialized(Meta { authorized, .. }) =
             StakeState::from(&stake_keyed_account.account).unwrap()
         {
             assert_eq!(authorized.staker, stake_pubkey2);
@@ -1947,7 +2035,7 @@ mod tests {
             stake_keyed_account.authorize(&stake_pubkey2, StakeAuthorize::Withdrawer, &signers0,),
             Ok(())
         );
-        if let StakeState::Initialized(authorized, _lockup) =
+        if let StakeState::Initialized(Meta { authorized, .. }) =
             StakeState::from(&stake_keyed_account.account).unwrap()
         {
             assert_eq!(authorized.staker, stake_pubkey2);
@@ -1982,46 +2070,60 @@ mod tests {
     }
 
     #[test]
-    fn test_split_init_mismatch() {
+    fn test_split_source_uninitialized() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Authorized::auto(&stake_pubkey), Lockup::default()),
+            &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
             &id(),
         )
         .expect("stake_account");
 
         let split_stake_pubkey = Pubkey::new_rand();
-        let split_stake_lamports = 42;
         let mut split_stake_account = Account::new_data_with_space(
-            split_stake_lamports,
-            &StakeState::Initialized(Authorized::auto(&split_stake_pubkey), Lockup::default()),
+            0,
+            &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
             &id(),
         )
         .expect("stake_account");
 
-        let signers = vec![stake_pubkey].into_iter().collect();
-        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
         let mut split_stake_keyed_account =
-            KeyedAccount::new(&split_stake_pubkey, true, &mut split_stake_account);
+            KeyedAccount::new(&split_stake_pubkey, false, &mut split_stake_account);
+
+        // no signers should fail
+        assert_eq!(
+            stake_keyed_account.split(
+                stake_lamports / 2,
+                &mut split_stake_keyed_account,
+                &HashSet::default() // no signers
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // this should work
+        let signers = vec![stake_pubkey].into_iter().collect();
         assert_eq!(
             stake_keyed_account.split(stake_lamports / 2, &mut split_stake_keyed_account, &signers),
-            Err(StakeError::SplitMismatch.into())
+            Ok(())
+        );
+        assert_eq!(
+            stake_keyed_account.account.lamports,
+            split_stake_keyed_account.account.lamports
         );
     }
 
     #[test]
-    fn test_split_stake_mismatch() {
+    fn test_split_split_not_uninitialized() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
             &StakeState::Stake(
-                Authorized::auto(&stake_pubkey),
-                Lockup::default(),
+                Meta::auto(&stake_pubkey),
                 Stake {
                     stake: stake_lamports,
                     ..Stake::default()
@@ -2033,10 +2135,9 @@ mod tests {
         .expect("stake_account");
 
         let split_stake_pubkey = Pubkey::new_rand();
-        let split_stake_lamports = 42;
         let mut split_stake_account = Account::new_data_with_space(
-            split_stake_lamports,
-            &StakeState::Initialized(Authorized::auto(&split_stake_pubkey), Lockup::default()),
+            0,
+            &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -2048,7 +2149,7 @@ mod tests {
             KeyedAccount::new(&split_stake_pubkey, true, &mut split_stake_account);
         assert_eq!(
             stake_keyed_account.split(stake_lamports / 2, &mut split_stake_keyed_account, &signers),
-            Err(StakeError::SplitMismatch.into())
+            Err(InstructionError::InvalidAccountData)
         );
     }
 
@@ -2059,8 +2160,7 @@ mod tests {
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
             &StakeState::Stake(
-                Authorized::auto(&stake_pubkey),
-                Lockup::default(),
+                Meta::auto(&stake_pubkey),
                 Stake {
                     stake: stake_lamports / 2 - 1,
                     ..Stake::default()
@@ -2072,10 +2172,9 @@ mod tests {
         .expect("stake_account");
 
         let split_stake_pubkey = Pubkey::new_rand();
-        let split_stake_lamports = 42;
         let mut split_stake_account = Account::new_data_with_space(
-            split_stake_lamports,
-            &StakeState::Initialized(Authorized::auto(&stake_pubkey), Lockup::default()),
+            0,
+            &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -2092,36 +2191,138 @@ mod tests {
     }
 
     #[test]
-    fn test_split() {
+    fn test_split_with_rent() {
         let stake_pubkey = Pubkey::new_rand();
-        let stake_lamports = 42;
-
         let split_stake_pubkey = Pubkey::new_rand();
-        let split_stake_lamports = 42;
-        let mut split_stake_account = Account::new_data_with_space(
-            split_stake_lamports,
-            &StakeState::Initialized(Authorized::auto(&stake_pubkey), Lockup::default()),
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-
-        let mut split_stake_keyed_account =
-            KeyedAccount::new(&split_stake_pubkey, true, &mut split_stake_account);
+        let stake_lamports = 42;
+        let rent_exempt_reserve = 10;
         let signers = vec![stake_pubkey].into_iter().collect();
+
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_pubkey),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
 
         // test splitting both an Initialized stake and a Staked stake
         for state in &[
-            StakeState::Initialized(Authorized::auto(&stake_pubkey), Lockup::default()),
+            StakeState::Initialized(meta),
             StakeState::Stake(
-                Authorized::auto(&stake_pubkey),
-                Lockup::default(),
+                meta,
                 Stake {
                     stake: stake_lamports,
                     ..Stake::default()
                 },
             ),
         ] {
+            let mut stake_account = Account::new_data_with_space(
+                stake_lamports,
+                state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("stake_account");
+
+            let mut stake_keyed_account =
+                KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+
+            let mut split_stake_account = Account::new_data_with_space(
+                0,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("stake_account");
+
+            let mut split_stake_keyed_account =
+                KeyedAccount::new(&split_stake_pubkey, true, &mut split_stake_account);
+
+            // not enough to make a stake account
+            assert_eq!(
+                stake_keyed_account.split(
+                    rent_exempt_reserve - 1,
+                    &mut split_stake_keyed_account,
+                    &signers
+                ),
+                Err(InstructionError::InsufficientFunds)
+            );
+
+            // doesn't leave enough for initial stake
+            assert_eq!(
+                stake_keyed_account.split(
+                    (stake_lamports - rent_exempt_reserve) + 1,
+                    &mut split_stake_keyed_account,
+                    &signers
+                ),
+                Err(InstructionError::InsufficientFunds)
+            );
+
+            // split account already has way enough lamports
+            split_stake_keyed_account.account.lamports = 1_000;
+            assert_eq!(
+                stake_keyed_account.split(
+                    stake_lamports - rent_exempt_reserve,
+                    &mut split_stake_keyed_account,
+                    &signers
+                ),
+                Ok(())
+            );
+
+            // verify no stake leakage in the case of a stake
+            if let StakeState::Stake(meta, stake) = state {
+                assert_eq!(
+                    split_stake_keyed_account.state(),
+                    Ok(StakeState::Stake(
+                        *meta,
+                        Stake {
+                            stake: stake_lamports - rent_exempt_reserve,
+                            ..*stake
+                        }
+                    ))
+                );
+                //                assert_eq!(
+                //                    stake_keyed_account.state(),
+                //                    Ok(StakeState::Stake(*meta, Stake { stake: 0, ..*stake }))
+                //                );
+                assert_eq!(stake_keyed_account.account.lamports, rent_exempt_reserve);
+                assert_eq!(
+                    split_stake_keyed_account.account.lamports,
+                    1_000 + stake_lamports - rent_exempt_reserve
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_split() {
+        let stake_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+
+        let split_stake_pubkey = Pubkey::new_rand();
+        let signers = vec![stake_pubkey].into_iter().collect();
+
+        // test splitting both an Initialized stake and a Staked stake
+        for state in &[
+            StakeState::Initialized(Meta::auto(&stake_pubkey)),
+            StakeState::Stake(
+                Meta::auto(&stake_pubkey),
+                Stake {
+                    stake: stake_lamports,
+                    ..Stake::default()
+                },
+            ),
+        ] {
+            let mut split_stake_account = Account::new_data_with_space(
+                0,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("stake_account");
+
+            let mut split_stake_keyed_account =
+                KeyedAccount::new(&split_stake_pubkey, true, &mut split_stake_account);
+
             let mut stake_account = Account::new_data_with_space(
                 stake_lamports,
                 state,
@@ -2154,19 +2355,18 @@ mod tests {
             // no lamport leakage
             assert_eq!(
                 stake_keyed_account.account.lamports + split_stake_keyed_account.account.lamports,
-                stake_lamports + split_stake_lamports
+                stake_lamports
             );
 
             match state {
-                StakeState::Initialized(_, _) => {
+                StakeState::Initialized(_) => {
                     assert_eq!(Ok(*state), split_stake_keyed_account.state());
                     assert_eq!(Ok(*state), stake_keyed_account.state());
                 }
-                StakeState::Stake(authorized, lockup, stake) => {
+                StakeState::Stake(meta, stake) => {
                     assert_eq!(
                         Ok(StakeState::Stake(
-                            *authorized,
-                            *lockup,
+                            *meta,
                             Stake {
                                 stake: stake_lamports / 2,
                                 ..*stake
@@ -2176,8 +2376,7 @@ mod tests {
                     );
                     assert_eq!(
                         Ok(StakeState::Stake(
-                            *authorized,
-                            *lockup,
+                            *meta,
                             Stake {
                                 stake: stake_lamports / 2,
                                 ..*stake
@@ -2190,7 +2389,6 @@ mod tests {
             }
 
             // reset
-            split_stake_keyed_account.account.lamports = split_stake_lamports;
             stake_keyed_account.account.lamports = stake_lamports;
         }
     }
@@ -2201,7 +2399,7 @@ mod tests {
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
-            &StakeState::Initialized(Authorized::auto(&stake_pubkey), Lockup::default()),
+            &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
             &id(),
         )

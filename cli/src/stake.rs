@@ -20,7 +20,7 @@ use solana_sdk::{
 };
 use solana_stake_api::{
     stake_instruction::{self, StakeError},
-    stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
+    stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
 };
 use solana_vote_api::vote_state::VoteState;
 use std::ops::Deref;
@@ -548,7 +548,12 @@ pub fn process_show_stake_account(
         println!("lockup custodian: {}", lockup.custodian);
     }
     match stake_account.state() {
-        Ok(StakeState::Stake(authorized, lockup, stake)) => {
+        Ok(StakeState::Stake(
+            Meta {
+                authorized, lockup, ..
+            },
+            stake,
+        )) => {
             println!(
                 "total stake: {}",
                 build_balance_message(stake_account.lamports, use_lamports_unit, true)
@@ -577,7 +582,9 @@ pub fn process_show_stake_account(
         }
         Ok(StakeState::RewardsPool) => Ok("Stake account is a rewards pool".to_string()),
         Ok(StakeState::Uninitialized) => Ok("Stake account is uninitialized".to_string()),
-        Ok(StakeState::Initialized(authorized, lockup)) => {
+        Ok(StakeState::Initialized(Meta {
+            authorized, lockup, ..
+        })) => {
             println!("Stake account is undelegated");
             show_authorized(&authorized);
             show_lockup(&lockup);
