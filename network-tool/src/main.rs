@@ -21,8 +21,8 @@ struct LogLine {
 
 impl Debug for LogLine {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        let a_to_b = Byte::from_str(&self.a_to_b).expect("Failed to read bytes");
-        let b_to_a = Byte::from_str(&self.b_to_a).expect("Failed to read bytes");
+        let a_to_b = Byte::from_str(&self.a_to_b).expect("Failed to read a_to_b bytes");
+        let b_to_a = Byte::from_str(&self.b_to_a).expect("Failed to read b_to_a bytes");
         write!(
             f,
             "{{ \"{}\", \"{}\", {}, {} }}",
@@ -105,8 +105,10 @@ fn main() {
     let mut unique_latest_logs = HashMap::new();
 
     json_log.into_iter().rev().for_each(|l| {
-        let key = (l.a.clone(), l.b.clone());
-        unique_latest_logs.entry(key).or_insert(l);
+        if !l.a.is_empty() && !l.b.is_empty() && !l.a_to_b.is_empty() && !l.b_to_a.is_empty() {
+            let key = (l.a.clone(), l.b.clone());
+            unique_latest_logs.entry(key).or_insert(l);
+        }
     });
 
     println!(
