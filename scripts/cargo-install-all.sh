@@ -90,4 +90,14 @@ for dir in programs/*; do
   done
 done
 
+for dir in programs/*; do
+  for program in echo programs/"$(basename "$dir")"/target/$buildVariant/deps/libsolana_"$(basename "$dir")".{so,dylib,dll}; do
+    if [[ -f $program ]]; then
+      mkdir -p "$installDir/bin/deps"
+      rm -f "$installDir/bin/deps/$(basename "$program")"
+      cp -v "$program" "$installDir"/bin/deps
+    fi
+  done
+done
+
 echo "Done after $SECONDS seconds"
