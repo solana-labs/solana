@@ -11,17 +11,22 @@ use crate::{
 /// Create and sign new SystemInstruction::CreateAccount transaction
 pub fn create_account(
     from_keypair: &Keypair,
-    to: &Pubkey,
+    to_keypair: &Keypair,
     recent_blockhash: Hash,
     lamports: u64,
     space: u64,
     program_id: &Pubkey,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
+    let to_pubkey = to_keypair.pubkey();
     let create_instruction =
-        system_instruction::create_account(&from_pubkey, to, lamports, space, program_id);
+        system_instruction::create_account(&from_pubkey, &to_pubkey, lamports, space, program_id);
     let instructions = vec![create_instruction];
-    Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
+    Transaction::new_signed_instructions(
+        &[from_keypair, to_keypair],
+        instructions,
+        recent_blockhash,
+    )
 }
 
 /// Create and sign new system_instruction::Assign transaction

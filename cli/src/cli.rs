@@ -622,7 +622,7 @@ fn process_deploy(
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
     let mut create_account_tx = system_transaction::create_account(
         &config.keypair,
-        &program_id.pubkey(),
+        &program_id,
         blockhash,
         minimum_balance,
         program_data.len() as u64,
