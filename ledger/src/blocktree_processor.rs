@@ -486,6 +486,7 @@ fn process_pending_slots(
     Ok(fork_info)
 }
 
+// used for tests only
 pub fn fill_blocktree_slot_with_ticks(
     blocktree: &Blocktree,
     ticks_per_slot: u64,
@@ -493,7 +494,9 @@ pub fn fill_blocktree_slot_with_ticks(
     parent_slot: u64,
     last_entry_hash: Hash,
 ) -> Hash {
-    let num_slots = (slot - parent_slot).max(1); // Note: slot 0 has parent slot 0
+    // Only slot 0 can be equal to the parent_slot
+    assert!(slot.saturating_sub(1) >= parent_slot);
+    let num_slots = (slot - parent_slot).max(1);
     let entries = create_ticks(num_slots * ticks_per_slot, 0, last_entry_hash);
     let last_entry_hash = entries.last().unwrap().hash;
 
