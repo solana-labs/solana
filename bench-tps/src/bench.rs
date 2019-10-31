@@ -56,7 +56,7 @@ type LibraKeys = (Keypair, Pubkey, Pubkey, Vec<Keypair>);
 
 fn get_recent_blockhash<T: Client>(client: &T) -> (Hash, FeeCalculator) {
     loop {
-        match client.get_recent_blockhash() {
+        match client.get_recent_blockhash_with_commitment(CommitmentConfig::recent()) {
             Ok((blockhash, fee_calculator)) => return (blockhash, fee_calculator),
             Err(err) => {
                 info!("Couldn't get recent blockhash: {:?}", err);
@@ -1091,7 +1091,12 @@ mod tests {
             generate_and_fund_keypairs(&client, None, &id, tx_count, lamports, false).unwrap();
 
         for kp in &keypairs {
-            assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports);
+            assert_eq!(
+                client
+                    .get_balance_with_commitment(&kp.pubkey(), CommitmentConfig::recent())
+                    .unwrap(),
+                lamports
+            );
         }
     }
 
@@ -1109,7 +1114,7 @@ mod tests {
             generate_and_fund_keypairs(&client, None, &id, tx_count, lamports, false).unwrap();
 
         let max_fee = client
-            .get_recent_blockhash()
+            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap()
             .1
             .max_lamports_per_signature;
