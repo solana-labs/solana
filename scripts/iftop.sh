@@ -8,11 +8,9 @@ set -e
 
 cd "$(dirname "$0")"
 
-Sudo=
+sudo=
 if sudo true; then
-Sudo="sudo -n"
+sudo="sudo -n"
 fi
 
-$Sudo iftop -i "$(ifconfig | grep mtu | grep -iv loopback | grep -i running | awk 'BEGIN { FS = ":" } ; {print $1}')" -nNbBP  -t
-
-exit 1
+$sudo iftop -i "$(ifconfig | grep mtu | grep -iv loopback | grep -i running | awk 'BEGIN { FS = ":" } ; {print $1}')" -nNbBP  -t

@@ -4,6 +4,19 @@
 #
 set -e
 
+usage() {
+  echo "Usage: $0 <iftop log file> <temp file for interediate data> [optional public IP address]"
+  echo
+  echo Processes iftop log file, and extracts latest bandwidth used by each connection
+  echo
+  echo
+}
+
+if [ "$#" -lt 2 ]; then
+  usage
+  exit 1
+fi
+
 cd "$(dirname "$0")"
 
 awk '{ if ($3 ~ "=>") { print $2, $7 } else if ($2 ~ "<=") { print $1, $6 }} ' < "$1" \
