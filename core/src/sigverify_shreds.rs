@@ -755,6 +755,9 @@ pub mod tests {
             &recycler_pubkeys,
             &recycler_out,
         );
+        let rv = verify_shreds_cpu(&batch, &pubkeys);
+        assert_eq!(rv, vec![vec![1]]);
+
         let rv = verify_shreds_gpu(
             &batch,
             &pubkeys,
