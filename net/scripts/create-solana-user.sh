@@ -17,6 +17,7 @@ else
   [[ -r /solana-scratch/id_ecdsa.pub ]] || exit 1
 
   sudo -u solana bash -c "
+    echo 'PATH=\"/home/solana/.cargo/bin:$PATH\"' > /home/solana/.profile
     mkdir -p /home/solana/.ssh/
     cd /home/solana/.ssh/
     cp /solana-scratch/id_ecdsa.pub authorized_keys
