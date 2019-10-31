@@ -7,6 +7,7 @@
 use crate::cuda_runtime::PinnedVec;
 use crate::packet::{Packet, Packets};
 use crate::recycler::Recycler;
+use crate::recycler::Reset;
 use crate::sigverify_stage::{SigVerifier, VerifiedPackets};
 use bincode::serialized_size;
 use rayon::ThreadPool;
@@ -18,6 +19,7 @@ use solana_sdk::short_vec::decode_len;
 use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
+use std::fmt;
 use std::mem::size_of;
 
 #[derive(Clone)]
@@ -98,7 +100,7 @@ pub fn init() {
             if !(api.ed25519_init)() {
                 panic!("ed25519_init() failed");
             }
-            (api.ed25519_set_verbose)(false);
+            //(api.ed25519_set_verbose)(false);
         }
     }
 }
@@ -317,6 +319,104 @@ pub fn copy_return_values(sig_lens: &[Vec<u32>], out: &PinnedVec<u8>, rvs: &mut 
             }
         }
     }
+}
+
+pub struct Sig([u8; 64]);
+
+impl fmt::Debug for Sig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?} {:?}", &self.0[..32], &self.0[32..])
+    }
+}
+
+impl Default for Sig {
+    fn default() -> Self {
+        Sig([0u8; 64])
+    }
+}
+
+impl Reset for PinnedVec<Sig> {
+    fn reset(&mut self) {
+        self.resize(0, Sig::default());
+    }
+}
+
+impl Clone for Sig {
+    fn clone(&self) -> Self {
+        let new = [0u8; 64];
+        Sig(new)
+    }
+}
+
+pub fn ed25519_sign(
+    batches: &[Packets],
+    recycler: &Recycler<TxOffset>,
+    recycler_out: &Recycler<PinnedVec<Sig>>,
+) {
+    let api = perf_libs::api();
+    if api.is_none() {
+        panic!("missing api");
+        //return ed25519_sign_cpu(batches);
+    }
+    let api = api.unwrap();
+
+    use crate::packet::PACKET_DATA_SIZE;
+    let count = batch_size(batches);
+
+    let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, _sig_lens) =
+        generate_offsets(batches, recycler).unwrap();
+
+    debug!("CUDA ECDSA for {}", batch_size(batches));
+    debug!("allocating out..");
+    let mut out = recycler_out.allocate("out_buffer");
+    out.set_pinnable();
+    let mut elems = Vec::new();
+
+    let mut num_packets = 0;
+    for p in batches {
+        elems.push(perf_libs::Elems {
+            elems: p.packets.as_ptr(),
+            num: p.packets.len() as u32,
+        });
+        let mut v = Vec::new();
+        v.resize(p.packets.len(), 0);
+        num_packets += p.packets.len();
+    }
+    let mut privkey_offsets = Vec::new();
+    privkey_offsets.resize(signature_offsets.len(), 0);
+
+    out.resize(signature_offsets.len(), Sig::default());
+    info!("Starting verify num packets: {}", num_packets);
+    info!("elem len: {}", elems.len() as u32);
+    info!("packet sizeof: {}", size_of::<Packet>() as u32);
+    info!("len offset: {}", PACKET_DATA_SIZE as u32);
+    const USE_NON_DEFAULT_STREAM: u8 = 1;
+    unsafe {
+        let res = (api.ed25519_sign_many)(
+            elems.as_ptr(),
+            elems.len() as u32,
+            size_of::<Packet>() as u32,
+            num_packets as u32,
+            signature_offsets.len() as u32,
+            msg_sizes.as_ptr(),
+            pubkey_offsets.as_ptr(),
+            privkey_offsets.as_ptr(),
+            msg_start_offsets.as_ptr(),
+            out.as_mut_ptr() as *mut u8,
+            USE_NON_DEFAULT_STREAM,
+        );
+        if res != 0 {
+            trace!("RETURN!!!: {}", res);
+        }
+    }
+    info!("{:?}", out);
+    trace!("done verify");
+    inc_new_counter_debug!("ed25519_verify_gpu", count);
+    recycler_out.recycle(out);
+    recycler.recycle(signature_offsets);
+    recycler.recycle(pubkey_offsets);
+    recycler.recycle(msg_sizes);
+    recycler.recycle(msg_start_offsets);
 }
 
 pub fn ed25519_verify(
@@ -756,5 +856,21 @@ mod tests {
     #[test]
     fn test_verify_fail() {
         test_verify_n(5, true);
+    }
+
+    #[test]
+    fn test_sign_many() {
+        solana_logger::setup();
+        sigverify::init();
+        let tx = test_multisig_tx();
+        let packet = sigverify::make_packet_from_transaction(tx);
+        let n = 4;
+        let num_batches = 3;
+
+        let recycler = Recycler::default();
+        let recycler_out = Recycler::default();
+
+        let batches = generate_packet_vec(&packet, n, num_batches);
+        sigverify::ed25519_sign(&batches, &recycler, &recycler_out);
     }
 }
