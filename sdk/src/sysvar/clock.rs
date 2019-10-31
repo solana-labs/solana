@@ -1,10 +1,13 @@
 //! This account contains the clock slot, epoch, and stakers_epoch
 //!
+pub use crate::clock::Clock;
 
-use crate::account::Account;
-use crate::account_info::AccountInfo;
-use crate::clock::{Epoch, Segment, Slot};
-use crate::sysvar;
+use crate::{
+    account::Account,
+    account_info::AccountInfo,
+    clock::{Epoch, Segment, Slot},
+    sysvar,
+};
 use bincode::serialized_size;
 
 const ID: [u8; 32] = [
@@ -13,15 +16,6 @@ const ID: [u8; 32] = [
 ];
 
 crate::solana_sysvar_id!(ID, "SysvarC1ock11111111111111111111111111111111");
-
-#[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
-pub struct Clock {
-    pub slot: Slot,
-    pub segment: Segment,
-    pub epoch: Epoch,
-    pub stakers_epoch: Epoch,
-}
 
 impl Clock {
     pub fn size_of() -> usize {
