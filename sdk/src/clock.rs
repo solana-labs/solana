@@ -72,13 +72,23 @@ pub type Segment = u64;
 ///  some number of Slots.
 pub type Epoch = u64;
 
+/// Clock represents network time.  Members of Clock start from 0 upon
+///  network boot.  The best way to map Clock to wallclock time is to use
+///  current Slot, as Epochs vary in duration (they start short and grow
+///  as the network progresses).
+///
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct Clock {
+    /// the current network/bank Slot
     pub slot: Slot,
+    /// the current Segment, used for archiver rounds
     pub segment: Segment,
+    /// the bank Epoch
     pub epoch: Epoch,
-    pub stakers_epoch: Epoch,
+    /// the future Epoch for which the leader schedule has
+    ///  most recently been calculated
+    pub leader_schedule_epoch: Epoch,
 }
 
 #[cfg(test)]
