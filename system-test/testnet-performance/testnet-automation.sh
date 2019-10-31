@@ -16,7 +16,7 @@ function collect_logs {
 
 function cleanup_testnet {
   FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
-  if [[ -n $UPLOAD_RESULTS_TO_SLACK ]] ; then
+  if [[ "$UPLOAD_RESULTS_TO_SLACK" = "true" ]] ; then
     upload_results_to_slack
   fi
 
@@ -39,6 +39,19 @@ function cleanup_testnet {
   continue_on_failure: true
 
 - command: "net/gce.sh delete -p ${TESTNET_TAG}"
+  label: "Delete Testnet"
+  agents:
+    - "queue=testnet-deploy"
+EOF
+  ) | buildkite-agent pipeline upload
+  ;;
+  ec2)
+  (
+    cat <<EOF
+- wait: ~
+  continue_on_failure: true
+
+- command: "net/ec2.sh delete -p ${TESTNET_TAG}"
   label: "Delete Testnet"
   agents:
     - "queue=testnet-deploy"
@@ -81,6 +94,16 @@ function launchTestnet() {
     # shellcheck disable=SC2086
       net/gce.sh create \
         -d pd-ssd \
+        -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
+        $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
+        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures \
+        ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
+        ${ADDITIONAL_FLAGS[@]/#/" "}
+      ;;
+    ec2)
+    # shellcheck disable=SC2068
+    # shellcheck disable=SC2086
+      net/ec2.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
         -p "$TESTNET_TAG" $maybeCreateAllowBootFailures \
