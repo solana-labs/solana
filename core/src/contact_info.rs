@@ -20,8 +20,10 @@ pub struct ContactInfo {
     pub gossip: SocketAddr,
     /// address to connect to for replication
     pub tvu: SocketAddr,
-    /// address to forward blobs to
+    /// address to forward shreds to
     pub tvu_forwards: SocketAddr,
+    /// address to send repairs to
+    pub repair: SocketAddr,
     /// transactions address
     pub tpu: SocketAddr,
     /// address to forward unprocessed transactions to
@@ -80,6 +82,7 @@ impl Default for ContactInfo {
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
             tvu_forwards: socketaddr_any!(),
+            repair: socketaddr_any!(),
             tpu: socketaddr_any!(),
             tpu_forwards: socketaddr_any!(),
             storage_addr: socketaddr_any!(),
@@ -98,6 +101,7 @@ impl ContactInfo {
         gossip: SocketAddr,
         tvu: SocketAddr,
         tvu_forwards: SocketAddr,
+        repair: SocketAddr,
         tpu: SocketAddr,
         tpu_forwards: SocketAddr,
         storage_addr: SocketAddr,
@@ -111,6 +115,7 @@ impl ContactInfo {
             gossip,
             tvu,
             tvu_forwards,
+            repair,
             tpu,
             tpu_forwards,
             storage_addr,
@@ -131,6 +136,7 @@ impl ContactInfo {
             socketaddr!("127.0.0.1:1239"),
             socketaddr!("127.0.0.1:1240"),
             socketaddr!("127.0.0.1:1241"),
+            socketaddr!("127.0.0.1:1242"),
             now,
         )
     }
@@ -142,6 +148,7 @@ impl ContactInfo {
         assert!(addr.ip().is_multicast());
         Self::new(
             &Pubkey::new_rand(),
+            addr,
             addr,
             addr,
             addr,
@@ -167,6 +174,7 @@ impl ContactInfo {
         let tvu_addr = next_port(&bind_addr, 2);
         let tpu_forwards_addr = next_port(&bind_addr, 3);
         let tvu_forwards_addr = next_port(&bind_addr, 4);
+        let repair = next_port(&bind_addr, 5);
         let rpc_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
         let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         Self::new(
@@ -174,6 +182,7 @@ impl ContactInfo {
             gossip_addr,
             tvu_addr,
             tvu_forwards_addr,
+            repair,
             tpu_addr,
             tpu_forwards_addr,
             "0.0.0.0:0".parse().unwrap(),
@@ -195,6 +204,7 @@ impl ContactInfo {
         Self::new(
             &Pubkey::default(),
             *gossip_addr,
+            daddr,
             daddr,
             daddr,
             daddr,
@@ -245,6 +255,7 @@ impl Signable for ContactInfo {
             tvu: SocketAddr,
             tpu: SocketAddr,
             tpu_forwards: SocketAddr,
+            repair: SocketAddr,
             storage_addr: SocketAddr,
             rpc: SocketAddr,
             rpc_pubsub: SocketAddr,
@@ -259,6 +270,7 @@ impl Signable for ContactInfo {
             tpu: me.tpu,
             storage_addr: me.storage_addr,
             tpu_forwards: me.tpu_forwards,
+            repair: me.repair,
             rpc: me.rpc,
             rpc_pubsub: me.rpc_pubsub,
             wallclock: me.wallclock,

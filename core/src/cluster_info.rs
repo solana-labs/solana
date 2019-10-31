@@ -1507,6 +1507,7 @@ impl ClusterInfo {
             daddr,
             daddr,
             daddr,
+            daddr,
             timestamp(),
         );
         (node, gossip_socket, Some(ip_echo))
@@ -1519,6 +1520,7 @@ impl ClusterInfo {
 
         let node = ContactInfo::new(
             id,
+            daddr,
             daddr,
             daddr,
             daddr,
@@ -1610,6 +1612,7 @@ impl Node {
             gossip.local_addr().unwrap(),
             tvu.local_addr().unwrap(),
             tvu_forwards.local_addr().unwrap(),
+            repair.local_addr().unwrap(),
             empty,
             empty,
             storage.local_addr().unwrap(),
@@ -1658,6 +1661,7 @@ impl Node {
             tvu_forwards.local_addr().unwrap(),
             tpu.local_addr().unwrap(),
             tpu_forwards.local_addr().unwrap(),
+            repair.local_addr().unwrap(),
             storage.local_addr().unwrap(),
             rpc_addr,
             rpc_pubsub_addr,
@@ -1717,7 +1721,7 @@ impl Node {
         let (_, retransmit_sockets) =
             multi_bind_in_range(port_range, 8).expect("retransmit multi_bind");
 
-        let (_, repair) = Self::bind(port_range);
+        let (repair_port, repair) = Self::bind(port_range);
         let (_, broadcast) = Self::bind(port_range);
 
         let info = ContactInfo::new(
@@ -1725,6 +1729,7 @@ impl Node {
             SocketAddr::new(gossip_addr.ip(), gossip_port),
             SocketAddr::new(gossip_addr.ip(), tvu_port),
             SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
+            SocketAddr::new(gossip_addr.ip(), repair_port),
             SocketAddr::new(gossip_addr.ip(), tpu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
             socketaddr_any!(),
@@ -1882,6 +1887,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1239),
             socketaddr!([127, 0, 0, 1], 1240),
             socketaddr!([127, 0, 0, 1], 1241),
+            socketaddr!([127, 0, 0, 1], 1242),
             0,
         );
         cluster_info.insert_info(nxt.clone());
@@ -1902,6 +1908,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1239),
             socketaddr!([127, 0, 0, 1], 1240),
             socketaddr!([127, 0, 0, 1], 1241),
+            socketaddr!([127, 0, 0, 1], 1242),
             0,
         );
         cluster_info.insert_info(nxt);
@@ -1939,6 +1946,7 @@ mod tests {
                 socketaddr!("127.0.0.1:1239"),
                 socketaddr!("127.0.0.1:1240"),
                 socketaddr!("127.0.0.1:1241"),
+                socketaddr!("127.0.0.1:1242"),
                 0,
             );
             let rv = ClusterInfo::run_window_request(
