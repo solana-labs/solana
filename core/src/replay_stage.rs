@@ -795,8 +795,6 @@ impl ReplayStage {
         shred_index: usize,
         bank_progress: &mut ForkProgress,
     ) -> Result<()> {
-        datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
-        let mut verify_total = Measure::start("verify_and_process_entries");
         let last_entry = &bank_progress.last_entry;
         let tick_hash_count = &mut bank_progress.tick_hash_count;
         let handle_block_error = move |block_error: BlockError| -> Result<()> {
