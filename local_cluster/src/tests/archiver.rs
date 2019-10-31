@@ -1,6 +1,6 @@
 use crate::local_cluster::{ClusterConfig, LocalCluster};
 use serial_test_derive::serial;
-use solana_client::{rpc_request::RpcCommitmentConfig, thin_client::create_client};
+use solana_client::thin_client::create_client;
 use solana_core::archiver::Archiver;
 use solana_core::cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
@@ -8,6 +8,7 @@ use solana_core::gossip_service::discover_cluster;
 use solana_core::storage_stage::SLOTS_PER_TURN_TEST;
 use solana_core::validator::ValidatorConfig;
 use solana_ledger::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::remove_dir_all;
@@ -170,7 +171,7 @@ fn test_account_setup() {
             client
                 .poll_get_balance_with_commitment(
                     &value.archiver_storage_pubkey,
-                    RpcCommitmentConfig::recent()
+                    CommitmentConfig::recent()
                 )
                 .unwrap(),
             1

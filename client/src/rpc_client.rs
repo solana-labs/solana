@@ -3,7 +3,7 @@ use crate::{
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::MockRpcClientRequest,
     rpc_client_request::RpcClientRequest,
-    rpc_request::{RpcCommitmentConfig, RpcEpochInfo, RpcRequest, RpcVoteAccountStatus},
+    rpc_request::{RpcEpochInfo, RpcRequest, RpcVoteAccountStatus},
 };
 use bincode::serialize;
 use log::*;
@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use solana_sdk::{
     account::Account,
     clock::{Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT},
+    commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -74,7 +75,7 @@ impl RpcClient {
     pub fn get_signature_status_with_commitment(
         &self,
         signature: &str,
-        commitment_config: RpcCommitmentConfig,
+        commitment_config: CommitmentConfig,
     ) -> Result<Option<transaction::Result<()>>, ClientError> {
         let params = json!(signature.to_string());
         let signature_status = self.client.send(
@@ -92,7 +93,7 @@ impl RpcClient {
         &self,
         signature: &str,
     ) -> Result<Option<transaction::Result<()>>, ClientError> {
-        self.get_signature_status_with_commitment(signature, RpcCommitmentConfig::default())
+        self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
     }
 
     pub fn get_slot(&self) -> io::Result<Slot> {
@@ -353,7 +354,7 @@ impl RpcClient {
     pub fn get_account_with_commitment(
         &self,
         pubkey: &Pubkey,
-        commitment_config: RpcCommitmentConfig,
+        commitment_config: CommitmentConfig,
     ) -> io::Result<Account> {
         let params = json!(format!("{}", pubkey));
         let response = self.client.send(
@@ -378,7 +379,7 @@ impl RpcClient {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
-        self.get_account_with_commitment(pubkey, RpcCommitmentConfig::default())
+        self.get_account_with_commitment(pubkey, CommitmentConfig::default())
     }
 
     pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
@@ -423,13 +424,13 @@ impl RpcClient {
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
     pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.get_balance_with_commitment(pubkey, RpcCommitmentConfig::default())
+        self.get_balance_with_commitment(pubkey, CommitmentConfig::default())
     }
 
     pub fn get_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
-        commitment_config: RpcCommitmentConfig,
+        commitment_config: CommitmentConfig,
     ) -> io::Result<u64> {
         self.get_account_with_commitment(pubkey, commitment_config)
             .map(|account| account.lamports)
@@ -470,7 +471,7 @@ impl RpcClient {
 
     pub fn get_transaction_count_with_commitment(
         &self,
-        commitment_config: RpcCommitmentConfig,
+        commitment_config: CommitmentConfig,
     ) -> io::Result<u64> {
         let response = self
             .client
@@ -497,7 +498,7 @@ impl RpcClient {
 
     /// Request the transaction count.
     pub fn get_transaction_count(&self) -> io::Result<u64> {
-        self.get_transaction_count_with_commitment(RpcCommitmentConfig::default())
+        self.get_transaction_count_with_commitment(CommitmentConfig::default())
     }
 
     pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {
@@ -588,7 +589,7 @@ impl RpcClient {
         pubkey: &Pubkey,
         polling_frequency: &Duration,
         timeout: &Duration,
-        commitment_config: RpcCommitmentConfig,
+        commitment_config: CommitmentConfig,
     ) -> io::Result<u64> {
         let now = Instant::now();
         loop {
@@ -609,7 +610,7 @@ impl RpcClient {
     pub fn poll_get_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
-        commitment_config: RpcCommitmentConfig,
+        commitment_config: CommitmentConfig,
     ) -> io::Result<u64> {
         self.poll_balance_with_timeout_and_commitment(
             pubkey,
@@ -623,7 +624,7 @@ impl RpcClient {
         &self,
         pubkey: &Pubkey,
         expected_balance: Option<u64>,
-        commitment_config: RpcCommitmentConfig,
+        commitment_config: CommitmentConfig,
     ) -> Option<u64> {
         const LAST: usize = 30;
         for run in 0..LAST {
@@ -757,7 +758,7 @@ impl RpcClient {
                 &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
                 Some(params.clone()),
                 1,
-                None,
+                CommitmentConfig::recent().ok(),
             )
             .map_err(|err| {
                 io::Error::new(

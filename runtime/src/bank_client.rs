@@ -1,6 +1,7 @@
 use crate::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::client::{AsyncClient, Client, SyncClient};
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
@@ -100,7 +101,11 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_account(pubkey))
     }
 
-    fn get_account_now(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
+    fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        _commitment_config: CommitmentConfig,
+    ) -> Result<Option<Account>> {
         Ok(self.bank.get_account(pubkey))
     }
 
@@ -108,7 +113,11 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_balance(pubkey))
     }
 
-    fn get_balance_now(&self, pubkey: &Pubkey) -> Result<u64> {
+    fn get_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        _commitment_config: CommitmentConfig,
+    ) -> Result<u64> {
         Ok(self.bank.get_balance(pubkey))
     }
 
@@ -123,9 +132,10 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_signature_status(signature))
     }
 
-    fn get_signature_status_now(
+    fn get_signature_status_with_commitment(
         &self,
         signature: &Signature,
+        _commitment_config: CommitmentConfig,
     ) -> Result<Option<transaction::Result<()>>> {
         Ok(self.bank.get_signature_status(signature))
     }
@@ -138,7 +148,10 @@ impl SyncClient for BankClient {
         Ok(self.bank.transaction_count())
     }
 
-    fn get_transaction_count_now(&self) -> Result<u64> {
+    fn get_transaction_count_with_commitment(
+        &self,
+        _commitment_config: CommitmentConfig,
+    ) -> Result<u64> {
         Ok(self.bank.transaction_count())
     }
 

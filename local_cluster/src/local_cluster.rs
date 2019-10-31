@@ -1,8 +1,5 @@
 use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
-use solana_client::{
-    rpc_request::RpcCommitmentConfig,
-    thin_client::{create_client, ThinClient},
-};
+use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
     archiver::Archiver,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
@@ -16,6 +13,7 @@ use solana_ledger::blocktree::create_new_tmp_ledger;
 use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
+    commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     genesis_block::{GenesisBlock, OperatingMode},
     message::Message,
@@ -443,7 +441,7 @@ impl LocalCluster {
             .wait_for_balance_with_commitment(
                 dest_pubkey,
                 Some(lamports),
-                RpcCommitmentConfig::recent(),
+                CommitmentConfig::recent(),
             )
             .expect("get balance")
     }
@@ -461,7 +459,7 @@ impl LocalCluster {
 
         // Create the vote account if necessary
         if client
-            .poll_get_balance_with_commitment(&vote_account_pubkey, RpcCommitmentConfig::recent())
+            .poll_get_balance_with_commitment(&vote_account_pubkey, CommitmentConfig::recent())
             .unwrap_or(0)
             == 0
         {
@@ -489,7 +487,7 @@ impl LocalCluster {
                 .wait_for_balance_with_commitment(
                     &vote_account_pubkey,
                     Some(amount),
-                    RpcCommitmentConfig::recent(),
+                    CommitmentConfig::recent(),
                 )
                 .expect("get balance");
 
@@ -517,7 +515,7 @@ impl LocalCluster {
                 .wait_for_balance_with_commitment(
                     &stake_account_pubkey,
                     Some(amount),
-                    RpcCommitmentConfig::recent(),
+                    CommitmentConfig::recent(),
                 )
                 .expect("get balance");
         } else {
@@ -528,8 +526,8 @@ impl LocalCluster {
         }
         info!("Checking for vote account registration of {}", node_pubkey);
         match (
-            client.get_account_now(&stake_account_pubkey),
-            client.get_account_now(&vote_account_pubkey),
+            client.get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent()),
+            client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::recent()),
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (

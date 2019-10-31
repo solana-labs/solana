@@ -10,6 +10,7 @@
 use crate::{
     account::Account,
     clock::Slot,
+    commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::Instruction,
@@ -44,14 +45,22 @@ pub trait SyncClient {
     /// Get an account or None if not found.
     fn get_account(&self, pubkey: &Pubkey) -> Result<Option<Account>>;
 
-    /// Get an account or None if not found.  Does not wait for default confirmations.
-    fn get_account_now(&self, pubkey: &Pubkey) -> Result<Option<Account>>;
+    /// Get an account or None if not found. Uses explicit commitment configuration.
+    fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Option<Account>>;
 
     /// Get account balance or 0 if not found.
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64>;
 
-    /// Get account balance or 0 if not found. Does not wait for default confirmations.
-    fn get_balance_now(&self, pubkey: &Pubkey) -> Result<u64>;
+    /// Get account balance or 0 if not found. Uses explicit commitment configuration.
+    fn get_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> Result<u64>;
 
     /// Get recent blockhash
     fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)>;
@@ -62,10 +71,11 @@ pub trait SyncClient {
         signature: &Signature,
     ) -> Result<Option<transaction::Result<()>>>;
 
-    /// Get signature status. Does not wait for default confirmations.
-    fn get_signature_status_now(
+    /// Get signature status. Uses explicit commitment configuration.
+    fn get_signature_status_with_commitment(
         &self,
         signature: &Signature,
+        commitment_config: CommitmentConfig,
     ) -> Result<Option<transaction::Result<()>>>;
 
     /// Get last known slot
@@ -74,8 +84,11 @@ pub trait SyncClient {
     /// Get transaction count
     fn get_transaction_count(&self) -> Result<u64>;
 
-    /// Get transaction count. Does not wait for default confirmations.
-    fn get_transaction_count_now(&self) -> Result<u64>;
+    /// Get transaction count. Uses explicit commitment configuration.
+    fn get_transaction_count_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> Result<u64>;
 
     /// Poll until the signature has been confirmed by at least `min_confirmed_blocks`
     fn poll_for_signature_confirmation(

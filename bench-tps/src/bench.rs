@@ -13,6 +13,7 @@ use solana_metrics::datapoint_debug;
 use solana_sdk::{
     client::Client,
     clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
+    commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
     pubkey::Pubkey,
@@ -451,7 +452,11 @@ fn do_tx_transfers<T: Client>(
 
 fn verify_funding_transfer<T: Client>(client: &T, tx: &Transaction, amount: u64) -> bool {
     for a in &tx.message().account_keys[1..] {
-        if client.get_balance_now(a).unwrap_or(0) >= amount {
+        if client
+            .get_balance_with_commitment(a, CommitmentConfig::recent())
+            .unwrap_or(0)
+            >= amount
+        {
             return true;
         }
     }
@@ -666,10 +671,12 @@ pub fn airdrop_lamports<T: Client>(
             }
         };
 
-        let current_balance = client.get_balance_now(&id.pubkey()).unwrap_or_else(|e| {
-            info!("airdrop error {}", e);
-            starting_balance
-        });
+        let current_balance = client
+            .get_balance_with_commitment(&id.pubkey(), CommitmentConfig::recent())
+            .unwrap_or_else(|e| {
+                info!("airdrop error {}", e);
+                starting_balance
+            });
         info!("current balance {}...", current_balance);
 
         metrics_submit_lamport_balance(current_balance);
@@ -815,7 +822,11 @@ fn fund_move_keys<T: Client>(
     let create_len = 8;
     let mut funding_time = Measure::start("funding_time");
     for (i, keys) in keypairs.chunks(create_len).enumerate() {
-        if client.get_balance_now(&keys[0].pubkey()).unwrap_or(0) > 0 {
+        if client
+            .get_balance_with_commitment(&keys[0].pubkey(), CommitmentConfig::recent())
+            .unwrap_or(0)
+            > 0
+        {
             // already created these accounts.
             break;
         }
@@ -853,7 +864,9 @@ fn fund_move_keys<T: Client>(
     client.send_message(&[funding_key], tx.message).unwrap();
     let mut balance = 0;
     for _ in 0..20 {
-        if let Ok(balance_) = client.get_balance_now(&funding_keys[0].pubkey()) {
+        if let Ok(balance_) = client
+            .get_balance_with_commitment(&funding_keys[0].pubkey(), CommitmentConfig::recent())
+        {
             if balance_ > 0 {
                 balance = balance_;
                 break;

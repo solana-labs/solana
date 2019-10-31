@@ -15,6 +15,7 @@ use solana_genesis::Base64Account;
 use solana_metrics::datapoint_info;
 use solana_sdk::client::Client;
 use solana_sdk::client::SyncClient;
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
@@ -659,7 +660,11 @@ fn verify_funding_transfer<T: SyncClient + ?Sized>(
 ) -> bool {
     if verify_transaction(client, tx) {
         for a in &tx.message().account_keys[1..] {
-            if client.get_balance_now(a).unwrap_or(0) >= amount {
+            if client
+                .get_balance_with_commitment(a, CommitmentConfig::recent())
+                .unwrap_or(0)
+                >= amount
+            {
                 return true;
             }
         }
@@ -945,12 +950,19 @@ pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypa
                 let signature = client.async_send_transaction(transaction).unwrap();
 
                 for _ in 0..30 {
-                    if let Ok(Some(_)) = client.get_signature_status_now(&signature) {
+                    if let Ok(Some(_)) = client.get_signature_status_with_commitment(
+                        &signature,
+                        CommitmentConfig::recent(),
+                    ) {
                         break;
                     }
                     sleep(Duration::from_millis(100));
                 }
-                if client.get_balance_now(&id.pubkey()).unwrap_or(0) >= amount {
+                if client
+                    .get_balance_with_commitment(&id.pubkey(), CommitmentConfig::recent())
+                    .unwrap_or(0)
+                    >= amount
+                {
                     break;
                 }
             }

@@ -174,7 +174,7 @@ impl Service for JsonRpcService {
 mod tests {
     use super::*;
     use crate::{
-        commitment::{tests::get_full_block_commitment_cache, CommitmentConfig},
+        commitment::{tests::get_full_block_commitment_cache, ParsedCommitment},
         contact_info::ContactInfo,
         genesis_utils::{create_genesis_block, GenesisBlockInfo},
         rpc::tests::create_validator_exit,
@@ -225,7 +225,7 @@ mod tests {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_balance(&mint_keypair.pubkey(), CommitmentConfig::default())
+                .get_balance(&mint_keypair.pubkey(), ParsedCommitment::default())
                 .unwrap()
         );
         rpc_service.exit();

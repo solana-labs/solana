@@ -15,6 +15,7 @@ use solana_runtime::accounts_db::AccountsDB;
 use solana_sdk::{
     client::SyncClient,
     clock,
+    commitment_config::CommitmentConfig,
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
     genesis_block::OperatingMode,
     poh_config::PohConfig,
@@ -329,7 +330,12 @@ fn test_softlaunch_operating_mode() {
     .iter()
     {
         assert_eq!(
-            (program_id, client.get_account_now(program_id).unwrap()),
+            (
+                program_id,
+                client
+                    .get_account_with_commitment(program_id, CommitmentConfig::recent())
+                    .unwrap()
+            ),
             (program_id, None)
         );
     }

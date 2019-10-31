@@ -2,7 +2,7 @@
 
 use crate::{
     cluster_info::ClusterInfo,
-    commitment::{BlockCommitment, CommitmentConfig, BlockCommitmentCache},
+    commitment::{BlockCommitment, BlockCommitmentCache, ParsedCommitment},
     contact_info::ContactInfo,
     packet::PACKET_DATA_SIZE,
     storage_stage::StorageState,
@@ -12,15 +12,14 @@ use crate::{
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Params, Result};
 use jsonrpc_derive::rpc;
-use solana_client::rpc_request::{
-    RpcCommitmentConfig, RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
-};
+use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
 use solana_drone::drone::request_airdrop_transaction;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
     clock::Slot,
+    commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -62,7 +61,7 @@ pub struct JsonRpcRequestProcessor {
 }
 
 impl JsonRpcRequestProcessor {
-    fn bank(&self, commitment_config: CommitmentConfig) -> Result<Arc<Bank>> {
+    fn bank(&self, commitment_config: ParsedCommitment) -> Result<Arc<Bank>> {
         debug!("RPC commitment_config: {:?}", commitment_config);
         self.block_commitment_cache
             .read()
@@ -102,7 +101,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_account_info(
         &self,
         pubkey: &Pubkey,
-        commitment_config: CommitmentConfig,
+        commitment_config: ParsedCommitment,
     ) -> Result<Account> {
         self.bank(commitment_config)?
             .get_account(&pubkey)
@@ -112,7 +111,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_minimum_balance_for_rent_exemption(
         &self,
         data_len: usize,
-        commitment_config: CommitmentConfig,
+        commitment_config: ParsedCommitment,
     ) -> Result<u64> {
         Ok(self
             .bank(commitment_config)?
@@ -122,7 +121,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_program_accounts(
         &self,
         program_id: &Pubkey,
-        commitment_config: CommitmentConfig,
+        commitment_config: ParsedCommitment,
     ) -> Result<Vec<(String, Account)>> {
         Ok(self
             .bank(commitment_config)?
@@ -132,23 +131,23 @@ impl JsonRpcRequestProcessor {
             .collect())
     }
 
-    pub fn get_inflation(&self, commitment_config: CommitmentConfig) -> Result<Inflation> {
+    pub fn get_inflation(&self, commitment_config: ParsedCommitment) -> Result<Inflation> {
         Ok(self.bank(commitment_config)?.inflation())
     }
 
     pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
-        // Since epoch schedule data comes from the genesis block, default CommitmentConfig should
+        // Since epoch schedule data comes from the genesis block, default ParsedCommitment should
         // be sufficient
-        Ok(*self.bank(CommitmentConfig::default())?.epoch_schedule())
+        Ok(*self.bank(ParsedCommitment::default())?.epoch_schedule())
     }
 
-    pub fn get_balance(&self, pubkey: &Pubkey, commitment_config: CommitmentConfig) -> Result<u64> {
+    pub fn get_balance(&self, pubkey: &Pubkey, commitment_config: ParsedCommitment) -> Result<u64> {
         Ok(self.bank(commitment_config)?.get_balance(&pubkey))
     }
 
     fn get_recent_blockhash(
         &self,
-        commitment_config: CommitmentConfig,
+        commitment_config: ParsedCommitment,
     ) -> Result<(String, FeeCalculator)> {
         let (blockhash, fee_calculator) = self.bank(commitment_config)?.confirmed_last_blockhash();
         Ok((blockhash.to_string(), fee_calculator))
@@ -165,32 +164,32 @@ impl JsonRpcRequestProcessor {
     pub fn get_signature_confirmation_status(
         &self,
         signature: Signature,
-        commitment_config: CommitmentConfig,
+        commitment_config: ParsedCommitment,
     ) -> Option<(usize, transaction::Result<()>)> {
         self.bank(commitment_config)
             .ok()
             .and_then(|bank| bank.get_signature_confirmation_status(&signature))
     }
 
-    fn get_slot(&self, commitment_config: CommitmentConfig) -> Result<u64> {
+    fn get_slot(&self, commitment_config: ParsedCommitment) -> Result<u64> {
         Ok(self.bank(commitment_config)?.slot())
     }
 
-    fn get_slot_leader(&self, commitment_config: CommitmentConfig) -> Result<String> {
+    fn get_slot_leader(&self, commitment_config: ParsedCommitment) -> Result<String> {
         Ok(self.bank(commitment_config)?.collector_id().to_string())
     }
 
-    fn get_transaction_count(&self, commitment_config: CommitmentConfig) -> Result<u64> {
+    fn get_transaction_count(&self, commitment_config: ParsedCommitment) -> Result<u64> {
         Ok(self.bank(commitment_config)?.transaction_count() as u64)
     }
 
-    fn get_total_supply(&self, commitment_config: CommitmentConfig) -> Result<u64> {
+    fn get_total_supply(&self, commitment_config: ParsedCommitment) -> Result<u64> {
         Ok(self.bank(commitment_config)?.capitalization())
     }
 
     fn get_vote_accounts(
         &self,
-        commitment_config: CommitmentConfig,
+        commitment_config: ParsedCommitment,
     ) -> Result<RpcVoteAccountStatus> {
         let bank = self.bank(commitment_config)?;
         let vote_accounts = bank.vote_accounts();
@@ -246,7 +245,7 @@ impl JsonRpcRequestProcessor {
         ))
     }
 
-    fn get_slots_per_segment(&self, commitment_config: CommitmentConfig) -> Result<u64> {
+    fn get_slots_per_segment(&self, commitment_config: ParsedCommitment) -> Result<u64> {
         Ok(self.bank(commitment_config)?.slots_per_segment())
     }
 
@@ -310,12 +309,12 @@ pub struct RpcVersionInfo {
     pub solana_core: String,
 }
 
-fn parse_params(params: Option<Params>) -> Result<CommitmentConfig> {
+fn parse_params(params: Option<Params>) -> Result<ParsedCommitment> {
     if let Some(params) = params {
-        let commitment_config: RpcCommitmentConfig = params.parse().map_err(|err| {
+        let commitment_config: CommitmentConfig = params.parse().map_err(|err| {
             Error::invalid_params(format!("commitment config could not be parsed: {}", err))
         })?;
-        let mut final_config = CommitmentConfig::default();
+        let mut final_config = ParsedCommitment::default();
         if let Some(confirmations) = commitment_config.confirmations {
             let confirmations = if let Some(integer) = confirmations.as_u64() {
                 Ok(integer as usize)
@@ -353,7 +352,7 @@ fn parse_params(params: Option<Params>) -> Result<CommitmentConfig> {
         }
         Ok(final_config)
     } else {
-        Ok(CommitmentConfig::default())
+        Ok(ParsedCommitment::default())
     }
 }
 
@@ -911,7 +910,11 @@ impl RpcSol for RpcSolImpl {
             .get_slots_per_segment(parse_params(params)?)
     }
 
-    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Pubkey>> {
+    fn get_storage_pubkeys_for_slot(
+        &self,
+        meta: Self::Metadata,
+        slot: Slot,
+    ) -> Result<Vec<Pubkey>> {
         meta.request_processor
             .read()
             .unwrap()
@@ -1030,7 +1033,7 @@ pub mod tests {
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
             parse_params(Some(params)).unwrap(),
-            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
+            ParsedCommitment::new(MAX_LOCKOUT_HISTORY, DEFAULT_PERCENT_COMMITMENT)
         );
 
         let params = json!({"confirmations": "something"});
@@ -1044,21 +1047,21 @@ pub mod tests {
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
             parse_params(Some(params)).unwrap(),
-            CommitmentConfig::new(MAX_LOCKOUT_HISTORY, 0.5)
+            ParsedCommitment::new(MAX_LOCKOUT_HISTORY, 0.5)
         );
 
         let params = json!({"confirmations": 15});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
             parse_params(Some(params)).unwrap(),
-            CommitmentConfig::new(15, DEFAULT_PERCENT_COMMITMENT)
+            ParsedCommitment::new(15, DEFAULT_PERCENT_COMMITMENT)
         );
 
         let params = json!({"confirmations": 15, "percentage": 0.5});
         let params: Params = serde_json::from_value(params).unwrap();
         assert_eq!(
             parse_params(Some(params)).unwrap(),
-            CommitmentConfig::new(15, 0.5)
+            ParsedCommitment::new(15, 0.5)
         );
 
         // confirmations bounded by 1 and MAX_LOCKOUT_HISTORY
@@ -1089,7 +1092,7 @@ pub mod tests {
             ErrorCode::InvalidParams
         );
 
-        assert_eq!(parse_params(None).unwrap(), CommitmentConfig::default());
+        assert_eq!(parse_params(None).unwrap(), ParsedCommitment::default());
     }
 
     #[test]
@@ -1116,7 +1119,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(
             request_processor
-                .get_transaction_count(CommitmentConfig::default())
+                .get_transaction_count(ParsedCommitment::default())
                 .unwrap(),
             1
         );

@@ -1,30 +1,9 @@
 use serde_json::{json, Value};
-use solana_sdk::clock::{Epoch, Slot};
+use solana_sdk::{
+    clock::{Epoch, Slot},
+    commitment_config::CommitmentConfig,
+};
 use std::{error, fmt};
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcCommitmentConfig {
-    pub confirmations: Option<Value>,
-    pub percentage: Option<f64>,
-}
-
-impl RpcCommitmentConfig {
-    pub fn recent() -> Self {
-        Self {
-            confirmations: Some(1.into()),
-            percentage: None,
-        }
-    }
-
-    pub fn ok(&self) -> Option<Self> {
-        if self == &Self::default() {
-            None
-        } else {
-            Some(self.clone())
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -111,7 +90,7 @@ impl RpcRequest {
         &self,
         id: u64,
         params: Option<Value>,
-        commitment_config: Option<RpcCommitmentConfig>,
+        commitment_config: Option<CommitmentConfig>,
     ) -> Value {
         let jsonrpc = "2.0";
         let method = match self {
@@ -233,18 +212,18 @@ mod tests {
 
     #[test]
     fn test_build_request_json_config_options() {
-        let commitment_config = RpcCommitmentConfig {
+        let commitment_config = CommitmentConfig {
             confirmations: Some(10.into()),
             percentage: Some(0.7),
         };
         let addr = json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx");
 
-        // Test request with RpcCommitmentConfig and no params
+        // Test request with CommitmentConfig and no params
         let test_request = RpcRequest::GetRecentBlockhash;
         let request = test_request.build_request_json(1, None, Some(commitment_config.clone()));
         assert_eq!(request["params"], json!([commitment_config.clone()]));
 
-        // Test request with RpcCommitmentConfig and params
+        // Test request with CommitmentConfig and params
         let test_request = RpcRequest::GetBalance;
         let request =
             test_request.build_request_json(1, Some(addr.clone()), Some(commitment_config.clone()));

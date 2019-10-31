@@ -63,7 +63,7 @@ impl BlockCommitmentCache {
 
     pub fn get_block_with_depth_commitment(
         &self,
-        commitment_config: CommitmentConfig,
+        commitment_config: ParsedCommitment,
     ) -> Option<u64> {
         self.block_commitment
             .iter()
@@ -241,12 +241,12 @@ impl Service for AggregateCommitmentService {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct CommitmentConfig {
+pub struct ParsedCommitment {
     pub confirmations: usize,
     pub percentage: f64,
 }
 
-impl CommitmentConfig {
+impl ParsedCommitment {
     pub fn new(confirmations: usize, percentage: f64) -> Self {
         Self {
             confirmations,
@@ -255,9 +255,9 @@ impl CommitmentConfig {
     }
 }
 
-impl Default for CommitmentConfig {
+impl Default for ParsedCommitment {
     fn default() -> Self {
-        CommitmentConfig {
+        ParsedCommitment {
             confirmations: MAX_LOCKOUT_HISTORY,
             percentage: DEFAULT_PERCENT_COMMITMENT,
         }
@@ -300,27 +300,27 @@ pub(crate) mod tests {
 
         // Neither slot meets the minimum level of commitment 0.6 at depth 1
         assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(CommitmentConfig::new(2, 0.6)),
+            block_commitment_cache.get_block_with_depth_commitment(ParsedCommitment::new(2, 0.6)),
             None
         );
         // Only slot 0 meets the minimum level of commitment 0.5 at depth 1
         assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(CommitmentConfig::new(2, 0.5)),
+            block_commitment_cache.get_block_with_depth_commitment(ParsedCommitment::new(2, 0.5)),
             Some(0)
         );
         // If multiple slots meet the minimum level of commitment, method should return the most recent
         assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(CommitmentConfig::new(2, 0.4)),
+            block_commitment_cache.get_block_with_depth_commitment(ParsedCommitment::new(2, 0.4)),
             Some(1)
         );
         // If multiple slots meet the minimum level of commitment, method should return the most recent
         assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(CommitmentConfig::new(1, 0.6)),
+            block_commitment_cache.get_block_with_depth_commitment(ParsedCommitment::new(1, 0.6)),
             Some(1)
         );
         // Neither slot meets the minimum level of commitment 0.9 at depth 0
         assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(CommitmentConfig::new(1, 0.9)),
+            block_commitment_cache.get_block_with_depth_commitment(ParsedCommitment::new(1, 0.9)),
             None
         );
     }
