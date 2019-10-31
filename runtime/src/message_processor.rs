@@ -133,8 +133,7 @@ pub fn verify_instruction(
         return Err(InstructionError::CreditOnlyDataModified);
     }
 
-    // executable is one-way (false->true) and
-    //  only system or the account owner may modify.
+    // executable is one-way (false->true) and only the account owner may set it.
     if pre.executable != post.executable
         && (!is_debitable // line coverage used to get branch coverage
             || pre.executable // line coverage used to get branch coverage
