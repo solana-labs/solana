@@ -572,7 +572,7 @@ fn trader<T>(
                 trade_account: trade.pubkey(),
                 order_info,
             });
-            trades.push((signer, trade.pubkey(), side, src));
+            trades.push((signer, trade, side, src));
         }
         account_group = (account_group + 1) % account_groups as usize;
 
@@ -583,16 +583,31 @@ fn trader<T>(
         trades.chunks(chunk_size).for_each(|chunk| {
             let trades_txs: Vec<_> = chunk
                 .par_iter()
-                .map(|(signer, trade, side, src)| {
-                    let s: &Keypair = &signer;
-                    let owner = &signer.pubkey();
+                .map(|(owner, trade, side, src)| {
+                    let o: &Keypair = &owner;
+                    let t: &Keypair = &trade;
+                    let trade_signer: &Keypair = &trade;
+                    let owner_pubkey = &owner.pubkey();
+                    let trade_pubkey = &trade.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
                     Transaction::new_signed_instructions(
-                        &[s],
+                        &[o, t],
                         vec![
-                            system_instruction::create_account(owner, trade, 1, space, &id()),
+                            system_instruction::create_account(
+                                owner_pubkey,
+                                trade_pubkey,
+                                1,
+                                space,
+                                &id(),
+                            ),
                             exchange_instruction::trade_request(
-                                owner, trade, *side, pair, tokens, price, src,
+                                owner_pubkey,
+                                trade_pubkey,
+                                *side,
+                                pair,
+                                tokens,
+                                price,
+                                src,
                             ),
                         ],
                         blockhash,
