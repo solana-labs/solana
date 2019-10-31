@@ -1,13 +1,14 @@
 //! storage program
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
-use crate::storage_contract::StorageAccount;
-use crate::storage_instruction::StorageInstruction;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::limited_deserialize;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::sysvar;
+use crate::{storage_contract::StorageAccount, storage_instruction::StorageInstruction};
+use solana_sdk::{
+    account::KeyedAccount,
+    instruction::InstructionError,
+    instruction_processor_utils::limited_deserialize,
+    pubkey::Pubkey,
+    sysvar::{clock::Clock, rewards::Rewards, Sysvar},
+};
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -40,7 +41,7 @@ pub fn process_instruction(
                 // This instruction must be signed by `me`
                 return Err(InstructionError::InvalidArgument);
             }
-            let clock = sysvar::clock::from_keyed_account(&rest[0])?;
+            let clock = Clock::from_keyed_account(&rest[0])?;
             storage_account.submit_mining_proof(
                 sha_state,
                 segment_index,
@@ -54,7 +55,7 @@ pub fn process_instruction(
                 // This instruction must be signed by `me`
                 return Err(InstructionError::InvalidArgument);
             }
-            let clock = sysvar::clock::from_keyed_account(&rest[0])?;
+            let clock = Clock::from_keyed_account(&rest[0])?;
             storage_account.advertise_storage_recent_blockhash(hash, segment, clock)
         }
         StorageInstruction::ClaimStorageReward => {
@@ -65,8 +66,8 @@ pub fn process_instruction(
             let (rewards, rest) = rest.split_at_mut(1);
             let (rewards_pools, owner) = rest.split_at_mut(1);
 
-            let rewards = sysvar::rewards::from_keyed_account(&rewards[0])?;
-            let clock = sysvar::clock::from_keyed_account(&clock[0])?;
+            let rewards = Rewards::from_keyed_account(&rewards[0])?;
+            let clock = Clock::from_keyed_account(&clock[0])?;
             let mut owner = StorageAccount::new(*owner[0].unsigned_key(), &mut owner[0].account);
 
             storage_account.claim_storage_reward(&mut rewards_pools[0], clock, rewards, &mut owner)
@@ -82,7 +83,7 @@ pub fn process_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
             let me_id = storage_account.id;
-            let clock = sysvar::clock::from_keyed_account(&clock[0])?;
+            let clock = Clock::from_keyed_account(&clock[0])?;
             let mut rest: Vec<_> = rest
                 .iter_mut()
                 .map(|keyed_account| {

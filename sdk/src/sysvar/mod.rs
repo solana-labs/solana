@@ -1,6 +1,11 @@
 //! named accounts for synthesized data accounts for bank state, etc.
 //!
-use crate::pubkey::Pubkey;
+use crate::{
+    account::{Account, KeyedAccount},
+    account_info::AccountInfo,
+    instruction::InstructionError,
+    pubkey::Pubkey,
+};
 
 pub mod clock;
 pub mod epoch_schedule;
@@ -24,8 +29,14 @@ pub fn is_sysvar_id(id: &Pubkey) -> bool {
 
 #[macro_export]
 macro_rules! solana_sysvar_id(
-    ($id:ident, $name:expr) => (
+    ($id:ident, $name:expr, $type:ty) => (
         $crate::solana_name_id!($id, $name);
+
+        impl $crate::sysvar::SysvarId for $type {
+            fn check_id(pubkey: &$crate::pubkey::Pubkey) -> bool {
+                check_id(pubkey)
+            }
+        }
 
         #[cfg(test)]
         #[test]
@@ -45,3 +56,42 @@ const ID: [u8; 32] = [
 ];
 
 crate::solana_name_id!(ID, "Sysvar1111111111111111111111111111111111111");
+
+pub trait SysvarId {
+    fn check_id(pubkey: &Pubkey) -> bool;
+}
+
+// utilities for moving into and out of Accounts
+pub trait Sysvar:
+    SysvarId + Default + Sized + serde::Serialize + serde::de::DeserializeOwned
+{
+    fn biggest() -> Self {
+        Self::default()
+    }
+    fn size_of() -> usize {
+        bincode::serialized_size(&Self::biggest()).unwrap() as usize
+    }
+    fn from_account(account: &Account) -> Option<Self> {
+        bincode::deserialize(&account.data).ok()
+    }
+    fn to_account(&self, account: &mut Account) -> Option<()> {
+        bincode::serialize_into(&mut account.data[..], self).ok()
+    }
+    fn from_account_info(account: &AccountInfo) -> Option<Self> {
+        bincode::deserialize(&account.data).ok()
+    }
+    fn to_account_info(&self, account: &mut AccountInfo) -> Option<()> {
+        bincode::serialize_into(&mut account.data[..], self).ok()
+    }
+    fn from_keyed_account(account: &KeyedAccount) -> Result<Self, InstructionError> {
+        if !Self::check_id(account.unsigned_key()) {
+            return Err(InstructionError::InvalidArgument);
+        }
+        Self::from_account(account.account).ok_or(InstructionError::InvalidArgument)
+    }
+    fn create_account(&self, lamports: u64) -> Account {
+        let mut account = Account::new(lamports, Self::size_of(), &id());
+        self.to_account(&mut account).unwrap();
+        account
+    }
+}

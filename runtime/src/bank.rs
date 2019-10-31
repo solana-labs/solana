@@ -39,7 +39,8 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
-    system_transaction, sysvar,
+    system_transaction,
+    sysvar::{self, Sysvar},
     timing::duration_as_ns,
     transaction::{Result, Transaction, TransactionError},
 };
@@ -447,7 +448,7 @@ impl Bank {
     fn update_clock(&self) {
         self.store_account(
             &sysvar::clock::id(),
-            &sysvar::clock::new_account(
+            &sysvar::clock::create_account(
                 1,
                 self.slot,
                 get_segment_from_slot(self.slot, self.slots_per_segment),

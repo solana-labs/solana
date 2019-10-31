@@ -10,7 +10,10 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
     instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
-    system_instruction, sysvar,
+    system_instruction,
+    sysvar::{
+        self, clock::Clock, rent::Rent, rewards::Rewards, stake_history::StakeHistory, Sysvar,
+    },
 };
 
 /// Reasons the stake might have had an error
@@ -330,7 +333,7 @@ pub fn process_instruction(
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
             &authorized,
             &lockup,
-            &sysvar::rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&authorized_pubkey, stake_authorize, &signers)
@@ -340,7 +343,7 @@ pub fn process_instruction(
 
             me.delegate_stake(
                 &vote,
-                &sysvar::clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &config::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
@@ -352,8 +355,8 @@ pub fn process_instruction(
             me.redeem_vote_credits(
                 vote,
                 rewards_pool,
-                &sysvar::rewards::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &sysvar::stake_history::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &Rewards::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             )
         }
         StakeInstruction::Split(lamports) => {
@@ -366,13 +369,13 @@ pub fn process_instruction(
             me.withdraw(
                 lamports,
                 to,
-                &sysvar::clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &sysvar::stake_history::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
         }
         StakeInstruction::Deactivate => me.deactivate_stake(
-            &sysvar::clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             &signers,
         ),
     }
@@ -390,7 +393,7 @@ mod tests {
             .iter()
             .map(|meta| {
                 if sysvar::clock::check_id(&meta.pubkey) {
-                    sysvar::clock::new_account(1, 0, 0, 0, 0)
+                    sysvar::clock::create_account(1, 0, 0, 0, 0)
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
                     sysvar::rewards::create_account(1, 0.0, 0.0)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
@@ -614,7 +617,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &mut sysvar::clock::new_account(1, 0, 0, 0, 0)
+                        &mut sysvar::clock::create_account(1, 0, 0, 0, 0)
                     ),
                     KeyedAccount::new(
                         &config::id(),

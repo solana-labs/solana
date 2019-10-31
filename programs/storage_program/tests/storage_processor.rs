@@ -17,8 +17,11 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
     system_instruction,
-    sysvar::clock::{self, Clock},
-    sysvar::rewards::{self, Rewards},
+    sysvar::{
+        clock::{self, Clock},
+        rewards::{self, Rewards},
+        Sysvar,
+    },
 };
 use solana_storage_api::{
     id,
@@ -131,13 +134,12 @@ fn test_proof_bounds() {
         Hash::default(),
     );
     // the proof is for segment 0, need to move the slot into segment 2
-    let mut clock_account = clock::new_account(1, 0, 0, 0, 0);
+    let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
     Clock::to_account(
         &Clock {
             slot: DEFAULT_SLOTS_PER_SEGMENT * 2,
             segment: 2,
-            epoch: 0,
-            leader_schedule_epoch: 0,
+            ..Clock::default()
         },
         &mut clock_account,
     );
@@ -159,7 +161,7 @@ fn test_serialize_overflow() {
     let clock_id = clock::id();
     let mut keyed_accounts = Vec::new();
     let mut user_account = Account::default();
-    let mut clock_account = clock::new_account(1, 0, 0, 0, 0);
+    let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
     keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
     keyed_accounts.push(KeyedAccount::new(&clock_id, false, &mut clock_account));
 
@@ -184,13 +186,12 @@ fn test_invalid_accounts_len() {
         Hash::default(),
     );
     // move tick height into segment 1
-    let mut clock_account = clock::new_account(1, 0, 0, 0, 0);
+    let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
     Clock::to_account(
         &Clock {
             slot: 16,
             segment: 1,
-            epoch: 0,
-            leader_schedule_epoch: 0,
+            ..Clock::default()
         },
         &mut clock_account,
     );
@@ -244,13 +245,12 @@ fn test_submit_mining_ok() {
         Hash::default(),
     );
     // move slot into segment 1
-    let mut clock_account = clock::new_account(1, 0, 0, 0, 0);
+    let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
     Clock::to_account(
         &Clock {
             slot: DEFAULT_SLOTS_PER_SEGMENT,
             segment: 1,
-            epoch: 0,
-            leader_schedule_epoch: 0,
+            ..Clock::default()
         },
         &mut clock_account,
     );

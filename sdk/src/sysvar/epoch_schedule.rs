@@ -1,12 +1,7 @@
 //! This account contains the current cluster rent
 //!
-use crate::{
-    account::{Account, KeyedAccount},
-    account_info::AccountInfo,
-    epoch_schedule::EpochSchedule,
-    instruction::InstructionError,
-    sysvar,
-};
+pub use crate::epoch_schedule::EpochSchedule;
+use crate::{account::Account, sysvar::Sysvar};
 
 ///  epoch_schedule account pubkey
 const ID: [u8; 32] = [
@@ -14,34 +9,16 @@ const ID: [u8; 32] = [
     30, 63, 80, 135, 25, 168, 5, 0, 0, 0,
 ];
 
-crate::solana_sysvar_id!(ID, "SysvarEpochSchedu1e111111111111111111111111");
+crate::solana_sysvar_id!(
+    ID,
+    "SysvarEpochSchedu1e111111111111111111111111",
+    EpochSchedule
+);
 
-impl EpochSchedule {
-    pub fn deserialize(account: &Account) -> Result<Self, bincode::Error> {
-        account.deserialize_data()
-    }
-    pub fn from_account(account: &Account) -> Option<Self> {
-        account.deserialize_data().ok()
-    }
-    pub fn to_account(&self, account: &mut Account) -> Option<()> {
-        account.serialize_data(self).ok()
-    }
-    pub fn from_account_info(account: &AccountInfo) -> Option<Self> {
-        account.deserialize_data().ok()
-    }
-    pub fn to_account_info(&self, account: &mut AccountInfo) -> Option<()> {
-        account.serialize_data(self).ok()
-    }
-    pub fn from_keyed_account(account: &KeyedAccount) -> Result<EpochSchedule, InstructionError> {
-        if !check_id(account.unsigned_key()) {
-            return Err(InstructionError::InvalidArgument);
-        }
-        EpochSchedule::from_account(account.account).ok_or(InstructionError::InvalidArgument)
-    }
-}
+impl Sysvar for EpochSchedule {}
 
 pub fn create_account(lamports: u64, epoch_schedule: &EpochSchedule) -> Account {
-    Account::new_data(lamports, epoch_schedule, &sysvar::id()).unwrap()
+    epoch_schedule.create_account(lamports)
 }
 
 #[cfg(test)]
