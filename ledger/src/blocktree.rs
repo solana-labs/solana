@@ -763,9 +763,7 @@ impl Blocktree {
         }
 
         let last_root = *last_root.read().unwrap();
-        verify_shred_slots(slot, slot_meta.parent_slot, last_root);
-
-        true
+        verify_shred_slots(slot, slot_meta.parent_slot, last_root)
     }
 
     fn insert_data_shred(
