@@ -18,7 +18,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_instruction, system_transaction,
-    timing::{duration_as_ms, duration_as_s, timestamp},
+    timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
     transaction::Transaction,
 };
 use std::{
@@ -158,12 +158,13 @@ where
     let mut reclaim_lamports_back_to_source_account = false;
     let mut i = keypair0_balance;
     let mut blockhash = Hash::default();
-    let mut blockhash_time = Instant::now();
+    let mut blockhash_time;
     while start.elapsed() < duration {
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
         // accounts
         let len = tx_count as usize;
+        blockhash_time = Instant::now();
         if let Ok((new_blockhash, _fee_calculator)) = client.get_new_blockhash(&blockhash) {
             blockhash = new_blockhash;
         } else {
@@ -173,13 +174,19 @@ where
             sleep(Duration::from_millis(100));
             continue;
         }
-        info!(
-            "Took {} ms for new blockhash",
-            duration_as_ms(&blockhash_time.elapsed())
+        datapoint_debug!(
+            "bench-tps-get_blockhash",
+            ("duration", duration_as_us(&blockhash_time.elapsed()), i64)
         );
+
         blockhash_time = Instant::now();
         let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
         metrics_submit_lamport_balance(balance);
+        datapoint_debug!(
+            "bench-tps-get_balance",
+            ("duration", duration_as_us(&blockhash_time.elapsed()), i64)
+        );
+
         generate_txs(
             &shared_txs,
             &blockhash,
@@ -367,7 +374,7 @@ fn generate_txs(
     );
     datapoint_debug!(
         "bench-tps-generate_txs",
-        ("duration", duration_as_ms(&duration), i64)
+        ("duration", duration_as_us(&duration), i64)
     );
 
     let sz = transactions.len() / threads;
@@ -432,7 +439,7 @@ fn do_tx_transfers<T: Client>(
             );
             datapoint_debug!(
                 "bench-tps-do_tx_transfers",
-                ("duration", duration_as_ms(&transfer_start.elapsed()), i64),
+                ("duration", duration_as_us(&transfer_start.elapsed()), i64),
                 ("count", tx_len, i64)
             );
         }
