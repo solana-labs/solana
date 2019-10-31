@@ -292,7 +292,7 @@ impl AppendVec {
         hashes: &[Hash],
     ) -> Vec<usize> {
         let mut offset = self.append_offset.lock().unwrap();
-        let mut rv = vec![];
+        let mut rv = Vec::with_capacity(accounts.len());
         for ((stored_meta, account), hash) in accounts.iter().zip(hashes) {
             let meta_ptr = stored_meta as *const StoredMeta;
             let account_meta = AccountMeta {

@@ -811,7 +811,7 @@ impl AccountsDB {
                 (meta, *account)
             })
             .collect();
-        let mut infos: Vec<AccountInfo> = vec![];
+        let mut infos: Vec<AccountInfo> = Vec::with_capacity(with_meta.len());
         while infos.len() < with_meta.len() {
             let storage = self.find_storage_candidate(slot_id);
             let rvs = storage
@@ -882,15 +882,19 @@ impl AccountsDB {
         accounts: &[(&Pubkey, &Account)],
     ) -> (Vec<(Slot, AccountInfo)>, u64) {
         let mut reclaims: Vec<(Slot, AccountInfo)> = Vec::with_capacity(infos.len() * 2);
-        let mut inserts = vec![];
         let index = self.accounts_index.read().unwrap();
         let mut update_index_work = Measure::start("update_index_work");
-        for (info, pubkey_account) in infos.into_iter().zip(accounts.iter()) {
-            let pubkey = pubkey_account.0;
-            if let Some(info) = index.update(slot_id, pubkey, info, &mut reclaims) {
-                inserts.push((pubkey, info));
-            }
-        }
+        let inserts: Vec<_> = infos
+            .into_iter()
+            .zip(accounts.iter())
+            .filter_map(|(info, pubkey_account)| {
+                let pubkey = pubkey_account.0;
+                index
+                    .update(slot_id, pubkey, info, &mut reclaims)
+                    .map(|info| (pubkey, info))
+            })
+            .collect();
+
         let last_root = index.last_root;
         drop(index);
         if !inserts.is_empty() {
@@ -955,30 +959,32 @@ impl AccountsDB {
     }
 
     fn hash_accounts(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) -> Vec<Hash> {
-        let mut hashes = vec![];
         let mut hash_state = BankHash::default();
         let mut had_account = false;
-        for (pubkey, account) in accounts {
-            if !sysvar::check_id(&account.owner) {
-                let hash = BankHash::from_hash(&account.hash);
-                let new_hash = Self::hash_account(slot_id, account, pubkey);
-                let new_bank_hash = BankHash::from_hash(&new_hash);
-                debug!(
-                    "hash_accounts: key: {} xor {} current: {}",
-                    pubkey, hash, hash_state
-                );
-                if !had_account {
-                    hash_state = hash;
-                    had_account = true;
+        let hashes: Vec<_> = accounts
+            .iter()
+            .map(|(pubkey, account)| {
+                if !sysvar::check_id(&account.owner) {
+                    let hash = BankHash::from_hash(&account.hash);
+                    let new_hash = Self::hash_account(slot_id, account, pubkey);
+                    let new_bank_hash = BankHash::from_hash(&new_hash);
+                    debug!(
+                        "hash_accounts: key: {} xor {} current: {}",
+                        pubkey, hash, hash_state
+                    );
+                    if !had_account {
+                        hash_state = hash;
+                        had_account = true;
+                    } else {
+                        hash_state.xor(hash);
+                    }
+                    hash_state.xor(new_bank_hash);
+                    new_hash
                 } else {
-                    hash_state.xor(hash);
+                    Hash::default()
                 }
-                hash_state.xor(new_bank_hash);
-                hashes.push(new_hash);
-            } else {
-                hashes.push(Hash::default());
-            }
-        }
+            })
+            .collect();
 
         if had_account {
             self.xor_in_hash_state(slot_id, hash_state);
