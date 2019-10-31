@@ -12,15 +12,15 @@ crate::solana_sysvar_id!(ID, "SysvarRecentB1ockHashes11111111111111111111");
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct RecentBlockHashes(Vec<Hash>);
+pub struct RecentBlockhashes(Vec<Hash>);
 
-impl Default for RecentBlockHashes {
+impl Default for RecentBlockhashes {
     fn default() -> Self {
         Self(Vec::with_capacity(MAX_ENTRIES))
     }
 }
 
-impl RecentBlockHashes {
+impl RecentBlockhashes {
     pub fn from_account(account: &Account) -> Option<Self> {
         account.deserialize_data().ok()
     }
@@ -35,21 +35,21 @@ impl RecentBlockHashes {
         account.serialize_data(self).ok()
     }
     pub fn size_of() -> usize {
-        serialized_size(&RecentBlockHashes(vec![Hash::default(); MAX_ENTRIES])).unwrap() as usize
+        serialized_size(&RecentBlockhashes(vec![Hash::default(); MAX_ENTRIES])).unwrap() as usize
     }
 }
 
-impl Deref for RecentBlockHashes {
+impl Deref for RecentBlockhashes {
     type Target = Vec<Hash>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-pub fn create_account(lamports: u64, recent_block_hashes: Vec<Hash>) -> Account {
-    let mut account = Account::new(lamports, RecentBlockHashes::size_of(), &sysvar::id());
-    let recent_block_hashes = RecentBlockHashes(recent_block_hashes);
-    recent_block_hashes.to_account(&mut account).unwrap();
+pub fn create_account(lamports: u64, recent_blockhashes: Vec<Hash>) -> Account {
+    let mut account = Account::new(lamports, RecentBlockhashes::size_of(), &sysvar::id());
+    let recent_blockhashes = RecentBlockhashes(recent_blockhashes);
+    recent_blockhashes.to_account(&mut account).unwrap();
     account
 }
 
@@ -61,21 +61,21 @@ mod tests {
     #[test]
     fn test_create_account_empty() {
         let account = create_account(42, vec![]);
-        let recent_block_hashes = RecentBlockHashes::from_account(&account).unwrap();
-        assert_eq!(recent_block_hashes, RecentBlockHashes::default());
+        let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
+        assert_eq!(recent_blockhashes, RecentBlockhashes::default());
     }
 
     #[test]
     fn test_create_account_full() {
         let account = create_account(42, vec![Hash::default(); MAX_ENTRIES]);
-        let recent_block_hashes = RecentBlockHashes::from_account(&account).unwrap();
-        assert_eq!(recent_block_hashes.len(), MAX_ENTRIES);
+        let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
+        assert_eq!(recent_blockhashes.len(), MAX_ENTRIES);
     }
 
     #[test]
     #[should_panic]
     fn test_create_account_too_big() {
         let account = create_account(42, vec![Hash::default(); MAX_ENTRIES + 1]);
-        RecentBlockHashes::from_account(&account).unwrap();
+        RecentBlockhashes::from_account(&account).unwrap();
     }
 }

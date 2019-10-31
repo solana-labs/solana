@@ -288,7 +288,7 @@ impl Bank {
         bank.update_clock();
         bank.update_rent();
         bank.update_epoch_schedule();
-        bank.update_recent_block_hashes();
+        bank.update_recent_blockhashes();
         bank
     }
 
@@ -382,7 +382,7 @@ impl Bank {
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
         new.update_fees();
-        new.update_recent_block_hashes();
+        new.update_recent_blockhashes();
         new
     }
 
@@ -537,15 +537,15 @@ impl Bank {
         );
     }
 
-    fn update_recent_block_hashes(&self) {
-        let recent_block_hashes = self
+    fn update_recent_blockhashes(&self) {
+        let recent_blockhashes = self
             .blockhash_queue
             .read()
             .unwrap()
-            .get_recent_blockhashes(sysvar::recent_block_hashes::MAX_ENTRIES);
+            .get_recent_blockhashes(sysvar::recent_blockhashes::MAX_ENTRIES);
         self.store_account(
-            &sysvar::recent_block_hashes::id(),
-            &sysvar::recent_block_hashes::create_account(1, recent_block_hashes),
+            &sysvar::recent_blockhashes::id(),
+            &sysvar::recent_blockhashes::create_account(1, recent_blockhashes),
         );
     }
 
@@ -3357,22 +3357,22 @@ mod tests {
     }
 
     #[test]
-    fn test_recent_block_hashes_sysvar() {
+    fn test_recent_blockhashes_sysvar() {
         let (genesis_block, _mint_keypair) = create_genesis_block(500);
         let mut bank = Arc::new(Bank::new(&genesis_block));
         let bhq_account = bank
-            .get_account(&sysvar::recent_block_hashes::id())
+            .get_account(&sysvar::recent_blockhashes::id())
             .unwrap();
-        let recent_block_hashes =
-            sysvar::recent_block_hashes::RecentBlockHashes::from_account(&bhq_account).unwrap();
-        assert_eq!(recent_block_hashes.len(), 1);
+        let recent_blockhashes =
+            sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
+        assert_eq!(recent_blockhashes.len(), 1);
         goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
         let bank = Arc::new(new_from_parent(&bank));
         let bhq_account = bank
-            .get_account(&sysvar::recent_block_hashes::id())
+            .get_account(&sysvar::recent_blockhashes::id())
             .unwrap();
-        let recent_block_hashes =
-            sysvar::recent_block_hashes::RecentBlockHashes::from_account(&bhq_account).unwrap();
-        assert_eq!(recent_block_hashes.len(), 2);
+        let recent_blockhashes =
+            sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
+        assert_eq!(recent_blockhashes.len(), 2);
     }
 }
