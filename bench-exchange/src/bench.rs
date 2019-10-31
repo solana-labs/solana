@@ -586,7 +586,6 @@ fn trader<T>(
                 .map(|(owner, trade, side, src)| {
                     let o: &Keypair = &owner;
                     let t: &Keypair = &trade;
-                    let trade_signer: &Keypair = &trade;
                     let owner_pubkey = &owner.pubkey();
                     let trade_pubkey = &trade.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
