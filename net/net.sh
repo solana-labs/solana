@@ -86,6 +86,8 @@ Operate a configured testnet
    --deploy-if-newer                  - Only deploy if newer software is
                                         available (requires -t or -T)
 
+   --use-move                         - Build the move-loader-program and add it to the cluster
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -138,6 +140,7 @@ maybeDisableAirdrops=""
 debugBuild=false
 doBuild=true
 gpuMode=auto
+maybeUseMove=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -197,6 +200,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --debug ]]; then
       debugBuild=true
+      shift 1
+    elif [[ $1 = --use-move ]]; then
+      maybeUseMove=$1
       shift 1
     elif [[ $1 = --gpu-mode ]]; then
       gpuMode=$2
@@ -367,7 +373,7 @@ build() {
 
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf \"$buildVariant\"
+      scripts/cargo-install-all.sh farf \"$buildVariant\" \"$maybeUseMove\"
       if [[ -n \"$customPrograms\" ]]; then
         scripts/cargo-install-custom-programs.sh farf $customPrograms
       fi
