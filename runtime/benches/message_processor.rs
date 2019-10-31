@@ -25,13 +25,6 @@ fn bench_verify_instruction_data(bencher: &mut Bencher) {
     let post = Account::new(0, BUFSIZE, &owner);
     assert_eq!(verify_instruction(&owner, &pre, &post), Ok(()));
 
-    match pre.data {
-        Some(ref data) => bencher.iter(|| *data == post.data),
-        None => panic!("No data!"),
-    }
-    let summary = bencher.bench(|_bencher| {}).unwrap();
-    info!("data compare {} ns/iter", summary.median);
-
     // this one should be faster
     bencher.iter(|| {
         verify_instruction(&owner, &pre, &post).unwrap();
@@ -40,7 +33,12 @@ fn bench_verify_instruction_data(bencher: &mut Bencher) {
     info!("data no change by owner: {} ns/iter", summary.median);
 
     let pre = PreAccount::new(&Account::new(0, BUFSIZE, &owner), true, &non_owner);
-
+    match pre.data {
+        Some(ref data) => bencher.iter(|| *data == post.data),
+        None => panic!("No data!"),
+    }
+    let summary = bencher.bench(|_bencher| {}).unwrap();
+    info!("data compare {} ns/iter", summary.median);
     bencher.iter(|| {
         verify_instruction(&non_owner, &pre, &post).unwrap();
     });
