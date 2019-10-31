@@ -387,9 +387,17 @@ impl SyncClient for ThinClient {
     }
 
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
+        self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
+    }
+
+    fn get_recent_blockhash_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<(Hash, FeeCalculator)> {
         let index = self.optimizer.experiment();
         let now = Instant::now();
-        let recent_blockhash = self.rpc_clients[index].get_recent_blockhash();
+        let recent_blockhash =
+            self.rpc_clients[index].get_recent_blockhash_with_commitment(commitment_config);
         match recent_blockhash {
             Ok(recent_blockhash) => {
                 self.optimizer.report(index, duration_as_ms(&now.elapsed()));
@@ -436,12 +444,22 @@ impl SyncClient for ThinClient {
     }
 
     fn get_slot(&self) -> TransportResult<u64> {
-        let slot = self.rpc_client().get_slot().map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("send_transaction failed with error {:?}", err),
-            )
-        })?;
+        self.get_slot_with_commitment(CommitmentConfig::default())
+    }
+
+    fn get_slot_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<u64> {
+        let slot = self
+            .rpc_client()
+            .get_slot_with_commitment(commitment_config)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("send_transaction failed with error {:?}", err),
+                )
+            })?;
         Ok(slot)
     }
 

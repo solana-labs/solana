@@ -125,6 +125,13 @@ impl SyncClient for BankClient {
         Ok(self.bank.last_blockhash_with_fee_calculator())
     }
 
+    fn get_recent_blockhash_with_commitment(
+        &self,
+        _commitment_config: CommitmentConfig,
+    ) -> Result<(Hash, FeeCalculator)> {
+        Ok(self.bank.last_blockhash_with_fee_calculator())
+    }
+
     fn get_signature_status(
         &self,
         signature: &Signature,
@@ -141,6 +148,10 @@ impl SyncClient for BankClient {
     }
 
     fn get_slot(&self) -> Result<u64> {
+        Ok(self.bank.slot())
+    }
+
+    fn get_slot_with_commitment(&self, _commitment_config: CommitmentConfig) -> Result<u64> {
         Ok(self.bank.slot())
     }
 

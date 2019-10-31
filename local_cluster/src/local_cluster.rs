@@ -425,7 +425,9 @@ impl LocalCluster {
         lamports: u64,
     ) -> u64 {
         trace!("getting leader blockhash");
-        let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+        let (blockhash, _fee_calculator) = client
+            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+            .unwrap();
         let mut tx =
             system_transaction::transfer(&source_keypair, dest_pubkey, lamports, blockhash);
         info!(
@@ -478,7 +480,10 @@ impl LocalCluster {
                     },
                     amount,
                 ),
-                client.get_recent_blockhash().unwrap().0,
+                client
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                    .unwrap()
+                    .0,
             );
             client
                 .retry_transfer(&from_account, &mut transaction, 10)
@@ -500,7 +505,10 @@ impl LocalCluster {
                     &StakeAuthorized::auto(&stake_account_pubkey),
                     amount,
                 ),
-                client.get_recent_blockhash().unwrap().0,
+                client
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                    .unwrap()
+                    .0,
             );
 
             client
@@ -585,7 +593,10 @@ impl LocalCluster {
             Some(&from_keypair.pubkey()),
         );
         let signer_keys = vec![from_keypair.as_ref()];
-        let blockhash = client.get_recent_blockhash().unwrap().0;
+        let blockhash = client
+            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+            .unwrap()
+            .0;
         let mut transaction = Transaction::new(&signer_keys, message, blockhash);
         client
             .retry_transfer(&from_keypair, &mut transaction, 10)

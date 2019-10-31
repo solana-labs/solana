@@ -72,6 +72,13 @@ impl RpcClient {
         }
     }
 
+    pub fn get_signature_status(
+        &self,
+        signature: &str,
+    ) -> Result<Option<transaction::Result<()>>, ClientError> {
+        self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
+    }
+
     pub fn get_signature_status_with_commitment(
         &self,
         signature: &str,
@@ -89,17 +96,17 @@ impl RpcClient {
         Ok(result)
     }
 
-    pub fn get_signature_status(
-        &self,
-        signature: &str,
-    ) -> Result<Option<transaction::Result<()>>, ClientError> {
-        self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
+    pub fn get_slot(&self) -> io::Result<Slot> {
+        self.get_slot_with_commitment(CommitmentConfig::default())
     }
 
-    pub fn get_slot(&self) -> io::Result<Slot> {
+    pub fn get_slot_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<Slot> {
         let response = self
             .client
-            .send(&RpcRequest::GetSlot, None, 0, None)
+            .send(&RpcRequest::GetSlot, None, 0, commitment_config.ok())
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -351,6 +358,10 @@ impl RpcClient {
         Ok(res)
     }
 
+    pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
+        self.get_account_with_commitment(pubkey, CommitmentConfig::default())
+    }
+
     pub fn get_account_with_commitment(
         &self,
         pubkey: &Pubkey,
@@ -376,10 +387,6 @@ impl RpcClient {
                     format!("AccountNotFound: pubkey={}: {}", pubkey, err),
                 )
             })
-    }
-
-    pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
-        self.get_account_with_commitment(pubkey, CommitmentConfig::default())
     }
 
     pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
@@ -469,6 +476,11 @@ impl RpcClient {
         Ok(pubkey_accounts)
     }
 
+    /// Request the transaction count.
+    pub fn get_transaction_count(&self) -> io::Result<u64> {
+        self.get_transaction_count_with_commitment(CommitmentConfig::default())
+    }
+
     pub fn get_transaction_count_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
@@ -496,15 +508,22 @@ impl RpcClient {
         })
     }
 
-    /// Request the transaction count.
-    pub fn get_transaction_count(&self) -> io::Result<u64> {
-        self.get_transaction_count_with_commitment(CommitmentConfig::default())
+    pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {
+        self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
     }
 
-    pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {
+    pub fn get_recent_blockhash_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<(Hash, FeeCalculator)> {
         let response = self
             .client
-            .send(&RpcRequest::GetRecentBlockhash, None, 0, None)
+            .send(
+                &RpcRequest::GetRecentBlockhash,
+                None,
+                0,
+                commitment_config.ok(),
+            )
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,

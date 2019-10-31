@@ -65,6 +65,12 @@ pub trait SyncClient {
     /// Get recent blockhash
     fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)>;
 
+    /// Get recent blockhash. Uses explicit commitment configuration.
+    fn get_recent_blockhash_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> Result<(Hash, FeeCalculator)>;
+
     /// Get signature status.
     fn get_signature_status(
         &self,
@@ -80,6 +86,9 @@ pub trait SyncClient {
 
     /// Get last known slot
     fn get_slot(&self) -> Result<Slot>;
+
+    /// Get last known slot. Uses explicit commitment configuration.
+    fn get_slot_with_commitment(&self, commitment_config: CommitmentConfig) -> Result<u64>;
 
     /// Get transaction count
     fn get_transaction_count(&self) -> Result<u64>;
