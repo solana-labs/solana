@@ -214,6 +214,7 @@ cloud_CreateInstances() {
       nodes+=("$node")
     done
   fi
+  nsgName=${networkName}-nsg
 
   declare -a args
   args=(
@@ -223,6 +224,7 @@ cloud_CreateInstances() {
     --size "$machineType"
     --location "$zone"
     --generate-ssh-keys
+    --nsg "$nsgName"
   )
 
   if [[ -n $optionalBootDiskSize ]]; then
