@@ -28,14 +28,12 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 
 #[test]
 fn test_cli_timestamp_tx() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, rpc_client) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
-
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url =
@@ -99,14 +97,12 @@ fn test_cli_timestamp_tx() {
 
 #[test]
 fn test_cli_witness_tx() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, rpc_client) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
-
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url =
@@ -166,14 +162,12 @@ fn test_cli_witness_tx() {
 
 #[test]
 fn test_cli_cancel_tx() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, rpc_client) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
-
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url =

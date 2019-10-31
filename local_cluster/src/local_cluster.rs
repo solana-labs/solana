@@ -1,5 +1,8 @@
 use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
-use solana_client::thin_client::{create_client, ThinClient};
+use solana_client::{
+    rpc_client::RpcClient,
+    thin_client::{create_client, ThinClient},
+};
 use solana_core::{
     archiver::Archiver,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
@@ -41,6 +44,7 @@ use std::{
     io::{Error, ErrorKind, Result},
     path::PathBuf,
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 pub struct ArchiverInfo {
@@ -204,6 +208,18 @@ impl LocalCluster {
             true,
             &config.validator_configs[0],
         );
+
+        let rpc_client = RpcClient::new_socket(leader_contact_info.rpc);
+        let now = Instant::now();
+        loop {
+            if rpc_client
+                .get_slot_with_commitment(CommitmentConfig::recent())
+                .is_ok()
+                || now.elapsed() > Duration::from_secs(3)
+            {
+                break;
+            }
+        }
 
         let mut validators = HashMap::new();
         let mut validator_infos = HashMap::new();

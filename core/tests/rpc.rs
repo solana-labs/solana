@@ -15,7 +15,7 @@ use std::time::Duration;
 fn test_rpc_send_tx() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, _client) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
     let client = reqwest::Client::new();

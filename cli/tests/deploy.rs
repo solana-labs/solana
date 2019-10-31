@@ -1,6 +1,5 @@
 use serde_json::{json, Value};
 use solana_cli::cli::{process_command, CliCommand, CliConfig};
-use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_core::validator::new_validator_for_tests;
 use solana_drone::drone::run_local_drone;
@@ -20,13 +19,11 @@ fn test_cli_deploy_program() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, rpc_client) = new_validator_for_tests();
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
-
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();

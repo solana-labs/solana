@@ -18,6 +18,7 @@ use crate::{
     tpu::Tpu,
     tvu::{Sockets, Tvu},
 };
+use solana_client::rpc_client::RpcClient;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
@@ -500,9 +501,10 @@ impl Service for Validator {
     }
 }
 
-pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
+pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf, RpcClient) {
     use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
     use solana_ledger::blocktree::create_new_tmp_ledger;
+    use std::time::{Duration, Instant};
 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
@@ -511,7 +513,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
     let GenesisBlockInfo {
         mut genesis_block,
         mint_keypair,
-        ..
+        voting_keypair,
     } = create_genesis_block_with_leader(10_000, &contact_info.id, 42);
     genesis_block
         .native_instruction_processors
@@ -522,21 +524,31 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
-    let voting_keypair = Arc::new(Keypair::new());
+    let leader_voting_keypair = Arc::new(voting_keypair);
     let storage_keypair = Arc::new(Keypair::new());
     let node = Validator::new(
         node,
         &node_keypair,
         &ledger_path,
-        &voting_keypair.pubkey(),
-        &voting_keypair,
+        &leader_voting_keypair.pubkey(),
+        &leader_voting_keypair,
         &storage_keypair,
         None,
         true,
         &ValidatorConfig::default(),
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
-    (node, contact_info, mint_keypair, ledger_path)
+
+    let rpc_client = RpcClient::new_socket(contact_info.rpc);
+
+    let now = Instant::now();
+    loop {
+        if rpc_client.get_slot().is_ok() || now.elapsed() > Duration::from_secs(15) {
+            break;
+        }
+    }
+
+    (node, contact_info, mint_keypair, ledger_path, rpc_client)
 }
 
 #[cfg(test)]

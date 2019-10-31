@@ -1,5 +1,4 @@
 use solana_cli::cli::{process_command, CliCommand, CliConfig};
-use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::signature::KeypairUtil;
@@ -8,7 +7,7 @@ use std::sync::mpsc::channel;
 
 #[test]
 fn test_cli_request_airdrop() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, rpc_client) = new_validator_for_tests();
     let (sender, receiver) = channel();
     run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
@@ -24,8 +23,6 @@ fn test_cli_request_airdrop() {
 
     let sig_response = process_command(&bob_config);
     sig_response.unwrap();
-
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let balance = rpc_client
         .retry_get_balance(&bob_config.keypair.pubkey(), 1)
