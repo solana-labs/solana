@@ -6335,7 +6335,7 @@
         "x": 8,
         "y": 68
       },
-      "id": 46,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6376,7 +6376,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "F",
           "resultFormat": "time_series",
@@ -6413,7 +6413,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -6450,9 +6450,46 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_overhead\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_overhead\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
           "resultFormat": "time_series",
           "select": [
             [
@@ -6490,7 +6527,7 @@
       },
       "yaxes": [
         {
-          "format": "ms",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
