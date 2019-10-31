@@ -114,6 +114,17 @@ impl BlockhashQueue {
         }
         None
     }
+
+    pub fn get_recent_blockhashes(&self, count: usize) -> Vec<Hash> {
+        let mut recent_blockhashes = self.ages.iter().collect::<Vec<_>>();
+        recent_blockhashes
+            .sort_by(|(_, v1), (_, v2)| v1.hash_height.cmp(&v2.hash_height).reverse());
+        recent_blockhashes
+            .iter()
+            .take(count)
+            .map(|(k, _)| **k)
+            .collect()
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -149,5 +160,28 @@ mod tests {
         hash_queue.register_hash(&last_hash, &FeeCalculator::default());
         assert_eq!(last_hash, hash_queue.last_hash());
         assert!(hash_queue.check_hash_age(&last_hash, 0));
+    }
+
+    #[test]
+    fn test_get_recent_blockhashes() {
+        const RECENT_MAX: usize = 32;
+        const QUEUE_MAX: usize = 2 * RECENT_MAX;
+        let mut blockhash_queue = BlockhashQueue::new(QUEUE_MAX);
+        let recent_blockhashes = blockhash_queue.get_recent_blockhashes(RECENT_MAX);
+        // Sanity-check an empty BlockhashQueue
+        assert_eq!(recent_blockhashes.len() as u64, 0);
+        for i in 0..QUEUE_MAX {
+            let hash = hash(&serialize(&i).unwrap());
+            blockhash_queue.register_hash(&hash, &FeeCalculator::default());
+        }
+        let recent_blockhashes = blockhash_queue.get_recent_blockhashes(RECENT_MAX);
+        // Verify that we returned a truncated list
+        assert!((recent_blockhashes.len() as u64) < blockhash_queue.hash_height());
+        // Verify that the truncation occurred at the intended size
+        assert_eq!(recent_blockhashes.len(), RECENT_MAX);
+        // Verify that the returned hashes are most recent
+        for hash in &recent_blockhashes {
+            assert!(blockhash_queue.check_hash_age(hash, RECENT_MAX));
+        }
     }
 }

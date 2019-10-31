@@ -288,6 +288,7 @@ impl Bank {
         bank.update_clock();
         bank.update_rent();
         bank.update_epoch_schedule();
+        bank.update_recent_block_hashes();
         bank
     }
 
@@ -381,6 +382,7 @@ impl Bank {
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
         new.update_fees();
+        new.update_recent_block_hashes();
         new
     }
 
@@ -532,6 +534,18 @@ impl Bank {
         self.capitalization.fetch_add(
             (validator_rewards + storage_rewards) as u64,
             Ordering::Relaxed,
+        );
+    }
+
+    fn update_recent_block_hashes(&self) {
+        let recent_block_hashes = self
+            .blockhash_queue
+            .read()
+            .unwrap()
+            .get_recent_blockhashes(sysvar::recent_block_hashes::MAX_ENTRIES);
+        self.store_account(
+            &sysvar::recent_block_hashes::id(),
+            &sysvar::recent_block_hashes::create_account(1, recent_block_hashes),
         );
     }
 
@@ -3340,5 +3354,25 @@ mod tests {
 
         // Non-native loader accounts can not be used for instruction processing
         bank.add_instruction_processor(mint_keypair.pubkey(), mock_ix_processor);
+    }
+
+    #[test]
+    fn test_recent_block_hashes_sysvar() {
+        let (genesis_block, _mint_keypair) = create_genesis_block(500);
+        let mut bank = Arc::new(Bank::new(&genesis_block));
+        let bhq_account = bank
+            .get_account(&sysvar::recent_block_hashes::id())
+            .unwrap();
+        let recent_block_hashes =
+            sysvar::recent_block_hashes::RecentBlockHashes::from_account(&bhq_account).unwrap();
+        assert_eq!(recent_block_hashes.len(), 1);
+        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        let bank = Arc::new(new_from_parent(&bank));
+        let bhq_account = bank
+            .get_account(&sysvar::recent_block_hashes::id())
+            .unwrap();
+        let recent_block_hashes =
+            sysvar::recent_block_hashes::RecentBlockHashes::from_account(&bhq_account).unwrap();
+        assert_eq!(recent_block_hashes.len(), 2);
     }
 }
