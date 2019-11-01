@@ -32,6 +32,11 @@ pub fn sample_txs<T>(
     let initial_txs = client.get_transaction_count().expect("transaction count");
     let mut last_txs = initial_txs;
 
+    println!(
+        "Starting sample at slot {}",
+        client.get_slot().expect("Start slot")
+    );
+
     loop {
         total_elapsed = start_time.elapsed();
         let elapsed = now.elapsed();
@@ -80,6 +85,11 @@ pub fn sample_txs<T>(
                 .write()
                 .unwrap()
                 .push((client.tpu_addr(), stats));
+
+            println!(
+                "Stopped sampling, slot is {}",
+                client.get_slot().expect("End slot")
+            );
             return;
         }
         sleep(Duration::from_secs(sample_period));
