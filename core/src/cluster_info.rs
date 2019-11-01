@@ -1663,7 +1663,7 @@ impl Node {
             tvu_forwards.local_addr().unwrap(),
             repair.local_addr().unwrap(),
             tpu.local_addr().unwrap(),
-            tpu_forwards.local_addr().unwrap(),            
+            tpu_forwards.local_addr().unwrap(),
             storage.local_addr().unwrap(),
             rpc_addr,
             rpc_pubsub_addr,
