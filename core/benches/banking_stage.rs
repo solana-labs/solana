@@ -30,7 +30,6 @@ use solana_sdk::system_instruction;
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_us, timestamp};
 use solana_sdk::transaction::Transaction;
-use std::iter;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
@@ -184,13 +183,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         assert!(r.is_ok(), "sanity parallel execution");
     }
     bank.clear_signatures();
-    let verified: Vec<_> = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH)
-        .into_iter()
-        .map(|x| {
-            let len = x.packets.len();
-            (x, iter::repeat(1).take(len).collect())
-        })
-        .collect();
+    let verified: Vec<_> = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH);
     let ledger_path = get_tmp_ledger_path!();
     {
         let blocktree = Arc::new(
@@ -229,7 +222,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                     v.len(),
                 );
                 for xv in v {
-                    sent += xv.0.packets.len();
+                    sent += xv.packets.len();
                 }
                 verified_sender.send(v.to_vec()).unwrap();
             }
