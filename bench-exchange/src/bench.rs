@@ -867,9 +867,7 @@ pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], acco
                 to_create_txs
                     .par_iter_mut()
                     .for_each(|((from_keypair, to_keypair), tx)| {
-                        let from: &Keypair = from_keypair;
-                        let to: &Keypair = to_keypair;
-                        tx.sign(&[from, to], blockhash);
+                        tx.sign(&[from_keypair.as_ref(), to_keypair], blockhash);
                     });
                 to_create_txs.iter().for_each(|(_, tx)| {
                     client.async_send_transaction(tx.clone()).expect("transfer");
