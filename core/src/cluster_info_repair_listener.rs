@@ -210,13 +210,13 @@ impl ClusterInfoRepairListener {
         for (repairee_pubkey, repairee_epoch_slots) in repairees {
             let repairee_root = repairee_epoch_slots.root;
 
-            let repairee_tvu = {
+            let repairee_repair_addr = {
                 let r_cluster_info = cluster_info.read().unwrap();
                 let contact_info = r_cluster_info.get_contact_info_for_node(repairee_pubkey);
-                contact_info.map(|c| c.tvu)
+                contact_info.map(|c| c.repair)
             };
 
-            if let Some(repairee_tvu) = repairee_tvu {
+            if let Some(repairee_addr) = repairee_repair_addr {
                 // For every repairee, get the set of repairmen who are responsible for
                 let mut eligible_repairmen = Self::find_eligible_repairmen(
                     my_pubkey,
@@ -242,7 +242,7 @@ impl ClusterInfoRepairListener {
                     &repairee_epoch_slots,
                     &eligible_repairmen,
                     socket,
-                    &repairee_tvu,
+                    &repairee_addr,
                     NUM_SLOTS_PER_UPDATE,
                     epoch_schedule,
                 );
@@ -261,7 +261,7 @@ impl ClusterInfoRepairListener {
         repairee_epoch_slots: &EpochSlots,
         eligible_repairmen: &[&Pubkey],
         socket: &UdpSocket,
-        repairee_tvu: &SocketAddr,
+        repairee_addr: &SocketAddr,
         num_slots_to_repair: usize,
         epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
@@ -320,7 +320,7 @@ impl ClusterInfoRepairListener {
                             .get_data_shred(slot, blob_index as u64)
                             .expect("Failed to read data blob from blocktree")
                         {
-                            socket.send_to(&blob_data[..], repairee_tvu)?;
+                            socket.send_to(&blob_data[..], repairee_addr)?;
                             total_data_blobs_sent += 1;
                         }
 
@@ -328,7 +328,7 @@ impl ClusterInfoRepairListener {
                             .get_coding_shred(slot, blob_index as u64)
                             .expect("Failed to read coding blob from blocktree")
                         {
-                            socket.send_to(&coding_bytes[..], repairee_tvu)?;
+                            socket.send_to(&coding_bytes[..], repairee_addr)?;
                             total_coding_blobs_sent += 1;
                         }
                     }
