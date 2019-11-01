@@ -1,18 +1,17 @@
 extern crate byte_unit;
 
-use bincode;
 use byte_unit::Byte;
 use clap::{
     crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
 };
+
 use serde::{Deserialize, Serialize};
-use serde_json::{self};
 use std::collections::HashMap;
 use std::fs;
 use std::ops::Sub;
 use std::path::PathBuf;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 struct LogLine {
     a: String,
     b: String,
@@ -142,7 +141,7 @@ fn process_iftop_logs(matches: &ArgMatches) {
         })
         .collect();
 
-    println!("{:?}", bincode::serialize(&output).unwrap());
+    println!("{:?}", serde_json::to_string(&output).unwrap());
 }
 
 fn compare_logs(matches: &ArgMatches) {
@@ -157,7 +156,7 @@ fn compare_logs(matches: &ArgMatches) {
             if let Ok(f) = f {
                 let log_str = fs::read_to_string(&f.path()).expect("Unable to read log file");
                 let log: Vec<LogLine> =
-                    bincode::deserialize(log_str.as_bytes()).expect("Failed to deserialize log");
+                    serde_json::from_str(&log_str).expect("Failed to deserialize log");
                 log
             } else {
                 vec![]
@@ -224,12 +223,12 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("compare")
-                .about("Compare processed iftop log files")
+            SubCommand::with_name("analyze")
+                .about("Compare processed network log files")
                 .arg(
-                    Arg::with_name("dir")
-                        .short("d")
-                        .long("dir")
+                    Arg::with_name("folder")
+                        .short("f")
+                        .long("folder")
                         .value_name("DIR")
                         .takes_value(true)
                         .help("Location of processed log files"),
