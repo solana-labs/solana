@@ -796,7 +796,7 @@ impl BankingStage {
         vers.iter()
             .enumerate()
             .filter_map(|(index, ver)| {
-                if ver.meta.discard == false {
+                if !ver.meta.discard {
                     Some(index)
                 } else {
                     None
