@@ -127,7 +127,7 @@ cloud_Initialize() {
   declare location="$2"
   declare nsgName=${resourceGroup}-nsg
 
-  # Check if resource group exists.  If not, create it.cl
+  # Check if resource group exists.  If not, create it.
   (
     set -x
     numGroup=$(az group list --query "length([?name=='$resourceGroup'])")
@@ -139,7 +139,7 @@ cloud_Initialize() {
       az group show --name "$resourceGroup"
     fi
 
-    az network nsg create --name ${nsgName} --resource-group ${resourceGroup}
+    az network nsg create --name "$nsgName" --resource-group "$resourceGroup"
   )
 
   create_nsg_rule() {
