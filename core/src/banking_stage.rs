@@ -795,13 +795,15 @@ impl BankingStage {
     fn generate_packet_indexes(vers: &[Packet]) -> Vec<usize> {
         vers.iter()
             .enumerate()
-            .filter_map(|(index, ver)| {
-                if !ver.meta.discard {
-                    Some(index)
-                } else {
-                    None
-                }
-            })
+            .filter_map(
+                |(index, ver)| {
+                    if !ver.meta.discard {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                },
+            )
             .collect()
     }
 
