@@ -184,7 +184,7 @@ where
         .collect();
     let src_pubkeys: Vec<Pubkey> = src_keypairs
         .iter()
-        .map(|keypair| keypair.pubkey().clone())
+        .map(|keypair| keypair.pubkey())
         .collect();
 
     let profit_keypairs: Vec<_> = account_keypairs
@@ -193,7 +193,7 @@ where
         .collect();
     let profit_pubkeys: Vec<Pubkey> = profit_keypairs
         .iter()
-        .map(|keypair| keypair.pubkey().clone())
+        .map(|keypair| keypair.pubkey())
         .collect();
 
     info!("Create {:?} source token accounts", src_pubkeys.len());
