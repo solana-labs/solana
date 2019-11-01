@@ -10,6 +10,7 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
+bincode = "1.2.0"
 byte-unit = "3.0.3"
 clap = { version = "2.33.0" }
 log = "0.4.8"
