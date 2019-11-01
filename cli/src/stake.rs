@@ -19,6 +19,7 @@ use solana_sdk::{
     sysvar::stake_history::{self, StakeHistory},
     transaction::Transaction,
 };
+use solana_stake_api::stake_state::Meta;
 use solana_stake_api::{
     stake_instruction::{self, StakeError},
     stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
