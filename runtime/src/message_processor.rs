@@ -67,20 +67,20 @@ pub struct PreAccount {
     pub rent_epoch: Epoch,
 }
 impl PreAccount {
-    pub fn new(a: &Account, is_writable: bool, program_id: &Pubkey) -> Self {
+    pub fn new(account: &Account, is_writable: bool, program_id: &Pubkey) -> Self {
         Self {
             is_writable,
-            lamports: a.lamports,
-            data_len: a.data.len(),
+            lamports: account.lamports,
+            data_len: account.data.len(),
             // Don't copy data if not needed
-            data: if *program_id != a.owner || !is_writable {
-                Some(a.data.clone())
+            data: if *program_id != account.owner || !is_writable {
+                Some(account.data.clone())
             } else {
                 None
             },
-            owner: a.owner,
-            executable: a.executable,
-            rent_epoch: a.rent_epoch,
+            owner: account.owner,
+            executable: account.executable,
+            rent_epoch: account.rent_epoch,
         }
     }
 }
@@ -321,9 +321,9 @@ impl MessageProcessor {
         let pre_accounts: Vec<_> = program_accounts
             .iter_mut()
             .enumerate()
-            .map(|(i, a)| {
+            .map(|(i, account)| {
                 PreAccount::new(
-                    a,
+                    account,
                     message.is_writable(instruction.accounts[i] as usize),
                     program_id,
                 )
