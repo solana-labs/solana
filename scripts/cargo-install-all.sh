@@ -4,27 +4,52 @@
 # other workspace crates or native program crates.
 set -e
 
-export rust_version=
-if [[ $1 =~ \+ ]]; then
-  export rust_version=$1
-  shift
-fi
+usage() {
+  exitcode=0
+  if [[ -n "$1" ]]; then
+    exitcode=1
+    echo "Error: $*"
+  fi
+  cat <<EOF
+usage: $0 [+<cargo version>] [--use-move] [--debug] <install directory>
+EOF
+  exit $exitcode
+}
 
-if [[ -z $1 ]]; then
-  echo Install directory not specified
+maybeRustVersion=
+useMove=false
+installDir=
+buildVariant=release
+maybeReleaseFlag=--release
+
+while [[ -n $1 ]]; do
+  if [[ ${1:0:1} = - ]]; then
+    if [[ $1 = --use-move ]]; then
+      useMove=true
+      shift
+    elif [[ $1 = --debug ]]; then
+      maybeReleaseFlag=
+      buildVariant=debug
+      shift
+    else
+      usage "Unknown option: $1"
+    fi
+  elif [[ ${1:0:1} = \+ ]]; then
+    maybeRustVersion=$1
+    shift
+  else
+    installDir=$1
+    shift
+  fi
+done
+
+if [[ -z "$installDir" ]]; then
+  usage "Install directory not specified"
   exit 1
 fi
 
-installDir="$(mkdir -p "$1"; cd "$1"; pwd)"
+installDir="$(mkdir -p "$installDir"; cd "$installDir"; pwd)"
 cargo=cargo
-debugBuild="$2"
-
-buildVariant=release
-maybeReleaseFlag=--release
-if [[ -n "$debugBuild" ]]; then
-  maybeReleaseFlag=
-  buildVariant=debug
-fi
 
 echo "Install location: $installDir ($buildVariant)"
 
@@ -36,10 +61,12 @@ SECONDS=0
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $rust_version build $maybeReleaseFlag
+  $cargo $maybeRustVersion build $maybeReleaseFlag
 
-  # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $rust_version build $maybeReleaseFlag --manifest-path programs/move_loader_program/Cargo.toml
+  if $useMove; then
+    # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+    $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path programs/move_loader_program/Cargo.toml
+  fi
 )
 
 BINS=(
@@ -69,7 +96,7 @@ done
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $rust_version build $maybeReleaseFlag "${binArgs[@]}"
+  $cargo $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
 )
 
 mkdir -p "$installDir/bin"
