@@ -6,6 +6,8 @@ use crate::sigverify_stage::VerifiedPackets;
 use crate::{packet, sigverify};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_metrics::inc_new_counter_debug;
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
@@ -48,14 +50,14 @@ impl ClusterInfoVoteListener {
         sender: &CrossbeamSender<VerifiedPackets>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
-        let mut last_ts = 0;
+        // the latest timestamp of a vote per peer
+        let mut peer_votes: HashMap<Pubkey, u64> = HashMap::new();
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            let (votes, new_ts) = cluster_info.read().unwrap().get_votes(last_ts);
             if poh_recorder.lock().unwrap().has_bank() {
-                last_ts = new_ts;
+                let votes = cluster_info.read().unwrap().get_votes(&mut peer_votes);
                 inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
                 let msgs = packet::to_packets(&votes);
                 if !msgs.is_empty() {

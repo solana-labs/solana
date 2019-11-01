@@ -311,26 +311,29 @@ impl ClusterInfo {
     }
 
     /// Get votes in the crds
-    /// * since - The timestamp of when the vote inserted must be greater than
-    /// since. This allows the bank to query for new votes only.
+    /// * peer_votes - The latest known vote per peer.
     ///
-    /// * return - The votes, and the max timestamp from the new set.
-    pub fn get_votes(&self, since: u64) -> (Vec<Transaction>, u64) {
+    /// * return - The latest votes per peer. Allows pulling the same vote multiple times if it is the
+    ///            latest one.
+    pub fn get_votes(&self, peer_votes: &mut HashMap<Pubkey, u64>) -> Vec<Transaction> {
         let votes: Vec<_> = self
             .gossip
             .crds
             .table
             .values()
-            .filter(|x| x.insert_timestamp > since)
             .filter_map(|x| {
-                x.value
-                    .vote()
-                    .map(|v| (x.insert_timestamp, v.transaction.clone()))
+                if x.insert_timestamp >= *peer_votes.get(&x.value.pubkey()).unwrap_or_else(|| &0u64)
+                {
+                    x.value.vote().map(|v| {
+                        *peer_votes.entry(x.value.pubkey()).or_insert(0) = x.insert_timestamp;
+                        v.transaction.clone()
+                    })
+                } else {
+                    None
+                }
             })
             .collect();
-        let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
-        let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
-        (txs, max_ts)
+        votes
     }
 
     pub fn get_epoch_state_for_node(
@@ -2331,28 +2334,33 @@ mod tests {
     #[test]
     fn test_push_vote() {
         let keys = Keypair::new();
-        let now = timestamp();
+        let mut peer_votes = HashMap::new();
         let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
 
         // make sure empty crds is handled correctly
-        let (votes, max_ts) = cluster_info.get_votes(now);
+        let votes = cluster_info.get_votes(&mut peer_votes);
         assert_eq!(votes, vec![]);
-        assert_eq!(max_ts, now);
+        assert!(peer_votes.is_empty());
 
         // add a vote
         let tx = test_tx();
         cluster_info.push_vote(tx.clone());
 
-        // -1 to make sure that the clock is strictly lower then when insert occurred
-        let (votes, max_ts) = cluster_info.get_votes(now - 1);
-        assert_eq!(votes, vec![tx]);
-        assert!(max_ts >= now - 1);
+        let votes = cluster_info.get_votes(&mut peer_votes);
+        assert_eq!(votes, vec![tx.clone()]);
+        assert!(!peer_votes.is_empty());
 
-        // make sure timestamp filter works
-        let (votes, new_max_ts) = cluster_info.get_votes(max_ts);
+        // make sure the latest vote is delivered repeatedly
+        let votes = cluster_info.get_votes(&mut peer_votes);
+        assert_eq!(votes, vec![tx]);
+
+        // make sure the time filter works by increasing the known timestamp
+        peer_votes
+            .iter_mut()
+            .for_each(|(_, timestamp)| *timestamp += 1);
+        let votes = cluster_info.get_votes(&mut peer_votes);
         assert_eq!(votes, vec![]);
-        assert_eq!(max_ts, new_max_ts);
     }
 
     #[test]
