@@ -31,7 +31,7 @@ impl Default for LogLine {
 }
 
 impl LogLine {
-    fn output(a: &String, b: &String, v1: u128, v2: u128) -> String {
+    fn output(a: &str, b: &str, v1: u128, v2: u128) -> String {
         format!(
             "Lost {} bytes ({} - {}, {}%)  from {} to {}",
             v1 - v2,
@@ -69,7 +69,7 @@ impl Sub for &LogLine {
         };
         let out2 = if rhs_a_to_b > b_to_a {
             LogLine::output(&self.a, &self.b, rhs_a_to_b, b_to_a)
-        } else if b_to_a < rhs_a_to_b {
+        } else if rhs_a_to_b < b_to_a {
             LogLine::output(&self.b, &self.a, b_to_a, rhs_a_to_b)
         } else {
             String::default()
@@ -77,7 +77,8 @@ impl Sub for &LogLine {
         if !out1.is_empty() && !out2.is_empty() {
             out1.push('\n');
         }
-        out1 + &out2
+        out1.push_str(&out2);
+        out1
     }
 }
 
@@ -149,7 +150,6 @@ fn analyze_logs(matches: &ArgMatches) {
     let list_all_diffs = matches.is_present("all");
     let files = fs::read_dir(dir_path).expect("Failed to read log folder");
     let logs: Vec<_> = files
-        .into_iter()
         .flat_map(|f| {
             if let Ok(f) = f {
                 let log_str = fs::read_to_string(&f.path()).expect("Unable to read log file");
