@@ -431,12 +431,14 @@ pub fn process_uptime(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::CliError::KeypairFileNotFound;
     use crate::cli::{app, parse_command};
 
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
-        let pubkey = Pubkey::new_rand();
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
         let pubkey_string = pubkey.to_string();
 
         let test_authorize_voter = test_commands.clone().get_matches_from(vec![
@@ -468,7 +470,7 @@ mod tests {
             parse_command(&test_create_vote_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account_pubkey: pubkey,
+                    vote_account: keypair,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
@@ -477,6 +479,11 @@ mod tests {
                 require_keypair: true
             }
         );
+
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+        let pubkey_string = pubkey.to_string();
+
         let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
@@ -487,7 +494,7 @@ mod tests {
             parse_command(&test_create_vote_account2).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account_pubkey: pubkey,
+                    vote_account: keypair,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
@@ -498,6 +505,10 @@ mod tests {
         );
         // test init with an authed voter
         let authed = Pubkey::new_rand();
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+        let pubkey_string = pubkey.to_string();
+
         let test_create_vote_account3 = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
@@ -510,7 +521,7 @@ mod tests {
             parse_command(&test_create_vote_account3).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account_pubkey: pubkey,
+                    vote_account: keypair,
                     node_pubkey,
                     authorized_voter: Some(authed),
                     authorized_withdrawer: None,
@@ -519,6 +530,10 @@ mod tests {
                 require_keypair: true
             }
         );
+
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+        let pubkey_string = pubkey.to_string();
         // test init with an authed withdrawer
         let test_create_vote_account4 = test_commands.clone().get_matches_from(vec![
             "test",
@@ -532,7 +547,7 @@ mod tests {
             parse_command(&test_create_vote_account4).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account_pubkey: pubkey,
+                    vote_account: keypair,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),
