@@ -123,10 +123,49 @@ cloud_FindInstance() {
 #
 # This function will be called before |cloud_CreateInstances|
 cloud_Initialize() {
-  declare networkName="$1"
-  # ec2-provider.sh creates firewall rules programmatically, should do the same
-  # here.
-  echo "Note: one day create $networkName firewall rules programmatically instead of assuming the 'testnet' tag exists"
+  declare resourceGroup="$1"
+  declare location="$2"
+  declare nsgName=${resourceGroup}-nsg
+
+  # Check if resource group exists.  If not, create it.
+  (
+    set -x
+    numGroup=$(az group list --query "length([?name=='$resourceGroup'])")
+    if [[ $numGroup -eq 0 ]]; then
+      echo Resource Group "$resourceGroup" does not exist.  Creating it now.
+      az group create --name "$resourceGroup" --location "$location"
+    else
+      echo Resource group "$resourceGroup" already exists.
+      az group show --name "$resourceGroup"
+    fi
+
+    az network nsg create --name "$nsgName" --resource-group "$resourceGroup"
+  )
+
+  create_nsg_rule() {
+    ruleName="$1"
+    ports="$2"
+    access="$3"
+    protocol="$4"
+    priority="$5"
+    (
+      set -x
+      az network nsg rule create -g "${resourceGroup}" --nsg-name "${nsgName}" -n "${ruleName}" \
+                                 --priority "${priority}" --source-address-prefixes "*" --source-port-ranges "*" \
+                                 --destination-address-prefixes "*" --destination-port-ranges "${ports}" --access "${access}" \
+                                 --protocol "${protocol}"
+    )
+  }
+
+  create_nsg_rule "InboundTCP" "8000-10000" "Allow" "Tcp" 1000
+  create_nsg_rule "InboundUDP" "8000-10000" "Allow" "Udp" 1001
+  create_nsg_rule "InboundHTTP" "80" "Allow" "Tcp" 1002
+  create_nsg_rule "InboundNetworkExplorerAPI" "3001" "Allow" "Tcp" 1003
+  create_nsg_rule "InboundDrone" "9900" "Allow" "Tcp" 1004
+  create_nsg_rule "InboundJsonRpc" "8899-8900" "Allow" "Tcp" 1005
+  create_nsg_rule "InboundRsync" "873" "Allow" "Tcp" 1006
+  create_nsg_rule "InboundStun" "3478" "Allow" "Udp" 1007
+  create_nsg_rule "InboundSSH" "22" "Allow" "Tcp" 1008
 }
 
 #
@@ -175,6 +214,7 @@ cloud_CreateInstances() {
       nodes+=("$node")
     done
   fi
+  nsgName=${networkName}-nsg
 
   declare -a args
   args=(
@@ -184,6 +224,7 @@ cloud_CreateInstances() {
     --size "$machineType"
     --location "$zone"
     --generate-ssh-keys
+    --nsg "$nsgName"
   )
 
   if [[ -n $optionalBootDiskSize ]]; then
@@ -219,27 +260,17 @@ cloud_CreateInstances() {
 
   (
     set -x
-    # 1: Check if resource group exists.  If not, create it.
-    numGroup=$(az group list --query "length([?name=='$networkName'])")
-    if [[ $numGroup -eq 0 ]]; then
-      echo Resource Group "$networkName" does not exist.  Creating it now.
-      az group create --name "$networkName" --location "$zone"
-    else
-      echo Resource group "$networkName" already exists.
-      az group show --name "$networkName"
-    fi
 
-    # 2: For node in numNodes, create VM and put the creation process in the background with --no-wait
+    # For node in numNodes, create VM and put the creation process in the background with --no-wait
     for nodeName in "${nodes[@]}"; do
       az vm create --name "$nodeName" "${args[@]}" --no-wait
     done
+    for nodeName in "${nodes[@]}"; do
+      az vm wait --created --name "$nodeName" --resource-group "$networkName" --verbose --timeout 600
+    done
 
-    # 3. If GPU is to be enabled, wait until nodes are created, then install the appropriate extension
+    # If GPU is to be enabled, install the appropriate extension
     if $enableGpu; then
-      for nodeName in "${nodes[@]}"; do
-        az vm wait --created --name "$nodeName" --resource-group "$networkName" --verbose --timeout 600
-      done
-
       for nodeName in "${nodes[@]}"; do
         az vm extension set \
         --resource-group "$networkName" \
@@ -250,7 +281,7 @@ cloud_CreateInstances() {
         --no-wait
       done
 
-      # 4. Wait until all nodes have GPU extension installed
+      # Wait until all nodes have GPU extension installed
       for nodeName in "${nodes[@]}"; do
         az vm wait --updated --name "$nodeName" --resource-group "$networkName" --verbose --timeout 600
       done
