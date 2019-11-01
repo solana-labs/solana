@@ -435,14 +435,18 @@ pub fn sign_shreds_gpu(
         return sign_shreds_cpu(batches, slot_leaders_pubkeys, slot_leaders_privkeys);
     }
     let slot_leaders_secrets: HashMap<u64, Signature> = slot_leaders_privkeys
-        .into_iter()
+        .iter()
         .map(|(k, v)| {
             if *k == std::u64::MAX {
                 (*k, Signature::default())
             } else {
                 let mut hasher = Sha512::default();
                 hasher.input(&v);
-                let sig = Signature::new(hasher.result().as_slice());
+                let mut result = hasher.result();
+                result[0] &= 248;
+                result[31] &= 63;
+                result[31] |= 64;
+                let sig = Signature::new(result.as_slice());
                 (*k, sig)
             }
         })
