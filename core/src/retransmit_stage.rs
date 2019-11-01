@@ -5,8 +5,8 @@ use crate::{
     repair_service::RepairStrategy,
     result::{Error, Result},
     service::Service,
-    sigverify_stage::VerifiedPackets,
     streamer::PacketReceiver,
+    packet::Packets,
     window_service::{should_retransmit_and_persist, WindowService},
 };
 use crossbeam_channel::Receiver as CrossbeamReceiver;
@@ -208,7 +208,7 @@ impl RetransmitStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        verified_receiver: CrossbeamReceiver<VerifiedPackets>,
+        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,

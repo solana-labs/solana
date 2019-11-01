@@ -22,23 +22,22 @@ use std::thread::{self, Builder, JoinHandle};
 const RECV_BATCH_MAX_CPU: usize = 1_000;
 const RECV_BATCH_MAX_GPU: usize = 5_000;
 
-pub type VerifiedPackets = Vec<(Packets, Vec<u8>)>;
-
 pub struct SigVerifyStage {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
 pub trait SigVerifier {
-    fn verify_batch(&self, batch: Vec<Packets>) -> VerifiedPackets;
+    fn verify_batch(&self, batch: Vec<Packets>) -> Vec<Packets>;
 }
 
 #[derive(Default, Clone)]
 pub struct DisabledSigVerifier {}
 
 impl SigVerifier for DisabledSigVerifier {
-    fn verify_batch(&self, batch: Vec<Packets>) -> VerifiedPackets {
+    fn verify_batch(&self, mut batch: Vec<Packets>) -> Vec<Packets> {
         let r = sigverify::ed25519_verify_disabled(&batch);
-        batch.into_iter().zip(r).collect()
+        sigverify::mark_disabled(&mut batch, &r);
+        batch
     }
 }
 
@@ -46,7 +45,7 @@ impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: Receiver<Packets>,
-        verified_sender: CrossbeamSender<VerifiedPackets>,
+        verified_sender: CrossbeamSender<Vec<Packets>>,
         verifier: T,
     ) -> Self {
         let thread_hdls = Self::verifier_services(packet_receiver, verified_sender, verifier);
@@ -55,7 +54,7 @@ impl SigVerifyStage {
 
     fn verifier<T: SigVerifier>(
         recvr: &Arc<Mutex<PacketReceiver>>,
-        sendr: &CrossbeamSender<VerifiedPackets>,
+        sendr: &CrossbeamSender<Vec<Packets>>,
         id: usize,
         verifier: &T,
     ) -> Result<()> {
@@ -115,7 +114,7 @@ impl SigVerifyStage {
 
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: Arc<Mutex<PacketReceiver>>,
-        verified_sender: CrossbeamSender<VerifiedPackets>,
+        verified_sender: CrossbeamSender<Vec<Packets>>,
         id: usize,
         verifier: &T,
     ) -> JoinHandle<()> {
@@ -139,7 +138,7 @@ impl SigVerifyStage {
 
     fn verifier_services<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: PacketReceiver,
-        verified_sender: CrossbeamSender<VerifiedPackets>,
+        verified_sender: CrossbeamSender<Vec<Packets>>,
         verifier: T,
     ) -> Vec<JoinHandle<()>> {
         let receiver = Arc::new(Mutex::new(packet_receiver));

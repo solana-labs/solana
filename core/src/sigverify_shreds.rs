@@ -5,7 +5,6 @@ use crate::recycler::Recycler;
 use crate::recycler::Reset;
 use crate::sigverify::{self, TxOffset};
 use crate::sigverify_stage::SigVerifier;
-use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -68,7 +67,7 @@ impl ShredSigVerifier {
 }
 
 impl SigVerifier for ShredSigVerifier {
-    fn verify_batch(&self, batches: Vec<Packets>) -> VerifiedPackets {
+    fn verify_batch(&self, mut batches: Vec<Packets>) -> Vec<Packets> {
         let r_bank = self.bank_forks.read().unwrap().working_bank();
         let slots: HashSet<u64> = Self::read_slots(&batches);
         let mut leader_slots: HashMap<u64, Pubkey> = slots
@@ -90,7 +89,8 @@ impl SigVerifier for ShredSigVerifier {
             &self.recycler_pubkeys,
             &self.recycler_out,
         );
-        batches.into_iter().zip(r).collect()
+        sigverify::mark_disabled(&mut batches, &r);
+        batches
     }
 }
 
@@ -543,6 +543,7 @@ pub mod tests {
         batch[0].packets[1].meta.size = shred.payload.len();
 
         let rv = verifier.verify_batch(batch);
-        assert_eq!(rv[0].1, vec![1, 0]);
+        assert_eq!(rv[0].packets[0].meta.discard, false);
+        assert_eq!(rv[0].packets[1].meta.discard, true);
     }
 }
