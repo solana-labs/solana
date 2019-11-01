@@ -178,27 +178,28 @@ where
 
     info!("Generating {:?} account keys", total_keys);
     let mut account_keypairs = generate_keypairs(total_keys);
-    let src_pubkeys: Vec<_> = account_keypairs
+    let src_keypairs: Vec<_> = account_keypairs
         .drain(0..accounts_in_groups)
-        .map(|keypair| keypair.pubkey())
+        .map(|keypair| keypair)
         .collect();
-    let profit_pubkeys: Vec<_> = account_keypairs
+    let src_pubkeys: Vec<Pubkey> = src_keypairs
+        .iter()
+        .map(|keypair| keypair.pubkey().clone())
+        .collect();
+
+    let profit_keypairs: Vec<_> = account_keypairs
         .drain(0..accounts_in_groups)
-        .map(|keypair| keypair.pubkey())
+        .map(|keypair| keypair)
+        .collect();
+    let profit_pubkeys: Vec<Pubkey> = profit_keypairs
+        .iter()
+        .map(|keypair| keypair.pubkey().clone())
         .collect();
 
     info!("Create {:?} source token accounts", src_pubkeys.len());
-    create_token_accounts(
-        client,
-        &trader_signers,
-        &account_keypairs[0..accounts_in_groups],
-    );
+    create_token_accounts(client, &trader_signers, &src_keypairs);
     info!("Create {:?} profit token accounts", profit_pubkeys.len());
-    create_token_accounts(
-        client,
-        &swapper_signers,
-        &account_keypairs[0..accounts_in_groups],
-    );
+    create_token_accounts(client, &swapper_signers, &profit_keypairs);
 
     // Collect the max transaction rate and total tx count seen (single node only)
     let sample_stats = Arc::new(RwLock::new(Vec::new()));

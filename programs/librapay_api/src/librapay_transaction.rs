@@ -175,12 +175,7 @@ mod tests {
         let from = Keypair::new();
         let to = Keypair::new();
 
-        let tx = create_accounts(
-            &mint_keypair,
-            &[from.pubkey(), to.pubkey()],
-            1,
-            bank.last_blockhash(),
-        );
+        let tx = create_accounts(&mint_keypair, &[&from, &to], 1, bank.last_blockhash());
         bank.process_transaction(&tx).unwrap();
 
         info!(
