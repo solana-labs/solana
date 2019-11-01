@@ -1,8 +1,8 @@
 use crate::cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS};
+use crate::packet::Packets;
 use crate::poh_recorder::PohRecorder;
 use crate::result::Result;
 use crate::service::Service;
-use crate::packet::Packets;
 use crate::{packet, sigverify};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_metrics::inc_new_counter_debug;

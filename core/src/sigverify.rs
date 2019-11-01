@@ -7,7 +7,7 @@
 use crate::cuda_runtime::PinnedVec;
 use crate::packet::{Packet, Packets};
 use crate::recycler::Recycler;
-use crate::sigverify_stage::{SigVerifier};
+use crate::sigverify_stage::SigVerifier;
 use bincode::serialized_size;
 use rayon::ThreadPool;
 use solana_ledger::perf_libs;
@@ -45,12 +45,12 @@ impl SigVerifier for TransactionSigVerifier {
 }
 
 pub fn mark_disabled(batches: &mut Vec<Packets>, r: &[Vec<u8>]) {
-                    batches.iter_mut().zip(r).for_each(|(b, v)| {
-                        b.packets
-                            .iter_mut()
-                            .zip(v)
-                            .for_each(|(p, f)| p.meta.discard = *f == 0)
-                    });
+    batches.iter_mut().zip(r).for_each(|(b, v)| {
+        b.packets
+            .iter_mut()
+            .zip(v)
+            .for_each(|(p, f)| p.meta.discard = *f == 0)
+    });
 }
 
 use solana_rayon_threadlimit::get_thread_count;

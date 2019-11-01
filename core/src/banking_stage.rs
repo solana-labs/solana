@@ -1068,9 +1068,12 @@ mod tests {
     }
 
     pub fn convert_from_old_verified(mut with_vers: Vec<(Packets, Vec<u8>)>) -> Vec<Packets> {
-        with_vers
-            .iter_mut()
-            .for_each(|(b, v)| b.packets.iter_mut().zip(v).for_each(|(p, f)| p.meta.discard = *f == 0));
+        with_vers.iter_mut().for_each(|(b, v)| {
+            b.packets
+                .iter_mut()
+                .zip(v)
+                .for_each(|(p, f)| p.meta.discard = *f == 0)
+        });
         with_vers.into_iter().map(|(b, _)| b).collect()
     }
 

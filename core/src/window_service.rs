@@ -2,10 +2,10 @@
 //!   blocktree and retransmitting where required
 //!
 use crate::cluster_info::ClusterInfo;
+use crate::packet::Packets;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::packet::Packets;
 use crate::streamer::PacketSender;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use rayon::iter::IntoParallelRefMutIterator;

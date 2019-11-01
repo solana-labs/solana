@@ -2,11 +2,11 @@
 
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+    packet::Packets,
     repair_service::RepairStrategy,
     result::{Error, Result},
     service::Service,
     streamer::PacketReceiver,
-    packet::Packets,
     window_service::{should_retransmit_and_persist, WindowService},
 };
 use crossbeam_channel::Receiver as CrossbeamReceiver;
