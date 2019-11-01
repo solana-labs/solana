@@ -472,7 +472,7 @@ impl LocalCluster {
             // 1) Create vote account
 
             let mut transaction = Transaction::new_signed_instructions(
-                &[from_account.as_ref()],
+                &[from_account.as_ref(), vote_account],
                 vote_instruction::create_account(
                     &from_account.pubkey(),
                     &vote_account_pubkey,
