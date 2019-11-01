@@ -1,8 +1,8 @@
 use crate::cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS};
+use crate::packet::Packets;
 use crate::poh_recorder::PohRecorder;
 use crate::result::Result;
 use crate::service::Service;
-use crate::sigverify_stage::VerifiedPackets;
 use crate::{packet, sigverify};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_metrics::inc_new_counter_debug;
@@ -20,7 +20,7 @@ impl ClusterInfoVoteListener {
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         sigverify_disabled: bool,
-        sender: CrossbeamSender<VerifiedPackets>,
+        sender: CrossbeamSender<Vec<Packets>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Self {
         let exit = exit.clone();
@@ -45,7 +45,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sigverify_disabled: bool,
-        sender: &CrossbeamSender<VerifiedPackets>,
+        sender: &CrossbeamSender<Vec<Packets>>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
         let mut last_ts = 0;
@@ -57,14 +57,15 @@ impl ClusterInfoVoteListener {
             if poh_recorder.lock().unwrap().has_bank() {
                 last_ts = new_ts;
                 inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
-                let msgs = packet::to_packets(&votes);
+                let mut msgs = packet::to_packets(&votes);
                 if !msgs.is_empty() {
                     let r = if sigverify_disabled {
                         sigverify::ed25519_verify_disabled(&msgs)
                     } else {
                         sigverify::ed25519_verify_cpu(&msgs)
                     };
-                    sender.send(msgs.into_iter().zip(r).collect())?;
+                    sigverify::mark_disabled(&mut msgs, &r);
+                    sender.send(msgs)?;
                 }
             }
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));

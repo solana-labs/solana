@@ -9,7 +9,6 @@ use crate::{
     poh_service::PohService,
     result::{Error, Result},
     service::Service,
-    sigverify_stage::VerifiedPackets,
 };
 use bincode::deserialize;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
@@ -74,8 +73,8 @@ impl BankingStage {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<VerifiedPackets>,
-        verified_vote_receiver: CrossbeamReceiver<VerifiedPackets>,
+        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
+        verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -89,8 +88,8 @@ impl BankingStage {
     fn new_num_threads(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<VerifiedPackets>,
-        verified_vote_receiver: CrossbeamReceiver<VerifiedPackets>,
+        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
+        verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
         num_threads: u32,
     ) -> Self {
         let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
@@ -345,7 +344,7 @@ impl BankingStage {
 
     pub fn process_loop(
         my_pubkey: Pubkey,
-        verified_receiver: &CrossbeamReceiver<VerifiedPackets>,
+        verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         recv_start: &mut Instant,
@@ -793,17 +792,25 @@ impl BankingStage {
         filtered_unprocessed_packet_indexes
     }
 
-    fn generate_packet_indexes(vers: Vec<u8>) -> Vec<usize> {
+    fn generate_packet_indexes(vers: &[Packet]) -> Vec<usize> {
         vers.iter()
             .enumerate()
-            .filter_map(|(index, ver)| if *ver != 0 { Some(index) } else { None })
+            .filter_map(
+                |(index, ver)| {
+                    if !ver.meta.discard {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                },
+            )
             .collect()
     }
 
     /// Process the incoming packets
     pub fn process_packets(
         my_pubkey: &Pubkey,
-        verified_receiver: &CrossbeamReceiver<VerifiedPackets>,
+        verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
         poh: &Arc<Mutex<PohRecorder>>,
         recv_start: &mut Instant,
         recv_timeout: Duration,
@@ -815,7 +822,7 @@ impl BankingStage {
         recv_time.stop();
 
         let mms_len = mms.len();
-        let count: usize = mms.iter().map(|x| x.1.len()).sum();
+        let count: usize = mms.iter().map(|x| x.packets.len()).sum();
         debug!(
             "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
             timestamp(),
@@ -830,8 +837,8 @@ impl BankingStage {
         let mut mms_iter = mms.into_iter();
         let mut unprocessed_packets = vec![];
         let mut dropped_batches_count = 0;
-        while let Some((msgs, vers)) = mms_iter.next() {
-            let packet_indexes = Self::generate_packet_indexes(vers);
+        while let Some(msgs) = mms_iter.next() {
+            let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
             let bank = poh.lock().unwrap().bank();
             if bank.is_none() {
                 Self::push_unprocessed(
@@ -863,8 +870,8 @@ impl BankingStage {
                 let next_leader = poh.lock().unwrap().next_slot_leader();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
                 #[allow(clippy::while_let_on_iterator)]
-                while let Some((msgs, vers)) = mms_iter.next() {
-                    let packet_indexes = Self::generate_packet_indexes(vers);
+                while let Some(msgs) = mms_iter.next() {
+                    let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
                     let unprocessed_indexes = Self::filter_unprocessed_packets(
                         &bank,
                         &msgs,
@@ -1062,6 +1069,16 @@ mod tests {
         Blocktree::destroy(&ledger_path).unwrap();
     }
 
+    pub fn convert_from_old_verified(mut with_vers: Vec<(Packets, Vec<u8>)>) -> Vec<Packets> {
+        with_vers.iter_mut().for_each(|(b, v)| {
+            b.packets
+                .iter_mut()
+                .zip(v)
+                .for_each(|(p, f)| p.meta.discard = *f == 0)
+        });
+        with_vers.into_iter().map(|(b, _)| b).collect()
+    }
+
     #[test]
     fn test_banking_stage_entries_only() {
         solana_logger::setup();
@@ -1122,7 +1139,7 @@ mod tests {
                 .into_iter()
                 .map(|packets| (packets, vec![0u8, 1u8, 1u8]))
                 .collect();
-
+            let packets = convert_from_old_verified(packets);
             verified_sender // no_ver, anf, tx
                 .send(packets)
                 .unwrap();
@@ -1194,6 +1211,7 @@ mod tests {
             .into_iter()
             .map(|packets| (packets, vec![1u8]))
             .collect();
+        let packets = convert_from_old_verified(packets);
         verified_sender.send(packets).unwrap();
 
         // Process a second batch that uses the same from account, so conflicts with above TX
@@ -1204,6 +1222,7 @@ mod tests {
             .into_iter()
             .map(|packets| (packets, vec![1u8]))
             .collect();
+        let packets = convert_from_old_verified(packets);
         verified_sender.send(packets).unwrap();
 
         let (vote_sender, vote_receiver) = unbounded();

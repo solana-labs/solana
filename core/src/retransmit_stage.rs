@@ -2,10 +2,10 @@
 
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+    packet::Packets,
     repair_service::RepairStrategy,
     result::{Error, Result},
     service::Service,
-    sigverify_stage::VerifiedPackets,
     streamer::PacketReceiver,
     window_service::{should_retransmit_and_persist, WindowService},
 };
@@ -208,7 +208,7 @@ impl RetransmitStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        verified_receiver: CrossbeamReceiver<VerifiedPackets>,
+        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,

@@ -2,10 +2,10 @@
 //!   blocktree and retransmitting where required
 //!
 use crate::cluster_info::ClusterInfo;
+use crate::packet::Packets;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::sigverify_stage::VerifiedPackets;
 use crate::streamer::PacketSender;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use rayon::iter::IntoParallelRefMutIterator;
@@ -67,7 +67,7 @@ pub fn should_retransmit_and_persist(
 fn recv_window<F>(
     blocktree: &Arc<Blocktree>,
     my_pubkey: &Pubkey,
-    verified_receiver: &CrossbeamReceiver<VerifiedPackets>,
+    verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
     retransmit: &PacketSender,
     shred_filter: F,
     thread_pool: &ThreadPool,
@@ -78,10 +78,10 @@ where
 {
     let timer = Duration::from_millis(200);
     let mut packets = verified_receiver.recv_timeout(timer)?;
-    let mut total_packets: usize = packets.iter().map(|(p, _)| p.packets.len()).sum();
+    let mut total_packets: usize = packets.iter().map(|p| p.packets.len()).sum();
 
     while let Ok(mut more_packets) = verified_receiver.try_recv() {
-        let count: usize = more_packets.iter().map(|(p, _)| p.packets.len()).sum();
+        let count: usize = more_packets.iter().map(|p| p.packets.len()).sum();
         total_packets += count;
         packets.append(&mut more_packets)
     }
@@ -93,14 +93,12 @@ where
     let shreds: Vec<_> = thread_pool.install(|| {
         packets
             .par_iter_mut()
-            .flat_map(|(packets, sigs)| {
+            .flat_map(|packets| {
                 packets
                     .packets
                     .iter_mut()
-                    .zip(sigs.iter())
-                    .filter_map(|(packet, sigcheck)| {
-                        if *sigcheck == 0 {
-                            packet.meta.discard = true;
+                    .filter_map(|packet| {
+                        if packet.meta.discard {
                             inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
                             None
                         } else if let Ok(shred) =
@@ -128,7 +126,7 @@ where
 
     trace!("{} num total shreds received: {}", my_pubkey, total_packets);
 
-    for (packets, _) in packets.into_iter() {
+    for packets in packets.into_iter() {
         if !packets.packets.is_empty() {
             // Ignore the send error, as the retransmit is optional (e.g. archivers don't retransmit)
             let _ = retransmit.send(packets);
@@ -174,7 +172,7 @@ impl WindowService {
     pub fn new<F>(
         blocktree: Arc<Blocktree>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        verified_receiver: CrossbeamReceiver<VerifiedPackets>,
+        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         retransmit: PacketSender,
         repair_socket: Arc<UdpSocket>,
         exit: &Arc<AtomicBool>,
@@ -410,7 +408,7 @@ mod test {
     }
 
     fn make_test_window(
-        verified_receiver: CrossbeamReceiver<VerifiedPackets>,
+        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         exit: Arc<AtomicBool>,
     ) -> WindowService {
         let blocktree_path = get_tmp_ledger_path!();
@@ -453,24 +451,18 @@ mod test {
             })
             .collect();
         let mut packets = Packets::new(packets);
-        let verified = vec![1; packets.packets.len()];
-        packet_sender
-            .send(vec![(packets.clone(), verified)])
-            .unwrap();
+        packet_sender.send(vec![packets.clone()]).unwrap();
         sleep(Duration::from_millis(500));
 
         // add some empty packets to the data set. These should fail to deserialize
         packets.packets.append(&mut vec![Packet::default(); 10]);
         packets.packets.shuffle(&mut thread_rng());
-        let verified = vec![1; packets.packets.len()];
-        packet_sender
-            .send(vec![(packets.clone(), verified)])
-            .unwrap();
+        packet_sender.send(vec![packets.clone()]).unwrap();
         sleep(Duration::from_millis(500));
 
         // send 1 empty packet that cannot deserialize into a shred
         packet_sender
-            .send(vec![(Packets::new(vec![Packet::default(); 1]), vec![1])])
+            .send(vec![Packets::new(vec![Packet::default(); 1])])
             .unwrap();
         sleep(Duration::from_millis(500));
 

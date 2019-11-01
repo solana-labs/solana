@@ -25,7 +25,6 @@ use solana_sdk::signature::Signature;
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_us, timestamp};
 use solana_sdk::transaction::Transaction;
-use std::iter;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, RwLock};
@@ -142,13 +141,7 @@ fn main() {
         assert!(r.is_ok(), "sanity parallel execution");
     }
     bank.clear_signatures();
-    let mut verified: Vec<_> = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH)
-        .into_iter()
-        .map(|x| {
-            let len = x.packets.len();
-            (x, iter::repeat(1).take(len).collect())
-        })
-        .collect();
+    let mut verified: Vec<_> = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH);
     let ledger_path = get_tmp_ledger_path!();
     {
         let blocktree = Arc::new(
@@ -209,7 +202,7 @@ fn main() {
                     index,
                 );
                 for xv in v {
-                    sent += xv.0.packets.len();
+                    sent += xv.packets.len();
                 }
                 verified_sender.send(v.to_vec()).unwrap();
             }
@@ -288,13 +281,7 @@ fn main() {
                     let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
                     tx.signatures[0] = Signature::new(&sig[0..64]);
                 }
-                verified = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH)
-                    .into_iter()
-                    .map(|x| {
-                        let len = x.packets.len();
-                        (x, iter::repeat(1).take(len).collect())
-                    })
-                    .collect();
+                verified = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH);
             }
 
             start += chunk_len;
