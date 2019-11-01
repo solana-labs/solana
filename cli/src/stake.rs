@@ -10,6 +10,7 @@ use crate::{
 use clap::{App, Arg, ArgMatches, SubCommand};
 use console::style;
 use solana_client::rpc_client::RpcClient;
+use solana_sdk::signature::Keypair;
 use solana_sdk::{
     account_utils::State,
     pubkey::Pubkey,
@@ -20,7 +21,7 @@ use solana_sdk::{
 };
 use solana_stake_api::{
     stake_instruction::{self, StakeError},
-    stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
+    stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
 };
 use solana_vote_api::vote_state::VoteState;
 use std::ops::Deref;
@@ -269,7 +270,7 @@ impl StakeSubCommands for App<'_, '_> {
 }
 
 pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+    let stake_account = keypair_of(matches, "stake_account").unwrap();
     let slot = value_of(&matches, "lockup").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
     let staker = pubkey_of(matches, "authorized_staker");
@@ -278,7 +279,7 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
-            stake_account_pubkey,
+            stake_account,
             staker,
             withdrawer,
             lockup: Lockup { custodian, slot },
@@ -371,15 +372,16 @@ pub fn parse_show_stake_history(matches: &ArgMatches<'_>) -> Result<CliCommandIn
 pub fn process_create_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    stake_account_pubkey: &Pubkey,
+    stake_account: &Keypair,
     staker: &Option<Pubkey>,
     withdrawer: &Option<Pubkey>,
     lockup: &Lockup,
     lamports: u64,
 ) -> ProcessResult {
+    let stake_account_pubkey = stake_account.pubkey();
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
-        (stake_account_pubkey, "stake_account_pubkey".to_string()),
+        (&stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
 
     if rpc_client.get_account(&stake_account_pubkey).is_ok() {
@@ -409,7 +411,7 @@ pub fn process_create_stake_account(
 
     let ixs = stake_instruction::create_stake_account_with_lockup(
         &config.keypair.pubkey(),
-        stake_account_pubkey,
+        &stake_account_pubkey,
         &authorized,
         lockup,
         lamports,
@@ -418,11 +420,12 @@ pub fn process_create_stake_account(
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
         Some(&config.keypair.pubkey()),
-        &[&config.keypair],
+        &[&config.keypair, stake_account],
         recent_blockhash,
     );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let result =
+        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, stake_account]);
     log_instruction_custom_error::<SystemError>(result)
 }
 
@@ -710,7 +713,8 @@ mod tests {
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
-        let pubkey = Pubkey::new_rand();
+        let stake_account = Keypair::new();
+        let pubkey = stake_account.pubkey();
         let pubkey_string = format!("{}", pubkey);
 
         let test_authorize_staker = test_commands.clone().get_matches_from(vec![
@@ -764,7 +768,7 @@ mod tests {
             parse_command(&test_create_stake_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account_pubkey: pubkey,
+                    stake_account,
                     staker: Some(authorized),
                     withdrawer: Some(authorized),
                     lockup: Lockup {
@@ -783,11 +787,15 @@ mod tests {
             "50",
             "lamports",
         ]);
+
+        let stake_account = Keypair::new();
+        let pubkey = stake_account.pubkey();
+        let pubkey_string = format!("{}", pubkey);
         assert_eq!(
             parse_command(&test_create_stake_account2).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account_pubkey: pubkey,
+                    stake_account,
                     staker: None,
                     withdrawer: None,
                     lockup: Lockup {
