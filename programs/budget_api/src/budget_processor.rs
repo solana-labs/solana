@@ -210,10 +210,13 @@ mod tests {
         let bank_client = BankClient::new(bank);
         let alice_pubkey = alice_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
-        let instructions = budget_instruction::payment(&alice_pubkey, &bob_pubkey, 100);
+        let budget_keypair = Keypair::new();
+        let budget_pubkey = budget_keypair.pubkey();
+        let instructions =
+            budget_instruction::payment(&alice_pubkey, &bob_pubkey, &budget_pubkey, 100);
         let message = Message::new(instructions);
         bank_client
-            .send_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
         assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 100);
     }
@@ -225,7 +228,8 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
 
         // Initialize BudgetState
-        let budget_pubkey = Pubkey::new_rand();
+        let budget_keypair = Keypair::new();
+        let budget_pubkey = budget_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let witness = Pubkey::new_rand();
         let instructions = budget_instruction::when_signed(
@@ -238,7 +242,7 @@ mod tests {
         );
         let message = Message::new(instructions);
         bank_client
-            .send_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
 
         // Attack! Part 1: Sign a witness transaction with a random key.
@@ -273,7 +277,8 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
 
         // Initialize BudgetState
-        let budget_pubkey = Pubkey::new_rand();
+        let budget_keypair = Keypair::new();
+        let budget_pubkey = budget_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
         let instructions = budget_instruction::on_date(
@@ -287,7 +292,7 @@ mod tests {
         );
         let message = Message::new(instructions);
         bank_client
-            .send_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
 
         // Attack! Part 1: Sign a timestamp transaction with a random key.
@@ -320,10 +325,12 @@ mod tests {
         let (bank, alice_keypair) = create_bank(2);
         let bank_client = BankClient::new(bank);
         let alice_pubkey = alice_keypair.pubkey();
-        let budget_pubkey = Pubkey::new_rand();
+        let budget_keypair = Keypair::new();
+        let budget_pubkey = budget_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let mallory_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
+
         let instructions = budget_instruction::on_date(
             &alice_pubkey,
             &bob_pubkey,
@@ -335,7 +342,7 @@ mod tests {
         );
         let message = Message::new(instructions);
         bank_client
-            .send_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
@@ -389,7 +396,8 @@ mod tests {
         let (bank, alice_keypair) = create_bank(3);
         let bank_client = BankClient::new(bank);
         let alice_pubkey = alice_keypair.pubkey();
-        let budget_pubkey = Pubkey::new_rand();
+        let budget_keypair = Keypair::new();
+        let budget_pubkey = budget_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
 
@@ -404,7 +412,7 @@ mod tests {
         );
         let message = Message::new(instructions);
         bank_client
-            .send_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
@@ -461,7 +469,8 @@ mod tests {
 
         let alice_pubkey = alice_keypair.pubkey();
         let game_hash = hash(&[1, 2, 3]);
-        let budget_pubkey = Pubkey::new_rand();
+        let budget_keypair = Keypair::new();
+        let budget_pubkey = budget_keypair.pubkey();
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
 
@@ -481,7 +490,7 @@ mod tests {
         );
         let message = Message::new(instructions);
         bank_client
-            .send_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 0);
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 41);

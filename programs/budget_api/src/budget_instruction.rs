@@ -82,8 +82,7 @@ pub fn create_account(
 }
 
 /// Create a new payment script.
-pub fn payment(from: &Pubkey, to: &Pubkey, lamports: u64) -> Vec<Instruction> {
-    let contract = Pubkey::new_rand();
+pub fn payment(from: &Pubkey, to: &Pubkey, contract: &Pubkey, lamports: u64) -> Vec<Instruction> {
     let expr = BudgetExpr::new_payment(lamports, to);
     create_account(from, &contract, lamports, expr)
 }
@@ -181,7 +180,8 @@ mod tests {
     fn test_budget_instruction_verify() {
         let alice_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
-        payment(&alice_pubkey, &bob_pubkey, 1); // No panic! indicates success.
+        let budget_pubkey = Pubkey::new_rand();
+        payment(&alice_pubkey, &bob_pubkey, &budget_pubkey, 1); // No panic! indicates success.
     }
 
     #[test]

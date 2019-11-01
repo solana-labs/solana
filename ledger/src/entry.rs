@@ -392,6 +392,7 @@ mod tests {
     use crate::entry::Entry;
     use chrono::prelude::Utc;
     use solana_budget_api::budget_instruction;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::{
         hash::{hash, Hash},
         message::Message,
@@ -402,7 +403,8 @@ mod tests {
 
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
-        let ixs = budget_instruction::payment(&pubkey, &pubkey, 1);
+        let budget_pubkey = Pubkey::new_rand();
+        let ixs = budget_instruction::payment(&pubkey, &pubkey, &budget_pubkey, 1);
         Transaction::new_signed_instructions(&[keypair], ixs, hash)
     }
 
