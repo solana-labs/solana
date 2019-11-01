@@ -11,10 +11,11 @@ publish = false
 
 [dependencies]
 byte-unit = "3.0.3"
-clap = { version = "2.33.0" }
+clap = "2.33.0"
 log = "0.4.8"
 semver = "0.9.0"
 serde = "1.0.102"
+serde_derive = "1.0.102"
 serde_json = "1.0.41"
 solana-logger = { path = "../logger", version = "0.21.0" }
 
