@@ -223,10 +223,10 @@ fn slot_key_data_for_gpu<
         (keyvec.len() * size_of::<T>() + (size_of::<Packet>() - 1)) / size_of::<Packet>();
     trace!("num_in_packets {}", num_in_packets);
     //number of bytes missing
-    let missing = num_in_packets * size_of::<Packet>() - keyvec.len() * size_of::<[u8; 32]>();
+    let missing = num_in_packets * size_of::<Packet>() - keyvec.len() * size_of::<T>();
     trace!("missing {}", missing);
     //extra Pubkeys needed to fill the buffer
-    let extra = (missing + size_of::<T>() - 1) / size_of::<[u8; 32]>();
+    let extra = (missing + size_of::<T>() - 1) / size_of::<T>();
     trace!("extra {}", extra);
     trace!("keyvec {}", keyvec.len());
     for _ in 0..extra {
