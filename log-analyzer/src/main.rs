@@ -30,6 +30,20 @@ impl Default for LogLine {
     }
 }
 
+impl LogLine {
+    fn output(a: &String, b: &String, v1: u128, v2: u128) -> String {
+        format!(
+            "Lost {} bytes ({} - {}, {}%)  from {} to {}",
+            v1 - v2,
+            v1,
+            v2,
+            ((v1 - v2) * 100 / v1),
+            a,
+            b
+        )
+    }
+}
+
 impl Sub for &LogLine {
     type Output = String;
 
@@ -46,40 +60,23 @@ impl Sub for &LogLine {
         let rhs_b_to_a = Byte::from_str(&rhs.b_to_a)
             .expect("Failed to read b_to_a bytes")
             .get_bytes();
-        let out1 = if a_to_b > rhs_b_to_a {
-            format!(
-                "Lost {} bytes from {} to {}",
-                a_to_b - rhs_b_to_a,
-                self.a,
-                self.b
-            )
+        let mut out1 = if a_to_b > rhs_b_to_a {
+            LogLine::output(&self.a, &self.b, a_to_b, rhs_b_to_a)
         } else if a_to_b < rhs_b_to_a {
-            format!(
-                "Lost {} bytes from {} to {}",
-                rhs_b_to_a - a_to_b,
-                self.b,
-                self.a
-            )
+            LogLine::output(&self.b, &self.a, rhs_b_to_a, a_to_b)
         } else {
             String::default()
         };
         let out2 = if rhs_a_to_b > b_to_a {
-            format!(
-                "Lost {} bytes from {} to {}",
-                rhs_a_to_b - b_to_a,
-                self.a,
-                self.b
-            )
-        } else if a_to_b < rhs_b_to_a {
-            format!(
-                "Lost {} bytes from {} to {}",
-                b_to_a - rhs_a_to_b,
-                self.b,
-                self.a
-            )
+            LogLine::output(&self.a, &self.b, rhs_a_to_b, b_to_a)
+        } else if b_to_a < rhs_a_to_b {
+            LogLine::output(&self.b, &self.a, b_to_a, rhs_a_to_b)
         } else {
             String::default()
         };
+        if !out1.is_empty() && !out2.is_empty() {
+            out1.push('\n');
+        }
         out1 + &out2
     }
 }
@@ -149,6 +146,7 @@ fn analyze_logs(matches: &ArgMatches) {
     if !dir_path.is_dir() {
         panic!("Need a folder that contains all log files");
     }
+    let list_all_diffs = matches.is_present("all");
     let files = fs::read_dir(dir_path).expect("Failed to read log folder");
     let logs: Vec<_> = files
         .into_iter()
@@ -170,19 +168,19 @@ fn analyze_logs(matches: &ArgMatches) {
     });
 
     logs.iter().for_each(|l| {
-        let v1 = logs_hash.remove(&(l.a.clone(), l.b.clone()));
-        let v2 = logs_hash.remove(&(l.b.clone(), l.a.clone()));
-        let diff = if let Some(v1) = v1 {
-            if let Some(v2) = v2 {
-                v1 - v2
-            } else {
-                v1 - &LogLine::default()
-            }
-        } else if let Some(v2) = v2 {
-            v2 - &LogLine::default()
-        } else {
-            String::default()
-        };
+        let diff = logs_hash
+            .remove(&(l.a.clone(), l.b.clone()))
+            .map(|v1| {
+                logs_hash.remove(&(l.b.clone(), l.a.clone())).map_or(
+                    if list_all_diffs {
+                        v1 - &LogLine::default()
+                    } else {
+                        String::default()
+                    },
+                    |v2| v1 - v2,
+                )
+            })
+            .unwrap_or_default();
         if !diff.is_empty() {
             println!("{}", diff);
         }
@@ -237,6 +235,13 @@ fn main() {
                         .value_name("DIR")
                         .takes_value(true)
                         .help("Location of processed log files"),
+                )
+                .arg(
+                    Arg::with_name("all")
+                        .short("a")
+                        .long("all")
+                        .takes_value(false)
+                        .help("List all differences"),
                 ),
         )
         .get_matches();
