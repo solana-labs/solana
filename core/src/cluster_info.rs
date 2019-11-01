@@ -1658,6 +1658,7 @@ impl Node {
             gossip_addr,
             tvu.local_addr().unwrap(),
             tvu_forwards.local_addr().unwrap(),
+            repair.local_addr().unwrap(),
             tpu.local_addr().unwrap(),
             tpu_forwards.local_addr().unwrap(),
             storage.local_addr().unwrap(),
