@@ -141,11 +141,11 @@ fn process_iftop_logs(matches: &ArgMatches) {
         })
         .collect();
 
-    println!("{:?}", serde_json::to_string(&output).unwrap());
+    println!("{}", serde_json::to_string(&output).unwrap());
 }
 
-fn compare_logs(matches: &ArgMatches) {
-    let dir_path = PathBuf::from(value_t_or_exit!(matches, "dir", String));
+fn analyze_logs(matches: &ArgMatches) {
+    let dir_path = PathBuf::from(value_t_or_exit!(matches, "folder", String));
     if !dir_path.is_dir() {
         panic!("Need a folder that contains all log files");
     }
@@ -156,7 +156,7 @@ fn compare_logs(matches: &ArgMatches) {
             if let Ok(f) = f {
                 let log_str = fs::read_to_string(&f.path()).expect("Unable to read log file");
                 let log: Vec<LogLine> =
-                    serde_json::from_str(&log_str).expect("Failed to deserialize log");
+                    serde_json::from_str(log_str.as_str()).expect("Failed to deserialize log");
                 log
             } else {
                 vec![]
@@ -172,14 +172,19 @@ fn compare_logs(matches: &ArgMatches) {
     logs.iter().for_each(|l| {
         let v1 = logs_hash.remove(&(l.a.clone(), l.b.clone()));
         let v2 = logs_hash.remove(&(l.b.clone(), l.a.clone()));
-        if let Some(v1) = v1 {
+        let diff = if let Some(v1) = v1 {
             if let Some(v2) = v2 {
-                println!("{}", v1 - v2);
+                v1 - v2
             } else {
-                println!("{}", v1 - &LogLine::default());
+                v1 - &LogLine::default()
             }
         } else if let Some(v2) = v2 {
-            println!("{}", v2 - &LogLine::default());
+            v2 - &LogLine::default()
+        } else {
+            String::default()
+        };
+        if !diff.is_empty() {
+            println!("{}", diff);
         }
     });
 }
@@ -238,7 +243,7 @@ fn main() {
 
     match matches.subcommand() {
         ("iftop", Some(args_matches)) => process_iftop_logs(args_matches),
-        ("compare", Some(args_matches)) => compare_logs(args_matches),
+        ("analyze", Some(args_matches)) => analyze_logs(args_matches),
         _ => {}
     };
 }
