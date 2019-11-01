@@ -33,11 +33,13 @@ impl Default for LogLine {
 impl LogLine {
     fn output(a: &str, b: &str, v1: u128, v2: u128) -> String {
         format!(
-            "Lost {} bytes ({} - {}, {}%)  from {} to {}",
-            v1 - v2,
-            v1,
-            v2,
+            "Lost {}%, {}, ({} - {}), sender {}, receiver {}",
             ((v1 - v2) * 100 / v1),
+            Byte::from_bytes(v1 - v2)
+                .get_appropriate_unit(true)
+                .to_string(),
+            Byte::from_bytes(v1).get_appropriate_unit(true).to_string(),
+            Byte::from_bytes(v2).get_appropriate_unit(true).to_string(),
             a,
             b
         )
