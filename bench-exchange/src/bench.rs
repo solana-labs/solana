@@ -584,13 +584,11 @@ fn trader<T>(
             let trades_txs: Vec<_> = chunk
                 .par_iter()
                 .map(|(owner, trade, side, src)| {
-                    let o: &Keypair = &owner;
-                    let t: &Keypair = &trade;
                     let owner_pubkey = &owner.pubkey();
                     let trade_pubkey = &trade.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
                     Transaction::new_signed_instructions(
-                        &[o, t],
+                        &[owner.as_ref(), trade],
                         vec![
                             system_instruction::create_account(
                                 owner_pubkey,
