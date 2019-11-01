@@ -64,12 +64,7 @@ impl ClusterInfoVoteListener {
                     } else {
                         sigverify::ed25519_verify_cpu(&msgs)
                     };
-                    msgs.iter_mut().zip(r).for_each(|(b, v)| {
-                        b.packets
-                            .iter_mut()
-                            .zip(v)
-                            .for_each(|(p, f)| p.meta.discard = f == 0)
-                    });
+                    sigverify::mark_disabled(&mut msgs, &r);
                     sender.send(msgs)?;
                 }
             }
