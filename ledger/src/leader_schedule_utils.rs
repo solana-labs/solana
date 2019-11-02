@@ -1,11 +1,13 @@
 use crate::leader_schedule::LeaderSchedule;
 use crate::staking_utils;
 use solana_runtime::bank::Bank;
-use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{
+    clock::{Epoch, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+    pubkey::Pubkey,
+};
 
 /// Return the leader schedule for the given epoch.
-pub fn leader_schedule(epoch: u64, bank: &Bank) -> Option<LeaderSchedule> {
+pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
     staking_utils::staked_nodes_at_epoch(bank, epoch).map(|stakes| {
         let mut seed = [0u8; 32];
         seed[0..8].copy_from_slice(&epoch.to_le_bytes());
@@ -21,7 +23,7 @@ pub fn leader_schedule(epoch: u64, bank: &Bank) -> Option<LeaderSchedule> {
 }
 
 /// Return the leader for the given slot.
-pub fn slot_leader_at(slot: u64, bank: &Bank) -> Option<Pubkey> {
+pub fn slot_leader_at(slot: Slot, bank: &Bank) -> Option<Pubkey> {
     let (epoch, slot_index) = bank.get_epoch_and_slot_index(slot);
 
     leader_schedule(epoch, bank).map(|leader_schedule| leader_schedule[slot_index])

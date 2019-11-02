@@ -673,7 +673,12 @@ impl Accounts {
     }
 }
 
-pub fn create_test_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize, slot: u64) {
+pub fn create_test_accounts(
+    accounts: &Accounts,
+    pubkeys: &mut Vec<Pubkey>,
+    num: usize,
+    slot: Slot,
+) {
     for t in 0..num {
         let pubkey = Pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);

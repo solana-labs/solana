@@ -132,6 +132,7 @@ impl Default for Session {
 pub mod test {
     use super::*;
     use log::*;
+    use solana_sdk::clock::Slot;
 
     /// Specifies the contents of a 16-data-blob and 4-coding-blob erasure set
     /// Exists to be passed to `generate_blocktree_with_coding`
@@ -147,7 +148,7 @@ pub mod test {
     /// Exists to be passed to `generate_blocktree_with_coding`
     #[derive(Debug, Clone)]
     pub struct SlotSpec {
-        pub slot: u64,
+        pub slot: Slot,
         pub set_specs: Vec<ErasureSpec>,
     }
 

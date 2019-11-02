@@ -7,8 +7,7 @@ use bincode::serialize;
 use chrono::{SecondsFormat, Utc};
 use serde_json::json;
 use solana_ledger::entry::Entry;
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
@@ -72,14 +71,14 @@ impl EntryWriter for EntrySocket {
 pub trait BlockstreamEvents {
     fn emit_entry_event(
         &self,
-        slot: u64,
+        slot: Slot,
         tick_height: u64,
         leader_pubkey: &Pubkey,
         entries: &Entry,
     ) -> Result<()>;
     fn emit_block_event(
         &self,
-        slot: u64,
+        slot: Slot,
         tick_height: u64,
         leader_pubkey: &Pubkey,
         blockhash: Hash,
@@ -97,7 +96,7 @@ where
 {
     fn emit_entry_event(
         &self,
-        slot: u64,
+        slot: Slot,
         tick_height: u64,
         leader_pubkey: &Pubkey,
         entry: &Entry,
@@ -123,7 +122,7 @@ where
 
     fn emit_block_event(
         &self,
-        slot: u64,
+        slot: Slot,
         tick_height: u64,
         leader_pubkey: &Pubkey,
         blockhash: Hash,

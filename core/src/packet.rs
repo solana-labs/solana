@@ -1,28 +1,32 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-use crate::cuda_runtime::PinnedVec;
-use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
-use crate::recycler::{Recycler, Reset};
-use crate::result::{Error, Result};
+use crate::{
+    cuda_runtime::PinnedVec,
+    recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
+    recycler::{Recycler, Reset},
+    result::{Error, Result},
+};
 use bincode;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
 use solana_ledger::erasure::ErasureConfig;
 use solana_metrics::inc_new_counter_debug;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signable;
-use solana_sdk::signature::Signature;
-use std::borrow::Cow;
-use std::cmp;
-use std::fmt;
-use std::io;
-use std::io::Cursor;
-use std::mem;
-use std::mem::size_of;
-use std::net::{SocketAddr, UdpSocket};
-use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, RwLock};
-use std::time::Instant;
+use solana_sdk::{
+    clock::Slot,
+    pubkey::Pubkey,
+    signature::{Signable, Signature},
+};
+use std::{
+    borrow::Cow,
+    cmp, fmt, io,
+    io::Cursor,
+    mem,
+    mem::size_of,
+    net::{SocketAddr, UdpSocket},
+    ops::{Deref, DerefMut},
+    sync::{Arc, RwLock},
+    time::Instant,
+};
 
 pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type SharedBlobs = Vec<SharedBlob>;
@@ -531,7 +535,13 @@ impl Signable for Blob {
     }
 }
 
-pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut blob_index: u64, slot: u64, parent: u64) {
+pub fn index_blobs(
+    blobs: &[SharedBlob],
+    id: &Pubkey,
+    mut blob_index: u64,
+    slot: Slot,
+    parent: Slot,
+) {
     // enumerate all the blobs, those are the indices
     for blob in blobs.iter() {
         let mut blob = blob.write().unwrap();

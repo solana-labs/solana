@@ -7,9 +7,11 @@ extern crate test;
 extern crate solana_ledger;
 
 use rand::Rng;
-use solana_ledger::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, Blocktree};
-use solana_ledger::entry::{create_ticks, Entry};
-use solana_sdk::hash::Hash;
+use solana_ledger::{
+    blocktree::{entries_to_test_shreds, get_tmp_ledger_path, Blocktree},
+    entry::{create_ticks, Entry},
+};
+use solana_sdk::{clock::Slot, hash::Hash};
 use std::path::Path;
 use test::Bencher;
 
@@ -30,7 +32,7 @@ fn setup_read_bench(
     blocktree: &mut Blocktree,
     num_small_shreds: u64,
     num_large_shreds: u64,
-    slot: u64,
+    slot: Slot,
 ) {
     // Make some big and small entries
     let entries = create_ticks(

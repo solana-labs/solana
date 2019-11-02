@@ -5,26 +5,36 @@ mod tests {
     use bincode::serialize_into;
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;
-    use solana_core::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-    use solana_core::service::Service;
-    use solana_core::snapshot_packager_service::SnapshotPackagerService;
-    use solana_ledger::bank_forks::{BankForks, SnapshotConfig};
-    use solana_ledger::snapshot_utils;
-    use solana_runtime::bank::Bank;
-    use solana_runtime::status_cache::SlotDelta;
-    use solana_runtime::status_cache::MAX_CACHE_ENTRIES;
-    use solana_sdk::hash::hashv;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
-    use solana_sdk::transaction::Result as TransactionResult;
-    use std::fs;
-    use std::fs::File;
-    use std::io::{BufWriter, Write};
-    use std::path::PathBuf;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
+    use solana_core::{
+        genesis_utils::{create_genesis_block, GenesisBlockInfo},
+        service::Service,
+        snapshot_packager_service::SnapshotPackagerService,
+    };
+    use solana_ledger::{
+        bank_forks::{BankForks, SnapshotConfig},
+        snapshot_utils,
+    };
+    use solana_runtime::{
+        bank::Bank,
+        status_cache::{SlotDelta, MAX_CACHE_ENTRIES},
+    };
+    use solana_sdk::{
+        clock::Slot,
+        hash::hashv,
+        pubkey::Pubkey,
+        signature::{Keypair, KeypairUtil},
+        system_transaction,
+        transaction::Result as TransactionResult,
+    };
+    use std::{
+        fs,
+        fs::File,
+        io::{BufWriter, Write},
+        path::PathBuf,
+        sync::atomic::AtomicBool,
+        sync::mpsc::channel,
+        sync::Arc,
+    };
     use tempfile::TempDir;
 
     struct SnapshotTestConfig {
@@ -100,7 +110,7 @@ mod tests {
     // also marks each bank as root and generates snapshots
     // finally tries to restore from the last bank's snapshot and compares the restored bank to the
     // `last_slot` bank
-    fn run_bank_forks_snapshot_n<F>(last_slot: u64, f: F, set_root_interval: u64)
+    fn run_bank_forks_snapshot_n<F>(last_slot: Slot, f: F, set_root_interval: u64)
     where
         F: Fn(&mut Bank, &Keypair),
     {

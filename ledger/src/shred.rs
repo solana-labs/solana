@@ -1,19 +1,25 @@
 //! The `shred` module defines data structures and methods to pull MTU sized data frames from the network.
-use crate::entry::{create_ticks, Entry};
-use crate::erasure::Session;
+use crate::{
+    entry::{create_ticks, Entry},
+    erasure::Session,
+};
 use core::cell::RefCell;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
-use rayon::slice::ParallelSlice;
-use rayon::ThreadPool;
+use rayon::{
+    iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
+    slice::ParallelSlice,
+    ThreadPool,
+};
 use serde::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::hash::Hash;
-use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use std::sync::Arc;
-use std::time::Instant;
+use solana_sdk::{
+    clock::Slot,
+    hash::Hash,
+    packet::PACKET_DATA_SIZE,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil, Signature},
+};
+use std::{sync::Arc, time::Instant};
 
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
@@ -52,7 +58,7 @@ pub const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
 pub enum ShredError {
     InvalidShredType,
     InvalidFecRate(f32), // FEC rate must be more than 0.0 and less than 1.0
-    SlotTooLow { slot: u64, parent_slot: u64 }, // "Current slot must be > Parent slot, but the difference must not be > u16::MAX
+    SlotTooLow { slot: Slot, parent_slot: Slot }, // "Current slot must be > Parent slot, but the difference must not be > u16::MAX
     Serialize(std::boxed::Box<bincode::ErrorKind>),
 }
 
@@ -77,7 +83,7 @@ impl Default for ShredType {
 pub struct ShredCommonHeader {
     pub signature: Signature,
     pub shred_type: ShredType,
-    pub slot: u64,
+    pub slot: Slot,
     pub index: u32,
 }
 
@@ -129,7 +135,7 @@ impl Shred {
     }
 
     pub fn new_from_data(
-        slot: u64,
+        slot: Slot,
         index: u32,
         parent_offset: u16,
         data: Option<&[u8]>,
@@ -256,11 +262,11 @@ impl Shred {
         )
     }
 
-    pub fn slot(&self) -> u64 {
+    pub fn slot(&self) -> Slot {
         self.common_header.slot
     }
 
-    pub fn parent(&self) -> u64 {
+    pub fn parent(&self) -> Slot {
         if self.is_data() {
             self.common_header.slot - u64::from(self.data_header.parent_offset)
         } else {
@@ -280,7 +286,7 @@ impl Shred {
 
     /// This is not a safe function. It only changes the meta information.
     /// Use this only for test code which doesn't care about actual shred
-    pub fn set_slot(&mut self, slot: u64) {
+    pub fn set_slot(&mut self, slot: Slot) {
         self.common_header.slot = slot
     }
 
@@ -335,15 +341,20 @@ impl Shred {
 
 #[derive(Debug)]
 pub struct Shredder {
-    slot: u64,
-    parent_slot: u64,
+    slot: Slot,
+    parent_slot: Slot,
     fec_rate: f32,
     keypair: Arc<Keypair>,
     pub signing_coding_time: u128,
 }
 
 impl Shredder {
-    pub fn new(slot: u64, parent_slot: u64, fec_rate: f32, keypair: Arc<Keypair>) -> Result<Self> {
+    pub fn new(
+        slot: Slot,
+        parent_slot: Slot,
+        fec_rate: f32,
+        keypair: Arc<Keypair>,
+    ) -> Result<Self> {
         if fec_rate > 1.0 || fec_rate < 0.0 {
             Err(ShredError::InvalidFecRate(fec_rate))
         } else if slot < parent_slot || slot - parent_slot > u64::from(std::u16::MAX) {
@@ -450,7 +461,7 @@ impl Shredder {
     }
 
     pub fn new_coding_shred_header(
-        slot: u64,
+        slot: Slot,
         index: u32,
         num_data: usize,
         num_code: usize,
@@ -472,7 +483,7 @@ impl Shredder {
 
     /// Generates coding shreds for the data shreds in the current FEC set
     pub fn generate_coding_shreds(
-        slot: u64,
+        slot: Slot,
         fec_rate: f32,
         data_shred_batch: &[Shred],
     ) -> Vec<Shred> {
@@ -583,7 +594,7 @@ impl Shredder {
         num_data: usize,
         num_coding: usize,
         first_index: usize,
-        slot: u64,
+        slot: Slot,
     ) -> std::result::Result<Vec<Shred>, reed_solomon_erasure::Error> {
         let mut recovered_data = vec![];
         let fec_set_size = num_data + num_coding;
@@ -760,8 +771,8 @@ pub mod tests {
     fn verify_test_data_shred(
         shred: &Shred,
         index: u32,
-        slot: u64,
-        parent: u64,
+        slot: Slot,
+        parent: Slot,
         pk: &Pubkey,
         verify: bool,
         is_last_in_slot: bool,
@@ -785,7 +796,7 @@ pub mod tests {
         }
     }
 
-    fn verify_test_code_shred(shred: &Shred, index: u32, slot: u64, pk: &Pubkey, verify: bool) {
+    fn verify_test_code_shred(shred: &Shred, index: u32, slot: Slot, pk: &Pubkey, verify: bool) {
         assert_eq!(shred.payload.len(), PACKET_DATA_SIZE);
         assert!(!shred.is_data());
         assert_eq!(shred.index(), index);

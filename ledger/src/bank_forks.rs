@@ -5,14 +5,15 @@ use crate::snapshot_utils::{self, SnapshotError};
 use log::*;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
-use solana_runtime::bank::Bank;
-use solana_runtime::status_cache::MAX_CACHE_ENTRIES;
-use solana_sdk::timing;
-use std::collections::{HashMap, HashSet};
-use std::ops::Index;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::Instant;
+use solana_runtime::{bank::Bank, status_cache::MAX_CACHE_ENTRIES};
+use solana_sdk::{clock::Slot, timing};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Index,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotConfig {
@@ -46,22 +47,22 @@ impl std::convert::From<SnapshotPackageSendError> for BankForksError {
 }
 
 pub struct BankForks {
-    pub banks: HashMap<u64, Arc<Bank>>,
+    pub banks: HashMap<Slot, Arc<Bank>>,
     working_bank: Arc<Bank>,
-    root: u64,
+    root: Slot,
     pub snapshot_config: Option<SnapshotConfig>,
-    last_snapshot_slot: u64,
+    last_snapshot_slot: Slot,
 }
 
 impl Index<u64> for BankForks {
     type Output = Arc<Bank>;
-    fn index(&self, bank_slot: u64) -> &Arc<Bank> {
+    fn index(&self, bank_slot: Slot) -> &Arc<Bank> {
         &self.banks[&bank_slot]
     }
 }
 
 impl BankForks {
-    pub fn new(bank_slot: u64, bank: Bank) -> Self {
+    pub fn new(bank_slot: Slot, bank: Bank) -> Self {
         let mut banks = HashMap::new();
         let working_bank = Arc::new(bank);
         banks.insert(bank_slot, working_bank.clone());
@@ -75,11 +76,11 @@ impl BankForks {
     }
 
     /// Create a map of bank slot id to the set of ancestors for the bank slot.
-    pub fn ancestors(&self) -> HashMap<u64, HashSet<u64>> {
+    pub fn ancestors(&self) -> HashMap<Slot, HashSet<Slot>> {
         let mut ancestors = HashMap::new();
         let root = self.root;
         for bank in self.banks.values() {
-            let mut set: HashSet<u64> = bank
+            let mut set: HashSet<Slot> = bank
                 .ancestors
                 .keys()
                 .filter(|k| **k >= root)
@@ -93,11 +94,11 @@ impl BankForks {
 
     /// Create a map of bank slot id to the set of all of its descendants
     #[allow(clippy::or_fun_call)]
-    pub fn descendants(&self) -> HashMap<u64, HashSet<u64>> {
+    pub fn descendants(&self) -> HashMap<Slot, HashSet<Slot>> {
         let mut descendants = HashMap::new();
         for bank in self.banks.values() {
             let _ = descendants.entry(bank.slot()).or_insert(HashSet::new());
-            let mut set: HashSet<u64> = bank.ancestors.keys().cloned().collect();
+            let mut set: HashSet<Slot> = bank.ancestors.keys().cloned().collect();
             set.remove(&bank.slot());
             for parent in set {
                 descendants
@@ -109,7 +110,7 @@ impl BankForks {
         descendants
     }
 
-    pub fn frozen_banks(&self) -> HashMap<u64, Arc<Bank>> {
+    pub fn frozen_banks(&self) -> HashMap<Slot, Arc<Bank>> {
         self.banks
             .iter()
             .filter(|(_, b)| b.is_frozen())
@@ -117,7 +118,7 @@ impl BankForks {
             .collect()
     }
 
-    pub fn active_banks(&self) -> Vec<u64> {
+    pub fn active_banks(&self) -> Vec<Slot> {
         self.banks
             .iter()
             .filter(|(_, v)| !v.is_frozen())
@@ -125,11 +126,11 @@ impl BankForks {
             .collect()
     }
 
-    pub fn get(&self, bank_slot: u64) -> Option<&Arc<Bank>> {
+    pub fn get(&self, bank_slot: Slot) -> Option<&Arc<Bank>> {
         self.banks.get(&bank_slot)
     }
 
-    pub fn new_from_banks(initial_forks: &[Arc<Bank>], rooted_path: Vec<u64>) -> Self {
+    pub fn new_from_banks(initial_forks: &[Arc<Bank>], rooted_path: Vec<Slot>) -> Self {
         let mut banks = HashMap::new();
         let working_bank = initial_forks[0].clone();
 
@@ -169,7 +170,11 @@ impl BankForks {
         self.working_bank.clone()
     }
 
-    pub fn set_root(&mut self, root: u64, snapshot_package_sender: &Option<SnapshotPackageSender>) {
+    pub fn set_root(
+        &mut self,
+        root: Slot,
+        snapshot_package_sender: &Option<SnapshotPackageSender>,
+    ) {
         self.root = root;
         let set_root_start = Instant::now();
         let root_bank = self
@@ -190,7 +195,7 @@ impl BankForks {
         if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
             let config = self.snapshot_config.as_ref().unwrap();
             info!("setting snapshot root: {}", root);
-            if root - self.last_snapshot_slot >= config.snapshot_interval_slots as u64 {
+            if root - self.last_snapshot_slot >= config.snapshot_interval_slots as Slot {
                 let mut snapshot_time = Measure::start("total-snapshot-ms");
                 let r = self.generate_snapshot(
                     root,
@@ -223,7 +228,7 @@ impl BankForks {
         );
     }
 
-    pub fn root(&self) -> u64 {
+    pub fn root(&self) -> Slot {
         self.root
     }
 
@@ -242,8 +247,8 @@ impl BankForks {
 
     pub fn generate_snapshot<P: AsRef<Path>>(
         &self,
-        root: u64,
-        slots_to_snapshot: &[u64],
+        root: Slot,
+        slots_to_snapshot: &[Slot],
         snapshot_package_sender: &SnapshotPackageSender,
         tar_output_file: P,
     ) -> Result<()> {
@@ -281,7 +286,7 @@ impl BankForks {
         Ok(())
     }
 
-    fn prune_non_root(&mut self, root: u64) {
+    fn prune_non_root(&mut self, root: Slot) {
         let descendants = self.descendants();
         self.banks
             .retain(|slot, _| slot == &root || descendants[&root].contains(slot));

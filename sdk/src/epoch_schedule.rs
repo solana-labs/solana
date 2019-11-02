@@ -45,7 +45,7 @@ impl EpochSchedule {
     pub fn new(slots_per_epoch: u64) -> Self {
         Self::custom(slots_per_epoch, slots_per_epoch, true)
     }
-    pub fn custom(slots_per_epoch: u64, leader_schedule_slot_offset: u64, warmup: bool) -> Self {
+    pub fn custom(slots_per_epoch: Epoch, leader_schedule_slot_offset: u64, warmup: bool) -> Self {
         assert!(slots_per_epoch >= MINIMUM_SLOTS_PER_EPOCH as u64);
         let (first_normal_epoch, first_normal_slot) = if warmup {
             let next_power_of_two = slots_per_epoch.next_power_of_two();
@@ -70,7 +70,7 @@ impl EpochSchedule {
     }
 
     /// get the length of the given epoch (in slots)
-    pub fn get_slots_in_epoch(&self, epoch: u64) -> u64 {
+    pub fn get_slots_in_epoch(&self, epoch: Epoch) -> u64 {
         if epoch < self.first_normal_epoch {
             2u64.pow(epoch as u32 + MINIMUM_SLOTS_PER_EPOCH.trailing_zeros() as u32)
         } else {
@@ -80,7 +80,7 @@ impl EpochSchedule {
 
     /// get the epoch for which the given slot should save off
     ///  information about stakers
-    pub fn get_leader_schedule_epoch(&self, slot: u64) -> u64 {
+    pub fn get_leader_schedule_epoch(&self, slot: Slot) -> Epoch {
         if slot < self.first_normal_slot {
             // until we get to normal slots, behave as if leader_schedule_slot_offset == slots_per_epoch
             self.get_epoch_and_slot_index(slot).0 + 1
@@ -92,12 +92,12 @@ impl EpochSchedule {
     }
 
     /// get epoch for the given slot
-    pub fn get_epoch(&self, slot: u64) -> u64 {
+    pub fn get_epoch(&self, slot: Slot) -> Epoch {
         self.get_epoch_and_slot_index(slot).0
     }
 
     /// get epoch and offset into the epoch for the given slot
-    pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
+    pub fn get_epoch_and_slot_index(&self, slot: Slot) -> (Epoch, u64) {
         if slot < self.first_normal_slot {
             let epoch = (slot + MINIMUM_SLOTS_PER_EPOCH + 1)
                 .next_power_of_two()
@@ -119,7 +119,7 @@ impl EpochSchedule {
         }
     }
 
-    pub fn get_first_slot_in_epoch(&self, epoch: u64) -> u64 {
+    pub fn get_first_slot_in_epoch(&self, epoch: Epoch) -> Slot {
         if epoch <= self.first_normal_epoch {
             (2u64.pow(epoch as u32) - 1) * MINIMUM_SLOTS_PER_EPOCH
         } else {
@@ -127,7 +127,7 @@ impl EpochSchedule {
         }
     }
 
-    pub fn get_last_slot_in_epoch(&self, epoch: u64) -> u64 {
+    pub fn get_last_slot_in_epoch(&self, epoch: Epoch) -> Slot {
         self.get_first_slot_in_epoch(epoch) + self.get_slots_in_epoch(epoch) - 1
     }
 }

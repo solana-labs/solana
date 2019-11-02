@@ -64,11 +64,11 @@ pub struct BankRc {
     parent: RwLock<Option<Arc<Bank>>>,
 
     /// Current slot
-    slot: u64,
+    slot: Slot,
 }
 
 impl BankRc {
-    pub fn new(account_paths: String, id: AppendVecId, slot: u64) -> Self {
+    pub fn new(account_paths: String, id: AppendVecId, slot: Slot) -> Self {
         let accounts = Accounts::new(Some(account_paths));
         accounts
             .accounts_db
@@ -133,7 +133,7 @@ impl StatusCacheRc {
         sc.slot_deltas(slots)
     }
 
-    pub fn roots(&self) -> Vec<u64> {
+    pub fn roots(&self) -> Vec<Slot> {
         self.status_cache
             .read()
             .unwrap()
@@ -166,7 +166,7 @@ pub struct Bank {
     blockhash_queue: RwLock<BlockhashQueue>,
 
     /// The set of parents including this bank
-    pub ancestors: HashMap<u64, usize>,
+    pub ancestors: HashMap<Slot, usize>,
 
     /// Hash of this Bank's state. Only meaningful after freezing.
     hash: RwLock<Hash>,
@@ -246,7 +246,7 @@ pub struct Bank {
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
-    epoch_stakes: HashMap<u64, Stakes>,
+    epoch_stakes: HashMap<Epoch, Stakes>,
 
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
@@ -295,7 +295,7 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: u64) -> Self {
+    pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
@@ -408,11 +408,11 @@ impl Bank {
         bank
     }
 
-    pub fn slot(&self) -> u64 {
+    pub fn slot(&self) -> Slot {
         self.slot
     }
 
-    pub fn epoch(&self) -> u64 {
+    pub fn epoch(&self) -> Epoch {
         self.epoch
     }
 
@@ -772,7 +772,7 @@ impl Bank {
     /// tick that has achieved confirmation
     pub fn get_confirmation_timestamp(
         &self,
-        mut slots_and_stakes: Vec<(u64, u64)>,
+        mut slots_and_stakes: Vec<(Slot, u64)>,
         supermajority_stake: u64,
     ) -> Option<u64> {
         // Sort by slot height
@@ -1473,7 +1473,7 @@ impl Bank {
 
     /// returns the epoch for which this bank's leader_schedule_slot_offset and slot would
     ///  need to cache leader_schedule
-    pub fn get_leader_schedule_epoch(&self, slot: u64) -> u64 {
+    pub fn get_leader_schedule_epoch(&self, slot: Slot) -> Epoch {
         self.epoch_schedule.get_leader_schedule_epoch(slot)
     }
 
@@ -1544,7 +1544,7 @@ impl Bank {
     ///
     ///  ( slot/slots_per_epoch, slot % slots_per_epoch )
     ///
-    pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
+    pub fn get_epoch_and_slot_index(&self, slot: Slot) -> (u64, u64) {
         self.epoch_schedule.get_epoch_and_slot_index(slot)
     }
 

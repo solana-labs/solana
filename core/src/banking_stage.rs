@@ -23,7 +23,7 @@ use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::
 use solana_sdk::clock::MAX_TRANSACTION_FORWARDING_DELAY_GPU;
 use solana_sdk::{
     clock::{
-        DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
+        Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
         MAX_TRANSACTION_FORWARDING_DELAY,
     },
     poh_config::PohConfig,
@@ -428,7 +428,7 @@ impl BankingStage {
 
     #[allow(clippy::match_wild_err_arm)]
     fn record_transactions(
-        bank_slot: u64,
+        bank_slot: Slot,
         txs: &[Transaction],
         results: &[transaction::Result<()>],
         poh: &Arc<Mutex<PohRecorder>>,

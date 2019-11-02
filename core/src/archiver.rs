@@ -1,54 +1,58 @@
-use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
-use crate::cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE};
-use crate::contact_info::ContactInfo;
-use crate::gossip_service::GossipService;
-use crate::packet::to_shared_blob;
-use crate::recycler::Recycler;
-use crate::repair_service;
-use crate::repair_service::{RepairService, RepairSlotRange, RepairStrategy};
-use crate::result::{Error, Result};
-use crate::service::Service;
-use crate::shred_fetch_stage::ShredFetchStage;
-use crate::sigverify_stage::{DisabledSigVerifier, SigVerifyStage};
-use crate::storage_stage::NUM_STORAGE_SAMPLES;
-use crate::streamer::{receiver, responder, PacketReceiver};
-use crate::window_service::WindowService;
+use crate::{
+    chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE},
+    cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
+    contact_info::ContactInfo,
+    gossip_service::GossipService,
+    packet::to_shared_blob,
+    recycler::Recycler,
+    repair_service,
+    repair_service::{RepairService, RepairSlotRange, RepairStrategy},
+    result::{Error, Result},
+    service::Service,
+    shred_fetch_stage::ShredFetchStage,
+    sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
+    storage_stage::NUM_STORAGE_SAMPLES,
+    streamer::{receiver, responder, PacketReceiver},
+    window_service::WindowService,
+};
 use bincode::deserialize;
 use crossbeam_channel::unbounded;
-use rand::thread_rng;
-use rand::Rng;
-use rand::SeedableRng;
+use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use solana_client::rpc_client::RpcClient;
-use solana_client::rpc_request::RpcRequest;
-use solana_client::thin_client::ThinClient;
+use solana_client::{rpc_client::RpcClient, rpc_request::RpcRequest, thin_client::ThinClient};
 use solana_ed25519_dalek as ed25519_dalek;
-use solana_ledger::blocktree::Blocktree;
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::Shred;
+use solana_ledger::{
+    blocktree::Blocktree, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
+};
 use solana_netutil::bind_in_range;
-use solana_sdk::account_utils::State;
-use solana_sdk::client::{AsyncClient, SyncClient};
-use solana_sdk::clock::{get_complete_segment_from_slot, get_segment_from_slot};
-use solana_sdk::hash::{Hash, Hasher};
-use solana_sdk::message::Message;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::timing::timestamp;
-use solana_sdk::transaction::Transaction;
-use solana_sdk::transport::TransportError;
-use solana_storage_api::storage_contract::StorageContract;
-use solana_storage_api::storage_instruction::{self, StorageAccountType};
-use std::fs::File;
-use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom};
-use std::mem::size_of;
-use std::net::{SocketAddr, UdpSocket};
-use std::path::{Path, PathBuf};
-use std::result;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, RwLock};
-use std::thread::{sleep, spawn, JoinHandle};
-use std::time::Duration;
+use solana_sdk::{
+    account_utils::State,
+    client::{AsyncClient, SyncClient},
+    clock::{get_complete_segment_from_slot, get_segment_from_slot, Slot},
+    hash::{Hash, Hasher},
+    message::Message,
+    signature::{Keypair, KeypairUtil, Signature},
+    timing::timestamp,
+    transaction::Transaction,
+    transport::TransportError,
+};
+use solana_storage_api::{
+    storage_contract::StorageContract,
+    storage_instruction::{self, StorageAccountType},
+};
+use std::{
+    fs::File,
+    io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom},
+    mem::size_of,
+    net::{SocketAddr, UdpSocket},
+    path::{Path, PathBuf},
+    result,
+    sync::atomic::{AtomicBool, Ordering},
+    sync::mpsc::{channel, Receiver, Sender},
+    sync::{Arc, RwLock},
+    thread::{sleep, spawn, JoinHandle},
+    time::Duration,
+};
 
 static ENCRYPTED_FILENAME: &str = "ledger.enc";
 
@@ -65,7 +69,7 @@ pub struct Archiver {
 // Shared Archiver Meta struct used internally
 #[derive(Default)]
 struct ArchiverMeta {
-    slot: u64,
+    slot: Slot,
     slots_per_segment: u64,
     ledger_path: PathBuf,
     signature: Signature,
@@ -497,7 +501,7 @@ impl Archiver {
     }
 
     fn wait_for_segment_download(
-        start_slot: u64,
+        start_slot: Slot,
         slots_per_segment: u64,
         blocktree: &Arc<Blocktree>,
         exit: &Arc<AtomicBool>,
@@ -905,7 +909,7 @@ impl Archiver {
     }
 
     fn segment_complete(
-        start_slot: u64,
+        start_slot: Slot,
         slots_per_segment: u64,
         blocktree: &Arc<Blocktree>,
     ) -> bool {

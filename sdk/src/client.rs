@@ -7,15 +7,18 @@
 //! Asynchronous implementations are expected to create transactions, sign them, and send
 //! them but without waiting to see if the server accepted it.
 
-use crate::account::Account;
-use crate::fee_calculator::FeeCalculator;
-use crate::hash::Hash;
-use crate::instruction::Instruction;
-use crate::message::Message;
-use crate::pubkey::Pubkey;
-use crate::signature::{Keypair, Signature};
-use crate::transaction;
-use crate::transport::Result;
+use crate::{
+    account::Account,
+    clock::Slot,
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    instruction::Instruction,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Keypair, Signature},
+    transaction,
+    transport::Result,
+};
 use std::io;
 
 pub trait Client: SyncClient + AsyncClient {
@@ -54,7 +57,7 @@ pub trait SyncClient {
     ) -> Result<Option<transaction::Result<()>>>;
 
     /// Get last known slot
-    fn get_slot(&self) -> Result<u64>;
+    fn get_slot(&self) -> Result<Slot>;
 
     /// Get transaction count
     fn get_transaction_count(&self) -> Result<u64>;

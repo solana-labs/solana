@@ -4,14 +4,15 @@ use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
-use solana_runtime::bank::Bank;
-use solana_runtime::status_cache::SlotDelta;
-use solana_sdk::transaction;
-use std::cmp::Ordering;
-use std::fs;
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Error as IOError, ErrorKind};
-use std::path::{Path, PathBuf};
+use solana_runtime::{bank::Bank, status_cache::SlotDelta};
+use solana_sdk::{clock::Slot, transaction};
+use std::{
+    cmp::Ordering,
+    fs,
+    fs::File,
+    io::{BufReader, BufWriter, Error as IOError, ErrorKind},
+    path::{Path, PathBuf},
+};
 use tar::Archive;
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
@@ -20,7 +21,7 @@ pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
-    pub slot: u64,
+    pub slot: Slot,
     pub snapshot_file_path: PathBuf,
 }
 
@@ -77,7 +78,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_files: &SlotSnapshotPaths,
     snapshot_package_output_file: P,
     snapshot_path: Q,
-    slots_to_snapshot: &[u64],
+    slots_to_snapshot: &[Slot],
 ) -> Result<SnapshotPackage> {
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -183,7 +184,7 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     Ok(())
 }
 
-pub fn remove_snapshot<P: AsRef<Path>>(slot: u64, snapshot_path: P) -> Result<()> {
+pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<()> {
     let slot_snapshot_dir = get_bank_snapshot_dir(&snapshot_path, slot);
     // Remove the snapshot directory for this slot
     fs::remove_dir_all(slot_snapshot_dir)?;
@@ -295,11 +296,11 @@ where
     Ok(bank)
 }
 
-fn get_snapshot_file_name(slot: u64) -> String {
+fn get_snapshot_file_name(slot: Slot) -> String {
     slot.to_string()
 }
 
-fn get_bank_snapshot_dir<P: AsRef<Path>>(path: P, slot: u64) -> PathBuf {
+fn get_bank_snapshot_dir<P: AsRef<Path>>(path: P, slot: Slot) -> PathBuf {
     path.as_ref().join(slot.to_string())
 }
 

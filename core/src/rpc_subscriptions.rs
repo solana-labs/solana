@@ -2,15 +2,13 @@
 
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
-use jsonrpc_pubsub::typed::Sink;
-use jsonrpc_pubsub::SubscriptionId;
+use jsonrpc_pubsub::{typed::Sink, SubscriptionId};
 use serde::Serialize;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
-use solana_sdk::account::Account;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::transaction;
+use solana_sdk::{
+    account::Account, clock::Slot, pubkey::Pubkey, signature::Signature, transaction,
+};
 use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -74,7 +72,7 @@ where
 fn check_confirmations_and_notify<K, S, F, N, X>(
     subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
     hashmap_key: &K,
-    current_slot: u64,
+    current_slot: Slot,
     bank_forks: &Arc<RwLock<BankForks>>,
     bank_method: F,
     notify: N,
@@ -169,7 +167,7 @@ impl RpcSubscriptions {
     pub fn check_account(
         &self,
         pubkey: &Pubkey,
-        current_slot: u64,
+        current_slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         let subscriptions = self.account_subscriptions.read().unwrap();
@@ -186,7 +184,7 @@ impl RpcSubscriptions {
     pub fn check_program(
         &self,
         program_id: &Pubkey,
-        current_slot: u64,
+        current_slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         let subscriptions = self.program_subscriptions.write().unwrap();
@@ -203,7 +201,7 @@ impl RpcSubscriptions {
     pub fn check_signature(
         &self,
         signature: &Signature,
-        current_slot: u64,
+        current_slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
@@ -268,7 +266,7 @@ impl RpcSubscriptions {
 
     /// Notify subscribers of changes to any accounts or new signatures since
     /// the bank's last checkpoint.
-    pub fn notify_subscribers(&self, current_slot: u64, bank_forks: &Arc<RwLock<BankForks>>) {
+    pub fn notify_subscribers(&self, current_slot: Slot, bank_forks: &Arc<RwLock<BankForks>>) {
         let pubkeys: Vec<_> = {
             let subs = self.account_subscriptions.read().unwrap();
             subs.keys().cloned().collect()

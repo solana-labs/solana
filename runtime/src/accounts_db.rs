@@ -115,10 +115,10 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
 
 pub struct AccountStorageSerialize<'a> {
     account_storage: &'a AccountStorage,
-    slot: u64,
+    slot: Slot,
 }
 impl<'a> AccountStorageSerialize<'a> {
-    pub fn new(account_storage: &'a AccountStorage, slot: u64) -> Self {
+    pub fn new(account_storage: &'a AccountStorage, slot: Slot) -> Self {
         Self {
             account_storage,
             slot,
@@ -323,11 +323,11 @@ pub fn get_temp_accounts_paths(count: u32) -> IOResult<(Vec<TempDir>, String)> {
 
 pub struct AccountsDBSerialize<'a> {
     accounts_db: &'a AccountsDB,
-    slot: u64,
+    slot: Slot,
 }
 
 impl<'a> AccountsDBSerialize<'a> {
-    pub fn new(accounts_db: &'a AccountsDB, slot: u64) -> Self {
+    pub fn new(accounts_db: &'a AccountsDB, slot: Slot) -> Self {
         Self { accounts_db, slot }
     }
 }

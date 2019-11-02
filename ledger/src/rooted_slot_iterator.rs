@@ -1,14 +1,14 @@
-use crate::blocktree::*;
-use crate::blocktree_meta::SlotMeta;
+use crate::{blocktree::*, blocktree_meta::SlotMeta};
 use log::*;
+use solana_sdk::clock::Slot;
 
 pub struct RootedSlotIterator<'a> {
-    next_slots: Vec<u64>,
+    next_slots: Vec<Slot>,
     blocktree: &'a Blocktree,
 }
 
 impl<'a> RootedSlotIterator<'a> {
-    pub fn new(start_slot: u64, blocktree: &'a Blocktree) -> Result<Self> {
+    pub fn new(start_slot: Slot, blocktree: &'a Blocktree) -> Result<Self> {
         if blocktree.is_root(start_slot) {
             Ok(Self {
                 next_slots: vec![start_slot],
@@ -20,7 +20,7 @@ impl<'a> RootedSlotIterator<'a> {
     }
 }
 impl<'a> Iterator for RootedSlotIterator<'a> {
-    type Item = (u64, SlotMeta);
+    type Item = (Slot, SlotMeta);
 
     fn next(&mut self) -> Option<Self::Item> {
         // Clone b/c passing the closure to the map below requires exclusive access to

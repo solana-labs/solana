@@ -1,13 +1,17 @@
 use solana_runtime::bank::Bank;
-use solana_sdk::{account::Account, pubkey::Pubkey};
+use solana_sdk::{
+    account::Account,
+    clock::{Epoch, Slot},
+    pubkey::Pubkey,
+};
 use solana_vote_api::vote_state::VoteState;
 use std::{borrow::Borrow, collections::HashMap};
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
 /// supermajority lockout
-pub fn get_supermajority_slot(bank: &Bank, epoch_height: u64) -> Option<u64> {
+pub fn get_supermajority_slot(bank: &Bank, epoch: Epoch) -> Option<u64> {
     // Find the amount of stake needed for supermajority
-    let stakes_and_lockouts = epoch_stakes_and_lockouts(bank, epoch_height);
+    let stakes_and_lockouts = epoch_stakes_and_lockouts(bank, epoch);
     let total_stake: u64 = stakes_and_lockouts.iter().map(|s| s.0).sum();
     let supermajority_stake = total_stake * 2 / 3;
 
@@ -29,8 +33,8 @@ pub fn staked_nodes(bank: &Bank) -> HashMap<Pubkey, u64> {
 
 /// At the specified epoch, collect the delegate account balance and vote states for delegates
 /// that have non-zero balance in any of their managed staking accounts
-pub fn staked_nodes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
-    bank.epoch_vote_accounts(epoch_height)
+pub fn staked_nodes_at_epoch(bank: &Bank, epoch: Epoch) -> Option<HashMap<Pubkey, u64>> {
+    bank.epoch_vote_accounts(epoch)
         .map(|vote_accounts| to_staked_nodes(to_vote_states(vote_accounts.iter())))
 }
 
@@ -58,9 +62,9 @@ fn to_staked_nodes(
     map
 }
 
-fn epoch_stakes_and_lockouts(bank: &Bank, epoch_height: u64) -> Vec<(u64, Option<u64>)> {
+fn epoch_stakes_and_lockouts(bank: &Bank, epoch: Epoch) -> Vec<(u64, Option<u64>)> {
     let node_staked_accounts = bank
-        .epoch_vote_accounts(epoch_height)
+        .epoch_vote_accounts(epoch)
         .expect("Bank state for epoch is missing")
         .iter();
 
@@ -69,7 +73,7 @@ fn epoch_stakes_and_lockouts(bank: &Bank, epoch_height: u64) -> Vec<(u64, Option
         .collect()
 }
 
-fn find_supermajority_slot<'a, I>(supermajority_stake: u64, stakes_and_lockouts: I) -> Option<u64>
+fn find_supermajority_slot<'a, I>(supermajority_stake: u64, stakes_and_lockouts: I) -> Option<Slot>
 where
     I: Iterator<Item = &'a (u64, Option<u64>)>,
 {
@@ -111,7 +115,7 @@ pub(crate) mod tests {
     use solana_vote_api::{vote_instruction, vote_state::VoteInit};
     use std::sync::Arc;
 
-    fn new_from_parent(parent: &Arc<Bank>, slot: u64) -> Bank {
+    fn new_from_parent(parent: &Arc<Bank>, slot: Slot) -> Bank {
         Bank::new_from_parent(parent, &Pubkey::default(), slot)
     }
 

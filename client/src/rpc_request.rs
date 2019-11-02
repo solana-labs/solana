@@ -1,11 +1,12 @@
 use serde_json::{json, Value};
+use solana_sdk::clock::{Epoch, Slot};
 use std::{error, fmt};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcEpochInfo {
     /// The current epoch
-    pub epoch: u64,
+    pub epoch: Epoch,
 
     /// The current slot, relative to the start of the current epoch
     pub slot_index: u64,
@@ -14,7 +15,7 @@ pub struct RpcEpochInfo {
     pub slots_in_epoch: u64,
 
     /// The absolute current slot
-    pub absolute_slot: u64,
+    pub absolute_slot: Slot,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -46,7 +47,7 @@ pub struct RpcVoteAccountInfo {
     pub last_vote: u64,
 
     /// Current root slot for this vote account (0 if not root slot exists)
-    pub root_slot: u64,
+    pub root_slot: Slot,
 }
 
 #[derive(Debug, PartialEq)]

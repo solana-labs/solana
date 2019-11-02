@@ -2,14 +2,16 @@ use crate::storage_instruction::StorageAccountType;
 use log::*;
 use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account::Account;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::account_utils::State;
-use solana_sdk::hash::Hash;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::sysvar;
+use solana_sdk::{
+    account::{Account, KeyedAccount},
+    account_utils::State,
+    clock::Epoch,
+    hash::Hash,
+    instruction::InstructionError,
+    pubkey::Pubkey,
+    signature::Signature,
+    sysvar,
+};
 use std::collections::BTreeMap;
 
 // Todo Tune this for actual use cases when PoRep is feature complete
@@ -19,15 +21,15 @@ pub const MAX_PROOFS_PER_SEGMENT: usize = 80;
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Credits {
     // current epoch
-    epoch: u64,
+    epoch: Epoch,
     // currently pending credits
-    pub current_epoch: u64,
+    pub current_epoch: Epoch,
     // credits ready to be claimed
     pub redeemable: u64,
 }
 
 impl Credits {
-    pub fn update_epoch(&mut self, current_epoch: u64) {
+    pub fn update_epoch(&mut self, current_epoch: Epoch) {
         if self.epoch != current_epoch {
             self.epoch = current_epoch;
             self.redeemable += self.current_epoch;

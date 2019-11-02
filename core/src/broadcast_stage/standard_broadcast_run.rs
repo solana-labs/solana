@@ -282,17 +282,22 @@ mod test {
     use super::*;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::create_genesis_block;
-    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
-    use solana_ledger::entry::create_ticks;
-    use solana_ledger::shred::max_ticks_per_n_shreds;
+    use solana_ledger::{
+        blocktree::{get_tmp_ledger_path, Blocktree},
+        entry::create_ticks,
+        shred::max_ticks_per_n_shreds,
+    };
     use solana_runtime::bank::Bank;
-    use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::{
+        clock::Slot,
+        genesis_block::GenesisBlock,
+        signature::{Keypair, KeypairUtil},
+    };
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
     fn setup(
-        num_shreds_per_slot: u64,
+        num_shreds_per_slot: Slot,
     ) -> (
         Arc<Blocktree>,
         GenesisBlock,

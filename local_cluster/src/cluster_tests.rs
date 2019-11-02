@@ -14,7 +14,7 @@ use solana_ledger::{
 };
 use solana_sdk::{
     client::SyncClient,
-    clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS},
+    clock::{Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS},
     epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
     hash::Hash,
     poh_config::PohConfig,
@@ -282,7 +282,7 @@ fn poll_all_nodes_for_signature(
     Ok(())
 }
 
-fn get_and_verify_slot_entries(blocktree: &Blocktree, slot: u64, last_entry: &Hash) -> Vec<Entry> {
+fn get_and_verify_slot_entries(blocktree: &Blocktree, slot: Slot, last_entry: &Hash) -> Vec<Entry> {
     let entries = blocktree.get_slot_entries(slot, 0, None).unwrap();
     assert!(entries.verify(last_entry));
     entries
@@ -290,7 +290,7 @@ fn get_and_verify_slot_entries(blocktree: &Blocktree, slot: u64, last_entry: &Ha
 
 fn verify_slot_ticks(
     blocktree: &Blocktree,
-    slot: u64,
+    slot: Slot,
     last_entry: &Hash,
     expected_num_ticks: Option<usize>,
 ) -> Hash {
