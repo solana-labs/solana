@@ -1,15 +1,17 @@
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, SubCommand};
-use solana_ledger::blocktree::Blocktree;
-use solana_ledger::blocktree_processor::{process_blocktree, ProcessOptions};
-use solana_ledger::rooted_slot_iterator::RootedSlotIterator;
-use solana_sdk::clock::Slot;
-use solana_sdk::genesis_block::GenesisBlock;
-use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::{stdout, Write};
-use std::path::PathBuf;
-use std::process::exit;
-use std::str::FromStr;
+use solana_ledger::{
+    bank_forks_utils, blocktree::Blocktree, blocktree_processor,
+    rooted_slot_iterator::RootedSlotIterator,
+};
+use solana_sdk::{clock::Slot, genesis_block::GenesisBlock};
+use std::{
+    collections::BTreeMap,
+    fs::File,
+    io::{stdout, Write},
+    path::PathBuf,
+    process::exit,
+    str::FromStr,
+};
 
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
@@ -169,12 +171,12 @@ fn main() {
         }
         ("verify", _) => {
             println!("Verifying ledger...");
-            let options = ProcessOptions {
+            let process_options = blocktree_processor::ProcessOptions {
                 verify_ledger: true,
-                ..ProcessOptions::default()
+                ..blocktree_processor::ProcessOptions::default()
             };
-            match process_blocktree(&genesis_block, &blocktree, None, options) {
-                Ok((_bank_forks, bank_forks_info, _)) => {
+            match bank_forks_utils::load(&genesis_block, &blocktree, None, None, process_options) {
+                Ok((_bank_forks, bank_forks_info, _leader_schedule_cache)) => {
                     println!("{:?}", bank_forks_info);
                 }
                 Err(err) => {

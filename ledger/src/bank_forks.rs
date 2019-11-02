@@ -292,8 +292,8 @@ impl BankForks {
             .retain(|slot, _| slot == &root || descendants[&root].contains(slot));
     }
 
-    pub fn set_snapshot_config(&mut self, snapshot_config: SnapshotConfig) {
-        self.snapshot_config = Some(snapshot_config);
+    pub fn set_snapshot_config(&mut self, snapshot_config: Option<SnapshotConfig>) {
+        self.snapshot_config = snapshot_config;
     }
 
     pub fn snapshot_config(&self) -> &Option<SnapshotConfig> {

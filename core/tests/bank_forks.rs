@@ -63,7 +63,7 @@ mod tests {
             snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
             snapshot_path: PathBuf::from(snapshot_dir.path()),
         };
-        bank_forks.set_snapshot_config(snapshot_config.clone());
+        bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         SnapshotTestConfig {
             accounts_dir,
             snapshot_dir,
