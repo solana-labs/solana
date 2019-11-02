@@ -538,16 +538,12 @@ impl Bank {
     }
 
     pub fn update_recent_blockhashes(&self) {
-        let id = sysvar::recent_blockhashes::id();
-        let mut account = self
-            .get_account(&id)
-            .or_else(|| Some(sysvar::recent_blockhashes::create_account(1)))
-            .unwrap();
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         let recent_blockhash_iter = blockhash_queue.get_recent_blockhashes();
-        sysvar::recent_blockhashes::update_account(&mut account, recent_blockhash_iter).unwrap();
-        drop(blockhash_queue);
-        self.store_account(&id, &account);
+        self.store_account(
+            &sysvar::recent_blockhashes::id(),
+            &sysvar::recent_blockhashes::create_account_with_data(1, recent_blockhash_iter),
+        );
     }
 
     // If the point values are not `normal`, bring them back into range and
