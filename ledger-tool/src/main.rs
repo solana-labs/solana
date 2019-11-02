@@ -2,12 +2,16 @@ use clap::{
     crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg, SubCommand,
 };
 use solana_ledger::{
-    bank_forks::SnapshotConfig, bank_forks_utils, blocktree::Blocktree, blocktree_processor,
+    bank_forks::{BankForks, SnapshotConfig},
+    bank_forks_utils,
+    blocktree::Blocktree,
+    blocktree_processor,
     rooted_slot_iterator::RootedSlotIterator,
 };
-use solana_sdk::{clock::Slot, genesis_block::GenesisBlock};
+use solana_sdk::{clock::Slot, genesis_block::GenesisBlock, native_token::lamports_to_sol};
+use solana_vote_api::vote_state::VoteState;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap, HashSet},
     fs::File,
     io::{stdout, Write},
     path::PathBuf,
@@ -71,6 +75,168 @@ fn output_ledger(blocktree: Blocktree, starting_slot: Slot, method: LedgerOutput
     }
 }
 
+fn graph_forks(
+    dot_file: &str,
+    bank_forks: BankForks,
+    bank_forks_info: Vec<blocktree_processor::BankForksInfo>,
+) {
+    // Search all forks and collect the last vote made by each validator
+    let mut last_votes = HashMap::new();
+    for bfi in &bank_forks_info {
+        let bank = bank_forks.banks.get(&bfi.bank_slot).unwrap();
+
+        let total_stake = bank
+            .vote_accounts()
+            .iter()
+            .fold(0, |acc, (_, (stake, _))| acc + stake);
+        for (_, (stake, vote_account)) in bank.vote_accounts() {
+            let vote_state = VoteState::from(&vote_account).unwrap_or_default();
+            if let Some(last_vote) = vote_state.votes.iter().last() {
+                let entry =
+                    last_votes
+                        .entry(vote_state.node_pubkey)
+                        .or_insert((0, None, 0, total_stake));
+                if entry.0 < last_vote.slot {
+                    *entry = (last_vote.slot, vote_state.root_slot, stake, total_stake);
+                }
+            }
+        }
+    }
+
+    // Figure the stake distribution at all the nodes containing the last vote from each
+    // validator
+    let mut slot_stake_and_vote_count = HashMap::new();
+    for (last_vote_slot, _, stake, total_stake) in last_votes.values() {
+        let entry = slot_stake_and_vote_count
+            .entry(last_vote_slot)
+            .or_insert((0, 0, *total_stake));
+        entry.0 += 1;
+        entry.1 += stake;
+        assert_eq!(entry.2, *total_stake)
+    }
+
+    let mut dot = vec!["digraph {".to_string()];
+
+    // Build a subgraph consisting of all banks and links to their parent banks
+    dot.push("  subgraph cluster_banks {".to_string());
+    dot.push("    style=invis".to_string());
+    let mut styled_slots = HashSet::new();
+    for bfi in &bank_forks_info {
+        let bank = bank_forks.banks.get(&bfi.bank_slot).unwrap();
+        let mut bank = bank.clone();
+
+        let mut first = true;
+        loop {
+            if !styled_slots.contains(&bank.slot()) {
+                dot.push(format!(
+                    r#"    "{}"[label="{} (epoch {})\nleader: {}{}",style="{}{}"];"#,
+                    bank.slot(),
+                    bank.slot(),
+                    bank.epoch(),
+                    bank.collector_id(),
+                    if let Some((votes, stake, total_stake)) =
+                        slot_stake_and_vote_count.get(&bank.slot())
+                    {
+                        format!(
+                            "\nvotes: {}, stake: {:.1} SOL ({:.1}%)",
+                            votes,
+                            lamports_to_sol(*stake),
+                            *stake as f64 / *total_stake as f64 * 100.,
+                        )
+                    } else {
+                        "".to_string()
+                    },
+                    if first { "filled," } else { "" },
+                    if !bank.is_votable() { "dotted," } else { "" }
+                ));
+                styled_slots.insert(bank.slot());
+            }
+            first = false;
+
+            match bank.parent() {
+                None => {
+                    if bank.slot() > 0 {
+                        dot.push(format!(r#"    "{}" -> "...""#, bank.slot(),));
+                    }
+                    break;
+                }
+                Some(parent) => {
+                    let slot_distance = bank.slot() - parent.slot();
+                    let penwidth = if bank.epoch() > parent.epoch() {
+                        "5"
+                    } else {
+                        "1"
+                    };
+                    let link_label = if slot_distance > 1 {
+                        format!("label=\"{} slots\",color=red", slot_distance)
+                    } else {
+                        "color=blue".to_string()
+                    };
+                    dot.push(format!(
+                        r#"    "{}" -> "{}"[{},penwidth={}];"#,
+                        bank.slot(),
+                        parent.slot(),
+                        link_label,
+                        penwidth
+                    ));
+
+                    bank = parent.clone();
+                }
+            }
+        }
+    }
+    dot.push("  }".to_string());
+
+    // Strafe the banks with links from validators to the bank they last voted on,
+    // while collecting information about the absent votes and stakes
+    let mut absent_stake = 0;
+    let mut absent_votes = 0;
+    let mut lowest_last_vote_slot = std::u64::MAX;
+    let mut lowest_total_stake = 0;
+    for (node_pubkey, (last_vote_slot, root_slot, stake, total_stake)) in &last_votes {
+        dot.push(format!(
+                r#"  "{}"[shape=box,label="validator: {}\nstake: {} SOL\nlast vote slot: {}\nroot slot: {}"];"#,
+                node_pubkey,
+                node_pubkey,
+                lamports_to_sol(*stake),
+                last_vote_slot,
+                root_slot.unwrap_or(0)
+            ));
+        dot.push(format!(
+            r#"  "{}" -> "{}" [style=dotted,label="last vote"];"#,
+            node_pubkey,
+            if styled_slots.contains(&last_vote_slot) {
+                last_vote_slot.to_string()
+            } else {
+                if *last_vote_slot < lowest_last_vote_slot {
+                    lowest_last_vote_slot = *last_vote_slot;
+                    lowest_total_stake = *total_stake;
+                }
+                absent_votes += 1;
+                absent_stake += stake;
+                "...".to_string()
+            }
+        ));
+    }
+
+    // Annotate the final "..." node with absent vote and stake information
+    if absent_votes > 0 {
+        dot.push(format!(
+            r#"    "..."[label="...\nvotes: {}, stake: {:.1} SOL {:.1}%"];"#,
+            absent_votes,
+            lamports_to_sol(absent_stake),
+            absent_stake as f64 / lowest_total_stake as f64 * 100.,
+        ));
+    }
+
+    dot.push("}".to_string());
+
+    match File::create(dot_file).and_then(|mut file| file.write_all(&dot.join("\n").into_bytes())) {
+        Ok(_) => println!("Wrote {}", dot_file),
+        Err(err) => eprintln!("Unable to write {}: {}", dot_file, err),
+    };
+}
+
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
     solana_logger::setup_with_filter("solana=info");
@@ -94,20 +260,35 @@ fn main() {
                 .global(true)
                 .help("Use directory for ledger location"),
         )
-        .subcommand(SubCommand::with_name("print").about("Print the ledger").arg(&starting_slot_arg))
-        .subcommand(SubCommand::with_name("print-slot").about("Print the contents of one slot").arg(
-            Arg::with_name("slot")
-                .index(1)
-                .value_name("SLOT")
-                .takes_value(true)
-                .required(true)
-                .help("The slot to print"),
-        ))
-        .subcommand(SubCommand::with_name("bounds").about("Print lowest and highest non-empty slots. Note: This ignores gaps in slots"))
-        .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format").arg(&starting_slot_arg))
+        .subcommand(
+            SubCommand::with_name("print")
+            .about("Print the ledger")
+            .arg(&starting_slot_arg)
+        )
+        .subcommand(
+            SubCommand::with_name("print-slot")
+            .about("Print the contents of one slot")
+            .arg(
+                Arg::with_name("slot")
+                    .index(1)
+                    .value_name("SLOT")
+                    .takes_value(true)
+                    .required(true)
+                    .help("The slot to print"),
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("bounds")
+            .about("Print lowest and highest non-empty slots. Note: This ignores gaps in slots")
+        )
+        .subcommand(
+            SubCommand::with_name("json")
+            .about("Print the ledger in JSON format")
+            .arg(&starting_slot_arg)
+        )
         .subcommand(
             SubCommand::with_name("verify")
-            .about("Verify the ledger's PoH")
+            .about("Verify the ledger")
             .arg(
                 Arg::with_name("no_snapshot")
                     .long("no-snapshot")
@@ -121,28 +302,38 @@ fn main() {
                     .takes_value(true)
                     .help("Comma separated persistent accounts location"),
             )
-        .arg(
-            Arg::with_name("halt_at_slot")
-                .long("halt-at-slot")
-                .value_name("SLOT")
-                .takes_value(true)
-                .help("Halt processing at the given slot"),
+            .arg(
+                Arg::with_name("halt_at_slot")
+                    .long("halt-at-slot")
+                    .value_name("SLOT")
+                    .takes_value(true)
+                    .help("Halt processing at the given slot"),
+            )
+            .arg(
+                Arg::with_name("skip_poh_verify")
+                    .long("skip-poh-verify")
+                    .takes_value(false)
+                    .help("Skip ledger PoH verification"),
+            )
+            .arg(
+                Arg::with_name("graph_forks")
+                    .long("graph-forks")
+                    .value_name("FILENAME.GV")
+                    .takes_value(true)
+                    .help("Create a Graphviz DOT file representing the active forks once the ledger is verified"),
+            )
+        ).subcommand(
+            SubCommand::with_name("prune")
+            .about("Prune the ledger at the block height")
+            .arg(
+                Arg::with_name("slot_list")
+                    .long("slot-list")
+                    .value_name("FILENAME")
+                    .takes_value(true)
+                    .required(true)
+                    .help("The location of the YAML file with a list of rollback slot heights and hashes"),
+            )
         )
-        .arg(
-            clap::Arg::with_name("skip_poh_verify")
-                .long("skip-poh-verify")
-                .takes_value(false)
-                .help("Skip ledger PoH verification"),
-        )
-
-        ).subcommand(SubCommand::with_name("prune").about("Prune the ledger at the block height").arg(
-            Arg::with_name("slot_list")
-                .long("slot-list")
-                .value_name("FILENAME")
-                .takes_value(true)
-                .required(true)
-                .help("The location of the YAML file with a list of rollback slot heights and hashes"),
-        ))
         .subcommand(
             SubCommand::with_name("list-roots")
             .about("Output upto last <num-roots> root hashes and their heights starting at the given block height")
@@ -152,21 +343,26 @@ fn main() {
                     .value_name("NUM")
                     .takes_value(true)
                     .required(true)
-                    .help("Maximum block height")).arg(
-            Arg::with_name("slot_list")
-                .long("slot-list")
-                .value_name("FILENAME")
-                .required(false)
-                .takes_value(true)
-                .help("The location of the output YAML file. A list of rollback slot heights and hashes will be written to the file.")).arg(
-            Arg::with_name("num_roots")
-                .long("num-roots")
-                .value_name("NUM")
-                .takes_value(true)
-                .default_value(DEFAULT_ROOT_COUNT)
-                .required(false)
-                .help("Number of roots in the output"),
-        ))
+                    .help("Maximum block height")
+            )
+            .arg(
+                Arg::with_name("slot_list")
+                    .long("slot-list")
+                    .value_name("FILENAME")
+                    .required(false)
+                    .takes_value(true)
+                    .help("The location of the output YAML file. A list of rollback slot heights and hashes will be written to the file.")
+            )
+            .arg(
+                Arg::with_name("num_roots")
+                    .long("num-roots")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .default_value(DEFAULT_ROOT_COUNT)
+                    .required(false)
+                    .help("Number of roots in the output"),
+            )
+        )
         .get_matches();
 
     let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger", String));
@@ -234,8 +430,12 @@ fn main() {
                 snapshot_config.as_ref(),
                 process_options,
             ) {
-                Ok((_bank_forks, _bank_forks_info, _leader_schedule_cache)) => {
+                Ok((bank_forks, bank_forks_info, _leader_schedule_cache)) => {
                     println!("Ok");
+
+                    if let Some(dot_file) = arg_matches.value_of("graph_forks") {
+                        graph_forks(&dot_file, bank_forks, bank_forks_info);
+                    }
                 }
                 Err(err) => {
                     eprintln!("Ledger verification failed: {:?}", err);
