@@ -299,7 +299,7 @@ impl Column for columns::Index {
     const NAME: &'static str = INDEX_CF;
     type Index = u64;
 
-    fn key(slot: u64) -> Vec<u8> {
+    fn key(slot: Slot) -> Vec<u8> {
         let mut key = vec![0; 8];
         BigEndian::write_u64(&mut key[..], slot);
         key
@@ -326,7 +326,7 @@ impl Column for columns::DeadSlots {
     const NAME: &'static str = DEAD_SLOTS_CF;
     type Index = u64;
 
-    fn key(slot: u64) -> Vec<u8> {
+    fn key(slot: Slot) -> Vec<u8> {
         let mut key = vec![0; 8];
         BigEndian::write_u64(&mut key[..], slot);
         key
@@ -353,7 +353,7 @@ impl Column for columns::Orphans {
     const NAME: &'static str = ORPHANS_CF;
     type Index = u64;
 
-    fn key(slot: u64) -> Vec<u8> {
+    fn key(slot: Slot) -> Vec<u8> {
         let mut key = vec![0; 8];
         BigEndian::write_u64(&mut key[..], slot);
         key
@@ -380,7 +380,7 @@ impl Column for columns::Root {
     const NAME: &'static str = ROOT_CF;
     type Index = u64;
 
-    fn key(slot: u64) -> Vec<u8> {
+    fn key(slot: Slot) -> Vec<u8> {
         let mut key = vec![0; 8];
         BigEndian::write_u64(&mut key[..], slot);
         key
@@ -407,7 +407,7 @@ impl Column for columns::SlotMeta {
     const NAME: &'static str = META_CF;
     type Index = u64;
 
-    fn key(slot: u64) -> Vec<u8> {
+    fn key(slot: Slot) -> Vec<u8> {
         let mut key = vec![0; 8];
         BigEndian::write_u64(&mut key[..], slot);
         key

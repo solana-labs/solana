@@ -1,6 +1,7 @@
 use crate::erasure::ErasureConfig;
 use serde::{Deserialize, Serialize};
 use solana_metrics::datapoint;
+use solana_sdk::clock::Slot;
 use std::{collections::BTreeSet, ops::RangeBounds};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -8,7 +9,7 @@ use std::{collections::BTreeSet, ops::RangeBounds};
 pub struct SlotMeta {
     // The number of slots above the root (the genesis block). The first
     // slot has slot 0.
-    pub slot: u64,
+    pub slot: Slot,
     // The total number of consecutive blobs starting from index 0
     // we have received for this slot.
     pub consumed: u64,
@@ -19,10 +20,10 @@ pub struct SlotMeta {
     // The index of the blob that is flagged as the last blob for this slot.
     pub last_index: u64,
     // The slot height of the block this one derives from.
-    pub parent_slot: u64,
-    // The list of slot heights, each of which contains a block that derives
+    pub parent_slot: Slot,
+    // The list of slots, each of which contains a block that derives
     // from this one.
-    pub next_slots: Vec<u64>,
+    pub next_slots: Vec<Slot>,
     // True if this slot is full (consumed == last_index + 1) and if every
     // slot that is a parent of this slot is also connected.
     pub is_connected: bool,
@@ -33,7 +34,7 @@ pub struct SlotMeta {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 /// Index recording presence/absence of blobs
 pub struct Index {
-    pub slot: u64,
+    pub slot: Slot,
     data: DataIndex,
     coding: CodingIndex,
 }
@@ -70,7 +71,7 @@ pub enum ErasureMetaStatus {
 }
 
 impl Index {
-    pub(crate) fn new(slot: u64) -> Self {
+    pub(crate) fn new(slot: Slot) -> Self {
         Index {
             slot,
             data: DataIndex::default(),
@@ -174,7 +175,7 @@ impl SlotMeta {
         self.parent_slot != std::u64::MAX
     }
 
-    pub(crate) fn new(slot: u64, parent_slot: u64) -> Self {
+    pub(crate) fn new(slot: Slot, parent_slot: Slot) -> Self {
         SlotMeta {
             slot,
             consumed: 0,

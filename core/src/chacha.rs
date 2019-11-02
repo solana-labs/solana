@@ -1,4 +1,5 @@
 use solana_ledger::blocktree::Blocktree;
+use solana_sdk::clock::Slot;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
@@ -12,7 +13,7 @@ pub const CHACHA_KEY_SIZE: usize = 32;
 
 pub fn chacha_cbc_encrypt_ledger(
     blocktree: &Arc<Blocktree>,
-    start_slot: u64,
+    start_slot: Slot,
     slots_per_segment: u64,
     out_path: &Path,
     ivec: &mut [u8; CHACHA_BLOCK_SIZE],

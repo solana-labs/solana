@@ -2,38 +2,45 @@
 // for storage mining. Archivers submit storage proofs, validator then bundles them
 // to submit its proof for mining to be rewarded.
 
-use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-use crate::cluster_info::ClusterInfo;
-use crate::contact_info::ContactInfo;
-use crate::result::{Error, Result};
-use crate::service::Service;
+use crate::{
+    chacha_cuda::chacha_cbc_encrypt_file_many_keys,
+    cluster_info::ClusterInfo,
+    contact_info::ContactInfo,
+    result::{Error, Result},
+    service::Service,
+};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blocktree::Blocktree;
-use solana_runtime::bank::Bank;
-use solana_runtime::storage_utils::archiver_accounts;
-use solana_sdk::account::Account;
-use solana_sdk::account_utils::State;
-use solana_sdk::clock::get_segment_from_slot;
-use solana_sdk::hash::Hash;
-use solana_sdk::instruction::Instruction;
-use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::transaction::Transaction;
-use solana_storage_api::storage_contract::{Proof, ProofStatus, StorageContract};
-use solana_storage_api::storage_instruction;
-use solana_storage_api::storage_instruction::proof_validation;
-use std::collections::HashMap;
-use std::mem::size_of;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, RwLock};
-use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::{Duration, Instant};
-use std::{cmp, io};
+use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
+use solana_runtime::{bank::Bank, storage_utils::archiver_accounts};
+use solana_sdk::{
+    account::Account,
+    account_utils::State,
+    clock::{get_segment_from_slot, Slot},
+    hash::Hash,
+    instruction::Instruction,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil, Signature},
+    transaction::Transaction,
+};
+use solana_storage_api::{
+    storage_contract::{Proof, ProofStatus, StorageContract},
+    storage_instruction,
+    storage_instruction::proof_validation,
+};
+use std::{
+    cmp,
+    collections::HashMap,
+    io,
+    mem::size_of,
+    net::UdpSocket,
+    sync::atomic::{AtomicBool, Ordering},
+    sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
+    sync::{Arc, RwLock},
+    thread::{self, sleep, Builder, JoinHandle},
+    time::{Duration, Instant},
+};
 
 // Block of hash answers to validate against
 // Vec of [ledger blocks] x [keys]
@@ -47,7 +54,7 @@ pub struct StorageStateInner {
     pub storage_keys: StorageKeys,
     archiver_map: ArchiverMap,
     storage_blockhash: Hash,
-    slot: u64,
+    slot: Slot,
     slots_per_segment: u64,
     slots_per_turn: u64,
 }
@@ -133,7 +140,7 @@ impl StorageState {
 
     pub fn get_pubkeys_for_slot(
         &self,
-        slot: u64,
+        slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Vec<Pubkey> {
         // TODO: keep track of age?
@@ -364,7 +371,7 @@ impl StorageStage {
         state: &Arc<RwLock<StorageStateInner>>,
         _blocktree: &Arc<Blocktree>,
         blockhash: Hash,
-        slot: u64,
+        slot: Slot,
         slots_per_segment: u64,
         instruction_sender: &InstructionSender,
     ) -> Result<()> {
@@ -440,7 +447,7 @@ impl StorageStage {
     }
 
     fn collect_proofs(
-        slot: u64,
+        slot: Slot,
         slots_per_segment: u64,
         account_id: Pubkey,
         account: Account,

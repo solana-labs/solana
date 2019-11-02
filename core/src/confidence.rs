@@ -1,14 +1,18 @@
-use crate::result::{Error, Result};
-use crate::service::Service;
+use crate::{
+    result::{Error, Result},
+    service::Service,
+};
 use solana_runtime::bank::Bank;
-use solana_vote_api::vote_state::VoteState;
-use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, RwLock};
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
+use solana_sdk::clock::Slot;
+use solana_vote_api::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicBool, Ordering},
+    sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
+    sync::{Arc, RwLock},
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
+};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BankConfidence {
@@ -33,20 +37,20 @@ impl BankConfidence {
 
 #[derive(Debug, Default)]
 pub struct ForkConfidenceCache {
-    bank_confidence: HashMap<u64, BankConfidence>,
+    bank_confidence: HashMap<Slot, BankConfidence>,
     total_stake: u64,
 }
 
 impl ForkConfidenceCache {
-    pub fn new(bank_confidence: HashMap<u64, BankConfidence>, total_stake: u64) -> Self {
+    pub fn new(bank_confidence: HashMap<Slot, BankConfidence>, total_stake: u64) -> Self {
         Self {
             bank_confidence,
             total_stake,
         }
     }
 
-    pub fn get_fork_confidence(&self, fork: u64) -> Option<&BankConfidence> {
-        self.bank_confidence.get(&fork)
+    pub fn get_fork_confidence(&self, slot: Slot) -> Option<&BankConfidence> {
+        self.bank_confidence.get(&slot)
     }
 
     pub fn total_stake(&self) -> u64 {
@@ -57,7 +61,7 @@ impl ForkConfidenceCache {
         &self,
         minimum_depth: usize,
         minimum_stake_percentage: f64,
-    ) -> Option<u64> {
+    ) -> Option<Slot> {
         self.bank_confidence
             .iter()
             .filter(|&(_, bank_confidence)| {
@@ -160,7 +164,7 @@ impl AggregateConfidenceService {
         }
     }
 
-    pub fn aggregate_confidence(ancestors: &[u64], bank: &Bank) -> HashMap<u64, BankConfidence> {
+    pub fn aggregate_confidence(ancestors: &[Slot], bank: &Bank) -> HashMap<Slot, BankConfidence> {
         assert!(!ancestors.is_empty());
 
         // Check ancestors is sorted
@@ -191,9 +195,9 @@ impl AggregateConfidenceService {
     }
 
     fn aggregate_confidence_for_vote_account(
-        confidence: &mut HashMap<u64, BankConfidence>,
+        confidence: &mut HashMap<Slot, BankConfidence>,
         vote_state: &VoteState,
-        ancestors: &[u64],
+        ancestors: &[Slot],
         lamports: u64,
     ) {
         assert!(!ancestors.is_empty());

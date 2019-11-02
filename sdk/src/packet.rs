@@ -1,3 +1,4 @@
+use crate::clock::Slot;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
@@ -18,7 +19,7 @@ pub struct Meta {
     pub port: u16,
     pub v6: bool,
     pub seed: [u8; 32],
-    pub slot: u64,
+    pub slot: Slot,
 }
 
 #[derive(Clone)]

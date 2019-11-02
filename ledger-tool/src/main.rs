@@ -17,7 +17,7 @@ enum LedgerOutputMethod {
     Json,
 }
 
-fn output_slot(blocktree: &Blocktree, slot: u64, method: &LedgerOutputMethod) {
+fn output_slot(blocktree: &Blocktree, slot: Slot, method: &LedgerOutputMethod) {
     let entries = blocktree
         .get_slot_entries(slot, 0, None)
         .unwrap_or_else(|err| {
@@ -36,7 +36,7 @@ fn output_slot(blocktree: &Blocktree, slot: u64, method: &LedgerOutputMethod) {
     }
 }
 
-fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputMethod) {
+fn output_ledger(blocktree: Blocktree, starting_slot: Slot, method: LedgerOutputMethod) {
     let rooted_slot_iterator =
         RootedSlotIterator::new(starting_slot, &blocktree).unwrap_or_else(|err| {
             eprintln!(

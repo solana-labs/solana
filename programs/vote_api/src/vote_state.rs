@@ -313,7 +313,7 @@ impl VoteState {
         self.epoch_credits.iter()
     }
 
-    fn pop_expired_votes(&mut self, slot: u64) {
+    fn pop_expired_votes(&mut self, slot: Slot) {
         loop {
             if self.votes.back().map_or(false, |v| v.is_expired(slot)) {
                 self.votes.pop_back();
@@ -465,9 +465,7 @@ pub fn create_account(
 mod tests {
     use super::*;
     use crate::vote_state;
-    use solana_sdk::account::Account;
-    use solana_sdk::account_utils::State;
-    use solana_sdk::hash::hash;
+    use solana_sdk::{account::Account, account_utils::State, hash::hash};
 
     const MAX_RECENT_VOTES: usize = 16;
 
@@ -528,7 +526,7 @@ mod tests {
         vote_account: &mut Account,
         vote: &Vote,
         slot_hashes: &[SlotHash],
-        epoch: u64,
+        epoch: Epoch,
     ) -> Result<VoteState, InstructionError> {
         process_vote(
             &mut KeyedAccount::new(vote_pubkey, true, vote_account),

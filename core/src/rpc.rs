@@ -18,6 +18,7 @@ use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
+    clock::Slot,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -215,7 +216,7 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank().slots_per_segment())
     }
 
-    fn get_storage_pubkeys_for_slot(&self, slot: u64) -> Result<Vec<Pubkey>> {
+    fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<Pubkey>> {
         Ok(self
             .storage_state
             .get_pubkeys_for_slot(slot, &self.bank_forks))
@@ -710,7 +711,11 @@ impl RpcSol for RpcSolImpl {
             .get_slots_per_segment()
     }
 
-    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<Pubkey>> {
+    fn get_storage_pubkeys_for_slot(
+        &self,
+        meta: Self::Metadata,
+        slot: Slot,
+    ) -> Result<Vec<Pubkey>> {
         meta.request_processor
             .read()
             .unwrap()

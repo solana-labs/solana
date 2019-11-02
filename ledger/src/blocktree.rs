@@ -201,11 +201,11 @@ impl Blocktree {
         Database::destroy(&blocktree_path)
     }
 
-    pub fn meta(&self, slot: u64) -> Result<Option<SlotMeta>> {
+    pub fn meta(&self, slot: Slot) -> Result<Option<SlotMeta>> {
         self.meta_cf.get(slot)
     }
 
-    pub fn is_full(&self, slot: u64) -> bool {
+    pub fn is_full(&self, slot: Slot) -> bool {
         if let Ok(meta) = self.meta_cf.get(slot) {
             if let Some(meta) = meta {
                 return meta.is_full();
@@ -293,17 +293,17 @@ impl Blocktree {
         Ok(end)
     }
 
-    pub fn erasure_meta(&self, slot: u64, set_index: u64) -> Result<Option<ErasureMeta>> {
+    pub fn erasure_meta(&self, slot: Slot, set_index: u64) -> Result<Option<ErasureMeta>> {
         self.erasure_meta_cf.get((slot, set_index))
     }
 
-    pub fn orphan(&self, slot: u64) -> Result<Option<bool>> {
+    pub fn orphan(&self, slot: Slot) -> Result<Option<bool>> {
         self.orphans_cf.get(slot)
     }
 
     pub fn slot_meta_iterator<'a>(
         &'a self,
-        slot: u64,
+        slot: Slot,
     ) -> Result<impl Iterator<Item = (u64, SlotMeta)> + 'a> {
         let meta_iter = self
             .db
@@ -319,7 +319,7 @@ impl Blocktree {
 
     pub fn slot_data_iterator<'a>(
         &'a self,
-        slot: u64,
+        slot: Slot,
     ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + 'a> {
         let slot_iterator = self
             .db
@@ -837,13 +837,13 @@ impl Blocktree {
         Ok(())
     }
 
-    pub fn get_data_shred(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
+    pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         self.data_shred_cf.get_bytes((slot, index))
     }
 
     pub fn get_data_shreds(
         &self,
-        slot: u64,
+        slot: Slot,
         from_index: u64,
         to_index: u64,
         buffer: &mut [u8],
@@ -880,13 +880,13 @@ impl Blocktree {
         Ok((last_index, buffer_offset))
     }
 
-    pub fn get_coding_shred(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
+    pub fn get_coding_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         self.code_shred_cf.get_bytes((slot, index))
     }
 
     pub fn write_entries(
         &self,
-        start_slot: u64,
+        start_slot: Slot,
         num_ticks_in_start_slot: u64,
         start_index: u32,
         ticks_per_slot: u64,
@@ -946,14 +946,14 @@ impl Blocktree {
         Ok(num_shreds)
     }
 
-    pub fn get_index(&self, slot: u64) -> Result<Option<Index>> {
+    pub fn get_index(&self, slot: Slot) -> Result<Option<Index>> {
         self.index_cf.get(slot)
     }
 
     /// Manually update the meta for a slot.
     /// Can interfere with automatic meta update and potentially break chaining.
     /// Dangerous. Use with care.
-    pub fn put_meta_bytes(&self, slot: u64, bytes: &[u8]) -> Result<()> {
+    pub fn put_meta_bytes(&self, slot: Slot, bytes: &[u8]) -> Result<()> {
         self.meta_cf.put_bytes(slot, bytes)
     }
 
@@ -962,7 +962,7 @@ impl Blocktree {
     // for the slot with the specified slot
     fn find_missing_indexes<C>(
         db_iterator: &mut DBRawIterator,
-        slot: u64,
+        slot: Slot,
         start_index: u64,
         end_index: u64,
         max_missing: usize,
@@ -1027,7 +1027,7 @@ impl Blocktree {
 
     pub fn find_missing_data_indexes(
         &self,
-        slot: u64,
+        slot: Slot,
         start_index: u64,
         end_index: u64,
         max_missing: usize,
@@ -1051,7 +1051,7 @@ impl Blocktree {
     /// Returns the entry vector for the slot starting with `shred_start_index`
     pub fn get_slot_entries(
         &self,
-        slot: u64,
+        slot: Slot,
         shred_start_index: u64,
         _max_entries: Option<u64>,
     ) -> Result<Vec<Entry>> {
@@ -1061,7 +1061,7 @@ impl Blocktree {
 
     pub fn get_slot_entries_with_shred_count(
         &self,
-        slot: u64,
+        slot: Slot,
         start_index: u64,
     ) -> Result<(Vec<Entry>, usize)> {
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
@@ -1127,7 +1127,7 @@ impl Blocktree {
 
     fn get_entries_in_data_block(
         &self,
-        slot: u64,
+        slot: Slot,
         start_index: u32,
         end_index: u32,
     ) -> Result<Vec<Entry>> {
@@ -1196,7 +1196,7 @@ impl Blocktree {
         Ok(result)
     }
 
-    pub fn is_root(&self, slot: u64) -> bool {
+    pub fn is_root(&self, slot: Slot) -> bool {
         if let Ok(Some(true)) = self.db.get::<cf::Root>(slot) {
             true
         } else {
@@ -1220,7 +1220,7 @@ impl Blocktree {
         Ok(())
     }
 
-    pub fn is_dead(&self, slot: u64) -> bool {
+    pub fn is_dead(&self, slot: Slot) -> bool {
         if let Some(true) = self
             .db
             .get::<cf::DeadSlots>(slot)
@@ -1232,7 +1232,7 @@ impl Blocktree {
         }
     }
 
-    pub fn set_dead_slot(&self, slot: u64) -> Result<()> {
+    pub fn set_dead_slot(&self, slot: Slot) -> Result<()> {
         self.dead_slots_cf.put(slot, &true)
     }
 
@@ -1258,7 +1258,7 @@ impl Blocktree {
 
     /// Prune blocktree such that slots higher than `target_slot` are deleted and all references to
     /// higher slots are removed
-    pub fn prune(&self, target_slot: u64) {
+    pub fn prune(&self, target_slot: Slot) {
         let mut meta = self
             .meta(target_slot)
             .expect("couldn't read slot meta")
@@ -1332,7 +1332,7 @@ fn update_slot_meta(
 
 fn get_index_meta_entry<'a>(
     db: &Database,
-    slot: u64,
+    slot: Slot,
     index_working_set: &'a mut HashMap<u64, IndexMetaWorkingSetEntry>,
     index_meta_time: &mut u64,
 ) -> &'a mut IndexMetaWorkingSetEntry {
@@ -1356,8 +1356,8 @@ fn get_index_meta_entry<'a>(
 fn get_slot_meta_entry<'a>(
     db: &Database,
     slot_meta_working_set: &'a mut HashMap<u64, SlotMetaWorkingSetEntry>,
-    slot: u64,
-    parent_slot: u64,
+    slot: Slot,
+    parent_slot: Slot,
 ) -> &'a mut SlotMetaWorkingSetEntry {
     let meta_cf = db.column::<cf::SlotMeta>();
 
@@ -1384,7 +1384,7 @@ fn get_slot_meta_entry<'a>(
     })
 }
 
-fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: u64, last_root: u64) -> bool {
+fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: Slot, last_root: u64) -> bool {
     slot_to_write == 0 && last_root == 0 && parent_slot == 0
 }
 
@@ -1475,7 +1475,7 @@ fn find_slot_meta_else_create<'a>(
 // create a dummy orphan slot in the database
 fn find_slot_meta_in_db_else_create<'a>(
     db: &Database,
-    slot: u64,
+    slot: Slot,
     insert_map: &'a mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
 ) -> Result<Rc<RefCell<SlotMeta>>> {
     if let Some(slot_meta) = db.column::<cf::SlotMeta>().get(slot)? {
@@ -1497,7 +1497,7 @@ fn find_slot_meta_in_db_else_create<'a>(
 fn find_slot_meta_in_cached_state<'a>(
     working_set: &'a HashMap<u64, SlotMetaWorkingSetEntry>,
     chained_slots: &'a HashMap<u64, Rc<RefCell<SlotMeta>>>,
-    slot: u64,
+    slot: Slot,
 ) -> Result<Option<Rc<RefCell<SlotMeta>>>> {
     if let Some(entry) = working_set.get(&slot) {
         Ok(Some(entry.new_slot_meta.clone()))
@@ -1535,7 +1535,7 @@ fn handle_chaining_for_slot(
     write_batch: &mut WriteBatch,
     working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
-    slot: u64,
+    slot: Slot,
 ) -> Result<()> {
     let slot_meta_entry = working_set
         .get(&slot)
@@ -1614,7 +1614,7 @@ fn handle_chaining_for_slot(
 
 fn traverse_children_mut<F>(
     db: &Database,
-    slot: u64,
+    slot: Slot,
     slot_meta: &Rc<RefCell<(SlotMeta)>>,
     working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
@@ -1654,7 +1654,7 @@ fn is_orphan(meta: &SlotMeta) -> bool {
 // 2) Determine whether to set the is_connected flag
 fn chain_new_slot_to_prev_slot(
     prev_slot_meta: &mut SlotMeta,
-    current_slot: u64,
+    current_slot: Slot,
     current_slot_meta: &mut SlotMeta,
 ) {
     prev_slot_meta.next_slots.push(current_slot);
@@ -1747,7 +1747,7 @@ macro_rules! create_new_tmp_ledger {
     };
 }
 
-pub fn verify_shred_slots(slot: u64, parent_slot: u64, last_root: u64) -> bool {
+pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: u64) -> bool {
     if !is_valid_write_to_slot_0(slot, parent_slot, last_root) {
         // Check that the parent_slot < slot
         if parent_slot >= slot {
@@ -1777,8 +1777,8 @@ pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (PathB
 
 pub fn entries_to_test_shreds(
     entries: Vec<Entry>,
-    slot: u64,
-    parent_slot: u64,
+    slot: Slot,
+    parent_slot: Slot,
     is_full_slot: bool,
 ) -> Vec<Shred> {
     let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()))
@@ -1789,8 +1789,8 @@ pub fn entries_to_test_shreds(
 
 // used for tests only
 pub fn make_slot_entries(
-    slot: u64,
-    parent_slot: u64,
+    slot: Slot,
+    parent_slot: Slot,
     num_entries: u64,
 ) -> (Vec<Shred>, Vec<Entry>) {
     let entries = create_ticks(num_entries, 0, Hash::default());
@@ -1800,7 +1800,7 @@ pub fn make_slot_entries(
 
 // used for tests only
 pub fn make_many_slot_entries(
-    start_slot: u64,
+    start_slot: Slot,
     num_slots: u64,
     entries_per_slot: u64,
 ) -> (Vec<Shred>, Vec<Entry>) {

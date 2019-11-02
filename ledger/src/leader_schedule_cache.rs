@@ -1,13 +1,17 @@
 use crate::{blocktree::Blocktree, leader_schedule::LeaderSchedule, leader_schedule_utils};
 use log::*;
 use solana_runtime::bank::Bank;
-use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
+use solana_sdk::{
+    clock::{Epoch, Slot},
+    epoch_schedule::EpochSchedule,
+    pubkey::Pubkey,
+};
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
     sync::{Arc, RwLock},
 };
 
-type CachedSchedules = (HashMap<u64, Arc<LeaderSchedule>>, VecDeque<u64>);
+type CachedSchedules = (HashMap<Epoch, Arc<LeaderSchedule>>, VecDeque<u64>);
 const MAX_SCHEDULES: usize = 10;
 
 struct CacheCapacity(usize);
@@ -22,7 +26,7 @@ pub struct LeaderScheduleCache {
     // Map from an epoch to a leader schedule for that epoch
     pub cached_schedules: RwLock<CachedSchedules>,
     epoch_schedule: EpochSchedule,
-    max_epoch: RwLock<u64>,
+    max_epoch: RwLock<Epoch>,
     max_schedules: CacheCapacity,
 }
 
@@ -79,7 +83,7 @@ impl LeaderScheduleCache {
         }
     }
 
-    pub fn slot_leader_at(&self, slot: u64, bank: Option<&Bank>) -> Option<Pubkey> {
+    pub fn slot_leader_at(&self, slot: Slot, bank: Option<&Bank>) -> Option<Pubkey> {
         if let Some(bank) = bank {
             self.slot_leader_at_else_compute(slot, bank)
         } else if self.epoch_schedule.slots_per_epoch == 0 {
@@ -93,10 +97,10 @@ impl LeaderScheduleCache {
     pub fn next_leader_slot(
         &self,
         pubkey: &Pubkey,
-        mut current_slot: u64,
+        mut current_slot: Slot,
         bank: &Bank,
         blocktree: Option<&Blocktree>,
-    ) -> Option<(u64, u64)> {
+    ) -> Option<(Slot, Slot)> {
         let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
         let mut first_slot = None;
         let mut last_slot = current_slot;
@@ -149,7 +153,7 @@ impl LeaderScheduleCache {
         first_slot.and_then(|slot| Some((slot, last_slot)))
     }
 
-    fn slot_leader_at_no_compute(&self, slot: u64) -> Option<Pubkey> {
+    fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<Pubkey> {
         let (epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(slot);
         self.cached_schedules
             .read()
@@ -159,7 +163,7 @@ impl LeaderScheduleCache {
             .map(|schedule| schedule[slot_index])
     }
 
-    fn slot_leader_at_else_compute(&self, slot: u64, bank: &Bank) -> Option<Pubkey> {
+    fn slot_leader_at_else_compute(&self, slot: Slot, bank: &Bank) -> Option<Pubkey> {
         let cache_result = self.slot_leader_at_no_compute(slot);
         // Forbid asking for slots in an unconfirmed epoch
         let bank_epoch = self.epoch_schedule.get_epoch_and_slot_index(slot).0;
@@ -184,7 +188,7 @@ impl LeaderScheduleCache {
 
     fn get_epoch_schedule_else_compute(
         &self,
-        epoch: u64,
+        epoch: Epoch,
         bank: &Bank,
     ) -> Option<Arc<LeaderSchedule>> {
         let epoch_schedule = self.cached_schedules.read().unwrap().0.get(&epoch).cloned();
@@ -198,7 +202,7 @@ impl LeaderScheduleCache {
         }
     }
 
-    fn compute_epoch_schedule(&self, epoch: u64, bank: &Bank) -> Option<Arc<LeaderSchedule>> {
+    fn compute_epoch_schedule(&self, epoch: Epoch, bank: &Bank) -> Option<Arc<LeaderSchedule>> {
         let leader_schedule = leader_schedule_utils::leader_schedule(epoch, bank);
         leader_schedule.map(|leader_schedule| {
             let leader_schedule = Arc::new(leader_schedule);
@@ -216,7 +220,7 @@ impl LeaderScheduleCache {
     }
 
     fn retain_latest(
-        schedules: &mut HashMap<u64, Arc<LeaderSchedule>>,
+        schedules: &mut HashMap<Epoch, Arc<LeaderSchedule>>,
         order: &mut VecDeque<u64>,
         max_schedules: usize,
     ) {

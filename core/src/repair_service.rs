@@ -4,9 +4,11 @@ use crate::{
     cluster_info::ClusterInfo, cluster_info_repair_listener::ClusterInfoRepairListener,
     result::Result, service::Service,
 };
-use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
-use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
+use solana_ledger::{
+    bank_forks::BankForks,
+    blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta},
+};
+use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
     collections::BTreeSet,
     net::UdpSocket,
@@ -241,7 +243,7 @@ impl RepairService {
 
     fn generate_repairs_for_slot(
         blocktree: &Blocktree,
-        slot: u64,
+        slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
     ) -> Vec<RepairType> {
@@ -272,7 +274,7 @@ impl RepairService {
         blocktree: &Blocktree,
         repairs: &mut Vec<RepairType>,
         max_repairs: usize,
-        slot: u64,
+        slot: Slot,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {

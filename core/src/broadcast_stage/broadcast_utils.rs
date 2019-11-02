@@ -2,9 +2,12 @@ use crate::poh_recorder::WorkingBankEntry;
 use crate::result::Result;
 use solana_ledger::entry::Entry;
 use solana_runtime::bank::Bank;
-use std::sync::mpsc::Receiver;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use solana_sdk::clock::Slot;
+use std::{
+    sync::mpsc::Receiver,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 pub(super) struct ReceiveResults {
     pub entries: Vec<Entry>,
@@ -16,8 +19,8 @@ pub(super) struct ReceiveResults {
 #[derive(Copy, Clone)]
 pub struct UnfinishedSlotInfo {
     pub next_shred_index: u32,
-    pub slot: u64,
-    pub parent: u64,
+    pub slot: Slot,
+    pub parent: Slot,
 }
 
 /// This parameter tunes how many entries are received in one iteration of recv loop

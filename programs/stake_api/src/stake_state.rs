@@ -424,7 +424,7 @@ impl Stake {
         }
     }
 
-    fn deactivate(&mut self, epoch: u64) -> Result<(), StakeError> {
+    fn deactivate(&mut self, epoch: Epoch) -> Result<(), StakeError> {
         if self.deactivation_epoch != std::u64::MAX {
             Err(StakeError::AlreadyDeactivated)
         } else {

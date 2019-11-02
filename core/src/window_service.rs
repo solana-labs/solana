@@ -295,6 +295,7 @@ mod test {
         shred::Shredder,
     };
     use solana_sdk::{
+        clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
         signature::{Keypair, KeypairUtil},
@@ -310,8 +311,8 @@ mod test {
 
     fn local_entries_to_shred(
         entries: &[Entry],
-        slot: u64,
-        parent: u64,
+        slot: Slot,
+        parent: Slot,
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
         let shredder = Shredder::new(slot, parent, 0.0, keypair.clone())

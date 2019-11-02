@@ -9,30 +9,37 @@ use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
-use solana_ledger::bank_forks::BankForks;
-use solana_ledger::block_error::BlockError;
-use solana_ledger::blocktree::{Blocktree, BlocktreeError};
-use solana_ledger::blocktree_processor;
-use solana_ledger::entry::{Entry, EntrySlice};
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::snapshot_package::SnapshotPackageSender;
+use solana_ledger::{
+    bank_forks::BankForks,
+    block_error::BlockError,
+    blocktree::{Blocktree, BlocktreeError},
+    blocktree_processor,
+    entry::{Entry, EntrySlice},
+    leader_schedule_cache::LeaderScheduleCache,
+    snapshot_package::SnapshotPackageSender,
+};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::bank::Bank;
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::KeypairUtil;
-use solana_sdk::timing::{self, duration_as_ms};
-use solana_sdk::transaction::Transaction;
+use solana_sdk::{
+    clock::Slot,
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::KeypairUtil,
+    timing::{self, duration_as_ms},
+    transaction::Transaction,
+};
 use solana_vote_api::vote_instruction;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
-use std::time::Instant;
+use std::{
+    collections::HashMap,
+    collections::HashSet,
+    sync::atomic::{AtomicBool, Ordering},
+    sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
+    sync::{Arc, Mutex, RwLock},
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
+    time::Instant,
+};
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 
@@ -62,7 +69,7 @@ pub struct ReplayStage {
 
 struct ReplaySlotStats {
     // Per-slot elapsed time
-    slot: u64,
+    slot: Slot,
     fetch_entries_elapsed: u64,
     fetch_entries_fail_elapsed: u64,
     entry_verification_elapsed: u64,
@@ -71,7 +78,7 @@ struct ReplaySlotStats {
 }
 
 impl ReplaySlotStats {
-    pub fn new(slot: u64) -> Self {
+    pub fn new(slot: Slot) -> Self {
         Self {
             slot,
             fetch_entries_elapsed: 0,
@@ -120,7 +127,7 @@ struct ForkProgress {
 }
 
 impl ForkProgress {
-    pub fn new(slot: u64, last_entry: Hash) -> Self {
+    pub fn new(slot: Slot, last_entry: Hash) -> Self {
         Self {
             last_entry,
             num_shreds: 0,
@@ -300,7 +307,7 @@ impl ReplayStage {
 
     fn log_leader_change(
         my_pubkey: &Pubkey,
-        bank_slot: u64,
+        bank_slot: Slot,
         current_leader: &mut Option<Pubkey>,
         new_leader: &Pubkey,
     ) {
@@ -451,7 +458,11 @@ impl ReplayStage {
         (replay_result, tx_count)
     }
 
-    fn mark_dead_slot(slot: u64, blocktree: &Blocktree, progress: &mut HashMap<u64, ForkProgress>) {
+    fn mark_dead_slot(
+        slot: Slot,
+        blocktree: &Blocktree,
+        progress: &mut HashMap<u64, ForkProgress>,
+    ) {
         // Remove from progress map so we no longer try to replay this bank
         let mut progress_entry = progress
             .get_mut(&slot)

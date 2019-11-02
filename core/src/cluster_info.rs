@@ -12,43 +12,48 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::contact_info::ContactInfo;
-use crate::crds_gossip::CrdsGossip;
-use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
-use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
-use crate::packet::{to_shared_blob, Blob, Packet, SharedBlob};
-use crate::repair_service::RepairType;
-use crate::result::{Error, Result};
-use crate::sendmmsg::{multicast, send_mmsg};
-use crate::streamer::{BlobReceiver, BlobSender};
-use crate::weighted_shuffle::{weighted_best, weighted_shuffle};
+use crate::{
+    contact_info::ContactInfo,
+    crds_gossip::CrdsGossip,
+    crds_gossip_error::CrdsGossipError,
+    crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+    crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote},
+    packet::{to_shared_blob, Blob, Packet, SharedBlob},
+    repair_service::RepairType,
+    result::{Error, Result},
+    sendmmsg::{multicast, send_mmsg},
+    streamer::{BlobReceiver, BlobSender},
+    weighted_shuffle::{weighted_best, weighted_shuffle},
+};
 use bincode::{deserialize, serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
 use rand::{thread_rng, Rng};
-use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blocktree::Blocktree;
-use solana_ledger::staking_utils;
+use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree, staking_utils};
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
 use solana_netutil::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
     multi_bind_in_range, PortRange,
 };
-use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
-use solana_sdk::timing::{duration_as_ms, timestamp};
-use solana_sdk::transaction::Transaction;
-use std::borrow::Cow;
-use std::cmp::min;
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::{sleep, Builder, JoinHandle};
-use std::time::{Duration, Instant};
+use solana_sdk::{
+    clock::Slot,
+    packet::PACKET_DATA_SIZE,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil, Signable, Signature},
+    timing::{duration_as_ms, timestamp},
+    transaction::Transaction,
+};
+use std::{
+    borrow::Cow,
+    cmp::min,
+    collections::{BTreeSet, HashMap, HashSet},
+    fmt,
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+    sync::atomic::{AtomicBool, Ordering},
+    sync::{Arc, RwLock},
+    thread::{sleep, Builder, JoinHandle},
+    time::{Duration, Instant},
+};
 
 pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
 
@@ -776,19 +781,19 @@ impl ClusterInfo {
         Ok(())
     }
 
-    pub fn window_index_request_bytes(&self, slot: u64, blob_index: u64) -> Result<Vec<u8>> {
+    pub fn window_index_request_bytes(&self, slot: Slot, blob_index: u64) -> Result<Vec<u8>> {
         let req = Protocol::RequestWindowIndex(self.my_data().clone(), slot, blob_index);
         let out = serialize(&req)?;
         Ok(out)
     }
 
-    fn window_highest_index_request_bytes(&self, slot: u64, blob_index: u64) -> Result<Vec<u8>> {
+    fn window_highest_index_request_bytes(&self, slot: Slot, blob_index: u64) -> Result<Vec<u8>> {
         let req = Protocol::RequestHighestWindowIndex(self.my_data().clone(), slot, blob_index);
         let out = serialize(&req)?;
         Ok(out)
     }
 
-    fn orphan_bytes(&self, slot: u64) -> Result<Vec<u8>> {
+    fn orphan_bytes(&self, slot: Slot) -> Result<Vec<u8>> {
         let req = Protocol::RequestOrphan(self.my_data().clone(), slot);
         let out = serialize(&req)?;
         Ok(out)
@@ -1043,7 +1048,7 @@ impl ClusterInfo {
 
     fn get_data_shred_as_blob(
         blocktree: &Arc<Blocktree>,
-        slot: u64,
+        slot: Slot,
         shred_index: u64,
     ) -> Result<Option<Blob>> {
         let bytes = blocktree.get_data_shred(slot, shred_index)?;
@@ -1055,7 +1060,7 @@ impl ClusterInfo {
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
         me: &ContactInfo,
-        slot: u64,
+        slot: Slot,
         blob_index: u64,
     ) -> Vec<SharedBlob> {
         if let Some(blocktree) = blocktree {
@@ -1085,7 +1090,7 @@ impl ClusterInfo {
     fn run_highest_window_request(
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
-        slot: u64,
+        slot: Slot,
         highest_index: u64,
     ) -> Vec<SharedBlob> {
         if let Some(blocktree) = blocktree {
@@ -1111,7 +1116,7 @@ impl ClusterInfo {
     fn run_orphan(
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
-        mut slot: u64,
+        mut slot: Slot,
         max_responses: usize,
     ) -> Vec<SharedBlob> {
         let mut res = vec![];
