@@ -431,7 +431,6 @@ pub fn process_uptime(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::CliError::KeypairFileNotFound;
     use crate::cli::{app, parse_command};
 
     #[test]
