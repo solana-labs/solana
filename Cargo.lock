@@ -3559,6 +3559,7 @@ dependencies = [
  "solana-logger 0.20.3",
  "solana-runtime 0.20.3",
  "solana-sdk 0.20.3",
+ "solana-vote-api 0.20.3",
 ]
 
 [[package]]
