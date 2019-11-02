@@ -493,7 +493,7 @@ impl ReplayStage {
         T: 'static + KeypairUtil + Send + Sync,
     {
         trace!("handle votable bank {}", bank.slot());
-        let vote = tower.new_vote_from_bank(bank, vote_account);
+        let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account);
         if let Some(new_root) = tower.record_bank_vote(vote) {
             // get the root bank before squash
             let root_bank = bank_forks
@@ -539,7 +539,10 @@ impl ReplayStage {
             let blockhash = bank.last_blockhash();
             vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
             vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
-            cluster_info.write().unwrap().push_vote(vote_tx);
+            cluster_info
+                .write()
+                .unwrap()
+                .push_vote(tower_index, vote_tx);
         }
         Ok(())
     }
