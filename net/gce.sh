@@ -755,9 +755,10 @@ $(
     cat <<EOSD
 
 # Setup GCE self-destruct
-cat >/solana-scratch/gce-self-destruct.sh <<EOS
+cat >/solana-scratch/gce-self-destruct.sh <<'EOS'
+$(cat gce-self-destruct.sh)
+EOS
 EOSD
-    sed -Ee 's/(^|[^\])\$/\1\\$/g' gce-self-destruct.sh
     cat <<EOSD
 EOS
 
