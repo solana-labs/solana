@@ -33,12 +33,12 @@ impl StorageSubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair),
                 )
                 .arg(
-                    Arg::with_name("storage_account_pubkey")
+                    Arg::with_name("storage_account")
                         .index(2)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
+                        .value_name("STORAGE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair),
+                        .validator(is_keypair),
                 ),
         )
         .subcommand(
@@ -53,12 +53,12 @@ impl StorageSubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair),
                 )
                 .arg(
-                    Arg::with_name("storage_account_pubkey")
+                    Arg::with_name("storage_account")
                         .index(2)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
+                        .value_name("STORAGE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair),
+                        .validator(is_keypair),
                 ),
         )
         .subcommand(
@@ -228,55 +228,75 @@ pub fn process_show_storage_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
+    use solana_sdk::signature::{gen_keypair_file, read_keypair_file};
+
+    fn make_tmp_path(name: &str) -> String {
+        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        let keypair = Keypair::new();
+
+        let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
+
+        // whack any possible collision
+        let _ignored = std::fs::remove_dir_all(&path);
+        // whack any possible collision
+        let _ignored = std::fs::remove_file(&path);
+
+        path
+    }
 
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
         let pubkey = Pubkey::new_rand();
         let pubkey_string = pubkey.to_string();
-        let storage_account = Keypair::new();
-        let storage_account_pubkey = storage_account.pubkey();
-        let storage_account_string = storage_account_pubkey.to_string();
+
+        let keypair_file = make_tmp_path("storage_keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let storage_account_keypair = read_keypair_file(&keypair_file).unwrap();
 
         let test_create_archiver_storage_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-archiver-storage-account",
             &pubkey_string,
-            &storage_account_string,
+            &keypair_file,
         ]);
         assert_eq!(
             parse_command(&test_create_archiver_storage_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account,
+                    storage_account: storage_account_keypair,
                     account_type: StorageAccountType::Archiver,
                 },
                 require_keypair: true
             }
         );
+        std::fs::remove_file(&keypair_file).unwrap();
 
-        let storage_account = Keypair::new();
-        let storage_account_pubkey = storage_account.pubkey();
+        let keypair_file = make_tmp_path("storage_keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let storage_account_keypair = read_keypair_file(&keypair_file).unwrap();
+        let storage_account_pubkey = storage_account_keypair.pubkey();
         let storage_account_string = storage_account_pubkey.to_string();
 
         let test_create_validator_storage_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-validator-storage-account",
             &pubkey_string,
-            &storage_account_string,
+            &keypair_file,
         ]);
         assert_eq!(
             parse_command(&test_create_validator_storage_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account,
+                    storage_account: storage_account_keypair,
                     account_type: StorageAccountType::Validator,
                 },
                 require_keypair: true
             }
         );
+        std::fs::remove_file(&keypair_file).unwrap();
 
         let test_claim_storage_reward = test_commands.clone().get_matches_from(vec![
             "test",

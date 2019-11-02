@@ -37,13 +37,13 @@ impl StakeSubCommands for App<'_, '_> {
             SubCommand::with_name("create-stake-account")
                 .about("Create a stake account")
                 .arg(
-                    Arg::with_name("stake_account_pubkey")
+                    Arg::with_name("stake_account")
                         .index(1)
                         .value_name("STAKE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Address of the stake account to fund (pubkey or keypair)")
+                        .validator(is_keypair)
+                        .help("Keypair of the stake account to fund")
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -709,37 +709,62 @@ pub fn process_delegate_stake(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
+    use solana_sdk::signature::{gen_keypair_file, read_keypair_file};
+
+    fn make_tmp_path(name: &str) -> String {
+        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        let keypair = Keypair::new();
+
+        let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
+
+        // whack any possible collision
+        let _ignored = std::fs::remove_dir_all(&path);
+        // whack any possible collision
+        let _ignored = std::fs::remove_file(&path);
+
+        path
+    }
 
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
-        let stake_account = Keypair::new();
-        let pubkey = stake_account.pubkey();
-        let pubkey_string = format!("{}", pubkey);
+        let keypair_file = make_tmp_path("stake_keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let stake_account_keypair = read_keypair_file(&keypair_file).unwrap();
+        let stake_account_pubkey = stake_account_keypair.pubkey();
+        let stake_account_string = stake_account_pubkey.to_string();
 
         let test_authorize_staker = test_commands.clone().get_matches_from(vec![
             "test",
             "stake-authorize-staker",
-            &pubkey_string,
-            &pubkey_string,
+            &stake_account_string,
+            &stake_account_string,
         ]);
         assert_eq!(
             parse_command(&test_authorize_staker).unwrap(),
             CliCommandInfo {
-                command: CliCommand::StakeAuthorize(pubkey, pubkey, StakeAuthorize::Staker),
+                command: CliCommand::StakeAuthorize(
+                    stake_account_pubkey,
+                    stake_account_pubkey,
+                    StakeAuthorize::Staker
+                ),
                 require_keypair: true
             }
         );
         let test_authorize_withdrawer = test_commands.clone().get_matches_from(vec![
             "test",
             "stake-authorize-withdrawer",
-            &pubkey_string,
-            &pubkey_string,
+            &stake_account_string,
+            &stake_account_string,
         ]);
         assert_eq!(
             parse_command(&test_authorize_withdrawer).unwrap(),
             CliCommandInfo {
-                command: CliCommand::StakeAuthorize(pubkey, pubkey, StakeAuthorize::Withdrawer),
+                command: CliCommand::StakeAuthorize(
+                    stake_account_pubkey,
+                    stake_account_pubkey,
+                    StakeAuthorize::Withdrawer
+                ),
                 require_keypair: true
             }
         );
@@ -752,7 +777,7 @@ mod tests {
         let test_create_stake_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-stake-account",
-            &pubkey_string,
+            &keypair_file,
             "50",
             "--authorized-staker",
             &authorized_string,
@@ -768,7 +793,7 @@ mod tests {
             parse_command(&test_create_stake_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account,
+                    stake_account: stake_account_keypair,
                     staker: Some(authorized),
                     withdrawer: Some(authorized),
                     lockup: Lockup {
@@ -780,22 +805,27 @@ mod tests {
                 require_keypair: true
             }
         );
+        std::fs::remove_file(&keypair_file).unwrap();
+
+        let keypair_file = make_tmp_path("stake_keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let stake_account_keypair = read_keypair_file(&keypair_file).unwrap();
+        let stake_account_pubkey = stake_account_keypair.pubkey();
+        let stake_account_string = stake_account_pubkey.to_string();
+
         let test_create_stake_account2 = test_commands.clone().get_matches_from(vec![
             "test",
             "create-stake-account",
-            &pubkey_string,
+            &keypair_file,
             "50",
             "lamports",
         ]);
 
-        let stake_account = Keypair::new();
-        let pubkey = stake_account.pubkey();
-        let pubkey_string = format!("{}", pubkey);
         assert_eq!(
             parse_command(&test_create_stake_account2).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account,
+                    stake_account: stake_account_keypair,
                     staker: None,
                     withdrawer: None,
                     lockup: Lockup {
@@ -807,6 +837,7 @@ mod tests {
                 require_keypair: true
             }
         );
+        std::fs::remove_file(&keypair_file).unwrap();
 
         // Test DelegateStake Subcommand
         let stake_pubkey = Pubkey::new_rand();
@@ -815,12 +846,12 @@ mod tests {
             "test",
             "delegate-stake",
             &stake_pubkey_string,
-            &pubkey_string,
+            &stake_account_string,
         ]);
         assert_eq!(
             parse_command(&test_delegate_stake).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DelegateStake(stake_pubkey, pubkey, false),
+                command: CliCommand::DelegateStake(stake_pubkey, stake_account_pubkey, false),
                 require_keypair: true
             }
         );
@@ -830,12 +861,12 @@ mod tests {
             "delegate-stake",
             "--force",
             &stake_pubkey_string,
-            &pubkey_string,
+            &stake_account_string,
         ]);
         assert_eq!(
             parse_command(&test_delegate_stake).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DelegateStake(stake_pubkey, pubkey, true),
+                command: CliCommand::DelegateStake(stake_pubkey, stake_account_pubkey, true),
                 require_keypair: true
             }
         );
@@ -845,7 +876,7 @@ mod tests {
             "test",
             "withdraw-stake",
             &stake_pubkey_string,
-            &pubkey_string,
+            &stake_account_string,
             "42",
             "lamports",
         ]);
@@ -853,7 +884,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_withdraw_stake).unwrap(),
             CliCommandInfo {
-                command: CliCommand::WithdrawStake(stake_pubkey, pubkey, 42),
+                command: CliCommand::WithdrawStake(stake_pubkey, stake_account_pubkey, 42),
                 require_keypair: true
             }
         );
