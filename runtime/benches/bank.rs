@@ -9,6 +9,7 @@ use solana_runtime::loader_utils::create_invoke_instruction;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::AsyncClient;
 use solana_sdk::client::SyncClient;
+use solana_sdk::clock::MAX_RECENT_BLOCKHASHES;
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
@@ -172,4 +173,27 @@ fn bench_bank_async_process_builtin_transactions(bencher: &mut Bencher) {
 #[ignore]
 fn bench_bank_async_process_native_loader_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &async_bencher, &create_native_loader_transactions);
+}
+
+#[bench]
+#[ignore]
+fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
+    let (genesis_block, _mint_keypair) = create_genesis_block(100);
+    let mut bank = Arc::new(Bank::new(&genesis_block));
+    goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+    let genesis_blockhash = bank.last_blockhash();
+    // Prime blockhash_queue
+    for i in 0..(MAX_RECENT_BLOCKHASHES + 1) {
+        bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            (i + 1) as u64,
+        ));
+        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+    }
+    // Verify blockhash_queue is full (genesis blockhash has been kicked out)
+    assert!(!bank.check_hash_age(&genesis_blockhash, MAX_RECENT_BLOCKHASHES));
+    bencher.iter(|| {
+        bank.update_recent_blockhashes();
+    });
 }

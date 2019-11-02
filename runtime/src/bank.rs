@@ -537,7 +537,7 @@ impl Bank {
         );
     }
 
-    fn update_recent_blockhashes(&self) {
+    pub fn update_recent_blockhashes(&self) {
         let id = sysvar::recent_blockhashes::id();
         let mut account = self
             .get_account(&id)
@@ -1632,6 +1632,18 @@ impl Drop for Bank {
     }
 }
 
+pub fn goto_end_of_slot(bank: &mut Bank) {
+    let mut tick_hash = bank.last_blockhash();
+    loop {
+        tick_hash = hashv(&[&tick_hash.as_ref(), &[42]]);
+        bank.register_tick(&tick_hash);
+        if tick_hash == bank.last_blockhash() {
+            bank.freeze();
+            return;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2054,18 +2066,6 @@ mod tests {
         // Enough balance
         assert_eq!(bank.withdraw(&key.pubkey(), 2), Ok(()));
         assert_eq!(bank.get_balance(&key.pubkey()), 1);
-    }
-
-    fn goto_end_of_slot(bank: &mut Bank) {
-        let mut tick_hash = bank.last_blockhash();
-        loop {
-            tick_hash = hashv(&[&tick_hash.as_ref(), &[42]]);
-            bank.register_tick(&tick_hash);
-            if tick_hash == bank.last_blockhash() {
-                bank.freeze();
-                return;
-            }
-        }
     }
 
     #[test]
