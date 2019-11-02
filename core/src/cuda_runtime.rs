@@ -67,15 +67,9 @@ pub struct PinnedVec<T> {
     pinnable: bool,
 }
 
-impl Reset for PinnedVec<u8> {
+impl<T: Default + Clone> Reset for PinnedVec<T> {
     fn reset(&mut self) {
-        self.resize(0, 0u8);
-    }
-}
-
-impl Reset for PinnedVec<u32> {
-    fn reset(&mut self) {
-        self.resize(0, 0u32);
+        self.resize(0, T::default());
     }
 }
 

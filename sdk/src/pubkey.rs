@@ -58,6 +58,9 @@ impl Pubkey {
             sol_log_64(0, 0, 0, i as u64, u64::from(*k));
         }
     }
+    pub fn to_bytes(self) -> [u8; 32] {
+        self.0
+    }
 }
 
 impl AsRef<[u8]> for Pubkey {

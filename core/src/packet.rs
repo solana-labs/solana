@@ -62,12 +62,6 @@ impl Reset for Packets {
     }
 }
 
-impl Reset for PinnedVec<Packet> {
-    fn reset(&mut self) {
-        self.resize(0, Packet::default());
-    }
-}
-
 //auto derive doesn't support large arrays
 impl Default for Packets {
     fn default() -> Packets {
