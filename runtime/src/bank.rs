@@ -546,8 +546,7 @@ impl Bank {
         let id = sysvar::recent_blockhashes::id();
         let mut account = self
             .get_account(&id)
-            .or_else(|| Some(sysvar::recent_blockhashes::create_account(1)))
-            .unwrap();
+            .unwrap_or_else(|| sysvar::recent_blockhashes::create_account(1));
         sysvar::recent_blockhashes::update_account(&mut account, recent_blockhashes).unwrap();
         self.store_account(&id, &account);
     }
