@@ -12,17 +12,20 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::contact_info::ContactInfo;
-use crate::crds_gossip::CrdsGossip;
-use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
-use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
-use crate::packet::{to_shared_blob, Blob, Packet, SharedBlob};
-use crate::repair_service::RepairType;
-use crate::result::{Error, Result};
-use crate::sendmmsg::{multicast, send_mmsg};
-use crate::streamer::{BlobReceiver, BlobSender};
-use crate::weighted_shuffle::{weighted_best, weighted_shuffle};
+use crate::crds_value::CrdsValue;
+use crate::{
+    contact_info::ContactInfo,
+    crds_gossip::CrdsGossip,
+    crds_gossip_error::CrdsGossipError,
+    crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+    crds_value::{CrdsData, CrdsValueLabel, EpochSlots, Vote},
+    packet::{to_shared_blob, Blob, Packet, SharedBlob},
+    repair_service::RepairType,
+    result::{Error, Result},
+    sendmmsg::{multicast, send_mmsg},
+    streamer::{BlobReceiver, BlobSender},
+    weighted_shuffle::{weighted_best, weighted_shuffle},
+};
 use bincode::{deserialize, serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
@@ -195,8 +198,8 @@ impl ClusterInfo {
 
     pub fn insert_self(&mut self, contact_info: ContactInfo) {
         if self.id() == contact_info.id {
-            let mut value = CrdsValue::ContactInfo(contact_info.clone());
-            value.sign(&self.keypair);
+            let value =
+                CrdsValue::new_signed(CrdsData::ContactInfo(contact_info.clone()), &self.keypair);
             let _ = self.gossip.crds.insert(value, timestamp());
         }
     }
@@ -205,8 +208,7 @@ impl ClusterInfo {
         let mut my_data = self.my_data();
         let now = timestamp();
         my_data.wallclock = now;
-        let mut entry = CrdsValue::ContactInfo(my_data);
-        entry.sign(&self.keypair);
+        let entry = CrdsValue::new_signed(CrdsData::ContactInfo(my_data), &self.keypair);
         self.gossip.refresh_push_active_set(stakes);
         self.gossip
             .process_push_message(&self.id(), vec![entry], now);
@@ -214,8 +216,7 @@ impl ClusterInfo {
 
     // TODO kill insert_info, only used by tests
     pub fn insert_info(&mut self, contact_info: ContactInfo) {
-        let mut value = CrdsValue::ContactInfo(contact_info);
-        value.sign(&self.keypair);
+        let value = CrdsValue::new_signed(CrdsData::ContactInfo(contact_info), &self.keypair);
         let _ = self.gossip.crds.insert(value, timestamp());
     }
 
@@ -297,8 +298,10 @@ impl ClusterInfo {
 
     pub fn push_epoch_slots(&mut self, id: Pubkey, root: u64, slots: BTreeSet<u64>) {
         let now = timestamp();
-        let mut entry = CrdsValue::EpochSlots(EpochSlots::new(id, root, slots, now));
-        entry.sign(&self.keypair);
+        let entry = CrdsValue::new_signed(
+            CrdsData::EpochSlots(EpochSlots::new(id, root, slots, now)),
+            &self.keypair,
+        );
         self.gossip
             .process_push_message(&self.id(), vec![entry], now);
     }
@@ -306,8 +309,7 @@ impl ClusterInfo {
     pub fn push_vote(&mut self, vote: Transaction) {
         let now = timestamp();
         let vote = Vote::new(&self.id(), vote, now);
-        let mut entry = CrdsValue::Vote(vote);
-        entry.sign(&self.keypair);
+        let entry = CrdsValue::new_signed(CrdsData::Vote(vote), &self.keypair);
         self.gossip
             .process_push_message(&self.id(), vec![entry], now);
     }
@@ -915,7 +917,7 @@ impl ClusterInfo {
             .expect("unable to serialize default filter") as usize;
         let protocol = Protocol::PullRequest(
             CrdsFilter::default(),
-            CrdsValue::ContactInfo(ContactInfo::default()),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default())),
         );
         let protocol_size =
             serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
@@ -1161,9 +1163,7 @@ impl ClusterInfo {
                                 1
                             );
                         } else if caller.contact_info().is_some() {
-                            if caller.contact_info().unwrap().pubkey()
-                                == me.read().unwrap().gossip.id
-                            {
+                            if caller.contact_info().unwrap().id == me.read().unwrap().gossip.id {
                                 warn!("PullRequest ignored, I'm talking to myself");
                                 inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
                             } else {
@@ -2384,7 +2384,8 @@ mod tests {
         }
 
         // now add this message back to the table and make sure after the next pull, the entrypoint is unset
-        let entrypoint_crdsvalue = CrdsValue::ContactInfo(entrypoint.clone());
+        let entrypoint_crdsvalue =
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint.clone()));
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         ClusterInfo::handle_pull_response(
             &cluster_info,
@@ -2401,7 +2402,7 @@ mod tests {
 
     #[test]
     fn test_split_messages_small() {
-        let value = CrdsValue::ContactInfo(ContactInfo::default());
+        let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         test_split_messages(value);
     }
 
@@ -2411,13 +2412,12 @@ mod tests {
         for i in 0..128 {
             btree_slots.insert(i);
         }
-        let value = CrdsValue::EpochSlots(EpochSlots {
+        let value = CrdsValue::new_unsigned(CrdsData::EpochSlots(EpochSlots {
             from: Pubkey::default(),
             root: 0,
             slots: btree_slots,
-            signature: Signature::default(),
             wallclock: 0,
-        });
+        }));
         test_split_messages(value);
     }
 
@@ -2441,7 +2441,7 @@ mod tests {
     }
 
     fn check_pull_request_size(filter: CrdsFilter) {
-        let value = CrdsValue::ContactInfo(ContactInfo::default());
+        let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         let protocol = Protocol::PullRequest(filter, value.clone());
         assert!(serialized_size(&protocol).unwrap() <= PACKET_DATA_SIZE as u64);
     }
