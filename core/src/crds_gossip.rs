@@ -9,7 +9,6 @@ use crate::crds_gossip_pull::{CrdsFilter, CrdsGossipPull};
 use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signable;
 use std::collections::{HashMap, HashSet};
 
 ///The min size for bloom filters
@@ -204,6 +203,7 @@ pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) ->
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
+    use crate::crds_value::CrdsData;
     use solana_sdk::hash::hash;
     use solana_sdk::timing::timestamp;
 
@@ -216,7 +216,10 @@ mod test {
         let prune_pubkey = Pubkey::new(&[2; 32]);
         crds_gossip
             .crds
-            .insert(CrdsValue::ContactInfo(ci.clone()), 0)
+            .insert(
+                CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone())),
+                0,
+            )
             .unwrap();
         crds_gossip.refresh_push_active_set(&HashMap::new());
         let now = timestamp();
