@@ -369,11 +369,12 @@ impl StorageStage {
     fn process_turn(
         storage_keypair: &Arc<Keypair>,
         state: &Arc<RwLock<StorageStateInner>>,
-        _blocktree: &Arc<Blocktree>,
+        blocktree: &Arc<Blocktree>,
         blockhash: Hash,
         slot: Slot,
         slots_per_segment: u64,
         instruction_sender: &InstructionSender,
+        total_proofs: usize,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
         let signature = storage_keypair.sign(&blockhash.as_ref());
@@ -393,6 +394,10 @@ impl StorageStage {
             let mut w_state = state.write().unwrap();
             w_state.slot = slot;
             w_state.storage_blockhash = blockhash;
+        }
+
+        if total_proofs == 0 {
+            return Ok(());
         }
 
         // Regenerate the answers
@@ -427,7 +432,7 @@ impl StorageStage {
             let mut statew = state.write().unwrap();
 
             match chacha_cbc_encrypt_file_many_keys(
-                _blocktree,
+                blocktree,
                 segment as u64,
                 statew.slots_per_segment,
                 &mut statew.storage_keys,
@@ -453,7 +458,8 @@ impl StorageStage {
         account: Account,
         storage_state: &Arc<RwLock<StorageStateInner>>,
         current_key_idx: &mut usize,
-    ) {
+    ) -> usize {
+        let mut proofs_collected = 0;
         if let Ok(StorageContract::ArchiverStorage { proofs, .. }) = account.state() {
             //convert slot to segment
             let segment = get_segment_from_slot(slot, slots_per_segment);
@@ -484,11 +490,13 @@ impl StorageStage {
                             .entry(account_id)
                             .or_default()
                             .push(proof.clone());
+                        proofs_collected += 1;
                     }
                 }
                 debug!("storage proof: slot: {}", slot);
             }
         }
+        proofs_collected
     }
 
     fn process_entries(
@@ -518,8 +526,9 @@ impl StorageStage {
                     let archiver_accounts = archiver_accounts(bank.as_ref());
                     // find proofs, and use them to update
                     // the storage_keys with their signatures
+                    let mut total_proofs = 0;
                     for (account_id, account) in archiver_accounts.into_iter() {
-                        Self::collect_proofs(
+                        total_proofs += Self::collect_proofs(
                             bank.slot(),
                             bank.slots_per_segment(),
                             account_id,
@@ -538,6 +547,7 @@ impl StorageStage {
                         bank.slot(),
                         bank.slots_per_segment(),
                         instruction_sender,
+                        total_proofs,
                     );
                     Self::submit_verifications(
                         get_segment_from_slot(bank.slot(), bank.slots_per_segment()),
