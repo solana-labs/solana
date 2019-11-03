@@ -759,8 +759,28 @@ cat >/solana-scratch/gce-self-destruct.sh <<'EOS'
 $(cat gce-self-destruct.sh)
 EOS
 EOSD
-    cat <<EOSD
+    cat <<'EOSD'
+
+# Populate terminal prompt update script
+cat >/solana-scratch/gce-self-destruct-ps1.sh <<'EOS'
+#!/usr/bin/env bash
+source "$(dirname "$0")/gce-self-destruct.sh"
+gce_self_destruct_ps1
 EOS
+chmod +x /solana-scratch/gce-self-destruct-ps1.sh
+
+# Append MOTD and PS1 replacement to .profile
+cat >>~solana/.profile <<'EOS'
+
+# Print self-destruct countdown on login
+source "/solana-scratch/gce-self-destruct.sh"
+gce_self_destruct_motd
+
+# Add self-destruct countdown to terminal prompt
+export PS1='\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]$(/solana-scratch/gce-self-destruct-ps1.sh):\[\033[01;34m\]\w\[\033[00m\]\$ '
+EOS
+EOSD
+    cat <<EOSD
 
 source /solana-scratch/gce-self-destruct.sh
 gce_self_destruct_setup $selfDestructMinutes
