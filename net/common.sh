@@ -12,8 +12,14 @@ netDir=$(
   echo "$PWD"
 )
 netConfigDir="$netDir"/config
+netLogDateDir="$netDir"/log-$(date +"%Y-%m-%d_%H_%M_%S")
 netLogDir="$netDir"/log
-mkdir -p "$netConfigDir" "$netLogDir"
+if [[ -d $netLogDir && ! -L $netLogDir ]]; then
+  echo "Warning: moving $netLogDir to make way for symlink."
+  mv "$netLogDir" "$netDir"/log.old
+fi
+mkdir -p "$netConfigDir" "$netLogDateDir"
+ln -sf "$netLogDateDir" "$netLogDir"
 
 SOLANA_ROOT="$netDir"/..
 # shellcheck source=scripts/configure-metrics.sh
