@@ -115,7 +115,7 @@ gce_self_destruct_check() {
     declare now gcloudBin
     now=$(date +%s)
     if [[ "$now" -ge "$destruct" ]]; then
-      # XXX: gcloud is installed in /snap/bin, but /snap/bin isn't in root's PATH...
+      # gcloud is installed in /snap/bin, but /snap/bin isn't in root's PATH...
       gcloudBin="$(command -v gcloud)"
       gcloudBin="${gcloudBin:-/snap/bin/gcloud}"
       "$gcloudBin" compute instances delete --quiet "$(hostname)" --zone "$zone"
