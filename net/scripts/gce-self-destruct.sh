@@ -44,21 +44,23 @@ EOF
 }
 
 gce_self_destruct_check() {
-  # shellcheck disable=SC1090
-  source "${__gce_sd_conf}"
-  declare now gcloudBin
-  now=$(date +%s)
-  if [[ "$now" -ge "$destruct" ]]; then
-    # XXX: gcloud is installed in /snap/bin, but /snap/bin isn't in root's PATH...
-    gcloudBin="$(command -v gcloud)"
-    gcloudBin="${gcloudBin:-/snap/bin/gcloud}"
-    "$gcloudBin" compute instances delete --quiet "$(hostname)" --zone "$zone"
-  else
-    at -t "$(unix_to_at_time "$destruct")" <<EOF
+  if [[ -f "${__gce_sd_conf}" ]]; then
+    # shellcheck disable=SC1090
+    source "${__gce_sd_conf}"
+    declare now gcloudBin
+    now=$(date +%s)
+    if [[ "$now" -ge "$destruct" ]]; then
+      # XXX: gcloud is installed in /snap/bin, but /snap/bin isn't in root's PATH...
+      gcloudBin="$(command -v gcloud)"
+      gcloudBin="${gcloudBin:-/snap/bin/gcloud}"
+      "$gcloudBin" compute instances delete --quiet "$(hostname)" --zone "$zone"
+    else
+      at -t "$(unix_to_at_time "$destruct")" <<EOF
 bash -i <<'OEF2'
 source /solana-scratch/gce-self-destruct.sh
 gce_self_destruct_check
 EOF2
 EOF
+    fi
   fi
 }
