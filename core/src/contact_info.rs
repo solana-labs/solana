@@ -1,12 +1,9 @@
-use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 #[cfg(test)]
 use solana_sdk::rpc_port;
 #[cfg(test)]
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::signature::{Signable, Signature};
 use solana_sdk::timing::timestamp;
-use std::borrow::Cow;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, SocketAddr};
 
@@ -14,8 +11,6 @@ use std::net::{IpAddr, SocketAddr};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContactInfo {
     pub id: Pubkey,
-    /// signature of this ContactInfo
-    pub signature: Signature,
     /// gossip address
     pub gossip: SocketAddr,
     /// address to connect to for replication
@@ -89,7 +84,6 @@ impl Default for ContactInfo {
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
             wallclock: 0,
-            signature: Signature::default(),
         }
     }
 }
@@ -111,7 +105,6 @@ impl ContactInfo {
     ) -> Self {
         Self {
             id: *id,
-            signature: Signature::default(),
             gossip,
             tvu,
             tvu_forwards,
@@ -239,51 +232,6 @@ impl ContactInfo {
         } else {
             None
         }
-    }
-}
-
-impl Signable for ContactInfo {
-    fn pubkey(&self) -> Pubkey {
-        self.id
-    }
-
-    fn signable_data(&self) -> Cow<[u8]> {
-        #[derive(Serialize)]
-        struct SignData {
-            id: Pubkey,
-            gossip: SocketAddr,
-            tvu: SocketAddr,
-            tpu: SocketAddr,
-            tpu_forwards: SocketAddr,
-            repair: SocketAddr,
-            storage_addr: SocketAddr,
-            rpc: SocketAddr,
-            rpc_pubsub: SocketAddr,
-            wallclock: u64,
-        }
-
-        let me = self;
-        let data = SignData {
-            id: me.id,
-            gossip: me.gossip,
-            tvu: me.tvu,
-            tpu: me.tpu,
-            storage_addr: me.storage_addr,
-            tpu_forwards: me.tpu_forwards,
-            repair: me.repair,
-            rpc: me.rpc,
-            rpc_pubsub: me.rpc_pubsub,
-            wallclock: me.wallclock,
-        };
-        Cow::Owned(serialize(&data).expect("failed to serialize ContactInfo"))
-    }
-
-    fn get_signature(&self) -> Signature {
-        self.signature
-    }
-
-    fn set_signature(&mut self, signature: Signature) {
-        self.signature = signature
     }
 }
 
