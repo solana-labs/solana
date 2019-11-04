@@ -1,7 +1,7 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-    cluster_info::ClusterInfo, confidence::ForkConfidenceCache, rpc::*, service::Service,
+    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*, service::Service,
     storage_stage::StorageState, validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
@@ -91,7 +91,7 @@ impl JsonRpcService {
         storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
-        fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         ledger_path: &Path,
         genesis_blockhash: Hash,
         validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
@@ -102,7 +102,7 @@ impl JsonRpcService {
             storage_state,
             config,
             bank_forks,
-            fork_confidence_cache,
+            block_commitment_cache,
             validator_exit,
         )));
         let request_processor_ = request_processor.clone();
@@ -199,14 +199,14 @@ mod tests {
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
-        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let mut rpc_service = JsonRpcService::new(
             &cluster_info,
             rpc_addr,
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
-            fork_confidence_cache,
+            block_commitment_cache,
             &PathBuf::from("farf"),
             Hash::default(),
             &validator_exit,

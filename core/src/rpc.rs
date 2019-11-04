@@ -2,7 +2,7 @@
 
 use crate::{
     cluster_info::ClusterInfo,
-    confidence::{BankConfidence, ForkConfidenceCache},
+    commitment::{BlockCommitment, BlockCommitmentCache},
     contact_info::ContactInfo,
     packet::PACKET_DATA_SIZE,
     storage_stage::StorageState,
@@ -53,7 +53,7 @@ impl Default for JsonRpcConfig {
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
-    fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
+    block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     storage_state: StorageState,
     config: JsonRpcConfig,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
@@ -68,12 +68,12 @@ impl JsonRpcRequestProcessor {
         storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
-        fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         JsonRpcRequestProcessor {
             bank_forks,
-            fork_confidence_cache,
+            block_commitment_cache,
             storage_state,
             config,
             validator_exit: validator_exit.clone(),
@@ -116,11 +116,11 @@ impl JsonRpcRequestProcessor {
         (blockhash.to_string(), fee_calculator)
     }
 
-    fn get_block_confidence(&self, block: u64) -> (Option<BankConfidence>, u64) {
-        let r_fork_confidence = self.fork_confidence_cache.read().unwrap();
+    fn get_block_commitment(&self, block: u64) -> (Option<BlockCommitment>, u64) {
+        let r_block_commitment = self.block_commitment_cache.read().unwrap();
         (
-            r_fork_confidence.get_fork_confidence(block).cloned(),
-            r_fork_confidence.total_stake(),
+            r_block_commitment.get_block_commitment(block).cloned(),
+            r_block_commitment.total_stake(),
         )
     }
 
@@ -307,12 +307,12 @@ pub trait RpcSol {
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(&self, _: Self::Metadata) -> Result<RpcEpochInfo>;
 
-    #[rpc(meta, name = "getBlockConfidence")]
-    fn get_block_confidence(
+    #[rpc(meta, name = "getBlockCommitment")]
+    fn get_block_commitment(
         &self,
         _: Self::Metadata,
         _: u64,
-    ) -> Result<(Option<BankConfidence>, u64)>;
+    ) -> Result<(Option<BlockCommitment>, u64)>;
 
     #[rpc(meta, name = "getGenesisBlockhash")]
     fn get_genesis_blockhash(&self, _: Self::Metadata) -> Result<String>;
@@ -504,16 +504,16 @@ impl RpcSol for RpcSolImpl {
         })
     }
 
-    fn get_block_confidence(
+    fn get_block_commitment(
         &self,
         meta: Self::Metadata,
         block: u64,
-    ) -> Result<(Option<BankConfidence>, u64)> {
+    ) -> Result<(Option<BlockCommitment>, u64)> {
         Ok(meta
             .request_processor
             .read()
             .unwrap()
-            .get_block_confidence(block))
+            .get_block_commitment(block))
     }
 
     fn get_genesis_blockhash(&self, meta: Self::Metadata) -> Result<String> {
@@ -769,20 +769,24 @@ pub mod tests {
         blockhash: Hash,
         alice: Keypair,
         leader_pubkey: Pubkey,
-        fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     }
 
     fn start_rpc_handler_with_tx(pubkey: &Pubkey) -> RpcHandler {
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
 
-        let confidence_slot0 = BankConfidence::new([8; MAX_LOCKOUT_HISTORY]);
-        let confidence_slot1 = BankConfidence::new([9; MAX_LOCKOUT_HISTORY]);
-        let mut bank_confidence: HashMap<u64, BankConfidence> = HashMap::new();
-        bank_confidence.entry(0).or_insert(confidence_slot0.clone());
-        bank_confidence.entry(1).or_insert(confidence_slot1.clone());
-        let fork_confidence_cache =
-            Arc::new(RwLock::new(ForkConfidenceCache::new(bank_confidence, 42)));
+        let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
+        let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY]);
+        let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
+        block_commitment
+            .entry(0)
+            .or_insert(commitment_slot0.clone());
+        block_commitment
+            .entry(1)
+            .or_insert(commitment_slot1.clone());
+        let block_commitment_cache =
+            Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
 
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
@@ -799,7 +803,7 @@ pub mod tests {
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
-            fork_confidence_cache.clone(),
+            block_commitment_cache.clone(),
             &validator_exit,
         )));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
@@ -829,7 +833,7 @@ pub mod tests {
             blockhash,
             alice,
             leader_pubkey,
-            fork_confidence_cache,
+            block_commitment_cache,
         }
     }
 
@@ -840,12 +844,12 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
-        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
-            fork_confidence_cache,
+            block_commitment_cache,
             &validator_exit,
         );
         thread::spawn(move || {
@@ -1255,7 +1259,7 @@ pub mod tests {
     fn test_rpc_send_bad_tx() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -1266,7 +1270,7 @@ pub mod tests {
                     StorageState::default(),
                     JsonRpcConfig::default(),
                     new_bank_forks().0,
-                    fork_confidence_cache,
+                    block_commitment_cache,
                     &validator_exit,
                 );
                 Arc::new(RwLock::new(request_processor))
@@ -1353,12 +1357,12 @@ pub mod tests {
     fn test_rpc_request_processor_config_default_trait_validator_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
             new_bank_forks().0,
-            fork_confidence_cache,
+            block_commitment_cache,
             &validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
@@ -1369,14 +1373,14 @@ pub mod tests {
     fn test_rpc_request_processor_allow_validator_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             config,
             new_bank_forks().0,
-            fork_confidence_cache,
+            block_commitment_cache,
             &validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
@@ -1405,16 +1409,20 @@ pub mod tests {
     }
 
     #[test]
-    fn test_rpc_processor_get_block_confidence() {
+    fn test_rpc_processor_get_block_commitment() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let confidence_slot0 = BankConfidence::new([8; MAX_LOCKOUT_HISTORY]);
-        let confidence_slot1 = BankConfidence::new([9; MAX_LOCKOUT_HISTORY]);
-        let mut bank_confidence: HashMap<u64, BankConfidence> = HashMap::new();
-        bank_confidence.entry(0).or_insert(confidence_slot0.clone());
-        bank_confidence.entry(1).or_insert(confidence_slot1.clone());
-        let fork_confidence_cache =
-            Arc::new(RwLock::new(ForkConfidenceCache::new(bank_confidence, 42)));
+        let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
+        let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY]);
+        let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
+        block_commitment
+            .entry(0)
+            .or_insert(commitment_slot0.clone());
+        block_commitment
+            .entry(1)
+            .or_insert(commitment_slot1.clone());
+        let block_commitment_cache =
+            Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
 
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
@@ -1422,36 +1430,36 @@ pub mod tests {
             StorageState::default(),
             config,
             new_bank_forks().0,
-            fork_confidence_cache,
+            block_commitment_cache,
             &validator_exit,
         );
         assert_eq!(
-            request_processor.get_block_confidence(0),
-            (Some(confidence_slot0), 42)
+            request_processor.get_block_commitment(0),
+            (Some(commitment_slot0), 42)
         );
         assert_eq!(
-            request_processor.get_block_confidence(1),
-            (Some(confidence_slot1), 42)
+            request_processor.get_block_commitment(1),
+            (Some(commitment_slot1), 42)
         );
-        assert_eq!(request_processor.get_block_confidence(2), (None, 42));
+        assert_eq!(request_processor.get_block_commitment(2), (None, 42));
     }
 
     #[test]
-    fn test_rpc_get_block_confidence() {
+    fn test_rpc_get_block_commitment() {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler {
             io,
             meta,
-            fork_confidence_cache,
+            block_commitment_cache,
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockConfidence","params":[0]}}"#);
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[0]}}"#);
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let (confidence, total_staked): (Option<BankConfidence>, u64) =
+        let (commitment, total_staked): (Option<BlockCommitment>, u64) =
             if let Response::Single(res) = result {
                 if let Output::Success(res) = res {
                     serde_json::from_value(res.result).unwrap()
@@ -1462,21 +1470,21 @@ pub mod tests {
                 panic!("Expected single response");
             };
         assert_eq!(
-            confidence,
-            fork_confidence_cache
+            commitment,
+            block_commitment_cache
                 .read()
                 .unwrap()
-                .get_fork_confidence(0)
+                .get_block_commitment(0)
                 .cloned()
         );
         assert_eq!(total_staked, 42);
 
         let req =
-            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockConfidence","params":[2]}}"#);
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[2]}}"#);
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let (confidence, total_staked): (Option<BankConfidence>, u64) =
+        let (commitment, total_staked): (Option<BlockCommitment>, u64) =
             if let Response::Single(res) = result {
                 if let Output::Success(res) = res {
                     serde_json::from_value(res.result).unwrap()
@@ -1486,7 +1494,7 @@ pub mod tests {
             } else {
                 panic!("Expected single response");
             };
-        assert_eq!(confidence, None);
+        assert_eq!(commitment, None);
         assert_eq!(total_staked, 42);
     }
 }

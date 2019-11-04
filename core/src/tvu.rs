@@ -14,7 +14,7 @@
 
 use crate::blockstream_service::BlockstreamService;
 use crate::cluster_info::ClusterInfo;
-use crate::confidence::ForkConfidenceCache;
+use crate::commitment::BlockCommitmentCache;
 use crate::ledger_cleanup_service::LedgerCleanupService;
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
@@ -82,7 +82,7 @@ impl Tvu {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
-        fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         sigverify_disabled: bool,
     ) -> Self
     where
@@ -171,7 +171,7 @@ impl Tvu {
             leader_schedule_cache,
             vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
             snapshot_package_sender,
-            fork_confidence_cache,
+            block_commitment_cache,
         );
 
         let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
@@ -279,7 +279,7 @@ pub mod tests {
         let voting_keypair = Keypair::new();
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(&Arc::new(voting_keypair)),
@@ -304,7 +304,7 @@ pub mod tests {
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
-            fork_confidence_cache,
+            block_commitment_cache,
             false,
         );
         exit.store(true, Ordering::Relaxed);

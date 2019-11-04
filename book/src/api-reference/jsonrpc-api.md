@@ -17,7 +17,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [confirmTransaction](jsonrpc-api.md#confirmtransaction)
 * [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 * [getBalance](jsonrpc-api.md#getbalance)
-* [getBlockConfidence](jsonrpc-api.md#getblockconfidence)
+* [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
@@ -151,9 +151,9 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 {"jsonrpc":"2.0","result":0,"id":1}
 ```
 
-### getBlockConfidence
+### getBlockCommitment
 
-Returns confidence for particular block
+Returns commitment for particular block
 
 #### Parameters:
 
@@ -163,20 +163,20 @@ Returns confidence for particular block
 
 The result field will be an array with two fields:
 
-* Confidence
+* Commitment
   * `null` - Unknown block
-  * `object` - BankConfidence
-    * `array` - confidence, array of u64 integers logging the amount of cluster stake in lamports that has voted on the block at each depth from 0 to `MAX_LOCKOUT_HISTORY`
+  * `object` - BlockCommitment
+    * `array` - commitment, array of u64 integers logging the amount of cluster stake in lamports that has voted on the block at each depth from 0 to `MAX_LOCKOUT_HISTORY`
 * 'integer' - total active stake, in lamports, of the current epoch
 
 #### Example:
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getBlockConfidence","params":[5]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":[{"confidence":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32]},42],"id":1}
+{"jsonrpc":"2.0","result":[{"commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32]},42],"id":1}
 ```
 
 ### getClusterNodes
