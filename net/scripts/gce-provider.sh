@@ -197,6 +197,7 @@ cloud_CreateInstances() {
     --image "$imageName"
     --maintenance-policy TERMINATE
     --restart-on-failure
+    --scopes compute-rw
   )
 
   # shellcheck disable=SC2206 # Do not want to quote $imageName as it may contain extra args

@@ -78,6 +78,7 @@ letsEncryptDomainName=
 enableGpu=false
 customMachineType=
 customAddress=
+selfDestructHours=8
 zones=()
 
 containsZone() {
@@ -151,6 +152,9 @@ Manage testnet instances
                       (by default preemptible instances are used to reduce
                       cost).  Note that the bootstrap leader, archiver,
                       blockstreamer and client nodes are always dedicated.
+   --self-destruct-hours [number]
+                    - Specify lifetime of the allocated instances in hours. 0 to
+                      disable. Only supported on GCE. (default: $selfDestructHours)
 
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -199,6 +203,15 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --custom-machine-type ]]; then
       customMachineType="$2"
+      shift 2
+    elif [[ $1 == --self-destruct-hours ]]; then
+      maybeTimeout=$2
+      if [[ $maybeTimeout =~ ^[0-9]+$ ]]; then
+        selfDestructHours=$maybeTimeout
+      else
+        echo "  Invalid parameter ($maybeTimeout) to $1"
+        usage 1
+      fi
       shift 2
     else
       usage "Unknown long option: $1"
@@ -736,6 +749,42 @@ $(
 
   if [[ -n $validatorAdditionalDiskSizeInGb ]]; then
     cat mount-additional-disk.sh
+  fi
+
+  if [[ $selfDestructHours -gt 0 ]]; then
+    cat <<EOSD
+
+# Setup GCE self-destruct
+cat >/solana-scratch/gce-self-destruct.sh <<'EOS'
+$(cat gce-self-destruct.sh)
+EOS
+EOSD
+    cat <<'EOSD'
+
+# Populate terminal prompt update script
+cat >/solana-scratch/gce-self-destruct-ps1.sh <<'EOS'
+#!/usr/bin/env bash
+source "$(dirname "$0")/gce-self-destruct.sh"
+gce_self_destruct_ps1
+EOS
+chmod +x /solana-scratch/gce-self-destruct-ps1.sh
+
+# Append MOTD and PS1 replacement to .profile
+cat >>~solana/.profile <<'EOS'
+
+# Print self-destruct countdown on login
+source "/solana-scratch/gce-self-destruct.sh"
+gce_self_destruct_motd
+
+# Add self-destruct countdown to terminal prompt
+export PS1='\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]$(/solana-scratch/gce-self-destruct-ps1.sh):\[\033[01;34m\]\w\[\033[00m\]\$ '
+EOS
+EOSD
+    cat <<EOSD
+
+source /solana-scratch/gce-self-destruct.sh
+gce_self_destruct_setup $selfDestructHours
+EOSD
   fi
 )
 

@@ -291,6 +291,7 @@ if ! $skipCreate; then
     -c "$clientNodeCount"
     -n "$additionalValidatorCount"
     --dedicated
+    --self-destruct-hours 0
   )
 
   if [[ -n $bootstrapValidatorAddress ]]; then
