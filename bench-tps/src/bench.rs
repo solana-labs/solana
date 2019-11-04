@@ -159,6 +159,9 @@ where
     let mut i = keypair0_balance;
     let mut blockhash = Hash::default();
     let mut blockhash_time = Instant::now();
+
+    println!("Starting to send txs at                {:?}", start);
+
     while start.elapsed() < duration {
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
@@ -206,6 +209,10 @@ where
 
     // Stop the sampling threads so it will collect the stats
     exit_signal.store(true, Ordering::Relaxed);
+    println!(
+        "Stopped the sampling threads at        {:?}",
+        Instant::now()
+    );
 
     info!("Waiting for validator threads...");
     for t in v_threads {

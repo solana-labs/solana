@@ -33,8 +33,9 @@ pub fn sample_txs<T>(
     let mut last_txs = initial_txs;
 
     println!(
-        "Starting sample at slot {}",
-        client.get_slot().expect("Start slot")
+        "Starting sample at slot {}, time       {:?}",
+        client.get_slot().expect("Start slot"),
+        now
     );
 
     loop {
@@ -87,8 +88,9 @@ pub fn sample_txs<T>(
                 .push((client.tpu_addr(), stats));
 
             println!(
-                "Stopped sampling, slot is {}",
-                client.get_slot().expect("End slot")
+                "Stopped sampling, slot is {}, time is {:?}",
+                client.get_slot().expect("End slot"),
+                now
             );
             return;
         }
