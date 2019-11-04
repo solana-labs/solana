@@ -1,7 +1,7 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::{create_keyed_read_only_accounts, Account, KeyedAccount, LamportCredit};
+use solana_sdk::account::{create_keyed_read_only_accounts, Account, KeyedAccount};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -280,7 +280,6 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
-        credits: &mut [&mut LamportCredit],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         assert_eq!(instruction.accounts.len(), program_accounts.len());
@@ -298,21 +297,17 @@ impl MessageProcessor {
 
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
         // Verify the instruction
-        for (pre_account, (i, post_account, is_writable)) in
+        for (pre_account, (post_account, is_writable)) in
             pre_accounts
                 .iter()
                 .zip(program_accounts.iter().enumerate().map(|(i, account)| {
                     (
-                        i,
                         account,
                         message.is_writable(instruction.accounts[i] as usize),
                     )
                 }))
         {
             verify_instruction(is_writable, &program_id, pre_account, post_account)?;
-            if !is_writable {
-                *credits[i] += post_account.lamports - pre_account.lamports;
-            }
         }
         // The total sum of all the lamports in all the accounts cannot change.
         let post_total: u128 = program_accounts
@@ -334,7 +329,6 @@ impl MessageProcessor {
         message: &Message,
         loaders: &mut [Vec<(Pubkey, Account)>],
         accounts: &mut [Account],
-        credits: &mut [LamportCredit],
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_index = message
@@ -346,14 +340,11 @@ impl MessageProcessor {
             // TODO: `get_subset_unchecked_mut` panics on an index out of bounds if an executable
             // account is also included as a regular account for an instruction, because the
             // executable account is not passed in as part of the accounts slice
-            let mut instruction_credits = get_subset_unchecked_mut(credits, &instruction.accounts)
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             self.execute_instruction(
                 message,
                 instruction,
                 executable_accounts,
                 &mut program_accounts,
-                &mut instruction_credits,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -463,9 +454,14 @@ mod tests {
             "system program should be able to change the account owner"
         );
         assert_eq!(
-            change_owner(&system_program_id, &system_program_id, &alice_program_id, false),
+            change_owner(
+                &system_program_id,
+                &system_program_id,
+                &alice_program_id,
+                false
+            ),
             Err(InstructionError::ModifiedProgramId),
-            "system program should not be able to change the account owner of a credit only account"
+            "system program should not be able to change the account owner of a read-only account"
         );
         assert_eq!(
             change_owner(
@@ -716,9 +712,9 @@ mod tests {
     fn test_process_message_read_only_handling() {
         #[derive(Serialize, Deserialize)]
         enum MockSystemInstruction {
-            Correct { lamports: u64 },
-            AttemptDebit { lamports: u64 },
-            Misbehave { lamports: u64 },
+            Correct,
+            AttemptCredit { lamports: u64 },
+            AttemptDataChange { data: u8 },
         }
 
         fn mock_system_process_instruction(
@@ -728,20 +724,15 @@ mod tests {
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
-                    MockSystemInstruction::Correct { lamports } => {
+                    MockSystemInstruction::Correct => Ok(()),
+                    MockSystemInstruction::AttemptCredit { lamports } => {
                         keyed_accounts[0].account.lamports -= lamports;
                         keyed_accounts[1].account.lamports += lamports;
                         Ok(())
                     }
-                    MockSystemInstruction::AttemptDebit { lamports } => {
-                        keyed_accounts[0].account.lamports += lamports;
-                        keyed_accounts[1].account.lamports -= lamports;
-                        Ok(())
-                    }
-                    // Credit a read-only account for more lamports than debited
-                    MockSystemInstruction::Misbehave { lamports } => {
-                        keyed_accounts[0].account.lamports -= lamports;
-                        keyed_accounts[1].account.lamports = 2 * lamports;
+                    // Change data in a read-only account
+                    MockSystemInstruction::AttemptDataChange { data } => {
+                        keyed_accounts[1].account.data = vec![data];
                         Ok(())
                     }
                 }
@@ -773,27 +764,22 @@ mod tests {
         ];
         let message = Message::new(vec![Instruction::new(
             mock_system_program_id,
-            &MockSystemInstruction::Correct { lamports: 50 },
+            &MockSystemInstruction::Correct,
             account_metas.clone(),
         )]);
-        let mut deltas = vec![0, 0];
 
-        let result =
-            message_processor.process_message(&message, &mut loaders, &mut accounts, &mut deltas);
+        let result = message_processor.process_message(&message, &mut loaders, &mut accounts);
         assert_eq!(result, Ok(()));
-        assert_eq!(accounts[0].lamports, 50);
-        assert_eq!(accounts[1].lamports, 50);
-        assert_eq!(deltas, vec![0, 50]);
+        assert_eq!(accounts[0].lamports, 100);
+        assert_eq!(accounts[1].lamports, 0);
 
         let message = Message::new(vec![Instruction::new(
             mock_system_program_id,
-            &MockSystemInstruction::AttemptDebit { lamports: 50 },
+            &MockSystemInstruction::AttemptCredit { lamports: 50 },
             account_metas.clone(),
         )]);
-        let mut deltas = vec![0, 0];
 
-        let result =
-            message_processor.process_message(&message, &mut loaders, &mut accounts, &mut deltas);
+        let result = message_processor.process_message(&message, &mut loaders, &mut accounts);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -804,18 +790,16 @@ mod tests {
 
         let message = Message::new(vec![Instruction::new(
             mock_system_program_id,
-            &MockSystemInstruction::Misbehave { lamports: 50 },
+            &MockSystemInstruction::AttemptDataChange { data: 50 },
             account_metas,
         )]);
-        let mut deltas = vec![0, 0];
 
-        let result =
-            message_processor.process_message(&message, &mut loaders, &mut accounts, &mut deltas);
+        let result = message_processor.process_message(&message, &mut loaders, &mut accounts);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::UnbalancedInstruction
+                InstructionError::ReadOnlyDataModified
             ))
         );
     }

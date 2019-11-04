@@ -594,7 +594,6 @@ impl Bank {
 
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
-            self.commit_credits();
             self.collect_fees();
 
             // freeze is a one-way trip, idempotent
@@ -807,15 +806,10 @@ impl Bank {
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector
-    /// Bank::process_transactions method, and commits read-only credits.
+    /// Bank::process_transactions method
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let txs = vec![tx.clone()];
         self.process_transactions(&txs)[0].clone()?;
-        // Call this instead of commit_credits(), so that the read-only locks hashmap on this
-        // bank isn't deleted
-        self.rc
-            .accounts
-            .commit_credits_unsafe(&self.ancestors, self.slot());
         tx.signatures
             .get(0)
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
@@ -1061,10 +1055,10 @@ impl Bank {
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
-                Ok((accounts, loaders, credits, _rents)) => {
+                Ok((accounts, loaders, _rents)) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
                     self.message_processor
-                        .process_message(tx.message(), loaders, accounts, credits)
+                        .process_message(tx.message(), loaders, accounts)
                 }
             })
             .collect();
@@ -1595,12 +1589,6 @@ impl Bank {
         );
     }
 
-    fn commit_credits(&self) {
-        self.rc
-            .accounts
-            .commit_credits(&self.ancestors, self.slot());
-    }
-
     pub fn purge_zero_lamport_accounts(&self) {
         self.rc
             .accounts
@@ -1646,19 +1634,18 @@ mod tests {
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_block::create_genesis_block,
         hash,
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::InstructionError,
         message::{Message, MessageHeader},
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, KeypairUtil},
-        system_instruction::{self, SystemInstruction},
-        system_program, system_transaction,
+        system_instruction,
         sysvar::{fees::Fees, rewards::Rewards},
     };
     use solana_stake_api::stake_state::Stake;
     use solana_vote_api::{
         vote_instruction,
-        vote_state::{VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
+        vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
     use std::{io::Cursor, time::Duration};
     use tempfile::TempDir;
@@ -1881,7 +1868,6 @@ mod tests {
         let t1 = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_block.hash());
         let t2 = system_transaction::transfer(&mint_keypair, &key2, 1, genesis_block.hash());
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
-        bank.commit_credits();
 
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
@@ -2234,57 +2220,75 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
     }
 
-    fn transfer_read_only(
-        from: &Keypair,
-        to: &Pubkey,
-        lamports: u64,
-        recent_blockhash: Hash,
-    ) -> Transaction {
-        Transaction::new_signed_instructions(
-            &[from],
-            vec![Instruction::new(
-                system_program::id(),
-                &SystemInstruction::Transfer { lamports },
-                vec![
-                    AccountMeta::new(from.pubkey(), true),
-                    AccountMeta::new_read_only(*to, false),
-                ],
-            )],
-            recent_blockhash,
-        )
-    }
-
     #[test]
     fn test_read_only_accounts() {
-        let (genesis_block, mint_keypair) = create_genesis_block(100);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block_with_leader(500, &Pubkey::new_rand(), 0);
         let bank = Bank::new(&genesis_block);
+
+        let vote_pubkey0 = Pubkey::new_rand();
+        let vote_pubkey1 = Pubkey::new_rand();
+        let vote_pubkey2 = Pubkey::new_rand();
+        let authorized_voter = Keypair::new();
         let payer0 = Keypair::new();
         let payer1 = Keypair::new();
-        let recipient = Keypair::new();
-        // Fund additional payers
-        bank.transfer(3, &mint_keypair, &payer0.pubkey()).unwrap();
-        bank.transfer(3, &mint_keypair, &payer1.pubkey()).unwrap();
-        let tx0 = transfer_read_only(&mint_keypair, &recipient.pubkey(), 1, genesis_block.hash());
-        let tx1 = transfer_read_only(&payer0, &recipient.pubkey(), 1, genesis_block.hash());
-        let tx2 = transfer_read_only(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
-        let txs = vec![tx0, tx1, tx2];
+
+        // Create vote accounts
+        let vote_account0 =
+            vote_state::create_account(&vote_pubkey0, &authorized_voter.pubkey(), 0, 100);
+        let vote_account1 =
+            vote_state::create_account(&vote_pubkey1, &authorized_voter.pubkey(), 0, 100);
+        let vote_account2 =
+            vote_state::create_account(&vote_pubkey2, &authorized_voter.pubkey(), 0, 100);
+        bank.store_account(&vote_pubkey0, &vote_account0);
+        bank.store_account(&vote_pubkey1, &vote_account1);
+        bank.store_account(&vote_pubkey2, &vote_account2);
+
+        // Fund payers
+        bank.transfer(10, &mint_keypair, &payer0.pubkey()).unwrap();
+        bank.transfer(10, &mint_keypair, &payer1.pubkey()).unwrap();
+        bank.transfer(1, &mint_keypair, &authorized_voter.pubkey())
+            .unwrap();
+
+        let vote = Vote::new(vec![1], Hash::default());
+        let ix0 = vote_instruction::vote(&vote_pubkey0, &authorized_voter.pubkey(), vote.clone());
+        let tx0 = Transaction::new_signed_with_payer(
+            vec![ix0],
+            Some(&payer0.pubkey()),
+            &[&payer0, &authorized_voter],
+            bank.last_blockhash(),
+        );
+        let ix1 = vote_instruction::vote(&vote_pubkey1, &authorized_voter.pubkey(), vote.clone());
+        let tx1 = Transaction::new_signed_with_payer(
+            vec![ix1],
+            Some(&payer1.pubkey()),
+            &[&payer1, &authorized_voter],
+            bank.last_blockhash(),
+        );
+        let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
 
-        // If multiple transactions attempt to deposit into the same account, they should succeed,
-        // since System Transfer `To` accounts are given read-only handling
+        // If multiple transactions attempt to read the same account, they should succeed.
+        // Vote authorized_voter and sysvar accounts are given read-only handling
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Ok(()));
-        assert_eq!(results[2], Ok(()));
-        assert_eq!(bank.get_balance(&recipient.pubkey()), 3);
 
-        let tx0 = system_transaction::transfer(
-            &mint_keypair,
-            &recipient.pubkey(),
-            2,
-            genesis_block.hash(),
+        let ix0 = vote_instruction::vote(&vote_pubkey2, &authorized_voter.pubkey(), vote.clone());
+        let tx0 = Transaction::new_signed_with_payer(
+            vec![ix0],
+            Some(&payer0.pubkey()),
+            &[&payer0, &authorized_voter],
+            bank.last_blockhash(),
         );
-        let tx1 =
-            system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
+        let tx1 = system_transaction::transfer(
+            &authorized_voter,
+            &Pubkey::new_rand(),
+            1,
+            bank.last_blockhash(),
+        );
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
         // However, an account may not be locked as read-only and read-write at the same time.

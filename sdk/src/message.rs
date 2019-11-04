@@ -227,16 +227,16 @@ impl Message {
     }
 
     pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
-        let mut credit_debit_keys = vec![];
+        let mut read_write_keys = vec![];
         let mut read_only_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
             if self.is_writable(i) {
-                credit_debit_keys.push(key);
+                read_write_keys.push(key);
             } else {
                 read_only_keys.push(key);
             }
         }
-        (credit_debit_keys, read_only_keys)
+        (read_write_keys, read_only_keys)
     }
 }
 
