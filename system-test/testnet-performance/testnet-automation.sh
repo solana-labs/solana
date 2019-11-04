@@ -20,12 +20,14 @@ function analyze_packet_loss {
     # shellcheck disable=SC1091
     source net/config/config
     mkdir -p iftop-logs
+    echo --- Collecting iftop logs
     # shellcheck disable=SC2154
     for ip in "${validatorIpList[@]}" ; do
       iftop_log=iftop-logs/"$ip"-iftop.log
       net/ssh.sh solana@"$ip" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log' "$ip" > "$iftop_log"
       upload-ci-artifact "$iftop_log"
     done
+    echo --- Analyzing Packet Loss
     if [[ -n $CHANNEL ]]; then
       solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
     else
@@ -62,7 +64,6 @@ function cleanup_testnet {
 
   (
     set +e
-    echo --- Analyzing Packet Loss
     analyze_packet_loss
   )
 
