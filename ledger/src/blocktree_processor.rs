@@ -534,6 +534,7 @@ pub mod tests {
     };
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
+    use solana_sdk::account::Account;
     use solana_sdk::{
         epoch_schedule::EpochSchedule,
         hash::Hash,
@@ -1576,6 +1577,10 @@ pub mod tests {
         }
         let mut hash = bank.last_blockhash();
 
+        let present_account_key = Keypair::new();
+        let present_account = Account::new(1, 10, &Pubkey::default());
+        bank.store_account(&present_account_key.pubkey(), &present_account);
+
         let entries: Vec<_> = (0..NUM_TRANSFERS)
             .step_by(NUM_TRANSFERS_PER_ENTRY)
             .map(|i| {
@@ -1592,7 +1597,7 @@ pub mod tests {
 
                 transactions.push(system_transaction::create_account(
                     &mint_keypair,
-                    &solana_sdk::sysvar::clock::id(), // puts a TX error in results
+                    &present_account_key, // puts a TX error in results
                     bank.last_blockhash(),
                     1,
                     0,
@@ -1926,6 +1931,10 @@ pub mod tests {
                 .expect("funding failed");
         }
 
+        let present_account_key = Keypair::new();
+        let present_account = Account::new(1, 10, &Pubkey::default());
+        bank.store_account(&present_account_key.pubkey(), &present_account);
+
         let mut i = 0;
         let mut hash = bank.last_blockhash();
         let mut root: Option<Arc<Bank>> = None;
@@ -1947,7 +1956,7 @@ pub mod tests {
 
                         transactions.push(system_transaction::create_account(
                             &mint_keypair,
-                            &solana_sdk::sysvar::clock::id(), // puts a TX error in results
+                            &present_account_key, // puts a TX error in results
                             bank.last_blockhash(),
                             100,
                             100,
