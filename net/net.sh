@@ -812,7 +812,7 @@ stopNode() {
       PS4=\"$PS4\"
       set -x
       ! tmux list-sessions || tmux kill-session
-      sudo=
+      declare sudo=
       if sudo true; then
       sudo="sudo -n"
       fi
