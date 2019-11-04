@@ -114,11 +114,16 @@ impl BlockhashQueue {
         }
         None
     }
+
+    pub fn get_recent_blockhashes(&self) -> impl Iterator<Item = (u64, &Hash)> {
+        (&self.ages).iter().map(|(k, v)| (v.hash_height, k))
+    }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     use bincode::serialize;
+    use solana_sdk::clock::MAX_RECENT_BLOCKHASHES;
     use solana_sdk::hash::hash;
 
     #[test]
@@ -149,5 +154,22 @@ mod tests {
         hash_queue.register_hash(&last_hash, &FeeCalculator::default());
         assert_eq!(last_hash, hash_queue.last_hash());
         assert!(hash_queue.check_hash_age(&last_hash, 0));
+    }
+
+    #[test]
+    fn test_get_recent_blockhashes() {
+        let mut blockhash_queue = BlockhashQueue::new(MAX_RECENT_BLOCKHASHES);
+        let recent_blockhashes = blockhash_queue.get_recent_blockhashes();
+        // Sanity-check an empty BlockhashQueue
+        assert_eq!(recent_blockhashes.count(), 0);
+        for i in 0..MAX_RECENT_BLOCKHASHES {
+            let hash = hash(&serialize(&i).unwrap());
+            blockhash_queue.register_hash(&hash, &FeeCalculator::default());
+        }
+        let recent_blockhashes = blockhash_queue.get_recent_blockhashes();
+        // Verify that the returned hashes are most recent
+        for (_slot, hash) in recent_blockhashes {
+            assert!(blockhash_queue.check_hash_age(hash, MAX_RECENT_BLOCKHASHES));
+        }
     }
 }

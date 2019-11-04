@@ -5,6 +5,7 @@ use crate::pubkey::Pubkey;
 pub mod clock;
 pub mod epoch_schedule;
 pub mod fees;
+pub mod recent_blockhashes;
 pub mod rent;
 pub mod rewards;
 pub mod slot_hashes;
@@ -14,6 +15,7 @@ pub fn is_sysvar_id(id: &Pubkey) -> bool {
     clock::check_id(id)
         || epoch_schedule::check_id(id)
         || fees::check_id(id)
+        || recent_blockhashes::check_id(id)
         || rent::check_id(id)
         || rewards::check_id(id)
         || slot_hashes::check_id(id)

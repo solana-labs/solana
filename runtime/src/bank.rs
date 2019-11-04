@@ -291,6 +291,7 @@ impl Bank {
         bank.update_clock();
         bank.update_rent();
         bank.update_epoch_schedule();
+        bank.update_recent_blockhashes();
         bank
     }
 
@@ -385,6 +386,7 @@ impl Bank {
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
         new.update_fees();
+        new.update_recent_blockhashes();
         new
     }
 
@@ -536,6 +538,15 @@ impl Bank {
         self.capitalization.fetch_add(
             (validator_rewards + storage_rewards) as u64,
             Ordering::Relaxed,
+        );
+    }
+
+    pub fn update_recent_blockhashes(&self) {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        let recent_blockhash_iter = blockhash_queue.get_recent_blockhashes();
+        self.store_account(
+            &sysvar::recent_blockhashes::id(),
+            &sysvar::recent_blockhashes::create_account_with_data(1, recent_blockhash_iter),
         );
     }
 
@@ -1599,6 +1610,18 @@ impl Drop for Bank {
     }
 }
 
+pub fn goto_end_of_slot(bank: &mut Bank) {
+    let mut tick_hash = bank.last_blockhash();
+    loop {
+        tick_hash = hashv(&[&tick_hash.as_ref(), &[42]]);
+        bank.register_tick(&tick_hash);
+        if tick_hash == bank.last_blockhash() {
+            bank.freeze();
+            return;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2021,18 +2044,6 @@ mod tests {
         // Enough balance
         assert_eq!(bank.withdraw(&key.pubkey(), 2), Ok(()));
         assert_eq!(bank.get_balance(&key.pubkey()), 1);
-    }
-
-    fn goto_end_of_slot(bank: &mut Bank) {
-        let mut tick_hash = bank.last_blockhash();
-        loop {
-            tick_hash = hashv(&[&tick_hash.as_ref(), &[42]]);
-            bank.register_tick(&tick_hash);
-            if tick_hash == bank.last_blockhash() {
-                bank.freeze();
-                return;
-            }
-        }
     }
 
     #[test]
@@ -3321,5 +3332,23 @@ mod tests {
 
         // Non-native loader accounts can not be used for instruction processing
         bank.add_instruction_processor(mint_keypair.pubkey(), mock_ix_processor);
+    }
+
+    #[test]
+    fn test_recent_blockhashes_sysvar() {
+        let (genesis_block, _mint_keypair) = create_genesis_block(500);
+        let mut bank = Arc::new(Bank::new(&genesis_block));
+        for i in 1..5 {
+            let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
+            let recent_blockhashes =
+                sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
+            // Check length
+            assert_eq!(recent_blockhashes.len(), i);
+            let most_recent_hash = recent_blockhashes.iter().nth(0).unwrap();
+            // Check order
+            assert!(bank.check_hash_age(most_recent_hash, 0));
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
     }
 }
