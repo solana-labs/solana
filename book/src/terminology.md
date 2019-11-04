@@ -18,6 +18,10 @@ The result of interpreting all programs on the ledger at a given [tick height](t
 
 A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [vote](terminology.md#ledger-vote). A [leader](terminology.md#leader) produces at most one block per [slot](terminology.md#slot).
 
+## blockhash
+
+The hash over a bank's state upon freeze.  Used to historically identify the block originated from the bank.
+
 ## block height
 
 The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height one.
