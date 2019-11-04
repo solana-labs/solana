@@ -21,7 +21,11 @@ fn bench_verify_instruction_data(bencher: &mut Bencher) {
 
     let owner = Pubkey::new_rand();
     let non_owner = Pubkey::new_rand();
-    let pre = PreAccount::new(&Account::new(0, BUFSIZE, &owner), true, &owner);
+    let pre = PreAccount::new(
+        &Account::new(0, BUFSIZE, &owner),
+        true,
+        need_account_data_checked(&owner, &owner, true),
+    );
     let post = Account::new(0, BUFSIZE, &owner);
     assert_eq!(verify_instruction(&owner, &pre, &post), Ok(()));
 
@@ -32,7 +36,11 @@ fn bench_verify_instruction_data(bencher: &mut Bencher) {
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data no change by owner: {} ns/iter", summary.median);
 
-    let pre = PreAccount::new(&Account::new(0, BUFSIZE, &owner), true, &non_owner);
+    let pre = PreAccount::new(
+        &Account::new(0, BUFSIZE, &owner),
+        true,
+        need_account_data_checked(&owner, &non_owner, true),
+    );
     match pre.data {
         Some(ref data) => bencher.iter(|| *data == post.data),
         None => panic!("No data!"),
