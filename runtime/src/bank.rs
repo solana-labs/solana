@@ -807,11 +807,11 @@ impl Bank {
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector
-    /// Bank::process_transactions method, and commits credit-only credits.
+    /// Bank::process_transactions method, and commits read-only credits.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let txs = vec![tx.clone()];
         self.process_transactions(&txs)[0].clone()?;
-        // Call this instead of commit_credits(), so that the credit-only locks hashmap on this
+        // Call this instead of commit_credits(), so that the read-only locks hashmap on this
         // bank isn't deleted
         self.rc
             .accounts
@@ -2234,7 +2234,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
     }
 
-    fn transfer_credit_only(
+    fn transfer_read_only(
         from: &Keypair,
         to: &Pubkey,
         lamports: u64,
@@ -2247,7 +2247,7 @@ mod tests {
                 &SystemInstruction::Transfer { lamports },
                 vec![
                     AccountMeta::new(from.pubkey(), true),
-                    AccountMeta::new_credit_only(*to, false),
+                    AccountMeta::new_read_only(*to, false),
                 ],
             )],
             recent_blockhash,
@@ -2255,7 +2255,7 @@ mod tests {
     }
 
     #[test]
-    fn test_credit_only_accounts() {
+    fn test_read_only_accounts() {
         let (genesis_block, mint_keypair) = create_genesis_block(100);
         let bank = Bank::new(&genesis_block);
         let payer0 = Keypair::new();
@@ -2264,14 +2264,14 @@ mod tests {
         // Fund additional payers
         bank.transfer(3, &mint_keypair, &payer0.pubkey()).unwrap();
         bank.transfer(3, &mint_keypair, &payer1.pubkey()).unwrap();
-        let tx0 = transfer_credit_only(&mint_keypair, &recipient.pubkey(), 1, genesis_block.hash());
-        let tx1 = transfer_credit_only(&payer0, &recipient.pubkey(), 1, genesis_block.hash());
-        let tx2 = transfer_credit_only(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
+        let tx0 = transfer_read_only(&mint_keypair, &recipient.pubkey(), 1, genesis_block.hash());
+        let tx1 = transfer_read_only(&payer0, &recipient.pubkey(), 1, genesis_block.hash());
+        let tx2 = transfer_read_only(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
 
         // If multiple transactions attempt to deposit into the same account, they should succeed,
-        // since System Transfer `To` accounts are given credit-only handling
+        // since System Transfer `To` accounts are given read-only handling
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Ok(()));
         assert_eq!(results[2], Ok(()));
@@ -2287,7 +2287,7 @@ mod tests {
             system_transaction::transfer(&recipient, &payer0.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
-        // However, an account may not be locked as credit-only and credit-debit at the same time.
+        // However, an account may not be locked as read-only and read-write at the same time.
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));
     }
@@ -2326,7 +2326,7 @@ mod tests {
     }
 
     #[test]
-    fn test_credit_only_relaxed_locks() {
+    fn test_read_only_relaxed_locks() {
         let (genesis_block, _) = create_genesis_block(3);
         let bank = Bank::new(&genesis_block);
         let key0 = Keypair::new();
@@ -2337,8 +2337,8 @@ mod tests {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
-                num_credit_only_signed_accounts: 0,
-                num_credit_only_unsigned_accounts: 1,
+                num_read_only_signed_accounts: 0,
+                num_read_only_unsigned_accounts: 1,
             },
             account_keys: vec![key0.pubkey(), key3],
             recent_blockhash: Hash::default(),
@@ -2350,13 +2350,13 @@ mod tests {
         let batch0 = bank.prepare_batch(&txs, None);
         assert!(batch0.lock_results()[0].is_ok());
 
-        // Try locking accounts, locking a previously credit-only account as credit-debit
+        // Try locking accounts, locking a previously read-only account as read-write
         // should fail
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
-                num_credit_only_signed_accounts: 0,
-                num_credit_only_unsigned_accounts: 0,
+                num_read_only_signed_accounts: 0,
+                num_read_only_unsigned_accounts: 0,
             },
             account_keys: vec![key1.pubkey(), key3],
             recent_blockhash: Hash::default(),
@@ -2368,12 +2368,12 @@ mod tests {
         let batch1 = bank.prepare_batch(&txs, None);
         assert!(batch1.lock_results()[0].is_err());
 
-        // Try locking a previously credit-only account a 2nd time; should succeed
+        // Try locking a previously read-only account a 2nd time; should succeed
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
-                num_credit_only_signed_accounts: 0,
-                num_credit_only_unsigned_accounts: 1,
+                num_read_only_signed_accounts: 0,
+                num_read_only_unsigned_accounts: 1,
             },
             account_keys: vec![key2.pubkey(), key3],
             recent_blockhash: Hash::default(),

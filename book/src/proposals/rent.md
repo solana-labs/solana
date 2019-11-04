@@ -32,7 +32,7 @@ Collecting rent on an as-needed basis \(i.e. whenever accounts were loaded/acces
 
 * accounts loaded as "credit only" for a transaction could very reasonably be expected to have rent due,
 
-  but would not be debitable during any such transaction
+  but would not be writable during any such transaction
 
 * a mechanism to "beat the bushes" \(i.e. go find accounts that need to pay rent\) is desirable,
 

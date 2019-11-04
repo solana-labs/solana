@@ -1,9 +1,7 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::{
-    create_keyed_credit_only_accounts, Account, KeyedAccount, LamportCredit,
-};
+use solana_sdk::account::{create_keyed_read_only_accounts, Account, KeyedAccount, LamportCredit};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -59,7 +57,7 @@ fn get_subset_unchecked_mut<'a, T>(
 }
 
 pub fn verify_instruction(
-    is_debitable: bool,
+    is_writable: bool,
     program_id: &Pubkey,
     pre: &Account,
     post: &Account,
@@ -67,10 +65,10 @@ pub fn verify_instruction(
     // Verify the transaction
 
     // Only the owner of the account may change owner and
-    //   only if the account is credit-debit and
+    //   only if the account is read-write and
     //   only if the data is zero-initialized or empty
     if pre.owner != post.owner
-        && (!is_debitable // line coverage used to get branch coverage
+        && (!is_writable // line coverage used to get branch coverage
             || *program_id != pre.owner // line coverage used to get branch coverage
             || !is_zeroed(&post.data))
     {
@@ -84,11 +82,11 @@ pub fn verify_instruction(
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
 
-    // The balance of credit-only accounts may only increase.
-    if !is_debitable // line coverage used to get branch coverage
-        && pre.lamports > post.lamports
+    // The balance of read-only accounts may not change.
+    if !is_writable // line coverage used to get branch coverage
+        && pre.lamports != post.lamports
     {
-        return Err(InstructionError::CreditOnlyLamportSpend);
+        return Err(InstructionError::ReadOnlyLamportChange);
     }
 
     // Only the system program can change the size of the data
@@ -126,16 +124,16 @@ pub fn verify_instruction(
         return Err(InstructionError::ExternalAccountDataModified);
     }
 
-    // Credit-only account data may not change.
-    if !is_debitable // line coverage used to get branch coverage
+    // Read-only account data may not change.
+    if !is_writable // line coverage used to get branch coverage
         && data_changed()
     {
-        return Err(InstructionError::CreditOnlyDataModified);
+        return Err(InstructionError::ReadOnlyDataModified);
     }
 
     // executable is one-way (false->true) and only the account owner may set it.
     if pre.executable != post.executable
-        && (!is_debitable // line coverage used to get branch coverage
+        && (!is_writable // line coverage used to get branch coverage
             || pre.executable // line coverage used to get branch coverage
             || *program_id != pre.owner)
     {
@@ -227,26 +225,26 @@ impl MessageProcessor {
             &mut loader_ix_data,
         );
 
-        let mut keyed_accounts = create_keyed_credit_only_accounts(executable_accounts);
+        let mut keyed_accounts = create_keyed_read_only_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
             .accounts
             .iter()
             .map(|&index| {
                 let index = index as usize;
                 let key = &message.account_keys[index];
-                let is_debitable = message.is_debitable(index);
+                let is_writable = message.is_writable(index);
                 (
                     key,
                     index < message.header.num_required_signatures as usize,
-                    is_debitable,
+                    is_writable,
                 )
             })
             .zip(program_accounts.iter_mut())
-            .map(|((key, is_signer, is_debitable), account)| {
-                if is_debitable {
+            .map(|((key, is_signer, is_writable), account)| {
+                if is_writable {
                     KeyedAccount::new(key, is_signer, account)
                 } else {
-                    KeyedAccount::new_credit_only(key, is_signer, account)
+                    KeyedAccount::new_read_only(key, is_signer, account)
                 }
             })
             .collect();
@@ -300,19 +298,19 @@ impl MessageProcessor {
 
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
         // Verify the instruction
-        for (pre_account, (i, post_account, is_debitable)) in
+        for (pre_account, (i, post_account, is_writable)) in
             pre_accounts
                 .iter()
                 .zip(program_accounts.iter().enumerate().map(|(i, account)| {
                     (
                         i,
                         account,
-                        message.is_debitable(instruction.accounts[i] as usize),
+                        message.is_writable(instruction.accounts[i] as usize),
                     )
                 }))
         {
-            verify_instruction(is_debitable, &program_id, pre_account, post_account)?;
-            if !is_debitable {
+            verify_instruction(is_writable, &program_id, pre_account, post_account)?;
+            if !is_writable {
                 *credits[i] += post_account.lamports - pre_account.lamports;
             }
         }
@@ -440,10 +438,10 @@ mod tests {
             ix: &Pubkey,
             pre: &Pubkey,
             post: &Pubkey,
-            is_debitable: bool,
+            is_writable: bool,
         ) -> Result<(), InstructionError> {
             verify_instruction(
-                is_debitable,
+                is_writable,
                 &ix,
                 &Account::new(0, 0, pre),
                 &Account::new(0, 0, post),
@@ -517,7 +515,7 @@ mod tests {
     fn test_verify_instruction_change_executable() {
         let owner = Pubkey::new_rand();
         let change_executable = |program_id: &Pubkey,
-                                 is_debitable: bool,
+                                 is_writable: bool,
                                  pre_executable: bool,
                                  post_executable: bool|
          -> Result<(), InstructionError> {
@@ -532,7 +530,7 @@ mod tests {
                 executable: post_executable,
                 ..Account::default()
             };
-            verify_instruction(is_debitable, &program_id, &pre, &post)
+            verify_instruction(is_writable, &program_id, &pre, &post)
         };
 
         let mallory_program_id = Pubkey::new_rand();
@@ -551,7 +549,7 @@ mod tests {
         assert_eq!(
             change_executable(&owner, false, false, true),
             Err(InstructionError::ExecutableModified),
-            "system program can't modify executable of credit-only accounts"
+            "system program can't modify executable of read-only accounts"
         );
         assert_eq!(
             change_executable(&owner, true, true, false),
@@ -596,10 +594,10 @@ mod tests {
         let alice_program_id = Pubkey::new_rand();
 
         let change_data =
-            |program_id: &Pubkey, is_debitable: bool| -> Result<(), InstructionError> {
+            |program_id: &Pubkey, is_writable: bool| -> Result<(), InstructionError> {
                 let pre = Account::new_data(0, &[0], &alice_program_id).unwrap();
                 let post = Account::new_data(0, &[42], &alice_program_id).unwrap();
-                verify_instruction(is_debitable, &program_id, &pre, &post)
+                verify_instruction(is_writable, &program_id, &pre, &post)
             };
 
         let mallory_program_id = Pubkey::new_rand();
@@ -617,7 +615,7 @@ mod tests {
 
         assert_eq!(
             change_data(&alice_program_id, false),
-            Err(InstructionError::CreditOnlyDataModified),
+            Err(InstructionError::ReadOnlyDataModified),
             "alice isn't allowed to touch a CO account"
         );
     }
@@ -670,7 +668,7 @@ mod tests {
         );
         assert_eq!(
             verify_instruction(false, &alice_program_id, &pre, &post,),
-            Err(InstructionError::CreditOnlyLamportSpend),
+            Err(InstructionError::ReadOnlyLamportChange),
             "debit should fail, even if owning program"
         );
 
@@ -715,7 +713,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_message_credit_only_handling() {
+    fn test_process_message_read_only_handling() {
         #[derive(Serialize, Deserialize)]
         enum MockSystemInstruction {
             Correct { lamports: u64 },
@@ -740,7 +738,7 @@ mod tests {
                         keyed_accounts[1].account.lamports -= lamports;
                         Ok(())
                     }
-                    // Credit a credit-only account for more lamports than debited
+                    // Credit a read-only account for more lamports than debited
                     MockSystemInstruction::Misbehave { lamports } => {
                         keyed_accounts[0].account.lamports -= lamports;
                         keyed_accounts[1].account.lamports = 2 * lamports;
@@ -771,7 +769,7 @@ mod tests {
         let to_pubkey = Pubkey::new_rand();
         let account_metas = vec![
             AccountMeta::new(from_pubkey, true),
-            AccountMeta::new_credit_only(to_pubkey, false),
+            AccountMeta::new_read_only(to_pubkey, false),
         ];
         let message = Message::new(vec![Instruction::new(
             mock_system_program_id,
@@ -800,7 +798,7 @@ mod tests {
             result,
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::CreditOnlyLamportSpend
+                InstructionError::ReadOnlyLamportChange
             ))
         );
 
