@@ -1640,11 +1640,13 @@ mod tests {
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_block::create_genesis_block,
         hash,
-        instruction::InstructionError,
+        instruction::{AccountMeta, Instruction, InstructionError},
+        message::{Message, MessageHeader},
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, KeypairUtil},
-        system_instruction, system_transaction,
+        system_instruction::{self, SystemInstruction},
+        system_program, system_transaction,
         sysvar::{fees::Fees, rewards::Rewards},
     };
     use solana_stake_api::stake_state::Stake;
@@ -2226,6 +2228,26 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
     }
 
+    fn transfer_credit_only(
+        from: &Keypair,
+        to: &Pubkey,
+        lamports: u64,
+        recent_blockhash: Hash,
+    ) -> Transaction {
+        Transaction::new_signed_instructions(
+            &[from],
+            vec![Instruction::new(
+                system_program::id(),
+                &SystemInstruction::Transfer { lamports },
+                vec![
+                    AccountMeta::new(from.pubkey(), true),
+                    AccountMeta::new_credit_only(*to, false),
+                ],
+            )],
+            recent_blockhash,
+        )
+    }
+
     #[test]
     fn test_credit_only_accounts() {
         let (genesis_block, mint_keypair) = create_genesis_block(100);
@@ -2236,16 +2258,9 @@ mod tests {
         // Fund additional payers
         bank.transfer(3, &mint_keypair, &payer0.pubkey()).unwrap();
         bank.transfer(3, &mint_keypair, &payer1.pubkey()).unwrap();
-        let tx0 = system_transaction::transfer(
-            &mint_keypair,
-            &recipient.pubkey(),
-            1,
-            genesis_block.hash(),
-        );
-        let tx1 =
-            system_transaction::transfer(&payer0, &recipient.pubkey(), 1, genesis_block.hash());
-        let tx2 =
-            system_transaction::transfer(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
+        let tx0 = transfer_credit_only(&mint_keypair, &recipient.pubkey(), 1, genesis_block.hash());
+        let tx1 = transfer_credit_only(&payer0, &recipient.pubkey(), 1, genesis_block.hash());
+        let tx2 = transfer_credit_only(&payer1, &recipient.pubkey(), 1, genesis_block.hash());
         let txs = vec![tx0, tx1, tx2];
         let results = bank.process_transactions(&txs);
 
@@ -2306,8 +2321,6 @@ mod tests {
 
     #[test]
     fn test_credit_only_relaxed_locks() {
-        use solana_sdk::message::{Message, MessageHeader};
-
         let (genesis_block, _) = create_genesis_block(3);
         let bank = Bank::new(&genesis_block);
         let key0 = Keypair::new();
