@@ -78,7 +78,7 @@ letsEncryptDomainName=
 enableGpu=false
 customMachineType=
 customAddress=
-selfDestructMinutes=480 # 8hrs
+selfDestructHours=8
 zones=()
 
 containsZone() {
@@ -152,9 +152,9 @@ Manage testnet instances
                       (by default preemptible instances are used to reduce
                       cost).  Note that the bootstrap leader, archiver,
                       blockstreamer and client nodes are always dedicated.
-   --self-destruct-minutes [number]
-                    - Specify lifetime of the allocated instances in minutes. 0 to
-                      disable. Only supported on GCE. (default: $selfDestructMinutes)
+   --self-destruct-hours [number]
+                    - Specify lifetime of the allocated instances in hours. 0 to
+                      disable. Only supported on GCE. (default: $selfDestructHours)
 
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -204,10 +204,10 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --custom-machine-type ]]; then
       customMachineType="$2"
       shift 2
-    elif [[ $1 == --self-destruct-minutes ]]; then
+    elif [[ $1 == --self-destruct-hours ]]; then
       maybeTimeout=$2
       if [[ $maybeTimeout =~ ^[0-9]+$ ]]; then
-        selfDestructMinutes=$maybeTimeout
+        selfDestructHours=$maybeTimeout
       else
         echo "  Invalid parameter ($maybeTimeout) to $1"
         usage 1
@@ -751,7 +751,7 @@ $(
     cat mount-additional-disk.sh
   fi
 
-  if [[ $selfDestructMinutes -gt 0 ]]; then
+  if [[ $selfDestructHours -gt 0 ]]; then
     cat <<EOSD
 
 # Setup GCE self-destruct
@@ -783,7 +783,7 @@ EOSD
     cat <<EOSD
 
 source /solana-scratch/gce-self-destruct.sh
-gce_self_destruct_setup $selfDestructMinutes
+gce_self_destruct_setup $selfDestructHours
 EOSD
   fi
 )

@@ -18,8 +18,8 @@ unix_to_at_time() {
 
 timeout_to_destruct() {
   declare timeout_sec now_unix
-  declare timeout_min=$1
-  timeout_sec=$((timeout_min * 60))
+  declare timeout_hrs=$1
+  timeout_sec=$((timeout_hrs * 60 * 60))
   now_unix=$(date +%s)
   echo $((now_unix + timeout_sec))
 }

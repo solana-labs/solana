@@ -340,7 +340,7 @@ if ! $skipCreate; then
 
   # Disable GCE self-destruct
   if [[ "$cloudProvider" == "gce" ]]; then
-    create_args+=( --self-destruct-minutes 0 )
+    create_args+=( --self-destruct-hours 0 )
   fi
 
   time net/"$cloudProvider".sh create "${create_args[@]}"
