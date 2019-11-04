@@ -291,6 +291,7 @@ if ! $skipCreate; then
     -c "$clientNodeCount"
     -n "$additionalValidatorCount"
     --dedicated
+    --self-destruct-hours 0
   )
 
   if [[ -n $bootstrapValidatorAddress ]]; then
@@ -336,11 +337,6 @@ if ! $skipCreate; then
   if [[ -n $maybeValidatorAdditionalDiskSize ]]; then
     # shellcheck disable=SC2206 # Do not want to quote
     create_args+=($maybeValidatorAdditionalDiskSize)
-  fi
-
-  # Disable GCE self-destruct
-  if [[ "$cloudProvider" == "gce" ]]; then
-    create_args+=( --self-destruct-hours 0 )
   fi
 
   time net/"$cloudProvider".sh create "${create_args[@]}"
