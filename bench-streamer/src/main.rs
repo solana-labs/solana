@@ -1,6 +1,6 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
-use solana_core::packet::PacketsRecycler;
-use solana_core::packet::{Packet, Packets, BLOB_SIZE, PACKET_DATA_SIZE};
+use solana_core::blob::BLOB_SIZE;
+use solana_core::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
 use solana_core::result::Result;
 use solana_core::streamer::{receiver, PacketReceiver};
 use std::cmp::max;

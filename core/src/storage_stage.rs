@@ -418,7 +418,7 @@ impl StorageStage {
         // TODO: cuda required to generate the reference values
         // but if it is missing, then we need to take care not to
         // process storage mining results.
-        if solana_ledger::perf_libs::api().is_some() {
+        if solana_perf::perf_libs::api().is_some() {
             // Lock the keys, since this is the IV memory,
             // it will be updated in-place by the encryption.
             // Should be overwritten by the proof signatures which replace the

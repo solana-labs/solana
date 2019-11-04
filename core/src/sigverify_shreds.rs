@@ -1,7 +1,5 @@
 #![allow(clippy::implicit_hasher)]
-use crate::cuda_runtime::PinnedVec;
 use crate::packet::{Packet, Packets};
-use crate::recycler::Recycler;
 use crate::sigverify::{self, TxOffset};
 use crate::sigverify_stage::SigVerifier;
 use bincode::deserialize;
@@ -14,9 +12,11 @@ use sha2::{Digest, Sha512};
 use solana_ed25519_dalek::{Keypair, PublicKey, SecretKey};
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::perf_libs;
 use solana_ledger::shred::ShredType;
 use solana_metrics::inc_new_counter_debug;
+use solana_perf::cuda_runtime::PinnedVec;
+use solana_perf::perf_libs;
+use solana_perf::recycler::Recycler;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};

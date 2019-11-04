@@ -12,7 +12,7 @@ pub mod genesis_utils;
 pub mod leader_schedule;
 pub mod leader_schedule_cache;
 pub mod leader_schedule_utils;
-pub mod perf_libs;
+pub mod packet;
 pub mod poh;
 pub mod rooted_slot_iterator;
 pub mod shred;

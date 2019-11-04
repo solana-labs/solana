@@ -414,7 +414,7 @@ pub fn main() {
         .get_matches();
 
     if matches.is_present("cuda") {
-        solana_ledger::perf_libs::init_cuda();
+        solana_perf::perf_libs::init_cuda();
     }
 
     let mut validator_config = ValidatorConfig::default();

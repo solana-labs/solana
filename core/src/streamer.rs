@@ -1,7 +1,8 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::packet::{Blob, Packets, PacketsRecycler, SharedBlobs, PACKETS_PER_BATCH};
+use crate::blob::{Blob, SharedBlobs};
+use crate::packet::{self, Packets, PacketsRecycler, PACKETS_PER_BATCH};
 use crate::recvmmsg::NUM_RCVMMSGS;
 use crate::result::{Error, Result};
 use solana_sdk::timing::duration_as_ms;
@@ -36,7 +37,7 @@ fn recv_loop(
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if let Ok(len) = msgs.recv_from(sock) {
+            if let Ok(len) = packet::recv_from(&mut msgs, sock) {
                 if len == NUM_RCVMMSGS {
                     num_max_received += 1;
                 }
@@ -160,9 +161,10 @@ pub fn blob_receiver(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
-    use crate::recycler::Recycler;
+    use crate::blob::{Blob, SharedBlob};
+    use crate::packet::{Packet, Packets, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder};
+    use solana_perf::recycler::Recycler;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;

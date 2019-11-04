@@ -3,9 +3,9 @@
 extern crate test;
 
 use solana_core::packet::to_packets;
-use solana_core::recycler::Recycler;
 use solana_core::sigverify;
 use solana_core::test_tx::test_tx;
+use solana_perf::recycler::Recycler;
 use test::Bencher;
 
 #[bench]

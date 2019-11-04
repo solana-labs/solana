@@ -275,7 +275,7 @@ mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
-    use crate::packet::{Meta, Packet, Packets};
+    use crate::packet::{self, Meta, Packet, Packets};
     use solana_ledger::blocktree::create_new_tmp_ledger;
     use solana_ledger::blocktree_processor::{process_blocktree, ProcessOptions};
     use solana_netutil::find_available_port_in_range;
@@ -327,7 +327,7 @@ mod tests {
         // it should send this over the sockets.
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        packets.recv_from(&me_retransmit).unwrap();
+        packet::recv_from(&mut packets, &me_retransmit).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
 
@@ -343,7 +343,7 @@ mod tests {
         let packets = Packets::new(vec![repair, Packet::default()]);
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        packets.recv_from(&me_retransmit).unwrap();
+        packet::recv_from(&mut packets, &me_retransmit).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
     }

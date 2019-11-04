@@ -1,10 +1,9 @@
 use crate::{
+    blob::to_shared_blob,
     chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE},
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
-    packet::to_shared_blob,
-    recycler::Recycler,
     repair_service,
     repair_service::{RepairService, RepairSlotRange, RepairStrategy},
     result::{Error, Result},
@@ -25,6 +24,7 @@ use solana_ledger::{
     blocktree::Blocktree, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
 };
 use solana_netutil::bind_in_range;
+use solana_perf::recycler::Recycler;
 use solana_sdk::{
     account_utils::State,
     client::{AsyncClient, SyncClient},
