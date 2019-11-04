@@ -356,7 +356,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         },
         ("pay", Some(matches)) => {
             let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
-            let to = value_of(&matches, "to").unwrap();
+            let to = pubkey_of(&matches, "to").unwrap();
             let timestamp = if matches.is_present("timestamp") {
                 // Parse input for serde_json
                 let date_string = if !matches.value_of("timestamp").unwrap().contains('Z') {
@@ -1288,10 +1288,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("TO PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey)
+                        .validator(is_pubkey_or_keypair)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
