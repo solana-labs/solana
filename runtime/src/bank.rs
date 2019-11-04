@@ -693,9 +693,6 @@ impl Bank {
         //  / ticks/slot
             / self.ticks_per_slot as f64;
 
-        // make bank 0 votable
-        self.is_delta.store(true, Ordering::Relaxed);
-
         self.epoch_schedule = genesis_block.epoch_schedule;
 
         self.inflation = genesis_block.inflation;
@@ -2940,19 +2937,14 @@ mod tests {
         let bank0 = Arc::new(Bank::new(&genesis_block));
         let key1 = Keypair::new();
 
-        // The zeroth bank is not empty because it processes transactions
-        assert_eq!(bank0.is_empty(), false);
-
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-
-        // The first bank is empty becasue there are no transactions
-        assert_eq!(bank1.is_empty(), true);
+        // The zeroth bank is empty becasue there are no transactions
+        assert_eq!(bank0.is_empty(), true);
 
         // Set is_delta to true, bank is no longer empty
         let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash());
-        assert_eq!(bank1.process_transaction(&tx_transfer_mint_to_1), Ok(()));
-        assert_eq!(bank1.is_empty(), false);
+        assert_eq!(bank0.process_transaction(&tx_transfer_mint_to_1), Ok(()));
+        assert_eq!(bank0.is_empty(), false);
     }
 
     #[test]
