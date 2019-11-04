@@ -1,42 +1,51 @@
 //! The `validator` module hosts all the validator microservices.
 
-use crate::broadcast_stage::BroadcastStageType;
-use crate::cluster_info::{ClusterInfo, Node};
-use crate::confidence::ForkConfidenceCache;
-use crate::contact_info::ContactInfo;
-use crate::gossip_service::{discover_cluster, GossipService};
-use crate::poh_recorder::PohRecorder;
-use crate::poh_service::PohService;
-use crate::rpc::JsonRpcConfig;
-use crate::rpc_pubsub_service::PubSubService;
-use crate::rpc_service::JsonRpcService;
-use crate::rpc_subscriptions::RpcSubscriptions;
-use crate::service::Service;
-use crate::sigverify;
-use crate::storage_stage::StorageState;
-use crate::tpu::Tpu;
-use crate::tvu::{Sockets, Tvu};
-use solana_ledger::bank_forks::{BankForks, SnapshotConfig};
-use solana_ledger::blocktree::{Blocktree, CompletedSlotsReceiver};
-use solana_ledger::blocktree_processor::{self, BankForksInfo};
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::snapshot_utils;
+use crate::{
+    broadcast_stage::BroadcastStageType,
+    cluster_info::{ClusterInfo, Node},
+    confidence::ForkConfidenceCache,
+    contact_info::ContactInfo,
+    gossip_service::{discover_cluster, GossipService},
+    poh_recorder::PohRecorder,
+    poh_service::PohService,
+    rpc::JsonRpcConfig,
+    rpc_pubsub_service::PubSubService,
+    rpc_service::JsonRpcService,
+    rpc_subscriptions::RpcSubscriptions,
+    service::Service,
+    sigverify,
+    storage_stage::StorageState,
+    tpu::Tpu,
+    tvu::{Sockets, Tvu},
+};
+use solana_ledger::{
+    bank_forks::{BankForks, SnapshotConfig},
+    blocktree::{Blocktree, CompletedSlotsReceiver},
+    blocktree_processor::{self, BankForksInfo},
+    leader_schedule_cache::LeaderScheduleCache,
+    snapshot_utils,
+};
 use solana_metrics::datapoint_info;
-use solana_sdk::clock::{Slot, DEFAULT_SLOTS_PER_TURN};
-use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::Hash;
-use solana_sdk::poh_config::PohConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::timestamp;
+use solana_sdk::{
+    clock::{Slot, DEFAULT_SLOTS_PER_TURN},
+    genesis_block::GenesisBlock,
+    hash::Hash,
+    poh_config::PohConfig,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    timing::timestamp,
+};
 
-use std::fs;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread::Result;
+use std::{
+    fs,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::{Path, PathBuf},
+    process,
+    sync::atomic::{AtomicBool, Ordering},
+    sync::mpsc::Receiver,
+    sync::{Arc, Mutex, RwLock},
+    thread::Result,
+};
 
 #[derive(Clone, Debug)]
 pub struct ValidatorConfig {
@@ -126,6 +135,20 @@ impl Validator {
                 "dis"
             }
         );
+
+        // Validator binaries built on a machine with AVX support will generate invalid opcodes
+        // when run on machines without AVX causing a non-obvious process abort.  Instead detect
+        // the mismatch and error cleanly.
+        #[target_feature(enable = "avx")]
+        {
+            if is_x86_feature_detected!("avx") {
+                info!("AVX detected");
+            } else {
+                error!("Your machine does not have AVX support, please rebuild from source on your machine");
+                process::exit(1);
+            }
+        }
+
         info!("entrypoint: {:?}", entrypoint_info_option);
 
         Self::print_node_info(&node);
@@ -517,8 +540,7 @@ pub fn new_banks_from_blocktree(
                 "Delete the ledger directory to continue: {:?}",
                 blocktree_path
             );
-            // TODO: bubble error up to caller?
-            std::process::exit(1);
+            process::exit(1);
         }
     }
 
