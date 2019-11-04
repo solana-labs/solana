@@ -2,10 +2,9 @@
 //!
 //! this account carries history about stake activations and de-activations
 //!
-use crate::account_info::AccountInfo;
 pub use crate::clock::Epoch;
-use crate::{account::Account, sysvar};
-use bincode::serialized_size;
+
+use crate::{account::Account, sysvar::Sysvar};
 use std::ops::Deref;
 
 const ID: [u8; 32] = [
@@ -13,7 +12,11 @@ const ID: [u8; 32] = [
     87, 184, 86, 108, 197, 55, 95, 244, 0, 0, 0,
 ];
 
-crate::solana_sysvar_id!(ID, "SysvarStakeHistory1111111111111111111111111");
+crate::solana_sysvar_id!(
+    ID,
+    "SysvarStakeHistory1111111111111111111111111",
+    StakeHistory
+);
 
 pub const MAX_STAKE_HISTORY: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
@@ -28,27 +31,13 @@ pub struct StakeHistoryEntry {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
 pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
 
-impl StakeHistory {
-    pub fn from_account(account: &Account) -> Option<Self> {
-        account.deserialize_data().ok()
+impl Sysvar for StakeHistory {
+    fn biggest() -> Self {
+        StakeHistory(vec![(0, StakeHistoryEntry::default()); MAX_STAKE_HISTORY])
     }
-    pub fn to_account(&self, account: &mut Account) -> Option<()> {
-        account.serialize_data(self).ok()
-    }
-    pub fn from_account_info(account: &AccountInfo) -> Option<Self> {
-        account.deserialize_data().ok()
-    }
-    pub fn to_account_info(&self, account: &mut AccountInfo) -> Option<()> {
-        account.serialize_data(self).ok()
-    }
-    pub fn size_of() -> usize {
-        serialized_size(&StakeHistory(vec![
-            (0, StakeHistoryEntry::default());
-            MAX_STAKE_HISTORY
-        ]))
-        .unwrap() as usize
-    }
+}
 
+impl StakeHistory {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn get(&self, epoch: &Epoch) -> Option<&StakeHistoryEntry> {
         self.binary_search_by(|probe| epoch.cmp(&probe.0))
@@ -73,9 +62,7 @@ impl Deref for StakeHistory {
 }
 
 pub fn create_account(lamports: u64, stake_history: &StakeHistory) -> Account {
-    let mut account = Account::new(lamports, StakeHistory::size_of(), &sysvar::id());
-    stake_history.to_account(&mut account).unwrap();
-    account
+    stake_history.create_account(lamports)
 }
 
 use crate::account::KeyedAccount;

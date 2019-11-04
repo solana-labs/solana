@@ -15,7 +15,7 @@ use solana_sdk::{
     instruction_processor_utils::{limited_deserialize, DecodeError},
     pubkey::Pubkey,
     system_instruction,
-    sysvar::{self, rent},
+    sysvar::{self, clock::Clock, slot_hashes::SlotHashes, Sysvar},
 };
 
 /// Reasons the stake might have had an error
@@ -182,7 +182,7 @@ pub fn process_instruction(
             if rest.is_empty() {
                 return Err(InstructionError::InvalidInstructionData);
             }
-            rent::verify_rent_exemption(me, &rest[0])?;
+            sysvar::rent::verify_rent_exemption(me, &rest[0])?;
             vote_state::initialize_account(me, &vote_init)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
@@ -197,8 +197,8 @@ pub fn process_instruction(
 
             vote_state::process_vote(
                 me,
-                &sysvar::slot_hashes::from_keyed_account(&slot_hashes_and_clock[0])?,
-                &sysvar::clock::from_keyed_account(&slot_hashes_and_clock[1])?,
+                &SlotHashes::from_keyed_account(&slot_hashes_and_clock[0])?,
+                &Clock::from_keyed_account(&slot_hashes_and_clock[1])?,
                 other_signers,
                 &vote,
             )
@@ -236,11 +236,11 @@ mod tests {
             .iter()
             .map(|meta| {
                 if sysvar::clock::check_id(&meta.pubkey) {
-                    sysvar::clock::new_account(1, 0, 0, 0, 0)
+                    sysvar::clock::create_account(1, 0, 0, 0, 0)
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
                     sysvar::slot_hashes::create_account(1, &[])
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    sysvar::rent::create_account(1, &Rent::default())
+                    Rent::default().create_account(1)
                 } else {
                     Account::default()
                 }

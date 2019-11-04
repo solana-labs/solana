@@ -11,7 +11,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
-    sysvar::{self, rewards::Rewards},
+    sysvar::{self, rewards::Rewards, Sysvar},
 };
 use solana_stake_api::{
     id,

@@ -10,7 +10,7 @@ use solana_sdk::{
     rent,
     sysvar::{
         clock::Clock, fees::Fees, rent::Rent, rewards::Rewards, slot_hashes::SlotHashes,
-        stake_history::StakeHistory,
+        stake_history::StakeHistory, Sysvar,
     },
 };
 

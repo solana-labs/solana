@@ -1,10 +1,6 @@
 //! This account contains the current cluster fees
 //!
-use crate::account::Account;
-use crate::account_info::AccountInfo;
-use crate::fee_calculator::FeeCalculator;
-use crate::sysvar;
-use bincode::serialized_size;
+use crate::{account::Account, fee_calculator::FeeCalculator, sysvar::Sysvar};
 
 ///  fees account pubkey
 const ID: [u8; 32] = [
@@ -12,7 +8,7 @@ const ID: [u8; 32] = [
     111, 196, 237, 82, 106, 156, 144, 0, 0, 0, 0,
 ];
 
-crate::solana_sysvar_id!(ID, "SysvarFees111111111111111111111111111111111");
+crate::solana_sysvar_id!(ID, "SysvarFees111111111111111111111111111111111", Fees);
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -20,33 +16,13 @@ pub struct Fees {
     pub fee_calculator: FeeCalculator,
 }
 
-impl Fees {
-    pub fn from_account(account: &Account) -> Option<Self> {
-        account.deserialize_data().ok()
-    }
-    pub fn to_account(&self, account: &mut Account) -> Option<()> {
-        account.serialize_data(self).ok()
-    }
-    pub fn from_account_info(account: &AccountInfo) -> Option<Self> {
-        account.deserialize_data().ok()
-    }
-    pub fn to_account_info(&self, account: &mut AccountInfo) -> Option<()> {
-        account.serialize_data(self).ok()
-    }
-    pub fn size_of() -> usize {
-        serialized_size(&Fees::default()).unwrap() as usize
-    }
-}
+impl Sysvar for Fees {}
 
 pub fn create_account(lamports: u64, fee_calculator: &FeeCalculator) -> Account {
-    Account::new_data(
-        lamports,
-        &Fees {
-            fee_calculator: fee_calculator.clone(),
-        },
-        &sysvar::id(),
-    )
-    .unwrap()
+    Fees {
+        fee_calculator: fee_calculator.clone(),
+    }
+    .create_account(lamports)
 }
 
 #[cfg(test)]

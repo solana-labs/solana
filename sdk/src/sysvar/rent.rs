@@ -4,11 +4,9 @@ pub use crate::rent::Rent;
 
 use crate::{
     account::{Account, KeyedAccount},
-    account_info::AccountInfo,
     instruction::InstructionError,
-    sysvar,
+    sysvar::Sysvar,
 };
-use bincode::serialized_size;
 
 ///  rent account pubkey
 const ID: [u8; 32] = [
@@ -16,44 +14,20 @@ const ID: [u8; 32] = [
     253, 68, 227, 219, 217, 138, 0, 0, 0, 0,
 ];
 
-crate::solana_sysvar_id!(ID, "SysvarRent111111111111111111111111111111111");
+crate::solana_sysvar_id!(ID, "SysvarRent111111111111111111111111111111111", Rent);
 
-impl Rent {
-    pub fn from_account(account: &Account) -> Option<Self> {
-        account.deserialize_data().ok()
-    }
-    pub fn to_account(&self, account: &mut Account) -> Option<()> {
-        account.serialize_data(self).ok()
-    }
-    pub fn from_account_info(account: &AccountInfo) -> Option<Self> {
-        account.deserialize_data().ok()
-    }
-    pub fn to_account_info(&self, account: &mut AccountInfo) -> Option<()> {
-        account.serialize_data(self).ok()
-    }
-    pub fn size_of() -> usize {
-        serialized_size(&Rent::default()).unwrap() as usize
-    }
-}
+impl Sysvar for Rent {}
 
 pub fn create_account(lamports: u64, rent: &Rent) -> Account {
-    Account::new_data(lamports, rent, &sysvar::id()).unwrap()
-}
-
-pub fn from_keyed_account(account: &KeyedAccount) -> Result<Rent, InstructionError> {
-    if !check_id(account.unsigned_key()) {
-        return Err(InstructionError::InvalidArgument);
-    }
-    Rent::from_account(account.account).ok_or(InstructionError::InvalidArgument)
+    rent.create_account(lamports)
 }
 
 pub fn verify_rent_exemption(
     account: &KeyedAccount,
     rent_sysvar_account: &KeyedAccount,
 ) -> Result<(), InstructionError> {
-    if !from_keyed_account(rent_sysvar_account)?
-        .is_exempt(account.account.lamports, account.account.data.len())
-    {
+    let rent = Rent::from_keyed_account(rent_sysvar_account)?;
+    if !rent.is_exempt(account.account.lamports, account.account.data.len()) {
         Err(InstructionError::InsufficientFunds)
     } else {
         Ok(())

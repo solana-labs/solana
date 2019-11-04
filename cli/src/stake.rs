@@ -15,7 +15,10 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::KeypairUtil,
     system_instruction::SystemError,
-    sysvar::stake_history::{self, StakeHistory},
+    sysvar::{
+        stake_history::{self, StakeHistory},
+        Sysvar,
+    },
     transaction::Transaction,
 };
 use solana_stake_api::{

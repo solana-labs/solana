@@ -105,7 +105,10 @@ pub(crate) mod tests {
         instruction::Instruction,
         pubkey::Pubkey,
         signature::{Keypair, KeypairUtil},
-        sysvar::stake_history::{self, StakeHistory},
+        sysvar::{
+            stake_history::{self, StakeHistory},
+            Sysvar,
+        },
         transaction::Transaction,
     };
     use solana_stake_api::{
