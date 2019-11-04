@@ -632,7 +632,8 @@ fn process_deploy(
     check_account_for_multiple_fees(rpc_client, config, &fee_calculator, &messages)?;
 
     trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction(&mut create_account_tx, &signers);
+    let result =
+        rpc_client.send_and_confirm_transaction(&mut create_account_tx, &[&config.keypair]);
     log_instruction_custom_error::<SystemError>(result)
         .map_err(|_| CliError::DynamicProgramError("Program allocate space failed".to_string()))?;
 
