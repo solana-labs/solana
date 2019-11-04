@@ -1,8 +1,8 @@
 # Commitment
 
 The commitment metric aims to give clients a measure of the network confirmation
-and stake levels on a particular block. Clients can then use this information to 
-derive their own measures of confidence.
+and stake levels on a particular block. Clients can then use this information to
+derive their own measures of commitment.
 
 # Calculation RPC
 

@@ -10,7 +10,7 @@ pub mod broadcast_stage;
 pub mod chacha;
 pub mod chacha_cuda;
 pub mod cluster_info_vote_listener;
-pub mod confidence;
+pub mod commitment;
 pub mod recycler;
 pub mod shred_fetch_stage;
 #[macro_use]

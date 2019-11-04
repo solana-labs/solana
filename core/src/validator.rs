@@ -3,7 +3,7 @@
 use crate::{
     broadcast_stage::BroadcastStageType,
     cluster_info::{ClusterInfo, Node},
-    confidence::ForkConfidenceCache,
+    commitment::BlockCommitmentCache,
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::PohRecorder,
@@ -181,7 +181,7 @@ impl Validator {
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
-        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
@@ -209,7 +209,7 @@ impl Validator {
                 storage_state.clone(),
                 config.rpc_config.clone(),
                 bank_forks.clone(),
-                fork_confidence_cache.clone(),
+                block_commitment_cache.clone(),
                 ledger_path,
                 genesis_blockhash,
                 &validator_exit,
@@ -340,7 +340,7 @@ impl Validator {
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
-            fork_confidence_cache,
+            block_commitment_cache,
             config.dev_sigverify_disabled,
         );
 

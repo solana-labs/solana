@@ -1,8 +1,8 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
 use crate::cluster_info::ClusterInfo;
-use crate::confidence::{
-    AggregateConfidenceService, ConfidenceAggregationData, ForkConfidenceCache,
+use crate::commitment::{
+    AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData,
 };
 use crate::consensus::{StakeLockout, Tower};
 use crate::poh_recorder::PohRecorder;
@@ -64,7 +64,7 @@ impl Drop for Finalizer {
 
 pub struct ReplayStage {
     t_replay: JoinHandle<Result<()>>,
-    confidence_service: AggregateConfidenceService,
+    commitment_service: AggregateCommitmentService,
 }
 
 struct ReplaySlotStats {
@@ -160,7 +160,7 @@ impl ReplayStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
         snapshot_package_sender: Option<SnapshotPackageSender>,
-        fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>)
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -178,8 +178,8 @@ impl ReplayStage {
         let vote_account = *vote_account;
         let voting_keypair = voting_keypair.cloned();
 
-        let (lockouts_sender, confidence_service) =
-            AggregateConfidenceService::new(exit, fork_confidence_cache);
+        let (lockouts_sender, commitment_service) =
+            AggregateCommitmentService::new(exit, block_commitment_cache);
 
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -299,7 +299,7 @@ impl ReplayStage {
         (
             Self {
                 t_replay,
-                confidence_service,
+                commitment_service,
             },
             root_bank_receiver,
         )
@@ -486,7 +486,7 @@ impl ReplayStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
         total_staked: u64,
-        lockouts_sender: &Sender<ConfidenceAggregationData>,
+        lockouts_sender: &Sender<CommitmentAggregationData>,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
     ) -> Result<()>
     where
@@ -524,7 +524,7 @@ impl ReplayStage {
                 return Err(e.into());
             }
         }
-        Self::update_confidence_cache(bank.clone(), total_staked, lockouts_sender);
+        Self::update_commitment_cache(bank.clone(), total_staked, lockouts_sender);
 
         if let Some(ref voting_keypair) = voting_keypair {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
@@ -544,12 +544,12 @@ impl ReplayStage {
         Ok(())
     }
 
-    fn update_confidence_cache(
+    fn update_commitment_cache(
         bank: Arc<Bank>,
         total_staked: u64,
-        lockouts_sender: &Sender<ConfidenceAggregationData>,
+        lockouts_sender: &Sender<CommitmentAggregationData>,
     ) {
-        if let Err(e) = lockouts_sender.send(ConfidenceAggregationData::new(bank, total_staked)) {
+        if let Err(e) = lockouts_sender.send(CommitmentAggregationData::new(bank, total_staked)) {
             trace!("lockouts_sender failed: {:?}", e);
         }
     }
@@ -917,7 +917,7 @@ impl Service for ReplayStage {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        self.confidence_service.join()?;
+        self.commitment_service.join()?;
         self.t_replay.join().map(|_| ())
     }
 }
@@ -925,7 +925,7 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::confidence::BankConfidence;
+    use crate::commitment::BlockCommitment;
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
     use crate::replay_stage::ReplayStage;
     use solana_ledger::blocktree::make_slot_entries;
@@ -1196,7 +1196,7 @@ mod test {
     }
 
     #[test]
-    fn test_replay_confidence_cache() {
+    fn test_replay_commitment_cache() {
         fn leader_vote(bank: &Arc<Bank>, pubkey: &Pubkey) {
             let mut leader_vote_account = bank.get_account(&pubkey).unwrap();
             let mut vote_state = VoteState::from(&leader_vote_account).unwrap();
@@ -1205,10 +1205,10 @@ mod test {
             bank.store_account(&pubkey, &leader_vote_account);
         }
 
-        let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
-        let (lockouts_sender, _) = AggregateConfidenceService::new(
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let (lockouts_sender, _) = AggregateCommitmentService::new(
             &Arc::new(AtomicBool::new(false)),
-            fork_confidence_cache.clone(),
+            block_commitment_cache.clone(),
         );
 
         let leader_pubkey = Pubkey::new_rand();
@@ -1230,15 +1230,15 @@ mod test {
             vec![0],
         )));
 
-        assert!(fork_confidence_cache
+        assert!(block_commitment_cache
             .read()
             .unwrap()
-            .get_fork_confidence(0)
+            .get_block_commitment(0)
             .is_none());
-        assert!(fork_confidence_cache
+        assert!(block_commitment_cache
             .read()
             .unwrap()
-            .get_fork_confidence(1)
+            .get_block_commitment(1)
             .is_none());
 
         let bank1 = Bank::new_from_parent(&arc_bank0, &Pubkey::default(), arc_bank0.slot() + 1);
@@ -1250,7 +1250,7 @@ mod test {
         bank_forks.write().unwrap().insert(bank1);
         let arc_bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
         leader_vote(&arc_bank1, &leader_voting_pubkey);
-        ReplayStage::update_confidence_cache(arc_bank1.clone(), leader_lamports, &lockouts_sender);
+        ReplayStage::update_commitment_cache(arc_bank1.clone(), leader_lamports, &lockouts_sender);
 
         let bank2 = Bank::new_from_parent(&arc_bank1, &Pubkey::default(), arc_bank1.slot() + 1);
         let _res = bank2.transfer(10, &genesis_block_info.mint_keypair, &Pubkey::new_rand());
@@ -1261,36 +1261,36 @@ mod test {
         bank_forks.write().unwrap().insert(bank2);
         let arc_bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
         leader_vote(&arc_bank2, &leader_voting_pubkey);
-        ReplayStage::update_confidence_cache(arc_bank2.clone(), leader_lamports, &lockouts_sender);
+        ReplayStage::update_commitment_cache(arc_bank2.clone(), leader_lamports, &lockouts_sender);
         thread::sleep(Duration::from_millis(200));
 
-        let mut expected0 = BankConfidence::default();
+        let mut expected0 = BlockCommitment::default();
         expected0.increase_confirmation_stake(2, leader_lamports);
         assert_eq!(
-            fork_confidence_cache
+            block_commitment_cache
                 .read()
                 .unwrap()
-                .get_fork_confidence(0)
+                .get_block_commitment(0)
                 .unwrap(),
             &expected0,
         );
-        let mut expected1 = BankConfidence::default();
+        let mut expected1 = BlockCommitment::default();
         expected1.increase_confirmation_stake(2, leader_lamports);
         assert_eq!(
-            fork_confidence_cache
+            block_commitment_cache
                 .read()
                 .unwrap()
-                .get_fork_confidence(1)
+                .get_block_commitment(1)
                 .unwrap(),
             &expected1
         );
-        let mut expected2 = BankConfidence::default();
+        let mut expected2 = BlockCommitment::default();
         expected2.increase_confirmation_stake(1, leader_lamports);
         assert_eq!(
-            fork_confidence_cache
+            block_commitment_cache
                 .read()
                 .unwrap()
-                .get_fork_confidence(2)
+                .get_block_commitment(2)
                 .unwrap(),
             &expected2
         );
