@@ -1,5 +1,8 @@
 //! A command-line executable for generating the chain's genesis block.
 
+mod genesis_accounts;
+
+use crate::genesis_accounts::create_genesis_accounts;
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana_genesis::Base64Account;
 use solana_ledger::blocktree::create_new_ledger;
@@ -330,12 +333,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         bootstrap_leader_stake_lamports,
     );
 
-    let accounts = vec![
-        // the mint
-        (
-            mint_keypair.pubkey(),
-            Account::new(lamports, 0, &system_program::id()),
-        ),
+    let mut accounts = vec![
         // node needs an account to issue votes from
         (
             bootstrap_leader_keypair.pubkey(),
@@ -359,6 +357,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ),
         ),
     ];
+    accounts.append(&mut create_genesis_accounts(
+        &mint_keypair.pubkey(),
+        lamports,
+    ));
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
     let slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);
