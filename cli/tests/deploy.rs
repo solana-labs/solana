@@ -3,7 +3,7 @@ use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
 use solana_drone::drone::run_local_drone;
-use solana_sdk::{bpf_loader, commitment_config::CommitmentConfig, pubkey::Pubkey};
+use solana_sdk::{bpf_loader, pubkey::Pubkey};
 use std::{
     fs::{remove_dir_all, File},
     io::Read,
@@ -59,10 +59,7 @@ fn test_cli_deploy_program() {
         .as_str()
         .unwrap();
     let program_id = Pubkey::from_str(&program_id_str).unwrap();
-
-    let account = rpc_client
-        .get_account_with_commitment(&program_id, CommitmentConfig::recent())
-        .unwrap();
+    let account = rpc_client.get_account(&program_id).unwrap();
     assert_eq!(account.lamports, minimum_balance_for_rent_exemption);
     assert_eq!(account.owner, bpf_loader::id());
     assert_eq!(account.executable, true);

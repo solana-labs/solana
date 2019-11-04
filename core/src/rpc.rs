@@ -12,7 +12,9 @@ use crate::{
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
+use solana_client::rpc_request::{
+    Response, RpcEpochInfo, RpcResponseContext, RpcVoteAccountInfo, RpcVoteAccountStatus,
+};
 use solana_drone::drone::request_airdrop_transaction;
 use solana_ledger::{
     bank_forks::BankForks, blocktree::Blocktree, rooted_slot_iterator::RootedSlotIterator,
@@ -39,6 +41,13 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
+
+type RpcResponse<T> = Result<Response<T>>;
+
+fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
+    let context = RpcResponseContext { slot: bank.slot() };
+    Ok(Response { context, value })
+}
 
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
@@ -100,12 +109,14 @@ impl JsonRpcRequestProcessor {
 
     pub fn get_account_info(
         &self,
-        pubkey: &Pubkey,
+        pubkey: Result<Pubkey>,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Account> {
-        self.bank(commitment)
-            .get_account(&pubkey)
-            .ok_or_else(Error::invalid_request)
+    ) -> RpcResponse<Option<Account>> {
+        let bank = &*self.bank(commitment);
+        match pubkey {
+            Ok(key) => new_response(bank, bank.get_account(&key)),
+            Err(e) => Err(e),
+        }
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -141,16 +152,43 @@ impl JsonRpcRequestProcessor {
         Ok(*self.bank(None).epoch_schedule())
     }
 
-    pub fn get_balance(&self, pubkey: &Pubkey, commitment: Option<CommitmentConfig>) -> u64 {
-        self.bank(commitment).get_balance(&pubkey)
+    pub fn get_balance(
+        &self,
+        pubkey: Result<Pubkey>,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<u64> {
+        let bank = &*self.bank(commitment);
+        match pubkey {
+            Ok(key) => new_response(bank, bank.get_balance(&key)),
+            Err(e) => Err(e),
+        }
     }
 
     fn get_recent_blockhash(
         &self,
         commitment: Option<CommitmentConfig>,
-    ) -> (String, FeeCalculator) {
-        let (blockhash, fee_calculator) = self.bank(commitment).confirmed_last_blockhash();
-        (blockhash.to_string(), fee_calculator)
+    ) -> RpcResponse<(String, FeeCalculator)> {
+        let bank = &*self.bank(commitment);
+        let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
+        new_response(bank, (blockhash.to_string(), fee_calculator))
+    }
+
+    pub fn confirm_transaction(
+        &self,
+        signature: Result<Signature>,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<bool> {
+        let bank = &*self.bank(commitment);
+        match signature {
+            Err(e) => Err(e),
+            Ok(sig) => {
+                let status = bank.get_signature_confirmation_status(&sig);
+                match status {
+                    Some((_, result)) => new_response(bank, result.is_ok()),
+                    None => new_response(bank, false),
+                }
+            }
+        }
     }
 
     fn get_block_commitment(&self, block: Slot) -> (Option<BlockCommitment>, u64) {
@@ -333,7 +371,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<bool>;
+    ) -> RpcResponse<bool>;
 
     #[rpc(meta, name = "getAccountInfo")]
     fn get_account_info(
@@ -341,7 +379,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Account>;
+    ) -> RpcResponse<Option<Account>>;
 
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(
@@ -375,7 +413,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<u64>;
+    ) -> RpcResponse<u64>;
 
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
@@ -409,7 +447,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<(String, FeeCalculator)>;
+    ) -> RpcResponse<(String, FeeCalculator)>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
@@ -521,20 +559,15 @@ impl RpcSol for RpcSolImpl {
     fn confirm_transaction(
         &self,
         meta: Self::Metadata,
-        signature_str: String,
+        id: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<bool> {
-        debug!(
-            "confirm_transaction rpc request received: {:?}",
-            signature_str
-        );
-        self.get_signature_status(meta, signature_str, commitment)
-            .map(|status_option| {
-                if status_option.is_none() {
-                    return false;
-                }
-                status_option.unwrap().is_ok()
-            })
+    ) -> RpcResponse<bool> {
+        debug!("confirm_transaction rpc request received: {:?}", id);
+        let signature = verify_signature(&id);
+        meta.request_processor
+            .read()
+            .unwrap()
+            .confirm_transaction(signature, commitment)
     }
 
     fn get_account_info(
@@ -542,13 +575,13 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Account> {
+    ) -> RpcResponse<Option<Account>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
-        let pubkey = verify_pubkey(pubkey_str)?;
+        let pubkey = verify_pubkey(pubkey_str);
         meta.request_processor
             .read()
             .unwrap()
-            .get_account_info(&pubkey, commitment)
+            .get_account_info(pubkey, commitment)
     }
 
     fn get_minimum_balance_for_rent_exemption(
@@ -613,14 +646,13 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<u64> {
+    ) -> RpcResponse<u64> {
         debug!("get_balance rpc request received: {:?}", pubkey_str);
-        let pubkey = verify_pubkey(pubkey_str)?;
-        Ok(meta
-            .request_processor
+        let pubkey = verify_pubkey(pubkey_str);
+        meta.request_processor
             .read()
             .unwrap()
-            .get_balance(&pubkey, commitment))
+            .get_balance(pubkey, commitment)
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
@@ -707,13 +739,12 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<(String, FeeCalculator)> {
+    ) -> RpcResponse<(String, FeeCalculator)> {
         debug!("get_recent_blockhash rpc request received");
-        Ok(meta
-            .request_processor
+        meta.request_processor
             .read()
             .unwrap()
-            .get_recent_blockhash(commitment))
+            .get_recent_blockhash(commitment)
     }
 
     fn get_signature_status(
@@ -1150,10 +1181,15 @@ pub mod tests {
             bob_pubkey
         );
         let res = io.handle_request_sync(&req, meta);
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":20,"id":1}}"#);
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":20,
+                },
+            "id": 1,
+        });
+        let result = serde_json::from_str::<Value>(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
     }
@@ -1328,19 +1364,22 @@ pub mod tests {
             bob_pubkey
         );
         let res = io.handle_request_sync(&req, meta);
-        let expected = r#"{
-            "jsonrpc":"2.0",
-            "result":{
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":{
                 "owner": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
                 "lamports": 20,
                 "data": [],
                 "executable": false,
                 "rent_epoch": 0
             },
-            "id":1}
-        "#;
+                },
+            "id": 1,
+        });
         let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+            serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
@@ -1404,9 +1443,16 @@ pub mod tests {
             tx.signatures[0]
         );
         let res = io.handle_request_sync(&req, meta);
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":true,
+                },
+            "id": 1,
+        });
         let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+            serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
@@ -1496,14 +1542,16 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
-            "result": [ blockhash.to_string(), {
+            "result": {
+            "context":{"slot":0},
+            "value":[ blockhash.to_string(), {
                 "burnPercent": DEFAULT_BURN_PERCENT,
                 "lamportsPerSignature": 0,
                 "maxLamportsPerSignature": 0,
                 "minLamportsPerSignature": 0,
                 "targetLamportsPerSignature": 0,
                 "targetSignaturesPerSlot": 0
-            }],
+            }]},
             "id": 1
         });
         let expected: Response =
