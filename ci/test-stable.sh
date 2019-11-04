@@ -98,5 +98,5 @@ echo --- ci/localnet-sanity.sh
 export CARGO_TOOLCHAIN=+"$rust_stable"
 (
   set -x
-  ci/localnet-sanity.sh -x
+#  ci/localnet-sanity.sh -x
 )
