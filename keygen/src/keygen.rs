@@ -1,16 +1,29 @@
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use bs58;
 use clap::{
-    crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand,
+    crate_description, crate_name, crate_version, values_t_or_exit, App, AppSettings, Arg,
+    ArgMatches, SubCommand,
 };
-use solana_sdk::pubkey::write_pubkey;
-use solana_sdk::signature::{
-    keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file, Keypair,
-    KeypairUtil,
+use num_cpus;
+use solana_sdk::{
+    pubkey::write_pubkey,
+    signature::{
+        keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
+        Keypair, KeypairUtil,
+    },
 };
-use std::error;
-use std::path::Path;
-use std::process::exit;
+use std::{
+    collections::HashSet,
+    error,
+    path::Path,
+    process::exit,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    thread,
+    time::Instant,
+};
 
 const NO_PASSPHRASE: &str = "";
 
@@ -66,17 +79,41 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("silent")
                         .help("Do not display mnemonic phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
+        )
+        .subcommand(
+            SubCommand::with_name("grind")
+                .about("Grind for vanity keypairs")
+                .setting(AppSettings::DisableVersion)
+                .arg(
+                    Arg::with_name("ignore_case")
+                        .long("ignore-case")
+                        .help("Perform case insensitive matches"),
+                )
+                .arg(
+                    Arg::with_name("includes")
+                        .long("includes")
+                        .value_name("BASE58")
+                        .takes_value(true)
+                        .multiple(true)
+                        .validator(|value| {
+                            bs58::decode(&value).into_vec()
+                                .map(|_| ())
+                                .map_err(|err| format!("{}: {:?}", value, err))
+                        })
+                        .help("Save keypair if its public key includes this string\n(may be specified multiple times)"),
+                )
                 .arg(
                     Arg::with_name("starts_with")
                         .long("starts-with")
                         .value_name("BASE58 PREFIX")
                         .takes_value(true)
+                        .multiple(true)
                         .validator(|value| {
-                            bs58::decode(value).into_vec()
+                            bs58::decode(&value).into_vec()
                                 .map(|_| ())
-                                .map_err(|err| format!("{:?}", err))
+                                .map_err(|err| format!("{}: {:?}", value, err))
                         })
-                        .help("Grind a keypair with public key starting with this prefix"),
+                        .help("Save keypair if its public key starts with this prefix\n(may be specified multiple times)"),
                 ),
         )
         .subcommand(
@@ -163,27 +200,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(&outfile, &matches);
             }
 
-            let mut attempts = 0;
-            let (pubkey, keypair, mnemonic) = loop {
-                let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-                let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
-                let keypair = keypair_from_seed(seed.as_bytes())?;
-                let pubkey = bs58::encode(keypair.pubkey()).into_string();
-
-                if let Some(prefix) = matches.value_of("starts_with") {
-                    if !pubkey.starts_with(prefix) {
-                        if attempts % 10_000 == 0 {
-                            println!(
-                                "Searching for pubkey prefix of {} ({} attempts)",
-                                prefix, attempts
-                            );
-                        }
-                        attempts += 1;
-                        continue;
-                    }
-                }
-                break (pubkey, keypair, mnemonic);
-            };
+            let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+            let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
+            let keypair = keypair_from_seed(seed.as_bytes())?;
 
             output_keypair(&keypair, &outfile, "new")?;
 
@@ -193,7 +212,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                 eprintln!(
                     "{}\npubkey: {}\n{}\nSave this mnemonic phrase to recover your new keypair:\n{}\n{}",
-                    &divider, pubkey, &divider, phrase, &divider
+                    &divider, keypair.pubkey(), &divider, phrase, &divider
                 );
             }
         }
@@ -216,6 +235,83 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
             output_keypair(&keypair, &outfile, "recovered")?;
+        }
+        ("grind", Some(matches)) => {
+            let ignore_case = matches.is_present("ignore-case");
+            let includes = if matches.is_present("includes") {
+                values_t_or_exit!(matches, "includes", String)
+                    .into_iter()
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+
+            let starts_with = if matches.is_present("starts_with") {
+                values_t_or_exit!(matches, "starts_with", String)
+                    .into_iter()
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+
+            if includes.is_empty() && starts_with.is_empty() {
+                eprintln!(
+                    "Error: No keypair search criteria provided (--includes or --starts-with)"
+                );
+                exit(1);
+            }
+
+            let attempts = Arc::new(AtomicU64::new(1));
+            let found = Arc::new(AtomicU64::new(0));
+            let start = Instant::now();
+
+            println!(
+                "Searching with {} threads for a pubkey containing {:?} or starting with {:?}",
+                num_cpus::get(),
+                includes,
+                starts_with
+            );
+
+            let _threads = (0..num_cpus::get())
+                .map(|_| {
+                    let attempts = attempts.clone();
+                    let found = found.clone();
+                    let includes = includes.clone();
+                    let starts_with = starts_with.clone();
+
+                    thread::spawn(move || loop {
+                        let attempts = attempts.fetch_add(1, Ordering::Relaxed);
+                        if attempts % 5_000_000 == 0 {
+                            println!(
+                                "Searched {} keypairs in {}s. {} matches found",
+                                attempts,
+                                start.elapsed().as_secs(),
+                                found.load(Ordering::Relaxed),
+                            );
+                        }
+
+                        let keypair = Keypair::new();
+                        let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
+
+                        if ignore_case {
+                            pubkey = pubkey.to_lowercase();
+                        }
+
+                        if starts_with.iter().any(|s| pubkey.starts_with(s))
+                            || includes.iter().any(|s| pubkey.contains(s))
+                        {
+                            let found = found.fetch_add(1, Ordering::Relaxed);
+                            output_keypair(
+                                &keypair,
+                                &format!("{}.json", keypair.pubkey()),
+                                &format!("{}", found),
+                            )
+                            .unwrap();
+                        }
+                    });
+                })
+                .collect::<Vec<_>>();
+            thread::park();
         }
         _ => unreachable!(),
     }
