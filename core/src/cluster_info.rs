@@ -255,31 +255,44 @@ impl ClusterInfo {
                 } else if Self::is_archiver(&node) {
                     archivers += 1;
                 }
-                fn addr_to_string(addr: &SocketAddr) -> String {
+                fn addr_to_string(default_ip: &IpAddr, addr: &SocketAddr) -> String {
                     if ContactInfo::is_valid_address(addr) {
-                        addr.to_string()
+                        if &addr.ip() == default_ip {
+                            addr.port().to_string()
+                        } else {
+                            addr.to_string()
+                        }
                     } else {
                         "none".to_string()
                     }
                 }
 
+                let ip_addr = node.gossip.ip();
+
                 format!(
-                    "- gossip: {:20} | {:5}ms | {} {}\n  \
-                     tpu:    {:20} |         |\n  \
-                     rpc:    {:20} |         |\n",
-                    addr_to_string(&node.gossip),
-                    now.saturating_sub(last_updated),
-                    node.id,
+                    "{:15} {:4}| {:5}ms | {:45} | {:5} | {:5} | {:5} | {:5} | {:5} | {:5} | {:5} | {:5} | {:5}\n",
+                    ip_addr.to_string(),
                     if node.id == my_pubkey { "(me)" } else { "" }.to_string(),
-                    addr_to_string(&node.tpu),
-                    addr_to_string(&node.rpc),
+                    now.saturating_sub(last_updated),
+                    node.id.to_string(),
+                    addr_to_string(&ip_addr, &node.gossip),
+                    addr_to_string(&ip_addr, &node.tpu),
+                    addr_to_string(&ip_addr, &node.tpu_forwards),
+                    addr_to_string(&ip_addr, &node.tvu),
+                    addr_to_string(&ip_addr, &node.tvu_forwards),
+                    addr_to_string(&ip_addr, &node.repair),
+                    addr_to_string(&ip_addr, &node.storage_addr),
+                    addr_to_string(&ip_addr, &node.rpc),
+                    addr_to_string(&ip_addr, &node.rpc_pubsub),
                 )
             })
             .collect();
 
         format!(
-            " Node contact info             | Age     | Node identifier                   \n\
-             -------------------------------+---------+-----------------------------------\n\
+            " IP Address         | Age     | Node identifier                               \
+             | Gossip| TPU   |TPU fwd| TVU   |TVU fwd|Repair |Storage| RPC   | PubSub\n\
+             --------------------+---------+-----------------------------------------------+\
+             -------+-------+-------+-------+-------+-------+-------+-------+-------\n\
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
