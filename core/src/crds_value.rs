@@ -3,6 +3,7 @@ use bincode::{serialize, serialized_size};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
+use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
@@ -33,6 +34,17 @@ impl Signable for CrdsValue {
 
     fn set_signature(&mut self, signature: Signature) {
         self.signature = signature
+    }
+
+    fn verify(&self) -> bool {
+        let sig_check = self
+            .get_signature()
+            .verify(&self.pubkey().as_ref(), self.signable_data().borrow());
+        let data_check = match &self.data {
+            CrdsData::Vote(ix, _) => *ix < MAX_VOTES,
+            _ => true,
+        };
+        sig_check && data_check
     }
 }
 
@@ -146,7 +158,7 @@ impl CrdsValue {
     pub fn label(&self) -> CrdsValueLabel {
         match &self.data {
             CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
-            CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(ix, self.pubkey()),
+            CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
             CrdsData::EpochSlots(_) => CrdsValueLabel::EpochSlots(self.pubkey()),
         }
     }
@@ -164,8 +176,8 @@ impl CrdsValue {
     }
 
     pub fn vote_index(&self) -> Option<VoteIndex> {
-        match self {
-            CrdsValue::Vote(ix, _) => Some(*ix),
+        match &self.data {
+            CrdsData::Vote(ix, _) => Some(*ix),
             _ => None,
         }
     }
@@ -294,11 +306,13 @@ mod test {
     #[test]
     fn test_max_vote_index() {
         let keypair = Keypair::new();
-        let mut vote = CrdsValue::Vote(
-            MAX_VOTES,
-            Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
+        let vote = CrdsValue::new_signed(
+            CrdsData::Vote(
+                MAX_VOTES,
+                Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
+            ),
+            &keypair,
         );
-        vote.sign(&keypair);
         assert!(!vote.verify());
     }
 
@@ -313,7 +327,10 @@ mod test {
     #[test]
     fn test_compute_vote_index_one() {
         let keypair = Keypair::new();
-        let vote = CrdsValue::Vote(0, Vote::new(&keypair.pubkey(), test_tx(), 0));
+        let vote = CrdsValue::new_unsigned(CrdsData::Vote(
+            0,
+            Vote::new(&keypair.pubkey(), test_tx(), 0),
+        ));
         for i in 0..MAX_VOTES {
             let votes = vec![&vote];
             assert!(CrdsValue::compute_vote_index(i as usize, votes) > 0);
@@ -326,7 +343,12 @@ mod test {
     fn test_compute_vote_index_full() {
         let keypair = Keypair::new();
         let votes: Vec<_> = (0..MAX_VOTES)
-            .map(|x| CrdsValue::Vote(x, Vote::new(&keypair.pubkey(), test_tx(), x as u64)))
+            .map(|x| {
+                CrdsValue::new_unsigned(CrdsData::Vote(
+                    x,
+                    Vote::new(&keypair.pubkey(), test_tx(), x as u64),
+                ))
+            })
             .collect();
         let vote_refs = votes.iter().collect();
         //pick the oldest vote when full
