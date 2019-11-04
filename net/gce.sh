@@ -639,10 +639,12 @@ create)
     trap create_error_cleanup EXIT
   fi
 
-  rm -rf "$sshPrivateKey"{,.pub}
+  if ! $externalNodes; then
+    rm -rf "$sshPrivateKey"{,.pub}
 
-  # Note: using rsa because |aws ec2 import-key-pair| seems to fail for ecdsa
-  ssh-keygen -t rsa -N '' -f "$sshPrivateKey"
+    # Note: using rsa because |aws ec2 import-key-pair| seems to fail for ecdsa
+    ssh-keygen -t rsa -N '' -f "$sshPrivateKey"
+  fi
 
   printNetworkInfo() {
     cat <<EOF
