@@ -28,11 +28,7 @@ function analyze_packet_loss {
       upload-ci-artifact "$iftop_log"
     done
     echo --- Analyzing Packet Loss
-    if [[ -n $CHANNEL ]]; then
-      solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
-    else
-      target/release/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
-    fi
+    solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
   )
 }
 
