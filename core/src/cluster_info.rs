@@ -290,7 +290,7 @@ impl ClusterInfo {
 
         format!(
             " IP Address         | Age     | Node identifier                               \
-             | Gossip|  TPU  |TPU_FWD|  TVU  |TVU_FWD| Repair|Storage|  RPC  | PubSub\n\
+             | Gossip| TPU   |TPU fwd| TVU   |TVU fwd|Repair |Storage| RPC   | PubSub\n\
              --------------------+---------+-----------------------------------------------+\
              -------+-------+-------+-------+-------+-------+-------+-------+-------\n\
              {}\
