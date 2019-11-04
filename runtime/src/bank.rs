@@ -1530,7 +1530,7 @@ impl Bank {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.is_delta.load(Ordering::Relaxed)
+        !self.is_delta.load(Ordering::Relaxed)
     }
 
     /// Add an instruction processor to intercept instructions before the dynamic loader.
@@ -2936,37 +2936,23 @@ mod tests {
 
     #[test]
     fn test_is_empty() {
-        // test normal case
         let (genesis_block, mint_keypair) = create_genesis_block(500);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let bank0 = Arc::new(Bank::new(&genesis_block));
         let key1 = Keypair::new();
-        assert_eq!(bank.is_empty(), false);
 
-        // Set is_delta to true
+        // The zeroth bank is not empty because it processes transactions
+        assert_eq!(bank0.is_empty(), false);
+
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+
+        // The first bank is empty becasue there are no transactions
+        assert_eq!(bank1.is_empty(), true);
+
+        // Set is_delta to true, bank is no longer empty
         let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash());
-        assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
-        assert_eq!(bank.is_empty(), false);
-
-        // Register enough ticks to hit max tick height
-        for i in 0..genesis_block.ticks_per_slot {
-            bank.register_tick(&hash::hash(format!("hello world {}", i).as_bytes()));
-        }
-
-        assert_eq!(bank.is_empty(), true);
-
-        // test empty bank with ticks
-        let (genesis_block, _mint_keypair) = create_genesis_block(500);
-        // make an empty bank at slot 1
-        let bank = new_from_parent(&Arc::new(Bank::new(&genesis_block)));
-        assert_eq!(bank.is_empty(), false);
-
-        // Register enough ticks to hit max tick height
-        for i in 0..genesis_block.ticks_per_slot {
-            bank.register_tick(&hash::hash(format!("hello world {}", i).as_bytes()));
-        }
-        // empty banks aren't votable even at max tick height
-        assert_eq!(bank.is_empty(), false);
+        assert_eq!(bank1.process_transaction(&tx_transfer_mint_to_1), Ok(()));
+        assert_eq!(bank1.is_empty(), false);
     }
 
     #[test]
