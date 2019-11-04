@@ -542,12 +542,6 @@ impl Blocktree {
         start.stop();
         let write_batch_elapsed = start.as_us();
 
-        if should_signal {
-            for signal in &self.new_shreds_signals {
-                let _ = signal.try_send(true);
-            }
-        }
-
         send_signals(
             &self.new_shreds_signals,
             &self.completed_slots_senders,
