@@ -131,16 +131,9 @@ pub fn verify_instruction(
     }
 
     if need_account_data_checked(&pre.owner, program_id, pre.debitable) {
-        // This match is only to extract the data from the `Option`.  The `Option`
-        // will never be `None` because `need_account_data_checked()` is the gate
-        // to both set and check it.
         match &pre.data {
-            Some(data) => {
-                if *data != post.data {
-                    return Err(InstructionError::ExternalAccountDataModified);
-                }
-            }
-            None => return Err(InstructionError::ExternalAccountDataModified),
+            Some(data) if *data == post.data => (),
+            _ => return Err(InstructionError::ExternalAccountDataModified),
         }
     }
 
