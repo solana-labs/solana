@@ -23,10 +23,10 @@ awk '{ if ($3 ~ "=>") { print $2, $7 } else if ($2 ~ "<=") { print $1, $6 }} ' <
   | awk 'NR%2{printf "%s ",$0;next;}1' \
   | awk '{ print "{ \"a\": \""$1"\", " "\"b\": \""$3"\", \"a_to_b\": \""$2"\", \"b_to_a\": \""$4"\"}," }' > "$2"
 
-if [ "$#" -ne 3 ]; then
+if [ "$#" -lt 4 ]; then
   solana-log-analyzer iftop -f "$2"
 else
-  solana-log-analyzer iftop -f "$2" map-IP --priv "$(hostname -i)" --pub "$3"
+  solana-log-analyzer iftop -f "$2" map-IP --priv "$3" --pub "$4"
 fi
 
 exit 1
