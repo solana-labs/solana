@@ -408,45 +408,6 @@ impl Validator {
     }
 }
 
-#[cfg(not(unix))]
-fn adjust_ulimit_nofile() {}
-
-#[cfg(unix)]
-fn adjust_ulimit_nofile() {
-    // Rocks DB likes to have many open files.  The default open file descriptor limit is
-    // usually not enough
-    let desired_nofile = 65000;
-
-    fn get_nofile() -> libc::rlimit {
-        let mut nofile = libc::rlimit {
-            rlim_cur: 0,
-            rlim_max: 0,
-        };
-        if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut nofile) } != 0 {
-            warn!("getrlimit(RLIMIT_NOFILE) failed");
-        }
-        nofile
-    }
-
-    let mut nofile = get_nofile();
-    if nofile.rlim_cur < desired_nofile {
-        nofile.rlim_cur = desired_nofile;
-        if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &nofile) } != 0 {
-            error!(
-                "Unable to increase the maximum open file descriptor limit to {}",
-                desired_nofile
-            );
-
-            if cfg!(target_os = "macos") {
-                error!("On mac OS you may need to run |sudo launchctl limit maxfiles 65536 200000| first");
-            }
-        }
-
-        nofile = get_nofile();
-    }
-    info!("Maximum open file descriptors: {}", nofile.rlim_cur);
-}
-
 pub fn new_banks_from_blocktree(
     expected_genesis_blockhash: Option<Hash>,
     blocktree_path: &Path,
@@ -481,8 +442,6 @@ pub fn new_banks_from_blocktree(
             process::exit(1);
         }
     }
-
-    adjust_ulimit_nofile();
 
     let (blocktree, ledger_signal_receiver, completed_slots_receiver) =
         Blocktree::open_with_signal(blocktree_path).expect("Failed to open ledger database");
