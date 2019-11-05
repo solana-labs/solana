@@ -833,7 +833,7 @@ impl ReplayStage {
             return handle_block_error(block_error);
         }
 
-        datapoint_info!("verify-batch-size", ("size", entries.len() as i64, i64));
+        datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
         let mut verify_total = Measure::start("verify_and_process_entries");
         let mut entry_state = entries.start_verify(last_entry);
 
