@@ -812,10 +812,15 @@ stopNode() {
       PS4=\"$PS4\"
       set -x
       ! tmux list-sessions || tmux kill-session
+      declare sudo=
+      if sudo true; then
+        sudo="sudo -n"
+      fi
+
       for pid in solana/*.pid; do
         pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')
         if [[ -n \$pgid ]]; then
-          sudo kill -- -\$pgid
+          \$sudo kill -- -\$pgid
         fi
       done
       for pattern in node solana- remote-; do
