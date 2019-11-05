@@ -228,20 +228,12 @@ pub fn process_show_storage_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::{gen_keypair_file, read_keypair_file};
+    use solana_sdk::signature::write_keypair;
+    use tempfile::NamedTempFile;
 
-    fn make_tmp_path(name: &str) -> String {
-        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
-
-        let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
-
-        // whack any possible collision
-        let _ignored = std::fs::remove_dir_all(&path);
-        // whack any possible collision
-        let _ignored = std::fs::remove_file(&path);
-
-        path
+    fn make_tmp_file() -> (String, NamedTempFile) {
+        let tmp_file = NamedTempFile::new().unwrap();
+        (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
     }
 
     #[test]
@@ -250,9 +242,9 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let pubkey_string = pubkey.to_string();
 
-        let keypair_file = make_tmp_path("storage_keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let storage_account_keypair = read_keypair_file(&keypair_file).unwrap();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let storage_account_keypair = Keypair::new();
+        write_keypair(&storage_account_keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_create_archiver_storage_account = test_commands.clone().get_matches_from(vec![
             "test",
@@ -271,11 +263,11 @@ mod tests {
                 require_keypair: true
             }
         );
-        std::fs::remove_file(&keypair_file).unwrap();
+        tmp_file.close().unwrap();
 
-        let keypair_file = make_tmp_path("storage_keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let storage_account_keypair = read_keypair_file(&keypair_file).unwrap();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let storage_account_keypair = Keypair::new();
+        write_keypair(&storage_account_keypair, tmp_file.as_file_mut()).unwrap();
         let storage_account_pubkey = storage_account_keypair.pubkey();
         let storage_account_string = storage_account_pubkey.to_string();
 
@@ -296,7 +288,7 @@ mod tests {
                 require_keypair: true
             }
         );
-        std::fs::remove_file(&keypair_file).unwrap();
+        tmp_file.close().unwrap();
 
         let test_claim_storage_reward = test_commands.clone().get_matches_from(vec![
             "test",

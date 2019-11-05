@@ -709,28 +709,20 @@ pub fn process_delegate_stake(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::{gen_keypair_file, read_keypair_file};
+    use solana_sdk::signature::write_keypair;
+    use tempfile::NamedTempFile;
 
-    fn make_tmp_path(name: &str) -> String {
-        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
-
-        let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
-
-        // whack any possible collision
-        let _ignored = std::fs::remove_dir_all(&path);
-        // whack any possible collision
-        let _ignored = std::fs::remove_file(&path);
-
-        path
+    fn make_tmp_file() -> (String, NamedTempFile) {
+        let tmp_file = NamedTempFile::new().unwrap();
+        (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
     }
 
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
-        let keypair_file = make_tmp_path("stake_keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let stake_account_keypair = read_keypair_file(&keypair_file).unwrap();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let stake_account_keypair = Keypair::new();
+        write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
         let stake_account_pubkey = stake_account_keypair.pubkey();
         let stake_account_string = stake_account_pubkey.to_string();
 
@@ -805,11 +797,11 @@ mod tests {
                 require_keypair: true
             }
         );
-        std::fs::remove_file(&keypair_file).unwrap();
+        tmp_file.close().unwrap();
 
-        let keypair_file = make_tmp_path("stake_keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let stake_account_keypair = read_keypair_file(&keypair_file).unwrap();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let stake_account_keypair = Keypair::new();
+        write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
         let stake_account_pubkey = stake_account_keypair.pubkey();
         let stake_account_string = stake_account_pubkey.to_string();
 
@@ -837,7 +829,7 @@ mod tests {
                 require_keypair: true
             }
         );
-        std::fs::remove_file(&keypair_file).unwrap();
+        tmp_file.close().unwrap();
 
         // Test DelegateStake Subcommand
         let stake_pubkey = Pubkey::new_rand();

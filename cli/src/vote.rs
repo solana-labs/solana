@@ -432,20 +432,12 @@ pub fn process_uptime(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::{gen_keypair_file, read_keypair_file};
+    use solana_sdk::signature::write_keypair;
+    use tempfile::NamedTempFile;
 
-    fn make_tmp_path(name: &str) -> String {
-        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
-
-        let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
-
-        // whack any possible collision
-        let _ignored = std::fs::remove_dir_all(&path);
-        // whack any possible collision
-        let _ignored = std::fs::remove_file(&path);
-
-        path
+    fn make_tmp_file() -> (String, NamedTempFile) {
+        let tmp_file = NamedTempFile::new().unwrap();
+        (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
     }
 
     #[test]
@@ -469,9 +461,9 @@ mod tests {
             }
         );
 
-        let keypair_file = make_tmp_path("vote_keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let keypair = read_keypair_file(&keypair_file).unwrap();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let keypair = Keypair::new();
+        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
         // Test CreateVoteAccount SubCommand
         let node_pubkey = Pubkey::new_rand();
         let node_pubkey_string = format!("{}", node_pubkey);
@@ -496,11 +488,11 @@ mod tests {
                 require_keypair: true
             }
         );
-        std::fs::remove_file(&keypair_file).unwrap();
+        tmp_file.close().unwrap();
 
-        let keypair_file = make_tmp_path("vote_keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let keypair = read_keypair_file(&keypair_file).unwrap();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let keypair = Keypair::new();
+        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
             "test",
@@ -521,13 +513,13 @@ mod tests {
                 require_keypair: true
             }
         );
-        std::fs::remove_file(&keypair_file).unwrap();
+        tmp_file.close().unwrap();
 
         // test init with an authed voter
         let authed = Pubkey::new_rand();
-        let keypair_file = make_tmp_path("vote_keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let keypair = read_keypair_file(&keypair_file).unwrap();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let keypair = Keypair::new();
+        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_create_vote_account3 = test_commands.clone().get_matches_from(vec![
             "test",
@@ -550,11 +542,11 @@ mod tests {
                 require_keypair: true
             }
         );
-        std::fs::remove_file(&keypair_file).unwrap();
+        tmp_file.close().unwrap();
 
-        let keypair_file = make_tmp_path("vote_keypair_file");
-        gen_keypair_file(&keypair_file).unwrap();
-        let keypair = read_keypair_file(&keypair_file).unwrap();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let keypair = Keypair::new();
+        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
         // test init with an authed withdrawer
         let test_create_vote_account4 = test_commands.clone().get_matches_from(vec![
             "test",
@@ -577,7 +569,7 @@ mod tests {
                 require_keypair: true
             }
         );
-        std::fs::remove_file(&keypair_file).unwrap();
+        tmp_file.close().unwrap();
 
         // Test Uptime Subcommand
         let pubkey = Pubkey::new_rand();
