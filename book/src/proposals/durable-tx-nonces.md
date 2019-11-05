@@ -19,7 +19,7 @@ transaction could be replayed by simply funding the fee account again.
 
 ## A Contract-based Solution
 
-Here we propose a contract-based solution to the problem, whereby a client can
+Here we describe a contract-based solution to the problem, whereby a client can
 "stash" a nonce value for future use in a transaction's `recent_blockhash`
 field. This approach is akin to the Compare and Swap atomic instruction,
 implemented by some CPU ISAs.
