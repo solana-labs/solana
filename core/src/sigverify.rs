@@ -92,7 +92,7 @@ pub enum PacketError {
     InvalidShortVec,
     InvalidSignatureLen,
     MismatchSignatureLen,
-    PayerNotDebitable,
+    PayerNotWritable,
 }
 
 impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for PacketError {
@@ -182,11 +182,11 @@ fn do_get_packet_offsets(
     let message_account_keys_len_offset = msg_start_offset + message_header_size;
 
     // This reads and compares the MessageHeader num_required_signatures and
-    // num_credit_only_signed_accounts bytes. If num_required_signatures is not larger than
-    // num_credit_only_signed_accounts, the first account is not debitable, and cannot be charged
+    // num_readonly_signed_accounts bytes. If num_required_signatures is not larger than
+    // num_readonly_signed_accounts, the first account is not writable, and cannot be charged
     // required transaction fees.
     if packet.data[msg_start_offset] <= packet.data[msg_start_offset + 1] {
-        return Err(PacketError::PayerNotDebitable);
+        return Err(PacketError::PayerNotWritable);
     }
 
     // read the length of Message.account_keys (serialized with short_vec)
@@ -486,8 +486,8 @@ mod tests {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: required_num_sigs,
-                num_credit_only_signed_accounts: 12,
-                num_credit_only_unsigned_accounts: 11,
+                num_readonly_signed_accounts: 12,
+                num_readonly_unsigned_accounts: 11,
             },
             account_keys: vec![],
             recent_blockhash: Hash::default(),
@@ -584,12 +584,12 @@ mod tests {
     }
 
     #[test]
-    fn test_fee_payer_is_debitable() {
+    fn test_fee_payer_is_writable() {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
-                num_credit_only_signed_accounts: 1,
-                num_credit_only_unsigned_accounts: 1,
+                num_readonly_signed_accounts: 1,
+                num_readonly_unsigned_accounts: 1,
             },
             account_keys: vec![],
             recent_blockhash: Hash::default(),
@@ -600,7 +600,7 @@ mod tests {
         let packet = sigverify::make_packet_from_transaction(tx.clone());
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
-        assert_eq!(res, Err(PacketError::PayerNotDebitable));
+        assert_eq!(res, Err(PacketError::PayerNotWritable));
     }
 
     #[test]

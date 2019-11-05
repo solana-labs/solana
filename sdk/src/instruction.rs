@@ -52,11 +52,11 @@ pub enum InstructionError {
     /// Program modified the data of an account that doesn't belong to it
     ExternalAccountDataModified,
 
-    /// Credit-only account spent lamports
-    CreditOnlyLamportSpend,
+    /// Read-only account modified lamports
+    ReadonlyLamportChange,
 
-    /// Credit-only account modified data
-    CreditOnlyDataModified,
+    /// Read-only account modified data
+    ReadonlyDataModified,
 
     /// An account was referenced more than once in a single instruction
     DuplicateAccountIndex,
@@ -116,8 +116,8 @@ pub struct AccountMeta {
     pub pubkey: Pubkey,
     /// True if an Instruciton requires a Transaction signature matching `pubkey`.
     pub is_signer: bool,
-    /// True if the `pubkey` can be loaded as a credit-debit account.
-    pub is_debitable: bool,
+    /// True if the `pubkey` can be loaded as a read-write account.
+    pub is_writable: bool,
 }
 
 impl AccountMeta {
@@ -125,15 +125,15 @@ impl AccountMeta {
         Self {
             pubkey,
             is_signer,
-            is_debitable: true,
+            is_writable: true,
         }
     }
 
-    pub fn new_credit_only(pubkey: Pubkey, is_signer: bool) -> Self {
+    pub fn new_readonly(pubkey: Pubkey, is_signer: bool) -> Self {
         Self {
             pubkey,
             is_signer,
-            is_debitable: false,
+            is_writable: false,
         }
     }
 }

@@ -109,13 +109,11 @@ impl Account {
     }
 }
 
-pub type LamportCredit = u64;
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyedAccount<'a> {
     is_signer: bool, // Transaction was signed by this account's key
-    is_debitable: bool,
+    is_writable: bool,
     key: &'a Pubkey,
     pub account: &'a mut Account,
 }
@@ -133,27 +131,27 @@ impl<'a> KeyedAccount<'a> {
         self.key
     }
 
-    pub fn is_debitable(&self) -> bool {
-        self.is_debitable
+    pub fn is_writable(&self) -> bool {
+        self.is_writable
     }
 
     pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a mut Account) -> KeyedAccount<'a> {
         KeyedAccount {
             is_signer,
-            is_debitable: true,
+            is_writable: true,
             key,
             account,
         }
     }
 
-    pub fn new_credit_only(
+    pub fn new_readonly(
         key: &'a Pubkey,
         is_signer: bool,
         account: &'a mut Account,
     ) -> KeyedAccount<'a> {
         KeyedAccount {
             is_signer,
-            is_debitable: false,
+            is_writable: false,
             key,
             account,
         }
@@ -164,7 +162,7 @@ impl<'a> From<(&'a Pubkey, &'a mut Account)> for KeyedAccount<'a> {
     fn from((key, account): (&'a Pubkey, &'a mut Account)) -> Self {
         KeyedAccount {
             is_signer: false,
-            is_debitable: true,
+            is_writable: true,
             key,
             account,
         }
@@ -175,7 +173,7 @@ impl<'a> From<&'a mut (Pubkey, Account)> for KeyedAccount<'a> {
     fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
         KeyedAccount {
             is_signer: false,
-            is_debitable: true,
+            is_writable: true,
             key,
             account,
         }
@@ -186,12 +184,12 @@ pub fn create_keyed_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAcc
     accounts.iter_mut().map(Into::into).collect()
 }
 
-pub fn create_keyed_credit_only_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
+pub fn create_keyed_readonly_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
     accounts
         .iter_mut()
         .map(|(key, account)| KeyedAccount {
             is_signer: false,
-            is_debitable: false,
+            is_writable: false,
             key,
             account,
         })

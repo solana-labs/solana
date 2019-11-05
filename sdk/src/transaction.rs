@@ -418,12 +418,12 @@ mod tests {
 
         let len_size = 1;
         let num_required_sigs_size = 1;
-        let num_credit_only_accounts_size = 2;
+        let num_readonly_accounts_size = 2;
         let blockhash_size = size_of::<Hash>();
         let expected_transaction_size = len_size
             + (tx.signatures.len() * size_of::<Signature>())
             + num_required_sigs_size
-            + num_credit_only_accounts_size
+            + num_readonly_accounts_size
             + len_size
             + (tx.message.account_keys.len() * size_of::<Pubkey>())
             + blockhash_size

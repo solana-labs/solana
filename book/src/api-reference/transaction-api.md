@@ -14,7 +14,7 @@
 
       * **num\_credit\_only\_signed\_accounts:** The last
 
-        `num_credit_only_signed_accounts` signatures refer to signing
+        `num_readonly_signed_accounts` signatures refer to signing
 
         credit only accounts. Credit only accounts can be used concurrently
 
@@ -24,7 +24,7 @@
 
       * **num\_credit\_only\_unsigned\_accounts:** The last
 
-        `num_credit_only_unsigned_accounts` public keys in `account_keys` refer
+        `num_readonly_unsigned_accounts` public keys in `account_keys` refer
 
         to non-signing credit only accounts
 
@@ -60,4 +60,3 @@ A `Transaction` is signed by using an ed25519 keypair to sign the serialization 
 ## Transaction Serialization
 
 `Transaction`s \(and their `message`s\) are serialized and deserialized using the [bincode](https://crates.io/crates/bincode) crate with a non-standard vector serialization that uses only one byte for the length if it can be encoded in 7 bits, 2 bytes if it fits in 14 bits, or 3 bytes if it requires 15 or 16 bits. The vector serialization is defined by Solana's [short-vec](https://github.com/solana-labs/solana/blob/master/sdk/src/short_vec.rs).
-

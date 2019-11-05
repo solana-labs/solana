@@ -423,7 +423,7 @@ mod tests {
         let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
         transfer_lamports(
             &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut KeyedAccount::new_credit_only(&to, false, &mut to_account),
+            &mut KeyedAccount::new(&to, false, &mut to_account),
             50,
         )
         .unwrap();
@@ -435,7 +435,7 @@ mod tests {
         // Attempt to move more lamports than remaining in from_account
         let result = transfer_lamports(
             &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut KeyedAccount::new_credit_only(&to, false, &mut to_account),
+            &mut KeyedAccount::new(&to, false, &mut to_account),
             100,
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
@@ -445,7 +445,7 @@ mod tests {
         // test unsigned transfer of zero
         assert!(transfer_lamports(
             &mut KeyedAccount::new(&from, false, &mut from_account),
-            &mut KeyedAccount::new_credit_only(&to, false, &mut to_account),
+            &mut KeyedAccount::new(&to, false, &mut to_account),
             0,
         )
         .is_ok(),);

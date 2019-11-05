@@ -2,7 +2,7 @@
 
 ## The Runtime
 
-The runtime is a concurrent transaction processor. Transactions specify their data dependencies upfront and dynamic memory allocation is explicit. By separating program code from the state it operates on, the runtime is able to choreograph concurrent access. Transactions accessing only credit-only accounts are executed in parallel whereas transactions accessing writable accounts are serialized. The runtime interacts with the program through an entrypoint with a well-defined interface. The data stored in an account is an opaque type, an array of bytes. The program has full control over its contents.
+The runtime is a concurrent transaction processor. Transactions specify their data dependencies upfront and dynamic memory allocation is explicit. By separating program code from the state it operates on, the runtime is able to choreograph concurrent access. Transactions accessing only read-only accounts are executed in parallel whereas transactions accessing writable accounts are serialized. The runtime interacts with the program through an entrypoint with a well-defined interface. The data stored in an account is an opaque type, an array of bytes. The program has full control over its contents.
 
 The transaction structure specifies a list of public keys and signatures for those keys and a sequential list of instructions that will operate over the states associated with the account keys. For the transaction to be committed all the instructions must execute successfully; if any abort the whole transaction fails to commit.
 
@@ -28,7 +28,7 @@ The runtime enforces the following rules:
 
 1. Only the _owner_ program may modify the contents of an account. This means that upon assignment data vector is guaranteed to be zero.
 2. Total balances on all the accounts is equal before and after execution of a transaction.
-3. After the transaction is executed, balances of credit-only accounts must be greater than or equal to the balances before the transaction.
+3. After the transaction is executed, balances of read-only accounts must be equal to the balances before the transaction.
 4. All instructions in the transaction executed atomically. If one fails, all account modifications are discarded.
 
 Execution of the program involves mapping the program's public key to an entrypoint which takes a pointer to the transaction, and an array of loaded accounts.
@@ -62,4 +62,3 @@ To pass messages between programs, the receiving program must accept the message
 * \[Continuations and Signals for long running
 
   Transactions\]\([https://github.com/solana-labs/solana/issues/1485](https://github.com/solana-labs/solana/issues/1485)\)
-

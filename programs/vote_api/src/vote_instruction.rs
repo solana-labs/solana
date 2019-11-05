@@ -106,7 +106,7 @@ fn metas_for_authorized_signer(
 
     // append signer at the end
     if !is_own_signer {
-        account_metas.push(AccountMeta::new_credit_only(*authorized_signer, true))
+        account_metas.push(AccountMeta::new_readonly(*authorized_signer, true))
         // signer
     }
 
@@ -134,9 +134,9 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
         authorized_voter_pubkey,
         &[
             // request slot_hashes sysvar account after vote_pubkey
-            AccountMeta::new_credit_only(sysvar::slot_hashes::id(), false),
+            AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
             // request clock sysvar account after that
-            AccountMeta::new_credit_only(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
         ],
     );
 
@@ -152,7 +152,7 @@ pub fn withdraw(
     let account_metas = metas_for_authorized_signer(
         vote_pubkey,
         withdrawer_pubkey,
-        &[AccountMeta::new_credit_only(*to_pubkey, false)],
+        &[AccountMeta::new(*to_pubkey, false)],
     );
 
     Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)

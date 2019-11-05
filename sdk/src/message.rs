@@ -30,34 +30,34 @@ fn compile_instructions(ixs: Vec<Instruction>, keys: &[Pubkey]) -> Vec<CompiledI
         .collect()
 }
 
-/// A helper struct to collect pubkeys referenced by a set of instructions and credit-only counts
+/// A helper struct to collect pubkeys referenced by a set of instructions and read-only counts
 #[derive(Debug, PartialEq, Eq)]
 struct InstructionKeys {
     pub signed_keys: Vec<Pubkey>,
     pub unsigned_keys: Vec<Pubkey>,
-    pub num_credit_only_signed_accounts: u8,
-    pub num_credit_only_unsigned_accounts: u8,
+    pub num_readonly_signed_accounts: u8,
+    pub num_readonly_unsigned_accounts: u8,
 }
 
 impl InstructionKeys {
     fn new(
         signed_keys: Vec<Pubkey>,
         unsigned_keys: Vec<Pubkey>,
-        num_credit_only_signed_accounts: u8,
-        num_credit_only_unsigned_accounts: u8,
+        num_readonly_signed_accounts: u8,
+        num_readonly_unsigned_accounts: u8,
     ) -> Self {
         Self {
             signed_keys,
             unsigned_keys,
-            num_credit_only_signed_accounts,
-            num_credit_only_unsigned_accounts,
+            num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts,
         }
     }
 }
 
 /// Return pubkeys referenced by all instructions, with the ones needing signatures first. If the
-/// payer key is provided, it is always placed first in the list of signed keys. Credit-only signed
-/// accounts are placed last in the set of signed accounts. Credit-only unsigned accounts,
+/// payer key is provided, it is always placed first in the list of signed keys. Read-only signed
+/// accounts are placed last in the set of signed accounts. Read-only unsigned accounts,
 /// including program ids, are placed last in the set. No duplicates and order is preserved.
 fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> InstructionKeys {
     let programs: Vec<_> = get_program_ids(instructions)
@@ -65,7 +65,7 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
         .map(|program_id| AccountMeta {
             pubkey: *program_id,
             is_signer: false,
-            is_debitable: false,
+            is_writable: false,
         })
         .collect();
     let mut keys_and_signed: Vec<_> = instructions
@@ -76,7 +76,7 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
     keys_and_signed.sort_by(|x, y| {
         y.is_signer
             .cmp(&x.is_signer)
-            .then(y.is_debitable.cmp(&x.is_debitable))
+            .then(y.is_writable.cmp(&x.is_writable))
     });
 
     let payer_account_meta;
@@ -84,33 +84,33 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
         payer_account_meta = AccountMeta {
             pubkey: *payer,
             is_signer: true,
-            is_debitable: true,
+            is_writable: true,
         };
         keys_and_signed.insert(0, &payer_account_meta);
     }
 
     let mut signed_keys = vec![];
     let mut unsigned_keys = vec![];
-    let mut num_credit_only_signed_accounts = 0;
-    let mut num_credit_only_unsigned_accounts = 0;
+    let mut num_readonly_signed_accounts = 0;
+    let mut num_readonly_unsigned_accounts = 0;
     for account_meta in keys_and_signed.into_iter().unique_by(|x| x.pubkey) {
         if account_meta.is_signer {
             signed_keys.push(account_meta.pubkey);
-            if !account_meta.is_debitable {
-                num_credit_only_signed_accounts += 1;
+            if !account_meta.is_writable {
+                num_readonly_signed_accounts += 1;
             }
         } else {
             unsigned_keys.push(account_meta.pubkey);
-            if !account_meta.is_debitable {
-                num_credit_only_unsigned_accounts += 1;
+            if !account_meta.is_writable {
+                num_readonly_unsigned_accounts += 1;
             }
         }
     }
     InstructionKeys::new(
         signed_keys,
         unsigned_keys,
-        num_credit_only_signed_accounts,
-        num_credit_only_unsigned_accounts,
+        num_readonly_signed_accounts,
+        num_readonly_unsigned_accounts,
     )
 }
 
@@ -130,19 +130,19 @@ pub struct MessageHeader {
     /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
     pub num_required_signatures: u8,
 
-    /// The last num_credit_only_signed_accounts of the signed keys are credit-only accounts.
-    /// Programs may process multiple transactions that add lamports to the same credit-only
-    /// account within a single PoH entry, but are not permitted to debit lamports or modify
-    /// account data. Transactions targeting the same debit account are evaluated sequentially.
-    pub num_credit_only_signed_accounts: u8,
+    /// The last num_readonly_signed_accounts of the signed keys are read-only accounts. Programs
+    /// may process multiple transactions that load read-only accounts within a single PoH entry,
+    /// but are not permitted to credit or debit lamports or modify account data. Transactions
+    /// targeting the same read-write account are evaluated sequentially.
+    pub num_readonly_signed_accounts: u8,
 
-    /// The last num_credit_only_unsigned_accounts of the unsigned keys are credit-only accounts.
-    pub num_credit_only_unsigned_accounts: u8,
+    /// The last num_readonly_unsigned_accounts of the unsigned keys are read-only accounts.
+    pub num_readonly_unsigned_accounts: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Message {
-    /// The message header, identifying signed and credit-only `account_keys`
+    /// The message header, identifying signed and read-only `account_keys`
     /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
     pub header: MessageHeader,
 
@@ -162,8 +162,8 @@ pub struct Message {
 impl Message {
     pub fn new_with_compiled_instructions(
         num_required_signatures: u8,
-        num_credit_only_signed_accounts: u8,
-        num_credit_only_unsigned_accounts: u8,
+        num_readonly_signed_accounts: u8,
+        num_readonly_unsigned_accounts: u8,
         account_keys: Vec<Pubkey>,
         recent_blockhash: Hash,
         instructions: Vec<CompiledInstruction>,
@@ -171,8 +171,8 @@ impl Message {
         Self {
             header: MessageHeader {
                 num_required_signatures,
-                num_credit_only_signed_accounts,
-                num_credit_only_unsigned_accounts,
+                num_readonly_signed_accounts,
+                num_readonly_unsigned_accounts,
             },
             account_keys,
             recent_blockhash,
@@ -188,16 +188,16 @@ impl Message {
         let InstructionKeys {
             mut signed_keys,
             unsigned_keys,
-            num_credit_only_signed_accounts,
-            num_credit_only_unsigned_accounts,
+            num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts,
         } = get_keys(&instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
         let instructions = compile_instructions(instructions, &signed_keys);
         Self::new_with_compiled_instructions(
             num_required_signatures,
-            num_credit_only_signed_accounts,
-            num_credit_only_unsigned_accounts,
+            num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts,
             signed_keys,
             Hash::default(),
             instructions,
@@ -218,25 +218,25 @@ impl Message {
             .position(|&&pubkey| pubkey == self.account_keys[index])
     }
 
-    pub fn is_debitable(&self, i: usize) -> bool {
-        i < (self.header.num_required_signatures - self.header.num_credit_only_signed_accounts)
+    pub fn is_writable(&self, i: usize) -> bool {
+        i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
-                    - self.header.num_credit_only_unsigned_accounts as usize)
+                    - self.header.num_readonly_unsigned_accounts as usize)
     }
 
     pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
-        let mut credit_debit_keys = vec![];
-        let mut credit_only_keys = vec![];
+        let mut writable_keys = vec![];
+        let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_debitable(i) {
-                credit_debit_keys.push(key);
+            if self.is_writable(i) {
+                writable_keys.push(key);
             } else {
-                credit_only_keys.push(key);
+                readonly_keys.push(key);
             }
         }
-        (credit_debit_keys, credit_only_keys)
+        (writable_keys, readonly_keys)
     }
 }
 
@@ -399,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn test_message_credit_only_keys_last() {
+    fn test_message_readonly_keys_last() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default(); // Identical key/program_id should be de-duped
         let id1 = Pubkey::new_rand();
@@ -407,16 +407,8 @@ mod tests {
         let id3 = Pubkey::new_rand();
         let keys = get_keys(
             &[
-                Instruction::new(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_credit_only(id0, false)],
-                ),
-                Instruction::new(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_credit_only(id1, true)],
-                ),
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id1, true)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id2, false)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id3, true)]),
             ],
@@ -484,16 +476,8 @@ mod tests {
         let id1 = Pubkey::new_rand();
         let keys = get_keys(
             &[
-                Instruction::new(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_credit_only(id0, false)],
-                ),
-                Instruction::new(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_credit_only(id1, true)],
-                ),
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id1, true)]),
             ],
             None,
         );
@@ -518,7 +502,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_debitable() {
+    fn test_is_writable() {
         let key0 = Pubkey::new_rand();
         let key1 = Pubkey::new_rand();
         let key2 = Pubkey::new_rand();
@@ -529,19 +513,19 @@ mod tests {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 3,
-                num_credit_only_signed_accounts: 2,
-                num_credit_only_unsigned_accounts: 1,
+                num_readonly_signed_accounts: 2,
+                num_readonly_unsigned_accounts: 1,
             },
             account_keys: vec![key0, key1, key2, key3, key4, key5],
             recent_blockhash: Hash::default(),
             instructions: vec![],
         };
-        assert_eq!(message.is_debitable(0), true);
-        assert_eq!(message.is_debitable(1), false);
-        assert_eq!(message.is_debitable(2), false);
-        assert_eq!(message.is_debitable(3), true);
-        assert_eq!(message.is_debitable(4), true);
-        assert_eq!(message.is_debitable(5), false);
+        assert_eq!(message.is_writable(0), true);
+        assert_eq!(message.is_writable(1), false);
+        assert_eq!(message.is_writable(2), false);
+        assert_eq!(message.is_writable(3), true);
+        assert_eq!(message.is_writable(4), true);
+        assert_eq!(message.is_writable(5), false);
     }
 
     #[test]
@@ -554,16 +538,8 @@ mod tests {
         let message = Message::new(vec![
             Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
             Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
-            Instruction::new(
-                program_id,
-                &0,
-                vec![AccountMeta::new_credit_only(id2, false)],
-            ),
-            Instruction::new(
-                program_id,
-                &0,
-                vec![AccountMeta::new_credit_only(id3, true)],
-            ),
+            Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id2, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id3, true)]),
         ]);
         assert_eq!(
             message.get_account_keys_by_lock_type(),
