@@ -58,6 +58,8 @@ pub enum CrdsData {
     Vote(VoteIndex, Vote),
     /// * Merge Strategy - Latest wallclock is picked
     EpochSlots(EpochSlots),
+    /// * Merge Strategy - Latest wallclock is picked
+    Root(Root),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -96,6 +98,23 @@ impl Vote {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Root {
+    pub from: Pubkey,
+    pub root: u64,
+    pub wallclock: u64,
+}
+
+impl Root {
+    pub fn new(from: &Pubkey, root: u64, wallclock: u64) -> Self {
+        Self {
+            from: *from,
+            root,
+            wallclock,
+        }
+    }
+}
+
 /// Type of the replicated value
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
@@ -103,6 +122,7 @@ pub enum CrdsValueLabel {
     ContactInfo(Pubkey),
     Vote(VoteIndex, Pubkey),
     EpochSlots(Pubkey),
+    Root(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -111,6 +131,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
             CrdsValueLabel::EpochSlots(_) => write!(f, "EpochSlots({})", self.pubkey()),
+            CrdsValueLabel::Root(_) => write!(f, "Root({})", self.pubkey()),
         }
     }
 }
@@ -121,6 +142,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::ContactInfo(p) => *p,
             CrdsValueLabel::Vote(_, p) => *p,
             CrdsValueLabel::EpochSlots(p) => *p,
+            CrdsValueLabel::Root(p) => *p,
         }
     }
 }
@@ -146,6 +168,7 @@ impl CrdsValue {
             CrdsData::ContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
             CrdsData::EpochSlots(vote) => vote.wallclock,
+            CrdsData::Root(root) => root.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -153,6 +176,7 @@ impl CrdsValue {
             CrdsData::ContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
             CrdsData::EpochSlots(slots) => slots.from,
+            CrdsData::Root(root) => root.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -160,6 +184,7 @@ impl CrdsValue {
             CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
             CrdsData::EpochSlots(_) => CrdsValueLabel::EpochSlots(self.pubkey()),
+            CrdsData::Root(_) => CrdsValueLabel::Root(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -188,11 +213,18 @@ impl CrdsValue {
             _ => None,
         }
     }
+    pub fn root(&self) -> Option<&Root> {
+        match &self.data {
+            CrdsData::Root(root) => Some(root),
+            _ => None,
+        }
+    }
     /// Return all the possible labels for a record identified by Pubkey.
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
             CrdsValueLabel::ContactInfo(*key),
             CrdsValueLabel::EpochSlots(*key),
+            CrdsValueLabel::Root(*key),
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
         labels
@@ -242,13 +274,14 @@ mod test {
 
     #[test]
     fn test_labels() {
-        let mut hits = [false; 2 + MAX_VOTES as usize];
+        let mut hits = [false; 3 + MAX_VOTES as usize];
         // this method should cover all the possible labels
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
                 CrdsValueLabel::ContactInfo(_) => hits[0] = true,
                 CrdsValueLabel::EpochSlots(_) => hits[1] = true,
-                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 2] = true,
+                CrdsValueLabel::Root(_) => hits[2] = true,
+                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 3] = true,
             }
         }
         assert!(hits.iter().all(|x| *x));
@@ -277,6 +310,11 @@ mod test {
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().epoch_slots().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::EpochSlots(key));
+
+        let v = CrdsValue::new_unsigned(CrdsData::Root(Root::new(&Pubkey::default(), 42, 0)));
+        assert_eq!(v.wallclock(), 0);
+        let key = v.clone().root().unwrap().from;
+        assert_eq!(v.label(), CrdsValueLabel::Root(key));
     }
 
     #[test]
@@ -300,6 +338,8 @@ mod test {
             btreeset,
             timestamp(),
         )));
+        verify_signatures(&mut v, &keypair, &wrong_keypair);
+        v = CrdsValue::new_unsigned(CrdsData::Root(Root::new(&keypair.pubkey(), 42, 0)));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
 

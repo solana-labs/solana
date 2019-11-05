@@ -18,7 +18,7 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, Vote},
+    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, Root, Vote},
     packet::Packet,
     repair_service::RepairType,
     result::{Error, Result},
@@ -308,6 +308,14 @@ impl ClusterInfo {
                 "".to_string()
             }
         )
+    }
+
+    pub fn push_root(&mut self, root: u64) {
+        let now = timestamp();
+        let root = Root::new(&self.id(), root, now);
+        let entry = CrdsValue::new_signed(CrdsData::Root(root), &self.keypair);
+        self.gossip
+            .process_push_message(&self.id(), vec![entry], now);
     }
 
     pub fn push_epoch_slots(&mut self, id: Pubkey, root: u64, slots: BTreeSet<u64>) {

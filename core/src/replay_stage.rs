@@ -523,6 +523,7 @@ impl ReplayStage {
                 trace!("root_bank_sender failed: {:?}", e);
                 return Err(e.into());
             }
+            cluster_info.write().unwrap().push_root(new_root);
         }
         Self::update_commitment_cache(bank.clone(), total_staked, lockouts_sender);
 
