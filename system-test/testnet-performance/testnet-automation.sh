@@ -64,6 +64,7 @@ function cleanup_testnet {
     analyze_packet_loss
   )
 
+  echo --- Deleting Testnet
   case $CLOUD_PROVIDER in
   gce)
   (
