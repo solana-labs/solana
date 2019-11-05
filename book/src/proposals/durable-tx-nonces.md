@@ -20,14 +20,14 @@ TODO: svgbob this into a flowchart, add prose
 Start
 Create Account
   state = Uninitialized
-Initialize Instruction
+InitializeInstruction(hash)
   if hash is recent
     stored_hash = hash
     state = Initialized
     success
   else
     error
-Spend Instruction
+SpendInstruction(spend_hash, next_hash)
   if spend_hash == stored_hash
     if next_hash is recent
       stored_hash = next_hash
