@@ -48,14 +48,15 @@ impl ClusterInfoVoteListener {
         sender: &CrossbeamSender<Vec<Packets>>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
-        let mut last_ts = 0;
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            let (votes, new_ts) = cluster_info.read().unwrap().get_votes(last_ts);
-            if poh_recorder.lock().unwrap().has_bank() {
-                last_ts = new_ts;
+            if let Some(bank) = poh_recorder.lock().unwrap().bank() {
+                let last_ts = bank.last_vote_sync.load(Ordering::Relaxed);
+                let (votes, new_ts) = cluster_info.read().unwrap().get_votes(last_ts);
+                bank.last_vote_sync
+                    .compare_and_swap(last_ts, new_ts, Ordering::Relaxed);
                 inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
                 let mut msgs = packet::to_packets(&votes);
                 if !msgs.is_empty() {

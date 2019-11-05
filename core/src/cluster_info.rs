@@ -12,13 +12,12 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::crds_value::CrdsValue;
 use crate::{
     contact_info::ContactInfo,
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{CrdsData, CrdsValueLabel, EpochSlots, Vote},
+    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, Vote},
     packet::{to_shared_blob, Blob, Packet, SharedBlob},
     repair_service::RepairType,
     result::{Error, Result},
@@ -320,10 +319,18 @@ impl ClusterInfo {
             .process_push_message(&self.id(), vec![entry], now);
     }
 
-    pub fn push_vote(&mut self, vote: Transaction) {
+    pub fn push_vote(&mut self, tower_index: usize, vote: Transaction) {
         let now = timestamp();
         let vote = Vote::new(&self.id(), vote, now);
-        let entry = CrdsValue::new_signed(CrdsData::Vote(vote), &self.keypair);
+        let current_votes: Vec<_> = (0..crds_value::MAX_VOTES)
+            .filter_map(|ix| {
+                self.gossip
+                    .crds
+                    .lookup(&CrdsValueLabel::Vote(ix, self.id()))
+            })
+            .collect();
+        let vote_ix = CrdsValue::compute_vote_index(tower_index, current_votes);
+        let entry = CrdsValue::new_signed(CrdsData::Vote(vote_ix, vote), &self.keypair);
         self.gossip
             .process_push_message(&self.id(), vec![entry], now);
     }
@@ -2358,7 +2365,7 @@ mod tests {
 
         // add a vote
         let tx = test_tx();
-        cluster_info.push_vote(tx.clone());
+        cluster_info.push_vote(0, tx.clone());
 
         // -1 to make sure that the clock is strictly lower then when insert occurred
         let (votes, max_ts) = cluster_info.get_votes(now - 1);
