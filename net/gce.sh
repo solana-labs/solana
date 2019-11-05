@@ -284,14 +284,8 @@ blockstreamerMachineType=$bootstrapLeaderMachineType
 [[ ${#zones[@]} -gt 0 ]] || zones+=("$(cloud_DefaultZone)")
 
 [[ -z $1 ]] || usage "Unexpected argument: $1"
-if [[ $cloudProvider = ec2 ]]; then
-  # EC2 keys can't be retrieved from running instances like GCE keys can so save
-  # EC2 keys in the user's home directory so |./ec2.sh config| can at least be
-  # used on the same host that ran |./ec2.sh create| .
-  sshPrivateKey="$HOME/.ssh/solana-net-id_$prefix"
-else
-  sshPrivateKey="$netConfigDir/id_$prefix"
-fi
+
+sshPrivateKey="$netConfigDir/id_$prefix"
 
 case $cloudProvider in
 gce)
@@ -591,13 +585,6 @@ EOF
 
 delete() {
   $metricsWriteDatapoint "testnet-deploy net-delete-begin=1"
-
-  # Filter for all nodes
-  filter="$prefix-"
-
-  echo "Searching for instances: $filter"
-  cloud_FindInstances "$filter"
-
   if [[ ${#instances[@]} -eq 0 ]]; then
     echo "No instances found matching '$filter'"
   else
@@ -611,7 +598,6 @@ delete() {
   else
     rm -f "$configFile"
   fi
-
   $metricsWriteDatapoint "testnet-deploy net-delete-complete=1"
 }
 
@@ -623,25 +609,34 @@ create_error_cleanup() {
   exit $RC
 }
 
+get_testnet_instances() {
+  # Filter for all nodes
+  filter="$prefix-"
+
+  echo "Searching for instances: $filter"
+  cloud_FindInstances "$filter"
+}
+
 case $command in
 delete)
+  get_testnet_instances
   delete
   ;;
 
 create)
   [[ -n $additionalValidatorCount ]] || usage "Need number of nodes"
 
-  delete
-
   $metricsWriteDatapoint "testnet-deploy net-create-begin=1"
+  get_testnet_instances
 
   if $failOnValidatorBootupFailure; then
     trap create_error_cleanup EXIT
   fi
 
   if ! $externalNodes; then
-    rm -rf "$sshPrivateKey"{,.pub}
+    delete
 
+    rm -rf "$sshPrivateKey"{,.pub}
     # Note: using rsa because |aws ec2 import-key-pair| seems to fail for ecdsa
     ssh-keygen -t rsa -N '' -f "$sshPrivateKey"
   fi
