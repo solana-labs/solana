@@ -72,7 +72,7 @@ Operate a configured testnet
                                         in genesis block for external nodes
    --no-snapshot-fetch
                                       - If set, disables booting validators from a snapshot
-   --skip-ledger-verify
+   --skip-poh-verify
                                       - If set, validators will skip verifying
                                         the ledger they already have saved to disk at
                                         boot (results in a much faster boot)
@@ -176,7 +176,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --limit-ledger-size ]]; then
       maybeLimitLedgerSize="$1"
       shift 1
-    elif [[ $1 = --skip-ledger-verify ]]; then
+    elif [[ $1 = --skip-poh-verify ]]; then
       maybeSkipLedgerVerify="$1"
       shift 1
     elif [[ $1 = --skip-setup ]]; then

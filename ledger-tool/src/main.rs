@@ -1,6 +1,8 @@
-use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, SubCommand};
+use clap::{
+    crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg, SubCommand,
+};
 use solana_ledger::{
-    bank_forks_utils, blocktree::Blocktree, blocktree_processor,
+    bank_forks::SnapshotConfig, bank_forks_utils, blocktree::Blocktree, blocktree_processor,
     rooted_slot_iterator::RootedSlotIterator,
 };
 use solana_sdk::{clock::Slot, genesis_block::GenesisBlock};
@@ -71,7 +73,7 @@ fn output_ledger(blocktree: Blocktree, starting_slot: Slot, method: LedgerOutput
 
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
-    solana_logger::setup();
+    solana_logger::setup_with_filter("solana=info");
 
     let starting_slot_arg = Arg::with_name("starting_slot")
         .long("starting-slot")
@@ -103,8 +105,37 @@ fn main() {
         ))
         .subcommand(SubCommand::with_name("bounds").about("Print lowest and highest non-empty slots. Note: This ignores gaps in slots"))
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format").arg(&starting_slot_arg))
-        .subcommand(SubCommand::with_name("verify").about("Verify the ledger's PoH"))
-        .subcommand(SubCommand::with_name("prune").about("Prune the ledger at the block height").arg(
+        .subcommand(
+            SubCommand::with_name("verify")
+            .about("Verify the ledger's PoH")
+            .arg(
+                Arg::with_name("no_snapshot")
+                    .long("no-snapshot")
+                    .takes_value(false)
+                    .help("Do not start from a local snapshot if present"),
+            )
+            .arg(
+                Arg::with_name("account_paths")
+                    .long("accounts")
+                    .value_name("PATHS")
+                    .takes_value(true)
+                    .help("Comma separated persistent accounts location"),
+            )
+        .arg(
+            Arg::with_name("halt_at_slot")
+                .long("halt-at-slot")
+                .value_name("SLOT")
+                .takes_value(true)
+                .help("Halt processing at the given slot"),
+        )
+        .arg(
+            clap::Arg::with_name("skip_poh_verify")
+                .long("skip-poh-verify")
+                .takes_value(false)
+                .help("Skip ledger PoH verification"),
+        )
+
+        ).subcommand(SubCommand::with_name("prune").about("Prune the ledger at the block height").arg(
             Arg::with_name("slot_list")
                 .long("slot-list")
                 .value_name("FILENAME")
@@ -169,15 +200,42 @@ fn main() {
             let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
             output_ledger(blocktree, starting_slot, LedgerOutputMethod::Json);
         }
-        ("verify", _) => {
+        ("verify", Some(arg_matches)) => {
             println!("Verifying ledger...");
+
+            let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+            let poh_verify = !arg_matches.is_present("skip_poh_verify");
+
+            let snapshot_config = if arg_matches.is_present("no_snapshot") {
+                None
+            } else {
+                Some(SnapshotConfig {
+                    snapshot_interval_slots: 0, // Value doesn't matter
+                    snapshot_package_output_path: ledger_path.clone(),
+                    snapshot_path: ledger_path.clone().join("snapshot"),
+                })
+            };
+            let account_paths = if let Some(account_paths) = matches.value_of("account_paths") {
+                Some(account_paths.to_string())
+            } else {
+                Some(ledger_path.join("accounts").to_str().unwrap().to_string())
+            };
+
             let process_options = blocktree_processor::ProcessOptions {
-                verify_ledger: true,
+                poh_verify,
+                dev_halt_at_slot,
                 ..blocktree_processor::ProcessOptions::default()
             };
-            match bank_forks_utils::load(&genesis_block, &blocktree, None, None, process_options) {
-                Ok((_bank_forks, bank_forks_info, _leader_schedule_cache)) => {
-                    println!("{:?}", bank_forks_info);
+
+            match bank_forks_utils::load(
+                &genesis_block,
+                &blocktree,
+                account_paths,
+                snapshot_config.as_ref(),
+                process_options,
+            ) {
+                Ok((_bank_forks, _bank_forks_info, _leader_schedule_cache)) => {
+                    println!("Ok");
                 }
                 Err(err) => {
                     eprintln!("Ledger verification failed: {:?}", err);

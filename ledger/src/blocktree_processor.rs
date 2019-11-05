@@ -1,29 +1,32 @@
-use crate::bank_forks::BankForks;
-use crate::block_error::BlockError;
-use crate::blocktree::Blocktree;
-use crate::blocktree_meta::SlotMeta;
-use crate::entry::{create_ticks, Entry, EntrySlice};
-use crate::leader_schedule_cache::LeaderScheduleCache;
+use crate::{
+    bank_forks::BankForks,
+    block_error::BlockError,
+    blocktree::Blocktree,
+    blocktree_meta::SlotMeta,
+    entry::{create_ticks, Entry, EntrySlice},
+    leader_schedule_cache::LeaderScheduleCache,
+};
+use itertools::Itertools;
 use log::*;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-use rayon::prelude::*;
-use rayon::ThreadPool;
+use rand::{seq::SliceRandom, thread_rng};
+use rayon::{prelude::*, ThreadPool};
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
-use solana_runtime::bank::Bank;
-use solana_runtime::transaction_batch::TransactionBatch;
-use solana_sdk::clock::{Slot, MAX_RECENT_BLOCKHASHES};
-use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::duration_as_ms;
-use solana_sdk::transaction::Result;
-use std::result;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-
 use solana_rayon_threadlimit::get_thread_count;
-use std::cell::RefCell;
+use solana_runtime::{bank::Bank, transaction_batch::TransactionBatch};
+use solana_sdk::{
+    clock::{Slot, MAX_RECENT_BLOCKHASHES},
+    genesis_block::GenesisBlock,
+    hash::Hash,
+    signature::{Keypair, KeypairUtil},
+    timing::duration_as_ms,
+    transaction::Result,
+};
+use std::{
+    cell::RefCell,
+    result,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -193,7 +196,7 @@ pub type ProcessCallback = Arc<dyn Fn(&Bank) -> () + Sync + Send>;
 
 #[derive(Default)]
 pub struct ProcessOptions {
-    pub verify_ledger: bool,
+    pub poh_verify: bool,
     pub full_leader_cache: bool,
     pub dev_halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
@@ -279,9 +282,14 @@ pub fn process_blocktree_from_root(
     };
 
     info!(
-        "processing ledger...complete in {}ms, forks={}...",
+        "ledger processed in {}ms. {} fork{} at {}",
         duration_as_ms(&now.elapsed()),
         bank_forks_info.len(),
+        if bank_forks_info.len() > 1 { "s" } else { "" },
+        bank_forks_info
+            .iter()
+            .map(|bfi| bfi.bank_slot.to_string())
+            .join(", ")
     );
 
     Ok((bank_forks, bank_forks_info, leader_schedule_cache))
@@ -295,7 +303,7 @@ fn verify_and_process_slot_entries(
 ) -> result::Result<Hash, BlocktreeProcessorError> {
     assert!(!entries.is_empty());
 
-    if opts.verify_ledger {
+    if opts.poh_verify {
         let next_bank_tick_height = bank.tick_height() + entries.tick_count();
         let max_bank_tick_height = bank.max_tick_height();
         if next_bank_tick_height != max_bank_tick_height {
@@ -569,7 +577,7 @@ pub mod tests {
             .expect("Expected to write shredded entries to blocktree");
 
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         assert_eq!(
@@ -609,7 +617,7 @@ pub mod tests {
             .expect("Expected to write shredded entries to blocktree");
 
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         assert_eq!(
@@ -660,7 +668,7 @@ pub mod tests {
             .expect("Expected to write shredded entries to blocktree");
 
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         assert_eq!(
@@ -726,7 +734,7 @@ pub mod tests {
         fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, blockhash);
 
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (mut _bank_forks, bank_forks_info, _) =
@@ -788,7 +796,7 @@ pub mod tests {
         blocktree.set_roots(&[0, 1, 4]).unwrap();
 
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -862,7 +870,7 @@ pub mod tests {
         blocktree.set_roots(&[0, 1]).unwrap();
 
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -942,7 +950,7 @@ pub mod tests {
 
         // Check that we can properly restart the ledger / leader scheduler doesn't fail
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -1089,7 +1097,7 @@ pub mod tests {
             )
             .unwrap();
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -1118,7 +1126,7 @@ pub mod tests {
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -1857,7 +1865,7 @@ pub mod tests {
         // Set up bank1
         let bank0 = Arc::new(Bank::new(&genesis_block));
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         process_bank_0(&bank0, &blocktree, &opts).unwrap();
