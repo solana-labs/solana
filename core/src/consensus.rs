@@ -210,9 +210,19 @@ impl Tower {
         bank_vote_state.votes.iter().map(|v| v.slot).last()
     }
 
-    pub fn new_vote_from_bank(&self, bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<(Vote, usize)> {
+    pub fn new_vote_from_bank(
+        &self,
+        bank: &Bank,
+        vote_account_pubkey: &Pubkey,
+    ) -> Option<(Vote, usize)> {
         let last_vote = Self::last_bank_vote(bank, vote_account_pubkey);
-        Self::new_vote(self.threshold_depth, &self.lockouts, bank.slot(), bank.hash(), last_vote)
+        Self::new_vote(
+            self.threshold_depth,
+            &self.lockouts,
+            bank.slot(),
+            bank.hash(),
+            last_vote,
+        )
     }
 
     pub fn record_bank_vote(&mut self, vote: Vote) -> Option<Slot> {
@@ -845,7 +855,7 @@ mod test {
         let mut local = VoteState::default();
         //network is censoring
         let vote = Vote {
-            slots: vec![0,1,2,3],
+            slots: vec![0, 1, 2, 3],
             hash: Hash::default(),
         };
         local.process_vote_unchecked(&vote);
@@ -853,12 +863,14 @@ mod test {
         assert_eq!(Tower::new_vote(4, &local, 4, Hash::default(), None), None);
         //vote 6 has expried vote 3, and should be at threshold 4
         let vote = Vote {
-            slots: vec![0,1,2,6],
+            slots: vec![0, 1, 2, 6],
             hash: Hash::default(),
         };
-        assert_eq!(Tower::new_vote(4, &local, 6, Hash::default(), None), Some((vote, 4)));
+        assert_eq!(
+            Tower::new_vote(4, &local, 6, Hash::default(), None),
+            Some((vote, 3))
+        );
     }
-
 
     #[test]
     fn test_check_vote_threshold_forks() {

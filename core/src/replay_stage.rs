@@ -497,60 +497,66 @@ impl ReplayStage {
         }
         trace!("handle votable bank {}", bank.slot());
         if let Some((vote, tower_index)) = tower.new_vote_from_bank(bank, vote_account) {
-        if let Some(new_root) = tower.record_bank_vote(vote) {
-            // get the root bank before squash
-            let root_bank = bank_forks
-                .read()
-                .unwrap()
-                .get(new_root)
-                .expect("Root bank doesn't exist")
-                .clone();
-            let mut rooted_banks = root_bank.parents();
-            rooted_banks.push(root_bank);
-            let rooted_slots: Vec<_> = rooted_banks.iter().map(|bank| bank.slot()).collect();
-            // Call leader schedule_cache.set_root() before blocktree.set_root() because
-            // bank_forks.root is consumed by repair_service to update gossip, so we don't want to
-            // get blobs for repair on gossip before we update leader schedule, otherwise they may
-            // get dropped.
-            leader_schedule_cache.set_root(rooted_banks.last().unwrap());
-            blocktree
-                .set_roots(&rooted_slots)
-                .expect("Ledger set roots failed");
-            bank_forks
-                .write()
-                .unwrap()
-                .set_root(new_root, snapshot_package_sender);
-            Self::handle_new_root(&bank_forks, progress);
-            trace!("new root {}", new_root);
-            if let Err(e) = root_bank_sender.send(rooted_banks) {
-                trace!("root_bank_sender failed: {:?}", e);
-                return Err(e.into());
+            if let Some(new_root) = tower.record_bank_vote(vote) {
+                // get the root bank before squash
+                let root_bank = bank_forks
+                    .read()
+                    .unwrap()
+                    .get(new_root)
+                    .expect("Root bank doesn't exist")
+                    .clone();
+                let mut rooted_banks = root_bank.parents();
+                rooted_banks.push(root_bank);
+                let rooted_slots: Vec<_> = rooted_banks.iter().map(|bank| bank.slot()).collect();
+                // Call leader schedule_cache.set_root() before blocktree.set_root() because
+                // bank_forks.root is consumed by repair_service to update gossip, so we don't want to
+                // get blobs for repair on gossip before we update leader schedule, otherwise they may
+                // get dropped.
+                leader_schedule_cache.set_root(rooted_banks.last().unwrap());
+                blocktree
+                    .set_roots(&rooted_slots)
+                    .expect("Ledger set roots failed");
+                bank_forks
+                    .write()
+                    .unwrap()
+                    .set_root(new_root, snapshot_package_sender);
+                Self::handle_new_root(&bank_forks, progress);
+                trace!("new root {}", new_root);
+                if let Err(e) = root_bank_sender.send(rooted_banks) {
+                    trace!("root_bank_sender failed: {:?}", e);
+                    return Err(e.into());
+                }
             }
+            Self::update_commitment_cache(bank.clone(), total_staked, lockouts_sender);
+
+            if let Some(ref voting_keypair) = voting_keypair {
+                let node_keypair = cluster_info.read().unwrap().keypair.clone();
+
+                // Send our last few votes along with the new one
+                let vote_ix = vote_instruction::vote(
+                    &vote_account,
+                    &voting_keypair.pubkey(),
+                    tower.last_vote(),
+                );
+
+                let mut vote_tx =
+                    Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
+
+                let blockhash = bank.last_blockhash();
+                vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
+                vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
+                cluster_info
+                    .write()
+                    .unwrap()
+                    .push_vote(tower_index, vote_tx);
+            }
+        } else {
+            warn!(
+                "Vote dropped for bank {}, bank censorship failure!!!",
+                bank.slot()
+            );
+            inc_new_counter_info!("replay_stage-votable_bank_censorship_failure", 1);
         }
-        Self::update_commitment_cache(bank.clone(), total_staked, lockouts_sender);
-
-        if let Some(ref voting_keypair) = voting_keypair {
-            let node_keypair = cluster_info.read().unwrap().keypair.clone();
-
-            // Send our last few votes along with the new one
-            let vote_ix =
-                vote_instruction::vote(&vote_account, &voting_keypair.pubkey(), tower.last_vote());
-
-            let mut vote_tx =
-                Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
-
-            let blockhash = bank.last_blockhash();
-            vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
-            vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
-            cluster_info
-                .write()
-                .unwrap()
-                .push_vote(tower_index, vote_tx);
-        }
-      } else {
-        warn!("Vote dropped for bank {}, bank censorship failure!!!", bank.slot());
-        inc_new_counter_info!("replay_stage-votable_bank_censorship_failure", 1);
-       }
         Ok(())
     }
 
