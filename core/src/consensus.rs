@@ -169,18 +169,19 @@ impl Tower {
     }
 
     fn new_vote(
+        threshold: usize,
         local_vote_state: &VoteState,
         slot: u64,
         hash: Hash,
         last_bank_slot: Option<Slot>,
-    ) -> (Vote, usize) {
+    ) -> Option<(Vote, usize)> {
         let mut local_vote_state = local_vote_state.clone();
         let vote = Vote {
             slots: vec![slot],
             hash,
         };
         local_vote_state.process_vote_unchecked(&vote);
-        let slots = if let Some(last_bank_slot) = last_bank_slot {
+        let slots: Vec<u64> = if let Some(last_bank_slot) = last_bank_slot {
             local_vote_state
                 .votes
                 .iter()
@@ -196,7 +197,11 @@ impl Tower {
             slots,
             local_vote_state.votes
         );
-        (Vote { slots, hash }, local_vote_state.votes.len() - 1)
+        if slots.len() > threshold {
+            None
+        } else {
+            Some((Vote { slots, hash }, local_vote_state.votes.len() - 1))
+        }
     }
 
     fn last_bank_vote(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
@@ -205,9 +210,9 @@ impl Tower {
         bank_vote_state.votes.iter().map(|v| v.slot).last()
     }
 
-    pub fn new_vote_from_bank(&self, bank: &Bank, vote_account_pubkey: &Pubkey) -> (Vote, usize) {
+    pub fn new_vote_from_bank(&self, bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<(Vote, usize)> {
         let last_vote = Self::last_bank_vote(bank, vote_account_pubkey);
-        Self::new_vote(&self.lockouts, bank.slot(), bank.hash(), last_vote)
+        Self::new_vote(self.threshold_depth, &self.lockouts, bank.slot(), bank.hash(), last_vote)
     }
 
     pub fn record_bank_vote(&mut self, vote: Vote) -> Option<Slot> {
@@ -793,7 +798,7 @@ mod test {
     #[test]
     fn test_new_vote() {
         let local = VoteState::default();
-        let vote = Tower::new_vote(&local, 0, Hash::default(), None);
+        let vote = Tower::new_vote(8, &local, 0, Hash::default(), None).unwrap();
         assert_eq!(local.votes.len(), 0);
         assert_eq!(vote.0.slots, vec![0]);
         assert_eq!(vote.1, 0);
@@ -802,7 +807,7 @@ mod test {
     #[test]
     fn test_new_vote_dup_vote() {
         let local = VoteState::default();
-        let vote = Tower::new_vote(&local, 0, Hash::default(), Some(0));
+        let vote = Tower::new_vote(8, &local, 0, Hash::default(), Some(0)).unwrap();
         assert!(vote.0.slots.is_empty());
     }
 
@@ -815,7 +820,7 @@ mod test {
         };
         local.process_vote_unchecked(&vote);
         assert_eq!(local.votes.len(), 1);
-        let vote = Tower::new_vote(&local, 1, Hash::default(), Some(0));
+        let vote = Tower::new_vote(8, &local, 1, Hash::default(), Some(0)).unwrap();
         assert_eq!(vote.0.slots, vec![1]);
         assert_eq!(vote.1, 1);
     }
@@ -829,11 +834,24 @@ mod test {
         };
         local.process_vote_unchecked(&vote);
         assert_eq!(local.votes.len(), 1);
-        let vote = Tower::new_vote(&local, 3, Hash::default(), Some(0));
+        let vote = Tower::new_vote(8, &local, 3, Hash::default(), Some(0)).unwrap();
         //first vote expired, so index should be 0
         assert_eq!(vote.0.slots, vec![3]);
         assert_eq!(vote.1, 0);
     }
+
+    #[test]
+    fn test_new_vote_threshold() {
+        let local = VoteState::default();
+        //network is censoring
+        let vote = Vote {
+            slots: vec![0,1,2,3],
+            hash: Hash::default(),
+        };
+        assert_eq!(Tower::new_vote(3, &local, 1, Hash::default(), Some(0)), None);
+        assert_eq!(Tower::new_vote(4, &local, 0, Hash::default(), Some(0)), Some((vote, 4)));
+    }
+
 
     #[test]
     fn test_check_vote_threshold_forks() {

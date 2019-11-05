@@ -496,7 +496,7 @@ impl ReplayStage {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
         trace!("handle votable bank {}", bank.slot());
-        let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account);
+        if let Some((vote, tower_index)) = tower.new_vote_from_bank(bank, vote_account) {
         if let Some(new_root) = tower.record_bank_vote(vote) {
             // get the root bank before squash
             let root_bank = bank_forks
@@ -547,6 +547,10 @@ impl ReplayStage {
                 .unwrap()
                 .push_vote(tower_index, vote_tx);
         }
+      } else {
+        warn!("Vote dropped for bank {}, bank censorship failure!!!", bank.slot());
+        inc_new_counter_info!("replay_stage-votable_bank_censorship_failure", 1);
+       }
         Ok(())
     }
 
