@@ -742,8 +742,8 @@ impl Blocktree {
                 (
                     "error",
                     format!(
-                        "Received index {} >= slot.last_index {}",
-                        shred_index, last_index
+                        "Slot {}: received index {} >= slot.last_index {}",
+                        slot, shred_index, last_index
                     ),
                     String
                 )
@@ -758,8 +758,8 @@ impl Blocktree {
                 (
                     "error",
                     format!(
-                        "Received shred_index {} < slot.received {}",
-                        shred_index, slot_meta.received
+                        "Slot {}: received shred_index {} < slot.received {}",
+                        slot, shred_index, slot_meta.received
                     ),
                     String
                 )
