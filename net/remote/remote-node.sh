@@ -148,6 +148,11 @@ cat >> ~/solana/on-reboot <<EOF
     echo "Expected GPU, found none!"
     export SOLANA_GPU_MISSING=1
   fi
+
+  if [[ -n "$netemConfig" ]]; then
+    scripts/netem.sh add "$netemConfig"
+    echo "$netemConfig" > netem.cfg
+  fi
 EOF
 
   case $nodeType in
@@ -242,11 +247,6 @@ EOF
       solana --url http://"$entrypointIp":8899 \
         --keypair ~/solana/config/bootstrap-leader/identity-keypair.json \
         validator-info publish "$(hostname)" -n team/solana --force || true
-    fi
-
-    if [[ -n "$netemConfig" ]]; then
-      ~/solana/scripts/netem.sh add "$netemConfig"
-      echo "$netemConfig" > ~/solana/netem.cfg
     fi
     ;;
   validator|blockstreamer)
@@ -377,11 +377,6 @@ EOF
       solana --url http://"$entrypointIp":8899 \
         --keypair config/validator-identity.json \
         validator-info publish "$(hostname)" -n team/solana --force || true
-    fi
-
-    if [[ -n "$netemConfig" ]]; then
-      ~/solana/scripts/netem.sh add "$netemConfig"
-      echo "$netemConfig" > ~/solana/netem.cfg
     fi
     ;;
   archiver)
