@@ -88,7 +88,7 @@ impl PreInstructionAccount {
 pub fn need_account_data_checked(program_id: &Pubkey, owner: &Pubkey, is_writable: bool) -> bool {
     // For accounts not assigned to the program, the data may not change.
     program_id != owner
-    // Credit-only account data may not change.
+    // Read-only account data may not change.
     || !is_writable
 }
 pub fn verify_instruction(
@@ -319,7 +319,7 @@ impl MessageProcessor {
 
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
 
-        // Verify the accounts
+        // Verify the instruction
         for (pre_account, post_account) in pre_accounts.iter().zip(program_accounts.iter()) {
             verify_instruction(&program_id, pre_account, post_account)?;
         }
