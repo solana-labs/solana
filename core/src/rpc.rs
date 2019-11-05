@@ -62,10 +62,12 @@ pub struct JsonRpcRequestProcessor {
 
 impl JsonRpcRequestProcessor {
     fn bank(&self, commitment_config: ParsedCommitment) -> Result<Arc<Bank>> {
+        // Lock both commitment_cache and bank_forks
+        let r_bank_forks = self.bank_forks.read().unwrap();
+        let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
+
         debug!("RPC commitment_config: {:?}", commitment_config);
-        self.block_commitment_cache
-            .read()
-            .unwrap()
+        r_block_commitment_cache
             .get_block_with_depth_commitment(commitment_config.clone())
             .ok_or_else(|| {
                 Error::invalid_params(format!(
@@ -75,9 +77,13 @@ impl JsonRpcRequestProcessor {
             })
             .and_then(|block| {
                 debug!("RPC using block: {:?}", block);
-                self.bank_forks.read().unwrap().get(block).cloned().ok_or_else(|| {
+                r_bank_forks.get(block).cloned().ok_or_else(|| {
                     // Should not happen
-                    Error::invalid_params("Could not load selected block; bank_forks and block_commitment_cache are out of sync")
+                    Error::invalid_params(format!(
+                        "Could not load selected block: {:?}; bank_forks root: {:?}",
+                        block,
+                        r_bank_forks.root()
+                    ))
                 })
             })
     }
