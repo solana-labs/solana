@@ -209,6 +209,7 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --netem ]]; then
       netemConfig=$2
+      shift 2
     elif [[ $1 = --gpu-mode ]]; then
       gpuMode=$2
       case "$gpuMode" in

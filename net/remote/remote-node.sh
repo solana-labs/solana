@@ -244,9 +244,9 @@ EOF
         validator-info publish "$(hostname)" -n team/solana --force || true
     fi
 
-    if [[ -n $netemConfig ]]; then
-      script/netem.sh add "$netemConfig"
-      echo "$netemConfig" > netem.cfg
+    if [[ -n "$netemConfig" ]]; then
+      ~/solana/scripts/netem.sh add "$netemConfig"
+      echo "$netemConfig" > ~/solana/netem.cfg
     fi
     ;;
   validator|blockstreamer)
@@ -379,9 +379,9 @@ EOF
         validator-info publish "$(hostname)" -n team/solana --force || true
     fi
 
-    if [[ -n $netemConfig ]]; then
-      script/netem.sh add "$netemConfig"
-      echo "$netemConfig" > netem.cfg
+    if [[ -n "$netemConfig" ]]; then
+      ~/solana/scripts/netem.sh add "$netemConfig"
+      echo "$netemConfig" > ~/solana/netem.cfg
     fi
     ;;
   archiver)
