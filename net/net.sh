@@ -88,6 +88,8 @@ Operate a configured testnet
 
    --use-move                         - Build the move-loader-program and add it to the cluster
 
+   --netem                            - Use netem to induce packet drops/latencies/errors
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -141,6 +143,7 @@ debugBuild=false
 doBuild=true
 gpuMode=auto
 maybeUseMove=""
+netemConfig=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -204,6 +207,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --use-move ]]; then
       maybeUseMove=$1
       shift 1
+    elif [[ $1 = --netem ]]; then
+      netemConfig=$2
+      shift 2
     elif [[ $1 = --gpu-mode ]]; then
       gpuMode=$2
       case "$gpuMode" in
@@ -459,6 +465,7 @@ startBootstrapLeader() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
+         \"$netemConfig\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -526,6 +533,7 @@ startNode() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
+         \"$netemConfig\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -823,6 +831,10 @@ stopNode() {
           \$sudo kill -- -\$pgid
         fi
       done
+      if [[ -f solana/netem.cfg ]]; then
+        solana/scripts/netem.sh delete < solana/netem.cfg
+        rm -f solana/netem.cfg
+      fi
       for pattern in node solana- remote-; do
         pkill -9 \$pattern
       done
