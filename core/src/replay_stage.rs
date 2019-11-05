@@ -793,6 +793,23 @@ impl ReplayStage {
             );
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
+<<<<<<< HEAD
+=======
+
+        datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
+        let mut verify_total = Measure::start("verify_and_process_entries");
+        let mut entry_state = entries.start_verify(last_entry);
+
+        let mut replay_elapsed = Measure::start("replay_elapsed");
+        let res = blocktree_processor::process_entries(bank, entries, true);
+        replay_elapsed.stop();
+        bank_progress.stats.replay_elapsed += replay_elapsed.as_us();
+
+        if !entry_state.finish_verify(entries) {
+            return handle_block_error(BlockError::InvalidEntryHash);
+        }
+
+>>>>>>> 57983980a... Lower verify-batch-size to debug (#6722)
         verify_total.stop();
         bank_progress.stats.entry_verification_elapsed =
             verify_total.as_us() - replay_elapsed.as_us();
