@@ -12,7 +12,6 @@ pub mod chacha;
 pub mod chacha_cuda;
 pub mod cluster_info_vote_listener;
 pub mod commitment;
-pub mod confidence;
 pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
