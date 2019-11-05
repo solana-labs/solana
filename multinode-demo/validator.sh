@@ -98,7 +98,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --limit-ledger-size ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --skip-ledger-verify ]]; then
+    elif [[ $1 = --skip-poh-verify ]]; then
       args+=("$1")
       shift
     elif [[ $1 = --no-snapshot-fetch ]]; then
@@ -140,7 +140,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --limit-ledger-size ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --skip-ledger-verify ]]; then
+    elif [[ $1 = --skip-poh-verify ]]; then
       args+=("$1")
       shift
     elif [[ $1 = -h ]]; then
