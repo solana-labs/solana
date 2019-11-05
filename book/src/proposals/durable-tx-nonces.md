@@ -39,7 +39,7 @@ InitializeInstruction(hash)
     success
   else
     error
-SpendInstruction(spend_hash, next_hash)
+NonceInstruction(spend_hash, next_hash)
   if spend_hash == stored_hash
     if next_hash is recent
       stored_hash = next_hash
@@ -53,7 +53,7 @@ SpendInstruction(spend_hash, next_hash)
 ### Runtime Support
 
 The contract alone is not sufficient for implementing this feature, as an extant
-`recent_blockhash` is still required on any transaction executing the `Spend`
+`recent_blockhash` is still required on any transaction executing the `Nonce`
 instruction. To alleviate this, a `flags` field will be added to the transaction
 message and one bit reserved to signal the use of a Durable Transaction Nonce,
 which skips the typical age check.
