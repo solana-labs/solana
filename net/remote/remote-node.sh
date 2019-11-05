@@ -26,6 +26,7 @@ genesisOptions="${17}"
 extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
 GEOLOCATION_API_KEY="${20}"
+netemConfig="${21}"
 set +x
 
 # Use a very large stake (relative to the default multinode-demo/ stake of 42)
@@ -242,6 +243,11 @@ EOF
         --keypair ~/solana/config/bootstrap-leader/identity-keypair.json \
         validator-info publish "$(hostname)" -n team/solana --force || true
     fi
+
+    if [[ -n $netemConfig ]]; then
+      script/netem.sh add "$netemConfig"
+      echo "$netemConfig" > netem.cfg
+    fi
     ;;
   validator|blockstreamer)
     if [[ $deployMethod != skip ]]; then
@@ -371,6 +377,11 @@ EOF
       solana --url http://"$entrypointIp":8899 \
         --keypair config/validator-identity.json \
         validator-info publish "$(hostname)" -n team/solana --force || true
+    fi
+
+    if [[ -n $netemConfig ]]; then
+      script/netem.sh add "$netemConfig"
+      echo "$netemConfig" > netem.cfg
     fi
     ;;
   archiver)
