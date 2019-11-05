@@ -196,7 +196,7 @@ pub type ProcessCallback = Arc<dyn Fn(&Bank) -> () + Sync + Send>;
 
 #[derive(Default)]
 pub struct ProcessOptions {
-    pub ledger_poh_verify: bool,
+    pub poh_verify: bool,
     pub full_leader_cache: bool,
     pub dev_halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
@@ -303,7 +303,7 @@ fn verify_and_process_slot_entries(
 ) -> result::Result<Hash, BlocktreeProcessorError> {
     assert!(!entries.is_empty());
 
-    if opts.ledger_poh_verify {
+    if opts.poh_verify {
         let next_bank_tick_height = bank.tick_height() + entries.tick_count();
         let max_bank_tick_height = bank.max_tick_height();
         if next_bank_tick_height != max_bank_tick_height {
@@ -577,7 +577,7 @@ pub mod tests {
             .expect("Expected to write shredded entries to blocktree");
 
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         assert_eq!(
@@ -617,7 +617,7 @@ pub mod tests {
             .expect("Expected to write shredded entries to blocktree");
 
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         assert_eq!(
@@ -668,7 +668,7 @@ pub mod tests {
             .expect("Expected to write shredded entries to blocktree");
 
         let opts = ProcessOptions {
-            verify_ledger: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         assert_eq!(
@@ -734,7 +734,7 @@ pub mod tests {
         fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, blockhash);
 
         let opts = ProcessOptions {
-            skip_ledger_poh_verify: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (mut _bank_forks, bank_forks_info, _) =
@@ -796,7 +796,7 @@ pub mod tests {
         blocktree.set_roots(&[0, 1, 4]).unwrap();
 
         let opts = ProcessOptions {
-            ledger_poh_verify: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -870,7 +870,7 @@ pub mod tests {
         blocktree.set_roots(&[0, 1]).unwrap();
 
         let opts = ProcessOptions {
-            ledger_poh_verify: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -950,7 +950,7 @@ pub mod tests {
 
         // Check that we can properly restart the ledger / leader scheduler doesn't fail
         let opts = ProcessOptions {
-            ledger_poh_verify: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -1097,7 +1097,7 @@ pub mod tests {
             )
             .unwrap();
         let opts = ProcessOptions {
-            ledger_poh_verify: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -1126,7 +1126,7 @@ pub mod tests {
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
-            ledger_poh_verify: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
@@ -1865,7 +1865,7 @@ pub mod tests {
         // Set up bank1
         let bank0 = Arc::new(Bank::new(&genesis_block));
         let opts = ProcessOptions {
-            ledger_poh_verify: true,
+            poh_verify: true,
             ..ProcessOptions::default()
         };
         process_bank_0(&bank0, &blocktree, &opts).unwrap();

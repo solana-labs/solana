@@ -118,7 +118,7 @@ impl Validator {
         voting_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
-        ledger_poh_verify: bool,
+        poh_verify: bool,
         config: &ValidatorConfig,
     ) -> Self {
         let id = keypair.pubkey();
@@ -171,7 +171,7 @@ impl Validator {
             ledger_path,
             config.account_paths.clone(),
             config.snapshot_config.clone(),
-            ledger_poh_verify,
+            poh_verify,
             config.dev_halt_at_slot,
         );
 
@@ -452,7 +452,7 @@ pub fn new_banks_from_blocktree(
     blocktree_path: &Path,
     account_paths: Option<String>,
     snapshot_config: Option<SnapshotConfig>,
-    ledger_poh_verify: bool,
+    poh_verify: bool,
     dev_halt_at_slot: Option<Slot>,
 ) -> (
     Hash,
@@ -488,7 +488,7 @@ pub fn new_banks_from_blocktree(
         Blocktree::open_with_signal(blocktree_path).expect("Failed to open ledger database");
 
     let process_options = blocktree_processor::ProcessOptions {
-        ledger_poh_verify,
+        poh_verify,
         dev_halt_at_slot,
         ..blocktree_processor::ProcessOptions::default()
     };

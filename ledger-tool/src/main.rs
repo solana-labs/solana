@@ -129,8 +129,8 @@ fn main() {
                 .help("Halt processing at the given slot"),
         )
         .arg(
-            clap::Arg::with_name("skip_ledger_poh_verify")
-                .long("skip-ledger-poh-verify")
+            clap::Arg::with_name("skip_poh_verify")
+                .long("skip-poh-verify")
                 .takes_value(false)
                 .help("Skip ledger PoH verification"),
         )
@@ -204,7 +204,7 @@ fn main() {
             println!("Verifying ledger...");
 
             let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
-            let ledger_poh_verify = !arg_matches.is_present("skip_ledger_poh_verify");
+            let poh_verify = !arg_matches.is_present("skip_poh_verify");
 
             let snapshot_config = if arg_matches.is_present("no_snapshot") {
                 None
@@ -222,7 +222,7 @@ fn main() {
             };
 
             let process_options = blocktree_processor::ProcessOptions {
-                ledger_poh_verify,
+                poh_verify,
                 dev_halt_at_slot,
                 ..blocktree_processor::ProcessOptions::default()
             };

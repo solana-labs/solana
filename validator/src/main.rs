@@ -392,8 +392,8 @@ pub fn main() {
                 .help("drop older slots in the ledger"),
         )
         .arg(
-            clap::Arg::with_name("skip_ledger_poh_verify")
-                .long("skip-ledger-poh-verify")
+            clap::Arg::with_name("skip_poh_verify")
+                .long("skip-poh-verify")
                 .takes_value(false)
                 .help("Skip ledger verification at node bootup"),
         )
@@ -539,7 +539,7 @@ pub fn main() {
     }
 
     let init_complete_file = matches.value_of("init_complete_file");
-    let skip_ledger_poh_verify = matches.is_present("skip_ledger_poh_verify");
+    let skip_poh_verify = matches.is_present("skip_poh_verify");
     validator_config.blockstream_unix_socket = matches
         .value_of("blockstream_unix_socket")
         .map(PathBuf::from);
@@ -640,7 +640,7 @@ pub fn main() {
         &Arc::new(voting_keypair),
         &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
-        !skip_ledger_poh_verify,
+        !skip_poh_verify,
         &validator_config,
     );
 
