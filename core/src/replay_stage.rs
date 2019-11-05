@@ -578,9 +578,10 @@ impl ReplayStage {
         };
 
         info!(
-            "{} voted and reset PoH at tick height {}. {}",
+            "{} voted and reset PoH to tick {} (within slot {}). {}",
             my_pubkey,
             bank.tick_height(),
+            bank.slot(),
             next_leader_msg,
         );
     }
