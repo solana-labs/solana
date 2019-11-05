@@ -6,7 +6,7 @@ use clap::{
 };
 use num_cpus;
 use solana_sdk::{
-    pubkey::write_pubkey,
+    pubkey::write_pubkey_file,
     signature::{
         keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
         Keypair, KeypairUtil,
@@ -182,7 +182,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
                 check_for_overwrite(&outfile, &matches);
-                write_pubkey(outfile, keypair.pubkey())?;
+                write_pubkey_file(outfile, keypair.pubkey())?;
             } else {
                 println!("{}", keypair.pubkey());
             }
