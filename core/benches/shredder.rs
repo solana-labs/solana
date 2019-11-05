@@ -2,12 +2,12 @@
 
 extern crate test;
 
-use solana_core::test_tx;
 use solana_ledger::entry::{create_ticks, Entry};
 use solana_ledger::shred::{
     max_entries_per_n_shred, max_ticks_per_n_shreds, Shred, Shredder, RECOMMENDED_FEC_RATE,
     SIZE_OF_DATA_SHRED_PAYLOAD,
 };
+use solana_perf::test_tx;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::sync::Arc;

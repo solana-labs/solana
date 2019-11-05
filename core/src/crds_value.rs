@@ -235,8 +235,8 @@ impl CrdsValue {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::test_tx::test_tx;
     use bincode::deserialize;
+    use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::timestamp;
 

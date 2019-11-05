@@ -10,7 +10,7 @@ use solana_core::packet::to_packets_chunked;
 use solana_core::service::Service;
 use solana_core::sigverify::TransactionSigVerifier;
 use solana_core::sigverify_stage::SigVerifyStage;
-use solana_core::test_tx::test_tx;
+use solana_perf::test_tx::test_tx;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;
