@@ -6,12 +6,12 @@
 //!
 
 pub mod banking_stage;
+pub mod blob;
 pub mod broadcast_stage;
 pub mod chacha;
 pub mod chacha_cuda;
 pub mod cluster_info_vote_listener;
 pub mod commitment;
-pub mod recycler;
 pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
@@ -27,7 +27,6 @@ pub mod crds_gossip_error;
 pub mod crds_gossip_pull;
 pub mod crds_gossip_push;
 pub mod crds_value;
-pub mod cuda_runtime;
 pub mod fetch_stage;
 pub mod gen_keys;
 pub mod genesis_utils;

@@ -218,7 +218,7 @@ mod tests {
             .collect::<Vec<_>>();
         bank_sender.send(rooted_banks).unwrap();
 
-        if solana_ledger::perf_libs::api().is_some() {
+        if solana_perf::perf_libs::api().is_some() {
             for _ in 0..5 {
                 result = storage_state.get_mining_result(&signature);
                 if result != Hash::default() {
@@ -234,7 +234,7 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
 
-        if solana_ledger::perf_libs::api().is_some() {
+        if solana_perf::perf_libs::api().is_some() {
             assert_ne!(result, Hash::default());
         } else {
             assert_eq!(result, Hash::default());

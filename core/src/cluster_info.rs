@@ -13,12 +13,13 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use crate::{
+    blob::{to_shared_blob, Blob, SharedBlob},
     contact_info::ContactInfo,
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, Vote},
-    packet::{to_shared_blob, Blob, Packet, SharedBlob},
+    packet::Packet,
     repair_service::RepairType,
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},

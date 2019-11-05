@@ -3,8 +3,7 @@
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::{
     cluster_info::ClusterInfo,
-    packet::PACKETS_PER_BATCH,
-    packet::{Packet, Packets},
+    packet::{Packet, Packets, PACKETS_PER_BATCH},
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
     result::{Error, Result},
@@ -15,10 +14,10 @@ use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use solana_ledger::{
     blocktree::Blocktree, entry::hash_transactions, leader_schedule_cache::LeaderScheduleCache,
-    perf_libs,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
+use solana_perf::perf_libs;
 use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::TransactionBatch};
 use solana_sdk::clock::MAX_TRANSACTION_FORWARDING_DELAY_GPU;
 use solana_sdk::{

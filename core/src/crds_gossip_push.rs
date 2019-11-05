@@ -8,12 +8,12 @@
 //!    the local nodes wallclock window they are drooped silently.
 //! 2. The prune set is stored in a Bloom filter.
 
+use crate::blob::BLOB_DATA_SIZE;
 use crate::contact_info::ContactInfo;
 use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
-use crate::packet::BLOB_DATA_SIZE;
 use crate::weighted_shuffle::weighted_shuffle;
 use bincode::serialized_size;
 use indexmap::map::IndexMap;

@@ -21,6 +21,7 @@ solana-core = { path = "../core", version = "0.21.0" }
 solana-drone = { path = "../drone", version = "0.21.0" }
 solana-ledger = { path = "../ledger", version = "0.21.0" }
 solana-logger = { path = "../logger", version = "0.21.0" }
+solana-perf = { path = "../perf", version = "0.21.0" }
 solana-metrics = { path = "../metrics", version = "0.21.0" }
 solana-netutil = { path = "../netutil", version = "0.21.0" }
 solana-runtime = { path = "../runtime", version = "0.21.0" }

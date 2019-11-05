@@ -1,11 +1,10 @@
 //! The `recvmmsg` module provides recvmmsg() API implementation
 
 use crate::packet::Packet;
+pub use solana_ledger::packet::NUM_RCVMMSGS;
 use std::cmp;
 use std::io;
 use std::net::UdpSocket;
-
-pub const NUM_RCVMMSGS: usize = 128;
 
 #[cfg(not(target_os = "linux"))]
 pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {

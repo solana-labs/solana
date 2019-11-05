@@ -480,8 +480,8 @@ impl Service for ClusterInfoRepairListener {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blob::{Blob, SharedBlob};
     use crate::cluster_info::Node;
-    use crate::packet::{Blob, SharedBlob};
     use crate::streamer;
     use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::blocktree::make_many_slot_entries;
