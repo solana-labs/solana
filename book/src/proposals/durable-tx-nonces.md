@@ -60,7 +60,4 @@ which skips the typical age check.
 
 ### Open Questions
 
-* Should an instruction be added to explicitly drive the account state back to
-`Uninitialized` or just leave it subject to rent?
-
 * Should this feature be restricted in the number of uses per transaction?
