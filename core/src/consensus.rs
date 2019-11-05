@@ -842,14 +842,21 @@ mod test {
 
     #[test]
     fn test_new_vote_threshold() {
-        let local = VoteState::default();
+        let mut local = VoteState::default();
         //network is censoring
         let vote = Vote {
             slots: vec![0,1,2,3],
             hash: Hash::default(),
         };
-        assert_eq!(Tower::new_vote(3, &local, 1, Hash::default(), Some(0)), None);
-        assert_eq!(Tower::new_vote(4, &local, 0, Hash::default(), Some(0)), Some((vote, 4)));
+        local.process_vote_unchecked(&vote);
+        //vote 4 should be at threshold 5
+        assert_eq!(Tower::new_vote(4, &local, 4, Hash::default(), None), None);
+        //vote 6 has expried vote 3, and should be at threshold 4
+        let vote = Vote {
+            slots: vec![0,1,2,6],
+            hash: Hash::default(),
+        };
+        assert_eq!(Tower::new_vote(4, &local, 6, Hash::default(), None), Some((vote, 4)));
     }
 
 
