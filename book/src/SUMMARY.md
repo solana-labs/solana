@@ -55,6 +55,7 @@
   * [Inter-chain Transaction Verification](proposals/interchain-transaction-verification.md)
   * [Snapshot Verification](proposals/snapshot-verification.md)
   * [Bankless Leader](proposals/bankless-leader.md)
+  * [Durable Transaction Nonces](proposals/durable-tx-nonces.md)
 * [Implemented Design Proposals](implemented-proposals/README.md)
   * [Blocktree](implemented-proposals/blocktree.md)
   * [Cluster Software Installation and Updates](implemented-proposals/installer.md)
