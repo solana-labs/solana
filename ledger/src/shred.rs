@@ -115,7 +115,9 @@ impl Shred {
     where
         T: Deserialize<'de>,
     {
-        let ret = bincode::deserialize(&buf[*index..*index + size])?;
+        let ret = bincode::config()
+            .limit(PACKET_DATA_SIZE as u64)
+            .deserialize(&buf[*index..*index + size])?;
         *index += size;
         Ok(ret)
     }
