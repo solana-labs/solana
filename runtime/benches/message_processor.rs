@@ -21,7 +21,7 @@ fn bench_verify_instruction_data(bencher: &mut Bencher) {
 
     let owner = Pubkey::new_rand();
     let non_owner = Pubkey::new_rand();
-    let pre = PreAccount::new(
+    let pre = PreInstructionAccount::new(
         &Account::new(0, BUFSIZE, &owner),
         true,
         need_account_data_checked(&owner, &owner, true),
@@ -36,7 +36,7 @@ fn bench_verify_instruction_data(bencher: &mut Bencher) {
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data no change by owner: {} ns/iter", summary.median);
 
-    let pre = PreAccount::new(
+    let pre = PreInstructionAccount::new(
         &Account::new(0, BUFSIZE, &owner),
         true,
         need_account_data_checked(&owner, &non_owner, true),

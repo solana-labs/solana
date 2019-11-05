@@ -57,7 +57,9 @@ fn get_subset_unchecked_mut<'a, T>(
         .collect())
 }
 
-pub struct PreAccount {
+// The relevant state of an account before an Instruction executes, used
+// to verify account integrity after the Instruction completes
+pub struct PreInstructionAccount {
     pub is_writable: bool,
     pub lamports: u64,
     pub data_len: usize,
@@ -66,8 +68,8 @@ pub struct PreAccount {
     pub executable: bool,
     pub rent_epoch: Epoch,
 }
-impl PreAccount {
-    pub fn new(account: &Account, is_writeable: bool, copy_data: bool) -> Self {
+impl PreInstructionAccount {
+    pub fn new(account: &Account, is_writable: bool, copy_data: bool) -> Self {
         Self {
             is_writable,
             lamports: account.lamports,
@@ -83,15 +85,15 @@ impl PreAccount {
         }
     }
 }
-pub fn need_account_data_checked(program_id: &Pubkey, owner: &Pubkey, debitable: bool) -> bool {
+pub fn need_account_data_checked(program_id: &Pubkey, owner: &Pubkey, is_writable: bool) -> bool {
     // For accounts not assigned to the program, the data may not change.
     program_id != owner
     // Credit-only account data may not change.
-    || !debitable
+    || !is_writable
 }
 pub fn verify_instruction(
     program_id: &Pubkey,
-    pre: &PreAccount,
+    pre: &PreInstructionAccount,
     post: &Account,
 ) -> Result<(), InstructionError> {
     // Verify the transaction
@@ -114,9 +116,9 @@ pub fn verify_instruction(
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
 
-    // The balance of credit-only accounts may only increase.
+    // The balance of read-only accounts may not change.
     if !pre.is_writable // line coverage used to get branch coverage
-        && pre.lamports > post.lamports
+        && pre.lamports != post.lamports
     {
         return Err(InstructionError::ReadonlyLamportChange);
     }
@@ -130,10 +132,16 @@ pub fn verify_instruction(
         return Err(InstructionError::AccountDataSizeChanged);
     }
 
-    if need_account_data_checked(&pre.owner, program_id, pre.debitable) {
+    if need_account_data_checked(&pre.owner, program_id, pre.is_writable) {
         match &pre.data {
             Some(data) if *data == post.data => (),
-            _ => return Err(InstructionError::ExternalAccountDataModified),
+            _ => {
+                if !pre.is_writable {
+                    return Err(InstructionError::ReadonlyDataModified);
+                } else {
+                    return Err(InstructionError::ExternalAccountDataModified);
+                }
+            }
         }
     }
 
@@ -298,11 +306,11 @@ impl MessageProcessor {
             .iter_mut()
             .enumerate()
             .map(|(i, account)| {
-                let is_writeable = message.is_writeable(instruction.accounts[i] as usize);
-                PreAccount::new(
+                let is_writable = message.is_writable(instruction.accounts[i] as usize);
+                PreInstructionAccount::new(
                     account,
-                    is_writeable,
-                    need_account_data_checked(&account.owner, program_id, is_writeable),
+                    is_writable,
+                    need_account_data_checked(&account.owner, program_id, is_writable),
                 )
             })
             .collect();
@@ -312,9 +320,7 @@ impl MessageProcessor {
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
 
         // Verify the accounts
-        for (pre_account, post_account) in
-            pre_accounts.iter().zip(program_accounts.iter())
-        {
+        for (pre_account, post_account) in pre_accounts.iter().zip(program_accounts.iter()) {
             verify_instruction(&program_id, pre_account, post_account)?;
         }
         // The total sum of all the lamports in all the accounts cannot change.
@@ -437,10 +443,10 @@ mod tests {
         ) -> Result<(), InstructionError> {
             verify_instruction(
                 &ix,
-                &PreAccount::new(
+                &PreInstructionAccount::new(
                     &Account::new(0, 0, pre),
-                    is_writeable,
-                    need_account_data_checked(pre, ix, is_writeable),
+                    is_writable,
+                    need_account_data_checked(pre, ix, is_writable),
                 ),
                 &Account::new(0, 0, post),
             )
@@ -495,7 +501,7 @@ mod tests {
         assert_eq!(
             verify_instruction(
                 &mallory_program_id,
-                &PreAccount::new(
+                &PreInstructionAccount::new(
                     &Account::new_data(0, &[42], &mallory_program_id).unwrap(),
                     true,
                     need_account_data_checked(&mallory_program_id, &mallory_program_id, true),
@@ -508,7 +514,7 @@ mod tests {
         assert_eq!(
             verify_instruction(
                 &mallory_program_id,
-                &PreAccount::new(
+                &PreInstructionAccount::new(
                     &Account::new_data(0, &[42], &mallory_program_id).unwrap(),
                     true,
                     need_account_data_checked(&mallory_program_id, &mallory_program_id, true),
@@ -528,14 +534,14 @@ mod tests {
                                  pre_executable: bool,
                                  post_executable: bool|
          -> Result<(), InstructionError> {
-            let pre = PreAccount::new(
+            let pre = PreInstructionAccount::new(
                 &Account {
                     owner,
                     executable: pre_executable,
                     ..Account::default()
                 },
-                is_writeable,
-                need_account_data_checked(&owner, &program_id, is_writeable),
+                is_writable,
+                need_account_data_checked(&owner, &program_id, is_writable),
             );
 
             let post = Account {
@@ -581,7 +587,7 @@ mod tests {
         assert_eq!(
             verify_instruction(
                 &system_program::id(),
-                &PreAccount::new(
+                &PreInstructionAccount::new(
                     &Account::new_data(0, &[0], &system_program::id()).unwrap(),
                     true,
                     need_account_data_checked(&system_program::id(), &system_program::id(), true),
@@ -596,7 +602,7 @@ mod tests {
         assert_eq!(
             verify_instruction(
                 &system_program::id(),
-                &PreAccount::new(
+                &PreInstructionAccount::new(
                     &Account::new_data(0, &[0], &alice_program_id).unwrap(),
                     true,
                     need_account_data_checked(&alice_program_id, &system_program::id(), true),
@@ -613,11 +619,11 @@ mod tests {
         let alice_program_id = Pubkey::new_rand();
 
         let change_data =
-            |program_id: &Pubkey, is_writeable: bool| -> Result<(), InstructionError> {
-                let pre = PreAccount::new(
+            |program_id: &Pubkey, is_writable: bool| -> Result<(), InstructionError> {
+                let pre = PreInstructionAccount::new(
                     &Account::new_data(0, &[0], &alice_program_id).unwrap(),
-                    is_writeable,
-                    need_account_data_checked(&alice_program_id, &program_id, is_writeable),
+                    is_writable,
+                    need_account_data_checked(&alice_program_id, &program_id, is_writable),
                 );
                 let post = Account::new_data(0, &[42], &alice_program_id).unwrap();
                 verify_instruction(&program_id, &pre, &post)
@@ -646,7 +652,7 @@ mod tests {
     #[test]
     fn test_verify_instruction_rent_epoch() {
         let alice_program_id = Pubkey::new_rand();
-        let pre = PreAccount::new(
+        let pre = PreInstructionAccount::new(
             &Account::new(0, 0, &alice_program_id),
             false,
             need_account_data_checked(&alice_program_id, &system_program::id(), false),
@@ -671,7 +677,7 @@ mod tests {
     fn test_verify_instruction_deduct_lamports_and_reassign_account() {
         let alice_program_id = Pubkey::new_rand();
         let bob_program_id = Pubkey::new_rand();
-        let pre = PreAccount::new(
+        let pre = PreInstructionAccount::new(
             &Account::new_data(42, &[42], &alice_program_id).unwrap(),
             true,
             need_account_data_checked(&alice_program_id, &alice_program_id, true),
@@ -689,7 +695,7 @@ mod tests {
     #[test]
     fn test_verify_instruction_change_lamports() {
         let alice_program_id = Pubkey::new_rand();
-        let pre = PreAccount::new(
+        let pre = PreInstructionAccount::new(
             &Account::new(42, 0, &alice_program_id),
             false,
             need_account_data_checked(&alice_program_id, &system_program::id(), false),
@@ -702,7 +708,7 @@ mod tests {
             "debit should fail, even if system program"
         );
 
-        let pre = PreAccount::new(
+        let pre = PreInstructionAccount::new(
             &Account::new(42, 0, &alice_program_id),
             false,
             need_account_data_checked(&alice_program_id, &alice_program_id, false),
@@ -714,7 +720,7 @@ mod tests {
             "debit should fail, even if owning program"
         );
 
-        let pre = PreAccount::new(
+        let pre = PreInstructionAccount::new(
             &Account::new(42, 0, &alice_program_id),
             true,
             need_account_data_checked(&alice_program_id, &system_program::id(), true),
@@ -726,7 +732,7 @@ mod tests {
             "system program can't debit the account unless it was the pre.owner"
         );
 
-        let pre = PreAccount::new(
+        let pre = PreInstructionAccount::new(
             &Account::new(42, 0, &system_program::id()),
             true,
             need_account_data_checked(&system_program::id(), &system_program::id(), true),
@@ -742,7 +748,7 @@ mod tests {
     #[test]
     fn test_verify_instruction_data_size_changed() {
         let alice_program_id = Pubkey::new_rand();
-        let pre = PreAccount::new(
+        let pre = PreInstructionAccount::new(
             &Account::new_data(42, &[0], &alice_program_id).unwrap(),
             true,
             need_account_data_checked(&alice_program_id, &system_program::id(), true),
@@ -753,7 +759,7 @@ mod tests {
             Err(InstructionError::AccountDataSizeChanged),
             "system program should not be able to change another program's account data size"
         );
-        let pre = PreAccount::new(
+        let pre = PreInstructionAccount::new(
             &Account::new_data(42, &[0], &alice_program_id).unwrap(),
             true,
             need_account_data_checked(&alice_program_id, &alice_program_id, true),
@@ -763,7 +769,7 @@ mod tests {
             Err(InstructionError::AccountDataSizeChanged),
             "non-system programs cannot change their data size"
         );
-        let pre = PreAccount::new(
+        let pre = PreInstructionAccount::new(
             &Account::new_data(42, &[0], &system_program::id()).unwrap(),
             true,
             need_account_data_checked(&system_program::id(), &system_program::id(), true),
