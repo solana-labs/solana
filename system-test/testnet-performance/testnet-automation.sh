@@ -24,6 +24,7 @@ function analyze_packet_loss {
     # shellcheck disable=SC2154
     for ip in "${validatorIpList[@]}" ; do
       iftop_log=iftop-logs/"$ip"-iftop.log
+      # shellcheck disable=SC2016
       net/ssh.sh solana@"$ip" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log' "$ip" > "$iftop_log"
       upload-ci-artifact "$iftop_log"
     done
