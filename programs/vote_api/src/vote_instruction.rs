@@ -152,7 +152,7 @@ pub fn withdraw(
     let account_metas = metas_for_authorized_signer(
         vote_pubkey,
         withdrawer_pubkey,
-        &[AccountMeta::new_read_only(*to_pubkey, false)],
+        &[AccountMeta::new(*to_pubkey, false)],
     );
 
     Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)

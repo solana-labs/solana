@@ -259,7 +259,7 @@ pub fn authorize(
 pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
-        AccountMeta::new_read_only(*vote_pubkey, false),
+        AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new(crate::rewards_pools::random_id(), false),
         AccountMeta::new_read_only(sysvar::rewards::id(), false),
         AccountMeta::new_read_only(sysvar::stake_history::id(), false),
@@ -293,7 +293,7 @@ pub fn withdraw(
     let account_metas = metas_with_signer(
         &[
             AccountMeta::new(*stake_pubkey, false),
-            AccountMeta::new_read_only(*to_pubkey, false),
+            AccountMeta::new(*to_pubkey, false),
             AccountMeta::new_read_only(sysvar::clock::id(), false),
             AccountMeta::new_read_only(sysvar::stake_history::id(), false),
         ],

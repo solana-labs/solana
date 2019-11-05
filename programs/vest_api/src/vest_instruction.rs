@@ -123,7 +123,7 @@ pub fn redeem_tokens(contract: &Pubkey, date_pubkey: &Pubkey, to: &Pubkey) -> In
     let account_metas = vec![
         AccountMeta::new(*contract, false),
         AccountMeta::new_read_only(*date_pubkey, false),
-        AccountMeta::new_read_only(*to, false),
+        AccountMeta::new(*to, false),
     ];
     Instruction::new(id(), &VestInstruction::RedeemTokens, account_metas)
 }
@@ -134,7 +134,7 @@ pub fn terminate(contract: &Pubkey, from: &Pubkey, to: &Pubkey) -> Instruction {
         AccountMeta::new(*from, true),
     ];
     if from != to {
-        account_metas.push(AccountMeta::new_read_only(*to, false));
+        account_metas.push(AccountMeta::new(*to, false));
     }
     Instruction::new(id(), &VestInstruction::Terminate, account_metas)
 }
