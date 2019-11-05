@@ -2221,7 +2221,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_only_accounts() {
+    fn test_readonly_accounts() {
         let GenesisBlockInfo {
             genesis_block,
             mint_keypair,
@@ -2291,7 +2291,7 @@ mod tests {
         );
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
-        // However, an account may not be locked as read-only and read-write at the same time.
+        // However, an account may not be locked as read-only and writable at the same time.
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Err(TransactionError::AccountInUse));
     }
@@ -2330,7 +2330,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_only_relaxed_locks() {
+    fn test_readonly_relaxed_locks() {
         let (genesis_block, _) = create_genesis_block(3);
         let bank = Bank::new(&genesis_block);
         let key0 = Keypair::new();
@@ -2341,8 +2341,8 @@ mod tests {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
-                num_read_only_signed_accounts: 0,
-                num_read_only_unsigned_accounts: 1,
+                num_readonly_signed_accounts: 0,
+                num_readonly_unsigned_accounts: 1,
             },
             account_keys: vec![key0.pubkey(), key3],
             recent_blockhash: Hash::default(),
@@ -2354,13 +2354,13 @@ mod tests {
         let batch0 = bank.prepare_batch(&txs, None);
         assert!(batch0.lock_results()[0].is_ok());
 
-        // Try locking accounts, locking a previously read-only account as read-write
+        // Try locking accounts, locking a previously read-only account as writable
         // should fail
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
-                num_read_only_signed_accounts: 0,
-                num_read_only_unsigned_accounts: 0,
+                num_readonly_signed_accounts: 0,
+                num_readonly_unsigned_accounts: 0,
             },
             account_keys: vec![key1.pubkey(), key3],
             recent_blockhash: Hash::default(),
@@ -2376,8 +2376,8 @@ mod tests {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
-                num_read_only_signed_accounts: 0,
-                num_read_only_unsigned_accounts: 1,
+                num_readonly_signed_accounts: 0,
+                num_readonly_unsigned_accounts: 1,
             },
             account_keys: vec![key2.pubkey(), key3],
             recent_blockhash: Hash::default(),

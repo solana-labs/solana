@@ -14,7 +14,7 @@
 
       * **num\_credit\_only\_signed\_accounts:** The last
 
-        `num_read_only_signed_accounts` signatures refer to signing
+        `num_readonly_signed_accounts` signatures refer to signing
 
         credit only accounts. Credit only accounts can be used concurrently
 
@@ -24,7 +24,7 @@
 
       * **num\_credit\_only\_unsigned\_accounts:** The last
 
-        `num_read_only_unsigned_accounts` public keys in `account_keys` refer
+        `num_readonly_unsigned_accounts` public keys in `account_keys` refer
 
         to non-signing credit only accounts
 

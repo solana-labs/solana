@@ -165,7 +165,7 @@ pub fn apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruc
 /// Apply account data to a contract waiting on an AccountData witness.
 pub fn apply_account_data(witness_pubkey: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new_read_only(*witness_pubkey, false),
+        AccountMeta::new_readonly(*witness_pubkey, false),
         AccountMeta::new(*contract, false),
         AccountMeta::new(*to, false),
     ];

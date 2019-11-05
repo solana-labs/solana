@@ -137,7 +137,7 @@ pub fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Locku
         &StakeInstruction::Initialize(*authorized, *lockup),
         vec![
             AccountMeta::new(*stake_pubkey, false),
-            AccountMeta::new_read_only(sysvar::rent::id(), false),
+            AccountMeta::new_readonly(sysvar::rent::id(), false),
         ],
     )
 }
@@ -235,7 +235,7 @@ fn metas_with_signer(
     }
 
     // signer wasn't in metas, append it after normal parameters
-    metas.push(AccountMeta::new_read_only(*signer, true));
+    metas.push(AccountMeta::new_readonly(*signer, true));
 
     metas
 }
@@ -261,8 +261,8 @@ pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instr
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new(crate::rewards_pools::random_id(), false),
-        AccountMeta::new_read_only(sysvar::rewards::id(), false),
-        AccountMeta::new_read_only(sysvar::stake_history::id(), false),
+        AccountMeta::new_readonly(sysvar::rewards::id(), false),
+        AccountMeta::new_readonly(sysvar::stake_history::id(), false),
     ];
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
@@ -275,9 +275,9 @@ pub fn delegate_stake(
     let account_metas = metas_with_signer(
         &[
             AccountMeta::new(*stake_pubkey, false),
-            AccountMeta::new_read_only(*vote_pubkey, false),
-            AccountMeta::new_read_only(sysvar::clock::id(), false),
-            AccountMeta::new_read_only(crate::config::id(), false),
+            AccountMeta::new_readonly(*vote_pubkey, false),
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(crate::config::id(), false),
         ],
         authorized_pubkey,
     );
@@ -294,8 +294,8 @@ pub fn withdraw(
         &[
             AccountMeta::new(*stake_pubkey, false),
             AccountMeta::new(*to_pubkey, false),
-            AccountMeta::new_read_only(sysvar::clock::id(), false),
-            AccountMeta::new_read_only(sysvar::stake_history::id(), false),
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(sysvar::stake_history::id(), false),
         ],
         authorized_pubkey,
     );
@@ -306,7 +306,7 @@ pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> In
     let account_metas = metas_with_signer(
         &[
             AccountMeta::new(*stake_pubkey, false),
-            AccountMeta::new_read_only(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
         ],
         authorized_pubkey,
     );

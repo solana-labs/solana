@@ -35,22 +35,22 @@ fn compile_instructions(ixs: Vec<Instruction>, keys: &[Pubkey]) -> Vec<CompiledI
 struct InstructionKeys {
     pub signed_keys: Vec<Pubkey>,
     pub unsigned_keys: Vec<Pubkey>,
-    pub num_read_only_signed_accounts: u8,
-    pub num_read_only_unsigned_accounts: u8,
+    pub num_readonly_signed_accounts: u8,
+    pub num_readonly_unsigned_accounts: u8,
 }
 
 impl InstructionKeys {
     fn new(
         signed_keys: Vec<Pubkey>,
         unsigned_keys: Vec<Pubkey>,
-        num_read_only_signed_accounts: u8,
-        num_read_only_unsigned_accounts: u8,
+        num_readonly_signed_accounts: u8,
+        num_readonly_unsigned_accounts: u8,
     ) -> Self {
         Self {
             signed_keys,
             unsigned_keys,
-            num_read_only_signed_accounts,
-            num_read_only_unsigned_accounts,
+            num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts,
         }
     }
 }
@@ -91,26 +91,26 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
 
     let mut signed_keys = vec![];
     let mut unsigned_keys = vec![];
-    let mut num_read_only_signed_accounts = 0;
-    let mut num_read_only_unsigned_accounts = 0;
+    let mut num_readonly_signed_accounts = 0;
+    let mut num_readonly_unsigned_accounts = 0;
     for account_meta in keys_and_signed.into_iter().unique_by(|x| x.pubkey) {
         if account_meta.is_signer {
             signed_keys.push(account_meta.pubkey);
             if !account_meta.is_writable {
-                num_read_only_signed_accounts += 1;
+                num_readonly_signed_accounts += 1;
             }
         } else {
             unsigned_keys.push(account_meta.pubkey);
             if !account_meta.is_writable {
-                num_read_only_unsigned_accounts += 1;
+                num_readonly_unsigned_accounts += 1;
             }
         }
     }
     InstructionKeys::new(
         signed_keys,
         unsigned_keys,
-        num_read_only_signed_accounts,
-        num_read_only_unsigned_accounts,
+        num_readonly_signed_accounts,
+        num_readonly_unsigned_accounts,
     )
 }
 
@@ -130,14 +130,14 @@ pub struct MessageHeader {
     /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
     pub num_required_signatures: u8,
 
-    /// The last num_read_only_signed_accounts of the signed keys are read-only accounts. Programs
+    /// The last num_readonly_signed_accounts of the signed keys are read-only accounts. Programs
     /// may process multiple transactions that load read-only accounts within a single PoH entry,
     /// but are not permitted to credit or debit lamports or modify account data. Transactions
     /// targeting the same read-write account are evaluated sequentially.
-    pub num_read_only_signed_accounts: u8,
+    pub num_readonly_signed_accounts: u8,
 
-    /// The last num_read_only_unsigned_accounts of the unsigned keys are read-only accounts.
-    pub num_read_only_unsigned_accounts: u8,
+    /// The last num_readonly_unsigned_accounts of the unsigned keys are read-only accounts.
+    pub num_readonly_unsigned_accounts: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -162,8 +162,8 @@ pub struct Message {
 impl Message {
     pub fn new_with_compiled_instructions(
         num_required_signatures: u8,
-        num_read_only_signed_accounts: u8,
-        num_read_only_unsigned_accounts: u8,
+        num_readonly_signed_accounts: u8,
+        num_readonly_unsigned_accounts: u8,
         account_keys: Vec<Pubkey>,
         recent_blockhash: Hash,
         instructions: Vec<CompiledInstruction>,
@@ -171,8 +171,8 @@ impl Message {
         Self {
             header: MessageHeader {
                 num_required_signatures,
-                num_read_only_signed_accounts,
-                num_read_only_unsigned_accounts,
+                num_readonly_signed_accounts,
+                num_readonly_unsigned_accounts,
             },
             account_keys,
             recent_blockhash,
@@ -188,16 +188,16 @@ impl Message {
         let InstructionKeys {
             mut signed_keys,
             unsigned_keys,
-            num_read_only_signed_accounts,
-            num_read_only_unsigned_accounts,
+            num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts,
         } = get_keys(&instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
         let instructions = compile_instructions(instructions, &signed_keys);
         Self::new_with_compiled_instructions(
             num_required_signatures,
-            num_read_only_signed_accounts,
-            num_read_only_unsigned_accounts,
+            num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts,
             signed_keys,
             Hash::default(),
             instructions,
@@ -219,24 +219,24 @@ impl Message {
     }
 
     pub fn is_writable(&self, i: usize) -> bool {
-        i < (self.header.num_required_signatures - self.header.num_read_only_signed_accounts)
+        i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
-                    - self.header.num_read_only_unsigned_accounts as usize)
+                    - self.header.num_readonly_unsigned_accounts as usize)
     }
 
     pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
-        let mut read_write_keys = vec![];
-        let mut read_only_keys = vec![];
+        let mut writable_keys = vec![];
+        let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
             if self.is_writable(i) {
-                read_write_keys.push(key);
+                writable_keys.push(key);
             } else {
-                read_only_keys.push(key);
+                readonly_keys.push(key);
             }
         }
-        (read_write_keys, read_only_keys)
+        (writable_keys, readonly_keys)
     }
 }
 
@@ -399,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn test_message_read_only_keys_last() {
+    fn test_message_readonly_keys_last() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default(); // Identical key/program_id should be de-duped
         let id1 = Pubkey::new_rand();
@@ -407,8 +407,8 @@ mod tests {
         let id3 = Pubkey::new_rand();
         let keys = get_keys(
             &[
-                Instruction::new(program_id, &0, vec![AccountMeta::new_read_only(id0, false)]),
-                Instruction::new(program_id, &0, vec![AccountMeta::new_read_only(id1, true)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id1, true)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id2, false)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id3, true)]),
             ],
@@ -476,8 +476,8 @@ mod tests {
         let id1 = Pubkey::new_rand();
         let keys = get_keys(
             &[
-                Instruction::new(program_id, &0, vec![AccountMeta::new_read_only(id0, false)]),
-                Instruction::new(program_id, &0, vec![AccountMeta::new_read_only(id1, true)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id1, true)]),
             ],
             None,
         );
@@ -513,8 +513,8 @@ mod tests {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 3,
-                num_read_only_signed_accounts: 2,
-                num_read_only_unsigned_accounts: 1,
+                num_readonly_signed_accounts: 2,
+                num_readonly_unsigned_accounts: 1,
             },
             account_keys: vec![key0, key1, key2, key3, key4, key5],
             recent_blockhash: Hash::default(),
@@ -538,8 +538,8 @@ mod tests {
         let message = Message::new(vec![
             Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
             Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
-            Instruction::new(program_id, &0, vec![AccountMeta::new_read_only(id2, false)]),
-            Instruction::new(program_id, &0, vec![AccountMeta::new_read_only(id3, true)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id2, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id3, true)]),
         ]);
         assert_eq!(
             message.get_account_keys_by_lock_type(),

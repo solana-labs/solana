@@ -1,7 +1,7 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::{create_keyed_read_only_accounts, Account, KeyedAccount};
+use solana_sdk::account::{create_keyed_readonly_accounts, Account, KeyedAccount};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -65,7 +65,7 @@ pub fn verify_instruction(
     // Verify the transaction
 
     // Only the owner of the account may change owner and
-    //   only if the account is read-write and
+    //   only if the account is writable and
     //   only if the data is zero-initialized or empty
     if pre.owner != post.owner
         && (!is_writable // line coverage used to get branch coverage
@@ -86,7 +86,7 @@ pub fn verify_instruction(
     if !is_writable // line coverage used to get branch coverage
         && pre.lamports != post.lamports
     {
-        return Err(InstructionError::ReadOnlyLamportChange);
+        return Err(InstructionError::ReadonlyLamportChange);
     }
 
     // Only the system program can change the size of the data
@@ -128,7 +128,7 @@ pub fn verify_instruction(
     if !is_writable // line coverage used to get branch coverage
         && data_changed()
     {
-        return Err(InstructionError::ReadOnlyDataModified);
+        return Err(InstructionError::ReadonlyDataModified);
     }
 
     // executable is one-way (false->true) and only the account owner may set it.
@@ -225,7 +225,7 @@ impl MessageProcessor {
             &mut loader_ix_data,
         );
 
-        let mut keyed_accounts = create_keyed_read_only_accounts(executable_accounts);
+        let mut keyed_accounts = create_keyed_readonly_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
             .accounts
             .iter()
@@ -244,7 +244,7 @@ impl MessageProcessor {
                 if is_writable {
                     KeyedAccount::new(key, is_signer, account)
                 } else {
-                    KeyedAccount::new_read_only(key, is_signer, account)
+                    KeyedAccount::new_readonly(key, is_signer, account)
                 }
             })
             .collect();
@@ -611,7 +611,7 @@ mod tests {
 
         assert_eq!(
             change_data(&alice_program_id, false),
-            Err(InstructionError::ReadOnlyDataModified),
+            Err(InstructionError::ReadonlyDataModified),
             "alice isn't allowed to touch a CO account"
         );
     }
@@ -664,7 +664,7 @@ mod tests {
         );
         assert_eq!(
             verify_instruction(false, &alice_program_id, &pre, &post,),
-            Err(InstructionError::ReadOnlyLamportChange),
+            Err(InstructionError::ReadonlyLamportChange),
             "debit should fail, even if owning program"
         );
 
@@ -709,7 +709,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_message_read_only_handling() {
+    fn test_process_message_readonly_handling() {
         #[derive(Serialize, Deserialize)]
         enum MockSystemInstruction {
             Correct,
@@ -760,7 +760,7 @@ mod tests {
         let to_pubkey = Pubkey::new_rand();
         let account_metas = vec![
             AccountMeta::new(from_pubkey, true),
-            AccountMeta::new_read_only(to_pubkey, false),
+            AccountMeta::new_readonly(to_pubkey, false),
         ];
         let message = Message::new(vec![Instruction::new(
             mock_system_program_id,
@@ -784,7 +784,7 @@ mod tests {
             result,
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::ReadOnlyLamportChange
+                InstructionError::ReadonlyLamportChange
             ))
         );
 
@@ -799,7 +799,7 @@ mod tests {
             result,
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::ReadOnlyDataModified
+                InstructionError::ReadonlyDataModified
             ))
         );
     }

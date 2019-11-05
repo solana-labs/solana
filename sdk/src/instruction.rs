@@ -53,10 +53,10 @@ pub enum InstructionError {
     ExternalAccountDataModified,
 
     /// Read-only account modified lamports
-    ReadOnlyLamportChange,
+    ReadonlyLamportChange,
 
     /// Read-only account modified data
-    ReadOnlyDataModified,
+    ReadonlyDataModified,
 
     /// An account was referenced more than once in a single instruction
     DuplicateAccountIndex,
@@ -129,7 +129,7 @@ impl AccountMeta {
         }
     }
 
-    pub fn new_read_only(pubkey: Pubkey, is_signer: bool) -> Self {
+    pub fn new_readonly(pubkey: Pubkey, is_signer: bool) -> Self {
         Self {
             pubkey,
             is_signer,

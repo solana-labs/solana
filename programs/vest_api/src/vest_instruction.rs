@@ -122,7 +122,7 @@ pub fn set_payee(contract: &Pubkey, old_pubkey: &Pubkey, new_pubkey: &Pubkey) ->
 pub fn redeem_tokens(contract: &Pubkey, date_pubkey: &Pubkey, to: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*contract, false),
-        AccountMeta::new_read_only(*date_pubkey, false),
+        AccountMeta::new_readonly(*date_pubkey, false),
         AccountMeta::new(*to, false),
     ];
     Instruction::new(id(), &VestInstruction::RedeemTokens, account_metas)

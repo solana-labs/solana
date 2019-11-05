@@ -182,8 +182,8 @@ fn do_get_packet_offsets(
     let message_account_keys_len_offset = msg_start_offset + message_header_size;
 
     // This reads and compares the MessageHeader num_required_signatures and
-    // num_read_only_signed_accounts bytes. If num_required_signatures is not larger than
-    // num_read_only_signed_accounts, the first account is not writable, and cannot be charged
+    // num_readonly_signed_accounts bytes. If num_required_signatures is not larger than
+    // num_readonly_signed_accounts, the first account is not writable, and cannot be charged
     // required transaction fees.
     if packet.data[msg_start_offset] <= packet.data[msg_start_offset + 1] {
         return Err(PacketError::PayerNotWritable);
@@ -487,8 +487,8 @@ mod tests {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: required_num_sigs,
-                num_read_only_signed_accounts: 12,
-                num_read_only_unsigned_accounts: 11,
+                num_readonly_signed_accounts: 12,
+                num_readonly_unsigned_accounts: 11,
             },
             account_keys: vec![],
             recent_blockhash: Hash::default(),
@@ -589,8 +589,8 @@ mod tests {
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
-                num_read_only_signed_accounts: 1,
-                num_read_only_unsigned_accounts: 1,
+                num_readonly_signed_accounts: 1,
+                num_readonly_unsigned_accounts: 1,
             },
             account_keys: vec![],
             recent_blockhash: Hash::default(),

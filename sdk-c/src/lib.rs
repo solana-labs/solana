@@ -164,30 +164,30 @@ pub struct MessageHeader {
     /// signatures must match the first `num_required_signatures` of `account_keys`.
     pub num_required_signatures: u8,
 
-    /// The last num_read_only_signed_accounts of the signed keys are read-only accounts. Programs
+    /// The last num_readonly_signed_accounts of the signed keys are read-only accounts. Programs
     /// may process multiple transactions that load read-only accounts within a single PoH entry,
     /// but are not permitted to credit or debit lamports or modify account data. Transactions
     /// targeting the same read-write account are evaluated sequentially.
-    pub num_read_only_signed_accounts: u8,
+    pub num_readonly_signed_accounts: u8,
 
-    /// The last num_read_only_unsigned_accounts of the unsigned keys are read-only accounts.
-    pub num_read_only_unsigned_accounts: u8,
+    /// The last num_readonly_unsigned_accounts of the unsigned keys are read-only accounts.
+    pub num_readonly_unsigned_accounts: u8,
 }
 
 impl MessageHeader {
     pub fn from_native(h: MessageHeaderNative) -> Self {
         Self {
             num_required_signatures: h.num_required_signatures,
-            num_read_only_signed_accounts: h.num_read_only_signed_accounts,
-            num_read_only_unsigned_accounts: h.num_read_only_unsigned_accounts,
+            num_readonly_signed_accounts: h.num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts: h.num_readonly_unsigned_accounts,
         }
     }
 
     pub fn into_native(self) -> MessageHeaderNative {
         MessageHeaderNative {
             num_required_signatures: self.num_required_signatures,
-            num_read_only_signed_accounts: self.num_read_only_signed_accounts,
-            num_read_only_unsigned_accounts: self.num_read_only_unsigned_accounts,
+            num_readonly_signed_accounts: self.num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts: self.num_readonly_unsigned_accounts,
         }
     }
 }

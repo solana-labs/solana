@@ -144,7 +144,7 @@ impl<'a> KeyedAccount<'a> {
         }
     }
 
-    pub fn new_read_only(
+    pub fn new_readonly(
         key: &'a Pubkey,
         is_signer: bool,
         account: &'a mut Account,
@@ -184,7 +184,7 @@ pub fn create_keyed_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAcc
     accounts.iter_mut().map(Into::into).collect()
 }
 
-pub fn create_keyed_read_only_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
+pub fn create_keyed_readonly_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
     accounts
         .iter_mut()
         .map(|(key, account)| KeyedAccount {
