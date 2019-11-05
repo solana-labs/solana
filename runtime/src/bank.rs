@@ -258,6 +258,10 @@ pub struct Bank {
     /// (used to adjust cluster features over time)
     #[serde(skip)]
     entered_epoch_callback: Arc<RwLock<Option<EnteredEpochCallback>>>,
+
+    /// Last time when the cluster info vote listener has synced with this bank
+    #[serde(skip)]
+    pub last_vote_sync: AtomicU64,
 }
 
 impl Default for BlockhashQueue {
@@ -346,6 +350,7 @@ impl Bank {
             signature_count: AtomicU64::new(0),
             message_processor: MessageProcessor::default(),
             entered_epoch_callback: parent.entered_epoch_callback.clone(),
+            last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
         };
 
         datapoint_debug!(
@@ -3343,5 +3348,17 @@ mod tests {
 
         // Non-native loader accounts can not be used for instruction processing
         bank.add_instruction_processor(mint_keypair.pubkey(), mock_ix_processor);
+    }
+    #[test]
+    fn test_bank_inherit_last_vote_sync() {
+        let (genesis_block, _) = create_genesis_block(500);
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let last_ts = bank0.last_vote_sync.load(Ordering::Relaxed);
+        assert_eq!(last_ts, 0);
+        bank0.last_vote_sync.store(1, Ordering::Relaxed);
+        let bank1 =
+            Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
+        let last_ts = bank1.last_vote_sync.load(Ordering::Relaxed);
+        assert_eq!(last_ts, 1);
     }
 }
