@@ -1,4 +1,5 @@
 pub mod bank_forks;
+pub mod bank_forks_utils;
 #[macro_use]
 pub mod blocktree;
 mod blocktree_db;
