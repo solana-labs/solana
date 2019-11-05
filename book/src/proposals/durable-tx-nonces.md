@@ -5,9 +5,9 @@
 To prevent replay, Solana transactions contain a nonce field populated with a
 "recent" blockhash value. A transaction containing a blockhash that is too old
 (~2min as of this writing) is rejected by the network as invalid. Unfortunately
-certain use cases, such as custodial services, require a longer time allowance
-to produce a signature for the transaction. A mechanism is needed to enable
-these slow-signer network participants.
+certain use cases, such as custodial services, require more time to produce a
+signature for the transaction. A mechanism is needed to enable these potentially
+offline network participants.
 
 ## A Naive Solution
 
