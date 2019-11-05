@@ -59,7 +59,7 @@ buildSshOptions() {
     -o "LogLevel=ERROR"
   )
 
-  [[ -z $externalNodeSshKey ]] || sshOptions+=(-o "IdentityFile=$externalNodeSshKey")
+  # [[ -z $externalNodeSshKey ]] || sshOptions+=(-o "IdentityFile=$externalNodeSshKey")
 }
 
 loadConfigFile() {

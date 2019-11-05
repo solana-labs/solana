@@ -395,7 +395,8 @@ prepareInstancesAndWriteConfigFile() {
 
   if $externalNodes; then
     echo "Appending to existing config file"
-    echo "externalNodeSshKey=$sshPrivateKey" >> "$configFile"
+    # TODO: Why this line?
+    # echo "externalNodeSshKey=$sshPrivateKey" >> "$configFile"
   else
     rm -f "$geoipConfigFile"
     cat >> "$configFile" <<EOF
