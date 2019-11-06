@@ -43,6 +43,7 @@ url = "2.1.0"
 [dev-dependencies]
 solana-core = { path = "../core", version = "0.21.0" }
 solana-budget-program = { path = "../programs/budget_program", version = "0.21.0" }
+tempfile = "3.1.0"
 
 [[bin]]
 name = "solana"

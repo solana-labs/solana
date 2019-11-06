@@ -8,6 +8,7 @@ use crate::{
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
+use solana_sdk::signature::Keypair;
 use solana_sdk::{
     account_utils::State, message::Message, pubkey::Pubkey, signature::KeypairUtil,
     system_instruction::SystemError, transaction::Transaction,
@@ -32,12 +33,12 @@ impl StorageSubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair),
                 )
                 .arg(
-                    Arg::with_name("storage_account_pubkey")
+                    Arg::with_name("storage_account")
                         .index(2)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
+                        .value_name("STORAGE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair),
+                        .validator(is_keypair),
                 ),
         )
         .subcommand(
@@ -52,12 +53,12 @@ impl StorageSubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair),
                 )
                 .arg(
-                    Arg::with_name("storage_account_pubkey")
+                    Arg::with_name("storage_account")
                         .index(2)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
+                        .value_name("STORAGE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair),
+                        .validator(is_keypair),
                 ),
         )
         .subcommand(
@@ -102,11 +103,11 @@ pub fn parse_storage_create_archiver_account(
     matches: &ArgMatches<'_>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
-    let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
+    let storage_account = keypair_of(matches, "storage_account").unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
-            storage_account_pubkey,
+            storage_account,
             account_type: StorageAccountType::Archiver,
         },
         require_keypair: true,
@@ -117,11 +118,11 @@ pub fn parse_storage_create_validator_account(
     matches: &ArgMatches<'_>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
-    let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
+    let storage_account = keypair_of(matches, "storage_account").unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
-            storage_account_pubkey,
+            storage_account,
             account_type: StorageAccountType::Validator,
         },
         require_keypair: true,
@@ -154,9 +155,10 @@ pub fn process_create_storage_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     account_owner: &Pubkey,
-    storage_account_pubkey: &Pubkey,
+    storage_account: &Keypair,
     account_type: StorageAccountType,
 ) -> ProcessResult {
+    let storage_account_pubkey = storage_account.pubkey();
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
         (
@@ -168,7 +170,7 @@ pub fn process_create_storage_account(
     let ixs = storage_instruction::create_storage_account(
         &config.keypair.pubkey(),
         &account_owner,
-        storage_account_pubkey,
+        &storage_account_pubkey,
         1,
         account_type,
     );
@@ -226,45 +228,60 @@ pub fn process_show_storage_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
+    use solana_sdk::signature::write_keypair;
+    use tempfile::NamedTempFile;
+
+    fn make_tmp_file() -> (String, NamedTempFile) {
+        let tmp_file = NamedTempFile::new().unwrap();
+        (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
+    }
 
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
         let pubkey = Pubkey::new_rand();
         let pubkey_string = pubkey.to_string();
-        let storage_account_pubkey = Pubkey::new_rand();
-        let storage_account_string = storage_account_pubkey.to_string();
+
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let storage_account_keypair = Keypair::new();
+        write_keypair(&storage_account_keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_create_archiver_storage_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-archiver-storage-account",
             &pubkey_string,
-            &storage_account_string,
+            &keypair_file,
         ]);
         assert_eq!(
             parse_command(&test_create_archiver_storage_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account_pubkey,
+                    storage_account: storage_account_keypair,
                     account_type: StorageAccountType::Archiver,
                 },
                 require_keypair: true
             }
         );
 
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let storage_account_keypair = Keypair::new();
+        write_keypair(&storage_account_keypair, tmp_file.as_file_mut()).unwrap();
+        let storage_account_pubkey = storage_account_keypair.pubkey();
+        let storage_account_string = storage_account_pubkey.to_string();
+
         let test_create_validator_storage_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-validator-storage-account",
             &pubkey_string,
-            &storage_account_string,
+            &keypair_file,
         ]);
         assert_eq!(
             parse_command(&test_create_validator_storage_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account_pubkey,
+                    storage_account: storage_account_keypair,
                     account_type: StorageAccountType::Validator,
                 },
                 require_keypair: true

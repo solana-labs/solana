@@ -64,7 +64,7 @@ pub enum CliCommand {
     Deploy(String),
     // Stake Commands
     CreateStakeAccount {
-        stake_account_pubkey: Pubkey,
+        stake_account: Keypair,
         staker: Option<Pubkey>,
         withdrawer: Option<Pubkey>,
         lockup: Lockup,
@@ -85,7 +85,7 @@ pub enum CliCommand {
     // Storage Commands
     CreateStorageAccount {
         account_owner: Pubkey,
-        storage_account_pubkey: Pubkey,
+        storage_account: Keypair,
         account_type: StorageAccountType,
     },
     ClaimStorageReward {
@@ -102,7 +102,7 @@ pub enum CliCommand {
     },
     // Vote Commands
     CreateVoteAccount {
-        vote_account_pubkey: Pubkey,
+        vote_account: Keypair,
         node_pubkey: Pubkey,
         authorized_voter: Option<Pubkey>,
         authorized_withdrawer: Option<Pubkey>,
@@ -840,7 +840,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Create stake account
         CliCommand::CreateStakeAccount {
-            stake_account_pubkey,
+            stake_account,
             staker,
             withdrawer,
             lockup,
@@ -848,7 +848,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_create_stake_account(
             &rpc_client,
             config,
-            &stake_account_pubkey,
+            stake_account,
             staker,
             withdrawer,
             lockup,
@@ -914,13 +914,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Create storage account
         CliCommand::CreateStorageAccount {
             account_owner,
-            storage_account_pubkey,
+            storage_account,
             account_type,
         } => process_create_storage_account(
             &rpc_client,
             config,
             &account_owner,
-            &storage_account_pubkey,
+            storage_account,
             *account_type,
         ),
         CliCommand::ClaimStorageReward {
@@ -959,7 +959,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Create vote account
         CliCommand::CreateVoteAccount {
-            vote_account_pubkey,
+            vote_account,
             node_pubkey,
             authorized_voter,
             authorized_withdrawer,
@@ -967,7 +967,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_create_vote_account(
             &rpc_client,
             config,
-            &vote_account_pubkey,
+            vote_account,
             &node_pubkey,
             authorized_voter,
             authorized_withdrawer,
@@ -1782,10 +1782,11 @@ mod tests {
         config.command = CliCommand::Confirm(good_signature);
         assert_eq!(process_command(&config).unwrap(), "Confirmed");
 
-        let bob_pubkey = Pubkey::new_rand();
+        let bob_keypair = Keypair::new();
+        let bob_pubkey = bob_keypair.pubkey();
         let node_pubkey = Pubkey::new_rand();
         config.command = CliCommand::CreateVoteAccount {
-            vote_account_pubkey: bob_pubkey,
+            vote_account: bob_keypair,
             node_pubkey,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),
@@ -1800,10 +1801,11 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        let bob_pubkey = Pubkey::new_rand();
+        let bob_keypair = Keypair::new();
+        let bob_pubkey = bob_keypair.pubkey();
         let custodian = Pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
-            stake_account_pubkey: bob_pubkey,
+            stake_account: bob_keypair,
             staker: None,
             withdrawer: None,
             lockup: Lockup { slot: 0, custodian },
@@ -1947,8 +1949,9 @@ mod tests {
         };
         assert!(process_command(&config).is_err());
 
+        let bob_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
-            vote_account_pubkey: bob_pubkey,
+            vote_account: bob_keypair,
             node_pubkey,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),

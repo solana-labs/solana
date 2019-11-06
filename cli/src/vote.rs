@@ -9,6 +9,7 @@ use crate::{
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_client::rpc_client::RpcClient;
+use solana_sdk::signature::Keypair;
 use solana_sdk::{
     account::Account, pubkey::Pubkey, signature::KeypairUtil, system_instruction::SystemError,
     transaction::Transaction,
@@ -28,13 +29,13 @@ impl VoteSubCommands for App<'_, '_> {
             SubCommand::with_name("create-vote-account")
                 .about("Create a vote account")
                 .arg(
-                    Arg::with_name("vote_account_pubkey")
+                    Arg::with_name("vote_account")
                         .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .value_name("VOTE ACCOUNT KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account address to fund"),
+                        .validator(is_keypair)
+                        .help("Vote account keypair to fund"),
                 )
                 .arg(
                     Arg::with_name("node_pubkey")
@@ -161,7 +162,7 @@ impl VoteSubCommands for App<'_, '_> {
 }
 
 pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+    let vote_account = keypair_of(matches, "vote_account").unwrap();
     let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
     let commission = value_of(&matches, "commission").unwrap_or(0);
     let authorized_voter = pubkey_of(matches, "authorized_voter");
@@ -169,7 +170,7 @@ pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandI
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateVoteAccount {
-            vote_account_pubkey,
+            vote_account,
             node_pubkey,
             authorized_voter,
             authorized_withdrawer,
@@ -231,19 +232,20 @@ pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<CliCommandI
 pub fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    vote_account_pubkey: &Pubkey,
+    vote_account: &Keypair,
     node_pubkey: &Pubkey,
     authorized_voter: &Option<Pubkey>,
     authorized_withdrawer: &Option<Pubkey>,
     commission: u8,
 ) -> ProcessResult {
+    let vote_account_pubkey = vote_account.pubkey();
     check_unique_pubkeys(
-        (vote_account_pubkey, "vote_account_pubkey".to_string()),
+        (&vote_account_pubkey, "vote_account_pubkey".to_string()),
         (&node_pubkey, "node_pubkey".to_string()),
     )?;
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
-        (vote_account_pubkey, "vote_account_pubkey".to_string()),
+        (&vote_account_pubkey, "vote_account_pubkey".to_string()),
     )?;
     let required_balance =
         rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
@@ -254,13 +256,13 @@ pub fn process_create_vote_account(
     };
     let vote_init = VoteInit {
         node_pubkey: *node_pubkey,
-        authorized_voter: authorized_voter.unwrap_or(*vote_account_pubkey),
+        authorized_voter: authorized_voter.unwrap_or(vote_account_pubkey),
         authorized_withdrawer: authorized_withdrawer.unwrap_or(config.keypair.pubkey()),
         commission,
     };
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
-        vote_account_pubkey,
+        &vote_account_pubkey,
         &vote_init,
         lamports,
     );
@@ -430,11 +432,19 @@ pub fn process_uptime(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
+    use solana_sdk::signature::write_keypair;
+    use tempfile::NamedTempFile;
+
+    fn make_tmp_file() -> (String, NamedTempFile) {
+        let tmp_file = NamedTempFile::new().unwrap();
+        (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
+    }
 
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
-        let pubkey = Pubkey::new_rand();
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
         let pubkey_string = pubkey.to_string();
 
         let test_authorize_voter = test_commands.clone().get_matches_from(vec![
@@ -451,13 +461,16 @@ mod tests {
             }
         );
 
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let keypair = Keypair::new();
+        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
         // Test CreateVoteAccount SubCommand
         let node_pubkey = Pubkey::new_rand();
         let node_pubkey_string = format!("{}", node_pubkey);
         let test_create_vote_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
-            &pubkey_string,
+            &keypair_file,
             &node_pubkey_string,
             "--commission",
             "10",
@@ -466,7 +479,7 @@ mod tests {
             parse_command(&test_create_vote_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account_pubkey: pubkey,
+                    vote_account: keypair,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
@@ -475,17 +488,22 @@ mod tests {
                 require_keypair: true
             }
         );
+
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let keypair = Keypair::new();
+        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
+
         let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
-            &pubkey_string,
+            &keypair_file,
             &node_pubkey_string,
         ]);
         assert_eq!(
             parse_command(&test_create_vote_account2).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account_pubkey: pubkey,
+                    vote_account: keypair,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
@@ -494,12 +512,17 @@ mod tests {
                 require_keypair: true
             }
         );
+
         // test init with an authed voter
         let authed = Pubkey::new_rand();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let keypair = Keypair::new();
+        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
+
         let test_create_vote_account3 = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
-            &pubkey_string,
+            &keypair_file,
             &node_pubkey_string,
             "--authorized-voter",
             &authed.to_string(),
@@ -508,7 +531,7 @@ mod tests {
             parse_command(&test_create_vote_account3).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account_pubkey: pubkey,
+                    vote_account: keypair,
                     node_pubkey,
                     authorized_voter: Some(authed),
                     authorized_withdrawer: None,
@@ -517,11 +540,15 @@ mod tests {
                 require_keypair: true
             }
         );
+
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let keypair = Keypair::new();
+        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
         // test init with an authed withdrawer
         let test_create_vote_account4 = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
-            &pubkey_string,
+            &keypair_file,
             &node_pubkey_string,
             "--authorized-withdrawer",
             &authed.to_string(),
@@ -530,7 +557,7 @@ mod tests {
             parse_command(&test_create_vote_account4).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account_pubkey: pubkey,
+                    vote_account: keypair,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),
