@@ -416,9 +416,17 @@ pub fn main() {
                 .validator(hash_validator)
                 .help("Require the genesis block have this blockhash"),
         )
+        .arg(
+            Arg::with_name("logfile")
+                .short("o")
+                .long("log")
+                .value_name("FILE")
+                .takes_value(true)
+                .help("Redirect logging to the specified file, '-' for standard error"),
+        )
         .get_matches();
 
-    let keypair = if let Some(identity) = matches.value_of("identity") {
+    let identity_keypair = if let Some(identity) = matches.value_of("identity") {
         read_keypair_file(identity).unwrap_or_else(|err| {
             error!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
@@ -524,6 +532,34 @@ pub fn main() {
         option_env!("CI_BRANCH").unwrap_or("unknown"),
         option_env!("CI_COMMIT").unwrap_or("unknown")
     );
+
+    let default_logfile = format!(
+        "solana-validator-{}-{}.log",
+        identity_keypair.pubkey(),
+        chrono::Local::now().to_rfc3339()
+    );
+    let logfile = matches.value_of("logfile").unwrap_or(&default_logfile);
+
+    let _log_redirect = if logfile == "-" {
+        None
+    } else {
+        #[cfg(unix)]
+        {
+            println!("log file: {}", logfile);
+            Some(gag::Redirect::stderr(File::create(logfile).unwrap_or_else(
+                |err| {
+                    eprintln!("Unable to create {}: {:?}", logfile, err);
+                    exit(1);
+                },
+            )))
+        }
+        #[cfg(not(unix))]
+        {
+            println!("logging to a file is not supported on this platform");
+            None
+        }
+    };
+
     solana_logger::setup_with_filter(
         &[
             "solana=info", /* info logging for all solana modules */
@@ -531,7 +567,7 @@ pub fn main() {
         ]
         .join(","),
     );
-    solana_metrics::set_host_id(keypair.pubkey().to_string());
+    solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 
     if cuda {
@@ -563,16 +599,13 @@ pub fn main() {
     });
 
     let mut tcp_ports = vec![];
-    let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);
+    let mut node =
+        Node::new_with_external_ip(&identity_keypair.pubkey(), &gossip_addr, dynamic_port_range);
     if let Ok(rpc_port) = rpc_port {
-        let port_number = rpc_port.to_string().parse().expect("integer");
-        if port_number == 0 {
-            error!("Invalid RPC port requested: {:?}", rpc_port);
-            exit(1);
-        }
-        node.info.rpc = SocketAddr::new(node.info.gossip.ip(), port_number);
-        node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), port_number + 1);
-        tcp_ports = vec![port_number, port_number + 1];
+        let rpc_pubsub_port = rpc_port + 1;
+        node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_port);
+        node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_port);
+        tcp_ports = vec![rpc_port, rpc_pubsub_port];
     };
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
@@ -637,7 +670,7 @@ pub fn main() {
 
     let validator = Validator::new(
         node,
-        &Arc::new(keypair),
+        &Arc::new(identity_keypair),
         &ledger_path,
         &vote_account,
         &Arc::new(voting_keypair),
