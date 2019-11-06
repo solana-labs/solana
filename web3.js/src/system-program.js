@@ -183,8 +183,8 @@ export class SystemProgram {
 
     return new Transaction().add({
       keys: [
-        {pubkey: from, isSigner: true, isDebitable: true},
-        {pubkey: newAccount, isSigner: false, isDebitable: true},
+        {pubkey: from, isSigner: true, isWritable: true},
+        {pubkey: newAccount, isSigner: false, isWritable: true},
       ],
       programId: SystemProgram.programId,
       data,
@@ -200,10 +200,8 @@ export class SystemProgram {
 
     return new Transaction().add({
       keys: [
-        {pubkey: from, isSigner: true, isDebitable: true},
-        // TEMP FIX: a better proposed solution is here:
-        // https://github.com/solana-labs/solana-web3.js/issues/542
-        {pubkey: to, isSigner: false, isDebitable: true},
+        {pubkey: from, isSigner: true, isWritable: true},
+        {pubkey: to, isSigner: false, isWritable: true},
       ],
       programId: SystemProgram.programId,
       data,
@@ -218,7 +216,7 @@ export class SystemProgram {
     const data = encodeData(type, {programId: programId.toBuffer()});
 
     return new Transaction().add({
-      keys: [{pubkey: from, isSigner: true, isDebitable: true}],
+      keys: [{pubkey: from, isSigner: true, isWritable: true}],
       programId: SystemProgram.programId,
       data,
     });

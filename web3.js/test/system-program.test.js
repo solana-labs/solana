@@ -111,8 +111,8 @@ test('non-SystemInstruction error', () => {
 
   const badProgramId = {
     keys: [
-      {pubkey: from.publicKey, isSigner: true, isDebitable: true},
-      {pubkey: to.publicKey, isSigner: false, isDebitable: false},
+      {pubkey: from.publicKey, isSigner: true, isWritable: true},
+      {pubkey: to.publicKey, isSigner: false, isWritable: true},
     ],
     programId: BudgetProgram.programId,
     data: Buffer.from([2, 0, 0, 0]),

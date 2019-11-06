@@ -41,7 +41,7 @@ export const PACKET_DATA_SIZE = 1280 - 40 - 8;
  * @property {?Buffer} data
  */
 export type TransactionInstructionCtorFields = {|
-  keys?: Array<{pubkey: PublicKey, isSigner: boolean, isDebitable: boolean}>,
+  keys?: Array<{pubkey: PublicKey, isSigner: boolean, isWritable: boolean}>,
   programId?: PublicKey,
   data?: Buffer,
 |};
@@ -57,7 +57,7 @@ export class TransactionInstruction {
   keys: Array<{
     pubkey: PublicKey,
     isSigner: boolean,
-    isDebitable: boolean,
+    isWritable: boolean,
   }> = [];
 
   /**
@@ -171,8 +171,8 @@ export class Transaction {
     }
 
     const keys = this.signatures.map(({publicKey}) => publicKey.toString());
-    let numCreditOnlySignedAccounts = 0;
-    let numCreditOnlyUnsignedAccounts = 0;
+    let numReadonlySignedAccounts = 0;
+    let numReadonlyUnsignedAccounts = 0;
 
     const programIds = [];
 
@@ -185,12 +185,12 @@ export class Transaction {
               signature: null,
               publicKey: keySignerPair.pubkey,
             });
-            if (!keySignerPair.isDebitable) {
-              numCreditOnlySignedAccounts += 1;
+            if (!keySignerPair.isWritable) {
+              numReadonlySignedAccounts += 1;
             }
           } else {
-            if (!keySignerPair.isDebitable) {
-              numCreditOnlyUnsignedAccounts += 1;
+            if (!keySignerPair.isWritable) {
+              numReadonlyUnsignedAccounts += 1;
             }
           }
           keys.push(keyStr);
@@ -206,7 +206,7 @@ export class Transaction {
     programIds.forEach(programId => {
       if (!keys.includes(programId)) {
         keys.push(programId);
-        numCreditOnlyUnsignedAccounts += 1;
+        numReadonlyUnsignedAccounts += 1;
       }
     });
 
@@ -274,8 +274,8 @@ export class Transaction {
 
     const signDataLayout = BufferLayout.struct([
       BufferLayout.blob(1, 'numRequiredSignatures'),
-      BufferLayout.blob(1, 'numCreditOnlySignedAccounts'),
-      BufferLayout.blob(1, 'numCreditOnlyUnsignedAccounts'),
+      BufferLayout.blob(1, 'numReadonlySignedAccounts'),
+      BufferLayout.blob(1, 'numReadonlyUnsignedAccounts'),
       BufferLayout.blob(keyCount.length, 'keyCount'),
       BufferLayout.seq(Layout.publicKey('key'), keys.length, 'keys'),
       Layout.publicKey('recentBlockhash'),
@@ -283,10 +283,8 @@ export class Transaction {
 
     const transaction = {
       numRequiredSignatures: Buffer.from([this.signatures.length]),
-      numCreditOnlySignedAccounts: Buffer.from([numCreditOnlySignedAccounts]),
-      numCreditOnlyUnsignedAccounts: Buffer.from([
-        numCreditOnlyUnsignedAccounts,
-      ]),
+      numReadonlySignedAccounts: Buffer.from([numReadonlySignedAccounts]),
+      numReadonlyUnsignedAccounts: Buffer.from([numReadonlyUnsignedAccounts]),
       keyCount: Buffer.from(keyCount),
       keys: keys.map(key => new PublicKey(key).toBuffer()),
       recentBlockhash: Buffer.from(bs58.decode(recentBlockhash)),
@@ -450,14 +448,14 @@ export class Transaction {
     function isCreditDebit(
       i: number,
       numRequiredSignatures: number,
-      numCreditOnlySignedAccounts: number,
-      numCreditOnlyUnsignedAccounts: number,
+      numReadonlySignedAccounts: number,
+      numReadonlyUnsignedAccounts: number,
       numKeys: number,
     ): boolean {
       return (
-        i < numRequiredSignatures - numCreditOnlySignedAccounts ||
+        i < numRequiredSignatures - numReadonlySignedAccounts ||
         (i >= numRequiredSignatures &&
-          i < numKeys - numCreditOnlyUnsignedAccounts)
+          i < numKeys - numReadonlyUnsignedAccounts)
       );
     }
 
@@ -476,10 +474,10 @@ export class Transaction {
 
     const numRequiredSignatures = byteArray.shift();
     // byteArray = byteArray.slice(1); // Skip numRequiredSignatures byte
-    const numCreditOnlySignedAccounts = byteArray.shift();
-    // byteArray = byteArray.slice(1); // Skip numCreditOnlySignedAccounts byte
-    const numCreditOnlyUnsignedAccounts = byteArray.shift();
-    // byteArray = byteArray.slice(1); // Skip numCreditOnlyUnsignedAccounts byte
+    const numReadonlySignedAccounts = byteArray.shift();
+    // byteArray = byteArray.slice(1); // Skip numReadonlySignedAccounts byte
+    const numReadonlyUnsignedAccounts = byteArray.shift();
+    // byteArray = byteArray.slice(1); // Skip numReadonlyUnsignedAccounts byte
 
     const accountCount = shortvec.decodeLength(byteArray);
     let accounts = [];
@@ -532,11 +530,11 @@ export class Transaction {
           isSigner: transaction.signatures.some(
             keyObj => keyObj.publicKey.toString() === pubkey.toString(),
           ),
-          isDebitable: isCreditDebit(
+          isWritable: isCreditDebit(
             j,
             numRequiredSignatures,
-            numCreditOnlySignedAccounts,
-            numCreditOnlyUnsignedAccounts,
+            numReadonlySignedAccounts,
+            numReadonlyUnsignedAccounts,
             accounts.length,
           ),
         });
