@@ -18,10 +18,10 @@ $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/stake-keypair.json
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/storage-keypair.json
 
 args=("$@")
-default_arg --bootstrap-leader-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
-default_arg --bootstrap-vote-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
-default_arg --bootstrap-stake-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/stake-keypair.json
-default_arg --bootstrap-storage-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader/storage-keypair.json
+default_arg --bootstrap-leader-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
+default_arg --bootstrap-vote-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
+default_arg --bootstrap-stake-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-leader/stake-keypair.json
+default_arg --bootstrap-storage-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-leader/storage-keypair.json
 default_arg --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader
 default_arg --mint "$SOLANA_CONFIG_DIR"/mint-keypair.json
 default_arg --hashes-per-tick auto

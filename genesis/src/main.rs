@@ -15,7 +15,7 @@ use solana_sdk::{
     genesis_block::{GenesisBlock, OperatingMode},
     native_token::sol_to_lamports,
     poh_config::PohConfig,
-    pubkey::Pubkey,
+    pubkey::{read_pubkey_file, Pubkey},
     rent::Rent,
     signature::{read_keypair_file, Keypair, KeypairUtil},
     system_program, timing,
@@ -30,30 +30,34 @@ pub enum AccountFileFormat {
     Keypair,
 }
 
-pub fn add_genesis_accounts(
-    file: &str,
-    file_format: AccountFileFormat,
-    genesis_block: &mut GenesisBlock,
-) -> io::Result<()> {
+fn pubkey_from_file(key_file: &str) -> Result<Pubkey, Box<dyn error::Error>> {
+    read_pubkey_file(key_file)
+        .or_else(|_| read_keypair_file(key_file).map(|keypair| keypair.pubkey()))
+}
+
+fn pubkey_from_str(key_str: &str) -> Result<Pubkey, Box<dyn error::Error>> {
+    Pubkey::from_str(key_str).or_else(|_| {
+        let bytes: Vec<u8> = serde_json::from_str(key_str)?;
+        let keypair = Keypair::from_bytes(&bytes)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        Ok(keypair.pubkey())
+    })
+}
+
+pub fn add_genesis_accounts(file: &str, genesis_block: &mut GenesisBlock) -> io::Result<()> {
     let accounts_file = File::open(file.to_string())?;
 
     let genesis_accounts: HashMap<String, Base64Account> =
         serde_yaml::from_reader(accounts_file)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
 
-    for (account, account_details) in genesis_accounts {
-        let pubkey = match file_format {
-            AccountFileFormat::Pubkey => Pubkey::from_str(account.as_str()).map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Invalid pubkey {}: {:?}", account, err),
-                )
-            })?,
-            AccountFileFormat::Keypair => {
-                let bytes: Vec<u8> = serde_json::from_str(account.as_str()).unwrap();
-                Keypair::from_bytes(&bytes).unwrap().pubkey()
-            }
-        };
+    for (key, account_details) in genesis_accounts {
+        let pubkey = pubkey_from_str(key.as_str()).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Invalid pubkey/keypair {}: {:?}", key, err),
+            )
+        })?;
 
         let owner_program_id = Pubkey::from_str(account_details.owner.as_str()).map_err(|err| {
             io::Error::new(
@@ -110,13 +114,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .about(crate_description!())
         .version(crate_version!())
         .arg(
-            Arg::with_name("bootstrap_leader_keypair_file")
+            Arg::with_name("bootstrap_leader_pubkey_file")
                 .short("b")
-                .long("bootstrap-leader-keypair")
-                .value_name("BOOTSTRAP LEADER KEYPAIR")
+                .long("bootstrap-leader-pubkey")
+                .value_name("BOOTSTRAP LEADER PUBKEY")
                 .takes_value(true)
                 .required(true)
-                .help("Path to file containing the bootstrap leader's keypair"),
+                .help("Path to file containing the bootstrap leader's pubkey"),
         )
         .arg(
             Arg::with_name("ledger_path")
@@ -138,7 +142,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Number of lamports to create in the mint"),
         )
         .arg(
-            Arg::with_name("mint_keypair_file")
+            Arg::with_name("mint_pubkey_file")
                 .short("m")
                 .long("mint")
                 .value_name("MINT")
@@ -147,30 +151,30 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Path to file containing keys of the mint"),
         )
         .arg(
-            Arg::with_name("bootstrap_vote_keypair_file")
+            Arg::with_name("bootstrap_vote_pubkey_file")
                 .short("s")
-                .long("bootstrap-vote-keypair")
-                .value_name("BOOTSTRAP VOTE KEYPAIR")
+                .long("bootstrap-vote-pubkey")
+                .value_name("BOOTSTRAP VOTE PUBKEY")
                 .takes_value(true)
                 .required(true)
-                .help("Path to file containing the bootstrap leader's voting keypair"),
+                .help("Path to file containing the bootstrap leader's voting pubkey"),
         )
         .arg(
-            Arg::with_name("bootstrap_stake_keypair_file")
+            Arg::with_name("bootstrap_stake_pubkey_file")
                 .short("k")
-                .long("bootstrap-stake-keypair")
-                .value_name("BOOTSTRAP STAKE KEYPAIR")
+                .long("bootstrap-stake-pubkey")
+                .value_name("BOOTSTRAP STAKE PUBKEY")
                 .takes_value(true)
                 .required(true)
-                .help("Path to file containing the bootstrap leader's staking keypair"),
+                .help("Path to file containing the bootstrap leader's staking pubkey"),
         )
         .arg(
-            Arg::with_name("bootstrap_storage_keypair_file")
-                .long("bootstrap-storage-keypair")
-                .value_name("BOOTSTRAP STORAGE KEYPAIR")
+            Arg::with_name("bootstrap_storage_pubkey_file")
+                .long("bootstrap-storage-pubkey")
+                .value_name("BOOTSTRAP STORAGE PUBKEY")
                 .takes_value(true)
                 .required(true)
-                .help("Path to file containing the bootstrap leader's storage keypair"),
+                .help("Path to file containing the bootstrap leader's storage pubkey"),
         )
         .arg(
             Arg::with_name("bootstrap_leader_lamports")
@@ -286,14 +290,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("primordial-accounts-file")
                 .value_name("FILENAME")
                 .takes_value(true)
+                .multiple(true)
                 .help("The location of pubkey for primordial accounts and balance"),
-        )
-        .arg(
-            Arg::with_name("primordial_keypairs_file")
-                .long("primordial-keypairs-file")
-                .value_name("FILENAME")
-                .takes_value(true)
-                .help("The location of keypairs for primordial accounts and balance"),
         )
         .arg(
             Arg::with_name("development")
@@ -302,33 +300,28 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .get_matches();
 
-    let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
-    let bootstrap_vote_keypair_file = matches.value_of("bootstrap_vote_keypair_file").unwrap();
-    let bootstrap_stake_keypair_file = matches.value_of("bootstrap_stake_keypair_file").unwrap();
-    let bootstrap_storage_keypair_file =
-        matches.value_of("bootstrap_storage_keypair_file").unwrap();
-    let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
+    let bootstrap_leader_pubkey_file = matches.value_of("bootstrap_leader_pubkey_file").unwrap();
+    let bootstrap_vote_pubkey_file = matches.value_of("bootstrap_vote_pubkey_file").unwrap();
+    let bootstrap_stake_pubkey_file = matches.value_of("bootstrap_stake_pubkey_file").unwrap();
+    let bootstrap_storage_pubkey_file = matches.value_of("bootstrap_storage_pubkey_file").unwrap();
+    let mint_pubkey_file = matches.value_of("mint_pubkey_file").unwrap();
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let lamports = value_t_or_exit!(matches, "lamports", u64);
     let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
     let bootstrap_leader_stake_lamports =
         value_t_or_exit!(matches, "bootstrap_leader_stake_lamports", u64);
 
-    let bootstrap_leader_keypair = read_keypair_file(bootstrap_leader_keypair_file)?;
-    let bootstrap_vote_keypair = read_keypair_file(bootstrap_vote_keypair_file)?;
-    let bootstrap_stake_keypair = read_keypair_file(bootstrap_stake_keypair_file)?;
-    let bootstrap_storage_keypair = read_keypair_file(bootstrap_storage_keypair_file)?;
-    let mint_keypair = read_keypair_file(mint_keypair_file)?;
+    let bootstrap_leader_pubkey = pubkey_from_file(bootstrap_leader_pubkey_file)?;
+    let bootstrap_vote_pubkey = pubkey_from_file(bootstrap_vote_pubkey_file)?;
+    let bootstrap_stake_pubkey = pubkey_from_file(bootstrap_stake_pubkey_file)?;
+    let bootstrap_storage_pubkey = pubkey_from_file(bootstrap_storage_pubkey_file)?;
+    let mint_pubkey = pubkey_from_file(mint_pubkey_file)?;
 
-    let bootstrap_leader_vote_account = vote_state::create_account(
-        &bootstrap_vote_keypair.pubkey(),
-        &bootstrap_leader_keypair.pubkey(),
-        0,
-        1,
-    );
+    let bootstrap_leader_vote_account =
+        vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
     let bootstrap_leader_stake_account = stake_state::create_account(
-        &bootstrap_leader_keypair.pubkey(),
-        &bootstrap_vote_keypair.pubkey(),
+        &bootstrap_leader_pubkey,
+        &bootstrap_vote_pubkey,
         &bootstrap_leader_vote_account,
         bootstrap_leader_stake_lamports,
     );
@@ -336,31 +329,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut accounts = vec![
         // node needs an account to issue votes from
         (
-            bootstrap_leader_keypair.pubkey(),
+            bootstrap_leader_pubkey,
             Account::new(bootstrap_leader_lamports, 0, &system_program::id()),
         ),
         // where votes go to
+        (bootstrap_vote_pubkey, bootstrap_leader_vote_account),
+        // bootstrap leader stake
+        (bootstrap_stake_pubkey, bootstrap_leader_stake_account),
         (
-            bootstrap_vote_keypair.pubkey(),
-            bootstrap_leader_vote_account,
-        ),
-        // passive bootstrap leader stake
-        (
-            bootstrap_stake_keypair.pubkey(),
-            bootstrap_leader_stake_account,
-        ),
-        (
-            bootstrap_storage_keypair.pubkey(),
-            storage_contract::create_validator_storage_account(
-                bootstrap_leader_keypair.pubkey(),
-                1,
-            ),
+            bootstrap_storage_pubkey,
+            storage_contract::create_validator_storage_account(bootstrap_leader_pubkey, 1),
         ),
     ];
-    accounts.append(&mut create_genesis_accounts(
-        &mint_keypair.pubkey(),
-        lamports,
-    ));
+    accounts.append(&mut create_genesis_accounts(&mint_pubkey, lamports));
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
     let slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);
@@ -414,12 +395,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ..GenesisBlock::default()
     };
 
-    if let Some(file) = matches.value_of("primordial_accounts_file") {
-        add_genesis_accounts(file, AccountFileFormat::Pubkey, &mut genesis_block)?;
-    }
-
-    if let Some(file) = matches.value_of("primordial_keypairs_file") {
-        add_genesis_accounts(file, AccountFileFormat::Keypair, &mut genesis_block)?;
+    if let Some(files) = matches.values_of("primordial_accounts_file") {
+        for file in files {
+            add_genesis_accounts(file, &mut genesis_block)?;
+        }
     }
 
     // add genesis stuff from storage and stake
@@ -444,12 +423,7 @@ mod tests {
     #[test]
     fn test_append_primordial_accounts_to_genesis() {
         // Test invalid file returns error
-        assert!(add_genesis_accounts(
-            "unknownfile",
-            AccountFileFormat::Pubkey,
-            &mut GenesisBlock::default()
-        )
-        .is_err());
+        assert!(add_genesis_accounts("unknownfile", &mut GenesisBlock::default()).is_err());
 
         let mut genesis_block = GenesisBlock::default();
 
@@ -489,7 +463,6 @@ mod tests {
 
         add_genesis_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
-            AccountFileFormat::Pubkey,
             &mut genesis_block,
         )
         .expect("test_append_primordial_accounts_to_genesis.yml");
@@ -562,7 +535,6 @@ mod tests {
 
         add_genesis_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
-            AccountFileFormat::Pubkey,
             &mut genesis_block,
         )
         .expect("test_append_primordial_accounts_to_genesis.yml");
@@ -663,7 +635,6 @@ mod tests {
 
         add_genesis_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
-            AccountFileFormat::Keypair,
             &mut genesis_block,
         )
         .expect("genesis");
@@ -796,12 +767,7 @@ mod tests {
         file.write_all(yaml_string_pubkey.as_bytes()).unwrap();
 
         let mut genesis_block = GenesisBlock::default();
-        add_genesis_accounts(
-            path.to_str().unwrap(),
-            AccountFileFormat::Pubkey,
-            &mut genesis_block,
-        )
-        .expect("genesis");
+        add_genesis_accounts(path.to_str().unwrap(), &mut genesis_block).expect("genesis");
         remove_file(path).unwrap();
 
         assert_eq!(genesis_block.accounts.len(), 4);
@@ -829,12 +795,7 @@ mod tests {
         file.write_all(yaml_string_keypair.as_bytes()).unwrap();
 
         let mut genesis_block = GenesisBlock::default();
-        add_genesis_accounts(
-            path.to_str().unwrap(),
-            AccountFileFormat::Keypair,
-            &mut genesis_block,
-        )
-        .expect("genesis");
+        add_genesis_accounts(path.to_str().unwrap(), &mut genesis_block).expect("genesis");
         remove_file(path).unwrap();
 
         assert_eq!(genesis_block.accounts.len(), 3);

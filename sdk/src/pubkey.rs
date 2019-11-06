@@ -82,7 +82,7 @@ impl fmt::Display for Pubkey {
 }
 
 #[cfg(not(feature = "program"))]
-pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn error::Error>> {
+pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn error::Error>> {
     use std::io::Write;
 
     let printable = format!("{}", pubkey);
@@ -98,7 +98,7 @@ pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn error::
 }
 
 #[cfg(not(feature = "program"))]
-pub fn read_pubkey(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
+pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
     let f = std::fs::File::open(infile.to_string())?;
     let printable: String = serde_json::from_reader(f)?;
     Ok(Pubkey::from_str(&printable)?)
@@ -183,8 +183,8 @@ mod tests {
     fn test_read_write_pubkey() -> Result<(), Box<dyn error::Error>> {
         let filename = "test_pubkey.json";
         let pubkey = Pubkey::new_rand();
-        write_pubkey(filename, pubkey)?;
-        let read = read_pubkey(filename)?;
+        write_pubkey_file(filename, pubkey)?;
+        let read = read_pubkey_file(filename)?;
         assert_eq!(read, pubkey);
         remove_file(filename)?;
         Ok(())

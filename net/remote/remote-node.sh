@@ -208,7 +208,7 @@ EOF
         genesisOptions+=" --primordial-accounts-file config/validator-balances.yml"
       fi
       if [[ -f config/client-accounts.yml ]]; then
-        genesisOptions+=" --primordial-keypairs-file config/client-accounts.yml"
+        genesisOptions+=" --primordial-accounts-file config/client-accounts.yml"
       fi
 
       args=(
