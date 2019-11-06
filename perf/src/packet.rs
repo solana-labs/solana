@@ -102,7 +102,6 @@ where
         .deserialize(data)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,8 +4,8 @@ use crate::{
     result::{Error, Result},
 };
 pub use solana_perf::packet::{
-    to_packets, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS, PACKETS_BATCH_SIZE,
-    PACKETS_PER_BATCH, limited_deserialize
+    limited_deserialize, to_packets, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
+    PACKETS_BATCH_SIZE, PACKETS_PER_BATCH,
 };
 
 use solana_metrics::inc_new_counter_debug;
