@@ -11,6 +11,7 @@ use serde_json::Value;
 use solana_client::{rpc_client::RpcClient, rpc_request::RpcVoteAccountInfo};
 use solana_sdk::{
     clock,
+    commitment_config::CommitmentConfig,
     hash::Hash,
     signature::{Keypair, KeypairUtil},
     system_transaction,
@@ -221,7 +222,10 @@ pub fn process_ping(
             Ok(signature) => {
                 let transaction_sent = Instant::now();
                 loop {
-                    let signature_status = rpc_client.get_signature_status(&signature)?;
+                    let signature_status = rpc_client.get_signature_status_with_commitment(
+                        &signature,
+                        CommitmentConfig::recent(),
+                    )?;
                     let elapsed_time = Instant::now().duration_since(transaction_sent);
                     if let Some(transaction_status) = signature_status {
                         match transaction_status {
