@@ -75,6 +75,14 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .takes_value(true)
                         .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
+                )
+                .arg(
+                    Arg::with_name("confirmed")
+                        .long("confirmed")
+                        .takes_value(false)
+                        .help(
+                            "Wait until the transaction is confirmed at maximum-lockout commitment level",
+                        ),
                 ),
         )
         .subcommand(
@@ -98,11 +106,17 @@ pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Cl
         None
     };
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
+    let commitment_config = if matches.is_present("confirmed") {
+        CommitmentConfig::default()
+    } else {
+        CommitmentConfig::recent()
+    };
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             interval,
             count,
             timeout,
+            commitment_config,
         },
         require_keypair: true,
     })
@@ -193,6 +207,7 @@ pub fn process_ping(
     interval: &Duration,
     count: &Option<u64>,
     timeout: &Duration,
+    commitment_config: &CommitmentConfig,
 ) -> ProcessResult {
     let to = Keypair::new().pubkey();
 
@@ -224,7 +239,7 @@ pub fn process_ping(
                 loop {
                     let signature_status = rpc_client.get_signature_status_with_commitment(
                         &signature,
-                        CommitmentConfig::recent(),
+                        commitment_config.clone(),
                     )?;
                     let elapsed_time = Instant::now().duration_since(transaction_sent);
                     if let Some(transaction_status) = signature_status {
@@ -481,9 +496,17 @@ mod tests {
             }
         );
 
-        let test_ping = test_commands
-            .clone()
-            .get_matches_from(vec!["test", "ping", "-i", "1", "-c", "2", "-t", "3"]);
+        let test_ping = test_commands.clone().get_matches_from(vec![
+            "test",
+            "ping",
+            "-i",
+            "1",
+            "-c",
+            "2",
+            "-t",
+            "3",
+            "--confirmed",
+        ]);
         assert_eq!(
             parse_command(&test_ping).unwrap(),
             CliCommandInfo {
@@ -491,6 +514,7 @@ mod tests {
                     interval: Duration::from_secs(1),
                     count: Some(2),
                     timeout: Duration::from_secs(3),
+                    commitment_config: CommitmentConfig::default(),
                 },
                 require_keypair: true
             }
