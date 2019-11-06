@@ -364,7 +364,7 @@ while [[ $iteration -le $iterations ]]; do
   echo "--- Wallet sanity ($iteration)"
   (
     set -x
-    timeout 60s scripts/wallet-sanity.sh --url http://127.0.0.1"$walletRpcPort"
+    timeout 90s scripts/wallet-sanity.sh --url http://127.0.0.1"$walletRpcPort"
   ) || flag_error
 
   iteration=$((iteration + 1))
