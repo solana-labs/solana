@@ -9,18 +9,27 @@ use solana_ledger::{
     blocktree::{entries_to_test_shreds, Blocktree},
     entry::{create_ticks, Entry},
     get_tmp_ledger_path,
+    shred::Shredder,
 };
-use solana_sdk::{clock::Slot, hash::Hash};
+use solana_perf::recycler_cache::RecyclerCache;
+use solana_sdk::{
+    clock::Slot,
+    hash::Hash,
+    signature::{Keypair, KeypairUtil},
+};
 use std::path::Path;
+use std::sync::Arc;
 use test::Bencher;
 
 // Given some shreds and a ledger at ledger_path, benchmark writing the shreds to the ledger
 fn bench_write_shreds(bench: &mut Bencher, entries: Vec<Entry>, ledger_path: &Path) {
+    let cache = RecyclerCache::warmed();
+    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0, 0).expect("shredder");
     let blocktree =
         Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
     bench.iter(move || {
-        let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true, 0);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        let packets = shredder.entries_to_shreds(&cache, &entries, true, 0).0;
+        blocktree.insert_batch(&packets, None, false).unwrap();
     });
 
     Blocktree::destroy(ledger_path).expect("Expected successful database destruction");
@@ -43,7 +52,7 @@ fn setup_read_bench(
     // Convert the entries to shreds, write the shreds to the ledger
     let shreds = entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0);
     blocktree
-        .insert_shreds(shreds, None, false)
+        .insert_test_shreds(shreds, None, false)
         .expect("Expectd successful insertion of shreds into ledger");
 }
 
@@ -135,7 +144,7 @@ fn bench_insert_data_shred_small(bench: &mut Bencher) {
     let entries = create_ticks(num_entries, 0, Hash::default());
     bench.iter(move || {
         let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true, 0);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blocktree.insert_test_shreds(shreds, None, false).unwrap();
     });
     Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }
@@ -150,7 +159,7 @@ fn bench_insert_data_shred_big(bench: &mut Bencher) {
     let entries = create_ticks(num_entries, 0, Hash::default());
     bench.iter(move || {
         let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true, 0);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blocktree.insert_test_shreds(shreds, None, false).unwrap();
     });
     Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }

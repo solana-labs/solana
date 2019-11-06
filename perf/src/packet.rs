@@ -20,6 +20,10 @@ pub struct Packets {
     recycler: Option<PacketsRecycler>,
 }
 
+pub fn batch_size(batches: &[Packets]) -> usize {
+    batches.iter().map(|p| p.packets.len()).sum()
+}
+
 impl Drop for Packets {
     fn drop(&mut self) {
         if let Some(ref recycler) = self.recycler {

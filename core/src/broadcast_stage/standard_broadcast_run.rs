@@ -3,6 +3,9 @@ use super::*;
 use crate::broadcast_stage::broadcast_utils::UnfinishedSlotInfo;
 use solana_ledger::entry::Entry;
 use solana_ledger::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE, SHRED_TICK_REFERENCE_MASK};
+use solana_perf::packet::Packets;
+use solana_perf::recycler_cache::RecyclerCache;
+use solana_sdk::packet::Packet;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::timing::duration_as_us;
@@ -36,6 +39,7 @@ pub(super) struct StandardBroadcastRun {
     slot_broadcast_start: Option<Instant>,
     keypair: Arc<Keypair>,
     shred_version: u16,
+    recycler_cache: RecyclerCache,
 }
 
 impl StandardBroadcastRun {
@@ -47,6 +51,7 @@ impl StandardBroadcastRun {
             slot_broadcast_start: None,
             keypair,
             shred_version,
+            recycler_cache: RecyclerCache::warmed(),
         }
     }
 
@@ -88,7 +93,7 @@ impl StandardBroadcastRun {
         entries: &[Entry],
         is_slot_end: bool,
         reference_tick: u8,
-    ) -> (Vec<Shred>, Vec<Shred>) {
+    ) -> (Vec<Packets>, Vec<Packets>) {
         let (slot, parent_slot) = self.current_slot_and_parent.unwrap();
         let shredder = Shredder::new(
             slot,
@@ -111,8 +116,12 @@ impl StandardBroadcastRun {
                     .unwrap_or(0) as u32
             });
 
-        let (data_shreds, coding_shreds, new_next_shred_index) =
-            shredder.entries_to_shreds(entries, is_slot_end, next_shred_index);
+        let (data_shreds, coding_shreds, new_next_shred_index) = shredder.entries_to_shreds(
+            &self.recycler_cache,
+            entries,
+            is_slot_end,
+            next_shred_index,
+        );
 
         self.unfinished_slot = Some(UnfinishedSlotInfo {
             next_shred_index: new_next_shred_index,
@@ -161,7 +170,9 @@ impl StandardBroadcastRun {
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
         );
         if let Some(last_shred) = last_unfinished_slot_shred {
-            data_shreds.push(last_shred);
+            let mut p = Packet::default();
+            last_shred.copy_to_packet(&mut p);
+            data_shreds.last_mut().unwrap().packets.push(p);
         }
         let to_shreds_elapsed = to_shreds_start.elapsed();
 
@@ -198,10 +209,9 @@ impl StandardBroadcastRun {
 
         Ok(())
     }
-
     fn maybe_insert_and_broadcast(
         &mut self,
-        shreds: Vec<Shred>,
+        mut shreds: Vec<Packets>,
         insert: bool,
         blocktree: &Arc<Blocktree>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -209,27 +219,28 @@ impl StandardBroadcastRun {
         sock: &UdpSocket,
     ) -> Result<()> {
         let seed_start = Instant::now();
-        let seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
+        let seeds: Vec<Vec<[u8; 32]>> = Shredder::seeds(&shreds);
         let seed_elapsed = seed_start.elapsed();
 
         // Insert shreds into blocktree
         let insert_shreds_start = Instant::now();
         if insert {
             blocktree
-                .insert_shreds(shreds.clone(), None, true)
+                .insert_batch(&shreds, None, true)
                 .expect("Failed to insert shreds in blocktree");
         }
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
 
         // Broadcast the shreds
         let broadcast_start = Instant::now();
-        let shred_bufs: Vec<Vec<u8>> = shreds.into_iter().map(|s| s.payload).collect();
-        trace!("Broadcasting {:?} shreds", shred_bufs.len());
+
+        let num: usize = shreds.iter().map(|x| x.packets.len()).sum();
+        trace!("Broadcasting {} shreds", num);
 
         cluster_info
             .read()
             .unwrap()
-            .broadcast_shreds(sock, shred_bufs, &seeds, stakes)?;
+            .broadcast_shreds(sock, &mut shreds, &seeds, stakes)?;
 
         let broadcast_elapsed = broadcast_start.elapsed();
 

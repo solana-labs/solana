@@ -18,9 +18,7 @@ use ed25519_dalek;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_client::{rpc_client::RpcClient, rpc_request::RpcRequest, thin_client::ThinClient};
-use solana_ledger::{
-    blocktree::Blocktree, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
-};
+use solana_ledger::{blocktree::Blocktree, leader_schedule_cache::LeaderScheduleCache};
 use solana_net_utils::bind_in_range;
 use solana_perf::packet::Packets;
 use solana_perf::recycler::Recycler;
@@ -918,16 +916,12 @@ impl Archiver {
                 }
             }
             let res = r_reader.recv_timeout(Duration::new(1, 0));
-            if let Ok(mut packets) = res {
-                while let Ok(mut more) = r_reader.try_recv() {
-                    packets.packets.append_pinned(&mut more.packets);
+            if let Ok(new_packets) = res {
+                let mut packets = vec![new_packets];
+                while let Ok(more) = r_reader.try_recv() {
+                    packets.push(more);
                 }
-                let shreds: Vec<Shred> = packets
-                    .packets
-                    .into_iter()
-                    .filter_map(|p| Shred::new_from_serialized_shred(p.data.to_vec()).ok())
-                    .collect();
-                blocktree.insert_shreds(shreds, None, false)?;
+                blocktree.insert_batch(&packets, None, false)?;
             }
             // check if all the slots in the segment are complete
             if Self::segment_complete(start_slot, slots_per_segment, blocktree) {

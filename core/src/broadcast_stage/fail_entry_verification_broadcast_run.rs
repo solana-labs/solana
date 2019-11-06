@@ -1,14 +1,20 @@
 use super::*;
-use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
+use solana_ledger::shred::{ShredCommonHeader, Shredder, RECOMMENDED_FEC_RATE};
+use solana_perf::packet::Packets;
+use solana_perf::recycler_cache::RecyclerCache;
 use solana_sdk::hash::Hash;
 
 pub(super) struct FailEntryVerificationBroadcastRun {
     shred_version: u16,
+    recycler_cache: RecyclerCache,
 }
 
 impl FailEntryVerificationBroadcastRun {
     pub(super) fn new(shred_version: u16) -> Self {
-        Self { shred_version }
+        Self {
+            shred_version,
+            recycler_cache: RecyclerCache::warmed(),
+        }
     }
 }
 
@@ -50,35 +56,41 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         .expect("Expected to create a new shredder");
 
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(
+            &self.recycler_cache,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
         );
 
-        let all_shreds = data_shreds
+        let mut all_shreds: Vec<Packets> = data_shreds
             .iter()
             .cloned()
             .chain(coding_shreds.iter().cloned())
-            .collect::<Vec<_>>();
-        let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
+            .collect();
+        let all_seeds: Vec<Vec<[u8; 32]>> = all_shreds
+            .iter()
+            .map(|p| {
+                p.packets
+                    .iter()
+                    .map(|p| {
+                        ShredCommonHeader::from_packet(p)
+                            .expect("invalid packet")
+                            .seed()
+                    })
+                    .collect()
+            })
+            .collect();
         blocktree
-            .insert_shreds(all_shreds, None, true)
+            .insert_batch(&all_shreds, None, true)
             .expect("Failed to insert shreds in blocktree");
 
         // 3) Start broadcast step
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        let all_shred_bufs: Vec<Vec<u8>> = data_shreds
-            .into_iter()
-            .chain(coding_shreds.into_iter())
-            .map(|s| s.payload)
-            .collect();
-
-        // Broadcast data
         cluster_info.read().unwrap().broadcast_shreds(
             sock,
-            all_shred_bufs,
+            &mut all_shreds,
             &all_seeds,
             stakes.as_ref(),
         )?;

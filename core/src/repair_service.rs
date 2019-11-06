@@ -411,7 +411,7 @@ mod test {
             let (mut shreds, _) = make_slot_entries(1, 0, 1);
             let (shreds2, _) = make_slot_entries(5, 2, 1);
             shreds.extend(shreds2);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.insert_test_shreds(shreds, None, false).unwrap();
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 0, 2).unwrap(),
                 vec![RepairType::HighestShred(0, 0), RepairType::Orphan(2)]
@@ -431,7 +431,7 @@ mod test {
 
             // Write this shred to slot 2, should chain to slot 0, which we haven't received
             // any shreds for
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.insert_test_shreds(shreds, None, false).unwrap();
 
             // Check that repair tries to patch the empty slot
             assert_eq!(
@@ -468,7 +468,7 @@ mod test {
                 }
             }
             blocktree
-                .insert_shreds(shreds_to_write, None, false)
+                .insert_test_shreds(shreds_to_write, None, false)
                 .unwrap();
             // sleep so that the holes are ready for repair
             sleep(Duration::from_secs(1));
@@ -508,7 +508,7 @@ mod test {
             // Remove last shred (which is also last in slot) so that slot is not complete
             shreds.pop();
 
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.insert_test_shreds(shreds, None, false).unwrap();
 
             // We didn't get the last shred for this slot, so ask for the highest shred for that slot
             let expected: Vec<RepairType> =
@@ -534,7 +534,9 @@ mod test {
             let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
             for (mut slot_shreds, _) in shreds.into_iter() {
                 slot_shreds.remove(0);
-                blocktree.insert_shreds(slot_shreds, None, false).unwrap();
+                blocktree
+                    .insert_test_shreds(slot_shreds, None, false)
+                    .unwrap();
             }
             // sleep to make slot eligible for repair
             sleep(Duration::from_secs(1));
@@ -587,7 +589,7 @@ mod test {
                 let parent = if i > 0 { i - 1 } else { 0 };
                 let (shreds, _) = make_slot_entries(i, parent, num_entries_per_slot as u64);
 
-                blocktree.insert_shreds(shreds, None, false).unwrap();
+                blocktree.insert_test_shreds(shreds, None, false).unwrap();
             }
 
             let end = 4;
@@ -640,9 +642,11 @@ mod test {
                 .collect();
             let mut full_slots = BTreeSet::new();
 
-            blocktree.insert_shreds(fork1_shreds, None, false).unwrap();
             blocktree
-                .insert_shreds(fork2_incomplete_shreds, None, false)
+                .insert_test_shreds(fork1_shreds, None, false)
+                .unwrap();
+            blocktree
+                .insert_test_shreds(fork2_incomplete_shreds, None, false)
                 .unwrap();
 
             // Test that only slots > root from fork1 were included
@@ -666,7 +670,9 @@ mod test {
                 .into_iter()
                 .flat_map(|(shreds, _)| shreds)
                 .collect();
-            blocktree.insert_shreds(fork3_shreds, None, false).unwrap();
+            blocktree
+                .insert_test_shreds(fork3_shreds, None, false)
+                .unwrap();
             RepairService::get_completed_slots_past_root(
                 &blocktree,
                 &mut full_slots,
@@ -714,7 +720,7 @@ mod test {
                         let step = std::cmp::min(step, num_shreds - i);
                         let shreds_to_insert = shreds.drain(..step).collect_vec();
                         blocktree_
-                            .insert_shreds(shreds_to_insert, None, false)
+                            .insert_test_shreds(shreds_to_insert, None, false)
                             .unwrap();
                         sleep(Duration::from_millis(repair_interval_ms));
                         i += step;
@@ -745,7 +751,7 @@ mod test {
             // Update with new root, should filter out the slots <= root
             root = num_slots / 2;
             let (shreds, _) = make_slot_entries(num_slots + 2, num_slots + 1, entries_per_slot);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.insert_test_shreds(shreds, None, false).unwrap();
             RepairService::update_epoch_slots(
                 Pubkey::default(),
                 root,

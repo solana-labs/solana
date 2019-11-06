@@ -201,6 +201,10 @@ impl<T: Clone> PinnedVec<T> {
         self.x.len()
     }
 
+    pub fn last(&self) -> Option<&T> {
+        self.x.last()
+    }
+
     pub fn as_ptr(&self) -> *const T {
         self.x.as_ptr()
     }

@@ -11,7 +11,7 @@ use sha2::{Digest, Sha512};
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::{
     cuda_runtime::PinnedVec,
-    packet::{limited_deserialize, Packet, Packets},
+    packet::{batch_size, limited_deserialize, Packet, Packets},
     perf_libs,
     recycler_cache::RecyclerCache,
     sigverify::{self, TxOffset},
@@ -61,7 +61,7 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> O
 
 fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, [u8; 32]>) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
-    let count = sigverify::batch_size(batches);
+    let count = batch_size(batches);
     debug!("CPU SHRED ECDSA for {}", count);
     let rv = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
@@ -207,7 +207,7 @@ pub fn verify_shreds_gpu(
 
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
-    let count = sigverify::batch_size(batches);
+    let count = batch_size(batches);
     let (pubkeys, pubkey_offsets, mut num_packets) =
         slot_key_data_for_gpu(0, batches, slot_leaders, recycler_cache);
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
@@ -328,7 +328,7 @@ fn sign_shreds_cpu(
     slot_leaders_privkeys: &HashMap<u64, [u8; 32]>,
 ) {
     use rayon::prelude::*;
-    let count = sigverify::batch_size(batches);
+    let count = batch_size(batches);
     debug!("CPU SHRED ECDSA for {}", count);
     PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
@@ -373,7 +373,7 @@ pub fn sign_shreds_gpu(
     let api = api.unwrap();
 
     let mut elems = Vec::new();
-    let count = sigverify::batch_size(batches);
+    let count = batch_size(batches);
     let mut offset: usize = 0;
     let mut num_packets = 0;
     let (pubkeys, pubkey_offsets, num_pubkey_packets) =

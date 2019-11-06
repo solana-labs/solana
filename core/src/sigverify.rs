@@ -9,9 +9,7 @@ use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::packet::Packets;
 use solana_perf::recycler::Recycler;
 use solana_perf::sigverify;
-pub use solana_perf::sigverify::{
-    batch_size, ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset,
-};
+pub use solana_perf::sigverify::{ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset};
 
 #[derive(Clone)]
 pub struct TransactionSigVerifier {

@@ -2,24 +2,32 @@
 use crate::{
     entry::{create_ticks, Entry},
     erasure::Session,
+    sigverify_shreds,
 };
 use core::cell::RefCell;
+use core::mem::size_of;
+use rayon::iter::IntoParallelRefIterator;
 use rayon::{
-    iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
+    iter::{IndexedParallelIterator, ParallelIterator},
     slice::ParallelSlice,
     ThreadPool,
 };
 use serde::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
+use solana_perf::packet::batch_size;
+use solana_perf::packet::limited_deserialize;
+use solana_perf::packet::Packets;
+use solana_perf::recycler_cache::RecyclerCache;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     clock::Slot,
     hash::Hash,
-    packet::PACKET_DATA_SIZE,
+    packet::{Packet, PACKET_DATA_SIZE},
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
 };
-use std::mem::size_of;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::{sync::Arc, time::Instant};
 
 /// The following constants are computed by hand, and hardcoded.
@@ -85,6 +93,20 @@ pub struct ShredCommonHeader {
     pub index: u32,
     pub version: u16,
 }
+impl ShredCommonHeader {
+    pub fn from_packet(packet: &Packet) -> Result<Self> {
+        let end = size_of::<ShredCommonHeader>();
+        let rv = limited_deserialize(&packet.data[..end])?;
+        Ok(rv)
+    }
+    pub fn seed(&self) -> [u8; 32] {
+        let mut seed = [0; 32];
+        let seed_len = seed.len();
+        let sig = self.signature.as_ref();
+        seed[0..seed_len].copy_from_slice(&sig[(sig.len() - seed_len)..]);
+        seed
+    }
+}
 
 /// The data shred header has parent offset and flags
 #[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug)]
@@ -99,6 +121,83 @@ pub struct CodingShredHeader {
     pub num_data_shreds: u16,
     pub num_coding_shreds: u16,
     pub position: u16,
+}
+
+pub enum ShredHeaders {
+    Data {
+        common_header: ShredCommonHeader,
+        data_header: DataShredHeader,
+    },
+    Coding {
+        common_header: ShredCommonHeader,
+        coding_header: CodingShredHeader,
+    },
+}
+
+impl ShredHeaders {
+    pub fn from_packet(packet: &Packet) -> Result<Self> {
+        let common_header = ShredCommonHeader::from_packet(packet)?;
+        let start = size_of::<ShredCommonHeader>();
+        if common_header.shred_type == ShredType(DATA_SHRED) {
+            let end = start + size_of::<DataShredHeader>();
+            let data_header = limited_deserialize(&packet.data[start..end])?;
+            Ok(ShredHeaders::Data {
+                common_header,
+                data_header,
+            })
+        } else if common_header.shred_type == ShredType(CODING_SHRED) {
+            let end = start + size_of::<CodingShredHeader>();
+            let coding_header = limited_deserialize(&packet.data[start..end])?;
+            Ok(ShredHeaders::Coding {
+                common_header,
+                coding_header,
+            })
+        } else {
+            Err(ShredError::InvalidShredType)
+        }
+    }
+    pub fn from_shred(shred: &Shred) -> Self {
+        let common_header = shred.common_header.clone();
+        if common_header.shred_type == ShredType(DATA_SHRED) {
+            ShredHeaders::Data {
+                common_header,
+                data_header: shred.data_header.clone(),
+            }
+        } else {
+            assert_eq!(common_header.shred_type, ShredType(CODING_SHRED));
+            ShredHeaders::Coding {
+                common_header,
+                coding_header: shred.coding_header.clone(),
+            }
+        }
+    }
+    pub fn parent(&self) -> Slot {
+        match self {
+            ShredHeaders::Data {
+                common_header,
+                data_header,
+            } => common_header.slot - u64::from(data_header.parent_offset),
+            _ => std::u64::MAX,
+        }
+    }
+    pub fn slot(&self) -> Slot {
+        match self {
+            ShredHeaders::Data { common_header, .. } => common_header.slot,
+            ShredHeaders::Coding { common_header, .. } => common_header.slot,
+        }
+    }
+    pub fn seed(&self) -> [u8; 32] {
+        match self {
+            ShredHeaders::Data { common_header, .. } => common_header.seed(),
+            ShredHeaders::Coding { common_header, .. } => common_header.seed(),
+        }
+    }
+    pub fn version(&self) -> u16 {
+        match self {
+            ShredHeaders::Data { common_header, .. } => common_header.version,
+            ShredHeaders::Coding { common_header, .. } => common_header.version,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -133,6 +232,35 @@ impl Shred {
         bincode::serialize_into(&mut buf[*index..*index + size], obj)?;
         *index += size;
         Ok(())
+    }
+
+    pub fn headers(&self) -> ShredHeaders {
+        ShredHeaders::from_shred(self)
+    }
+    pub fn from_packet(packet: &Packet) -> Self {
+        Self::new_from_serialized_shred(packet.data.to_vec()).expect("valid shred")
+    }
+
+    pub fn make_packets(shreds: &[Shred]) -> Packets {
+        let mut packets = Packets::default();
+        for s in shreds {
+            let mut p = Packet::default();
+            s.copy_to_packet(&mut p);
+            packets.packets.push(p);
+        }
+        packets
+    }
+    pub fn from_packets(packets: Vec<Packets>) -> Vec<Shred> {
+        packets
+            .iter()
+            .flat_map(|p| p.packets.iter().map(|p| Shred::from_packet(p)))
+            .collect()
+    }
+
+    pub fn copy_to_packet(&self, packet: &mut Packet) {
+        let len = self.payload.len();
+        packet.data[..len].copy_from_slice(&self.payload[..]);
+        packet.meta.size = len;
     }
 
     pub fn new_from_data(
@@ -318,11 +446,7 @@ impl Shred {
     }
 
     pub fn seed(&self) -> [u8; 32] {
-        let mut seed = [0; 32];
-        let seed_len = seed.len();
-        let sig = self.common_header.signature.as_ref();
-        seed[0..seed_len].copy_from_slice(&sig[(sig.len() - seed_len)..]);
-        seed
+        self.common_header.seed()
     }
 
     pub fn is_data(&self) -> bool {
@@ -425,17 +549,17 @@ impl Shredder {
         }
     }
 
-    pub fn entries_to_shreds(
+    pub fn entries_to_unsigned_data_shreds(
         &self,
+        recycler_cache: &RecyclerCache,
         entries: &[Entry],
         is_last_in_slot: bool,
         next_shred_index: u32,
-    ) -> (Vec<Shred>, Vec<Shred>, u32) {
+    ) -> (Vec<Packets>, u32) {
         let now = Instant::now();
         let serialized_shreds =
             bincode::serialize(entries).expect("Expect to serialize all entries");
         let serialize_time = now.elapsed().as_millis();
-
         let now = Instant::now();
 
         let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD;
@@ -443,49 +567,115 @@ impl Shredder {
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
 
         // 1) Generate data shreds
-        let data_shreds: Vec<Shred> = PAR_THREAD_POOL.with(|thread_pool| {
+        let data_shreds: Vec<Packets> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 serialized_shreds
                     .par_chunks(no_header_size)
                     .enumerate()
-                    .map(|(i, shred_data)| {
-                        let shred_index = next_shred_index + i as u32;
-
-                        let (is_last_data, is_last_in_slot) = {
-                            if shred_index == last_shred_index {
-                                (true, is_last_in_slot)
-                            } else {
-                                (false, false)
-                            }
-                        };
-
-                        let mut shred = Shred::new_from_data(
-                            self.slot,
-                            shred_index,
-                            (self.slot - self.parent_slot) as u16,
-                            Some(shred_data),
-                            is_last_data,
-                            is_last_in_slot,
-                            self.reference_tick,
-                            self.version,
+                    .chunks(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
+                    .map(|chunk| {
+                        let mut packets = Packets::new_with_recycler(
+                            recycler_cache.packets().clone(),
+                            MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
+                            "data shreds",
                         );
+                        for (i, shred_data) in &chunk {
+                            let shred_index = next_shred_index + *i as u32;
 
-                        Shredder::sign_shred(&self.keypair, &mut shred);
-                        shred
+                            let (is_last_data, is_last_in_slot) = {
+                                if shred_index == last_shred_index {
+                                    (true, is_last_in_slot)
+                                } else {
+                                    (false, false)
+                                }
+                            };
+
+                            let shred = Shred::new_from_data(
+                                self.slot,
+                                shred_index,
+                                (self.slot - self.parent_slot) as u16,
+                                Some(shred_data),
+                                is_last_data,
+                                is_last_in_slot,
+                                self.reference_tick,
+                                self.version,
+                            );
+                            let mut p = Packet::default();
+                            shred.copy_to_packet(&mut p);
+                            packets.packets.push(p);
+                        }
+                        packets.packets.resize(chunk.len(), Packet::default());
+                        packets
                     })
                     .collect()
             })
         });
         let gen_data_time = now.elapsed().as_millis();
+        datapoint_debug!(
+            "shredding-stats",
+            ("slot", self.slot as i64, i64),
+            ("num_shreds", num_shreds as i64, i64),
+            ("serialzing", serialize_time as i64, i64),
+            ("gen_data", gen_data_time as i64, i64),
+        );
+
+        (data_shreds, last_shred_index)
+    }
+
+    pub fn read_slots(batches: &[Packets]) -> HashSet<u64> {
+        batches
+            .iter()
+            .flat_map(|batch| {
+                batch.packets.iter().filter_map(|packet| {
+                    let slot_start = size_of::<Signature>() + size_of::<ShredType>();
+                    let slot_end = slot_start + size_of::<u64>();
+                    trace!("slot {} {}", slot_start, slot_end,);
+                    if slot_end <= packet.meta.size {
+                        limited_deserialize(&packet.data[slot_start..slot_end]).ok()
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect()
+    }
+
+    pub fn entries_to_shreds(
+        &self,
+        recycler_cache: &RecyclerCache,
+        entries: &[Entry],
+        is_last_in_slot: bool,
+        next_shred_index: u32,
+    ) -> (Vec<Packets>, Vec<Packets>, u32) {
+        let (mut data_shreds, last_shred_index) = self.entries_to_unsigned_data_shreds(
+            recycler_cache,
+            entries,
+            is_last_in_slot,
+            next_shred_index,
+        );
+
+        let now = Instant::now();
+        let slots = Self::read_slots(&data_shreds);
+        let pubkeys: HashMap<u64, [u8; 32]> = slots
+            .iter()
+            .map(|s| (*s, self.keypair.pubkey().to_bytes()))
+            .collect();
+        let privkeys: HashMap<u64, [u8; 32]> = slots
+            .iter()
+            .map(|s| (*s, self.keypair.secret.to_bytes()))
+            .collect();
+        sigverify_shreds::sign_shreds_gpu(&mut data_shreds, &pubkeys, &privkeys, recycler_cache);
+        let sign_data_time = now.elapsed().as_millis();
 
         let now = Instant::now();
         // 2) Generate coding shreds
-        let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
+        let mut coding_shreds: Vec<Packets> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 data_shreds
-                    .par_chunks(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
-                    .flat_map(|shred_data_batch| {
+                    .par_iter()
+                    .filter_map(|shred_data_batch| {
                         Shredder::generate_coding_shreds(
+                            recycler_cache,
                             self.slot,
                             self.fec_rate,
                             shred_data_batch,
@@ -498,25 +688,17 @@ impl Shredder {
         let gen_coding_time = now.elapsed().as_millis();
 
         let now = Instant::now();
-        // 3) Sign coding shreds
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                coding_shreds.par_iter_mut().for_each(|mut coding_shred| {
-                    Shredder::sign_shred(&self.keypair, &mut coding_shred);
-                })
-            })
-        });
+        sigverify_shreds::sign_shreds_gpu(&mut coding_shreds, &pubkeys, &privkeys, recycler_cache);
         let sign_coding_time = now.elapsed().as_millis();
 
         datapoint_debug!(
             "shredding-stats",
             ("slot", self.slot as i64, i64),
-            ("num_data_shreds", data_shreds.len() as i64, i64),
-            ("num_coding_shreds", coding_shreds.len() as i64, i64),
-            ("serializing", serialize_time as i64, i64),
-            ("gen_data", gen_data_time as i64, i64),
+            ("num_data_shreds", batch_size(&data_shreds) as i64, i64),
+            ("num_coding_shreds", batch_size(&coding_shreds) as i64, i64),
             ("gen_coding", gen_coding_time as i64, i64),
             ("sign_coding", sign_coding_time as i64, i64),
+            ("sign_data", sign_data_time as i64, i64),
         );
 
         (data_shreds, coding_shreds, last_shred_index + 1)
@@ -556,29 +738,38 @@ impl Shredder {
 
     /// Generates coding shreds for the data shreds in the current FEC set
     pub fn generate_coding_shreds(
+        recycler_cache: &RecyclerCache,
         slot: Slot,
         fec_rate: f32,
-        data_shred_batch: &[Shred],
+        data_shred_batch: &Packets,
         version: u16,
-    ) -> Vec<Shred> {
-        assert!(!data_shred_batch.is_empty());
+    ) -> Option<Packets> {
+        assert!(!data_shred_batch.packets.is_empty());
         if fec_rate != 0.0 {
-            let num_data = data_shred_batch.len();
+            let num_data = data_shred_batch.packets.len();
             // always generate at least 1 coding shred even if the fec_rate doesn't allow it
             let num_coding = Self::calculate_num_coding_shreds(num_data as f32, fec_rate);
             let session =
                 Session::new(num_data, num_coding).expect("Failed to create erasure session");
-            let start_index = data_shred_batch[0].common_header.index;
+            let common_header = ShredCommonHeader::from_packet(&data_shred_batch.packets[0])
+                .expect("invalid packet");
+            let start_index = common_header.index;
 
             // All information after coding shred field in a data shred is encoded
             let valid_data_len = PACKET_DATA_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
             let data_ptrs: Vec<_> = data_shred_batch
+                .packets
                 .iter()
-                .map(|data| &data.payload[..valid_data_len])
+                .map(|packet| &packet.data[..valid_data_len])
                 .collect();
 
             // Create empty coding shreds, with correctly populated headers
-            let mut coding_shreds = Vec::with_capacity(num_coding);
+            let mut coding_shreds = Packets::new_with_recycler(
+                recycler_cache.packets().clone(),
+                MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
+                "data shreds",
+            );
+
             (0..num_coding).for_each(|i| {
                 let (header, coding_header) = Self::new_coding_shred_header(
                     slot,
@@ -590,44 +781,26 @@ impl Shredder {
                 );
                 let shred =
                     Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
-                coding_shreds.push(shred.payload);
+                let mut p = Packet::default();
+                shred.copy_to_packet(&mut p);
+                coding_shreds.packets.push(p);
             });
 
             // Grab pointers for the coding blocks
             let coding_block_offset = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
             let mut coding_ptrs: Vec<_> = coding_shreds
+                .packets
                 .iter_mut()
-                .map(|buffer| &mut buffer[coding_block_offset..])
+                .map(|packet| &mut packet.data[coding_block_offset..])
                 .collect();
 
-            // Create coding blocks
+            // Create coding blocks in place
             session
                 .encode(&data_ptrs, coding_ptrs.as_mut_slice())
                 .expect("Failed in erasure encode");
-
-            // append to the shred list
-            coding_shreds
-                .into_iter()
-                .enumerate()
-                .map(|(i, payload)| {
-                    let (common_header, coding_header) = Self::new_coding_shred_header(
-                        slot,
-                        start_index + i as u32,
-                        num_data,
-                        num_coding,
-                        i,
-                        version,
-                    );
-                    Shred {
-                        common_header,
-                        data_header: DataShredHeader::default(),
-                        coding_header,
-                        payload,
-                    }
-                })
-                .collect()
+            Some(coding_shreds)
         } else {
-            vec![]
+            None
         }
     }
 
@@ -799,6 +972,21 @@ impl Shredder {
             .cloned()
             .collect()
     }
+    fn packet_seed(packet: &Packet) -> Result<[u8; 32]> {
+        Ok(ShredCommonHeader::from_packet(packet)?.seed())
+    }
+    pub fn seeds(shreds: &[Packets]) -> Vec<Vec<[u8; 32]>> {
+        shreds
+            .iter()
+            .map(|packets| {
+                packets
+                    .packets
+                    .iter()
+                    .map(|s| Shredder::packet_seed(s).expect("invalid packet"))
+                    .collect()
+            })
+            .collect()
+    }
 }
 
 pub fn max_ticks_per_n_shreds(num_shreds: u64) -> u64 {
@@ -884,6 +1072,7 @@ pub mod tests {
     #[test]
     fn test_data_shredder() {
         let keypair = Arc::new(Keypair::new());
+        let recycler_cache = RecyclerCache::default();
         let slot = 0x123456789abcdef0;
 
         // Test that parent cannot be > current slot
@@ -926,11 +1115,12 @@ pub mod tests {
 
         let start_index = 0;
         let (data_shreds, coding_shreds, next_index) =
-            shredder.entries_to_shreds(&entries, true, start_index);
+            shredder.entries_to_shreds(&recycler_cache, &entries, true, start_index);
         assert_eq!(next_index as u64, num_expected_data_shreds);
 
         let mut data_shred_indexes = HashSet::new();
         let mut coding_shred_indexes = HashSet::new();
+        let data_shreds = Shred::from_packets(data_shreds);
         for shred in data_shreds.iter() {
             assert_eq!(shred.common_header.shred_type, ShredType(DATA_SHRED));
             let index = shred.common_header.index;
@@ -949,6 +1139,7 @@ pub mod tests {
             data_shred_indexes.insert(index);
         }
 
+        let coding_shreds = Shred::from_packets(coding_shreds);
         for shred in coding_shreds.iter() {
             let index = shred.common_header.index;
             assert_eq!(shred.common_header.shred_type, ShredType(CODING_SHRED));
@@ -976,6 +1167,7 @@ pub mod tests {
 
     #[test]
     fn test_deserialize_shred_payload() {
+        let recycler_cache = RecyclerCache::default();
         let keypair = Arc::new(Keypair::new());
         let slot = 1;
 
@@ -993,8 +1185,10 @@ pub mod tests {
             })
             .collect();
 
-        let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
-
+        let data_shreds = shredder
+            .entries_to_shreds(&recycler_cache, &entries, true, 0)
+            .0;
+        let data_shreds = Shred::from_packets(data_shreds);
         let deserialized_shred =
             Shred::new_from_serialized_shred(data_shreds.last().unwrap().payload.clone()).unwrap();
         assert_eq!(deserialized_shred, *data_shreds.last().unwrap());
@@ -1002,6 +1196,7 @@ pub mod tests {
 
     #[test]
     fn test_shred_reference_tick() {
+        let recycler_cache = RecyclerCache::default();
         let keypair = Arc::new(Keypair::new());
         let slot = 1;
 
@@ -1019,7 +1214,10 @@ pub mod tests {
             })
             .collect();
 
-        let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+        let data_shreds = shredder
+            .entries_to_shreds(&recycler_cache, &entries, true, 0)
+            .0;
+        let data_shreds = Shred::from_packets(data_shreds);
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), 5);
             assert_eq!(Shred::reference_tick_from_data(&s.payload), 5);
@@ -1032,6 +1230,7 @@ pub mod tests {
 
     #[test]
     fn test_shred_reference_tick_overflow() {
+        let recycler_cache = RecyclerCache::default();
         let keypair = Arc::new(Keypair::new());
         let slot = 1;
 
@@ -1049,7 +1248,10 @@ pub mod tests {
             })
             .collect();
 
-        let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+        let data_shreds = shredder
+            .entries_to_shreds(&recycler_cache, &entries, true, 0)
+            .0;
+        let data_shreds = Shred::from_packets(data_shreds);
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), SHRED_TICK_REFERENCE_MASK);
             assert_eq!(
@@ -1068,6 +1270,7 @@ pub mod tests {
 
     #[test]
     fn test_data_and_code_shredder() {
+        let recycler_cache = RecyclerCache::default();
         let keypair = Arc::new(Keypair::new());
 
         let slot = 0x123456789abcdef0;
@@ -1092,8 +1295,11 @@ pub mod tests {
             })
             .collect();
 
-        let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
+        let (data_shreds, coding_shreds, _) =
+            shredder.entries_to_shreds(&recycler_cache, &entries, true, 0);
 
+        let data_shreds = Shred::from_packets(data_shreds);
+        let coding_shreds = Shred::from_packets(coding_shreds);
         // Must have created an equal number of coding and data shreds
         assert_eq!(data_shreds.len(), coding_shreds.len());
 
@@ -1117,6 +1323,7 @@ pub mod tests {
 
     #[test]
     fn test_recovery_and_reassembly() {
+        let recycler_cache = RecyclerCache::default();
         let keypair = Arc::new(Keypair::new());
         let slot = 0x123456789abcdef0;
         let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
@@ -1140,7 +1347,10 @@ pub mod tests {
             .collect();
 
         let serialized_entries = bincode::serialize(&entries).unwrap();
-        let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
+        let (data_shreds, coding_shreds, _) =
+            shredder.entries_to_shreds(&recycler_cache, &entries, true, 0);
+        let data_shreds = Shred::from_packets(data_shreds);
+        let coding_shreds = Shred::from_packets(coding_shreds);
 
         // We should have 10 shreds now, an equal number of coding shreds
         assert_eq!(data_shreds.len(), num_data_shreds);
@@ -1283,7 +1493,10 @@ pub mod tests {
         // Test5: Try recovery/reassembly with non zero index full slot with 3 missing data shreds
         // and 2 missing coding shreds. Hint: should work
         let serialized_entries = bincode::serialize(&entries).unwrap();
-        let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 25);
+        let (data_shreds, coding_shreds, _) =
+            shredder.entries_to_shreds(&recycler_cache, &entries, true, 25);
+        let data_shreds = Shred::from_packets(data_shreds);
+        let coding_shreds = Shred::from_packets(coding_shreds);
 
         // We should have 10 shreds now, an equal number of coding shreds
         assert_eq!(data_shreds.len(), num_data_shreds);
@@ -1363,6 +1576,7 @@ pub mod tests {
 
     #[test]
     fn test_multi_fec_block_coding() {
+        let recycler_cache = RecyclerCache::default();
         let keypair = Arc::new(Keypair::new());
         let slot = 0x123456789abcdef0;
         let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
@@ -1388,7 +1602,9 @@ pub mod tests {
 
         let serialized_entries = bincode::serialize(&entries).unwrap();
         let (data_shreds, coding_shreds, next_index) =
-            shredder.entries_to_shreds(&entries, true, 0);
+            shredder.entries_to_shreds(&recycler_cache, &entries, true, 0);
+        let data_shreds = Shred::from_packets(data_shreds);
+        let coding_shreds = Shred::from_packets(coding_shreds);
         assert_eq!(next_index as usize, num_data_shreds);
         assert_eq!(data_shreds.len(), num_data_shreds);
         assert_eq!(coding_shreds.len(), num_data_shreds);
@@ -1454,6 +1670,7 @@ pub mod tests {
         let keypair = Arc::new(Keypair::new());
         let hash = hash(Hash::default().as_ref());
         let version = Shred::version_from_hash(&hash);
+        let recycler_cache = RecyclerCache::default();
         assert_ne!(version, 0);
         let shredder =
             Shredder::new(0, 0, 1.0, keypair, 0, version).expect("Failed in creating shredder");
@@ -1469,11 +1686,11 @@ pub mod tests {
             .collect();
 
         let (data_shreds, coding_shreds, _next_index) =
-            shredder.entries_to_shreds(&entries, true, 0);
-        assert!(!data_shreds
+            shredder.entries_to_shreds(&recycler_cache, &entries, true, 0);
+        assert!(!data_shreds.iter().chain(coding_shreds.iter()).any(|s| s
+            .packets
             .iter()
-            .chain(coding_shreds.iter())
-            .any(|s| s.version() != version));
+            .any(|p| Shred::from_packet(p).version() != version)));
     }
 
     #[test]
@@ -1497,5 +1714,65 @@ pub mod tests {
         ];
         let version = Shred::version_from_hash(&Hash::new(&hash));
         assert_eq!(version, 0x5a5a);
+    }
+    #[test]
+    fn test_read_slots() {
+        solana_logger::setup();
+        let mut shred = Shred::new_from_data(
+            0xdeadc0de,
+            0xc0de,
+            0xdead,
+            Some(&[1, 2, 3, 4]),
+            true,
+            true,
+            0,
+            0,
+        );
+        let mut batch = [Packets::default(), Packets::default()];
+
+        let keypair = Keypair::new();
+        Shredder::sign_shred(&keypair, &mut shred);
+        batch[0].packets.resize(1, Packet::default());
+        batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batch[0].packets[0].meta.size = shred.payload.len();
+
+        let mut shred = Shred::new_from_data(
+            0xc0dedead,
+            0xc0de,
+            0xdead,
+            Some(&[1, 2, 3, 4]),
+            true,
+            true,
+            0,
+            0,
+        );
+        Shredder::sign_shred(&keypair, &mut shred);
+        batch[1].packets.resize(1, Packet::default());
+        batch[1].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batch[1].packets[0].meta.size = shred.payload.len();
+
+        let expected: HashSet<u64> = [0xc0dedead, 0xdeadc0de].iter().cloned().collect();
+        assert_eq!(Shredder::read_slots(&batch), expected);
+    }
+
+    #[test]
+    fn test_to_from_packets() {
+        solana_logger::setup();
+        let mut shred = Shred::new_from_data(
+            0xdeadc0de,
+            0xc0de,
+            0xdead,
+            Some(&[1, 2, 3, 4]),
+            true,
+            true,
+            0,
+            0,
+        );
+
+        let keypair = Keypair::new();
+        Shredder::sign_shred(&keypair, &mut shred);
+        let packets = Shred::make_packets(&vec![shred.clone()]);
+        let from_packets = Shred::from_packets(vec![packets]);
+        assert_eq!(shred, from_packets[0]);
     }
 }

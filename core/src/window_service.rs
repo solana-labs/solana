@@ -12,7 +12,7 @@ use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 use solana_ledger::blocktree::{self, Blocktree};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::Shred;
+use solana_ledger::shred::ShredHeaders;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
@@ -24,20 +24,19 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
-fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
-    if shred.is_data() {
-        // Only data shreds have parent information
-        blocktree::verify_shred_slots(shred.slot(), shred.parent(), root)
-    } else {
-        // Filter out outdated coding shreds
-        shred.slot() >= root
+fn verify_shred_slot(shred: &ShredHeaders, root: u64) -> bool {
+    match shred {
+        ShredHeaders::Data { common_header, .. } => {
+            blocktree::verify_shred_slots(common_header.slot, shred.parent(), root)
+        }
+        ShredHeaders::Coding { common_header, .. } => common_header.slot >= root,
     }
 }
 
 /// drop shreds that are from myself or not from the correct leader for the
 /// shred's slot
 pub fn should_retransmit_and_persist(
-    shred: &Shred,
+    shred: &ShredHeaders,
     bank: Option<Arc<Bank>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     my_pubkey: &Pubkey,
@@ -66,7 +65,12 @@ pub fn should_retransmit_and_persist(
         false
     }
 }
-
+fn count_valid_packets(packets: &[Packets]) -> usize {
+    fn count_all(packets: &Packets) -> usize {
+        packets.packets.iter().filter(|p| !p.meta.discard).count()
+    }
+    packets.iter().map(|p| count_all(p)).sum()
+}
 fn recv_window<F>(
     blocktree: &Arc<Blocktree>,
     my_pubkey: &Pubkey,
@@ -77,7 +81,7 @@ fn recv_window<F>(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
 ) -> Result<()>
 where
-    F: Fn(&Shred, u64) -> bool + Sync,
+    F: Fn(&ShredHeaders, u64) -> bool + Sync,
 {
     let timer = Duration::from_millis(200);
     let mut packets = verified_receiver.recv_timeout(timer)?;
@@ -93,41 +97,34 @@ where
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
 
     let last_root = blocktree.last_root();
-    let shreds: Vec<_> = thread_pool.install(|| {
-        packets
-            .par_iter_mut()
-            .flat_map(|packets| {
-                packets
-                    .packets
-                    .iter_mut()
-                    .filter_map(|packet| {
-                        if packet.meta.discard {
-                            inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
-                            None
-                        } else if let Ok(shred) =
-                            Shred::new_from_serialized_shred(packet.data.to_vec())
-                        {
-                            if shred_filter(&shred, last_root) {
-                                packet.meta.slot = shred.slot();
-                                packet.meta.seed = shred.seed();
-                                Some(shred)
-                            } else {
-                                packet.meta.discard = true;
-                                None
-                            }
-                        } else {
-                            packet.meta.discard = true;
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect()
+    thread_pool.install(|| {
+        packets.par_iter_mut().for_each(|packets| {
+            packets.packets.iter_mut().for_each(|packet| {
+                if packet.meta.discard {
+                    inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
+                } else if let Ok(shred) = ShredHeaders::from_packet(&packet) {
+                    if shred_filter(&shred, last_root) {
+                        packet.meta.slot = shred.slot();
+                        packet.meta.seed = shred.seed();
+                    } else {
+                        packet.meta.discard = true;
+                    }
+                } else {
+                    packet.meta.discard = true;
+                }
+            });
+        });
     });
+    let count: usize = count_valid_packets(&packets);
 
-    trace!("{:?} shreds from packets", shreds.len());
+    trace!("{:?} shreds from packets", count);
 
     trace!("{} num total shreds received: {}", my_pubkey, total_packets);
+
+    let metrics = blocktree.insert_batch(&packets, Some(leader_schedule_cache), false)?;
+    for metrics in &metrics {
+        metrics.report_metrics("recv-window-insert-shreds");
+    }
 
     for packets in packets.into_iter() {
         if !packets.is_empty() {
@@ -135,10 +132,6 @@ where
             let _ = retransmit.send(packets);
         }
     }
-
-    let blocktree_insert_metrics =
-        blocktree.insert_shreds(shreds, Some(leader_schedule_cache), false)?;
-    blocktree_insert_metrics.report_metrics("recv-window-insert-shreds");
 
     trace!(
         "Elapsed processing time in recv_window(): {}",
@@ -186,7 +179,7 @@ impl WindowService {
     ) -> WindowService
     where
         F: 'static
-            + Fn(&Pubkey, &Shred, Option<Arc<Bank>>, u64) -> bool
+            + Fn(&Pubkey, &ShredHeaders, Option<Arc<Bank>>, u64) -> bool
             + std::marker::Send
             + std::marker::Sync,
     {
@@ -286,12 +279,14 @@ mod test {
     use crossbeam_channel::unbounded;
     use rand::thread_rng;
     use solana_ledger::shred::DataShredHeader;
+    use solana_ledger::shred::Shred;
     use solana_ledger::{
         blocktree::{make_many_slot_entries, Blocktree},
         entry::{create_ticks, Entry},
         get_tmp_ledger_path,
         shred::Shredder,
     };
+    use solana_perf::recycler_cache::RecyclerCache;
     use solana_sdk::{
         clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -313,9 +308,10 @@ mod test {
         parent: Slot,
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
+        let cache = RecyclerCache::default();
         let shredder = Shredder::new(slot, parent, 0.0, keypair.clone(), 0, 0)
             .expect("Failed to create entry shredder");
-        shredder.entries_to_shreds(&entries, true, 0).0
+        Shred::from_packets(shredder.entries_to_shreds(&cache, &entries, true, 0).0)
     }
 
     #[test]
@@ -327,7 +323,7 @@ mod test {
         let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Arc::new(Keypair::new()));
         shreds.reverse();
         blocktree
-            .insert_shreds(shreds, None, false)
+            .insert_test_shreds(shreds, None, false)
             .expect("Expect successful processing of shred");
 
         assert_eq!(
@@ -353,12 +349,26 @@ mod test {
 
         // with a Bank for slot 0, shred continues
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0, 0),
+            should_retransmit_and_persist(
+                &shreds[0].headers(),
+                Some(bank.clone()),
+                &cache,
+                &me_id,
+                0,
+                0
+            ),
             true
         );
         // with the wrong shred_version, shred gets thrown out
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0, 1),
+            should_retransmit_and_persist(
+                &shreds[0].headers(),
+                Some(bank.clone()),
+                &cache,
+                &me_id,
+                0,
+                1
+            ),
             false
         );
 
@@ -368,22 +378,50 @@ mod test {
             Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         Shredder::sign_shred(&leader_keypair, &mut coding_shred);
         assert_eq!(
-            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 0, 0),
+            should_retransmit_and_persist(
+                &coding_shred.headers(),
+                Some(bank.clone()),
+                &cache,
+                &me_id,
+                0,
+                0
+            ),
             true
         );
         assert_eq!(
-            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 5, 0),
+            should_retransmit_and_persist(
+                &coding_shred.headers(),
+                Some(bank.clone()),
+                &cache,
+                &me_id,
+                5,
+                0
+            ),
             true
         );
         assert_eq!(
-            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 6, 0),
+            should_retransmit_and_persist(
+                &coding_shred.headers(),
+                Some(bank.clone()),
+                &cache,
+                &me_id,
+                6,
+                0
+            ),
             false
         );
 
         // with a Bank and no idea who leader is, shred gets thrown out
         shreds[0].set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0, 0),
+            should_retransmit_and_persist(
+                &shreds[0].headers(),
+                Some(bank.clone()),
+                &cache,
+                &me_id,
+                0,
+                0
+            ),
             false
         );
 
@@ -391,7 +429,14 @@ mod test {
         let slot = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
         let shreds = local_entries_to_shred(&[Entry::default()], slot, slot - 1, &leader_keypair);
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot, 0),
+            should_retransmit_and_persist(
+                &shreds[0].headers(),
+                Some(bank.clone()),
+                &cache,
+                &me_id,
+                slot,
+                0
+            ),
             false
         );
 
@@ -400,13 +445,20 @@ mod test {
         let shreds =
             local_entries_to_shred(&[Entry::default()], slot + 1, slot - 1, &leader_keypair);
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot, 0),
+            should_retransmit_and_persist(
+                &shreds[0].headers(),
+                Some(bank.clone()),
+                &cache,
+                &me_id,
+                slot,
+                0
+            ),
             false
         );
 
         // if the shred came back from me, it doesn't continue, whether or not I have a bank
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], None, &cache, &me_id, 0, 0),
+            should_retransmit_and_persist(&shreds[0].headers(), None, &cache, &me_id, 0, 0),
             false
         );
     }
