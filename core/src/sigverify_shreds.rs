@@ -1,5 +1,5 @@
 #![allow(clippy::implicit_hasher)]
-use crate::packet::{Packet, Packets, PACKET_DATA_SIZE};
+use crate::packet::{limited_deserialize, Packet, Packets};
 use crate::sigverify::{self, TxOffset};
 use crate::sigverify_stage::SigVerifier;
 use rayon::iter::IndexedParallelIterator;
@@ -56,10 +56,8 @@ impl ShredSigVerifier {
                     let slot_end = slot_start + size_of::<u64>();
                     trace!("slot {} {}", slot_start, slot_end,);
                     if slot_end <= packet.meta.size {
-                        let slot: u64 = bincode::config()
-                            .limit(PACKET_DATA_SIZE as u64)
-                            .deserialize(&packet.data[slot_start..slot_end])
-                            .ok()?;
+                        let slot: u64 =
+                            limited_deserialize(&packet.data[slot_start..slot_end]).ok()?;
                         Some(slot)
                     } else {
                         None
@@ -122,10 +120,7 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> O
     if packet.meta.size < slot_end {
         return Some(0);
     }
-    let slot: u64 = bincode::config()
-        .limit(PACKET_DATA_SIZE as u64)
-        .deserialize(&packet.data[slot_start..slot_end])
-        .ok()?;
+    let slot: u64 = limited_deserialize(&packet.data[slot_start..slot_end]).ok()?;
     trace!("slot {}", slot);
     let pubkey = slot_leaders.get(&slot)?;
     if packet.meta.size < sig_end {
@@ -184,10 +179,8 @@ fn slot_key_data_for_gpu<
                             if packet.meta.size < slot_end {
                                 return std::u64::MAX;
                             }
-                            let slot: Option<u64> = bincode::config()
-                                .limit(PACKET_DATA_SIZE as u64)
-                                .deserialize(&packet.data[slot_start..slot_end])
-                                .ok();
+                            let slot: Option<u64> =
+                                limited_deserialize(&packet.data[slot_start..slot_end]).ok();
                             match slot {
                                 Some(slot) if slot_keys.get(&slot).is_some() => slot,
                                 _ => std::u64::MAX,
@@ -385,10 +378,8 @@ fn sign_shred_cpu(
         packet.meta.size >= slot_end,
         "packet is not large enough for a slot"
     );
-    let slot: u64 = bincode::config()
-        .limit(PACKET_DATA_SIZE as u64)
-        .deserialize(&packet.data[slot_start..slot_end])
-        .expect("can't deserialize slot");
+    let slot: u64 =
+        limited_deserialize(&packet.data[slot_start..slot_end]).expect("can't deserialize slot");
     trace!("slot {}", slot);
     let pubkey = slot_leaders_pubkeys
         .get(&slot)

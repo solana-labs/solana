@@ -13,7 +13,7 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use crate::{
-    blob::{to_shared_blob, Blob, SharedBlob},
+    blob::{limited_deserialize, to_shared_blob, Blob, SharedBlob},
     contact_info::ContactInfo,
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
@@ -1174,9 +1174,7 @@ impl ClusterInfo {
         blobs.iter().for_each(|blob| {
             let blob = blob.read().unwrap();
             let from_addr = blob.meta.addr();
-            bincode::config()
-                .limit(PACKET_DATA_SIZE as u64)
-                .deserialize(&blob.data[..blob.meta.size])
+            limited_deserialize(&blob.data[..blob.meta.size])
                 .into_iter()
                 .for_each(|request| match request {
                     Protocol::PullRequest(filter, caller) => {

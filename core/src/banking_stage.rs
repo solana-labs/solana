@@ -3,7 +3,7 @@
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::{
     cluster_info::ClusterInfo,
-    packet::{Packet, Packets, PACKETS_PER_BATCH, PACKET_DATA_SIZE},
+    packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
     result::{Error, Result},
@@ -419,12 +419,7 @@ impl BankingStage {
     fn deserialize_transactions(p: &Packets) -> Vec<Option<Transaction>> {
         p.packets
             .iter()
-            .map(|x| {
-                bincode::config()
-                    .limit(PACKET_DATA_SIZE as u64)
-                    .deserialize(&x.data[0..x.meta.size])
-                    .ok()
-            })
+            .map(|x| limited_deserialize(&x.data[0..x.meta.size]).ok())
             .collect()
     }
 

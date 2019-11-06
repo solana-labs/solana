@@ -4,7 +4,7 @@ use crate::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
-    packet::PACKET_DATA_SIZE,
+    packet::{limited_deserialize, PACKET_DATA_SIZE},
     repair_service,
     repair_service::{RepairService, RepairSlotRange, RepairStrategy},
     result::{Error, Result},
@@ -161,9 +161,7 @@ fn create_request_processor(
             if let Ok(packets) = packets {
                 for packet in &packets.packets {
                     let req: result::Result<ArchiverRequest, Box<bincode::ErrorKind>> =
-                        bincode::config()
-                            .limit(PACKET_DATA_SIZE as u64)
-                            .deserialize(&packet.data[..packet.meta.size]);
+                        limited_deserialize(&packet.data[..packet.meta.size]);
                     match req {
                         Ok(ArchiverRequest::GetSlotHeight(from)) => {
                             if let Ok(blob) = to_shared_blob(slot, from) {
