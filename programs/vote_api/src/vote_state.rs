@@ -195,7 +195,7 @@ impl VoteState {
             j -= 1;
         }
         if j == slot_hashes.len() {
-            warn!(
+            debug!(
                 "{} dropped vote {:?} too old: {:?} ",
                 self.node_pubkey, vote, slot_hashes
             );
