@@ -973,10 +973,13 @@ impl Archiver {
             socket.send_to(&serialized_req, to).unwrap();
             let mut buf = [0; 1024];
             if let Ok((size, _addr)) = socket.recv_from(&mut buf) {
-                return bincode::config()
+                // Ignore bad packet and try again
+                if let Ok(slot) = bincode::config()
                     .limit(PACKET_DATA_SIZE as u64)
                     .deserialize(&buf[..size])
-                    .unwrap();
+                {
+                    return slot;
+                }
             }
             sleep(Duration::from_millis(500));
         }

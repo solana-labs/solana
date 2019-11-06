@@ -43,9 +43,7 @@ impl ShredSigVerifier {
                     let slot_end = slot_start + size_of::<u64>();
                     trace!("slot {} {}", slot_start, slot_end,);
                     if slot_end <= packet.meta.size {
-                        let slot: u64 =
-                            limited_deserialize(&packet.data[slot_start..slot_end]).ok()?;
-                        Some(slot)
+                        limited_deserialize(&packet.data[slot_start..slot_end]).ok()
                     } else {
                         None
                     }
