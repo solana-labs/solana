@@ -26,6 +26,8 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
                     .build()
                     .unwrap()));
 
+const SHRED_BATCH_MAX_CPU: usize = 16_000;
+
 /// Assuming layout is
 /// signature: Signature
 /// signed_msg: {
@@ -203,14 +205,14 @@ pub fn verify_shreds_gpu(
     recycler_out: &Recycler<PinnedVec<u8>>,
 ) -> Vec<Vec<u8>> {
     let api = perf_libs::api();
-    if api.is_none() {
+    let count = sigverify::batch_size(batches);
+    if api.is_none() || count < SHRED_BATCH_MAX_CPU {
         return verify_shreds_cpu(batches, slot_leaders);
     }
     let api = api.unwrap();
 
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
-    let count = sigverify::batch_size(batches);
     let (pubkeys, pubkey_offsets, mut num_packets) =
         slot_key_data_for_gpu(0, batches, slot_leaders, recycler_offsets, recycler_pubkeys);
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU

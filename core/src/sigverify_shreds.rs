@@ -12,6 +12,7 @@ use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
 use std::mem::size_of;
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 #[derive(Clone)]
 pub struct ShredSigVerifier {
@@ -71,7 +72,8 @@ impl SigVerifier for ShredSigVerifier {
             })
             .collect();
         leader_slots.insert(std::u64::MAX, [0u8; 32]);
-
+        let count = sigverify::batch_size(&batches);
+        let verify = Instant::now();
         let r = verify_shreds_gpu(
             &batches,
             &leader_slots,
@@ -79,7 +81,16 @@ impl SigVerifier for ShredSigVerifier {
             &self.recycler_keys,
             &self.recycler_out,
         );
+        let verify = verify.elapsed();
+        let disabled = Instant::now();
         sigverify::mark_disabled(&mut batches, &r);
+        let disabled = disabled.elapsed();
+        datapoint!(
+            "shred_verify",
+            ("count", count, i64),
+            ("verify_time_us", verify.as_micros(), i64),
+            ("disable_time_us", disabled.as_micros(), i64)
+        );
         batches
     }
 }
