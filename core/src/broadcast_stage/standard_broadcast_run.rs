@@ -381,11 +381,7 @@ mod test {
             setup(num_shreds_per_slot);
 
         // Insert 1 less than the number of ticks needed to finish the slot
-<<<<<<< HEAD
-        let ticks = create_ticks(genesis_block.ticks_per_slot - 1, genesis_block.hash());
-=======
-        let ticks0 = create_ticks(genesis_block.ticks_per_slot - 1, 0, genesis_block.hash());
->>>>>>> 7ff2a44a6... Make last shred for an interrupted slot signed + typed (#6760)
+        let ticks0 = create_ticks(genesis_block.ticks_per_slot - 1, genesis_block.hash());
         let receive_results = ReceiveResults {
             entries: ticks0.clone(),
             time_elapsed: Duration::new(3, 0),
@@ -423,11 +419,7 @@ mod test {
         // Interrupting the slot should cause the unfinished_slot and stats to reset
         let num_shreds = 1;
         assert!(num_shreds < num_shreds_per_slot);
-<<<<<<< HEAD
-        let ticks = create_ticks(max_ticks_per_n_shreds(num_shreds), genesis_block.hash());
-=======
-        let ticks1 = create_ticks(max_ticks_per_n_shreds(num_shreds), 0, genesis_block.hash());
->>>>>>> 7ff2a44a6... Make last shred for an interrupted slot signed + typed (#6760)
+        let ticks1 = create_ticks(max_ticks_per_n_shreds(num_shreds), genesis_block.hash());
         let receive_results = ReceiveResults {
             entries: ticks1.clone(),
             time_elapsed: Duration::new(2, 0),
