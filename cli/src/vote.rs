@@ -488,7 +488,6 @@ mod tests {
                 require_keypair: true
             }
         );
-        tmp_file.close().unwrap();
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let keypair = Keypair::new();
@@ -513,7 +512,6 @@ mod tests {
                 require_keypair: true
             }
         );
-        tmp_file.close().unwrap();
 
         // test init with an authed voter
         let authed = Pubkey::new_rand();
@@ -542,7 +540,6 @@ mod tests {
                 require_keypair: true
             }
         );
-        tmp_file.close().unwrap();
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let keypair = Keypair::new();
@@ -569,7 +566,6 @@ mod tests {
                 require_keypair: true
             }
         );
-        tmp_file.close().unwrap();
 
         // Test Uptime Subcommand
         let pubkey = Pubkey::new_rand();

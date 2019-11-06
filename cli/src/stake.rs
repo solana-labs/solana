@@ -797,7 +797,6 @@ mod tests {
                 require_keypair: true
             }
         );
-        tmp_file.close().unwrap();
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let stake_account_keypair = Keypair::new();
@@ -829,7 +828,6 @@ mod tests {
                 require_keypair: true
             }
         );
-        tmp_file.close().unwrap();
 
         // Test DelegateStake Subcommand
         let stake_pubkey = Pubkey::new_rand();

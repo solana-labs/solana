@@ -263,7 +263,6 @@ mod tests {
                 require_keypair: true
             }
         );
-        tmp_file.close().unwrap();
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let storage_account_keypair = Keypair::new();
@@ -288,7 +287,6 @@ mod tests {
                 require_keypair: true
             }
         );
-        tmp_file.close().unwrap();
 
         let test_claim_storage_reward = test_commands.clone().get_matches_from(vec![
             "test",
