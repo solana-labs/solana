@@ -904,6 +904,7 @@ impl Blocktree {
         let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
 
         let mut current_slot = start_slot;
+<<<<<<< HEAD
         let mut parent_slot = parent.map_or(
             if current_slot == 0 {
                 current_slot
@@ -912,6 +913,8 @@ impl Blocktree {
             },
             |v| v,
         );
+=======
+>>>>>>> 0ace79939... Add reference tick to data shreds (#6772)
         let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone(), 0)
             .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];

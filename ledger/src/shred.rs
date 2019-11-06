@@ -338,11 +338,14 @@ impl Shred {
         }
     }
 
+<<<<<<< HEAD
     pub fn reference_tick_from_data(data: &[u8]) -> u8 {
         let flags = data[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER - size_of::<u8>()];
         flags & SHRED_TICK_REFERENCE_MASK
     }
 
+=======
+>>>>>>> 0ace79939... Add reference tick to data shreds (#6772)
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
@@ -959,7 +962,10 @@ pub mod tests {
         let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), 5);
+<<<<<<< HEAD
             assert_eq!(Shred::reference_tick_from_data(&s.payload), 5);
+=======
+>>>>>>> 0ace79939... Add reference tick to data shreds (#6772)
         });
 
         let deserialized_shred =
@@ -989,10 +995,13 @@ pub mod tests {
         let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), SHRED_TICK_REFERENCE_MASK);
+<<<<<<< HEAD
             assert_eq!(
                 Shred::reference_tick_from_data(&s.payload),
                 SHRED_TICK_REFERENCE_MASK
             );
+=======
+>>>>>>> 0ace79939... Add reference tick to data shreds (#6772)
         });
 
         let deserialized_shred =
