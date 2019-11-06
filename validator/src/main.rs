@@ -533,30 +533,32 @@ pub fn main() {
         option_env!("CI_COMMIT").unwrap_or("unknown")
     );
 
-    let default_logfile = format!(
-        "solana-validator-{}-{}.log",
-        identity_keypair.pubkey(),
-        chrono::Local::now().to_rfc3339()
-    );
-    let logfile = matches.value_of("logfile").unwrap_or(&default_logfile);
-
-    let _log_redirect = if logfile == "-" {
-        None
-    } else {
+    let _log_redirect = {
         #[cfg(unix)]
         {
-            println!("log file: {}", logfile);
-            Some(gag::Redirect::stderr(File::create(logfile).unwrap_or_else(
-                |err| {
-                    eprintln!("Unable to create {}: {:?}", logfile, err);
-                    exit(1);
-                },
-            )))
+            let default_logfile = format!(
+                "solana-validator-{}-{}.log",
+                identity_keypair.pubkey(),
+                chrono::Local::now().to_rfc3339()
+            );
+            let logfile = matches.value_of("logfile").unwrap_or(&default_logfile);
+
+            if logfile == "-" {
+                None
+            } else {
+                println!("log file: {}", logfile);
+                Some(gag::Redirect::stderr(File::create(logfile).unwrap_or_else(
+                    |err| {
+                        eprintln!("Unable to create {}: {:?}", logfile, err);
+                        exit(1);
+                    },
+                )))
+            }
         }
         #[cfg(not(unix))]
         {
             println!("logging to a file is not supported on this platform");
-            None
+            ()
         }
     };
 
