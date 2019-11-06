@@ -9,13 +9,10 @@ certain use cases, such as custodial services, require more time to produce a
 signature for the transaction. A mechanism is needed to enable these potentially
 offline network participants.
 
-## A Naive Solution
+## Requirements
 
-An initial attempt at this was made by designating an special blockhash value
-that, if present in the `recent_blockhash` field, allowed the transaction to
-succeed so long as it additionally spent the full balance of the fee account.
-However, this would introduce a security vulnerability by the fact that the
-transaction could be replayed by simply funding the fee account again.
+1) The transaction's signature needs to cover the nonce value
+2) The nonce must not be reusable, even in the face of signing key disclosure
 
 ## A Contract-based Solution
 
