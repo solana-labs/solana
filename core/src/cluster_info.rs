@@ -1183,8 +1183,8 @@ impl ClusterInfo {
                                 "cluster_info-gossip_pull_request_verify_fail",
                                 1
                             );
-                        } else if caller.contact_info().is_some() {
-                            if caller.contact_info().unwrap().id == me.read().unwrap().gossip.id {
+                        } else if let Some(contact_info) = caller.contact_info() {
+                            if contact_info.id == me.read().unwrap().gossip.id {
                                 warn!("PullRequest ignored, I'm talking to myself");
                                 inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
                             } else {

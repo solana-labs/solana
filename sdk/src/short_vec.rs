@@ -179,8 +179,8 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for ShortVec<T> {
 /// Return the decoded value and how many bytes it consumed.
 pub fn decode_len(bytes: &[u8]) -> Result<(usize, usize), Box<bincode::ErrorKind>> {
     let short_len: ShortU16 = bincode::deserialize(bytes)?;
-    let num_bytes = bincode::serialized_size(&short_len).unwrap() as usize;
-    Ok((short_len.0 as usize, num_bytes))
+    let num_bytes = bincode::serialized_size(&short_len)?;
+    Ok((short_len.0 as usize, num_bytes as usize))
 }
 
 #[cfg(test)]
