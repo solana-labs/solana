@@ -18,7 +18,6 @@ pub struct ShredSigVerifier {
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     recycler_offsets: Recycler<TxOffset>,
-    recycler_keys: Recycler<PinnedVec<[u8; 32]>>,
     recycler_out: Recycler<PinnedVec<u8>>,
 }
 
@@ -32,7 +31,6 @@ impl ShredSigVerifier {
             bank_forks,
             leader_schedule_cache,
             recycler_offsets: Recycler::default(),
-            recycler_keys: Recycler::default(),
             recycler_out: Recycler::default(),
         }
     }
@@ -76,7 +74,6 @@ impl SigVerifier for ShredSigVerifier {
             &batches,
             &leader_slots,
             &self.recycler_offsets,
-            &self.recycler_keys,
             &self.recycler_out,
         );
         sigverify::mark_disabled(&mut batches, &r);
