@@ -24,6 +24,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
+fn port_validator(port: String) -> Result<(), String> {
+    port.parse::<u16>()
+        .map(|_| ())
+        .map_err(|e| format!("{:?}", e))
+}
+
 fn port_range_validator(port_range: String) -> Result<(), String> {
     if solana_netutil::parse_port_range(&port_range).is_some() {
         Ok(())
@@ -124,7 +130,7 @@ fn download_tar_bz2(
         .map_err(|err| format!("Unable to write {:?}: {:?}", temp_archive_path, err))?;
 
     source.progress_bar.finish_and_clear();
-    println!(
+    info!(
         "  {}{}",
         SPARKLE,
         format!(
@@ -136,7 +142,7 @@ fn download_tar_bz2(
     );
 
     if extract {
-        println!("Extracting {:?}...", archive_path);
+        info!("Extracting {:?}...", archive_path);
         let extract_start = Instant::now();
         let tar_bz2 = File::open(&temp_archive_path)
             .map_err(|err| format!("Unable to open {}: {:?}", archive_name, err))?;
@@ -145,7 +151,7 @@ fn download_tar_bz2(
         archive
             .unpack(download_path)
             .map_err(|err| format!("Unable to unpack {}: {:?}", archive_name, err))?;
-        println!(
+        info!(
             "Extracted {} in {:?}",
             archive_name,
             Instant::now().duration_since(extract_start)
@@ -224,16 +230,8 @@ fn is_keypair(string: String) -> Result<(), String> {
         .map_err(|err| format!("{:?}", err))
 }
 
+#[allow(clippy::cognitive_complexity)]
 pub fn main() {
-    solana_logger::setup_with_filter(
-        &[
-            "solana=info", /* info logging for all solana modules */
-            "rpc=trace",   /* json_rpc request/response logging */
-        ]
-        .join(","),
-    );
-    solana_metrics::set_panic_hook("validator");
-
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
 
@@ -335,6 +333,7 @@ pub fn main() {
                 .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
+                .validator(port_validator)
                 .help("RPC port to use for this node"),
         )
         .arg(
@@ -419,11 +418,6 @@ pub fn main() {
         )
         .get_matches();
 
-    if matches.is_present("cuda") {
-        solana_perf::perf_libs::init_cuda();
-    }
-
-    let mut validator_config = ValidatorConfig::default();
     let keypair = if let Some(identity) = matches.value_of("identity") {
         read_keypair_file(identity).unwrap_or_else(|err| {
             error!("{}: Unable to open keypair file: {}", err, identity);
@@ -457,7 +451,14 @@ pub fn main() {
         });
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
+    let entrypoint = matches.value_of("entrypoint");
+    let init_complete_file = matches.value_of("init_complete_file");
+    let skip_poh_verify = matches.is_present("skip_poh_verify");
+    let cuda = matches.is_present("cuda");
+    let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
+    let rpc_port = value_t!(matches, "rpc_port", u16);
 
+    let mut validator_config = ValidatorConfig::default();
     validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
     validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
 
@@ -472,15 +473,6 @@ pub fn main() {
     let dynamic_port_range =
         solana_netutil::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
             .expect("invalid dynamic_port_range");
-
-    let mut gossip_addr = solana_netutil::parse_port_or_addr(
-        matches.value_of("gossip_port"),
-        socketaddr!(
-            [127, 0, 0, 1],
-            solana_netutil::find_available_port_in_range(dynamic_port_range)
-                .expect("unable to find an available gossip port")
-        ),
-    );
 
     if let Some(account_paths) = matches.value_of("account_paths") {
         validator_config.account_paths = Some(account_paths.to_string());
@@ -512,7 +504,50 @@ pub fn main() {
     if matches.is_present("limit_ledger_size") {
         validator_config.max_ledger_slots = Some(DEFAULT_MAX_LEDGER_SLOTS);
     }
-    let cluster_entrypoint = matches.value_of("entrypoint").map(|entrypoint| {
+
+    if matches.value_of("signer_addr").is_some() {
+        warn!("--vote-signer-address ignored");
+    }
+
+    validator_config.blockstream_unix_socket = matches
+        .value_of("blockstream_unix_socket")
+        .map(PathBuf::from);
+
+    validator_config.expected_genesis_blockhash = matches
+        .value_of("expected_genesis_blockhash")
+        .map(|s| Hash::from_str(&s).unwrap());
+
+    println!(
+        "{} version {} (branch={}, commit={})",
+        style(crate_name!()).bold(),
+        crate_version!(),
+        option_env!("CI_BRANCH").unwrap_or("unknown"),
+        option_env!("CI_COMMIT").unwrap_or("unknown")
+    );
+    solana_logger::setup_with_filter(
+        &[
+            "solana=info", /* info logging for all solana modules */
+            "rpc=trace",   /* json_rpc request/response logging */
+        ]
+        .join(","),
+    );
+    solana_metrics::set_host_id(keypair.pubkey().to_string());
+    solana_metrics::set_panic_hook("validator");
+
+    if cuda {
+        solana_perf::perf_libs::init_cuda();
+    }
+
+    let mut gossip_addr = solana_netutil::parse_port_or_addr(
+        matches.value_of("gossip_port"),
+        socketaddr!(
+            [127, 0, 0, 1],
+            solana_netutil::find_available_port_in_range(dynamic_port_range)
+                .expect("unable to find an available gossip port")
+        ),
+    );
+
+    let cluster_entrypoint = entrypoint.map(|entrypoint| {
         let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)
             .expect("failed to parse entrypoint address");
         let ip_addr = solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
@@ -527,54 +562,18 @@ pub fn main() {
         ContactInfo::new_gossip_entry_point(&entrypoint_addr)
     });
 
-    if matches.value_of("signer_addr").is_some() {
-        warn!("--vote-signer-address ignored");
-        /*
-        let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer_addr")
-        {
-            (
-                None,
-                signer_addr.to_string().parse().expect("Signer IP Address"),
-            )
-        } else {
-            // Run a local vote signer if a vote signer service address was not provided
-            let (signer_service, signer_addr) = solana_core::local_vote_signer_service::LocalVoteSignerService::new(dynamic_port_range);
-            (Some(signer_service), signer_addr)
-        };
-        */
-    }
-
-    let init_complete_file = matches.value_of("init_complete_file");
-    let skip_poh_verify = matches.is_present("skip_poh_verify");
-    validator_config.blockstream_unix_socket = matches
-        .value_of("blockstream_unix_socket")
-        .map(PathBuf::from);
-
-    println!(
-        "{} version {} (branch={}, commit={})",
-        style(crate_name!()).bold(),
-        crate_version!(),
-        option_env!("CI_BRANCH").unwrap_or("unknown"),
-        option_env!("CI_COMMIT").unwrap_or("unknown")
-    );
-    solana_metrics::set_host_id(keypair.pubkey().to_string());
-
     let mut tcp_ports = vec![];
     let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);
-    if let Some(port) = matches.value_of("rpc_port") {
-        let port_number = port.to_string().parse().expect("integer");
+    if let Ok(rpc_port) = rpc_port {
+        let port_number = rpc_port.to_string().parse().expect("integer");
         if port_number == 0 {
-            error!("Invalid RPC port requested: {:?}", port);
+            error!("Invalid RPC port requested: {:?}", rpc_port);
             exit(1);
         }
         node.info.rpc = SocketAddr::new(node.info.gossip.ip(), port_number);
         node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), port_number + 1);
         tcp_ports = vec![port_number, port_number + 1];
     };
-
-    validator_config.expected_genesis_blockhash = matches
-        .value_of("expected_genesis_blockhash")
-        .map(|s| Hash::from_str(&s).unwrap());
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
         let udp_sockets = [
@@ -601,21 +600,19 @@ pub fn main() {
             let ip_echo = ip_echo.try_clone().expect("unable to clone tcp_listener");
             tcp_listeners.push((node.info.gossip.port(), ip_echo));
         }
+
         solana_netutil::verify_reachable_ports(
             &cluster_entrypoint.gossip,
             tcp_listeners,
             &udp_sockets,
         );
 
-        let genesis_blockhash = initialize_ledger_path(
-            cluster_entrypoint,
-            &ledger_path,
-            matches.is_present("no_snapshot_fetch"),
-        )
-        .unwrap_or_else(|err| {
-            error!("Failed to download ledger: {}", err);
-            exit(1);
-        });
+        let genesis_blockhash =
+            initialize_ledger_path(cluster_entrypoint, &ledger_path, no_snapshot_fetch)
+                .unwrap_or_else(|err| {
+                    error!("Failed to download ledger: {}", err);
+                    exit(1);
+                });
 
         if let Some(expected_genesis_blockhash) = validator_config.expected_genesis_blockhash {
             if expected_genesis_blockhash != genesis_blockhash {
