@@ -20,15 +20,11 @@ A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [
 
 ## blockhash
 
-A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height).
+A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height). Taken from the last [entry id](terminology.md#entry-id) in the slot
 
 ## block height
 
 The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height one.
-
-## block id
-
-The [entry id](terminology.md#entry-id) of the last entry in a [block](terminology.md#block).
 
 ## bootstrap leader
 
