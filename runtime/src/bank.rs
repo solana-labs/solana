@@ -693,9 +693,6 @@ impl Bank {
         //  / ticks/slot
             / self.ticks_per_slot as f64;
 
-        // make bank 0 votable
-        self.is_delta.store(true, Ordering::Relaxed);
-
         self.epoch_schedule = genesis_block.epoch_schedule;
 
         self.inflation = genesis_block.inflation;
@@ -1529,8 +1526,8 @@ impl Bank {
         self.epoch_schedule.get_epoch_and_slot_index(slot)
     }
 
-    pub fn is_votable(&self) -> bool {
-        self.is_delta.load(Ordering::Relaxed) && self.tick_height() == self.max_tick_height
+    pub fn is_empty(&self) -> bool {
+        !self.is_delta.load(Ordering::Relaxed)
     }
 
     /// Add an instruction processor to intercept instructions before the dynamic loader.
@@ -1633,7 +1630,6 @@ mod tests {
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_block::create_genesis_block,
-        hash,
         instruction::InstructionError,
         message::{Message, MessageHeader},
         poh_config::PohConfig,
@@ -2935,38 +2931,19 @@ mod tests {
     }
 
     #[test]
-    fn test_is_votable() {
-        // test normal case
+    fn test_is_empty() {
         let (genesis_block, mint_keypair) = create_genesis_block(500);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let bank0 = Arc::new(Bank::new(&genesis_block));
         let key1 = Keypair::new();
-        assert_eq!(bank.is_votable(), false);
 
-        // Set is_delta to true
+        // The zeroth bank is empty becasue there are no transactions
+        assert_eq!(bank0.is_empty(), true);
+
+        // Set is_delta to true, bank is no longer empty
         let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash());
-        assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
-        assert_eq!(bank.is_votable(), false);
-
-        // Register enough ticks to hit max tick height
-        for i in 0..genesis_block.ticks_per_slot {
-            bank.register_tick(&hash::hash(format!("hello world {}", i).as_bytes()));
-        }
-
-        assert_eq!(bank.is_votable(), true);
-
-        // test empty bank with ticks
-        let (genesis_block, _mint_keypair) = create_genesis_block(500);
-        // make an empty bank at slot 1
-        let bank = new_from_parent(&Arc::new(Bank::new(&genesis_block)));
-        assert_eq!(bank.is_votable(), false);
-
-        // Register enough ticks to hit max tick height
-        for i in 0..genesis_block.ticks_per_slot {
-            bank.register_tick(&hash::hash(format!("hello world {}", i).as_bytes()));
-        }
-        // empty banks aren't votable even at max tick height
-        assert_eq!(bank.is_votable(), false);
+        assert_eq!(bank0.process_transaction(&tx_transfer_mint_to_1), Ok(()));
+        assert_eq!(bank0.is_empty(), false);
     }
 
     #[test]
@@ -3066,16 +3043,6 @@ mod tests {
         let vote_accounts = bank.vote_accounts();
 
         assert_eq!(vote_accounts.len(), 1);
-    }
-
-    #[test]
-    fn test_bank_0_votable() {
-        let (genesis_block, _) = create_genesis_block(500);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        //set tick height to max
-        let max_tick_height = (bank.slot + 1) * bank.ticks_per_slot;
-        bank.tick_height.store(max_tick_height, Ordering::Relaxed);
-        assert!(bank.is_votable());
     }
 
     #[test]

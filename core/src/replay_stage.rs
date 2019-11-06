@@ -492,6 +492,9 @@ impl ReplayStage {
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
+        if bank.is_empty() {
+            inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
+        }
         trace!("handle votable bank {}", bank.slot());
         let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account);
         if let Some(new_root) = tower.record_bank_vote(vote) {
@@ -651,11 +654,6 @@ impl ReplayStage {
         trace!("frozen_banks {}", frozen_banks.len());
         let mut votable: Vec<(u128, Arc<Bank>, HashMap<u64, StakeLockout>, u64)> = frozen_banks
             .values()
-            .filter(|b| {
-                let is_votable = b.is_votable();
-                trace!("bank is votable: {} {}", b.slot(), is_votable);
-                is_votable
-            })
             .filter(|b| {
                 let has_voted = tower.has_voted(b.slot());
                 trace!("bank has_voted: {} {}", b.slot(), has_voted);
