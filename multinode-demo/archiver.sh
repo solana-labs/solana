@@ -68,10 +68,9 @@ identity_pubkey=$($solana_keygen pubkey "$identity_keypair")
 
 if [[ ! -r $storage_keypair ]]; then
   $solana_keygen new -o "$storage_keypair"
-  storage_pubkey=$($solana_keygen pubkey "$storage_keypair")
 
   $solana_cli --keypair "$identity_keypair" --url "$rpc_url" \
-    create-archiver-storage-account "$identity_pubkey" "$storage_pubkey"
+    create-archiver-storage-account "$identity_pubkey" "$storage_keypair"
 fi
 
 default_arg --entrypoint "$entrypoint"
