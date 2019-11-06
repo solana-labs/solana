@@ -37,6 +37,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-poh-verify ]]; then
       args+=("$1")
       shift
+    elif [[ $1 = --log ]]; then
+      args+=("$1" "$2")
+      shift 2
     else
       echo "Unknown argument: $1"
       $program --help
@@ -79,6 +82,7 @@ args+=(
   --rpc-drone-address 127.0.0.1:9900
 )
 default_arg --gossip-port 8001
+default_arg --log -
 
 set -x
 # shellcheck disable=SC2086 # Don't want to double quote $program
