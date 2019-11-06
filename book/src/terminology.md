@@ -20,7 +20,7 @@ A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [
 
 ## blockhash
 
-A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) state at a given [block height](terminology.md#block-height).
+A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height).
 
 ## block height
 
