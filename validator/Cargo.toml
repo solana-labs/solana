@@ -11,6 +11,7 @@ homepage = "https://solana.com/"
 [dependencies]
 bzip2 = "0.3.3"
 clap = "2.33.0"
+chrono = { version = "0.4.9", features = ["serde"] }
 console = "0.9.1"
 log = "0.4.8"
 indicatif = "0.13.0"
@@ -30,3 +31,6 @@ solana-vote-api = { path = "../programs/vote_api", version = "0.21.0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.21.0" }
 tempfile = "3.1.0"
 tar = "0.4.26"
+
+[target."cfg(unix)".dependencies]
+gag = "0.1.10"

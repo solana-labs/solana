@@ -143,6 +143,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-poh-verify ]]; then
       args+=("$1")
       shift
+    elif [[ $1 = --log ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = -h ]]; then
       usage "$@"
     else
@@ -216,6 +219,7 @@ default_arg --identity "$identity_keypair_path"
 default_arg --voting-keypair "$voting_keypair_path"
 default_arg --storage-keypair "$storage_keypair_path"
 default_arg --ledger "$ledger_dir"
+default_arg --log -
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda
