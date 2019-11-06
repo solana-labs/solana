@@ -18,6 +18,14 @@ impl CommitmentConfig {
             commitment: CommitmentLevel::Recent,
         }
     }
+
+    pub fn ok(&self) -> Option<Self> {
+        if self == &Self::default() {
+            None
+        } else {
+            Some(self.clone())
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

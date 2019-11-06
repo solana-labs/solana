@@ -1,14 +1,16 @@
-use serde_json::{json, Value};
+use serde_json::Value;
 use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
-use solana_client::rpc_request::RpcRequest;
 use solana_core::validator::new_validator_for_tests;
 use solana_drone::drone::run_local_drone;
-use solana_sdk::bpf_loader;
-use std::fs::{remove_dir_all, File};
-use std::io::Read;
-use std::path::PathBuf;
-use std::sync::mpsc::channel;
+use solana_sdk::{bpf_loader, commitment_config::CommitmentConfig, pubkey::Pubkey};
+use std::{
+    fs::{remove_dir_all, File},
+    io::Read,
+    path::PathBuf,
+    str::FromStr,
+    sync::mpsc::channel,
+};
 
 #[test]
 fn test_cli_deploy_program() {
@@ -56,35 +58,20 @@ fn test_cli_deploy_program() {
         .unwrap()
         .as_str()
         .unwrap();
+    let program_id = Pubkey::from_str(&program_id_str).unwrap();
 
-    let params = json!([program_id_str]);
-    let account_info = rpc_client
-        .retry_make_rpc_request(&RpcRequest::GetAccountInfo, Some(params), 0)
+    let account = rpc_client
+        .get_account_with_commitment(&program_id, CommitmentConfig::recent())
         .unwrap();
-    let account_info_obj = account_info.as_object().unwrap();
-    assert_eq!(
-        account_info_obj.get("lamports").unwrap().as_u64().unwrap(),
-        minimum_balance_for_rent_exemption
-    );
-    let owner_array = account_info.get("owner").unwrap();
-    assert_eq!(owner_array, &json!(bpf_loader::id()));
-    assert_eq!(
-        account_info_obj
-            .get("executable")
-            .unwrap()
-            .as_bool()
-            .unwrap(),
-        true
-    );
+    assert_eq!(account.lamports, minimum_balance_for_rent_exemption);
+    assert_eq!(account.owner, bpf_loader::id());
+    assert_eq!(account.executable, true);
 
     let mut file = File::open(pathbuf.to_str().unwrap().to_string()).unwrap();
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
 
-    assert_eq!(
-        account_info_obj.get("data").unwrap().as_array().unwrap(),
-        &elf
-    );
+    assert_eq!(account.data, elf);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

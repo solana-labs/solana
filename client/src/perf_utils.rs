@@ -1,10 +1,13 @@
 use log::*;
-use solana_sdk::client::Client;
-use solana_sdk::timing::duration_as_s;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use solana_sdk::{client::Client, timing::duration_as_s};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 #[derive(Default)]
 pub struct SampleStats {
