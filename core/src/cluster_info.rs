@@ -13,20 +13,20 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use crate::{
-    blob::{to_shared_blob, Blob, SharedBlob},
+    blob::{limited_deserialize, to_shared_blob, Blob, SharedBlob},
     contact_info::ContactInfo,
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, Vote},
-    packet::Packet,
+    packet::{Packet, PACKET_DATA_SIZE},
     repair_service::RepairType,
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
     streamer::{BlobReceiver, BlobSender},
     weighted_shuffle::{weighted_best, weighted_shuffle},
 };
-use bincode::{deserialize, serialize, serialized_size};
+use bincode::{serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
 use rand::{thread_rng, Rng};
@@ -38,7 +38,6 @@ use solana_netutil::{
 };
 use solana_sdk::{
     clock::Slot,
-    packet::PACKET_DATA_SIZE,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signable, Signature},
     timing::{duration_as_ms, timestamp},
@@ -1175,7 +1174,7 @@ impl ClusterInfo {
         blobs.iter().for_each(|blob| {
             let blob = blob.read().unwrap();
             let from_addr = blob.meta.addr();
-            deserialize(&blob.data[..blob.meta.size])
+            limited_deserialize(&blob.data[..blob.meta.size])
                 .into_iter()
                 .for_each(|request| match request {
                     Protocol::PullRequest(filter, caller) => {

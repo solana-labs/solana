@@ -3,13 +3,12 @@
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::{
     cluster_info::ClusterInfo,
-    packet::{Packet, Packets, PACKETS_PER_BATCH},
+    packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
     result::{Error, Result},
     service::Service,
 };
-use bincode::deserialize;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use solana_ledger::{
@@ -19,11 +18,10 @@ use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
 use solana_perf::perf_libs;
 use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::TransactionBatch};
-use solana_sdk::clock::MAX_TRANSACTION_FORWARDING_DELAY_GPU;
 use solana_sdk::{
     clock::{
         Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
-        MAX_TRANSACTION_FORWARDING_DELAY,
+        MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
     },
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -421,7 +419,7 @@ impl BankingStage {
     fn deserialize_transactions(p: &Packets) -> Vec<Option<Transaction>> {
         p.packets
             .iter()
-            .map(|x| deserialize(&x.data[0..x.meta.size]).ok())
+            .map(|x| limited_deserialize(&x.data[0..x.meta.size]).ok())
             .collect()
     }
 

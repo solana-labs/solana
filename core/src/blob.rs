@@ -404,6 +404,13 @@ pub fn index_blobs(
     }
 }
 
+pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    bincode::config().limit(BLOB_SIZE as u64).deserialize(data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

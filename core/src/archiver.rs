@@ -4,6 +4,7 @@ use crate::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
+    packet::{limited_deserialize, PACKET_DATA_SIZE},
     repair_service,
     repair_service::{RepairService, RepairSlotRange, RepairStrategy},
     result::{Error, Result},
@@ -14,7 +15,6 @@ use crate::{
     streamer::{receiver, responder, PacketReceiver},
     window_service::WindowService,
 };
-use bincode::deserialize;
 use crossbeam_channel::unbounded;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
@@ -161,7 +161,7 @@ fn create_request_processor(
             if let Ok(packets) = packets {
                 for packet in &packets.packets {
                     let req: result::Result<ArchiverRequest, Box<bincode::ErrorKind>> =
-                        deserialize(&packet.data[..packet.meta.size]);
+                        limited_deserialize(&packet.data[..packet.meta.size]);
                     match req {
                         Ok(ArchiverRequest::GetSlotHeight(from)) => {
                             if let Ok(blob) = to_shared_blob(slot, from) {
@@ -933,7 +933,10 @@ impl Archiver {
             socket.send_to(&serialized_req, to).unwrap();
             let mut buf = [0; 1024];
             if let Ok((size, _addr)) = socket.recv_from(&mut buf) {
-                return deserialize(&buf[..size]).unwrap();
+                return bincode::config()
+                    .limit(PACKET_DATA_SIZE as u64)
+                    .deserialize(&buf[..size])
+                    .unwrap();
             }
             sleep(Duration::from_millis(500));
         }

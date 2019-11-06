@@ -1,7 +1,7 @@
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::next_keyed_account;
+use solana_sdk::instruction_processor_utils::{limited_deserialize, next_keyed_account};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
@@ -102,8 +102,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    let instruction =
-        bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)?;
+    let instruction = limited_deserialize(data)?;
 
     trace!("process_instruction: {:?}", instruction);
     trace!("keyed_accounts: {:?}", keyed_accounts);

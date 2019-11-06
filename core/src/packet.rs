@@ -85,6 +85,15 @@ pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<Packets> {
     to_packets_chunked(xs, NUM_PACKETS)
 }
 
+pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    bincode::config()
+        .limit(PACKET_DATA_SIZE as u64)
+        .deserialize(data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

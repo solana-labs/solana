@@ -9,7 +9,7 @@ use crate::{
     validator::ValidatorExit,
     version::VERSION,
 };
-use bincode::{deserialize, serialize};
+use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
@@ -655,10 +655,6 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
-        let tx: Transaction = deserialize(&data).map_err(|err| {
-            info!("send_transaction: deserialize error: {:?}", err);
-            Error::invalid_request()
-        })?;
         if data.len() >= PACKET_DATA_SIZE {
             info!(
                 "send_transaction: transaction too large: {} bytes (max: {} bytes)",
@@ -667,6 +663,14 @@ impl RpcSol for RpcSolImpl {
             );
             return Err(Error::invalid_request());
         }
+        let tx: Transaction = bincode::config()
+            .limit(PACKET_DATA_SIZE as u64)
+            .deserialize(&data)
+            .map_err(|err| {
+                info!("send_transaction: deserialize error: {:?}", err);
+                Error::invalid_request()
+            })?;
+
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_addr = get_tpu_addr(&meta.cluster_info)?;
         trace!("send_transaction: leader is {:?}", &tpu_addr);
