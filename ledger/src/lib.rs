@@ -12,13 +12,16 @@ pub mod genesis_utils;
 pub mod leader_schedule;
 pub mod leader_schedule_cache;
 pub mod leader_schedule_utils;
-pub mod packet;
 pub mod poh;
 pub mod rooted_slot_iterator;
 pub mod shred;
+pub mod sigverify_shreds;
 pub mod snapshot_package;
 pub mod snapshot_utils;
 pub mod staking_utils;
 
 #[macro_use]
 extern crate solana_metrics;
+
+#[macro_use]
+extern crate log;

@@ -54,7 +54,6 @@ pub mod sigverify_stage;
 pub mod snapshot_packager_service;
 pub mod storage_stage;
 pub mod streamer;
-pub mod test_tx;
 pub mod tpu;
 pub mod tvu;
 pub mod validator;

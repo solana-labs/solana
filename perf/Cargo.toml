@@ -11,10 +11,23 @@ edition = "2018"
 [dependencies]
 rand = "0.6.5"
 dlopen = "0.1.8"
+bincode = "1.2.0"
+rayon = "1.2.0"
+serde = "1.0.102"
+serde_derive = "1.0.102"
 dlopen_derive = "0.1.4"
 log = "0.4.8"
 solana-sdk = { path = "../sdk", version = "0.21.0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.21.0" }
+solana-budget-api = { path = "../programs/budget_api", version = "0.21.0" }
+solana-logger = { path = "../logger", version = "0.21.0" }
+solana-metrics = { path = "../metrics", version = "0.21.0" }
 
 [lib]
 name = "solana_perf"
 
+[dev-dependencies]
+matches = "0.1.6"
+
+[[bench]]
+name = "sigverify"

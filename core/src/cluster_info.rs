@@ -1812,7 +1812,6 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use crate::repair_service::RepairType;
     use crate::result::Error;
-    use crate::test_tx::test_tx;
     use rayon::prelude::*;
     use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::blocktree::make_many_slot_entries;
@@ -1821,6 +1820,7 @@ mod tests {
     use solana_ledger::shred::{
         max_ticks_per_n_shreds, CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader,
     };
+    use solana_perf::test_tx::test_tx;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;

@@ -3,15 +3,14 @@ use crate::{
     recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
     result::{Error, Result},
 };
-use bincode;
-use serde::Serialize;
-pub use solana_ledger::packet::{
-    Packets, PacketsRecycler, NUM_PACKETS, PACKETS_BATCH_SIZE, PACKETS_PER_BATCH,
+pub use solana_perf::packet::{
+    limited_deserialize, to_packets, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
+    PACKETS_BATCH_SIZE, PACKETS_PER_BATCH,
 };
 
 use solana_metrics::inc_new_counter_debug;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use std::{io, net::UdpSocket, time::Instant};
+use std::{net::UdpSocket, time::Instant};
 
 pub fn recv_from(obj: &mut Packets, socket: &UdpSocket) -> Result<usize> {
     let mut i = 0;
@@ -65,41 +64,9 @@ pub fn send_to(obj: &Packets, socket: &UdpSocket) -> Result<()> {
     Ok(())
 }
 
-pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets> {
-    let mut out = vec![];
-    for x in xs.chunks(chunks) {
-        let mut p = Packets::default();
-        p.packets.resize(x.len(), Packet::default());
-        for (i, o) in x.iter().zip(p.packets.iter_mut()) {
-            let mut wr = io::Cursor::new(&mut o.data[..]);
-            bincode::serialize_into(&mut wr, &i).expect("serialize request");
-            let len = wr.position() as usize;
-            o.meta.size = len;
-        }
-        out.push(p);
-    }
-    out
-}
-
-pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<Packets> {
-    to_packets_chunked(xs, NUM_PACKETS)
-}
-
-pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
-where
-    T: serde::de::DeserializeOwned,
-{
-    bincode::config()
-        .limit(PACKET_DATA_SIZE as u64)
-        .deserialize(data)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
     use std::io;
     use std::io::Write;
     use std::net::{SocketAddr, UdpSocket};
@@ -139,25 +106,6 @@ mod tests {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }
-    }
-
-    #[test]
-    fn test_to_packets() {
-        let keypair = Keypair::new();
-        let hash = Hash::new(&[1; 32]);
-        let tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
-        let rv = to_packets(&vec![tx.clone(); 1]);
-        assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].packets.len(), 1);
-
-        let rv = to_packets(&vec![tx.clone(); NUM_PACKETS]);
-        assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].packets.len(), NUM_PACKETS);
-
-        let rv = to_packets(&vec![tx.clone(); NUM_PACKETS + 1]);
-        assert_eq!(rv.len(), 2);
-        assert_eq!(rv[0].packets.len(), NUM_PACKETS);
-        assert_eq!(rv[1].packets.len(), 1);
     }
 
     #[test]

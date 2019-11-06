@@ -2,10 +2,10 @@
 
 extern crate test;
 
-use solana_core::packet::to_packets;
-use solana_core::sigverify;
-use solana_core::test_tx::test_tx;
+use solana_perf::packet::to_packets;
 use solana_perf::recycler::Recycler;
+use solana_perf::sigverify;
+use solana_perf::test_tx::test_tx;
 use test::Bencher;
 
 #[bench]

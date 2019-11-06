@@ -93,9 +93,6 @@ name = "blocktree"
 name = "gen_keys"
 
 [[bench]]
-name = "sigverify"
-
-[[bench]]
 name = "sigverify_stage"
 
 [[bench]]
