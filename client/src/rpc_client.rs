@@ -1,14 +1,17 @@
-use crate::client_error::ClientError;
-use crate::generic_rpc_client_request::GenericRpcClientRequest;
-use crate::mock_rpc_client_request::MockRpcClientRequest;
-use crate::rpc_client_request::RpcClientRequest;
-use crate::rpc_request::{RpcEpochInfo, RpcRequest, RpcVoteAccountStatus};
+use crate::{
+    client_error::ClientError,
+    generic_rpc_client_request::GenericRpcClientRequest,
+    mock_rpc_client_request::MockRpcClientRequest,
+    rpc_client_request::RpcClientRequest,
+    rpc_request::{RpcEpochInfo, RpcRequest, RpcVoteAccountStatus},
+};
 use bincode::serialize;
 use log::*;
 use serde_json::{json, Value};
 use solana_sdk::{
     account::Account,
     clock::{Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT},
+    commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -54,10 +57,10 @@ impl RpcClient {
 
     pub fn send_transaction(&self, transaction: &Transaction) -> Result<String, ClientError> {
         let serialized = serialize(transaction).unwrap();
-        let params = json!([serialized]);
+        let params = json!(serialized);
         let signature = self
             .client
-            .send(&RpcRequest::SendTransaction, Some(params), 5)?;
+            .send(&RpcRequest::SendTransaction, Some(params), 5, None)?;
         if signature.as_str().is_none() {
             Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -73,19 +76,37 @@ impl RpcClient {
         &self,
         signature: &str,
     ) -> Result<Option<transaction::Result<()>>, ClientError> {
-        let params = json!([signature.to_string()]);
-        let signature_status =
-            self.client
-                .send(&RpcRequest::GetSignatureStatus, Some(params), 5)?;
+        self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
+    }
+
+    pub fn get_signature_status_with_commitment(
+        &self,
+        signature: &str,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Option<transaction::Result<()>>, ClientError> {
+        let params = json!(signature.to_string());
+        let signature_status = self.client.send(
+            &RpcRequest::GetSignatureStatus,
+            Some(params),
+            5,
+            commitment_config.ok(),
+        )?;
         let result: Option<transaction::Result<()>> =
             serde_json::from_value(signature_status).unwrap();
         Ok(result)
     }
 
     pub fn get_slot(&self) -> io::Result<Slot> {
+        self.get_slot_with_commitment(CommitmentConfig::default())
+    }
+
+    pub fn get_slot_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<Slot> {
         let response = self
             .client
-            .send(&RpcRequest::GetSlot, None, 0)
+            .send(&RpcRequest::GetSlot, None, 0, commitment_config.ok())
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -104,7 +125,7 @@ impl RpcClient {
     pub fn get_vote_accounts(&self) -> io::Result<RpcVoteAccountStatus> {
         let response = self
             .client
-            .send(&RpcRequest::GetVoteAccounts, None, 0)
+            .send(&RpcRequest::GetVoteAccounts, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -123,7 +144,7 @@ impl RpcClient {
     pub fn get_epoch_info(&self) -> io::Result<RpcEpochInfo> {
         let response = self
             .client
-            .send(&RpcRequest::GetEpochInfo, None, 0)
+            .send(&RpcRequest::GetEpochInfo, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -142,7 +163,7 @@ impl RpcClient {
     pub fn get_epoch_schedule(&self) -> io::Result<EpochSchedule> {
         let response = self
             .client
-            .send(&RpcRequest::GetEpochSchedule, None, 0)
+            .send(&RpcRequest::GetEpochSchedule, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -161,7 +182,7 @@ impl RpcClient {
     pub fn get_inflation(&self) -> io::Result<Inflation> {
         let response = self
             .client
-            .send(&RpcRequest::GetInflation, None, 0)
+            .send(&RpcRequest::GetInflation, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -180,7 +201,7 @@ impl RpcClient {
     pub fn get_version(&self) -> io::Result<String> {
         let response = self
             .client
-            .send(&RpcRequest::GetVersion, None, 0)
+            .send(&RpcRequest::GetVersion, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -203,7 +224,7 @@ impl RpcClient {
     ) -> Result<String, ClientError> {
         let mut send_retries = 20;
         loop {
-            let mut status_retries = 4;
+            let mut status_retries = 15;
             let signature_str = self.send_transaction(transaction)?;
             let status = loop {
                 let status = self.get_signature_status(&signature_str)?;
@@ -216,10 +237,8 @@ impl RpcClient {
                     break status;
                 }
                 if cfg!(not(test)) {
-                    // Retry ~twice during a slot
-                    sleep(Duration::from_millis(
-                        500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
-                    ));
+                    // Retry twice a second
+                    sleep(Duration::from_millis(500));
                 }
             };
             send_retries = if let Some(result) = status.clone() {
@@ -252,7 +271,7 @@ impl RpcClient {
     ) -> Result<(), Box<dyn error::Error>> {
         let mut send_retries = 5;
         loop {
-            let mut status_retries = 4;
+            let mut status_retries = 15;
 
             // Send all transactions
             let mut transactions_signatures = vec![];
@@ -273,10 +292,8 @@ impl RpcClient {
                 status_retries -= 1;
 
                 if cfg!(not(test)) {
-                    // Retry ~twice during a slot
-                    sleep(Duration::from_millis(
-                        500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
-                    ));
+                    // Retry twice a second
+                    sleep(Duration::from_millis(500));
                 }
 
                 transactions_signatures = transactions_signatures
@@ -333,19 +350,30 @@ impl RpcClient {
         pubkey: &Pubkey,
         retries: usize,
     ) -> Result<Option<u64>, Box<dyn error::Error>> {
-        let params = json!([format!("{}", pubkey)]);
+        let params = json!(format!("{}", pubkey));
         let res = self
             .client
-            .send(&RpcRequest::GetBalance, Some(params), retries)?
+            .send(&RpcRequest::GetBalance, Some(params), retries, None)?
             .as_u64();
         Ok(res)
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
-        let params = json!([format!("{}", pubkey)]);
-        let response = self
-            .client
-            .send(&RpcRequest::GetAccountInfo, Some(params), 0);
+        self.get_account_with_commitment(pubkey, CommitmentConfig::default())
+    }
+
+    pub fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<Account> {
+        let params = json!(format!("{}", pubkey));
+        let response = self.client.send(
+            &RpcRequest::GetAccountInfo,
+            Some(params),
+            0,
+            commitment_config.ok(),
+        );
 
         response
             .and_then(|account_json| {
@@ -366,13 +394,14 @@ impl RpcClient {
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> io::Result<u64> {
-        let params = json!([data_len]);
+        let params = json!(data_len);
         let minimum_balance_json = self
             .client
             .send(
                 &RpcRequest::GetMinimumBalanceForRentExemption,
                 Some(params),
                 0,
+                None,
             )
             .map_err(|err| {
                 io::Error::new(
@@ -398,18 +427,25 @@ impl RpcClient {
         Ok(minimum_balance)
     }
 
-    /// Request the balance of the user holding `pubkey`. This method blocks
-    /// until the server sends a response. If the response packet is dropped
-    /// by the network, this method will hang indefinitely.
+    /// Request the balance of the account `pubkey`.
     pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.get_account(pubkey).map(|account| account.lamports)
+        self.get_balance_with_commitment(pubkey, CommitmentConfig::default())
+    }
+
+    pub fn get_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<u64> {
+        self.get_account_with_commitment(pubkey, commitment_config)
+            .map(|account| account.lamports)
     }
 
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> io::Result<Vec<(Pubkey, Account)>> {
-        let params = json!([format!("{}", pubkey)]);
+        let params = json!(format!("{}", pubkey));
         let response = self
             .client
-            .send(&RpcRequest::GetProgramAccounts, Some(params), 0)
+            .send(&RpcRequest::GetProgramAccounts, Some(params), 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -438,12 +474,23 @@ impl RpcClient {
         Ok(pubkey_accounts)
     }
 
-    /// Request the transaction count.  If the response packet is dropped by the network,
-    /// this method will try again 5 times.
+    /// Request the transaction count.
     pub fn get_transaction_count(&self) -> io::Result<u64> {
+        self.get_transaction_count_with_commitment(CommitmentConfig::default())
+    }
+
+    pub fn get_transaction_count_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<u64> {
         let response = self
             .client
-            .send(&RpcRequest::GetTransactionCount, None, 0)
+            .send(
+                &RpcRequest::GetTransactionCount,
+                None,
+                0,
+                commitment_config.ok(),
+            )
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -460,9 +507,21 @@ impl RpcClient {
     }
 
     pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {
+        self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
+    }
+
+    pub fn get_recent_blockhash_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<(Hash, FeeCalculator)> {
         let response = self
             .client
-            .send(&RpcRequest::GetRecentBlockhash, None, 0)
+            .send(
+                &RpcRequest::GetRecentBlockhash,
+                None,
+                0,
+                commitment_config.ok(),
+            )
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -518,7 +577,7 @@ impl RpcClient {
     pub fn get_genesis_blockhash(&self) -> io::Result<Hash> {
         let response = self
             .client
-            .send(&RpcRequest::GetGenesisBlockhash, None, 0)
+            .send(&RpcRequest::GetGenesisBlockhash, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -542,15 +601,16 @@ impl RpcClient {
         Ok(blockhash)
     }
 
-    pub fn poll_balance_with_timeout(
+    pub fn poll_balance_with_timeout_and_commitment(
         &self,
         pubkey: &Pubkey,
         polling_frequency: &Duration,
         timeout: &Duration,
+        commitment_config: CommitmentConfig,
     ) -> io::Result<u64> {
         let now = Instant::now();
         loop {
-            match self.get_balance(&pubkey) {
+            match self.get_balance_with_commitment(&pubkey, commitment_config.clone()) {
                 Ok(bal) => {
                     return Ok(bal);
                 }
@@ -564,14 +624,29 @@ impl RpcClient {
         }
     }
 
-    pub fn poll_get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.poll_balance_with_timeout(pubkey, &Duration::from_millis(100), &Duration::from_secs(1))
+    pub fn poll_get_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<u64> {
+        self.poll_balance_with_timeout_and_commitment(
+            pubkey,
+            &Duration::from_millis(100),
+            &Duration::from_secs(1),
+            commitment_config,
+        )
     }
 
-    pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
+    pub fn wait_for_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        expected_balance: Option<u64>,
+        commitment_config: CommitmentConfig,
+    ) -> Option<u64> {
         const LAST: usize = 30;
         for run in 0..LAST {
-            let balance_result = self.poll_get_balance(pubkey);
+            let balance_result =
+                self.poll_get_balance_with_commitment(pubkey, commitment_config.clone());
             if expected_balance.is_none() {
                 return balance_result.ok();
             }
@@ -593,8 +668,23 @@ impl RpcClient {
 
     /// Poll the server to confirm a transaction.
     pub fn poll_for_signature(&self, signature: &Signature) -> io::Result<()> {
+        self.poll_for_signature_with_commitment(signature, CommitmentConfig::default())
+    }
+
+    /// Poll the server to confirm a transaction.
+    pub fn poll_for_signature_with_commitment(
+        &self,
+        signature: &Signature,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<()> {
         let now = Instant::now();
-        while !self.check_signature(signature) {
+        loop {
+            if let Ok(Some(_)) = self.get_signature_status_with_commitment(
+                &signature.to_string(),
+                commitment_config.clone(),
+            ) {
+                break;
+            }
             if now.elapsed().as_secs() > 15 {
                 // TODO: Return a better error.
                 return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
@@ -607,12 +697,15 @@ impl RpcClient {
     /// Check a signature in the bank.
     pub fn check_signature(&self, signature: &Signature) -> bool {
         trace!("check_signature: {:?}", signature);
-        let params = json!([format!("{}", signature)]);
+        let params = json!(format!("{}", signature));
 
         for _ in 0..30 {
-            let response =
-                self.client
-                    .send(&RpcRequest::ConfirmTransaction, Some(params.clone()), 0);
+            let response = self.client.send(
+                &RpcRequest::ConfirmTransaction,
+                Some(params.clone()),
+                0,
+                Some(CommitmentConfig::recent()),
+            );
 
             match response {
                 Ok(confirmation) => {
@@ -666,7 +759,7 @@ impl RpcClient {
                     debug!("check_confirmations request failed: {:?}", err);
                 }
             };
-            if now.elapsed().as_secs() > 15 {
+            if now.elapsed().as_secs() > 20 {
                 info!(
                     "signature {} confirmed {} out of {} failed after {} ms",
                     signature,
@@ -690,13 +783,14 @@ impl RpcClient {
         &self,
         sig: &Signature,
     ) -> io::Result<usize> {
-        let params = json!([format!("{}", sig)]);
+        let params = json!(format!("{}", sig));
         let response = self
             .client
             .send(
                 &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
                 Some(params.clone()),
                 1,
+                CommitmentConfig::recent().ok(),
             )
             .map_err(|err| {
                 io::Error::new(
@@ -721,7 +815,7 @@ impl RpcClient {
     pub fn validator_exit(&self) -> io::Result<bool> {
         let response = self
             .client
-            .send(&RpcRequest::ValidatorExit, None, 0)
+            .send(&RpcRequest::ValidatorExit, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -742,8 +836,9 @@ impl RpcClient {
         request: &RpcRequest,
         params: Option<Value>,
         retries: usize,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Value, ClientError> {
-        self.client.send(request, params, retries)
+        self.client.send(request, params, retries, commitment)
     }
 }
 
@@ -763,11 +858,12 @@ mod tests {
     use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
     use serde_json::Number;
     use solana_logger;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
-    use solana_sdk::transaction::TransactionError;
-    use std::sync::mpsc::channel;
-    use std::thread;
+    use solana_sdk::{
+        signature::{Keypair, KeypairUtil},
+        system_transaction,
+        transaction::TransactionError,
+    };
+    use std::{sync::mpsc::channel, thread};
 
     #[test]
     fn test_make_rpc_request() {
@@ -808,10 +904,12 @@ mod tests {
             &RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
             0,
+            None,
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let blockhash = rpc_client.retry_make_rpc_request(&RpcRequest::GetRecentBlockhash, None, 0);
+        let blockhash =
+            rpc_client.retry_make_rpc_request(&RpcRequest::GetRecentBlockhash, None, 0, None);
         assert_eq!(
             blockhash.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
@@ -822,6 +920,7 @@ mod tests {
             &RpcRequest::GetRecentBlockhash,
             Some(json!("parameter")),
             0,
+            None,
         );
         assert_eq!(blockhash.is_err(), true);
     }
@@ -860,6 +959,7 @@ mod tests {
             &RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"])),
             10,
+            None,
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 5);
     }

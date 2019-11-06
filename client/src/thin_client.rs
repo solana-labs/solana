@@ -6,25 +6,32 @@
 use crate::rpc_client::RpcClient;
 use bincode::{serialize_into, serialized_size};
 use log::*;
-use solana_sdk::account::Account;
-use solana_sdk::client::{AsyncClient, Client, SyncClient};
-use solana_sdk::clock::MAX_PROCESSING_AGE;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::instruction::Instruction;
-use solana_sdk::message::Message;
-use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_instruction;
-use solana_sdk::timing::duration_as_ms;
-use solana_sdk::transaction::{self, Transaction};
-use solana_sdk::transport::Result as TransportResult;
-use std::io;
-use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::RwLock;
-use std::time::{Duration, Instant};
+use solana_sdk::{
+    account::Account,
+    client::{AsyncClient, Client, SyncClient},
+    clock::MAX_PROCESSING_AGE,
+    commitment_config::CommitmentConfig,
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    instruction::Instruction,
+    message::Message,
+    packet::PACKET_DATA_SIZE,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil, Signature},
+    system_instruction,
+    timing::duration_as_ms,
+    transaction::{self, Transaction},
+    transport::Result as TransportResult,
+};
+use std::{
+    io,
+    net::{SocketAddr, UdpSocket},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        RwLock,
+    },
+    time::{Duration, Instant},
+};
 
 struct ClientOptimizer {
     cur_index: AtomicUsize,
@@ -244,22 +251,78 @@ impl ThinClient {
         ))
     }
 
+    pub fn poll_balance_with_timeout_and_commitment(
+        &self,
+        pubkey: &Pubkey,
+        polling_frequency: &Duration,
+        timeout: &Duration,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<u64> {
+        self.rpc_client().poll_balance_with_timeout_and_commitment(
+            pubkey,
+            polling_frequency,
+            timeout,
+            commitment_config,
+        )
+    }
+
     pub fn poll_balance_with_timeout(
         &self,
         pubkey: &Pubkey,
         polling_frequency: &Duration,
         timeout: &Duration,
     ) -> io::Result<u64> {
-        self.rpc_client()
-            .poll_balance_with_timeout(pubkey, polling_frequency, timeout)
+        self.rpc_client().poll_balance_with_timeout_and_commitment(
+            pubkey,
+            polling_frequency,
+            timeout,
+            CommitmentConfig::default(),
+        )
     }
 
     pub fn poll_get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.rpc_client().poll_get_balance(pubkey)
+        self.rpc_client()
+            .poll_get_balance_with_commitment(pubkey, CommitmentConfig::default())
+    }
+
+    pub fn poll_get_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<u64> {
+        self.rpc_client()
+            .poll_get_balance_with_commitment(pubkey, commitment_config)
     }
 
     pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
-        self.rpc_client().wait_for_balance(pubkey, expected_balance)
+        self.rpc_client().wait_for_balance_with_commitment(
+            pubkey,
+            expected_balance,
+            CommitmentConfig::default(),
+        )
+    }
+
+    pub fn wait_for_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        expected_balance: Option<u64>,
+        commitment_config: CommitmentConfig,
+    ) -> Option<u64> {
+        self.rpc_client().wait_for_balance_with_commitment(
+            pubkey,
+            expected_balance,
+            commitment_config,
+        )
+    }
+
+    pub fn poll_for_signature_with_commitment(
+        &self,
+        signature: &Signature,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<()> {
+        Ok(self
+            .rpc_client()
+            .poll_for_signature_with_commitment(signature, commitment_config)?)
     }
 
     /// Check a signature in the bank. This method blocks
@@ -323,15 +386,45 @@ impl SyncClient for ThinClient {
         Ok(self.rpc_client().get_account(pubkey).ok())
     }
 
+    fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<Option<Account>> {
+        Ok(self
+            .rpc_client()
+            .get_account_with_commitment(pubkey, commitment_config)
+            .ok())
+    }
+
     fn get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
         let balance = self.rpc_client().get_balance(pubkey)?;
         Ok(balance)
     }
 
+    fn get_balance_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<u64> {
+        let balance = self
+            .rpc_client()
+            .get_balance_with_commitment(pubkey, commitment_config)?;
+        Ok(balance)
+    }
+
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
+        self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
+    }
+
+    fn get_recent_blockhash_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<(Hash, FeeCalculator)> {
         let index = self.optimizer.experiment();
         let now = Instant::now();
-        let recent_blockhash = self.rpc_clients[index].get_recent_blockhash();
+        let recent_blockhash =
+            self.rpc_clients[index].get_recent_blockhash_with_commitment(commitment_config);
         match recent_blockhash {
             Ok(recent_blockhash) => {
                 self.optimizer.report(index, duration_as_ms(&now.elapsed()));
@@ -360,13 +453,40 @@ impl SyncClient for ThinClient {
         Ok(status)
     }
 
+    fn get_signature_status_with_commitment(
+        &self,
+        signature: &Signature,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<Option<transaction::Result<()>>> {
+        let status = self
+            .rpc_client()
+            .get_signature_status_with_commitment(&signature.to_string(), commitment_config)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("send_transaction failed with error {:?}", err),
+                )
+            })?;
+        Ok(status)
+    }
+
     fn get_slot(&self) -> TransportResult<u64> {
-        let slot = self.rpc_client().get_slot().map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("send_transaction failed with error {:?}", err),
-            )
-        })?;
+        self.get_slot_with_commitment(CommitmentConfig::default())
+    }
+
+    fn get_slot_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<u64> {
+        let slot = self
+            .rpc_client()
+            .get_slot_with_commitment(commitment_config)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("send_transaction failed with error {:?}", err),
+                )
+            })?;
         Ok(slot)
     }
 
@@ -374,6 +494,27 @@ impl SyncClient for ThinClient {
         let index = self.optimizer.experiment();
         let now = Instant::now();
         match self.rpc_client().get_transaction_count() {
+            Ok(transaction_count) => {
+                self.optimizer.report(index, duration_as_ms(&now.elapsed()));
+                Ok(transaction_count)
+            }
+            Err(e) => {
+                self.optimizer.report(index, std::u64::MAX);
+                Err(e.into())
+            }
+        }
+    }
+
+    fn get_transaction_count_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<u64> {
+        let index = self.optimizer.experiment();
+        let now = Instant::now();
+        match self
+            .rpc_client()
+            .get_transaction_count_with_commitment(commitment_config)
+        {
             Ok(transaction_count) => {
                 self.optimizer.report(index, duration_as_ms(&now.elapsed()));
                 Ok(transaction_count)

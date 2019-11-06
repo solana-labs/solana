@@ -511,7 +511,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
     let GenesisBlockInfo {
         mut genesis_block,
         mint_keypair,
-        ..
+        voting_keypair,
     } = create_genesis_block_with_leader(10_000, &contact_info.id, 42);
     genesis_block
         .native_instruction_processors
@@ -522,14 +522,14 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
-    let voting_keypair = Arc::new(Keypair::new());
+    let leader_voting_keypair = Arc::new(voting_keypair);
     let storage_keypair = Arc::new(Keypair::new());
     let node = Validator::new(
         node,
         &node_keypair,
         &ledger_path,
-        &voting_keypair.pubkey(),
-        &voting_keypair,
+        &leader_voting_keypair.pubkey(),
+        &leader_voting_keypair,
         &storage_keypair,
         None,
         true,

@@ -13,6 +13,7 @@ use solana_ledger::blocktree::create_new_tmp_ledger;
 use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
+    commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     genesis_block::{GenesisBlock, OperatingMode},
     message::Message,
@@ -386,6 +387,7 @@ impl LocalCluster {
             self.entry_point_info.clone(),
             archiver_keypair,
             storage_keypair,
+            CommitmentConfig::recent(),
         )
         .unwrap_or_else(|err| panic!("Archiver::new() failed: {:?}", err));
 
@@ -424,7 +426,9 @@ impl LocalCluster {
         lamports: u64,
     ) -> u64 {
         trace!("getting leader blockhash");
-        let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+        let (blockhash, _fee_calculator) = client
+            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+            .unwrap();
         let mut tx =
             system_transaction::transfer(&source_keypair, dest_pubkey, lamports, blockhash);
         info!(
@@ -437,7 +441,11 @@ impl LocalCluster {
             .retry_transfer(&source_keypair, &mut tx, 10)
             .expect("client transfer");
         client
-            .wait_for_balance(dest_pubkey, Some(lamports))
+            .wait_for_balance_with_commitment(
+                dest_pubkey,
+                Some(lamports),
+                CommitmentConfig::recent(),
+            )
             .expect("get balance")
     }
 
@@ -453,7 +461,11 @@ impl LocalCluster {
         let stake_account_pubkey = stake_account_keypair.pubkey();
 
         // Create the vote account if necessary
-        if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
+        if client
+            .poll_get_balance_with_commitment(&vote_account_pubkey, CommitmentConfig::recent())
+            .unwrap_or(0)
+            == 0
+        {
             // 1) Create vote account
 
             let mut transaction = Transaction::new_signed_instructions(
@@ -469,13 +481,20 @@ impl LocalCluster {
                     },
                     amount,
                 ),
-                client.get_recent_blockhash().unwrap().0,
+                client
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                    .unwrap()
+                    .0,
             );
             client
                 .retry_transfer(&from_account, &mut transaction, 10)
                 .expect("fund vote");
             client
-                .wait_for_balance(&vote_account_pubkey, Some(amount))
+                .wait_for_balance_with_commitment(
+                    &vote_account_pubkey,
+                    Some(amount),
+                    CommitmentConfig::recent(),
+                )
                 .expect("get balance");
 
             let mut transaction = Transaction::new_signed_instructions(
@@ -487,7 +506,10 @@ impl LocalCluster {
                     &StakeAuthorized::auto(&stake_account_pubkey),
                     amount,
                 ),
-                client.get_recent_blockhash().unwrap().0,
+                client
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                    .unwrap()
+                    .0,
             );
 
             client
@@ -499,7 +521,11 @@ impl LocalCluster {
                 )
                 .expect("delegate stake");
             client
-                .wait_for_balance(&stake_account_pubkey, Some(amount))
+                .wait_for_balance_with_commitment(
+                    &stake_account_pubkey,
+                    Some(amount),
+                    CommitmentConfig::recent(),
+                )
                 .expect("get balance");
         } else {
             warn!(
@@ -509,8 +535,8 @@ impl LocalCluster {
         }
         info!("Checking for vote account registration of {}", node_pubkey);
         match (
-            client.get_account(&stake_account_pubkey),
-            client.get_account(&vote_account_pubkey),
+            client.get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent()),
+            client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::recent()),
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (
@@ -568,7 +594,10 @@ impl LocalCluster {
             Some(&from_keypair.pubkey()),
         );
         let signer_keys = vec![from_keypair.as_ref()];
-        let blockhash = client.get_recent_blockhash().unwrap().0;
+        let blockhash = client
+            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+            .unwrap()
+            .0;
         let mut transaction = Transaction::new(&signer_keys, message, blockhash);
         client
             .retry_transfer(&from_keypair, &mut transaction, 10)

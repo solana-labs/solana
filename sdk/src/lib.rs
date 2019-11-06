@@ -35,6 +35,8 @@ pub mod bank_hash;
 #[cfg(not(feature = "program"))]
 pub mod client;
 #[cfg(not(feature = "program"))]
+pub mod commitment_config;
+#[cfg(not(feature = "program"))]
 pub mod genesis_block;
 #[cfg(not(feature = "program"))]
 pub mod packet;

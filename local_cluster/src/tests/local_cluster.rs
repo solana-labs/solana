@@ -15,14 +15,15 @@ use solana_runtime::accounts_db::AccountsDB;
 use solana_sdk::{
     client::SyncClient,
     clock,
+    commitment_config::CommitmentConfig,
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
     genesis_block::OperatingMode,
     poh_config::PohConfig,
 };
-use std::path::{Path, PathBuf};
 use std::{
     collections::{HashMap, HashSet},
     fs,
+    path::{Path, PathBuf},
     thread::sleep,
     time::Duration,
 };
@@ -329,7 +330,12 @@ fn test_softlaunch_operating_mode() {
     .iter()
     {
         assert_eq!(
-            (program_id, client.get_account(program_id).unwrap()),
+            (
+                program_id,
+                client
+                    .get_account_with_commitment(program_id, CommitmentConfig::recent())
+                    .unwrap()
+            ),
             (program_id, None)
         );
     }
@@ -460,7 +466,7 @@ fn test_snapshots_blocktree_floor() {
     let target_slot = slot_floor + 40;
     while current_slot <= target_slot {
         trace!("current_slot: {}", current_slot);
-        if let Ok(slot) = validator_client.get_slot() {
+        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::recent()) {
             current_slot = slot;
         } else {
             continue;
@@ -751,7 +757,7 @@ fn run_repairman_catchup(num_repairmen: u64) {
     let target_slot = (num_warmup_epochs) * num_slots_per_epoch + 1;
     while current_slot <= target_slot {
         trace!("current_slot: {}", current_slot);
-        if let Ok(slot) = repairee_client.get_slot() {
+        if let Ok(slot) = repairee_client.get_slot_with_commitment(CommitmentConfig::recent()) {
             current_slot = slot;
         } else {
             continue;
@@ -765,7 +771,9 @@ fn wait_for_next_snapshot<P: AsRef<Path>>(cluster: &LocalCluster, tar: P) {
     let client = cluster
         .get_validator_client(&cluster.entry_point_info.id)
         .unwrap();
-    let last_slot = client.get_slot().expect("Couldn't get slot");
+    let last_slot = client
+        .get_slot_with_commitment(CommitmentConfig::recent())
+        .expect("Couldn't get slot");
 
     // Wait for a snapshot for a bank >= last_slot to be made so we know that the snapshot
     // must include the transactions just pushed

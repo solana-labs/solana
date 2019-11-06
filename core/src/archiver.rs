@@ -29,6 +29,7 @@ use solana_sdk::{
     account_utils::State,
     client::{AsyncClient, SyncClient},
     clock::{get_complete_segment_from_slot, get_segment_from_slot, Slot},
+    commitment_config::CommitmentConfig,
     hash::{Hash, Hasher},
     message::Message,
     signature::{Keypair, KeypairUtil, Signature},
@@ -78,6 +79,7 @@ struct ArchiverMeta {
     blockhash: Hash,
     sha_state: Hash,
     num_chacha_blocks: usize,
+    client_commitment: CommitmentConfig,
 }
 
 pub(crate) fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
@@ -208,6 +210,7 @@ impl Archiver {
         cluster_entrypoint: ContactInfo,
         keypair: Arc<Keypair>,
         storage_keypair: Arc<Keypair>,
+        client_commitment: CommitmentConfig,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -246,7 +249,12 @@ impl Archiver {
         let client = crate::gossip_service::get_client(&nodes);
 
         info!("Setting up mining account...");
-        if let Err(e) = Self::setup_mining_account(&client, &keypair, &storage_keypair) {
+        if let Err(e) = Self::setup_mining_account(
+            &client,
+            &keypair,
+            &storage_keypair,
+            client_commitment.clone(),
+        ) {
             //shutdown services before exiting
             exit.store(true, Ordering::Relaxed);
             gossip_service.join()?;
@@ -279,6 +287,7 @@ impl Archiver {
             let node_info = node.info.clone();
             let mut meta = ArchiverMeta {
                 ledger_path: ledger_path.to_path_buf(),
+                client_commitment,
                 ..ArchiverMeta::default()
             };
             spawn(move || {
@@ -383,7 +392,12 @@ impl Archiver {
                 }
             };
             meta.blockhash = storage_blockhash;
-            Self::redeem_rewards(&cluster_info, archiver_keypair, storage_keypair);
+            Self::redeem_rewards(
+                &cluster_info,
+                archiver_keypair,
+                storage_keypair,
+                meta.client_commitment.clone(),
+            );
         }
         exit.store(true, Ordering::Relaxed);
     }
@@ -392,11 +406,14 @@ impl Archiver {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         archiver_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
+        client_commitment: CommitmentConfig,
     ) {
         let nodes = cluster_info.read().unwrap().tvu_peers();
         let client = crate::gossip_service::get_client(&nodes);
 
-        if let Ok(Some(account)) = client.get_account(&storage_keypair.pubkey()) {
+        if let Ok(Some(account)) =
+            client.get_account_with_commitment(&storage_keypair.pubkey(), client_commitment.clone())
+        {
             if let Ok(StorageContract::ArchiverStorage { validations, .. }) = account.state() {
                 if !validations.is_empty() {
                     let ix = storage_instruction::claim_reward(
@@ -410,7 +427,10 @@ impl Archiver {
                     } else {
                         info!(
                             "collected mining rewards: Account balance {:?}",
-                            client.get_balance(&archiver_keypair.pubkey())
+                            client.get_balance_with_commitment(
+                                &archiver_keypair.pubkey(),
+                                client_commitment.clone()
+                            )
                         );
                     }
                 }
@@ -432,15 +452,16 @@ impl Archiver {
         blob_fetch_receiver: PacketReceiver,
         slot_sender: Sender<u64>,
     ) -> Result<(WindowService)> {
-        let slots_per_segment = match Self::get_segment_config(&cluster_info) {
-            Ok(slots_per_segment) => slots_per_segment,
-            Err(e) => {
-                error!("unable to get segment size configuration, exiting...");
-                //shutdown services before exiting
-                exit.store(true, Ordering::Relaxed);
-                return Err(e);
-            }
-        };
+        let slots_per_segment =
+            match Self::get_segment_config(&cluster_info, meta.client_commitment.clone()) {
+                Ok(slots_per_segment) => slots_per_segment,
+                Err(e) => {
+                    error!("unable to get segment size configuration, exiting...");
+                    //shutdown services before exiting
+                    exit.store(true, Ordering::Relaxed);
+                    return Err(e);
+                }
+            };
         let (segment_blockhash, segment_slot) = match Self::poll_for_segment(
             &cluster_info,
             slots_per_segment,
@@ -588,13 +609,15 @@ impl Archiver {
         client: &ThinClient,
         keypair: &Keypair,
         storage_keypair: &Keypair,
+        client_commitment: CommitmentConfig,
     ) -> Result<()> {
         // make sure archiver has some balance
         info!("checking archiver keypair...");
-        if client.poll_balance_with_timeout(
+        if client.poll_balance_with_timeout_and_commitment(
             &keypair.pubkey(),
             &Duration::from_millis(100),
             &Duration::from_secs(5),
+            client_commitment.clone(),
         )? == 0
         {
             return Err(
@@ -604,17 +627,19 @@ impl Archiver {
 
         info!("checking storage account keypair...");
         // check if the storage account exists
-        let balance = client.poll_get_balance(&storage_keypair.pubkey());
+        let balance = client
+            .poll_get_balance_with_commitment(&storage_keypair.pubkey(), client_commitment.clone());
         if balance.is_err() || balance.unwrap() == 0 {
-            let blockhash = match client.get_recent_blockhash() {
-                Ok((blockhash, _)) => blockhash,
-                Err(_) => {
-                    return Err(Error::IO(<io::Error>::new(
-                        io::ErrorKind::Other,
-                        "unable to get recent blockhash, can't submit proof",
-                    )));
-                }
-            };
+            let blockhash =
+                match client.get_recent_blockhash_with_commitment(client_commitment.clone()) {
+                    Ok((blockhash, _)) => blockhash,
+                    Err(_) => {
+                        return Err(Error::IO(<io::Error>::new(
+                            io::ErrorKind::Other,
+                            "unable to get recent blockhash, can't submit proof",
+                        )));
+                    }
+                };
 
             let ix = storage_instruction::create_storage_account(
                 &keypair.pubkey(),
@@ -626,7 +651,7 @@ impl Archiver {
             let tx = Transaction::new_signed_instructions(&[keypair], ix, blockhash);
             let signature = client.async_send_transaction(tx)?;
             client
-                .poll_for_signature(&signature)
+                .poll_for_signature_with_commitment(&signature, client_commitment.clone())
                 .map_err(|err| match err {
                     TransportError::IoError(e) => e,
                     TransportError::TransactionError(_) => io::Error::new(
@@ -647,25 +672,32 @@ impl Archiver {
         // No point if we've got no storage account...
         let nodes = cluster_info.read().unwrap().tvu_peers();
         let client = crate::gossip_service::get_client(&nodes);
-        let storage_balance = client.poll_get_balance(&storage_keypair.pubkey());
+        let storage_balance = client.poll_get_balance_with_commitment(
+            &storage_keypair.pubkey(),
+            meta.client_commitment.clone(),
+        );
         if storage_balance.is_err() || storage_balance.unwrap() == 0 {
             error!("Unable to submit mining proof, no storage account");
             return;
         }
         // ...or no lamports for fees
-        let balance = client.poll_get_balance(&archiver_keypair.pubkey());
+        let balance = client.poll_get_balance_with_commitment(
+            &archiver_keypair.pubkey(),
+            meta.client_commitment.clone(),
+        );
         if balance.is_err() || balance.unwrap() == 0 {
             error!("Unable to submit mining proof, insufficient Archiver Account balance");
             return;
         }
 
-        let blockhash = match client.get_recent_blockhash() {
-            Ok((blockhash, _)) => blockhash,
-            Err(_) => {
-                error!("unable to get recent blockhash, can't submit proof");
-                return;
-            }
-        };
+        let blockhash =
+            match client.get_recent_blockhash_with_commitment(meta.client_commitment.clone()) {
+                Ok((blockhash, _)) => blockhash,
+                Err(_) => {
+                    error!("unable to get recent blockhash, can't submit proof");
+                    return;
+                }
+            };
         let instruction = storage_instruction::mining_proof(
             &storage_keypair.pubkey(),
             meta.sha_state,
@@ -700,7 +732,10 @@ impl Archiver {
         }
     }
 
-    fn get_segment_config(cluster_info: &Arc<RwLock<ClusterInfo>>) -> result::Result<u64, Error> {
+    fn get_segment_config(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        client_commitment: CommitmentConfig,
+    ) -> result::Result<u64, Error> {
         let rpc_peers = {
             let cluster_info = cluster_info.read().unwrap();
             cluster_info.rpc_peers()
@@ -712,7 +747,12 @@ impl Archiver {
                 RpcClient::new_socket(rpc_peers[node_index].rpc)
             };
             Ok(rpc_client
-                .retry_make_rpc_request(&RpcRequest::GetSlotsPerSegment, None, 0)
+                .retry_make_rpc_request(
+                    &RpcRequest::GetSlotsPerSegment,
+                    None,
+                    0,
+                    Some(client_commitment),
+                )
                 .map_err(|err| {
                     warn!("Error while making rpc request {:?}", err);
                     Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
@@ -764,7 +804,7 @@ impl Archiver {
                     RpcClient::new_socket(rpc_peers[node_index].rpc)
                 };
                 let response = rpc_client
-                    .retry_make_rpc_request(&RpcRequest::GetStorageTurn, None, 0)
+                    .retry_make_rpc_request(&RpcRequest::GetStorageTurn, None, 0, None)
                     .map_err(|err| {
                         warn!("Error while making rpc request {:?}", err);
                         Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
