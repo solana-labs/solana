@@ -1,17 +1,23 @@
 use crate::local_cluster::{ClusterConfig, LocalCluster};
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
-use solana_core::archiver::Archiver;
-use solana_core::cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE};
-use solana_core::contact_info::ContactInfo;
-use solana_core::gossip_service::discover_cluster;
-use solana_core::storage_stage::SLOTS_PER_TURN_TEST;
-use solana_core::validator::ValidatorConfig;
+use solana_core::{
+    archiver::Archiver,
+    cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
+    contact_info::ContactInfo,
+    gossip_service::discover_cluster,
+    storage_stage::SLOTS_PER_TURN_TEST,
+    validator::ValidatorConfig,
+};
 use solana_ledger::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
-use solana_sdk::genesis_block::create_genesis_block;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use std::fs::remove_dir_all;
-use std::sync::{Arc, RwLock};
+use solana_sdk::{
+    genesis_block::create_genesis_block,
+    signature::{Keypair, KeypairUtil},
+};
+use std::{
+    fs::remove_dir_all,
+    sync::{Arc, RwLock},
+};
 
 /// Start the cluster with the given configuration and wait till the archivers are discovered
 /// Then download blobs from one of them.

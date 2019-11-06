@@ -1,5 +1,3 @@
-use solana_metrics;
-
 use crate::cli::Config;
 use log::*;
 use rayon::prelude::*;
@@ -9,10 +7,11 @@ use solana_drone::drone::request_airdrop_transaction;
 #[cfg(feature = "move")]
 use solana_librapay_api::{create_genesis, upload_mint_program, upload_payment_program};
 use solana_measure::measure::Measure;
-use solana_metrics::datapoint_debug;
+use solana_metrics::{self, datapoint_debug};
 use solana_sdk::{
     client::Client,
     clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
+    commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
     pubkey::Pubkey,
@@ -55,7 +54,7 @@ type LibraKeys = (Keypair, Pubkey, Pubkey, Vec<Keypair>);
 
 fn get_recent_blockhash<T: Client>(client: &T) -> (Hash, FeeCalculator) {
     loop {
-        match client.get_recent_blockhash() {
+        match client.get_recent_blockhash_with_commitment(CommitmentConfig::recent()) {
             Ok((blockhash, fee_calculator)) => return (blockhash, fee_calculator),
             Err(err) => {
                 info!("Couldn't get recent blockhash: {:?}", err);
@@ -451,7 +450,11 @@ fn do_tx_transfers<T: Client>(
 
 fn verify_funding_transfer<T: Client>(client: &T, tx: &Transaction, amount: u64) -> bool {
     for a in &tx.message().account_keys[1..] {
-        if client.get_balance(a).unwrap_or(0) >= amount {
+        if client
+            .get_balance_with_commitment(a, CommitmentConfig::recent())
+            .unwrap_or(0)
+            >= amount
+        {
             return true;
         }
     }
@@ -666,10 +669,12 @@ pub fn airdrop_lamports<T: Client>(
             }
         };
 
-        let current_balance = client.get_balance(&id.pubkey()).unwrap_or_else(|e| {
-            info!("airdrop error {}", e);
-            starting_balance
-        });
+        let current_balance = client
+            .get_balance_with_commitment(&id.pubkey(), CommitmentConfig::recent())
+            .unwrap_or_else(|e| {
+                info!("airdrop error {}", e);
+                starting_balance
+            });
         info!("current balance {}...", current_balance);
 
         metrics_submit_lamport_balance(current_balance);
@@ -815,7 +820,11 @@ fn fund_move_keys<T: Client>(
     let create_len = 8;
     let mut funding_time = Measure::start("funding_time");
     for (i, keys) in keypairs.chunks(create_len).enumerate() {
-        if client.get_balance(&keys[0].pubkey()).unwrap_or(0) > 0 {
+        if client
+            .get_balance_with_commitment(&keys[0].pubkey(), CommitmentConfig::recent())
+            .unwrap_or(0)
+            > 0
+        {
             // already created these accounts.
             break;
         }
@@ -853,7 +862,9 @@ fn fund_move_keys<T: Client>(
     client.send_message(&[funding_key], tx.message).unwrap();
     let mut balance = 0;
     for _ in 0..20 {
-        if let Ok(balance_) = client.get_balance(&funding_keys[0].pubkey()) {
+        if let Ok(balance_) = client
+            .get_balance_with_commitment(&funding_keys[0].pubkey(), CommitmentConfig::recent())
+        {
             if balance_ > 0 {
                 balance = balance_;
                 break;
@@ -1078,7 +1089,12 @@ mod tests {
             generate_and_fund_keypairs(&client, None, &id, tx_count, lamports, false).unwrap();
 
         for kp in &keypairs {
-            assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports);
+            assert_eq!(
+                client
+                    .get_balance_with_commitment(&kp.pubkey(), CommitmentConfig::recent())
+                    .unwrap(),
+                lamports
+            );
         }
     }
 
@@ -1096,7 +1112,7 @@ mod tests {
             generate_and_fund_keypairs(&client, None, &id, tx_count, lamports, false).unwrap();
 
         let max_fee = client
-            .get_recent_blockhash()
+            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap()
             .1
             .max_lamports_per_signature;

@@ -1,5 +1,5 @@
 use log::*;
-use solana_sdk::{client::Client, timing::duration_as_s};
+use solana_sdk::{client::Client, commitment_config::CommitmentConfig, timing::duration_as_s};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -32,7 +32,9 @@ pub fn sample_txs<T>(
     let mut total_txs;
     let mut now = Instant::now();
     let start_time = now;
-    let initial_txs = client.get_transaction_count().expect("transaction count");
+    let initial_txs = client
+        .get_transaction_count_with_commitment(CommitmentConfig::recent())
+        .expect("transaction count");
     let mut last_txs = initial_txs;
 
     loop {
@@ -40,7 +42,7 @@ pub fn sample_txs<T>(
         let elapsed = now.elapsed();
         now = Instant::now();
         let mut txs;
-        match client.get_transaction_count() {
+        match client.get_transaction_count_with_commitment(CommitmentConfig::recent()) {
             Err(e) => {
                 // ThinClient with multiple options should pick a better one now.
                 info!("Couldn't get transaction count {:?}", e);
