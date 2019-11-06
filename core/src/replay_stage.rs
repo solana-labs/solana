@@ -1137,7 +1137,7 @@ mod test {
             let payload_len = SIZE_OF_DATA_SHRED_PAYLOAD;
             let gibberish = [0xa5u8; PACKET_DATA_SIZE];
             let mut data_header = DataShredHeader::default();
-            data_header.flags = DATA_COMPLETE_SHRED;
+            data_header.flags |= DATA_COMPLETE_SHRED;
             let mut shred = Shred::new_empty_from_header(
                 ShredCommonHeader::default(),
                 data_header,

@@ -2,7 +2,7 @@ use super::broadcast_utils::{self, ReceiveResults};
 use super::*;
 use crate::broadcast_stage::broadcast_utils::UnfinishedSlotInfo;
 use solana_ledger::entry::Entry;
-use solana_ledger::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE};
+use solana_ledger::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE, SHRED_TICK_REFERENCE_MASK};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::timing::duration_as_us;
@@ -48,7 +48,7 @@ impl StandardBroadcastRun {
         }
     }
 
-    fn check_for_interrupted_slot(&mut self) -> Option<Shred> {
+    fn check_for_interrupted_slot(&mut self, max_ticks_in_slot: u8) -> Option<Shred> {
         let (slot, _) = self.current_slot_and_parent.unwrap();
         let mut last_unfinished_slot_shred = self
             .unfinished_slot
@@ -62,6 +62,7 @@ impl StandardBroadcastRun {
                         None,
                         true,
                         true,
+                        max_ticks_in_slot & SHRED_TICK_REFERENCE_MASK,
                     ))
                 } else {
                     None
@@ -83,6 +84,7 @@ impl StandardBroadcastRun {
         blocktree: &Blocktree,
         entries: &[Entry],
         is_slot_end: bool,
+        reference_tick: u8,
     ) -> (Vec<Shred>, Vec<Shred>) {
         let (slot, parent_slot) = self.current_slot_and_parent.unwrap();
         let shredder = Shredder::new(
@@ -90,6 +92,7 @@ impl StandardBroadcastRun {
             parent_slot,
             RECOMMENDED_FEC_RATE,
             self.keypair.clone(),
+            reference_tick,
         )
         .expect("Expected to create a new shredder");
 
@@ -149,13 +152,15 @@ impl StandardBroadcastRun {
         let to_shreds_start = Instant::now();
 
         // 1) Check if slot was interrupted
-        let last_unfinished_slot_shred = self.check_for_interrupted_slot();
+        let last_unfinished_slot_shred =
+            self.check_for_interrupted_slot(bank.ticks_per_slot() as u8);
 
         // 2) Convert entries to shreds and coding shreds
         let (mut data_shreds, coding_shreds) = self.entries_to_shreds(
             blocktree,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
+            (bank.tick_height() % bank.ticks_per_slot()) as u8,
         );
         if let Some(last_shred) = last_unfinished_slot_shred {
             data_shreds.push(last_shred);
@@ -353,7 +358,7 @@ mod test {
 
         // Slot 2 interrupted slot 1
         let shred = run
-            .check_for_interrupted_slot()
+            .check_for_interrupted_slot(0)
             .expect("Expected a shred that signals an interrupt");
 
         // Validate the shred
