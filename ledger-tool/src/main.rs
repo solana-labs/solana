@@ -92,12 +92,14 @@ fn graph_forks(
         for (_, (stake, vote_account)) in bank.vote_accounts() {
             let vote_state = VoteState::from(&vote_account).unwrap_or_default();
             if let Some(last_vote) = vote_state.votes.iter().last() {
-                let entry =
-                    last_votes
-                        .entry(vote_state.node_pubkey)
-                        .or_insert((0, None, 0, total_stake));
+                let entry = last_votes.entry(vote_state.node_pubkey).or_insert((
+                    last_vote.slot,
+                    vote_state.clone(),
+                    stake,
+                    total_stake,
+                ));
                 if entry.0 < last_vote.slot {
-                    *entry = (last_vote.slot, vote_state.root_slot, stake, total_stake);
+                    *entry = (last_vote.slot, vote_state, stake, total_stake);
                 }
             }
         }
@@ -156,7 +158,7 @@ fn graph_forks(
             match bank.parent() {
                 None => {
                     if bank.slot() > 0 {
-                        dot.push(format!(r#"    "{}" -> "...""#, bank.slot(),));
+                        dot.push(format!(r#"    "{}" -> "..." [dir=back]"#, bank.slot(),));
                     }
                     break;
                 }
@@ -173,7 +175,7 @@ fn graph_forks(
                         "color=blue".to_string()
                     };
                     dot.push(format!(
-                        r#"    "{}" -> "{}"[{},penwidth={}];"#,
+                        r#"    "{}" -> "{}"[{},dir=back,penwidth={}];"#,
                         bank.slot(),
                         parent.slot(),
                         link_label,
@@ -193,15 +195,21 @@ fn graph_forks(
     let mut absent_votes = 0;
     let mut lowest_last_vote_slot = std::u64::MAX;
     let mut lowest_total_stake = 0;
-    for (node_pubkey, (last_vote_slot, root_slot, stake, total_stake)) in &last_votes {
+    for (node_pubkey, (last_vote_slot, vote_state, stake, total_stake)) in &last_votes {
         dot.push(format!(
-                r#"  "{}"[shape=box,label="validator: {}\nstake: {} SOL\nlast vote slot: {}\nroot slot: {}"];"#,
-                node_pubkey,
-                node_pubkey,
-                lamports_to_sol(*stake),
-                last_vote_slot,
-                root_slot.unwrap_or(0)
-            ));
+            r#"  "{}"[shape=box,label="validator: {}\nstake: {} SOL\nroot slot: {}\nlatest votes:\n{}"];"#,
+            node_pubkey,
+            node_pubkey,
+            lamports_to_sol(*stake),
+            vote_state.root_slot.unwrap_or(0),
+            vote_state
+                .votes
+                .iter()
+                .map(|vote| format!("slot {} (conf={})", vote.slot, vote.confirmation_count))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+
         dot.push(format!(
             r#"  "{}" -> "{}" [style=dotted,label="last vote"];"#,
             node_pubkey,
@@ -214,8 +222,9 @@ fn graph_forks(
                 }
                 absent_votes += 1;
                 absent_stake += stake;
+
                 "...".to_string()
-            }
+            },
         ));
     }
 
