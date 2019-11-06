@@ -283,7 +283,7 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
-            stake_account,
+            stake_account: stake_account.into(),
             staker,
             withdrawer,
             lockup: Lockup { custodian, slot },
@@ -788,7 +788,7 @@ mod tests {
             parse_command(&test_create_stake_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account: stake_account_keypair,
+                    stake_account: stake_account_keypair.into(),
                     staker: Some(authorized),
                     withdrawer: Some(authorized),
                     lockup: Lockup {
@@ -819,7 +819,7 @@ mod tests {
             parse_command(&test_create_stake_account2).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account: stake_account_keypair,
+                    stake_account: stake_account_keypair.into(),
                     staker: None,
                     withdrawer: None,
                     lockup: Lockup {

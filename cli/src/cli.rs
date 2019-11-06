@@ -43,6 +43,28 @@ use std::{
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
+#[derive(Debug)]
+pub struct KeypairEq(Keypair);
+
+impl From<Keypair> for KeypairEq {
+    fn from(keypair: Keypair) -> Self {
+        Self(keypair)
+    }
+}
+
+impl PartialEq for KeypairEq {
+    fn eq(&self, other: &Self) -> bool {
+        self.pubkey() == other.pubkey()
+    }
+}
+
+impl std::ops::Deref for KeypairEq {
+    type Target = Keypair;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum CliCommand {
@@ -66,7 +88,7 @@ pub enum CliCommand {
     Deploy(String),
     // Stake Commands
     CreateStakeAccount {
-        stake_account: Keypair,
+        stake_account: KeypairEq,
         staker: Option<Pubkey>,
         withdrawer: Option<Pubkey>,
         lockup: Lockup,
@@ -87,7 +109,7 @@ pub enum CliCommand {
     // Storage Commands
     CreateStorageAccount {
         account_owner: Pubkey,
-        storage_account: Keypair,
+        storage_account: KeypairEq,
         account_type: StorageAccountType,
     },
     ClaimStorageReward {
@@ -104,7 +126,7 @@ pub enum CliCommand {
     },
     // Vote Commands
     CreateVoteAccount {
-        vote_account: Keypair,
+        vote_account: KeypairEq,
         node_pubkey: Pubkey,
         authorized_voter: Option<Pubkey>,
         authorized_withdrawer: Option<Pubkey>,
@@ -1796,7 +1818,7 @@ mod tests {
         let bob_pubkey = bob_keypair.pubkey();
         let node_pubkey = Pubkey::new_rand();
         config.command = CliCommand::CreateVoteAccount {
-            vote_account: bob_keypair,
+            vote_account: bob_keypair.into(),
             node_pubkey,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),
@@ -1815,7 +1837,7 @@ mod tests {
         let bob_pubkey = bob_keypair.pubkey();
         let custodian = Pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
-            stake_account: bob_keypair,
+            stake_account: bob_keypair.into(),
             staker: None,
             withdrawer: None,
             lockup: Lockup { slot: 0, custodian },
@@ -1961,7 +1983,7 @@ mod tests {
 
         let bob_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
-            vote_account: bob_keypair,
+            vote_account: bob_keypair.into(),
             node_pubkey,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),

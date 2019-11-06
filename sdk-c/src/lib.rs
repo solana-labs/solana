@@ -1,21 +1,23 @@
 use bincode::{deserialize, serialize};
+use ed25519_dalek::{SignatureError, KEYPAIR_LENGTH, PUBLIC_KEY_LENGTH};
 use libc::{c_int, size_t};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
-use solana_ed25519_dalek::{SignatureError, KEYPAIR_LENGTH, PUBLIC_KEY_LENGTH};
-use solana_sdk::hash::Hash;
-use solana_sdk::instruction::CompiledInstruction as CompiledInstructionNative;
-use solana_sdk::message::Message as MessageNative;
-use solana_sdk::message::MessageHeader as MessageHeaderNative;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature as SignatureNative;
-use solana_sdk::signature::{Keypair as KeypairNative, KeypairUtil};
-use solana_sdk::transaction::Transaction as TransactionNative;
-use std::convert::TryInto;
-use std::ffi::CString;
-use std::os::raw::c_char;
-use std::vec::Vec;
-use std::{fmt, mem, ptr, slice};
+use solana_sdk::{
+    hash::Hash,
+    instruction::CompiledInstruction as CompiledInstructionNative,
+    message::{Message as MessageNative, MessageHeader as MessageHeaderNative},
+    pubkey::Pubkey,
+    signature::{Keypair as KeypairNative, KeypairUtil, Signature as SignatureNative},
+    transaction::Transaction as TransactionNative,
+};
+use std::{
+    convert::TryInto,
+    ffi::CString,
+    os::raw::c_char,
+    vec::Vec,
+    {fmt, mem, ptr, slice},
+};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -481,7 +483,7 @@ mod tests {
         let mut rng = ChaChaRng::from_seed(seed);
         let keypair = KeypairNative::generate(&mut rng);
         let c_keypair = unsafe { Box::from_raw(generate_keypair(seed.as_ptr())) };
-        assert_eq!(c_keypair.new_native(), Ok(keypair));
+        assert_eq!(c_keypair.new_native().unwrap().pubkey(), keypair.pubkey());
     }
 
     #[test]

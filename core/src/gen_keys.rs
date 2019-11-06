@@ -1,4 +1,4 @@
-//! The `signature` module provides functionality for public, and private keys.
+//! The `gen_keys` module makes lots of keypairs
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
