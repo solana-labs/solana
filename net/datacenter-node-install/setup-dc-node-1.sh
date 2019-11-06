@@ -23,7 +23,15 @@ set -xe
 
 apt update
 apt upgrade -y
-apt install -y build-essential pkg-config clang
+
+cat >/etc/apt/apt.conf.d/99-solana <<'EOF'
+// Set and persist extra caps on iftop binary
+Dpkg::Post-Invoke { "which iftop 2>&1 >/dev/null && setcap cap_net_raw=eip $(which iftop) || true"; };
+EOF
+
+apt install -y build-essential pkg-config clang cmake sysstat perf \
+  linux-generic-hwe-18.04-edge linux-tools-generic-hwe-18.04-edge \
+  iftop
 
 "$HERE"/../scripts/install-docker.sh
 usermod -aG docker "$SETUP_USER"

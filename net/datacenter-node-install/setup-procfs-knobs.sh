@@ -18,5 +18,8 @@ net.core.wmem_max=134217728
 
 # Solana earlyoom setup
 kernel.sysrq=$(( $(cat /proc/sys/kernel/sysrq) | 64 ))
+
+# Allow kernel and CPU perf events
+kernel.perf_event_paranoid=0
 EOF
 
