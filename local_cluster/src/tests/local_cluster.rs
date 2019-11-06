@@ -7,8 +7,8 @@ use log::*;
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
 use solana_core::{
-    broadcast_stage::BroadcastStageType, gossip_service::discover_cluster,
-    validator::ValidatorConfig,
+    broadcast_stage::BroadcastStageType, consensus::VOTE_THRESHOLD_DEPTH,
+    gossip_service::discover_cluster, validator::ValidatorConfig,
 };
 use solana_ledger::{bank_forks::SnapshotConfig, blocktree::Blocktree, snapshot_utils};
 use solana_runtime::accounts_db::AccountsDB;
@@ -626,7 +626,47 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 }
 
 #[test]
-#[serial]
+// Test that when a leader is leader for banks B_i..B_{i+n}, and B_i is not
+// votable, then B_{i+1} still chains to B_i
+fn test_no_voting() {
+    solana_logger::setup();
+    let mut validator_config = ValidatorConfig::default();
+    validator_config.rpc_config.enable_validator_exit = true;
+    validator_config.voting_disabled = true;
+    let config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes: vec![100],
+        validator_configs: vec![validator_config.clone()],
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+    let client = cluster
+        .get_validator_client(&cluster.entry_point_info.id)
+        .unwrap();
+    loop {
+        let last_slot = client.get_slot().expect("Couldn't get slot");
+        if last_slot > 4 * VOTE_THRESHOLD_DEPTH as u64 {
+            break;
+        }
+        sleep(Duration::from_secs(1));
+    }
+
+    cluster.close_preserve_ledgers();
+    let leader_pubkey = cluster.entry_point_info.id;
+    let ledger_path = cluster.validator_infos[&leader_pubkey]
+        .info
+        .ledger_path
+        .clone();
+    let ledger = Blocktree::open(&ledger_path).unwrap();
+    for i in 0..2 * VOTE_THRESHOLD_DEPTH {
+        let meta = ledger.meta(i as u64).unwrap().unwrap();
+        let parent = meta.parent_slot;
+        let expected_parent = i.saturating_sub(1);
+        assert_eq!(parent, expected_parent as u64);
+    }
+}
+
+#[test]
 fn test_repairman_catchup() {
     solana_logger::setup();
     error!("test_repairman_catchup");

@@ -149,7 +149,7 @@ fn graph_forks(
                         "".to_string()
                     },
                     if first { "filled," } else { "" },
-                    if !bank.is_votable() { "dotted," } else { "" }
+                    ""
                 ));
                 styled_slots.insert(bank.slot());
             }
