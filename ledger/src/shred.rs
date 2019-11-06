@@ -51,8 +51,9 @@ pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 16;
 /// Based on rse benchmarks, the optimal erasure config uses 16 data shreds and 4 coding shreds
 pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
 
-const LAST_SHRED_IN_SLOT: u8 = 0b0000_0001;
-pub const DATA_COMPLETE_SHRED: u8 = 0b0000_0010;
+pub const SHRED_TICK_REFERENCE_MASK: u8 = 0b0011_1111;
+const LAST_SHRED_IN_SLOT: u8 = 0b1000_0000;
+pub const DATA_COMPLETE_SHRED: u8 = 0b0100_0000;
 
 #[derive(Debug)]
 pub enum ShredError {
@@ -143,6 +144,7 @@ impl Shred {
         data: Option<&[u8]>,
         is_last_data: bool,
         is_last_in_slot: bool,
+        reference_tick: u8,
     ) -> Self {
         let mut payload = vec![0; PACKET_DATA_SIZE];
         let mut common_header = ShredCommonHeader::default();
@@ -151,6 +153,7 @@ impl Shred {
 
         let mut data_header = DataShredHeader::default();
         data_header.parent_offset = parent_offset;
+        data_header.flags = reference_tick.min(SHRED_TICK_REFERENCE_MASK);
 
         if is_last_data {
             data_header.flags |= DATA_COMPLETE_SHRED
@@ -336,6 +339,14 @@ impl Shred {
         }
     }
 
+    pub fn reference_tick(&self) -> u8 {
+        if self.is_data() {
+            self.data_header.flags & SHRED_TICK_REFERENCE_MASK
+        } else {
+            SHRED_TICK_REFERENCE_MASK
+        }
+    }
+
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
@@ -349,6 +360,7 @@ pub struct Shredder {
     fec_rate: f32,
     keypair: Arc<Keypair>,
     pub signing_coding_time: u128,
+    reference_tick: u8,
 }
 
 impl Shredder {
@@ -357,6 +369,7 @@ impl Shredder {
         parent_slot: Slot,
         fec_rate: f32,
         keypair: Arc<Keypair>,
+        reference_tick: u8,
     ) -> Result<Self> {
         if fec_rate > 1.0 || fec_rate < 0.0 {
             Err(ShredError::InvalidFecRate(fec_rate))
@@ -369,6 +382,7 @@ impl Shredder {
                 fec_rate,
                 keypair,
                 signing_coding_time: 0,
+                reference_tick,
             })
         }
     }
@@ -412,6 +426,7 @@ impl Shredder {
                             Some(shred_data),
                             is_last_data,
                             is_last_in_slot,
+                            self.reference_tick,
                         );
 
                         Shredder::sign_shred(&self.keypair, &mut shred);
@@ -814,7 +829,7 @@ pub mod tests {
 
         // Test that parent cannot be > current slot
         assert_matches!(
-            Shredder::new(slot, slot + 1, 1.00, keypair.clone()),
+            Shredder::new(slot, slot + 1, 1.00, keypair.clone(), 0),
             Err(ShredError::SlotTooLow {
                 slot: _,
                 parent_slot: _,
@@ -822,7 +837,7 @@ pub mod tests {
         );
         // Test that slot - parent cannot be > u16 MAX
         assert_matches!(
-            Shredder::new(slot, slot - 1 - 0xffff, 1.00, keypair.clone()),
+            Shredder::new(slot, slot - 1 - 0xffff, 1.00, keypair.clone(), 0),
             Err(ShredError::SlotTooLow {
                 slot: _,
                 parent_slot: _,
@@ -831,7 +846,7 @@ pub mod tests {
 
         let fec_rate = 0.25;
         let parent_slot = slot - 5;
-        let shredder = Shredder::new(slot, parent_slot, fec_rate, keypair.clone())
+        let shredder = Shredder::new(slot, parent_slot, fec_rate, keypair.clone(), 0)
             .expect("Failed in creating shredder");
 
         let entries: Vec<_> = (0..5)
@@ -906,7 +921,7 @@ pub mod tests {
         let slot = 1;
 
         let parent_slot = 0;
-        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone())
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), 0)
             .expect("Failed in creating shredder");
 
         let entries: Vec<_> = (0..5)
@@ -927,17 +942,78 @@ pub mod tests {
     }
 
     #[test]
+    fn test_shred_reference_tick() {
+        let keypair = Arc::new(Keypair::new());
+        let slot = 1;
+
+        let parent_slot = 0;
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), 5)
+            .expect("Failed in creating shredder");
+
+        let entries: Vec<_> = (0..5)
+            .map(|_| {
+                let keypair0 = Keypair::new();
+                let keypair1 = Keypair::new();
+                let tx0 =
+                    system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+                Entry::new(&Hash::default(), 1, vec![tx0])
+            })
+            .collect();
+
+        let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+        data_shreds.iter().for_each(|s| {
+            assert_eq!(s.reference_tick(), 5);
+        });
+
+        let deserialized_shred =
+            Shred::new_from_serialized_shred(data_shreds.last().unwrap().payload.clone()).unwrap();
+        assert_eq!(deserialized_shred.reference_tick(), 5);
+    }
+
+    #[test]
+    fn test_shred_reference_tick_overflow() {
+        let keypair = Arc::new(Keypair::new());
+        let slot = 1;
+
+        let parent_slot = 0;
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), u8::max_value())
+            .expect("Failed in creating shredder");
+
+        let entries: Vec<_> = (0..5)
+            .map(|_| {
+                let keypair0 = Keypair::new();
+                let keypair1 = Keypair::new();
+                let tx0 =
+                    system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+                Entry::new(&Hash::default(), 1, vec![tx0])
+            })
+            .collect();
+
+        let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+        data_shreds.iter().for_each(|s| {
+            assert_eq!(s.reference_tick(), SHRED_TICK_REFERENCE_MASK);
+        });
+
+        let deserialized_shred =
+            Shred::new_from_serialized_shred(data_shreds.last().unwrap().payload.clone()).unwrap();
+        assert_eq!(
+            deserialized_shred.reference_tick(),
+            SHRED_TICK_REFERENCE_MASK
+        );
+    }
+
+    #[test]
     fn test_data_and_code_shredder() {
         let keypair = Arc::new(Keypair::new());
 
         let slot = 0x123456789abcdef0;
         // Test that FEC rate cannot be > 1.0
         assert_matches!(
-            Shredder::new(slot, slot - 5, 1.001, keypair.clone()),
+            Shredder::new(slot, slot - 5, 1.001, keypair.clone(), 0),
             Err(ShredError::InvalidFecRate(_))
         );
 
-        let shredder = Shredder::new(0x123456789abcdef0, slot - 5, 1.0, keypair.clone())
+        let shredder = Shredder::new(0x123456789abcdef0, slot - 5, 1.0, keypair.clone(), 0)
             .expect("Failed in creating shredder");
 
         // Create enough entries to make > 1 shred
@@ -979,7 +1055,7 @@ pub mod tests {
     fn test_recovery_and_reassembly() {
         let keypair = Arc::new(Keypair::new());
         let slot = 0x123456789abcdef0;
-        let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone())
+        let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0)
             .expect("Failed in creating shredder");
 
         let keypair0 = Keypair::new();
@@ -1225,7 +1301,7 @@ pub mod tests {
     fn test_multi_fec_block_coding() {
         let keypair = Arc::new(Keypair::new());
         let slot = 0x123456789abcdef0;
-        let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone())
+        let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0)
             .expect("Failed in creating shredder");
 
         let num_fec_sets = 100;
