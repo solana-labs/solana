@@ -904,15 +904,7 @@ impl Blocktree {
         let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
 
         let mut current_slot = start_slot;
-        let mut parent_slot = parent.map_or(
-            if current_slot == 0 {
-                current_slot
-            } else {
-                current_slot - 1
-            },
-            |v| v,
-        );
-        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
+        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone(), 0)#6772)
             .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];
         let mut slot_entries = vec![];
@@ -935,8 +927,14 @@ impl Blocktree {
                     shredder.entries_to_shreds(&current_entries, true, start_index);
                 all_shreds.append(&mut data_shreds);
                 all_shreds.append(&mut coding_shreds);
-                shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
-                    .expect("Failed to create entry shredder");
+                shredder = Shredder::new(
+                    current_slot,
+                    parent_slot,
+                    0.0,
+                    keypair.clone(),
+                    (ticks_per_slot - remaining_ticks_in_slot) as u8,
+                )
+                .expect("Failed to create entry shredder");
             }
 
             if entry.is_tick() {
@@ -1730,7 +1728,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     let entries = create_ticks(ticks_per_slot, genesis_block.hash());
     let last_hash = entries.last().unwrap().hash;
 
-    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()))
+    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0)
         .expect("Failed to create entry shredder");
     let shreds = shredder.entries_to_shreds(&entries, true, 0).0;
     assert!(shreds.last().unwrap().last_in_slot());
@@ -1815,7 +1813,7 @@ pub fn entries_to_test_shreds(
     parent_slot: u64,
     is_full_slot: bool,
 ) -> Vec<Shred> {
-    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()))
+    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()), 0)
         .expect("Failed to create entry shredder");
 
     shredder.entries_to_shreds(&entries, is_full_slot, 0).0
@@ -3868,6 +3866,7 @@ pub mod tests {
                 Some(&[1, 1, 1]),
                 true,
                 true,
+                0,
             )];
 
             // With the corruption, nothing should be returned, even though an
