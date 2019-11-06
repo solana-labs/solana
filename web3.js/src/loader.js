@@ -97,7 +97,7 @@ export class Loader {
       );
 
       const transaction = new Transaction().add({
-        keys: [{pubkey: program.publicKey, isSigner: true, isDebitable: true}],
+        keys: [{pubkey: program.publicKey, isSigner: true, isWritable: true}],
         programId,
         data,
       });
@@ -137,8 +137,8 @@ export class Loader {
 
       const transaction = new Transaction().add({
         keys: [
-          {pubkey: program.publicKey, isSigner: true, isDebitable: true},
-          {pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isDebitable: false},
+          {pubkey: program.publicKey, isSigner: true, isWritable: true},
+          {pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false},
         ],
         programId,
         data,

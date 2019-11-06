@@ -681,11 +681,6 @@ test('transaction', async () => {
       result: 31,
     },
   ]);
-  if (!mockRpcEnabled) {
-    // Credit-only account credits are committed at the end of every slot;
-    // this sleep is to ensure a full slot has elapsed
-    await sleep((1000 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
-  }
   expect(await connection.getBalance(accountTo.publicKey)).toBe(31);
 });
 

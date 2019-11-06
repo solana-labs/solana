@@ -201,8 +201,8 @@ export class BudgetProgram {
 
         return transaction.add({
           keys: [
-            {pubkey: to, isSigner: false, isDebitable: false},
-            {pubkey: program, isSigner: false, isDebitable: true},
+            {pubkey: to, isSigner: false, isWritable: true},
+            {pubkey: program, isSigner: false, isWritable: true},
           ],
           programId: this.programId,
           data: trimmedData,
@@ -236,7 +236,7 @@ export class BudgetProgram {
         );
 
         return transaction.add({
-          keys: [{pubkey: program, isSigner: false, isDebitable: true}],
+          keys: [{pubkey: program, isSigner: false, isWritable: true}],
           programId: this.programId,
           data: trimmedData,
         });
@@ -269,7 +269,7 @@ export class BudgetProgram {
         );
 
         return transaction.add({
-          keys: [{pubkey: program, isSigner: false, isDebitable: true}],
+          keys: [{pubkey: program, isSigner: false, isWritable: true}],
           programId: this.programId,
           data: trimmedData,
         });
@@ -325,7 +325,7 @@ export class BudgetProgram {
     );
 
     return transaction.add({
-      keys: [{pubkey: program, isSigner: false, isDebitable: true}],
+      keys: [{pubkey: program, isSigner: false, isWritable: true}],
       programId: this.programId,
       data: trimmedData,
     });
@@ -349,9 +349,9 @@ export class BudgetProgram {
 
     return new Transaction().add({
       keys: [
-        {pubkey: from, isSigner: true, isDebitable: true},
-        {pubkey: program, isSigner: false, isDebitable: true},
-        {pubkey: to, isSigner: false, isDebitable: false},
+        {pubkey: from, isSigner: true, isWritable: true},
+        {pubkey: program, isSigner: false, isWritable: true},
+        {pubkey: to, isSigner: false, isWritable: false},
       ],
       programId: this.programId,
       data,
@@ -379,9 +379,9 @@ export class BudgetProgram {
 
     return new Transaction().add({
       keys: [
-        {pubkey: from, isSigner: true, isDebitable: true},
-        {pubkey: program, isSigner: false, isDebitable: true},
-        {pubkey: to, isSigner: false, isDebitable: false},
+        {pubkey: from, isSigner: true, isWritable: true},
+        {pubkey: program, isSigner: false, isWritable: true},
+        {pubkey: to, isSigner: false, isWritable: true},
       ],
       programId: this.programId,
       data,
