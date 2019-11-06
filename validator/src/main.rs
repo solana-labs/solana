@@ -230,6 +230,7 @@ fn is_keypair(string: String) -> Result<(), String> {
         .map_err(|err| format!("{:?}", err))
 }
 
+#[allow(clippy::cognitive_complexity)]
 pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
