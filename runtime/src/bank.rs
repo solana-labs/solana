@@ -1630,7 +1630,6 @@ mod tests {
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_block::create_genesis_block,
-        hash,
         instruction::InstructionError,
         message::{Message, MessageHeader},
         poh_config::PohConfig,
