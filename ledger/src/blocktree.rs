@@ -3804,7 +3804,7 @@ pub mod tests {
                 slot,
                 next_shred_index as u32,
                 1,
-                None,
+                Some(&[1, 1, 1]),
                 true,
                 true,
             )];

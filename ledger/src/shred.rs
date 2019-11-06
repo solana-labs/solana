@@ -160,22 +160,23 @@ impl Shred {
             data_header.flags |= LAST_SHRED_IN_SLOT
         }
 
+        let mut start = 0;
+        Self::serialize_obj_into(
+            &mut start,
+            SIZE_OF_COMMON_SHRED_HEADER,
+            &mut payload,
+            &common_header,
+        )
+        .expect("Failed to write header into shred buffer");
+        Self::serialize_obj_into(
+            &mut start,
+            SIZE_OF_DATA_SHRED_HEADER,
+            &mut payload,
+            &data_header,
+        )
+        .expect("Failed to write data header into shred buffer");
+
         if let Some(data) = data {
-            let mut start = 0;
-            Self::serialize_obj_into(
-                &mut start,
-                SIZE_OF_COMMON_SHRED_HEADER,
-                &mut payload,
-                &common_header,
-            )
-            .expect("Failed to write header into shred buffer");
-            Self::serialize_obj_into(
-                &mut start,
-                SIZE_OF_DATA_SHRED_HEADER,
-                &mut payload,
-                &data_header,
-            )
-            .expect("Failed to write data header into shred buffer");
             payload[start..start + data.len()].clone_from_slice(data);
         }
 
