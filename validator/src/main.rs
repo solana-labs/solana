@@ -225,7 +225,13 @@ fn is_keypair(string: String) -> Result<(), String> {
 }
 
 pub fn main() {
-    solana_logger::setup_with_filter("solana=info");
+    solana_logger::setup_with_filter(
+        &[
+            "solana=info", /* info logging for all solana modules */
+            "rpc=trace",   /* json_rpc request/response logging */
+        ]
+        .join(","),
+    );
     solana_metrics::set_panic_hook("validator");
 
     let default_dynamic_port_range =
