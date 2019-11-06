@@ -20,7 +20,7 @@ A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [
 
 ## blockhash
 
-The hash over a bank's state upon freeze.  Used to historically identify the block originated from the bank.
+A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) state at a given [block height](terminology.md#block-height).
 
 ## block height
 
