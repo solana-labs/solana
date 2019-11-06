@@ -1,5 +1,5 @@
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::Shred;
+use solana_ledger::shred::ShredHeaders;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
@@ -41,7 +41,7 @@ impl PartitionCfg {
         &self,
         bank: &Option<Arc<Bank>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        shred: &Shred,
+        shred: &ShredHeaders,
     ) -> bool {
         if bank.is_none() {
             return true;

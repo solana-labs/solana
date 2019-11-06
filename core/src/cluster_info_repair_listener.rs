@@ -698,7 +698,7 @@ mod tests {
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
         let num_slots = 2;
         let (shreds, _) = make_many_slot_entries(0, num_slots, 1);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blocktree.insert_test_shreds(shreds, None, false).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
         let last_root = num_slots - 1;
@@ -769,7 +769,7 @@ mod tests {
         let num_shreds_per_slot = shreds.len() as u64 / num_slots;
 
         // Write slots in the range [0, num_slots] to blocktree
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blocktree.insert_test_shreds(shreds, None, false).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
         let roots: Vec<_> = (0..=num_slots - 1).collect();
@@ -858,7 +858,7 @@ mod tests {
         // Create shreds for first two epochs and write them to blocktree
         let total_slots = slots_per_epoch * 2;
         let (shreds, _) = make_many_slot_entries(0, total_slots, 1);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blocktree.insert_test_shreds(shreds, None, false).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
         let roots: Vec<_> = (0..=slots_per_epoch * 2 - 1).collect();

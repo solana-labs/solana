@@ -2,6 +2,8 @@ use solana_ledger::entry::Entry;
 use solana_ledger::shred::{
     max_entries_per_n_shred, verify_test_data_shred, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
 };
+use solana_ledger::sigverify_shreds::sign_shreds_gpu_pinned_keypair;
+use solana_perf::recycler_cache::RecyclerCache;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::{hash::Hash, system_transaction};
 use std::convert::TryInto;
@@ -9,9 +11,12 @@ use std::sync::Arc;
 
 #[test]
 fn test_multi_fec_block_coding() {
+    let recycler_cache = RecyclerCache::default();
     let keypair = Arc::new(Keypair::new());
+    let pkp = sign_shreds_gpu_pinned_keypair(&keypair, &recycler_cache);
+    let pkp = Some(Arc::new(pkp));
     let slot = 0x123456789abcdef0;
-    let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
+    let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), pkp, 0, 0)
         .expect("Failed in creating shredder");
 
     let num_fec_sets = 100;
@@ -33,7 +38,8 @@ fn test_multi_fec_block_coding() {
         .collect();
 
     let serialized_entries = bincode::serialize(&entries).unwrap();
-    let (data_shreds, coding_shreds, next_index) = shredder.entries_to_shreds(&entries, true, 0);
+    let (data_shreds, coding_shreds, next_index) =
+        shredder.test_entries_to_shreds(&entries, true, 0);
     assert_eq!(next_index as usize, num_data_shreds);
     assert_eq!(data_shreds.len(), num_data_shreds);
     assert_eq!(coding_shreds.len(), num_data_shreds);

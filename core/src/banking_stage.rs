@@ -1955,7 +1955,7 @@ mod tests {
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
             let shreds = entries_to_test_shreds(entries.clone(), bank.slot(), 0, true, 0);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.insert_test_shreds(shreds, None, false).unwrap();
             blocktree.set_roots(&[bank.slot()]).unwrap();
 
             let (transaction_status_sender, transaction_status_receiver) = unbounded();

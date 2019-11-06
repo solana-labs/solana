@@ -742,8 +742,8 @@ impl ClusterInfo {
     pub fn broadcast_shreds(
         &self,
         s: &UdpSocket,
-        shreds: Vec<Vec<u8>>,
-        seeds: &[[u8; 32]],
+        shreds: &mut [Packets],
+        seeds: &[Vec<[u8; 32]>],
         stakes: Option<&HashMap<Pubkey, u64>>,
     ) -> Result<()> {
         let (peers, peers_and_stakes) = self.sorted_tvu_peers_and_stakes(stakes);
@@ -757,12 +757,13 @@ impl ClusterInfo {
             return Ok(());
         }
         let mut packets: Vec<_> = shreds
-            .into_iter()
+            .iter_mut()
             .zip(seeds)
-            .map(|(shred, seed)| {
-                let broadcast_index = weighted_best(&peers_and_stakes, *seed);
-
-                (shred, &peers[broadcast_index].tvu)
+            .flat_map(|(packets, seeds)| {
+                packets.packets.iter_mut().zip(seeds).map(|(p, seed)| {
+                    let broadcast_index = weighted_best(&peers_and_stakes, *seed);
+                    (&mut p.data[..], &peers[broadcast_index].tvu)
+                })
             })
             .collect();
 
@@ -2095,7 +2096,7 @@ mod tests {
             );
 
             blocktree
-                .insert_shreds(vec![shred_info], None, false)
+                .insert_test_shreds(vec![shred_info], None, false)
                 .expect("Expect successful ledger write");
 
             let rv = ClusterInfo::run_window_request(
@@ -2191,7 +2192,7 @@ mod tests {
             let (shreds, _) = make_many_slot_entries(1, 3, 5);
 
             blocktree
-                .insert_shreds(shreds, None, false)
+                .insert_test_shreds(shreds, None, false)
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset

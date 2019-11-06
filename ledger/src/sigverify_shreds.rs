@@ -10,7 +10,7 @@ use sha2::{Digest, Sha512};
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::{
     cuda_runtime::PinnedVec,
-    packet::{limited_deserialize, Packet, Packets},
+    packet::{batch_size, limited_deserialize, Packet, Packets},
     perf_libs,
     recycler_cache::RecyclerCache,
     sigverify::{self, batch_size, TxOffset},

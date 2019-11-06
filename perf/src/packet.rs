@@ -15,6 +15,10 @@ pub struct Packets {
     pub packets: PinnedVec<Packet>,
 }
 
+pub fn batch_size(batches: &[Packets]) -> usize {
+    batches.iter().map(|p| p.packets.len()).sum()
+}
+
 //auto derive doesn't support large arrays
 impl Default for Packets {
     fn default() -> Packets {

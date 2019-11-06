@@ -5,7 +5,7 @@
 //!
 
 use crate::cuda_runtime::PinnedVec;
-use crate::packet::{Packet, Packets};
+use crate::packet::{batch_size, Packet, Packets};
 use crate::perf_libs;
 use crate::recycler::Recycler;
 use bincode::serialized_size;
@@ -112,10 +112,6 @@ fn verify_packet(packet: &Packet) -> u8 {
         sig_start += size_of::<Signature>();
     }
     1
-}
-
-pub fn batch_size(batches: &[Packets]) -> usize {
-    batches.iter().map(|p| p.packets.len()).sum()
 }
 
 // internal function to be unit-tested; should be used only by get_packet_offsets

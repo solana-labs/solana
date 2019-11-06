@@ -1487,7 +1487,7 @@ pub(crate) mod tests {
 
             // Insert shred for slot 1, generate new forks, check result
             let (shreds, _) = make_slot_entries(1, 0, 8);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.insert_test_shreds(shreds, None, false).unwrap();
             assert!(bank_forks.get(1).is_none());
             ReplayStage::generate_new_bank_forks(
                 &blocktree,
@@ -1499,7 +1499,7 @@ pub(crate) mod tests {
 
             // Insert shred for slot 3, generate new forks, check result
             let (shreds, _) = make_slot_entries(2, 0, 8);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.insert_test_shreds(shreds, None, false).unwrap();
             assert!(bank_forks.get(2).is_none());
             ReplayStage::generate_new_bank_forks(
                 &blocktree,
@@ -1752,7 +1752,7 @@ pub(crate) mod tests {
                 .entry(bank0.slot())
                 .or_insert_with(|| ForkProgress::new(0, last_blockhash));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.insert_test_shreds(shreds, None, false).unwrap();
             let (res, _tx_count) = ReplayStage::replay_blocktree_into_bank(
                 &bank0,
                 &blocktree,
@@ -1907,7 +1907,7 @@ pub(crate) mod tests {
         let entries = vec![entry_1, entry_2, entry_3];
 
         let shreds = entries_to_test_shreds(entries.clone(), slot, previous_slot, true, 0);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blocktree.insert_test_shreds(shreds, None, false).unwrap();
         blocktree.set_roots(&[slot]).unwrap();
 
         let (transaction_status_sender, transaction_status_receiver) = unbounded();

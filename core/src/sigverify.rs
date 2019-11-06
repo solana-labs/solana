@@ -9,9 +9,7 @@ use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::packet::Packets;
 use solana_perf::recycler::Recycler;
 use solana_perf::sigverify;
-pub use solana_perf::sigverify::{
-    batch_size, ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset,
-};
+pub use solana_perf::sigverify::{ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset};
 
 #[derive(Clone)]
 pub struct TransactionSigVerifier {
@@ -39,10 +37,12 @@ impl SigVerifier for TransactionSigVerifier {
 
 pub fn mark_disabled(batches: &mut Vec<Packets>, r: &[Vec<u8>]) {
     batches.iter_mut().zip(r).for_each(|(b, v)| {
-        b.packets
-            .iter_mut()
-            .zip(v)
-            .for_each(|(p, f)| p.meta.discard = *f == 0)
+        b.packets.iter_mut().zip(v).for_each(|(p, f)| {
+            p.meta.discard = *f == 0;
+            if p.meta.discard {
+                debug!("packet discarded: failed sig_verify");
+            }
+        })
     });
 }
 

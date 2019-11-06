@@ -1,18 +1,21 @@
 use super::*;
 use solana_ledger::entry::Entry;
 use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
+use solana_perf::recycler_cache::RecyclerCache;
 use solana_sdk::hash::Hash;
 
 pub(super) struct BroadcastFakeShredsRun {
     last_blockhash: Hash,
     partition: usize,
     shred_version: u16,
+    recycler_cache: RecyclerCache,
 }
 
 impl BroadcastFakeShredsRun {
     pub(super) fn new(partition: usize, shred_version: u16) -> Self {
         Self {
             last_blockhash: Hash::default(),
+            recycler_cache: RecyclerCache::warmed(),
             partition,
             shred_version,
         }
@@ -46,12 +49,14 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             bank.parent().unwrap().slot(),
             RECOMMENDED_FEC_RATE,
             keypair.clone(),
+            None,
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
             self.shred_version,
         )
         .expect("Expected to create a new shredder");
 
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(
+            &self.recycler_cache,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
@@ -68,6 +73,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             .collect();
 
         let (fake_data_shreds, fake_coding_shreds, _) = shredder.entries_to_shreds(
+            &self.recycler_cache,
             &fake_entries,
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
@@ -79,7 +85,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             self.last_blockhash = Hash::default();
         }
 
-        blocktree.insert_shreds(data_shreds.clone(), None, true)?;
+        blocktree.insert_batch(&data_shreds, None, true)?;
 
         // 3) Start broadcast step
         let peers = cluster_info.read().unwrap().tvu_peers();
@@ -89,19 +95,22 @@ impl BroadcastRun for BroadcastFakeShredsRun {
                 fake_data_shreds
                     .iter()
                     .chain(fake_coding_shreds.iter())
-                    .for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                    .for_each(|packets| {
+                        packets.packets.iter().for_each(|p| {
+                            sock.send_to(&p.data, &peer.tvu_forwards).unwrap();
+                        });
                     });
             } else {
                 data_shreds
                     .iter()
                     .chain(coding_shreds.iter())
-                    .for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                    .for_each(|packets| {
+                        packets.packets.iter().for_each(|p| {
+                            sock.send_to(&p.data, &peer.tvu_forwards).unwrap();
+                        });
                     });
             }
         });
-
         Ok(())
     }
 }
