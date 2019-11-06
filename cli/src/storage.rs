@@ -174,9 +174,14 @@ pub fn process_create_storage_account(
         1,
         account_type,
     );
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let mut tx = Transaction::new_signed_instructions(
+        &[&config.keypair, &storage_account],
+        ixs,
+        recent_blockhash,
+    );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let result =
+        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, &storage_account]);
     log_instruction_custom_error::<SystemError>(result)
 }
 

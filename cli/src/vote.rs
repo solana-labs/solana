@@ -267,9 +267,13 @@ pub fn process_create_vote_account(
         lamports,
     );
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let mut tx = Transaction::new_signed_instructions(
+        &[&config.keypair, vote_account],
+        ixs,
+        recent_blockhash,
+    );
     check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, vote_account]);
     log_instruction_custom_error::<SystemError>(result)
 }
 
