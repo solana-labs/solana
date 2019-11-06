@@ -861,6 +861,19 @@ mod test {
         local.process_vote_unchecked(&vote);
         //vote 4 should be at threshold 5
         assert_eq!(Tower::new_vote(4, &local, 4, Hash::default(), None), None);
+
+        //bank has 0 as the last root
+        //Threshold is not met
+        let vote = Vote {
+            slots: vec![1, 2, 3, 4],
+            hash: Hash::default(),
+        };
+        //Tower length is 5, 0-, so index for this vote is 4
+        assert_eq!(
+            Tower::new_vote(4, &local, 4, Hash::default(), Some(0)),
+            Some((vote, 4))
+        );
+
         //vote 6 has expried vote 3, and should be at threshold 4
         let vote = Vote {
             slots: vec![0, 1, 2, 6],
