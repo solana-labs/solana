@@ -53,6 +53,7 @@ impl RpcRequestMiddleware {
     }
 
     fn get(&self, filename: &str) -> RequestMiddlewareAction {
+        info!("get {}", filename);
         let filename = self.ledger_path.join(filename);
         RequestMiddlewareAction::Respond {
             should_validate_hosts: true,
