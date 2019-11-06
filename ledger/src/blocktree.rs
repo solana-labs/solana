@@ -1139,9 +1139,12 @@ impl Blocktree {
                             serialized_shred
                                 .expect("Shred must exist if shred index was included in a range"),
                         )
-                        .map_err(|_| {
+                        .map_err(|err| {
                             BlocktreeError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
-                                "Could not reconstruct shred from shred payload".to_string(),
+                                format!(
+                                    "Could not reconstruct shred from shred payload: {:?}",
+                                    err
+                                ),
                             )))
                         })
                     })
