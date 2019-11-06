@@ -668,8 +668,23 @@ impl RpcClient {
 
     /// Poll the server to confirm a transaction.
     pub fn poll_for_signature(&self, signature: &Signature) -> io::Result<()> {
+        self.poll_for_signature_with_commitment(signature, CommitmentConfig::default())
+    }
+
+    /// Poll the server to confirm a transaction.
+    pub fn poll_for_signature_with_commitment(
+        &self,
+        signature: &Signature,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<()> {
         let now = Instant::now();
-        while !self.check_signature(signature) {
+        loop {
+            if let Ok(Some(_)) = self.get_signature_status_with_commitment(
+                &signature.to_string(),
+                commitment_config.clone(),
+            ) {
+                break;
+            }
             if now.elapsed().as_secs() > 15 {
                 // TODO: Return a better error.
                 return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
@@ -689,7 +704,7 @@ impl RpcClient {
                 &RpcRequest::ConfirmTransaction,
                 Some(params.clone()),
                 0,
-                None,
+                Some(CommitmentConfig::recent()),
             );
 
             match response {
@@ -821,8 +836,9 @@ impl RpcClient {
         request: &RpcRequest,
         params: Option<Value>,
         retries: usize,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Value, ClientError> {
-        self.client.send(request, params, retries, None)
+        self.client.send(request, params, retries, commitment)
     }
 }
 
@@ -888,10 +904,12 @@ mod tests {
             &RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
             0,
+            None,
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let blockhash = rpc_client.retry_make_rpc_request(&RpcRequest::GetRecentBlockhash, None, 0);
+        let blockhash =
+            rpc_client.retry_make_rpc_request(&RpcRequest::GetRecentBlockhash, None, 0, None);
         assert_eq!(
             blockhash.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
@@ -902,6 +920,7 @@ mod tests {
             &RpcRequest::GetRecentBlockhash,
             Some(json!("parameter")),
             0,
+            None,
         );
         assert_eq!(blockhash.is_err(), true);
     }
@@ -940,6 +959,7 @@ mod tests {
             &RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"])),
             10,
+            None,
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 5);
     }

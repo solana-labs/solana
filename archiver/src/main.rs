@@ -1,13 +1,15 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
 use console::style;
-use solana_core::archiver::Archiver;
-use solana_core::cluster_info::{Node, VALIDATOR_PORT_RANGE};
-use solana_core::contact_info::ContactInfo;
-use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::process::exit;
-use std::sync::Arc;
+use solana_core::{
+    archiver::Archiver,
+    cluster_info::{Node, VALIDATOR_PORT_RANGE},
+    contact_info::ContactInfo,
+};
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    signature::{read_keypair_file, Keypair, KeypairUtil},
+};
+use std::{net::SocketAddr, path::PathBuf, process::exit, sync::Arc};
 
 // Return an error if a keypair file cannot be parsed.
 fn is_keypair(string: String) -> Result<(), String> {
@@ -118,6 +120,7 @@ fn main() {
         entrypoint_info,
         Arc::new(keypair),
         Arc::new(storage_keypair),
+        CommitmentConfig::recent(),
     )
     .unwrap();
 

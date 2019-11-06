@@ -387,6 +387,7 @@ impl LocalCluster {
             self.entry_point_info.clone(),
             archiver_keypair,
             storage_keypair,
+            CommitmentConfig::recent(),
         )
         .unwrap_or_else(|err| panic!("Archiver::new() failed: {:?}", err));
 

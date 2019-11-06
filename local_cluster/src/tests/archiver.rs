@@ -11,6 +11,7 @@ use solana_core::{
 };
 use solana_ledger::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
 use solana_sdk::{
+    commitment_config::CommitmentConfig,
     genesis_block::create_genesis_block,
     signature::{Keypair, KeypairUtil},
 };
@@ -105,6 +106,7 @@ fn test_archiver_startup_leader_hang() {
             leader_info,
             archiver_keypair,
             storage_keypair,
+            CommitmentConfig::recent(),
         );
 
         assert!(archiver_res.is_err());
@@ -140,6 +142,7 @@ fn test_archiver_startup_ledger_hang() {
         cluster.entry_point_info.clone(),
         bad_keys,
         storage_keypair,
+        CommitmentConfig::recent(),
     );
 
     assert!(archiver_res.is_err());
@@ -174,7 +177,10 @@ fn test_account_setup() {
     cluster.archiver_infos.iter().for_each(|(_, value)| {
         assert_eq!(
             client
-                .poll_get_balance(&value.archiver_storage_pubkey)
+                .poll_get_balance_with_commitment(
+                    &value.archiver_storage_pubkey,
+                    CommitmentConfig::recent()
+                )
                 .unwrap(),
             1
         );

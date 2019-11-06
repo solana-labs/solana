@@ -251,6 +251,21 @@ impl ThinClient {
         ))
     }
 
+    pub fn poll_balance_with_timeout_and_commitment(
+        &self,
+        pubkey: &Pubkey,
+        polling_frequency: &Duration,
+        timeout: &Duration,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<u64> {
+        self.rpc_client().poll_balance_with_timeout_and_commitment(
+            pubkey,
+            polling_frequency,
+            timeout,
+            commitment_config,
+        )
+    }
+
     pub fn poll_balance_with_timeout(
         &self,
         pubkey: &Pubkey,
@@ -298,6 +313,16 @@ impl ThinClient {
             expected_balance,
             commitment_config,
         )
+    }
+
+    pub fn poll_for_signature_with_commitment(
+        &self,
+        signature: &Signature,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<()> {
+        Ok(self
+            .rpc_client()
+            .poll_for_signature_with_commitment(signature, commitment_config)?)
     }
 
     /// Check a signature in the bank. This method blocks
