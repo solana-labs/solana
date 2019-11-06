@@ -201,7 +201,9 @@ export class SystemProgram {
     return new Transaction().add({
       keys: [
         {pubkey: from, isSigner: true, isDebitable: true},
-        {pubkey: to, isSigner: false, isDebitable: false},
+        // TEMP FIX: a better proposed solution is here:
+        // https://github.com/solana-labs/solana-web3.js/issues/542
+        {pubkey: to, isSigner: false, isDebitable: true},
       ],
       programId: SystemProgram.programId,
       data,
