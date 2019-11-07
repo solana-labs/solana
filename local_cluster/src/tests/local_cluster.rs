@@ -650,7 +650,9 @@ fn test_no_voting() {
         .get_validator_client(&cluster.entry_point_info.id)
         .unwrap();
     loop {
-        let last_slot = client.get_slot().expect("Couldn't get slot");
+        let last_slot = client
+            .get_slot_with_commitment(CommitmentConfig::recent())
+            .expect("Couldn't get slot");
         if last_slot > 4 * VOTE_THRESHOLD_DEPTH as u64 {
             break;
         }
