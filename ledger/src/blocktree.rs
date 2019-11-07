@@ -1012,8 +1012,7 @@ impl Blocktree {
             let upper_index = cmp::min(current_index, end_index);
             // the tick that will be used to figure out the timeout for this hole
             let reference_tick =
-                Shred::reference_tick_from_data(&db_iterator.value().expect("couldn't read value"))
-                    as u64;
+                u64::from(Shred::reference_tick_from_data(&db_iterator.value().expect("couldn't read value"));
 
             if ticks_since_first_insert < reference_tick + MAX_TURBINE_PROPAGATION_DELAY_TICKS {
                 // The higher index holes have not timed out yet
@@ -1329,7 +1328,7 @@ fn update_slot_meta(
     slot_meta.received = cmp::max((u64::from(index) + 1) as u64, slot_meta.received);
     if maybe_first_insert && slot_meta.received > 0 {
         // predict the timestamp of what would have been the first shred in this slot
-        let slot_time_elapsed = reference_tick as u64 * 1000 / DEFAULT_TICKS_PER_SECOND;
+        let slot_time_elapsed = u64::from(reference_tick) * 1000 / DEFAULT_TICKS_PER_SECOND;
         slot_meta.first_shred_timestamp = timestamp() - slot_time_elapsed;
     }
     slot_meta.consumed = new_consumed;
