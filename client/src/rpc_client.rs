@@ -55,6 +55,33 @@ impl RpcClient {
         }
     }
 
+    pub fn confirm_transaction(&self, signature: &str) -> Result<bool, ClientError> {
+        self.confirm_transaction_with_commitment(signature, CommitmentConfig::default())
+    }
+
+    pub fn confirm_transaction_with_commitment(
+        &self,
+        signature: &str,
+        commitment_config: CommitmentConfig,
+    ) -> Result<bool, ClientError> {
+        let params = json!(signature);
+        let response = self.client.send(
+            &RpcRequest::ConfirmTransaction,
+            Some(params),
+            0,
+            Some(commitment_config),
+        )?;
+        if response.as_bool().is_none() {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Received result of an unexpected type",
+            )
+            .into())
+        } else {
+            Ok(response.as_bool().unwrap())
+        }
+    }
+
     pub fn send_transaction(&self, transaction: &Transaction) -> Result<String, ClientError> {
         let serialized = serialize(transaction).unwrap();
         let params = json!(serialized);
@@ -437,8 +464,27 @@ impl RpcClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> io::Result<u64> {
-        self.get_account_with_commitment(pubkey, commitment_config)
-            .map(|account| account.lamports)
+        let params = json!(pubkey.to_string());
+        let balance_json = self
+            .client
+            .send(
+                &RpcRequest::GetBalance,
+                Some(params),
+                0,
+                Some(commitment_config),
+            )
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetBalance request failure: {:?}", err),
+                )
+            })?;
+        serde_json::from_value(balance_json).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetBalance parse failure: {:?}", err),
+            )
+        })
     }
 
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> io::Result<Vec<(Pubkey, Account)>> {
