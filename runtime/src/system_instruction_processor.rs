@@ -286,8 +286,21 @@ mod tests {
         let mut owned_account = Account::new(0, 0, &Pubkey::default());
         let unchanged_account = owned_account.clone();
 
+        // Haven't signed from account
         let result = create_system_account(
             &mut KeyedAccount::new(&from, false, &mut from_account),
+            &mut KeyedAccount::new(&owned_key, true, &mut owned_account),
+            50,
+            2,
+            &new_program_owner,
+        );
+        assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
+        assert_eq!(from_account.lamports, 100);
+        assert_eq!(owned_account, unchanged_account);
+
+        // Haven't signed to account
+        let result = create_system_account(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
             &mut KeyedAccount::new(&owned_key, false, &mut owned_account),
             50,
             2,
