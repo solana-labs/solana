@@ -72,6 +72,7 @@ solana-genesis \
   --bootstrap-storage-pubkey "$dataDir"/leader-storage-account-keypair.json \
   --ledger "$ledgerDir" \
   --operating-mode development
+tar jcfS "$ledgerDir/genesis.tar.bz2" -C "$ledgerDir" genesis.bin rocksdb
 
 abort() {
   set +e
