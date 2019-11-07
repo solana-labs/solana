@@ -420,7 +420,7 @@ impl Validator {
                     found_account.owner, vote_account
                 );
             } else {
-                error!("Vote account not found: {}:", vote_account);
+                error!("Vote account not found: {}", vote_account);
             }
             panic!("aaaaaaa");
         }
