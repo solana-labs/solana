@@ -88,8 +88,6 @@ Operate a configured testnet
 
    --use-move                         - Build the move-loader-program and add it to the cluster
 
-   --netem                            - Use netem to induce packet drops/latencies/errors
-
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -100,6 +98,10 @@ Operate a configured testnet
 
  logs-specific options:
    none
+
+ netem-specific options:
+   --config            - Netem configuration (as a double quoted string)
+   --parition          - Percentage of network that should be configured with netem
 
  update-specific options:
    --platform linux|osx|windows       - Deploy the tarball using 'solana-install deploy ...' for the
@@ -143,6 +145,7 @@ debugBuild=false
 doBuild=true
 gpuMode=auto
 maybeUseMove=""
+netemPartition=""
 netemConfig=""
 
 command=$1
@@ -207,7 +210,10 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --use-move ]]; then
       maybeUseMove=$1
       shift 1
-    elif [[ $1 = --netem ]]; then
+    elif [[ $1 = --partition ]]; then
+      netemPartition=$2
+      shift 2
+    elif [[ $1 = --config ]]; then
       netemConfig=$2
       shift 2
     elif [[ $1 = --gpu-mode ]]; then
@@ -465,7 +471,6 @@ startBootstrapLeader() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
-         \"$netemConfig\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -533,7 +538,6 @@ startNode() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
-         \"$netemConfig\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -962,7 +966,25 @@ logs)
     fetchRemoteLog "$ipAddress" validator
   done
   ;;
+netem)
+  num_nodes=$((${#validatorIpList[@]}*netemPartition/100))
+  if [[ $((${#validatorIpList[@]}*netemPartition%100)) -gt 0 ]]; then
+    num_nodes=$((num_nodes+1))
+  fi
+  if [[ "$num_nodes" -gt "${#validatorIpList[@]}" ]]; then
+    num_nodes=${#validatorIpList[@]}
+  fi
 
+  # Stop netem on all nodes
+  for ipAddress in "${validatorIpList[@]}"; do
+    "$here"/ssh.sh solana@"$ipAddress" 'solana/scripts/netem.sh delete < solana/netem.cfg || true'
+  done
+
+  # Start netem on required nodes
+  for ((i=0; i<num_nodes; i++ )); do :
+    "$here"/ssh.sh solana@"${validatorIpList[$i]}" "echo $netemConfig > solana/netem.cfg; solana/scripts/netem.sh add \"$netemConfig\""
+  done
+  ;;
 *)
   echo "Internal error: Unknown command: $command"
   usage

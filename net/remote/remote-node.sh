@@ -26,7 +26,6 @@ genesisOptions="${17}"
 extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
 GEOLOCATION_API_KEY="${20}"
-netemConfig="${21}"
 set +x
 
 # Use a very large stake (relative to the default multinode-demo/ stake of 42)
@@ -147,11 +146,6 @@ cat >> ~/solana/on-reboot <<EOF
   elif ${GPU_FAIL_IF_NONE} ; then
     echo "Expected GPU, found none!"
     export SOLANA_GPU_MISSING=1
-  fi
-
-  if [[ -n "$netemConfig" ]]; then
-    scripts/netem.sh add "$netemConfig"
-    echo "$netemConfig" > netem.cfg
   fi
 EOF
 
