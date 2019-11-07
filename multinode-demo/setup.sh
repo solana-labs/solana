@@ -10,9 +10,18 @@ rm -rf "$SOLANA_CONFIG_DIR"/bootstrap-leader
 mkdir -p "$SOLANA_CONFIG_DIR"/bootstrap-leader
 
 # Create genesis ledger
-$solana_keygen new -f -o "$SOLANA_CONFIG_DIR"/mint-keypair.json
+if [[ -r $MINT_KEYPAIR ]]; then
+  cp -f "$MINT_KEYPAIR" "$SOLANA_CONFIG_DIR"/mint-keypair.json
+else
+  $solana_keygen new -f -o "$SOLANA_CONFIG_DIR"/mint-keypair.json
+fi
 
-$solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
+if [[ -f $BOOTSTRAP_LEADER_IDENTITY_KEYPAIR ]]; then
+  cp -f "$BOOTSTRAP_LEADER_IDENTITY_KEYPAIR" "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
+else
+  $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
+fi
+
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/stake-keypair.json
 $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/storage-keypair.json
