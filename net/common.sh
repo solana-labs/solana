@@ -19,7 +19,7 @@ if [[ -d $netLogDir && ! -L $netLogDir ]]; then
   mv "$netLogDir" "$netDir"/log.old
 fi
 mkdir -p "$netConfigDir" "$netLogDateDir"
-ln -sf "$netLogDateDir" "$netLogDir"
+ln -sfh "$netLogDateDir" "$netLogDir"
 
 SOLANA_ROOT="$netDir"/..
 # shellcheck source=scripts/configure-metrics.sh
@@ -131,4 +131,3 @@ _setup_secondary_mount() {
     fi
   )
 }
-
