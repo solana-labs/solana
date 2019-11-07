@@ -402,7 +402,11 @@ mod tests {
             None,
             51,
         );
-        let tx = Transaction::new_signed_instructions(&[&contract_funds], ixs, blockhash);
+        let tx = Transaction::new_signed_instructions(
+            &[&contract_funds, &contract_state],
+            ixs,
+            blockhash,
+        );
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
