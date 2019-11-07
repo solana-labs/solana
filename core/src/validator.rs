@@ -422,7 +422,7 @@ impl Validator {
             } else {
                 error!("Vote account not found: {}:", vote_account);
             }
-            process::exit(1);
+            panic!("aaaaaaa");
         }
     }
 }
