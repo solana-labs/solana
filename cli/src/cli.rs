@@ -15,6 +15,7 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::{
     bpf_loader,
+    commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::InstructionError,
@@ -56,6 +57,7 @@ pub enum CliCommand {
         interval: Duration,
         count: Option<u64>,
         timeout: Duration,
+        commitment_config: CommitmentConfig,
     },
     ShowValidators {
         use_lamports_unit: bool,
@@ -824,7 +826,15 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             interval,
             count,
             timeout,
-        } => process_ping(&rpc_client, config, interval, count, timeout),
+            commitment_config,
+        } => process_ping(
+            &rpc_client,
+            config,
+            interval,
+            count,
+            timeout,
+            commitment_config,
+        ),
         CliCommand::ShowValidators { use_lamports_unit } => {
             process_show_validators(&rpc_client, *use_lamports_unit)
         }
