@@ -795,12 +795,10 @@ impl Bank {
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         inc_new_counter_debug!("bank-register_tick-registered", 1);
+        let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         let current_tick_height = self.tick_height.fetch_add(1, Ordering::Relaxed) as u64;
         if self.is_block_boundary(current_tick_height + 1) {
-            self.blockhash_queue
-                .write()
-                .unwrap()
-                .register_hash(hash, &self.fee_calculator);
+            w_blockhash_queue.register_hash(hash, &self.fee_calculator);
         }
     }
 
