@@ -56,8 +56,10 @@ fn test_instruction(
 #[test]
 fn test_account_owner() {
     let account_owner = Pubkey::new_rand();
-    let validator_storage_pubkey = Pubkey::new_rand();
-    let archiver_storage_pubkey = Pubkey::new_rand();
+    let validator_storage_keypair = Keypair::new();
+    let validator_storage_pubkey = validator_storage_keypair.pubkey();
+    let archiver_storage_keypair = Keypair::new();
+    let archiver_storage_pubkey = archiver_storage_keypair.pubkey();
 
     let GenesisBlockInfo {
         genesis_block,
@@ -78,7 +80,7 @@ fn test_account_owner() {
         StorageAccountType::Validator,
     ));
     bank_client
-        .send_message(&[&mint_keypair], message)
+        .send_message(&[&mint_keypair, &validator_storage_keypair], message)
         .expect("failed to create account");
     let account = bank
         .get_account(&validator_storage_pubkey)
@@ -98,7 +100,7 @@ fn test_account_owner() {
         StorageAccountType::Archiver,
     ));
     bank_client
-        .send_message(&[&mint_keypair], message)
+        .send_message(&[&mint_keypair, &archiver_storage_keypair], message)
         .expect("failed to create account");
     let account = bank
         .get_account(&archiver_storage_pubkey)
@@ -290,8 +292,8 @@ fn test_validate_mining() {
         &owner_pubkey,
         &bank_client,
         &mint_keypair,
-        &[&validator_storage_id],
-        &[&archiver_1_storage_id, &archiver_2_storage_id],
+        &[&validator_storage_keypair],
+        &[&archiver_1_storage_keypair, &archiver_2_storage_keypair],
         10,
     );
 
@@ -465,19 +467,21 @@ fn init_storage_accounts(
     owner: &Pubkey,
     client: &BankClient,
     mint: &Keypair,
-    validator_accounts_to_create: &[&Pubkey],
-    archiver_accounts_to_create: &[&Pubkey],
+    validator_accounts_to_create: &[&Keypair],
+    archiver_accounts_to_create: &[&Keypair],
     lamports: u64,
 ) {
+    let mut signers = vec![mint];
     let mut ixs: Vec<_> = vec![system_instruction::transfer(&mint.pubkey(), owner, 1)];
     ixs.append(
         &mut validator_accounts_to_create
             .into_iter()
             .flat_map(|account| {
+                signers.push(&account);
                 storage_instruction::create_storage_account(
                     &mint.pubkey(),
                     owner,
-                    account,
+                    &account.pubkey(),
                     lamports,
                     StorageAccountType::Validator,
                 )
@@ -485,16 +489,17 @@ fn init_storage_accounts(
             .collect(),
     );
     archiver_accounts_to_create.into_iter().for_each(|account| {
+        signers.push(&account);
         ixs.append(&mut storage_instruction::create_storage_account(
             &mint.pubkey(),
             owner,
-            account,
+            &account.pubkey(),
             lamports,
             StorageAccountType::Archiver,
         ))
     });
     let message = Message::new(ixs);
-    client.send_message(&[mint], message).unwrap();
+    client.send_message(&signers, message).unwrap();
 }
 
 fn get_storage_segment<C: SyncClient>(client: &C, account: &Pubkey) -> u64 {
@@ -594,7 +599,9 @@ fn test_bank_storage() {
         11,
         StorageAccountType::Archiver,
     ));
-    bank_client.send_message(&[&mint_keypair], message).unwrap();
+    bank_client
+        .send_message(&[&mint_keypair, &archiver_keypair], message)
+        .unwrap();
 
     let message = Message::new(storage_instruction::create_storage_account(
         &mint_pubkey,
@@ -603,7 +610,9 @@ fn test_bank_storage() {
         1,
         StorageAccountType::Validator,
     ));
-    bank_client.send_message(&[&mint_keypair], message).unwrap();
+    bank_client
+        .send_message(&[&mint_keypair, &validator_keypair], message)
+        .unwrap();
 
     let message = Message::new_with_payer(
         vec![storage_instruction::advertise_recent_blockhash(
