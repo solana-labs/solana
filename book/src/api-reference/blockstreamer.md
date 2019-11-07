@@ -24,5 +24,5 @@ The stream will output a series of JSON objects:
   * `s`, the slot height, as unsigned 64-bit integer
   * `h`, the tick height, as unsigned 64-bit integer
   * `l`, the slot leader id, as base-58 encoded string
-  * `id`, the block id, as base-58 encoded string
+  * `hash`, the [blockhash](terminology.md#blockhash), as base-58 encoded string
 

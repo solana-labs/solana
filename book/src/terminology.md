@@ -18,13 +18,13 @@ The result of interpreting all programs on the ledger at a given [tick height](t
 
 A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [vote](terminology.md#ledger-vote). A [leader](terminology.md#leader) produces at most one block per [slot](terminology.md#slot).
 
+## blockhash
+
+A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height). Taken from the last [entry id](terminology.md#entry-id) in the slot
+
 ## block height
 
 The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height one.
-
-## block id
-
-The [entry id](terminology.md#entry-id) of the last entry in a [block](terminology.md#block).
 
 ## bootstrap leader
 
@@ -72,7 +72,13 @@ An entry on the [ledger](terminology.md#ledger) either a [tick](terminology.md#t
 
 ## entry id
 
-A globally unique identifier that is also a proof that the [entry](terminology.md#entry) was generated after a duration of time, all [transactions](terminology.md#transaction) included in the entry, and all previous entries on the [ledger](terminology.md#ledger). See [Proof of History](terminology.md#proof-of-history).
+A preimage resistant [hash](terminology.md#hash) over the final contents of an entry, which acts as the [entry's](terminology.md#entry) globally unique identifier. The hash serves as evidence of:
+
+ * The entry being generated after a duration of time
+ * The specified [transactions](terminology.md#transaction) are those included in the entry
+ * The entry's position with respect to other entries in [ledger](terminology.md#ledger)
+
+See [Proof of History](terminology.md#proof-of-history).
 
 ## epoch
 
