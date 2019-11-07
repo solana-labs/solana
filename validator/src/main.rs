@@ -539,7 +539,7 @@ pub fn main() {
             let default_logfile = format!(
                 "solana-validator-{}-{}.log",
                 identity_keypair.pubkey(),
-                chrono::Local::now().to_rfc3339()
+                chrono::Utc::now().format("%Y%m%d-%H%M%S")
             );
             let logfile = matches.value_of("logfile").unwrap_or(&default_logfile);
 
