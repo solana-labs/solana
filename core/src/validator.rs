@@ -26,6 +26,7 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_metrics::datapoint_info;
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Slot, DEFAULT_SLOTS_PER_TURN},
     genesis_config::GenesisConfig,
@@ -179,6 +180,9 @@ impl Validator {
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
+
+        Self::check_vote_account(&bank, vote_account);
+
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
@@ -407,6 +411,20 @@ impl Validator {
             node.sockets.retransmit_sockets[0].local_addr().unwrap()
         );
     }
+
+    fn check_vote_account(bank: &Bank, vote_account: &Pubkey) {
+        if bank.vote_accounts().get(vote_account).is_none() {
+            if let Some(found_account) = bank.get_account(vote_account) {
+                error!(
+                    "Account is not a vote account (but owned by {}): {}",
+                    found_account.owner, vote_account
+                );
+            } else {
+                error!("Vote account not found: {}:", vote_account);
+            }
+            process::exit(1);
+        }
+    }
 }
 
 pub fn new_banks_from_blocktree(
@@ -462,7 +480,7 @@ pub fn new_banks_from_blocktree(
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
-        std::process::exit(1);
+        process::exit(1);
     });
 
     bank_forks.set_snapshot_config(snapshot_config);
