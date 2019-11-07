@@ -977,7 +977,7 @@ netem)
 
   # Stop netem on all nodes
   for ipAddress in "${validatorIpList[@]}"; do
-    "$here"/ssh.sh solana@$ipAddress 'solana/scripts/netem.sh delete < solana/netem.cfg || true'
+    "$here"/ssh.sh solana@"$ipAddress" 'solana/scripts/netem.sh delete < solana/netem.cfg || true'
   done
 
   # Start netem on required nodes
