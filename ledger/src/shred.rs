@@ -19,6 +19,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
 };
+use std::mem::size_of;
 use std::{sync::Arc, time::Instant};
 
 /// The following constants are computed by hand, and hardcoded.
@@ -345,6 +346,11 @@ impl Shred {
         } else {
             SHRED_TICK_REFERENCE_MASK
         }
+    }
+
+    pub fn reference_tick_from_data(data: &[u8]) -> u8 {
+        let flags = data[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER - size_of::<u8>()];
+        flags & SHRED_TICK_REFERENCE_MASK
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
@@ -963,6 +969,7 @@ pub mod tests {
         let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), 5);
+            assert_eq!(Shred::reference_tick_from_data(&s.payload), 5);
         });
 
         let deserialized_shred =
@@ -992,6 +999,10 @@ pub mod tests {
         let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), SHRED_TICK_REFERENCE_MASK);
+            assert_eq!(
+                Shred::reference_tick_from_data(&s.payload),
+                SHRED_TICK_REFERENCE_MASK
+            );
         });
 
         let deserialized_shred =

@@ -20,8 +20,8 @@ use std::{
     time::Duration,
 };
 
-pub const MAX_REPAIR_LENGTH: usize = 16;
-pub const REPAIR_MS: u64 = 100;
+pub const MAX_REPAIR_LENGTH: usize = 1024;
+pub const REPAIR_MS: u64 = 50;
 pub const MAX_ORPHANS: usize = 5;
 
 pub enum RepairStrategy {
@@ -37,7 +37,7 @@ pub enum RepairStrategy {
 pub enum RepairType {
     Orphan(u64),
     HighestBlob(u64, u64),
-    Blob(u64, u64),
+    Shred(u64, u64),
 }
 
 pub struct RepairSlotRange {
@@ -254,13 +254,13 @@ impl RepairService {
         } else {
             let reqs = blocktree.find_missing_data_indexes(
                 slot,
+                slot_meta.first_shred_timestamp,
                 slot_meta.consumed,
                 slot_meta.received,
                 max_repairs,
             );
-
             reqs.into_iter()
-                .map(|i| RepairType::Blob(slot, i))
+                .map(|i| RepairType::Shred(slot, i))
                 .collect()
         }
     }
@@ -485,7 +485,7 @@ mod test {
                 .flat_map(|slot| {
                     missing_indexes_per_slot
                         .iter()
-                        .map(move |blob_index| RepairType::Blob(slot as u64, *blob_index))
+                        .map(move |blob_index| RepairType::Shred(slot as u64, *blob_index))
                 })
                 .collect();
 
@@ -557,7 +557,7 @@ mod test {
                         ..=repair_slot_range.end)
                         .map(|slot_index| {
                             if slots.contains(&(slot_index as u64)) {
-                                RepairType::Blob(slot_index as u64, 0)
+                                RepairType::Shred(slot_index as u64, 0)
                             } else {
                                 RepairType::HighestBlob(slot_index as u64, 0)
                             }

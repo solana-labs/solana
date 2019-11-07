@@ -13,11 +13,13 @@ pub struct SlotMeta {
     // The total number of consecutive blobs starting from index 0
     // we have received for this slot.
     pub consumed: u64,
-    // The index *plus one* of the highest blob received for this slot.  Useful
-    // for checking if the slot has received any blobs yet, and to calculate the
+    // The index *plus one* of the highest shred received for this slot.  Useful
+    // for checking if the slot has received any shreds yet, and to calculate the
     // range where there is one or more holes: `(consumed..received)`.
     pub received: u64,
-    // The index of the blob that is flagged as the last blob for this slot.
+    // The timestamp of the first time a shred was added for this slot
+    pub first_shred_timestamp: u64,
+    // The index of the shred that is flagged as the last shred for this slot.
     pub last_index: u64,
     // The slot height of the block this one derives from.
     pub parent_slot: Slot,
@@ -32,7 +34,7 @@ pub struct SlotMeta {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-/// Index recording presence/absence of blobs
+/// Index recording presence/absence of shreds
 pub struct Index {
     pub slot: Slot,
     data: DataIndex,
@@ -41,14 +43,14 @@ pub struct Index {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct DataIndex {
-    /// Map representing presence/absence of data blobs
+    /// Map representing presence/absence of data shreds
     index: BTreeSet<u64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 /// Erasure coding information
 pub struct CodingIndex {
-    /// Map from set index, to hashmap from blob index to presence bool
+    /// Map from set index, to hashmap from shred index to presence bool
     index: BTreeSet<u64>,
 }
 
@@ -146,8 +148,8 @@ impl DataIndex {
 impl SlotMeta {
     pub fn is_full(&self) -> bool {
         // last_index is std::u64::MAX when it has no information about how
-        // many blobs will fill this slot.
-        // Note: A full slot with zero blobs is not possible.
+        // many shreds will fill this slot.
+        // Note: A full slot with zero shreds is not possible.
         if self.last_index == std::u64::MAX {
             return false;
         }
@@ -180,6 +182,7 @@ impl SlotMeta {
             slot,
             consumed: 0,
             received: 0,
+            first_shred_timestamp: 0,
             parent_slot,
             next_slots: vec![],
             is_connected: slot == 0,
