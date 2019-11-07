@@ -163,9 +163,18 @@ EOF
 
       if [[ -n $internalNodesLamports ]]; then
         echo "---" >> config/validator-balances.yml
-        for i in $(seq 0 "$numNodes"); do
-          solana-keygen new -o config/validator-"$i"-identity.json
-          pubkey="$(solana-keygen pubkey config/validator-"$i"-identity.json)"
+      fi
+
+      setupValidatorKeypair() {
+        declare name=$1
+        if [[ -f net/keypairs/"$name".json ]]; then
+          cp net/keypairs/"$name".json config/"$name".json
+        else
+          solana-keygen new -o config/"$name".json
+        fi
+        if [[ -n $internalNodesLamports ]]; then
+          declare pubkey
+          pubkey="$(solana-keygen pubkey config/"$name".json)"
           cat >> config/validator-balances.yml <<EOF
 $pubkey:
   balance: $internalNodesLamports
@@ -173,8 +182,12 @@ $pubkey:
   data:
   executable: false
 EOF
-        done
-      fi
+        fi
+      }
+      for i in $(seq 1 "$numNodes"); do
+        setupValidatorKeypair validator-identity-"$i"
+      done
+      setupValidatorKeypair blockstreamer-identity
 
       lamports_per_signature="42"
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
@@ -219,6 +232,13 @@ EOF
       fi
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
+
+      if [[ -f net/keypairs/mint.json ]]; then
+        export MINT_KEYPAIR=net/keypairs/mint.json
+      fi
+      if [[ -f net/keypairs/bootstrap-leader-identity.json ]]; then
+        export BOOTSTRAP_LEADER_IDENTITY_KEYPAIR=net/keypairs/bootstrap-leader-identity.json
+      fi
       multinode-demo/setup.sh "${args[@]}"
     fi
     args=(
@@ -256,8 +276,14 @@ EOF
     fi
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
-      [[ -z $internalNodesLamports ]] || net/scripts/rsync-retry.sh -vPrc \
-      "$entrypointIp":~/solana/config/validator-"$nodeIndex"-identity.json config/validator-identity.json
+
+      if [[ $nodeType = blockstreamer ]]; then
+        net/scripts/rsync-retry.sh -vPrc \
+          "$entrypointIp":~/solana/config/blockstreamer-identity.json config/validator-identity.json
+      else
+        net/scripts/rsync-retry.sh -vPrc \
+          "$entrypointIp":~/solana/config/validator-identity-"$nodeIndex".json config/validator-identity.json
+      fi
     fi
 
     args=(
