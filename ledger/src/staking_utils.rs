@@ -195,7 +195,6 @@ pub(crate) mod tests {
 
         let bank = Bank::new(&genesis_block);
         let vote_account = Keypair::new();
-        let vote_pubkey = vote_account.pubkey();
 
         // Give the validator some stake but don't setup a staking account
         // Validator has no lamports staked, so they get filtered out. Only the bootstrap leader

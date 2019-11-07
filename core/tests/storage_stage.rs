@@ -86,7 +86,7 @@ mod tests {
             StorageAccountType::Archiver,
         );
         let account_tx = Transaction::new_signed_instructions(
-            &[&mint_keypair],
+            &[&mint_keypair, &archiver_keypair],
             account_ix,
             bank.last_blockhash(),
         );
