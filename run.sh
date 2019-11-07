@@ -65,10 +65,10 @@ solana-keygen new -f -o "$dataDir"/leader-storage-account-keypair.json
 solana-genesis \
   --hashes-per-tick sleep \
   --mint "$dataDir"/drone-keypair.json \
-  --bootstrap-leader-keypair "$dataDir"/leader-keypair.json \
-  --bootstrap-vote-keypair "$dataDir"/leader-vote-account-keypair.json \
-  --bootstrap-stake-keypair "$dataDir"/leader-stake-account-keypair.json \
-  --bootstrap-storage-keypair "$dataDir"/leader-storage-account-keypair.json \
+  --bootstrap-leader-pubkey "$dataDir"/leader-keypair.json \
+  --bootstrap-vote-pubkey "$dataDir"/leader-vote-account-keypair.json \
+  --bootstrap-stake-pubkey "$dataDir"/leader-stake-account-keypair.json \
+  --bootstrap-storage-pubkey "$dataDir"/leader-storage-account-keypair.json \
   --ledger "$ledgerDir" \
   --dev
 
