@@ -8,12 +8,24 @@ use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
 use solana_rayon_threadlimit::get_thread_count;
+<<<<<<< HEAD
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use std::sync::Arc;
 use std::time::Instant;
+=======
+use solana_sdk::{
+    clock::Slot,
+    hash::Hash,
+    packet::PACKET_DATA_SIZE,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil, Signature},
+};
+use std::mem::size_of;
+use std::{sync::Arc, time::Instant};
+>>>>>>> 67d1e2903... Upgrade Repair be more intelligent and agressive (#6789)
 
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
@@ -328,6 +340,22 @@ impl Shred {
         }
     }
 
+<<<<<<< HEAD
+=======
+    pub fn reference_tick(&self) -> u8 {
+        if self.is_data() {
+            self.data_header.flags & SHRED_TICK_REFERENCE_MASK
+        } else {
+            SHRED_TICK_REFERENCE_MASK
+        }
+    }
+
+    pub fn reference_tick_from_data(data: &[u8]) -> u8 {
+        let flags = data[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER - size_of::<u8>()];
+        flags & SHRED_TICK_REFERENCE_MASK
+    }
+
+>>>>>>> 67d1e2903... Upgrade Repair be more intelligent and agressive (#6789)
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
@@ -914,6 +942,75 @@ pub mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn test_shred_reference_tick() {
+        let keypair = Arc::new(Keypair::new());
+        let slot = 1;
+
+        let parent_slot = 0;
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), 5)
+            .expect("Failed in creating shredder");
+
+        let entries: Vec<_> = (0..5)
+            .map(|_| {
+                let keypair0 = Keypair::new();
+                let keypair1 = Keypair::new();
+                let tx0 =
+                    system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+                Entry::new(&Hash::default(), 1, vec![tx0])
+            })
+            .collect();
+
+        let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+        data_shreds.iter().for_each(|s| {
+            assert_eq!(s.reference_tick(), 5);
+            assert_eq!(Shred::reference_tick_from_data(&s.payload), 5);
+        });
+
+        let deserialized_shred =
+            Shred::new_from_serialized_shred(data_shreds.last().unwrap().payload.clone()).unwrap();
+        assert_eq!(deserialized_shred.reference_tick(), 5);
+    }
+
+    #[test]
+    fn test_shred_reference_tick_overflow() {
+        let keypair = Arc::new(Keypair::new());
+        let slot = 1;
+
+        let parent_slot = 0;
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), u8::max_value())
+            .expect("Failed in creating shredder");
+
+        let entries: Vec<_> = (0..5)
+            .map(|_| {
+                let keypair0 = Keypair::new();
+                let keypair1 = Keypair::new();
+                let tx0 =
+                    system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+                Entry::new(&Hash::default(), 1, vec![tx0])
+            })
+            .collect();
+
+        let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+        data_shreds.iter().for_each(|s| {
+            assert_eq!(s.reference_tick(), SHRED_TICK_REFERENCE_MASK);
+            assert_eq!(
+                Shred::reference_tick_from_data(&s.payload),
+                SHRED_TICK_REFERENCE_MASK
+            );
+        });
+
+        let deserialized_shred =
+            Shred::new_from_serialized_shred(data_shreds.last().unwrap().payload.clone()).unwrap();
+        assert_eq!(
+            deserialized_shred.reference_tick(),
+            SHRED_TICK_REFERENCE_MASK
+        );
+    }
+
+    #[test]
+>>>>>>> 67d1e2903... Upgrade Repair be more intelligent and agressive (#6789)
     fn test_data_and_code_shredder() {
         let keypair = Arc::new(Keypair::new());
 
