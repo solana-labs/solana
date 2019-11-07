@@ -16,7 +16,7 @@ You can submit a JSON-RPC request to see the specific version of the cluster.
 
 ```bash
 curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' edge.testnet.solana.com:8899
-{"jsonrpc":"2.0","result":{"solana-core":"0.20.3"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core":"0.20.4"},"id":1}
 ```
 
 ## Using a Different Testnet
@@ -28,17 +28,17 @@ This guide is written in the context of testnet.solana.com, our most stable clus
 If you are bootstrapping with `solana-install`, you can specify the release tag or named channel to install to match your desired testnet.
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.20.3/install/solana-install-init.sh | sh -s - 0.20.3
+curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.20.4/install/solana-install-init.sh | sh -s - 0.20.4
 ```
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.20.3/install/solana-install-init.sh | sh -s - beta
+curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.20.4/install/solana-install-init.sh | sh -s - beta
 ```
 
 Similarly, you can add this argument to the `solana-install` command if you've built the program from source:
 
 ```bash
-solana-install init 0.20.3
+solana-install init 0.20.4
 ```
 
 If you are downloading pre-compiled binaries or building from source, simply choose the release matching your desired testnet.

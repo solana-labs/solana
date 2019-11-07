@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-validator"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.20.3"
+version = "0.20.4"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -17,17 +17,17 @@ log = "0.4.8"
 indicatif = "0.12.0"
 reqwest = { version = "0.9.22", default-features = false }
 serde_json = "1.0.41"
-solana-client = { path = "../client", version = "0.20.3" }
-solana-core = { path = "../core", version = "0.20.3" }
-solana-drone = { path = "../drone", version = "0.20.3" }
-solana-ledger = { path = "../ledger", version = "0.20.3" }
-solana-logger = { path = "../logger", version = "0.20.3" }
-solana-metrics = { path = "../metrics", version = "0.20.3" }
-solana-netutil = { path = "../netutil", version = "0.20.3" }
-solana-runtime = { path = "../runtime", version = "0.20.3" }
-solana-sdk = { path = "../sdk", version = "0.20.3" }
-solana-vote-api = { path = "../programs/vote_api", version = "0.20.3" }
-solana-vote-signer = { path = "../vote-signer", version = "0.20.3" }
+solana-client = { path = "../client", version = "0.20.4" }
+solana-core = { path = "../core", version = "0.20.4" }
+solana-drone = { path = "../drone", version = "0.20.4" }
+solana-ledger = { path = "../ledger", version = "0.20.4" }
+solana-logger = { path = "../logger", version = "0.20.4" }
+solana-metrics = { path = "../metrics", version = "0.20.4" }
+solana-netutil = { path = "../netutil", version = "0.20.4" }
+solana-runtime = { path = "../runtime", version = "0.20.4" }
+solana-sdk = { path = "../sdk", version = "0.20.4" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.20.4" }
+solana-vote-signer = { path = "../vote-signer", version = "0.20.4" }
 tempfile = "3.1.0"
 tar = "0.4.26"
 
