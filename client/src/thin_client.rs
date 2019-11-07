@@ -242,7 +242,9 @@ impl ThinClient {
                 }
             }
             info!("{} tries failed transfer to {}", x, self.tpu_addr());
-            let (blockhash, _fee_calculator) = self.rpc_client().get_recent_blockhash()?;
+            let (blockhash, _fee_calculator) = self
+                .rpc_client()
+                .get_recent_blockhash_with_commitment(CommitmentConfig::recent())?;
             transaction.sign(keypairs, blockhash);
         }
         Err(io::Error::new(
@@ -352,7 +354,8 @@ impl Client for ThinClient {
 
 impl SyncClient for ThinClient {
     fn send_message(&self, keypairs: &[&Keypair], message: Message) -> TransportResult<Signature> {
-        let (blockhash, _fee_calculator) = self.get_recent_blockhash()?;
+        let (blockhash, _fee_calculator) =
+            self.get_recent_blockhash_with_commitment(CommitmentConfig::recent())?;
         let mut transaction = Transaction::new(&keypairs, message, blockhash);
         let signature = self.send_and_confirm_transaction(keypairs, &mut transaction, 5, 0)?;
         Ok(signature)
