@@ -967,8 +967,8 @@ logs)
   done
   ;;
 netem)
-  num_nodes=$((${#validatorIpList[@]}*$netemPartition/100))
-  if [[ $((${#validatorIpList[@]}*$netemPartition%100)) -gt 0 ]]; then
+  num_nodes=$((${#validatorIpList[@]}*netemPartition/100))
+  if [[ $((${#validatorIpList[@]}*netemPartition%100)) -gt 0 ]]; then
     num_nodes=$((num_nodes+1))
   fi
   if [[ "$num_nodes" -gt "${#validatorIpList[@]}" ]]; then
@@ -977,12 +977,12 @@ netem)
 
   # Stop netem on all nodes
   for ipAddress in "${validatorIpList[@]}"; do
-    $here/ssh.sh solana@$ipAddress '~/solana/scripts/netem.sh delete < ~/solana/netem.cfg || true'
+    "$here"/ssh.sh solana@$ipAddress 'solana/scripts/netem.sh delete < solana/netem.cfg || true'
   done
 
   # Start netem on required nodes
-  for ((i=0; i<$num_nodes; i++ )); do :
-    $here/ssh.sh solana@${validatorIpList[$i]} "echo $netemConfig > ~/solana/netem.cfg; ~/solana/scripts/netem.sh add \"$netemConfig\""
+  for ((i=0; i<num_nodes; i++ )); do :
+    "$here"/ssh.sh solana@"${validatorIpList[$i]}" "echo $netemConfig > solana/netem.cfg; solana/scripts/netem.sh add \"$netemConfig\""
   done
   ;;
 *)
