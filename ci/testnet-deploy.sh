@@ -262,6 +262,11 @@ trap shutdown EXIT INT
 
 set -x
 
+# Fetch reusable testnet keypairs
+if [[ ! -d net/keypairs ]]; then
+  git clone git@github.com:solana-labs/testnet-keypairs.git net/keypairs
+fi
+
 # Build a string to pass zone opts to $cloudProvider.sh: "-z zone1 -z zone2 ..."
 zone_args=()
 for val in "${zone[@]}"; do
