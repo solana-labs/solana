@@ -1683,6 +1683,15 @@ mod tests {
     }
 
     #[test]
+    fn test_bank_block_height() {
+        let (genesis_block, _mint_keypair) = create_genesis_block(1);
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        assert_eq!(bank0.block_height(), 0);
+        let bank1 = Arc::new(new_from_parent(&bank0));
+        assert_eq!(bank1.block_height(), 1);
+    }
+
+    #[test]
     fn test_bank_capitalization() {
         let bank = Arc::new(Bank::new(&GenesisBlock {
             accounts: (0..42)
