@@ -237,7 +237,7 @@ pub struct Bank {
     epoch_schedule: EpochSchedule,
 
     /// inflation specs
-    inflation: Inflation,
+    inflation: Arc<RwLock<Inflation>>,
 
     /// cache of vote_account and stake_account state for this fork
     stakes: RwLock<Stakes>,
@@ -341,7 +341,7 @@ impl Bank {
                 parent.signature_count() as usize,
             ),
             capitalization: AtomicU64::new(parent.capitalization()),
-            inflation: parent.inflation,
+            inflation: parent.inflation.clone(),
             transaction_count: AtomicU64::new(parent.transaction_count()),
             stakes: RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(epoch)),
             epoch_stakes: parent.epoch_stakes.clone(),
@@ -520,15 +520,17 @@ impl Bank {
 
         // period: time that has passed as a fraction of a year, basically the length of
         //  an epoch as a fraction of a year
-        //  years_elapsed =   slots_elapsed                                   /  slots/year
+        //  years_elapsed =   slots_elapsed                               /  slots/year
         let period = self.epoch_schedule.get_slots_in_epoch(epoch) as f64 / self.slots_per_year;
 
+        let inflation = self.inflation.read().unwrap();
+
         let validator_rewards =
-            self.inflation.validator(year) * self.capitalization() as f64 * period;
+            (*inflation).validator(year) * self.capitalization() as f64 * period;
 
         let validator_points = self.stakes.write().unwrap().claim_points();
 
-        let storage_rewards = self.inflation.storage(year) * self.capitalization() as f64 * period;
+        let storage_rewards = (*inflation).storage(year) * self.capitalization() as f64 * period;
 
         let storage_points = self.storage_accounts.write().unwrap().claim_points();
 
@@ -695,7 +697,7 @@ impl Bank {
 
         self.epoch_schedule = genesis_block.epoch_schedule;
 
-        self.inflation = genesis_block.inflation;
+        self.inflation = Arc::new(RwLock::new(genesis_block.inflation));
 
         self.rent_collector = RentCollector::new(
             self.epoch,
@@ -1286,11 +1288,12 @@ impl Bank {
         self.rc.parent = RwLock::new(Some(parent.clone()));
     }
 
+    pub fn set_inflation(&self, inflation: Inflation) {
+        *self.inflation.write().unwrap() = inflation;
+    }
+
     pub fn set_entered_epoch_callback(&self, entered_epoch_callback: EnteredEpochCallback) {
-        std::mem::replace(
-            &mut *self.entered_epoch_callback.write().unwrap(),
-            Some(entered_epoch_callback),
-        );
+        *self.entered_epoch_callback.write().unwrap() = Some(entered_epoch_callback);
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
@@ -1426,7 +1429,7 @@ impl Bank {
 
     /// Return the inflation parameters of the Bank
     pub fn inflation(&self) -> Inflation {
-        self.inflation
+        *self.inflation.read().unwrap()
     }
 
     /// Return the total capititalization of the Bank
@@ -1706,6 +1709,35 @@ mod tests {
     }
 
     #[test]
+    fn test_bank_inflation() {
+        let key = Pubkey::default();
+        let bank = Arc::new(Bank::new(&GenesisBlock {
+            accounts: (0..42)
+                .into_iter()
+                .map(|_| (Pubkey::new_rand(), Account::new(42, 0, &key)))
+                .collect(),
+            ..GenesisBlock::default()
+        }));
+        assert_eq!(bank.capitalization(), 42 * 42);
+
+        // With inflation
+        bank.set_entered_epoch_callback(Box::new(move |bank: &mut Bank| {
+            let mut inflation = Inflation::default();
+            inflation.initial = 1_000_000.0;
+            bank.set_inflation(inflation)
+        }));
+        let bank1 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH + 1);
+        assert_ne!(bank.capitalization(), bank1.capitalization());
+
+        // Without inflation
+        bank.set_entered_epoch_callback(Box::new(move |bank: &mut Bank| {
+            bank.set_inflation(Inflation::new_disabled())
+        }));
+        let bank2 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH * 2 + 1);
+        assert_eq!(bank.capitalization(), bank2.capitalization());
+    }
+
+    #[test]
     fn test_bank_update_rewards() {
         // create a bank that ticks really slowly...
         let bank = Arc::new(Bank::new(&GenesisBlock {
@@ -1739,7 +1771,7 @@ mod tests {
         let ((validator_id, validator_account), (archiver_id, archiver_account)) =
             crate::storage_utils::tests::create_storage_accounts_with_credits(100);
 
-        // set up stakes,vote, and storage accounts
+        // set up stakes, vote, and storage accounts
         bank.store_account(&stake.0, &stake.1);
         bank.store_account(&validator_id, &validator_account);
         bank.store_account(&archiver_id, &archiver_account);
