@@ -9,7 +9,12 @@ set -e
 
 # Prefer possible `cargo build` binaries over PATH binaries
 cd "$(dirname "$0")/"
-PATH=$PWD/target/debug:$PATH
+
+profile=debug
+if [[ -n $NDEBUG ]]; then
+  profile=release
+fi
+PATH=$PWD/target/$profile:$PATH
 
 ok=true
 for program in solana-{drone,genesis,keygen,validator}; do
