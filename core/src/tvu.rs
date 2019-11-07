@@ -12,6 +12,7 @@
 //! 4. StorageStage
 //! - Generating the keys used to encrypt the ledger and sample it for storage mining.
 
+use crate::bank_cleanup_service::BankCleanupService;
 use crate::blockstream_service::BlockstreamService;
 use crate::cluster_info::ClusterInfo;
 use crate::commitment::BlockCommitmentCache;
@@ -48,6 +49,7 @@ pub struct Tvu {
     ledger_cleanup_service: Option<LedgerCleanupService>,
     storage_stage: StorageStage,
     snapshot_packager_service: Option<SnapshotPackagerService>,
+    bank_cleanup_service: BankCleanupService,
 }
 
 pub struct Sockets {
@@ -206,6 +208,8 @@ impl Tvu {
             &cluster_info,
         );
 
+        let bank_cleanup_service = BankCleanupService::new(&bank_forks, &exit);
+
         Tvu {
             fetch_stage,
             sigverify_stage,
@@ -215,6 +219,7 @@ impl Tvu {
             ledger_cleanup_service,
             storage_stage,
             snapshot_packager_service,
+            bank_cleanup_service,
         }
     }
 }
@@ -237,6 +242,7 @@ impl Service for Tvu {
         if let Some(s) = self.snapshot_packager_service {
             s.join()?;
         }
+        self.bank_cleanup_service.join()?;
         Ok(())
     }
 }

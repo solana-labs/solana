@@ -5,6 +5,7 @@
 //! command-line tools to spin up validators and a Rust library
 //!
 
+pub mod bank_cleanup_service;
 pub mod banking_stage;
 pub mod blob;
 pub mod broadcast_stage;

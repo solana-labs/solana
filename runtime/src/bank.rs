@@ -1388,13 +1388,14 @@ impl Bank {
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
+        self.purge_zero_lamport_accounts();
         self.rc
             .accounts
             .verify_hash_internal_state(self.slot(), &self.ancestors)
             && !self.has_accounts_with_zero_lamports()
     }
 
-    fn has_accounts_with_zero_lamports(&self) -> bool {
+    pub fn has_accounts_with_zero_lamports(&self) -> bool {
         self.rc.accounts.accounts_db.scan_accounts(
             &self.ancestors,
             |collector: &mut bool, option| {
