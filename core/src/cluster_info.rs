@@ -834,7 +834,7 @@ impl ClusterInfo {
     }
     pub fn map_repair_request(&self, repair_request: &RepairType) -> Result<Vec<u8>> {
         match repair_request {
-            RepairType::Blob(slot, blob_index) => {
+            RepairType::Shred(slot, blob_index) => {
                 datapoint_debug!(
                     "cluster_info-repair",
                     ("repair-slot", *slot, i64),
@@ -1896,7 +1896,7 @@ mod tests {
     fn window_index_request() {
         let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(me);
-        let rv = cluster_info.repair_request(&RepairType::Blob(0, 0));
+        let rv = cluster_info.repair_request(&RepairType::Shred(0, 0));
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let gossip_addr = socketaddr!([127, 0, 0, 1], 1234);
@@ -1915,7 +1915,7 @@ mod tests {
         );
         cluster_info.insert_info(nxt.clone());
         let rv = cluster_info
-            .repair_request(&RepairType::Blob(0, 0))
+            .repair_request(&RepairType::Shred(0, 0))
             .unwrap();
         assert_eq!(nxt.gossip, gossip_addr);
         assert_eq!(rv.0, nxt.gossip);
@@ -1940,7 +1940,7 @@ mod tests {
         while !one || !two {
             //this randomly picks an option, so eventually it should pick both
             let rv = cluster_info
-                .repair_request(&RepairType::Blob(0, 0))
+                .repair_request(&RepairType::Shred(0, 0))
                 .unwrap();
             if rv.0 == gossip_addr {
                 one = true;
