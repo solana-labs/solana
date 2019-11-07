@@ -151,12 +151,15 @@ impl LocalCluster {
         match genesis_block.operating_mode {
             OperatingMode::SoftLaunch => {
                 genesis_block.native_instruction_processors =
-                    solana_genesis_programs::get(genesis_block.operating_mode, 0).unwrap()
+                    solana_genesis_programs::get_programs(genesis_block.operating_mode, 0).unwrap()
             }
             // create_genesis_block_with_leader() assumes OperatingMode::Development so do
             // nothing...
             OperatingMode::Development => (),
         }
+
+        genesis_block.inflation =
+            solana_genesis_programs::get_inflation(genesis_block.operating_mode, 0).unwrap();
 
         genesis_block
             .native_instruction_processors
