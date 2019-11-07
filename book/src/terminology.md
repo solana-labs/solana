@@ -20,7 +20,7 @@ A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [
 
 ## block height
 
-The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height zero.
+The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height one.
 
 ## block id
 
@@ -96,7 +96,11 @@ A [ledger](terminology.md#ledger) derived from common entries but then diverged.
 
 ## genesis block
 
-The configuration file that prepares the [ledger](terminology.md#ledger) for the first [block](terminology.md#block).
+The first [block](terminology.md#block) in the chain.
+
+## genesis config
+
+The configuration file that prepares the [ledger](terminology.md#ledger) for the [genesis block](terminology.md#genesis-block).
 
 ## hash
 
@@ -113,10 +117,6 @@ A [public key](terminology.md#public-key) and corresponding [private key](termin
 ## lamport
 
 A fractional [native token](terminology.md#native-token) with the value of 0.000000001 [sol](terminology.md#sol).
-
-## loader
-
-A [program](terminology.md#program) with the ability to interpret the binary encoding of other on-chain programs.
 
 ## leader
 
@@ -141,6 +141,10 @@ A [hash](terminology.md#hash) of the [validator's state](terminology.md#bank-sta
 ## light client
 
 A type of [client](terminology.md#client) that can verify it's pointing to a valid [cluster](terminology.md#cluster). It performs more ledger verification than a [thin client](terminology.md#thin-client) and less than a [validator](terminology.md#validator).
+
+## loader
+
+A [program](terminology.md#program) with the ability to interpret the binary encoding of other on-chain programs.
 
 ## lockout
 
