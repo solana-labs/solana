@@ -162,7 +162,7 @@ mod tests {
         assert_eq!(
             create_system_account(
                 &mut KeyedAccount::new(&from, true, &mut from_account),
-                &mut KeyedAccount::new(&to, false, &mut to_account),
+                &mut KeyedAccount::new(&to, true, &mut to_account),
                 50,
                 2,
                 &new_program_owner,
@@ -193,7 +193,7 @@ mod tests {
         assert_eq!(
             create_system_account(
                 &mut KeyedAccount::new(&from, false, &mut from_account), // no signer
-                &mut KeyedAccount::new(&to, false, &mut to_account),
+                &mut KeyedAccount::new(&to, true, &mut to_account),
                 0,
                 2,
                 &new_program_owner,
@@ -224,7 +224,7 @@ mod tests {
 
         let result = create_system_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut KeyedAccount::new(&to, false, &mut to_account),
+            &mut KeyedAccount::new(&to, true, &mut to_account),
             150,
             2,
             &new_program_owner,
@@ -249,7 +249,7 @@ mod tests {
 
         let result = create_system_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut KeyedAccount::new(&owned_key, false, &mut owned_account),
+            &mut KeyedAccount::new(&owned_key, true, &mut owned_account),
             50,
             2,
             &new_program_owner,
@@ -264,7 +264,7 @@ mod tests {
         let unchanged_account = owned_account.clone();
         let result = create_system_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut KeyedAccount::new(&owned_key, false, &mut owned_account),
+            &mut KeyedAccount::new(&owned_key, true, &mut owned_account),
             50,
             2,
             &new_program_owner,
@@ -300,7 +300,7 @@ mod tests {
         // support creation/assignment with zero lamports (ephemeral account)
         let result = create_system_account(
             &mut KeyedAccount::new(&from, false, &mut from_account),
-            &mut KeyedAccount::new(&owned_key, false, &mut owned_account),
+            &mut KeyedAccount::new(&owned_key, true, &mut owned_account),
             0,
             2,
             &new_program_owner,
@@ -322,7 +322,7 @@ mod tests {
         // fail to create a sysvar::id() owned account
         let result = create_system_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut KeyedAccount::new(&to, false, &mut to_account),
+            &mut KeyedAccount::new(&to, true, &mut to_account),
             50,
             2,
             &sysvar::id(),
@@ -362,7 +362,7 @@ mod tests {
 
         let result = create_system_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut KeyedAccount::new(&populated_key, false, &mut populated_account),
+            &mut KeyedAccount::new(&populated_key, true, &mut populated_account),
             50,
             2,
             &new_program_owner,

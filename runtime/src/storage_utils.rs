@@ -117,7 +117,9 @@ pub(crate) mod tests {
             11,
             StorageAccountType::Archiver,
         ));
-        bank_client.send_message(&[&mint_keypair], message).unwrap();
+        bank_client
+            .send_message(&[&mint_keypair, &archiver_keypair], message)
+            .unwrap();
 
         let message = Message::new(storage_instruction::create_storage_account(
             &mint_pubkey,
@@ -126,7 +128,9 @@ pub(crate) mod tests {
             11,
             StorageAccountType::Validator,
         ));
-        bank_client.send_message(&[&mint_keypair], message).unwrap();
+        bank_client
+            .send_message(&[&mint_keypair, &validator_keypair], message)
+            .unwrap();
 
         assert_eq!(validator_accounts(bank.as_ref()).len(), 1);
         assert_eq!(archiver_accounts(bank.as_ref()).len(), 1);

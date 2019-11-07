@@ -3066,7 +3066,7 @@ mod tests {
         );
 
         let transaction = Transaction::new_signed_instructions(
-            &[&mint_keypair],
+            &[&mint_keypair, &vote_keypair],
             instructions,
             bank.last_blockhash(),
         );
@@ -3287,7 +3287,7 @@ mod tests {
         );
 
         let transaction = Transaction::new_signed_instructions(
-            &[&mint_keypair],
+            &[&mint_keypair, &mock_account],
             instructions,
             bank.last_blockhash(),
         );
@@ -3328,7 +3328,7 @@ mod tests {
         );
 
         let transaction = Transaction::new_signed_instructions(
-            &[&mint_keypair],
+            &[&mint_keypair, &mock_account],
             instructions,
             bank.last_blockhash(),
         );
