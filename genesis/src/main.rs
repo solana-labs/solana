@@ -382,12 +382,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     } else {
         OperatingMode::SoftLaunch
     };
-    let native_instruction_processors = solana_genesis_programs::get(operating_mode, 0).unwrap();
+    let native_instruction_processors =
+        solana_genesis_programs::get_programs(operating_mode, 0).unwrap();
+    let inflation = solana_genesis_programs::get_inflation(operating_mode, 0).unwrap();
     let mut genesis_block = GenesisBlock {
         accounts,
         native_instruction_processors,
         ticks_per_slot,
         epoch_schedule,
+        inflation,
         fee_calculator,
         rent,
         poh_config,
