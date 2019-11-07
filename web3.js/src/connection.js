@@ -1043,8 +1043,10 @@ export class Connection {
     // 1000 means _rpcWebSocket.close() was called explicitly
     if (code !== 1000) {
       console.log('ws close:', code, message);
+    } else {
+      // Only after an explicit close do we need to explicitly connect again
+      this._rpcWebSocketConnected = false;
     }
-    this._rpcWebSocketConnected = false;
   }
 
   /**
