@@ -65,7 +65,7 @@ Probability of a block succeeding in turbine:
 * Shred group failure rate: `S = SUM of i=0 -> M for binomial(prob_failure = P,  trials = N, failures = i)`
 * Shreds per block: `G`
 * Block success rate: `B = (1 - S) ^ (G / N) `
-* Binomial distribution is defined as `(N choose i) * P^i * (1 - P)^(N-i)`
+* Binomial distribution for exactly `i` results with probability of P in N trials is defined as `(N choose i) * P^i * (1 - P)^(N-i)`
 
 For example:
 
@@ -74,18 +74,18 @@ For example:
 * FEC rate increases the total shres per block by the FEC ratio.
 
 With a FEC rate: `16:4`
-*  G = 8000
+* `G = 8000`
 * `P = 1 - 0.85 * 0.85 = 1 - 0.7225 = 0.2775`
 * `S = SUM of i=0 -> 4 for binomial(prob_failure = 0.2775,  trials = 20, failures = i) = 0.689414`
 * `B = (1 - 0.689) ^ (8000 / 20) = 10^-203`
 
 With FEC rate of `16:16`
-*  G = 12800
+* `G = 12800`
 * `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775,  trials = 64, failures = i) = 0.002132`
 * `B = (1 - 0.002132) ^ (12800 / 32) = 0.42583`
 
 With FEC rate of `32:32`
-*  G = 12800
+* `G = 12800`
 * `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775,  trials = 64, failures = i) = 0.000048`
 * `B = (1 - 0.000048) ^ (12800 / 64) = 0.99045`
 
