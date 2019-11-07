@@ -480,7 +480,8 @@ mod test {
                 }
             }
             blocktree.insert_shreds(shreds_to_write, None).unwrap();
-
+            // sleep so that the holes are ready for repair
+            sleep(Duration::from_secs(1));
             let expected: Vec<RepairType> = (0..num_slots)
                 .flat_map(|slot| {
                     missing_indexes_per_slot
@@ -545,7 +546,8 @@ mod test {
                 slot_shreds.remove(0);
                 blocktree.insert_shreds(slot_shreds, None).unwrap();
             }
-
+            // sleep to make slot eligible for repair
+            sleep(Duration::from_secs(1));
             // Iterate through all possible combinations of start..end (inclusive on both
             // sides of the range)
             for start in 0..slots.len() {
