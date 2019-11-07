@@ -561,7 +561,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::create_genesis_config_with_leader;
+    use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
     use solana_ledger::blocktree::create_new_tmp_ledger;
     use std::fs::remove_dir_all;
 
@@ -571,18 +571,20 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
-        let validator_keypair = Keypair::new();
-        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
-        let genesis_config =
-            create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
-                .genesis_config;
+        // Abuse leader_keypair which is backed by voting_keypair instead of manually creating
+        let validator_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
+        let GenesiConfigInfo {
+            genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_block_with_leader(10_000, &leader_keypair.pubkey(), 1000);
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-        let voting_keypair = Arc::new(Keypair::new());
+        let voting_keypair = Arc::new(voting_keypair);
         let storage_keypair = Arc::new(Keypair::new());
         let validator = Validator::new(
             validator_node,
-            &Arc::new(validator_keypair),
+            &Arc::new(leader_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             &voting_keypair,
@@ -597,24 +599,26 @@ mod tests {
 
     #[test]
     fn validator_parallel_exit() {
-        let leader_keypair = Keypair::new();
+        let leader_keypair = Arc::new(Keypair::new());
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         let mut ledger_paths = vec![];
         let mut validators: Vec<Validator> = (0..2)
             .map(|_| {
-                let validator_keypair = Keypair::new();
-                let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
-                let genesis_config =
-                    create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
-                        .genesis_config;
+                // Abuse leader_keypair which is backed by voting_keypair instead of manually creating
+                let validator_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
+                let GenesisConfigInfo {
+                    genesis_config,
+                    voting_keypair,
+                    ..
+                } = create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000);
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
                 ledger_paths.push(validator_ledger_path.clone());
-                let voting_keypair = Arc::new(Keypair::new());
+                let voting_keypair = Arc::new(voting_keypair);
                 let storage_keypair = Arc::new(Keypair::new());
                 Validator::new(
                     validator_node,
-                    &Arc::new(validator_keypair),
+                    &leader_keypair,
                     &validator_ledger_path,
                     &voting_keypair.pubkey(),
                     &voting_keypair,
