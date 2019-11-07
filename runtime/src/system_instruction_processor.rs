@@ -335,7 +335,7 @@ mod tests {
         // fail to create an account with a sysvar id
         let result = create_system_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut KeyedAccount::new(&to, false, &mut to_account),
+            &mut KeyedAccount::new(&to, true, &mut to_account),
             50,
             2,
             &system_program::id(),
