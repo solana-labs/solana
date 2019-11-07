@@ -92,7 +92,7 @@ fn test_stake_account_delegate() {
         10,
     ));
     bank_client
-        .send_message(&[&mint_keypair], message)
+        .send_message(&[&mint_keypair, &vote_keypair], message)
         .expect("failed to create vote account");
 
     let authorized = stake_state::Authorized::auto(&staker_pubkey);
