@@ -115,8 +115,18 @@ fn process_entries_with_callback(
     let mut tick_hashes = vec![];
     for entry in entries {
         if entry.is_tick() {
-            // if its a tick, save it for later
+            // If it's a tick, save it for later
             tick_hashes.push(entry.hash);
+            if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
+                // If it's a tick that will cause a new blockhash to be created,
+                // execute the group and register the tick
+                execute_batches(bank, &batches, entry_callback)?;
+                batches.clear();
+                for hash in &tick_hashes {
+                    bank.register_tick(hash);
+                }
+                tick_hashes.clear();
+            }
             continue;
         }
         // else loop on processing the entry
@@ -2014,6 +2024,33 @@ pub mod tests {
                 bank.slot() + thread_rng().gen_range(1, 3),
             ));
         }
+    }
+
+    #[test]
+    fn test_process_ledger_ticks_ordering() {
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(100);
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let genesis_hash = genesis_block.hash();
+        let keypair = Keypair::new();
+
+        // Simulate a slot of virtual ticks, creates a new blockhash
+        let mut entries = create_ticks(genesis_block.ticks_per_slot, 1, genesis_hash);
+
+        // The new blockhash is going to be the hash of the last tick in the block
+        let new_blockhash = entries.last().unwrap().hash;
+        // Create an transaction that references the new blockhash, should still
+        // be able to find the blockhash if we process transactions all in the same
+        // batch
+        let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 1, new_blockhash);
+        let entry = next_entry(&new_blockhash, 1, vec![tx]);
+        entries.push(entry);
+
+        process_entries_with_callback(&bank0, &entries, true, None).unwrap();
+        assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 
     fn get_epoch_schedule(

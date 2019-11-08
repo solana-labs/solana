@@ -796,12 +796,16 @@ impl Bank {
         // assert!(!self.is_frozen());
         inc_new_counter_debug!("bank-register_tick-registered", 1);
         let current_tick_height = self.tick_height.fetch_add(1, Ordering::Relaxed) as u64;
-        if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
+        if self.is_block_boundary(current_tick_height + 1) {
             self.blockhash_queue
                 .write()
                 .unwrap()
                 .register_hash(hash, &self.fee_calculator);
         }
+    }
+
+    pub fn is_block_boundary(&self, tick_height: u64) -> bool {
+        tick_height % self.ticks_per_slot == 0
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector
