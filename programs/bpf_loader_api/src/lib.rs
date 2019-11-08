@@ -93,8 +93,8 @@ pub fn process_instruction(
     if let Ok(instruction) = limited_deserialize(ix_data) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
-                let mut keyed_account_iter = keyed_accounts.iter_mut();
-                let program = next_keyed_account(&mut keyed_account_iter)?;
+                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let program = next_keyed_account(&mut keyed_accounts_iter)?;
                 if program.signer_key().is_none() {
                     warn!("key[0] did not sign the transaction");
                     return Err(InstructionError::MissingRequiredSignature);
@@ -113,9 +113,9 @@ pub fn process_instruction(
                 program.account.data[offset..offset + len].copy_from_slice(&bytes);
             }
             LoaderInstruction::Finalize => {
-                let mut keyed_account_iter = keyed_accounts.iter_mut();
-                let program = next_keyed_account(&mut keyed_account_iter)?;
-                let rent = next_keyed_account(&mut keyed_account_iter)?;
+                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let program = next_keyed_account(&mut keyed_accounts_iter)?;
+                let rent = next_keyed_account(&mut keyed_accounts_iter)?;
 
                 if program.signer_key().is_none() {
                     warn!("key[0] did not sign the transaction");
@@ -128,24 +128,21 @@ pub fn process_instruction(
                 info!("Finalize: account {:?}", program.signer_key().unwrap());
             }
             LoaderInstruction::InvokeMain { data } => {
-                if keyed_accounts.is_empty() {
-                    warn!("Require at least one account");
-                    return Err(InstructionError::NotEnoughAccountKeys);
-                }
-                let (program, parameter_accounts) = keyed_accounts.split_at_mut(1);
-                let program = &program[0].account;
+                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let program = next_keyed_account(&mut keyed_accounts_iter)?;
 
-                if !program.executable {
+                if !program.account.executable {
                     warn!("BPF program account not executable");
                     return Err(InstructionError::AccountNotExecutable);
                 }
-                let (mut vm, heap_region) = match create_vm(&program.data) {
+                let (mut vm, heap_region) = match create_vm(&program.account.data) {
                     Ok(info) => info,
                     Err(e) => {
                         warn!("Failed to create BPF VM: {}", e);
                         return Err(InstructionError::GenericError);
                     }
                 };
+                let parameter_accounts = keyed_accounts_iter.into_slice();
                 let mut parameter_bytes =
                     serialize_parameters(program_id, parameter_accounts, &data);
 
