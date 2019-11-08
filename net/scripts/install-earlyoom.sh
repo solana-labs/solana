@@ -7,9 +7,10 @@ set -ex
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
-# 64 - enable signalling of processes (term, kill, oom-kill)
-# TODO: This setting will not persist across reboots
-sysctl -w kernel.sysrq=$(( $(cat /proc/sys/kernel/sysrq) | 64 ))
+# earlyoom specifically needs "SysRq 64 - enable signalling of processes (term, kill, oom-kill)"
+# but for simplicity just enable all SysRq
+sysctl -w kernel.sysrq=1
+echo kernel.sysrq=1 >> /etc/sysctl.conf
 
 if command -v earlyoom; then
   systemctl status earlyoom
