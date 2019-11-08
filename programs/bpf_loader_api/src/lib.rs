@@ -18,7 +18,7 @@ use log::*;
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::limited_deserialize;
+use solana_sdk::instruction_processor_utils::{limited_deserialize, next_keyed_account};
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::rent;
@@ -93,58 +93,61 @@ pub fn process_instruction(
     if let Ok(instruction) = limited_deserialize(ix_data) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
-                if keyed_accounts[0].signer_key().is_none() {
+                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let program = next_keyed_account(&mut keyed_accounts_iter)?;
+                if program.signer_key().is_none() {
                     warn!("key[0] did not sign the transaction");
-                    return Err(InstructionError::GenericError);
+                    return Err(InstructionError::MissingRequiredSignature);
                 }
                 let offset = offset as usize;
                 let len = bytes.len();
                 trace!("Write: offset={} length={}", offset, len);
-                if keyed_accounts[0].account.data.len() < offset + len {
+                if program.account.data.len() < offset + len {
                     warn!(
                         "Write overflow: {} < {}",
-                        keyed_accounts[0].account.data.len(),
+                        program.account.data.len(),
                         offset + len
                     );
-                    return Err(InstructionError::GenericError);
+                    return Err(InstructionError::AccountDataTooSmall);
                 }
-                keyed_accounts[0].account.data[offset..offset + len].copy_from_slice(&bytes);
+                program.account.data[offset..offset + len].copy_from_slice(&bytes);
             }
             LoaderInstruction::Finalize => {
-                if keyed_accounts.len() < 2 {
-                    return Err(InstructionError::InvalidInstructionData);
-                }
-                if keyed_accounts[0].signer_key().is_none() {
+                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let program = next_keyed_account(&mut keyed_accounts_iter)?;
+                let rent = next_keyed_account(&mut keyed_accounts_iter)?;
+
+                if program.signer_key().is_none() {
                     warn!("key[0] did not sign the transaction");
-                    return Err(InstructionError::GenericError);
+                    return Err(InstructionError::MissingRequiredSignature);
                 }
 
-                rent::verify_rent_exemption(&keyed_accounts[0], &keyed_accounts[1])?;
+                rent::verify_rent_exemption(&program, &rent)?;
 
-                keyed_accounts[0].account.executable = true;
-                info!(
-                    "Finalize: account {:?}",
-                    keyed_accounts[0].signer_key().unwrap()
-                );
+                program.account.executable = true;
+                info!("Finalize: account {:?}", program.signer_key().unwrap());
             }
             LoaderInstruction::InvokeMain { data } => {
-                if !keyed_accounts[0].account.executable {
-                    warn!("BPF account not executable");
-                    return Err(InstructionError::GenericError);
+                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let program = next_keyed_account(&mut keyed_accounts_iter)?;
+
+                if !program.account.executable {
+                    warn!("BPF program account not executable");
+                    return Err(InstructionError::AccountNotExecutable);
                 }
-                let (progs, params) = keyed_accounts.split_at_mut(1);
-                let prog = &progs[0].account.data;
-                let (mut vm, heap_region) = match create_vm(prog) {
+                let (mut vm, heap_region) = match create_vm(&program.account.data) {
                     Ok(info) => info,
                     Err(e) => {
                         warn!("Failed to create BPF VM: {}", e);
                         return Err(InstructionError::GenericError);
                     }
                 };
-                let mut v = serialize_parameters(program_id, params, &data);
+                let parameter_accounts = keyed_accounts_iter.into_slice();
+                let mut parameter_bytes =
+                    serialize_parameters(program_id, parameter_accounts, &data);
 
                 info!("Call BPF program");
-                match vm.execute_program(v.as_mut_slice(), &[], &[heap_region]) {
+                match vm.execute_program(parameter_bytes.as_mut_slice(), &[], &[heap_region]) {
                     Ok(status) => match u32::try_from(status) {
                         Ok(status) => {
                             if status > 0 {
@@ -162,13 +165,13 @@ pub fn process_instruction(
                         return Err(InstructionError::GenericError);
                     }
                 }
-                deserialize_parameters(params, &v);
+                deserialize_parameters(parameter_accounts, &parameter_bytes);
                 info!("BPF program success");
             }
         }
     } else {
         warn!("Invalid instruction data: {:?}", ix_data);
-        return Err(InstructionError::GenericError);
+        return Err(InstructionError::InvalidInstructionData);
     }
     Ok(())
 }
@@ -176,12 +179,15 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::account::Account;
+    use std::fs::File;
+    use std::io::Read;
 
     #[test]
     #[should_panic(expected = "Error: Exceeded maximum number of instructions allowed")]
-    fn test_non_terminating_program() {
+    fn test_bpf_loader_non_terminating_program() {
         #[rustfmt::skip]
-        let prog = &[
+        let program = &[
             0x07, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, // r6 + 1
             0x05, 0x00, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00, // goto -2
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
@@ -191,7 +197,134 @@ mod tests {
         let mut vm = EbpfVm::new(None).unwrap();
         vm.set_verifier(bpf_verifier::check).unwrap();
         vm.set_max_instruction_count(10).unwrap();
-        vm.set_program(prog).unwrap();
+        vm.set_program(program).unwrap();
         vm.execute_program(input, &[], &[]).unwrap();
+    }
+
+    #[test]
+    fn test_bpf_loader_write() {
+        let program_id = Pubkey::new_rand();
+        let program_key = Pubkey::new_rand();
+        let mut program_account = Account::new(1, 0, &program_id);
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
+        let ix_data = bincode::serialize(&LoaderInstruction::Write {
+            offset: 3,
+            bytes: vec![1, 2, 3],
+        })
+        .unwrap();
+
+        // Case: Empty keyed accounts
+        assert_eq!(
+            Err(InstructionError::NotEnoughAccountKeys),
+            process_instruction(&program_id, &mut vec![], &ix_data)
+        );
+
+        // Case: Not signed
+        assert_eq!(
+            Err(InstructionError::MissingRequiredSignature),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
+
+        // Case: Write bytes to an offset
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &mut program_account)];
+        keyed_accounts[0].account.data = vec![0; 6];
+        assert_eq!(
+            Ok(()),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
+        assert_eq!(vec![0, 0, 0, 1, 2, 3], keyed_accounts[0].account.data);
+
+        // Case: Overflow
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &mut program_account)];
+        keyed_accounts[0].account.data = vec![0; 5];
+        assert_eq!(
+            Err(InstructionError::AccountDataTooSmall),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
+    }
+
+    #[test]
+    fn test_bpf_loader_finalize() {
+        let program_id = Pubkey::new_rand();
+        let program_key = Pubkey::new_rand();
+        let rent_key = rent::id();
+        let mut program_account = Account::new(1, 0, &program_id);
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
+        let ix_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
+
+        // Case: Empty keyed accounts
+        assert_eq!(
+            Err(InstructionError::NotEnoughAccountKeys),
+            process_instruction(&program_id, &mut vec![], &ix_data)
+        );
+
+        let mut rent_account = rent::create_account(1, &rent::Rent::default());
+        keyed_accounts.push(KeyedAccount::new(&rent_key, false, &mut rent_account));
+
+        // Case: Not signed
+        assert_eq!(
+            Err(InstructionError::MissingRequiredSignature),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
+
+        // Case: Finalize
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program_key, true, &mut program_account),
+            KeyedAccount::new(&rent_key, false, &mut rent_account),
+        ];
+        assert_eq!(
+            Ok(()),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
+        assert!(keyed_accounts[0].account.executable);
+    }
+
+    #[test]
+    fn test_bpf_loader_invoke_main() {
+        let program_id = Pubkey::new_rand();
+        let program_key = Pubkey::new_rand();
+
+        // Create program account
+        let mut file = File::open("test_elfs/noop.so").expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+        let mut program_account = Account::new(1, 0, &program_id);
+        program_account.data = elf;
+        program_account.executable = true;
+
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
+        let ix_data = bincode::serialize(&LoaderInstruction::InvokeMain { data: vec![] }).unwrap();
+
+        // Case: Empty keyed accounts
+        assert_eq!(
+            Err(InstructionError::NotEnoughAccountKeys),
+            process_instruction(&program_id, &mut vec![], &ix_data)
+        );
+
+        // Case: Only a program account
+        assert_eq!(
+            Ok(()),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
+
+        // Case: Account not executable
+        keyed_accounts[0].account.executable = false;
+        assert_eq!(
+            Err(InstructionError::AccountNotExecutable),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
+        keyed_accounts[0].account.executable = true;
+
+        // Case: With program and parameter account
+        let mut parameter_account = Account::new(1, 0, &program_id);
+        keyed_accounts.push(KeyedAccount::new(
+            &program_key,
+            false,
+            &mut parameter_account,
+        ));
+        assert_eq!(
+            Ok(()),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
     }
 }

@@ -5,9 +5,13 @@ use bytecode_verifier::verifier::{VerifiedModule, VerifiedScript};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::KeyedAccount, instruction::InstructionError,
-    instruction_processor_utils::limited_deserialize, loader_instruction::LoaderInstruction,
-    move_loader::id, pubkey::Pubkey, sysvar::rent,
+    account::KeyedAccount,
+    instruction::InstructionError,
+    instruction_processor_utils::{limited_deserialize, next_keyed_account},
+    loader_instruction::LoaderInstruction,
+    move_loader::id,
+    pubkey::Pubkey,
+    sysvar::rent,
 };
 use types::{
     account_address::AccountAddress,
@@ -49,9 +53,6 @@ pub fn process_instruction(
         }
     }
 }
-
-pub const PROGRAM_INDEX: usize = 0;
-pub const GENESIS_INDEX: usize = 1;
 
 /// Command to invoke
 #[derive(Debug, Serialize, Deserialize)]
@@ -228,21 +229,30 @@ impl MoveProcessor {
     }
 
     fn keyed_accounts_to_data_store(
-        genesis_key: &Pubkey,
         keyed_accounts: &[KeyedAccount],
     ) -> Result<DataStore, InstructionError> {
         let mut data_store = DataStore::default();
-        for keyed_account in keyed_accounts {
-            match limited_deserialize(&keyed_account.account.data)? {
-                LibraAccountState::Genesis(write_set) => data_store.apply_write_set(&write_set),
-                LibraAccountState::User(owner, write_set) => {
-                    if owner != *genesis_key {
-                        debug!("All user accounts must be owned by the genesis");
-                        return Err(InstructionError::InvalidArgument);
-                    }
-                    data_store.apply_write_set(&write_set)
+
+        let mut keyed_accounts_iter = keyed_accounts.iter();
+        let genesis = next_keyed_account(&mut keyed_accounts_iter)?;
+
+        match limited_deserialize(&genesis.account.data)? {
+            LibraAccountState::Genesis(write_set) => data_store.apply_write_set(&write_set),
+            _ => {
+                debug!("Must include a genesis account");
+                return Err(InstructionError::InvalidArgument);
+            }
+        }
+
+        for keyed_account in keyed_accounts_iter {
+            if let LibraAccountState::User(owner, write_set) =
+                limited_deserialize(&keyed_account.account.data)?
+            {
+                if owner != *genesis.unsigned_key() {
+                    debug!("All user accounts must be owned by the genesis");
+                    return Err(InstructionError::InvalidArgument);
                 }
-                _ => (), // ignore unallocated accounts
+                data_store.apply_write_set(&write_set)
             }
         }
         Ok(data_store)
@@ -256,8 +266,11 @@ impl MoveProcessor {
             .into_write_sets()
             .map_err(|_| InstructionError::GenericError)?;
 
+        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+
         // Genesis account holds both mint and stdlib
-        let genesis_key = *keyed_accounts[GENESIS_INDEX].unsigned_key();
+        let genesis = next_keyed_account(&mut keyed_accounts_iter)?;
+        let genesis_key = *genesis.unsigned_key();
         let mut write_set = write_sets
             .remove(&account_config::association_address())
             .ok_or_else(Self::missing_account)?
@@ -272,11 +285,11 @@ impl MoveProcessor {
         let write_set = write_set.freeze().unwrap();
         Self::serialize_and_enforce_length(
             &LibraAccountState::Genesis(write_set),
-            &mut keyed_accounts[GENESIS_INDEX].account.data,
+            &mut genesis.account.data,
         )?;
 
         // Now do the rest of the accounts
-        for keyed_account in keyed_accounts[GENESIS_INDEX + 1..].iter_mut() {
+        for keyed_account in keyed_accounts_iter {
             let write_set = write_sets
                 .remove(&pubkey_to_address(keyed_account.unsigned_key()))
                 .ok_or_else(Self::missing_account)?;
@@ -297,38 +310,42 @@ impl MoveProcessor {
         offset: u32,
         bytes: &[u8],
     ) -> Result<(), InstructionError> {
-        if keyed_accounts[PROGRAM_INDEX].signer_key().is_none() {
+        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let program = next_keyed_account(&mut keyed_accounts_iter)?;
+
+        if program.signer_key().is_none() {
             debug!("Error: key[0] did not sign the transaction");
-            return Err(InstructionError::GenericError);
+            return Err(InstructionError::MissingRequiredSignature);
         }
         let offset = offset as usize;
         let len = bytes.len();
         trace!("Write: offset={} length={}", offset, len);
-        if keyed_accounts[PROGRAM_INDEX].account.data.len() < offset + len {
+        if program.account.data.len() < offset + len {
             debug!(
                 "Error: Write overflow: {} < {}",
-                keyed_accounts[PROGRAM_INDEX].account.data.len(),
+                program.account.data.len(),
                 offset + len
             );
-            return Err(InstructionError::GenericError);
+            return Err(InstructionError::AccountDataTooSmall);
         }
-        keyed_accounts[PROGRAM_INDEX].account.data[offset..offset + len].copy_from_slice(&bytes);
+        program.account.data[offset..offset + len].copy_from_slice(&bytes);
         Ok(())
     }
 
     pub fn do_finalize(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
-        if keyed_accounts.len() < 2 {
-            return Err(InstructionError::InvalidInstructionData);
-        }
-        if keyed_accounts[PROGRAM_INDEX].signer_key().is_none() {
+        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let program = next_keyed_account(&mut keyed_accounts_iter)?;
+        let rent = next_keyed_account(&mut keyed_accounts_iter)?;
+
+        if program.signer_key().is_none() {
             debug!("Error: key[0] did not sign the transaction");
-            return Err(InstructionError::GenericError);
+            return Err(InstructionError::MissingRequiredSignature);
         }
 
-        rent::verify_rent_exemption(&keyed_accounts[0], &keyed_accounts[1])?;
+        rent::verify_rent_exemption(&program, &rent)?;
 
         let (compiled_script, compiled_modules) =
-            Self::deserialize_compiled_program(&keyed_accounts[PROGRAM_INDEX].account.data)?;
+            Self::deserialize_compiled_program(&program.account.data)?;
 
         let verified_script = VerifiedScript::new(compiled_script).unwrap();
         let verified_modules = compiled_modules
@@ -339,16 +356,14 @@ impl MoveProcessor {
 
         Self::serialize_and_enforce_length(
             &Self::verify_program(&verified_script, &verified_modules)?,
-            &mut keyed_accounts[PROGRAM_INDEX].account.data,
+            &mut program.account.data,
         )?;
 
-        keyed_accounts[PROGRAM_INDEX].account.executable = true;
+        program.account.executable = true;
 
         info!(
             "Finalize: {:?}",
-            keyed_accounts[PROGRAM_INDEX]
-                .signer_key()
-                .unwrap_or(&Pubkey::default())
+            program.signer_key().unwrap_or(&Pubkey::default())
         );
         Ok(())
     }
@@ -359,19 +374,18 @@ impl MoveProcessor {
     ) -> Result<(), InstructionError> {
         match limited_deserialize(&data)? {
             InvokeCommand::CreateGenesis(amount) => {
-                if keyed_accounts.is_empty() {
-                    debug!("Error: Requires an unallocated account");
-                    return Err(InstructionError::InvalidArgument);
-                }
-                if keyed_accounts[0].account.owner != id() {
+                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let program = next_keyed_account(&mut keyed_accounts_iter)?;
+
+                if program.account.owner != id() {
                     debug!("Error: Move program account not owned by Move loader");
                     return Err(InstructionError::InvalidArgument);
                 }
 
-                match limited_deserialize(&keyed_accounts[0].account.data)? {
+                match limited_deserialize(&program.account.data)? {
                     LibraAccountState::Unallocated => Self::serialize_and_enforce_length(
                         &LibraAccountState::create_genesis(amount)?,
-                        &mut keyed_accounts[0].account.data,
+                        &mut program.account.data,
                     ),
                     _ => {
                         debug!("Error: Must provide an unallocated account");
@@ -384,26 +398,23 @@ impl MoveProcessor {
                 function_name,
                 args,
             } => {
-                if keyed_accounts.len() < 2 {
-                    debug!("Error: Requires at least a program and a genesis accounts");
-                    return Err(InstructionError::InvalidArgument);
-                }
-                if keyed_accounts[PROGRAM_INDEX].account.owner != id() {
+                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let program = next_keyed_account(&mut keyed_accounts_iter)?;
+
+                if program.account.owner != id() {
                     debug!("Error: Move program account not owned by Move loader");
                     return Err(InstructionError::InvalidArgument);
                 }
-                if !keyed_accounts[PROGRAM_INDEX].account.executable {
+                if !program.account.executable {
                     debug!("Error: Move program account not executable");
-                    return Err(InstructionError::InvalidArgument);
+                    return Err(InstructionError::AccountNotExecutable);
                 }
 
-                let mut data_store = Self::keyed_accounts_to_data_store(
-                    keyed_accounts[GENESIS_INDEX].unsigned_key(),
-                    &keyed_accounts[GENESIS_INDEX..],
-                )?;
-                let (verified_script, verified_modules) = Self::deserialize_verified_program(
-                    &keyed_accounts[PROGRAM_INDEX].account.data,
-                )?;
+                let data_accounts = keyed_accounts_iter.into_slice();
+
+                let mut data_store = Self::keyed_accounts_to_data_store(&data_accounts)?;
+                let (verified_script, verified_modules) =
+                    Self::deserialize_verified_program(&program.account.data)?;
 
                 let output = Self::execute(
                     sender_address,
@@ -418,7 +429,7 @@ impl MoveProcessor {
                 }
 
                 data_store.apply_write_set(&output.write_set());
-                Self::data_store_to_keyed_accounts(data_store, keyed_accounts)
+                Self::data_store_to_keyed_accounts(data_store, data_accounts)
             }
         }
     }
@@ -585,22 +596,27 @@ mod tests {
     fn test_invoke_mint_to_address() {
         solana_logger::setup();
 
-        let amount = 42;
-        let accounts = mint_coins(amount).unwrap();
-
         let mut data_store = DataStore::default();
-        match bincode::deserialize(&accounts[GENESIS_INDEX + 1].account.data).unwrap() {
+
+        let amount = 42;
+        let mut accounts = mint_coins(amount).unwrap();
+        let mut accounts_iter = accounts.iter_mut();
+
+        let _program = next_libra_account(&mut accounts_iter).unwrap();
+        let genesis = next_libra_account(&mut accounts_iter).unwrap();
+        let payee = next_libra_account(&mut accounts_iter).unwrap();
+        match bincode::deserialize(&payee.account.data).unwrap() {
             LibraAccountState::User(owner, write_set) => {
-                if owner != accounts[GENESIS_INDEX].key {
+                if owner != genesis.key {
                     panic!();
                 }
                 data_store.apply_write_set(&write_set)
             }
             _ => panic!("Invalid account state"),
         }
-        let payee_resource = data_store
-            .read_account_resource(&accounts[GENESIS_INDEX + 1].address)
-            .unwrap();
+
+        let payee_resource = data_store.read_account_resource(&payee.address).unwrap();
+        println!("{}:{}", line!(), file!());
 
         assert_eq!(amount, payee_resource.balance());
         assert_eq!(0, payee_resource.sequence_number());
@@ -611,6 +627,11 @@ mod tests {
         solana_logger::setup();
         let amount_to_mint = 42;
         let mut accounts = mint_coins(amount_to_mint).unwrap();
+        let mut accounts_iter = accounts.iter_mut();
+
+        let _program = next_libra_account(&mut accounts_iter).unwrap();
+        let genesis = next_libra_account(&mut accounts_iter).unwrap();
+        let sender = next_libra_account(&mut accounts_iter).unwrap();
 
         let code = "
             import 0x0.LibraAccount;
@@ -620,13 +641,8 @@ mod tests {
                 return;
             }
         ";
-        let mut program =
-            LibraAccount::create_program(&accounts[GENESIS_INDEX + 1].address, code, vec![]);
+        let mut program = LibraAccount::create_program(&genesis.address, code, vec![]);
         let mut payee = LibraAccount::create_unallocated();
-
-        let (genesis, sender) = accounts.split_at_mut(GENESIS_INDEX + 1);
-        let genesis = &mut genesis[1];
-        let sender = &mut sender[0];
 
         let rent_id = rent::id();
         let mut rent_account = rent::create_account(1, &Rent::default());
@@ -662,9 +678,7 @@ mod tests {
         )
         .unwrap();
 
-        let data_store =
-            MoveProcessor::keyed_accounts_to_data_store(&genesis.key, &keyed_accounts[1..])
-                .unwrap();
+        let data_store = MoveProcessor::keyed_accounts_to_data_store(&keyed_accounts[1..]).unwrap();
         let sender_resource = data_store.read_account_resource(&sender.address).unwrap();
         let payee_resource = data_store.read_account_resource(&payee.address).unwrap();
 
@@ -876,6 +890,11 @@ mod tests {
         pub address: AccountAddress,
         pub account: Account,
     }
+
+    pub fn next_libra_account<I: Iterator>(iter: &mut I) -> Result<I::Item, InstructionError> {
+        iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
+    }
+
     impl LibraAccount {
         pub fn new(key: Pubkey, account: Account) -> Self {
             let address = pubkey_to_address(&key);
