@@ -238,7 +238,11 @@ impl Accounts {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, (Ok(()), hash_age_kind)) => {
-                    let fee_hash = tx.message().recent_blockhash;
+                    let fee_hash = if let Some(HashAgeKind::DurableNonce) = hash_age_kind {
+                        hash_queue.last_hash()
+                    } else {
+                        tx.message().recent_blockhash
+                    };
                     let fee = if let Some(fee_calculator) = hash_queue.get_fee_calculator(&fee_hash)
                     {
                         fee_calculator.calculate_fee(tx.message())

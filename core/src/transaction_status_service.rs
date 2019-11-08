@@ -56,10 +56,15 @@ impl TransactionStatusService {
         } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
 
         let slot = bank.slot();
-        for (transaction, (status, _hash_age_kind)) in transactions.iter().zip(statuses) {
+        for (transaction, (status, hash_age_kind)) in transactions.iter().zip(statuses) {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
+                let fee_hash = if let Some(HashAgeKind::DurableNonce) = hash_age_kind {
+                    bank.last_blockhash()
+                } else {
+                    transaction.message().recent_blockhash
+                };
                 let fee_calculator = bank
-                    .get_fee_calculator(&transaction.message().recent_blockhash)
+                    .get_fee_calculator(&fee_hash)
                     .expect("FeeCalculator must exist");
                 let fee = fee_calculator.calculate_fee(transaction.message());
                 blocktree
