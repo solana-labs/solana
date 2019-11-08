@@ -36,7 +36,6 @@ azure)
   # shellcheck source=net/scripts/azure-provider.sh
   source "$here"/scripts/azure-provider.sh
 
-  # TODO: Dial in machine types for Azure
   cpuBootstrapLeaderMachineType=Standard_D16s_v3
   gpuBootstrapLeaderMachineType=Standard_NC12
   clientMachineType=Standard_D16s_v3
