@@ -42,16 +42,6 @@ impl Default for Inflation {
 }
 
 impl Inflation {
-    pub fn new_disabled() -> Self {
-        Self {
-            initial: 0.0,
-            terminal: 0.0,
-            taper: 0.0,
-            foundation: 0.0,
-            foundation_term: 0.0,
-            storage: 0.0,
-        }
-    }
     /// inflation rate at year
     pub fn total(&self, year: f64) -> f64 {
         let tapered = self.initial * ((1.0 - self.taper).powf(year));
