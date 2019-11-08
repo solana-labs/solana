@@ -208,7 +208,7 @@ impl StandardBroadcastRun {
         // Insert shreds into blocktree
         let insert_shreds_start = Instant::now();
         blocktree
-            .insert_shreds(shreds.clone(), None)
+            .insert_leader_shreds(shreds.clone(), None)
             .expect("Failed to insert shreds in blocktree");
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
 

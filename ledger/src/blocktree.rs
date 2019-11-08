@@ -435,6 +435,23 @@ impl Blocktree {
         shreds: Vec<Shred>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
     ) -> Result<BlocktreeInsertionMetrics> {
+        self.insert_shreds_for_node_type(shreds, leader_schedule, false)
+    }
+
+    pub fn insert_leader_shreds(
+        &self,
+        shreds: Vec<Shred>,
+        leader_schedule: Option<&Arc<LeaderScheduleCache>>,
+    ) -> Result<BlocktreeInsertionMetrics> {
+        self.insert_shreds_for_node_type(shreds, leader_schedule, true)
+    }
+
+    fn insert_shreds_for_node_type(
+        &self,
+        shreds: Vec<Shred>,
+        leader_schedule: Option<&Arc<LeaderScheduleCache>>,
+        is_leader: bool,
+    ) -> Result<BlocktreeInsertionMetrics> {
         let mut total_start = Measure::start("Total elapsed");
         let mut start = Measure::start("Blocktree lock");
         let _lock = self.insert_shreds_lock.lock().unwrap();
@@ -466,7 +483,7 @@ impl Blocktree {
                         &mut index_meta_time,
                     )
                 } else if shred.is_code() {
-                    leader_schedule.is_some()
+                    !is_leader
                         && self.check_insert_coding_shred(
                             shred,
                             &mut erasure_metas,
@@ -1914,6 +1931,7 @@ pub mod tests {
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::shred::{max_ticks_per_n_shreds, DataShredHeader};
     use itertools::Itertools;
+    use matches::assert_matches;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
     use solana_sdk::hash::Hash;
@@ -1964,6 +1982,78 @@ pub mod tests {
         let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
 
         assert_eq!(last_shred, deserialized_shred);
+        // Destroying database without closing it first is undefined behavior
+        drop(ledger);
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_insert_leader_shreds() {
+        // Create enough entries to ensure there are at least two shreds created
+        let num_entries = max_ticks_per_n_shreds(1) + 1;
+        assert!(num_entries > 1);
+
+        let (mut shreds, _) = make_slot_entries(0, 0, num_entries);
+
+        let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_basic");
+        let ledger = Blocktree::open(&ledger_path).unwrap();
+
+        // Insert last shred, test we can retrieve it
+        let last_shred = shreds.pop().unwrap();
+        assert!(last_shred.index() > 0);
+        let (shred, coding) = Shredder::new_coding_shred_header(1, 11, 11, 11, 10);
+        let coding_shred = Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
+        ledger
+            .insert_leader_shreds(vec![last_shred.clone(), coding_shred], None)
+            .unwrap();
+
+        let serialized_shred = ledger
+            .data_shred_cf
+            .get_bytes((0, last_shred.index() as u64))
+            .unwrap()
+            .unwrap();
+        let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
+
+        assert_eq!(last_shred, deserialized_shred);
+
+        assert_eq!(None, ledger.code_shred_cf.get_bytes((1, 11)).unwrap());
+
+        // Destroying database without closing it first is undefined behavior
+        drop(ledger);
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_insert_non_leader_shreds() {
+        // Create enough entries to ensure there are at least two shreds created
+        let num_entries = max_ticks_per_n_shreds(1) + 1;
+        assert!(num_entries > 1);
+
+        let (mut shreds, _) = make_slot_entries(0, 0, num_entries);
+
+        let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_basic");
+        let ledger = Blocktree::open(&ledger_path).unwrap();
+
+        // Insert last shred, test we can retrieve it
+        let last_shred = shreds.pop().unwrap();
+        assert!(last_shred.index() > 0);
+        let (shred, coding) = Shredder::new_coding_shred_header(1, 11, 11, 11, 10);
+        let coding_shred = Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
+        ledger
+            .insert_shreds(vec![last_shred.clone(), coding_shred], None)
+            .unwrap();
+
+        let serialized_shred = ledger
+            .data_shred_cf
+            .get_bytes((0, last_shred.index() as u64))
+            .unwrap()
+            .unwrap();
+        let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
+
+        assert_eq!(last_shred, deserialized_shred);
+
+        assert_matches!(ledger.code_shred_cf.get_bytes((1, 11)).unwrap(), Some(_));
+
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
