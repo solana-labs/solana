@@ -25,14 +25,6 @@ fn check_prog_len(prog: &[u8]) -> Result<(), Error> {
         reject("No program set, call prog_set() to load one".to_string())?;
     }
 
-    // TODO BPF program may deterministically exit even if the last
-    // instruction in the block is not an exit (might be earlier and jumped to)
-    // TODO need to validate more intelligently
-    // let last_insn = ebpf::get_insn(prog, (prog.len() / ebpf::INSN_SIZE) - 1);
-    // if last_insn.opc != ebpf::EXIT {
-    //     reject("program does not end with “EXIT” instruction".to_string())?;
-    // }
-
     Ok(())
 }
 
@@ -55,8 +47,10 @@ fn check_imm_endian(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), Error> {
 }
 
 fn check_load_dw(prog: &[u8], insn_ptr: usize) -> Result<(), Error> {
-    // We know we can reach next insn since we enforce an EXIT insn at the end of program, while
-    // this function should be called only for LD_DW insn, that cannot be last in program.
+    if insn_ptr >= (prog.len() / ebpf::INSN_SIZE) {
+        // Last instruction cannot be LD_DW because there would be no 2nd DW
+        reject("LD_DW instruction cannot be last in program".to_string())?;
+    }
     let next_insn = ebpf::get_insn(prog, insn_ptr + 1);
     if next_insn.opc != 0 {
         reject(format!(
