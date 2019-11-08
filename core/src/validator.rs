@@ -184,7 +184,7 @@ impl Validator {
         // Only do this check if started as a bootstrap leader.
         // Normal validators can encounter newly-created vote accounts, which to be synced with this new validator.
         if entrypoint_info_option.is_none() {
-          Self::check_vote_account(&bank, vote_account);
+            Self::check_vote_account(&bank, vote_account);
         }
 
         let bank_forks = Arc::new(RwLock::new(bank_forks));
