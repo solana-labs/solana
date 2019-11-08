@@ -466,14 +466,15 @@ impl Blocktree {
                         &mut index_meta_time,
                     )
                 } else if shred.is_code() {
-                    self.check_insert_coding_shred(
-                        shred,
-                        &mut erasure_metas,
-                        &mut index_working_set,
-                        &mut write_batch,
-                        &mut just_inserted_coding_shreds,
-                        &mut index_meta_time,
-                    )
+                    leader_schedule.is_some()
+                        && self.check_insert_coding_shred(
+                            shred,
+                            &mut erasure_metas,
+                            &mut index_working_set,
+                            &mut write_batch,
+                            &mut just_inserted_coding_shreds,
+                            &mut index_meta_time,
+                        )
                 } else {
                     panic!("There should be no other case");
                 }
