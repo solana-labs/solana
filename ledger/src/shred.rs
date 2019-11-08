@@ -8,14 +8,6 @@ use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
 use solana_rayon_threadlimit::get_thread_count;
-<<<<<<< HEAD
-use solana_sdk::hash::Hash;
-use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use std::sync::Arc;
-use std::time::Instant;
-=======
 use solana_sdk::{
     clock::Slot,
     hash::Hash,
@@ -25,7 +17,6 @@ use solana_sdk::{
 };
 use std::mem::size_of;
 use std::{sync::Arc, time::Instant};
->>>>>>> 67d1e2903... Upgrade Repair be more intelligent and agressive (#6789)
 
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
@@ -340,8 +331,6 @@ impl Shred {
         }
     }
 
-<<<<<<< HEAD
-=======
     pub fn reference_tick(&self) -> u8 {
         if self.is_data() {
             self.data_header.flags & SHRED_TICK_REFERENCE_MASK
@@ -355,7 +344,6 @@ impl Shred {
         flags & SHRED_TICK_REFERENCE_MASK
     }
 
->>>>>>> 67d1e2903... Upgrade Repair be more intelligent and agressive (#6789)
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
@@ -942,8 +930,6 @@ pub mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-=======
     fn test_shred_reference_tick() {
         let keypair = Arc::new(Keypair::new());
         let slot = 1;
@@ -1010,7 +996,6 @@ pub mod tests {
     }
 
     #[test]
->>>>>>> 67d1e2903... Upgrade Repair be more intelligent and agressive (#6789)
     fn test_data_and_code_shredder() {
         let keypair = Arc::new(Keypair::new());
 

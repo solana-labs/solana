@@ -973,12 +973,8 @@ impl Blocktree {
     // for the slot with the specified slot
     fn find_missing_indexes<C>(
         db_iterator: &mut DBRawIterator,
-<<<<<<< HEAD
-        slot: u64,
-=======
         slot: Slot,
         first_timestamp: u64,
->>>>>>> 67d1e2903... Upgrade Repair be more intelligent and agressive (#6789)
         start_index: u64,
         end_index: u64,
         max_missing: usize,
@@ -1053,12 +1049,8 @@ impl Blocktree {
 
     pub fn find_missing_data_indexes(
         &self,
-<<<<<<< HEAD
-        slot: u64,
-=======
         slot: Slot,
         first_timestamp: u64,
->>>>>>> 67d1e2903... Upgrade Repair be more intelligent and agressive (#6789)
         start_index: u64,
         end_index: u64,
         max_missing: usize,
