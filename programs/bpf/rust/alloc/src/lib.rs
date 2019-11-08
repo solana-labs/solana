@@ -54,25 +54,6 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
         alloc::alloc::dealloc(ptr, layout);
     }
 
-    // TODO not supported bump allocator
-    // unsafe {
-    //     // Test alloc all bytes and one more (assumes heap size of 2048)
-
-    //     let layout = Layout::from_size_align(2048, mem::align_of::<u8>()).unwrap();
-    //     let ptr = alloc::alloc::alloc(layout);
-    //     if ptr.is_null() {
-    //         info!("Error: Alloc of 2048 bytes failed");
-    //         alloc::alloc::handle_alloc_error(layout);
-    //     }
-    //     let layout = Layout::from_size_align(1, mem::align_of::<u8>()).unwrap();
-    //     let ptr_fail = alloc::alloc::alloc(layout);
-    //     if !ptr_fail.is_null() {
-    //         info!("Error: Able to alloc 1 more then max");
-    //         panic!();
-    //     }
-    //     alloc::alloc::dealloc(ptr, layout);
-    // }
-
     {
         // Test allocated vector
 
