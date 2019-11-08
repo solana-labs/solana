@@ -18,7 +18,7 @@ fn test_rpc_client() {
 
     assert_eq!(
         client.get_version().unwrap(),
-        format!("{{\"solana-core\":\"{}\"}}", env!("CARGO_PKG_VERSION"))
+        format!("{{\"solana-core\":\"{}\"}}", solana_core::version!())
     );
 
     assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 0);
