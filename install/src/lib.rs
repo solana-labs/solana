@@ -2,6 +2,7 @@
 extern crate lazy_static;
 
 use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg, SubCommand};
+use solana_clap_utils::input_validators::{is_pubkey, is_release_channel, is_semver, is_url};
 use solana_sdk::pubkey::Pubkey;
 
 mod build_env;
@@ -10,42 +11,6 @@ mod config;
 mod defaults;
 mod stop_process;
 mod update_manifest;
-
-// Return an error if a url cannot be parsed.
-fn is_url(string: String) -> Result<(), String> {
-    match url::Url::parse(&string) {
-        Ok(url) => {
-            if url.has_host() {
-                Ok(())
-            } else {
-                Err("no host provided".to_string())
-            }
-        }
-        Err(err) => Err(format!("{:?}", err)),
-    }
-}
-
-// Return an error if a pubkey cannot be parsed.
-fn is_pubkey(string: String) -> Result<(), String> {
-    match string.parse::<Pubkey>() {
-        Ok(_) => Ok(()),
-        Err(err) => Err(format!("{:?}", err)),
-    }
-}
-
-fn is_semver(semver: &str) -> Result<(), String> {
-    match semver::Version::parse(&semver) {
-        Ok(_) => Ok(()),
-        Err(err) => Err(format!("{:?}", err)),
-    }
-}
-
-fn is_release_channel(channel: &str) -> Result<(), String> {
-    match channel {
-        "edge" | "beta" | "stable" => Ok(()),
-        _ => Err(format!("Invalid release channel {}", channel)),
-    }
-}
 
 pub fn main() -> Result<(), String> {
     solana_logger::setup();

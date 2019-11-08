@@ -1,0 +1,18 @@
+[package]
+name = "solana-clap-utils"
+version = "0.21.0"
+description = "Solana utilities for the clap"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+edition = "2018"
+
+[dependencies]
+clap = "2.33.0"
+semver = "0.9.0"
+solana-sdk = { path = "../sdk", version = "0.21.0" }
+url = "2.1.0"
+
+[lib]
+name = "solana_clap_utils"

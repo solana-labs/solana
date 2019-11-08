@@ -1,13 +1,9 @@
-use crate::{
-    cli::{
-        build_balance_message, check_account_for_fee, check_unique_pubkeys,
-        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult,
-    },
-    input_parsers::*,
-    input_validators::*,
+use crate::cli::{
+    build_balance_message, check_account_for_fee, check_unique_pubkeys,
+    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
+use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 use solana_sdk::{

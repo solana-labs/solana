@@ -1,5 +1,6 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
 use console::style;
+use solana_clap_utils::input_validators::is_keypair;
 use solana_core::{
     archiver::Archiver,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
@@ -10,13 +11,6 @@ use solana_sdk::{
     signature::{read_keypair_file, Keypair, KeypairUtil},
 };
 use std::{net::SocketAddr, path::PathBuf, process::exit, sync::Arc};
-
-// Return an error if a keypair file cannot be parsed.
-fn is_keypair(string: String) -> Result<(), String> {
-    read_keypair_file(&string)
-        .map(|_| ())
-        .map_err(|err| format!("{:?}", err))
-}
 
 fn main() {
     solana_logger::setup();
