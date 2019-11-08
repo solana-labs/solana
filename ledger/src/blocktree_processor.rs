@@ -117,6 +117,16 @@ fn process_entries_with_callback(
         if entry.is_tick() {
             // if its a tick, save it for later
             tick_hashes.push(entry.hash);
+            if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
+                // if its a tick that will cause a new blockhash to be created,
+                // execute the group and register the tick
+                execute_batches(bank, &batches, entry_callback)?;
+                batches.clear();
+                for hash in &tick_hashes {
+                    bank.register_tick(hash);
+                }
+                tick_hashes.clear();
+            }
             continue;
         }
         // else loop on processing the entry
