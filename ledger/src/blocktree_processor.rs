@@ -2017,6 +2017,33 @@ pub mod tests {
         }
     }
 
+    #[test]
+    fn test_process_ledger_ticks_ordering() {
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(100);
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let genesis_hash = genesis_block.hash();
+        let keypair = Keypair::new();
+
+        // Simulate a slot of virtual ticks, creates a new blockhash
+        let mut entries = create_ticks(genesis_block.ticks_per_slot, 1, genesis_hash);
+
+        // The new blockhash is going to be the hash of the last tick in the block
+        let new_blockhash = entries.last().unwrap().hash;
+        // Create an transaction that references the new blockhash, should still
+        // be able to find the blockhash if we process transactions all in the same
+        // batch
+        let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 1, new_blockhash);
+        let entry = next_entry(&new_blockhash, 1, vec![tx]);
+        entries.push(entry);
+
+        process_entries_with_callback(&bank0, &entries, true, None).unwrap();
+        assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
+    }
+
     fn get_epoch_schedule(
         genesis_block: &GenesisBlock,
         account_paths: Option<String>,
