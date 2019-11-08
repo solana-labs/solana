@@ -24,7 +24,10 @@ pub fn load_program<T: Client>(
         loader_pubkey,
     );
     bank_client
-        .send_instruction(&from_keypair, instruction)
+        .send_message(
+            &[from_keypair, &program_keypair],
+            Message::new(vec![instruction]),
+        )
         .unwrap();
 
     let chunk_size = 256; // Size of chunk just needs to fit into tx

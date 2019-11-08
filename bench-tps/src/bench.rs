@@ -795,13 +795,10 @@ fn fund_move_keys<T: Client>(
 
     info!("creating the libra funding account..");
     let libra_funding_key = Keypair::new();
-    let tx = librapay_transaction::create_account(
-        funding_key,
-        &libra_funding_key.pubkey(),
-        1,
-        blockhash,
-    );
-    client.send_message(&[funding_key], tx.message).unwrap();
+    let tx = librapay_transaction::create_account(funding_key, &libra_funding_key, 1, blockhash);
+    client
+        .send_message(&[funding_key, &libra_funding_key], tx.message)
+        .unwrap();
 
     info!("minting to funding keypair");
     let tx = librapay_transaction::mint_tokens(
@@ -829,8 +826,8 @@ fn fund_move_keys<T: Client>(
             break;
         }
 
-        let pubkeys: Vec<_> = keys.iter().map(|k| k.pubkey()).collect();
-        let tx = librapay_transaction::create_accounts(funding_key, &pubkeys, 1, blockhash);
+        let keypairs: Vec<_> = keys.iter().map(|k| k).collect();
+        let tx = librapay_transaction::create_accounts(funding_key, &keypairs, 1, blockhash);
 
         let ser_size = bincode::serialized_size(&tx).unwrap();
 
@@ -877,10 +874,9 @@ fn fund_move_keys<T: Client>(
 
     let libra_funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| Keypair::new()).collect();
     for (i, key) in libra_funding_keys.iter().enumerate() {
-        let tx =
-            librapay_transaction::create_account(&funding_keys[i], &key.pubkey(), 1, blockhash);
+        let tx = librapay_transaction::create_account(&funding_keys[i], &key, 1, blockhash);
         client
-            .send_message(&[&funding_keys[i]], tx.message)
+            .send_message(&[&funding_keys[i], &key], tx.message)
             .unwrap();
 
         let tx = librapay_transaction::transfer(

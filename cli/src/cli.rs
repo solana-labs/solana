@@ -622,7 +622,7 @@ fn process_deploy(
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
     let mut create_account_tx = system_transaction::create_account(
         &config.keypair,
-        &program_id.pubkey(),
+        &program_id,
         blockhash,
         minimum_balance,
         program_data.len() as u64,
@@ -656,8 +656,7 @@ fn process_deploy(
     check_account_for_multiple_fees(rpc_client, config, &fee_calculator, &messages)?;
 
     trace!("Creating program account");
-    let result =
-        rpc_client.send_and_confirm_transaction(&mut create_account_tx, &[&config.keypair]);
+    let result = rpc_client.send_and_confirm_transaction(&mut create_account_tx, &signers);
     log_instruction_custom_error::<SystemError>(result)
         .map_err(|_| CliError::DynamicProgramError("Program allocate space failed".to_string()))?;
 
@@ -723,9 +722,14 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
+        let mut tx = Transaction::new_signed_instructions(
+            &[&config.keypair, &contract_state],
+            ixs,
+            blockhash,
+        );
         check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+        let result =
+            rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
         let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
         Ok(json!({
@@ -756,8 +760,13 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+        let mut tx = Transaction::new_signed_instructions(
+            &[&config.keypair, &contract_state],
+            ixs,
+            blockhash,
+        );
+        let result =
+            rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
         check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
         let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 

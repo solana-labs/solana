@@ -247,6 +247,7 @@ mod tests {
         EpochSchedule, DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET, DEFAULT_SLOTS_PER_EPOCH,
         MINIMUM_SLOTS_PER_EPOCH,
     };
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::{sync::mpsc::channel, sync::Arc, thread::Builder};
 
     #[test]
@@ -496,11 +497,11 @@ mod tests {
 
         // Create new vote account
         let node_pubkey = Pubkey::new_rand();
-        let vote_pubkey = Pubkey::new_rand();
+        let vote_account = Keypair::new();
         setup_vote_and_stake_accounts(
             &bank,
             &mint_keypair,
-            &vote_pubkey,
+            &vote_account,
             &node_pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         );

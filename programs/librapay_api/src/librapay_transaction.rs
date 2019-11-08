@@ -63,32 +63,35 @@ pub fn transfer(
 
 pub fn create_accounts(
     from: &Keypair,
-    tos: &[Pubkey],
+    to: &[&Keypair],
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    let instructions = tos
+    let instructions = to
         .iter()
         .map(|to| {
             system_instruction::create_account(
                 &from.pubkey(),
-                to,
+                &to.pubkey(),
                 lamports,
                 400,
                 &solana_sdk::move_loader::id(),
             )
         })
         .collect();
-    Transaction::new_signed_instructions(&[from], instructions, recent_blockhash)
+
+    let mut from_signers = vec![from];
+    from_signers.extend_from_slice(to);
+    Transaction::new_signed_instructions(&from_signers, instructions, recent_blockhash)
 }
 
 pub fn create_account(
     from: &Keypair,
-    to: &Pubkey,
+    to: &Keypair,
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    create_accounts(from, &[*to], lamports, recent_blockhash)
+    create_accounts(from, &[to], lamports, recent_blockhash)
 }
 
 #[derive(Debug)]
@@ -172,12 +175,7 @@ mod tests {
         let from = Keypair::new();
         let to = Keypair::new();
 
-        let tx = create_accounts(
-            &mint_keypair,
-            &[from.pubkey(), to.pubkey()],
-            1,
-            bank.last_blockhash(),
-        );
+        let tx = create_accounts(&mint_keypair, &[&from, &to], 1, bank.last_blockhash());
         bank.process_transaction(&tx).unwrap();
 
         info!(

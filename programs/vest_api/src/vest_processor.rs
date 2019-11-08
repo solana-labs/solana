@@ -192,7 +192,7 @@ mod tests {
 
     fn create_vest_account(
         bank_client: &BankClient,
-        contract_pubkey: &Pubkey,
+        contract_keypair: &Keypair,
         payer_keypair: &Keypair,
         terminator_pubkey: &Pubkey,
         payee_pubkey: &Pubkey,
@@ -203,14 +203,14 @@ mod tests {
         let instructions = vest_instruction::create_account(
             &payer_keypair.pubkey(),
             &terminator_pubkey,
-            &contract_pubkey,
+            &contract_keypair.pubkey(),
             &payee_pubkey,
             start_date,
             &date_pubkey,
             lamports,
         );
         let message = Message::new(instructions);
-        bank_client.send_message(&[&payer_keypair], message)
+        bank_client.send_message(&[&payer_keypair, &contract_keypair], message)
     }
 
     fn send_set_terminator(
@@ -327,10 +327,12 @@ mod tests {
     fn test_initialize_no_panic() {
         let (bank_client, alice_keypair) = create_bank_client(3);
 
+        let contract_keypair = Keypair::new();
+
         let mut instructions = vest_instruction::create_account(
             &alice_keypair.pubkey(),
             &Pubkey::new_rand(),
-            &Pubkey::new_rand(),
+            &contract_keypair.pubkey(),
             &Pubkey::new_rand(),
             Utc::now().date(),
             &Pubkey::new_rand(),
@@ -341,7 +343,7 @@ mod tests {
         let message = Message::new(instructions);
         assert_eq!(
             bank_client
-                .send_message(&[&alice_keypair], message)
+                .send_message(&[&alice_keypair, &contract_keypair], message)
                 .unwrap_err()
                 .unwrap(),
             TransactionError::InstructionError(1, InstructionError::NotEnoughAccountKeys)
@@ -352,14 +354,15 @@ mod tests {
         let (bank_client, alice_keypair) = create_bank_client(39);
         let alice_pubkey = alice_keypair.pubkey();
         let date_pubkey = Pubkey::new_rand();
-        let contract_pubkey = Pubkey::new_rand();
+        let contract_keypair = Keypair::new();
+        let contract_pubkey = contract_keypair.pubkey();
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
         let start_date = Utc.ymd(2018, 1, 1);
 
         create_vest_account(
             &bank_client,
-            &contract_pubkey,
+            &contract_keypair,
             &alice_keypair,
             &alice_pubkey,
             &bob_pubkey,
@@ -422,14 +425,15 @@ mod tests {
         let (bank_client, alice_keypair) = create_bank_client(38);
         let alice_pubkey = alice_keypair.pubkey();
         let date_pubkey = Pubkey::new_rand();
-        let contract_pubkey = Pubkey::new_rand();
+        let contract_keypair = Keypair::new();
+        let contract_pubkey = contract_keypair.pubkey();
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
         let start_date = Utc.ymd(2018, 1, 1);
 
         create_vest_account(
             &bank_client,
-            &contract_pubkey,
+            &contract_keypair,
             &alice_keypair,
             &alice_pubkey,
             &bob_pubkey,
@@ -481,13 +485,14 @@ mod tests {
         let current_date = Utc.ymd(2019, 1, 1);
         create_date_account(&bank_client, &date_keypair, &alice_keypair, current_date).unwrap();
 
-        let contract_pubkey = Pubkey::new_rand();
+        let contract_keypair = Keypair::new();
+        let contract_pubkey = contract_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let start_date = Utc.ymd(2018, 1, 1);
 
         create_vest_account(
             &bank_client,
-            &contract_pubkey,
+            &contract_keypair,
             &alice_keypair,
             &alice_pubkey,
             &bob_pubkey,
@@ -542,7 +547,8 @@ mod tests {
     fn test_terminate_and_refund() {
         let (bank_client, alice_keypair) = create_bank_client(3);
         let alice_pubkey = alice_keypair.pubkey();
-        let contract_pubkey = Pubkey::new_rand();
+        let contract_keypair = Keypair::new();
+        let contract_pubkey = contract_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let start_date = Utc::now().date();
 
@@ -554,7 +560,7 @@ mod tests {
 
         create_vest_account(
             &bank_client,
-            &contract_pubkey,
+            &contract_keypair,
             &alice_keypair,
             &alice_pubkey,
             &bob_pubkey,
@@ -585,7 +591,8 @@ mod tests {
     fn test_terminate_and_send_funds() {
         let (bank_client, alice_keypair) = create_bank_client(3);
         let alice_pubkey = alice_keypair.pubkey();
-        let contract_pubkey = Pubkey::new_rand();
+        let contract_keypair = Keypair::new();
+        let contract_pubkey = contract_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let start_date = Utc::now().date();
 
@@ -597,7 +604,7 @@ mod tests {
 
         create_vest_account(
             &bank_client,
-            &contract_pubkey,
+            &contract_keypair,
             &alice_keypair,
             &alice_pubkey,
             &bob_pubkey,

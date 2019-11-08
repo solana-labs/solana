@@ -402,8 +402,10 @@ mod tests {
 
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
-        let ixs = budget_instruction::payment(&pubkey, &pubkey, 1);
-        Transaction::new_signed_instructions(&[keypair], ixs, hash)
+        let budget_contract = Keypair::new();
+        let budget_pubkey = budget_contract.pubkey();
+        let ixs = budget_instruction::payment(&pubkey, &pubkey, &budget_pubkey, 1);
+        Transaction::new_signed_instructions(&[keypair, &budget_contract], ixs, hash)
     }
 
     fn create_sample_timestamp(keypair: &Keypair, hash: Hash) -> Transaction {

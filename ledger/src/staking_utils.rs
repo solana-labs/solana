@@ -88,7 +88,7 @@ where
     // Find if any slot has achieved sufficient votes for supermajority lockout
     let mut total = 0;
     for (stake, slot) in stakes_and_lockouts {
-        total += stake;
+        total += *stake;
         if total > supermajority_stake {
             return Some(slot);
         }
@@ -125,10 +125,11 @@ pub(crate) mod tests {
     pub(crate) fn setup_vote_and_stake_accounts(
         bank: &Bank,
         from_account: &Keypair,
-        vote_pubkey: &Pubkey,
+        vote_account: &Keypair,
         node_pubkey: &Pubkey,
         amount: u64,
     ) {
+        let vote_pubkey = vote_account.pubkey();
         fn process_instructions<T: KeypairUtil>(
             bank: &Bank,
             keypairs: &[&T],
@@ -145,14 +146,14 @@ pub(crate) mod tests {
 
         process_instructions(
             bank,
-            &[from_account],
+            &[from_account, vote_account],
             vote_instruction::create_account(
                 &from_account.pubkey(),
-                vote_pubkey,
+                &vote_pubkey,
                 &VoteInit {
                     node_pubkey: *node_pubkey,
-                    authorized_voter: *vote_pubkey,
-                    authorized_withdrawer: *vote_pubkey,
+                    authorized_voter: vote_pubkey,
+                    authorized_withdrawer: vote_pubkey,
                     commission: 0,
                 },
                 amount,
@@ -168,7 +169,7 @@ pub(crate) mod tests {
             stake_instruction::create_stake_account_and_delegate_stake(
                 &from_account.pubkey(),
                 &stake_account_pubkey,
-                vote_pubkey,
+                &vote_pubkey,
                 &Authorized::auto(&stake_account_pubkey),
                 amount,
             ),
@@ -193,7 +194,7 @@ pub(crate) mod tests {
         } = create_genesis_block(10_000);
 
         let bank = Bank::new(&genesis_block);
-        let vote_pubkey = Pubkey::new_rand();
+        let vote_account = Keypair::new();
 
         // Give the validator some stake but don't setup a staking account
         // Validator has no lamports staked, so they get filtered out. Only the bootstrap leader
@@ -206,7 +207,7 @@ pub(crate) mod tests {
         setup_vote_and_stake_accounts(
             &bank,
             &mint_keypair,
-            &vote_pubkey,
+            &vote_account,
             &mint_keypair.pubkey(),
             stake,
         );

@@ -472,7 +472,7 @@ impl LocalCluster {
             // 1) Create vote account
 
             let mut transaction = Transaction::new_signed_instructions(
-                &[from_account.as_ref()],
+                &[from_account.as_ref(), vote_account],
                 vote_instruction::create_account(
                     &from_account.pubkey(),
                     &vote_account_pubkey,
@@ -596,7 +596,8 @@ impl LocalCluster {
             ),
             Some(&from_keypair.pubkey()),
         );
-        let signer_keys = vec![from_keypair.as_ref()];
+
+        let signer_keys = vec![from_keypair.as_ref(), &storage_keypair];
         let blockhash = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap()

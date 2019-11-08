@@ -178,19 +178,28 @@ where
 
     info!("Generating {:?} account keys", total_keys);
     let mut account_keypairs = generate_keypairs(total_keys);
-    let src_pubkeys: Vec<_> = account_keypairs
+    let src_keypairs: Vec<_> = account_keypairs
         .drain(0..accounts_in_groups)
+        .map(|keypair| keypair)
+        .collect();
+    let src_pubkeys: Vec<Pubkey> = src_keypairs
+        .iter()
         .map(|keypair| keypair.pubkey())
         .collect();
-    let profit_pubkeys: Vec<_> = account_keypairs
+
+    let profit_keypairs: Vec<_> = account_keypairs
         .drain(0..accounts_in_groups)
+        .map(|keypair| keypair)
+        .collect();
+    let profit_pubkeys: Vec<Pubkey> = profit_keypairs
+        .iter()
         .map(|keypair| keypair.pubkey())
         .collect();
 
     info!("Create {:?} source token accounts", src_pubkeys.len());
-    create_token_accounts(client, &trader_signers, &src_pubkeys);
+    create_token_accounts(client, &trader_signers, &src_keypairs);
     info!("Create {:?} profit token accounts", profit_pubkeys.len());
-    create_token_accounts(client, &swapper_signers, &profit_pubkeys);
+    create_token_accounts(client, &swapper_signers, &profit_keypairs);
 
     // Collect the max transaction rate and total tx count seen (single node only)
     let sample_stats = Arc::new(RwLock::new(Vec::new()));
@@ -564,7 +573,7 @@ fn trader<T>(
                 trade_account: trade.pubkey(),
                 order_info,
             });
-            trades.push((signer, trade.pubkey(), side, src));
+            trades.push((signer, trade, side, src));
         }
         account_group = (account_group + 1) % account_groups as usize;
 
@@ -575,16 +584,28 @@ fn trader<T>(
         trades.chunks(chunk_size).for_each(|chunk| {
             let trades_txs: Vec<_> = chunk
                 .par_iter()
-                .map(|(signer, trade, side, src)| {
-                    let s: &Keypair = &signer;
-                    let owner = &signer.pubkey();
+                .map(|(owner, trade, side, src)| {
+                    let owner_pubkey = &owner.pubkey();
+                    let trade_pubkey = &trade.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
                     Transaction::new_signed_instructions(
-                        &[s],
+                        &[owner.as_ref(), trade],
                         vec![
-                            system_instruction::create_account(owner, trade, 1, space, &id()),
+                            system_instruction::create_account(
+                                owner_pubkey,
+                                trade_pubkey,
+                                1,
+                                space,
+                                &id(),
+                            ),
                             exchange_instruction::trade_request(
-                                owner, trade, *side, pair, tokens, price, src,
+                                owner_pubkey,
+                                trade_pubkey,
+                                *side,
+                                pair,
+                                tokens,
+                                price,
+                                src,
                             ),
                         ],
                         blockhash,
@@ -803,21 +824,27 @@ pub fn fund_keys(client: &dyn Client, source: &Keypair, dests: &[Arc<Keypair>], 
     }
 }
 
-pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], accounts: &[Pubkey]) {
-    let mut notfunded: Vec<(&Arc<Keypair>, &Pubkey)> = signers.iter().zip(accounts).collect();
+pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], accounts: &[Keypair]) {
+    let mut notfunded: Vec<(&Arc<Keypair>, &Keypair)> = signers.iter().zip(accounts).collect();
 
     while !notfunded.is_empty() {
         notfunded.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
             let mut to_create_txs: Vec<_> = chunk
                 .par_iter()
-                .map(|(signer, new)| {
-                    let owner_pubkey = &signer.pubkey();
+                .map(|(from_keypair, new_keypair)| {
+                    let owner_pubkey = &from_keypair.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
-                    let create_ix =
-                        system_instruction::create_account(owner_pubkey, new, 1, space, &id());
-                    let request_ix = exchange_instruction::account_request(owner_pubkey, new);
+                    let create_ix = system_instruction::create_account(
+                        owner_pubkey,
+                        &new_keypair.pubkey(),
+                        1,
+                        space,
+                        &id(),
+                    );
+                    let request_ix =
+                        exchange_instruction::account_request(owner_pubkey, &new_keypair.pubkey());
                     (
-                        signer,
+                        (from_keypair, new_keypair),
                         Transaction::new_unsigned_instructions(vec![create_ix, request_ix]),
                     )
                 })
@@ -838,10 +865,11 @@ pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], acco
                 let (blockhash, _fee_calculator) = client
                     .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
                     .expect("Failed to get blockhash");
-                to_create_txs.par_iter_mut().for_each(|(k, tx)| {
-                    let kp: &Keypair = k;
-                    tx.sign(&[kp], blockhash);
-                });
+                to_create_txs
+                    .par_iter_mut()
+                    .for_each(|((from_keypair, to_keypair), tx)| {
+                        tx.sign(&[from_keypair.as_ref(), to_keypair], blockhash);
+                    });
                 to_create_txs.iter().for_each(|(_, tx)| {
                     client.async_send_transaction(tx.clone()).expect("transfer");
                 });
@@ -878,10 +906,10 @@ pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], acco
             }
         });
 
-        let mut new_notfunded: Vec<(&Arc<Keypair>, &Pubkey)> = vec![];
+        let mut new_notfunded: Vec<(&Arc<Keypair>, &Keypair)> = vec![];
         for f in &notfunded {
             if client
-                .get_balance_with_commitment(&f.1, CommitmentConfig::recent())
+                .get_balance_with_commitment(&f.1.pubkey(), CommitmentConfig::recent())
                 .unwrap_or(0)
                 == 0
             {

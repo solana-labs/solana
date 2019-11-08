@@ -36,7 +36,13 @@ pub fn create_genesis<T: Client>(from_key: &Keypair, client: &T, amount: u64) ->
             as u64,
         &solana_sdk::move_loader::id(),
     );
-    client.send_instruction(&from_key, instruction).unwrap();
+
+    client
+        .send_message(
+            &[&from_key, &libra_genesis_key],
+            Message::new(vec![instruction]),
+        )
+        .unwrap();
 
     let instruction = librapay_instruction::genesis(&libra_genesis_key.pubkey(), amount);
     let message = Message::new_with_payer(vec![instruction], Some(&from_key.pubkey()));

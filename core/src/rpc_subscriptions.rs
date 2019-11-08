@@ -316,7 +316,7 @@ mod tests {
         let alice = Keypair::new();
         let tx = system_transaction::create_account(
             &mint_keypair,
-            &alice.pubkey(),
+            &alice,
             blockhash,
             1,
             16,
@@ -371,7 +371,7 @@ mod tests {
         let alice = Keypair::new();
         let tx = system_transaction::create_account(
             &mint_keypair,
-            &alice.pubkey(),
+            &alice,
             blockhash,
             1,
             16,
