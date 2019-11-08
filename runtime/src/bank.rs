@@ -180,11 +180,6 @@ pub struct Bank {
     #[serde(deserialize_with = "deserialize_atomicu64")]
     transaction_count: AtomicU64,
 
-    /// Bank tick height
-    #[serde(serialize_with = "serialize_atomicu64")]
-    #[serde(deserialize_with = "deserialize_atomicu64")]
-    tick_height: AtomicU64,
-
     /// The number of signatures from valid transactions in this slot
     #[serde(serialize_with = "serialize_atomicu64")]
     #[serde(deserialize_with = "deserialize_atomicu64")]
@@ -352,7 +347,6 @@ impl Bank {
             ancestors: HashMap::new(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
-            tick_height: AtomicU64::new(parent.tick_height.load(Ordering::Relaxed)),
             signature_count: AtomicU64::new(0),
             message_processor: MessageProcessor::default(),
             entered_epoch_callback: parent.entered_epoch_callback.clone(),
@@ -795,12 +789,11 @@ impl Bank {
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         inc_new_counter_debug!("bank-register_tick-registered", 1);
-        let current_tick_height = self.tick_height.fetch_add(1, Ordering::Relaxed) as u64;
+        let mut blockhash_queue = self.blockhash_queue.write().unwrap();
+        let current_tick_height = blockhash_queue.tick_height();
+        blockhash_queue.set_tick_height(current_tick_height + 1);
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
-            self.blockhash_queue
-                .write()
-                .unwrap()
-                .register_hash(hash, &self.fee_calculator);
+            blockhash_queue.register_hash(hash, &self.fee_calculator);
         }
     }
 
@@ -1424,7 +1417,7 @@ impl Bank {
 
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
-        self.tick_height.load(Ordering::Relaxed)
+        self.blockhash_queue.read().unwrap().tick_height()
     }
 
     /// Return the inflation parameters of the Bank
@@ -1559,8 +1552,8 @@ impl Bank {
         assert_eq!(self.ticks_per_slot, dbank.ticks_per_slot);
         assert_eq!(self.parent_hash, dbank.parent_hash);
         assert_eq!(
-            self.tick_height.load(Ordering::Relaxed),
-            dbank.tick_height.load(Ordering::Relaxed)
+            self.blockhash_queue.read().unwrap().tick_height(),
+            dbank.blockhash_queue.read().unwrap().tick_height()
         );
         assert_eq!(
             self.is_delta.load(Ordering::Relaxed),

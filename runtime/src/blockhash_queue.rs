@@ -17,6 +17,8 @@ pub struct BlockhashQueue {
     /// updated whenever an hash is registered
     hash_height: u64,
 
+    tick_height: u64,
+
     /// last hash to be registered
     last_hash: Option<Hash>,
 
@@ -31,6 +33,7 @@ impl BlockhashQueue {
         Self {
             ages: HashMap::new(),
             hash_height: 0,
+            tick_height: 0,
             last_hash: None,
             max_age,
         }
@@ -39,6 +42,15 @@ impl BlockhashQueue {
     #[allow(dead_code)]
     pub fn hash_height(&self) -> u64 {
         self.hash_height
+    }
+
+    /// Return the number of ticks since genesis.
+    pub fn tick_height(&self) -> u64 {
+        self.tick_height
+    }
+
+    pub fn set_tick_height(&mut self, n: u64) {
+        self.tick_height = n;
     }
 
     pub fn last_hash(&self) -> Hash {
