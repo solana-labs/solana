@@ -60,7 +60,6 @@ impl fmt::Debug for Account {
 }
 
 impl Account {
-    // TODO do we want to add executable and leader_owner even though they should always be false/default?
     pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Account {
         Account {
             lamports,
