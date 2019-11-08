@@ -83,7 +83,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_storage_api::{
@@ -95,13 +95,13 @@ pub(crate) mod tests {
 
     #[test]
     fn test_store_and_recover() {
-        let (genesis_block, mint_keypair) = create_genesis_block(1000);
+        let (genesis_config, mint_keypair) = create_genesis_config(1000);
         let mint_pubkey = mint_keypair.pubkey();
         let archiver_keypair = Keypair::new();
         let archiver_pubkey = archiver_keypair.pubkey();
         let validator_keypair = Keypair::new();
         let validator_pubkey = validator_keypair.pubkey();
-        let mut bank = Bank::new(&genesis_block);
+        let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(
             solana_storage_api::id(),
             storage_processor::process_instruction,

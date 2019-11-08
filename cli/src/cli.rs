@@ -72,7 +72,7 @@ pub enum CliCommand {
     ClusterVersion,
     Fees,
     GetEpochInfo,
-    GetGenesisBlockhash,
+    GetGenesisHash,
     GetSlot,
     GetTransactionCount,
     Ping {
@@ -247,8 +247,8 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             command: CliCommand::GetEpochInfo,
             require_keypair: false,
         }),
-        ("get-genesis-blockhash", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::GetGenesisBlockhash,
+        ("get-genesis-hash", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::GetGenesisHash,
             require_keypair: false,
         }),
         ("get-slot", Some(_matches)) => Ok(CliCommandInfo {
@@ -849,7 +849,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Return software version of solana-cli and cluster entrypoint node
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client, config),
         CliCommand::Fees => process_fees(&rpc_client),
-        CliCommand::GetGenesisBlockhash => process_get_genesis_blockhash(&rpc_client),
+        CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
         CliCommand::GetSlot => process_get_slot(&rpc_client),
         CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client),
         CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),

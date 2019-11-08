@@ -23,11 +23,11 @@ OPTIONS:
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --label LABEL             - Append the given label to the configuration files, useful when running
                               multiple validators in the same workspace
-  --node-lamports LAMPORTS  - Number of lamports this node has been funded from the genesis block
+  --node-lamports LAMPORTS  - Number of lamports this node has been funded from the genesis config
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
   --no-restart              - do not restart the node if it exits
-  --no-airdrop              - The genesis block has an account for the node. Airdrops are not required.
+  --no-airdrop              - The genesis config has an account for the node. Airdrops are not required.
 
 EOF
   exit 1
@@ -36,7 +36,7 @@ EOF
 args=()
 airdrops_enabled=1
 node_lamports=500000000000 # 500 SOL: number of lamports to airdrop the node for transaction fees (ignored if airdrops_enabled=0)
-poll_for_new_genesis_block=0
+poll_for_new_genesis_config=0
 label=
 identity_keypair_path=
 voting_keypair_path=
@@ -54,8 +54,8 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-restart ]]; then
       no_restart=1
       shift
-    elif [[ $1 = --poll-for-new-genesis-block ]]; then
-      poll_for_new_genesis_block=1
+    elif [[ $1 = --poll-for-new-genesis-config ]]; then
+      poll_for_new_genesis_config=1
       shift
     elif [[ $1 = --node-lamports ]]; then
       node_lamports="$2"
@@ -67,7 +67,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --blockstream ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --expected-genesis-blockhash ]]; then
+    elif [[ $1 = --expected-genesis-hash ]]; then
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --identity ]]; then
@@ -232,7 +232,7 @@ if [[ -z $CI ]]; then # Skip in CI
   source "$here"/../scripts/tune-system.sh
 fi
 
-new_genesis_block() {
+new_genesis_config() {
   if [[ ! -d "$ledger_dir" ]]; then
     return
   fi
@@ -336,9 +336,9 @@ while true; do
 
     sleep 1
 
-    if ((poll_for_new_genesis_block && --secs_to_next_genesis_poll == 0)); then
-      echo "Polling for new genesis block..."
-      if new_genesis_block; then
+    if ((poll_for_new_genesis_config && --secs_to_next_genesis_poll == 0)); then
+      echo "Polling for new genesis config..."
+      if new_genesis_config; then
         echo "############## New genesis detected, restarting ##############"
         (
           set -x

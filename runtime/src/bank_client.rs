@@ -266,17 +266,17 @@ impl BankClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::instruction::AccountMeta;
 
     #[test]
     fn test_bank_client_new_with_keypairs() {
-        let (genesis_block, john_doe_keypair) = create_genesis_block(10_000);
+        let (genesis_config, john_doe_keypair) = create_genesis_config(10_000);
         let john_pubkey = john_doe_keypair.pubkey();
         let jane_doe_keypair = Keypair::new();
         let jane_pubkey = jane_doe_keypair.pubkey();
         let doe_keypairs = vec![&john_doe_keypair, &jane_doe_keypair];
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
 
         // Create 2-2 Multisig Transfer instruction.

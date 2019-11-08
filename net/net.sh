@@ -60,16 +60,16 @@ Operate a configured testnet
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
    --no-airdrop
-                                      - If set, disables airdrops.  Nodes must be funded in genesis block when airdrops are disabled.
+                                      - If set, disables airdrops.  Nodes must be funded in genesis config when airdrops are disabled.
    --lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 500000000000000000 lamports minted in genesis
    --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE
                                       - Amount to stake internal nodes.
    --internal-nodes-lamports NUM_LAMPORTS_PER_NODE
-                                      - Amount to fund internal nodes in genesis block.
+                                      - Amount to fund internal nodes in genesis config.
    --external-accounts-file FILE_PATH
                                       - A YML file with a list of account pubkeys and corresponding lamport balances
-                                        in genesis block for external nodes
+                                        in genesis config for external nodes
    --no-snapshot-fetch
                                       - If set, disables booting validators from a snapshot
    --skip-poh-verify

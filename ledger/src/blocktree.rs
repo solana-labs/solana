@@ -21,7 +21,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::clock::{Slot, DEFAULT_TICKS_PER_SECOND};
-use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
@@ -1716,15 +1716,15 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
 //
 // Returns the blockhash that can be used to append entries with.
-pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Result<Hash> {
+pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> Result<Hash> {
     Blocktree::destroy(ledger_path)?;
-    genesis_block.write(&ledger_path)?;
+    genesis_config.write(&ledger_path)?;
 
-    // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
+    // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
     let blocktree = Blocktree::open(ledger_path)?;
-    let ticks_per_slot = genesis_block.ticks_per_slot;
-    let hashes_per_tick = genesis_block.poh_config.hashes_per_tick.unwrap_or(0);
-    let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_block.hash());
+    let ticks_per_slot = genesis_config.ticks_per_slot;
+    let hashes_per_tick = genesis_config.poh_config.hashes_per_tick.unwrap_or(0);
+    let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_config.hash());
     let last_hash = entries.last().unwrap().hash;
 
     let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0)
@@ -1773,8 +1773,8 @@ pub fn get_tmp_ledger_path(name: &str) -> PathBuf {
 
 #[macro_export]
 macro_rules! create_new_tmp_ledger {
-    ($genesis_block:expr) => {
-        create_new_tmp_ledger(tmp_ledger_name!(), $genesis_block)
+    ($genesis_config:expr) => {
+        create_new_tmp_ledger(tmp_ledger_name!(), $genesis_config)
     };
 }
 
@@ -1800,9 +1800,9 @@ pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: u64) -> bool
 //
 // Note: like `create_new_ledger` the returned ledger will have slot 0 full of ticks (and only
 // ticks)
-pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (PathBuf, Hash) {
+pub fn create_new_tmp_ledger(name: &str, genesis_config: &GenesisConfig) -> (PathBuf, Hash) {
     let ledger_path = get_tmp_ledger_path(name);
-    let blockhash = create_new_ledger(&ledger_path, genesis_block).unwrap();
+    let blockhash = create_new_ledger(&ledger_path, genesis_config).unwrap();
     (ledger_path, blockhash)
 }
 
@@ -1913,7 +1913,7 @@ fn adjust_ulimit_nofile() {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::shred::{max_ticks_per_n_shreds, DataShredHeader};
     use itertools::Itertools;
     use rand::seq::SliceRandom;
@@ -1926,11 +1926,11 @@ pub mod tests {
     #[test]
     fn test_create_new_ledger() {
         let mint_total = 1_000_000_000_000;
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(mint_total);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(mint_total);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
-        let ticks = create_ticks(genesis_block.ticks_per_slot, 0, genesis_block.hash());
+        let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
         let entries = ledger.get_slot_entries(0, 0, None).unwrap();
 
         assert_eq!(ticks, entries);

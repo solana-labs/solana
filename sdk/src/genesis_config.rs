@@ -1,4 +1,4 @@
-//! The `genesis_block` module is a library for generating the chain's genesis block.
+//! The `genesis_config` module is a library for generating the chain's genesis config.
 
 use crate::{
     account::Account,
@@ -28,7 +28,7 @@ pub enum OperatingMode {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct GenesisBlock {
+pub struct GenesisConfig {
     pub accounts: Vec<(Pubkey, Account)>,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub rewards_pools: Vec<(Pubkey, Account)>,
@@ -43,10 +43,10 @@ pub struct GenesisBlock {
 }
 
 // useful for basic tests
-pub fn create_genesis_block(lamports: u64) -> (GenesisBlock, Keypair) {
+pub fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
     let mint_keypair = Keypair::new();
     (
-        GenesisBlock::new(
+        GenesisConfig::new(
             &[(
                 mint_keypair.pubkey(),
                 Account::new(lamports, 0, &system_program::id()),
@@ -57,7 +57,7 @@ pub fn create_genesis_block(lamports: u64) -> (GenesisBlock, Keypair) {
     )
 }
 
-impl Default for GenesisBlock {
+impl Default for GenesisConfig {
     fn default() -> Self {
         Self {
             accounts: Vec::new(),
@@ -75,7 +75,7 @@ impl Default for GenesisBlock {
     }
 }
 
-impl GenesisBlock {
+impl GenesisConfig {
     pub fn new(
         accounts: &[(Pubkey, Account)],
         native_instruction_processors: &[(String, Pubkey)],
@@ -83,7 +83,7 @@ impl GenesisBlock {
         Self {
             accounts: accounts.to_vec(),
             native_instruction_processors: native_instruction_processors.to_vec(),
-            ..GenesisBlock::default()
+            ..GenesisConfig::default()
         }
     }
 
@@ -100,9 +100,9 @@ impl GenesisBlock {
 
         //UNSAFE: Required to create a Mmap
         let mem = unsafe { Mmap::map(&file).expect("failed to map the genesis file") };
-        let genesis_block = deserialize(&mem)
+        let genesis_config = deserialize(&mem)
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))?;
-        Ok(genesis_block)
+        Ok(genesis_config)
     }
 
     pub fn write(&self, ledger_path: &Path) -> Result<(), std::io::Error> {
@@ -155,25 +155,25 @@ mod tests {
     }
 
     #[test]
-    fn test_genesis_block() {
+    fn test_genesis_config() {
         let mint_keypair = Keypair::new();
-        let mut block = GenesisBlock::default();
-        block.add_account(
+        let mut config = GenesisConfig::default();
+        config.add_account(
             mint_keypair.pubkey(),
             Account::new(10_000, 0, &Pubkey::default()),
         );
-        block.add_account(Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default()));
-        block.add_native_instruction_processor("hi".to_string(), Pubkey::new_rand());
+        config.add_account(Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default()));
+        config.add_native_instruction_processor("hi".to_string(), Pubkey::new_rand());
 
-        assert_eq!(block.accounts.len(), 2);
-        assert!(block.accounts.iter().any(
+        assert_eq!(config.accounts.len(), 2);
+        assert!(config.accounts.iter().any(
             |(pubkey, account)| *pubkey == mint_keypair.pubkey() && account.lamports == 10_000
         ));
 
-        let path = &make_tmp_path("genesis_block");
-        block.write(&path).expect("write");
-        let loaded_block = GenesisBlock::load(&path).expect("load");
-        assert_eq!(block.hash(), loaded_block.hash());
+        let path = &make_tmp_path("genesis_config");
+        config.write(&path).expect("write");
+        let loaded_config = GenesisConfig::load(&path).expect("load");
+        assert_eq!(config.hash(), loaded_config.hash());
         let _ignored = std::fs::remove_file(&path);
     }
 }

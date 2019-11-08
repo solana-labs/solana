@@ -296,7 +296,7 @@ impl RpcSubscriptions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_budget_api;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -305,12 +305,12 @@ mod tests {
 
     #[test]
     fn test_check_account_subscribe() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(100);
-        let bank = Bank::new(&genesis_block);
+        } = create_genesis_config(100);
+        let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let alice = Keypair::new();
@@ -360,12 +360,12 @@ mod tests {
 
     #[test]
     fn test_check_program_subscribe() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(100);
-        let bank = Bank::new(&genesis_block);
+        } = create_genesis_config(100);
+        let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let alice = Keypair::new();
@@ -414,12 +414,12 @@ mod tests {
     }
     #[test]
     fn test_check_signature_subscribe() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(100);
-        let bank = Bank::new(&genesis_block);
+        } = create_genesis_config(100);
+        let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let alice = Keypair::new();

@@ -279,7 +279,7 @@ mod test {
     use crate::{
         cluster_info::ClusterInfo,
         contact_info::ContactInfo,
-        genesis_utils::create_genesis_block_with_leader,
+        genesis_utils::create_genesis_config_with_leader,
         packet::{Packet, Packets},
         repair_service::RepairSlotRange,
         service::Service,
@@ -345,7 +345,7 @@ mod test {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let bank = Arc::new(Bank::new(
-            &create_genesis_block_with_leader(100, &leader_pubkey, 10).genesis_block,
+            &create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config,
         ));
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 

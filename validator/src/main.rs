@@ -193,9 +193,7 @@ fn initialize_ledger_path(
         });
 
     let client = RpcClient::new_socket(rpc_addr);
-    let genesis_blockhash = client
-        .get_genesis_blockhash()
-        .map_err(|err| err.to_string())?;
+    let genesis_hash = client.get_genesis_hash().map_err(|err| err.to_string())?;
 
     fs::create_dir_all(ledger_path).map_err(|err| err.to_string())?;
 
@@ -221,7 +219,7 @@ fn initialize_ledger_path(
         Err(err) => warn!("Failed to get_slot from entrypoint: {}", err),
     }
 
-    Ok(genesis_blockhash)
+    Ok(genesis_hash)
 }
 
 // Return an error if a keypair file cannot be parsed.
@@ -410,12 +408,12 @@ pub fn main() {
                 .help("Use CUDA"),
         )
         .arg(
-            Arg::with_name("expected_genesis_blockhash")
-                .long("expected-genesis-blockhash")
+            Arg::with_name("expected_genesis_hash")
+                .long("expected-genesis-hash")
                 .value_name("HASH")
                 .takes_value(true)
                 .validator(hash_validator)
-                .help("Require the genesis block have this blockhash"),
+                .help("Require the genesis have this hash"),
         )
         .arg(
             Arg::with_name("logfile")
@@ -522,8 +520,8 @@ pub fn main() {
         .value_of("blockstream_unix_socket")
         .map(PathBuf::from);
 
-    validator_config.expected_genesis_blockhash = matches
-        .value_of("expected_genesis_blockhash")
+    validator_config.expected_genesis_hash = matches
+        .value_of("expected_genesis_hash")
         .map(|s| Hash::from_str(&s).unwrap());
 
     println!(
@@ -644,23 +642,23 @@ pub fn main() {
             &udp_sockets,
         );
 
-        let genesis_blockhash =
+        let genesis_hash =
             initialize_ledger_path(cluster_entrypoint, &ledger_path, no_snapshot_fetch)
                 .unwrap_or_else(|err| {
                     error!("Failed to download ledger: {}", err);
                     exit(1);
                 });
 
-        if let Some(expected_genesis_blockhash) = validator_config.expected_genesis_blockhash {
-            if expected_genesis_blockhash != genesis_blockhash {
+        if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
+            if expected_genesis_hash != genesis_hash {
                 error!(
-                    "Genesis blockhash mismatch: expected {} but local genesis blockhash is {}",
-                    expected_genesis_blockhash, genesis_blockhash,
+                    "Genesis hash mismatch: expected {} but local genesis hash is {}",
+                    expected_genesis_hash, genesis_hash,
                 );
                 exit(1);
             }
         }
-        validator_config.expected_genesis_blockhash = Some(genesis_blockhash);
+        validator_config.expected_genesis_hash = Some(genesis_hash);
     } else {
         // Without a cluster entrypoint, ledger_path must already be present
         if !ledger_path.is_dir() {

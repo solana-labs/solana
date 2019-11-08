@@ -1,5 +1,5 @@
 use solana_sdk::{
-    clock::Epoch, genesis_block::OperatingMode, inflation::Inflation,
+    clock::Epoch, genesis_config::OperatingMode, inflation::Inflation,
     move_loader::solana_move_loader_program, pubkey::Pubkey, system_program::solana_system_program,
 };
 

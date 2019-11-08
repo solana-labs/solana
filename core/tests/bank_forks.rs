@@ -6,7 +6,7 @@ mod tests {
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;
     use solana_core::{
-        genesis_utils::{create_genesis_block, GenesisBlockInfo},
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
         service::Service,
         snapshot_packager_service::SnapshotPackagerService,
     };
@@ -43,16 +43,16 @@ mod tests {
         _snapshot_output_path: TempDir,
         snapshot_config: SnapshotConfig,
         bank_forks: BankForks,
-        genesis_block_info: GenesisBlockInfo,
+        genesis_config_info: GenesisConfigInfo,
     }
 
     fn setup_snapshot_test(snapshot_interval_slots: usize) -> SnapshotTestConfig {
         let accounts_dir = TempDir::new().unwrap();
         let snapshot_dir = TempDir::new().unwrap();
         let snapshot_output_path = TempDir::new().unwrap();
-        let genesis_block_info = create_genesis_block(10_000);
+        let genesis_config_info = create_genesis_config(10_000);
         let bank0 = Bank::new_with_paths(
-            &genesis_block_info.genesis_block,
+            &genesis_config_info.genesis_config,
             Some(accounts_dir.path().to_str().unwrap().to_string()),
         );
         bank0.freeze();
@@ -70,7 +70,7 @@ mod tests {
             _snapshot_output_path: snapshot_output_path,
             snapshot_config,
             bank_forks,
-            genesis_block_info,
+            genesis_config_info,
         }
     }
 
@@ -121,7 +121,7 @@ mod tests {
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let accounts_dir = &snapshot_test_config.accounts_dir;
         let snapshot_config = &snapshot_test_config.snapshot_config;
-        let mint_keypair = &snapshot_test_config.genesis_block_info.mint_keypair;
+        let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (s, _r) = channel();
         let sender = Some(s);
@@ -198,8 +198,8 @@ mod tests {
         let accounts_dir = &snapshot_test_config.accounts_dir;
         let snapshots_dir = &snapshot_test_config.snapshot_dir;
         let snapshot_config = &snapshot_test_config.snapshot_config;
-        let mint_keypair = &snapshot_test_config.genesis_block_info.mint_keypair;
-        let genesis_block = &snapshot_test_config.genesis_block_info.genesis_block;
+        let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
+        let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
 
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
@@ -230,7 +230,7 @@ mod tests {
             );
             let slot = bank.slot();
             let key1 = Keypair::new().pubkey();
-            let tx = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_block.hash());
+            let tx = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.freeze();
             bank_forks.insert(bank);

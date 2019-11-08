@@ -109,7 +109,7 @@ impl Service for PohService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::poh_recorder::WorkingBank;
     use crate::result::Result;
     use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
@@ -122,8 +122,8 @@ mod tests {
 
     #[test]
     fn test_poh_service() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let prev_hash = bank.last_blockhash();
         let ledger_path = get_tmp_ledger_path!();
         {

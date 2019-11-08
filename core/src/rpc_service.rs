@@ -94,7 +94,7 @@ impl JsonRpcService {
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         ledger_path: &Path,
-        genesis_blockhash: Hash,
+        genesis_hash: Hash,
         validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
@@ -123,7 +123,7 @@ impl JsonRpcService {
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor_.clone(),
                         cluster_info: cluster_info.clone(),
-                        genesis_blockhash
+                        genesis_hash
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -175,7 +175,7 @@ impl Service for JsonRpcService {
 mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::rpc::tests::create_validator_exit;
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::KeypairUtil;
@@ -184,14 +184,14 @@ mod tests {
 
     #[test]
     fn test_rpc_new() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
+        } = create_genesis_config(10_000);
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::default(),
         )));

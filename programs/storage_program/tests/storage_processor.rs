@@ -4,7 +4,7 @@ use log::*;
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
-    genesis_utils::{create_genesis_block, GenesisBlockInfo},
+    genesis_utils::{create_genesis_config, GenesisConfigInfo},
 };
 use solana_sdk::{
     account::{create_keyed_accounts, Account, KeyedAccount},
@@ -61,12 +61,12 @@ fn test_account_owner() {
     let archiver_storage_keypair = Keypair::new();
     let archiver_storage_pubkey = archiver_storage_keypair.pubkey();
 
-    let GenesisBlockInfo {
-        genesis_block,
+    let GenesisConfigInfo {
+        genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_block(1000);
-    let mut bank = Bank::new(&genesis_block);
+    } = create_genesis_config(1000);
+    let mut bank = Bank::new(&genesis_config);
     let mint_pubkey = mint_keypair.pubkey();
     bank.add_instruction_processor(id(), process_instruction);
     let bank = Arc::new(bank);
@@ -263,12 +263,12 @@ fn test_submit_mining_ok() {
 #[test]
 fn test_validate_mining() {
     solana_logger::setup();
-    let GenesisBlockInfo {
-        mut genesis_block,
+    let GenesisConfigInfo {
+        mut genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_block(100_000_000_000);
-    genesis_block
+    } = create_genesis_config(100_000_000_000);
+    genesis_config
         .native_instruction_processors
         .push(solana_storage_program::solana_storage_program!());
     let mint_pubkey = mint_keypair.pubkey();
@@ -284,7 +284,7 @@ fn test_validate_mining() {
     let validator_storage_keypair = Keypair::new();
     let validator_storage_id = validator_storage_keypair.pubkey();
 
-    let bank = Bank::new(&genesis_block);
+    let bank = Bank::new(&genesis_config);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -564,12 +564,12 @@ fn get_storage_blockhash<C: SyncClient>(client: &C, account: &Pubkey) -> Hash {
 
 #[test]
 fn test_bank_storage() {
-    let GenesisBlockInfo {
-        mut genesis_block,
+    let GenesisConfigInfo {
+        mut genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_block(1000);
-    genesis_block
+    } = create_genesis_config(1000);
+    genesis_config
         .native_instruction_processors
         .push(solana_storage_program::solana_storage_program!());
     let mint_pubkey = mint_keypair.pubkey();
@@ -578,7 +578,7 @@ fn test_bank_storage() {
     let validator_keypair = Keypair::new();
     let validator_pubkey = validator_keypair.pubkey();
 
-    let bank = Bank::new(&genesis_block);
+    let bank = Bank::new(&genesis_config);
     // tick the bank up until it's moved into storage segment 2
     // create a new bank in storage segment 2
     let bank = Bank::new_from_parent(

@@ -153,7 +153,7 @@ startNodes() {
     addLogs=true
   fi
   initCompleteFiles=()
-  maybeExpectedGenesisBlockhash=
+  maybeExpectedGenesisHash=
   for i in $(seq 0 $((${#nodes[@]} - 1))); do
     declare cmd=${nodes[$i]}
 
@@ -162,7 +162,7 @@ startNodes() {
       rm -f "$initCompleteFile"
       initCompleteFiles+=("$initCompleteFile")
     fi
-    startNode "$i" "$cmd $maybeExpectedGenesisBlockhash"
+    startNode "$i" "$cmd $maybeExpectedGenesisHash"
     if $addLogs; then
       logs+=("$(getNodeLogFile "$i" "$cmd")")
     fi
@@ -176,9 +176,9 @@ startNodes() {
       (
         set -x
         $solana_cli --keypair config/bootstrap-leader/identity-keypair.json \
-          --url http://127.0.0.1:8899 get-genesis-blockhash
-      ) | tee genesis-blockhash.log
-      maybeExpectedGenesisBlockhash="--expected-genesis-blockhash $(tail -n1 genesis-blockhash.log)"
+          --url http://127.0.0.1:8899 get-genesis-hash
+      ) | tee genesis-hash.log
+      maybeExpectedGenesisHash="--expected-genesis-hash $(tail -n1 genesis-hash.log)"
     fi
   done
 

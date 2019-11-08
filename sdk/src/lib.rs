@@ -37,7 +37,7 @@ pub mod client;
 #[cfg(not(feature = "program"))]
 pub mod commitment_config;
 #[cfg(not(feature = "program"))]
-pub mod genesis_block;
+pub mod genesis_config;
 #[cfg(not(feature = "program"))]
 pub mod packet;
 #[cfg(not(feature = "program"))]

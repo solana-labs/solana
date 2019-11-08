@@ -5,7 +5,7 @@ extern crate test;
 use solana_runtime::accounts::{create_test_accounts, Accounts};
 use solana_runtime::bank::*;
 use solana_sdk::account::Account;
-use solana_sdk::genesis_block::create_genesis_block;
+use solana_sdk::genesis_config::create_genesis_config;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use test::Bencher;
@@ -23,8 +23,8 @@ fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
 
 #[bench]
 fn test_accounts_create(bencher: &mut Bencher) {
-    let (genesis_block, _) = create_genesis_block(10_000);
-    let bank0 = Bank::new_with_paths(&genesis_block, Some("bench_a0".to_string()));
+    let (genesis_config, _) = create_genesis_config(10_000);
+    let bank0 = Bank::new_with_paths(&genesis_config, Some("bench_a0".to_string()));
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
         deposit_many(&bank0, &mut pubkeys, 1000);
@@ -33,10 +33,10 @@ fn test_accounts_create(bencher: &mut Bencher) {
 
 #[bench]
 fn test_accounts_squash(bencher: &mut Bencher) {
-    let (genesis_block, _) = create_genesis_block(100_000);
+    let (genesis_config, _) = create_genesis_config(100_000);
     let mut banks: Vec<Arc<Bank>> = Vec::with_capacity(10);
     banks.push(Arc::new(Bank::new_with_paths(
-        &genesis_block,
+        &genesis_config,
         Some("bench_a1".to_string()),
     )));
     let mut pubkeys: Vec<Pubkey> = vec![];

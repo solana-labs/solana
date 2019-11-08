@@ -129,7 +129,7 @@ impl JsonRpcRequestProcessor {
     }
 
     pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
-        // Since epoch schedule data comes from the genesis block, any commitment level should be
+        // Since epoch schedule data comes from the genesis config, any commitment level should be
         // fine
         Ok(*self.bank(None).epoch_schedule())
     }
@@ -278,7 +278,7 @@ fn verify_signature(input: &str) -> Result<Signature> {
 pub struct Meta {
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
     pub cluster_info: Arc<RwLock<ClusterInfo>>,
-    pub genesis_blockhash: Hash,
+    pub genesis_hash: Hash,
 }
 impl Metadata for Meta {}
 
@@ -372,8 +372,8 @@ pub trait RpcSol {
         block: u64,
     ) -> Result<(Option<BlockCommitment>, u64)>;
 
-    #[rpc(meta, name = "getGenesisBlockhash")]
-    fn get_genesis_blockhash(&self, meta: Self::Metadata) -> Result<String>;
+    #[rpc(meta, name = "getGenesisHash")]
+    fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
 
     #[rpc(meta, name = "getLeaderSchedule")]
     fn get_leader_schedule(
@@ -647,9 +647,9 @@ impl RpcSol for RpcSolImpl {
             .get_block_commitment(block))
     }
 
-    fn get_genesis_blockhash(&self, meta: Self::Metadata) -> Result<String> {
-        debug!("get_genesis_blockhash rpc request received");
-        Ok(meta.genesis_blockhash.to_string())
+    fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String> {
+        debug!("get_genesis_hash rpc request received");
+        Ok(meta.genesis_hash.to_string())
     }
 
     fn get_leader_schedule(
@@ -928,7 +928,7 @@ pub mod tests {
     use super::*;
     use crate::{
         contact_info::ContactInfo,
-        genesis_utils::{create_genesis_block, GenesisBlockInfo},
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
     use solana_sdk::{
@@ -1009,7 +1009,7 @@ pub mod tests {
         let meta = Meta {
             request_processor,
             cluster_info,
-            genesis_blockhash: Hash::default(),
+            genesis_hash: Hash::default(),
         };
         RpcHandler {
             io,
@@ -1463,7 +1463,7 @@ pub mod tests {
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
                 ContactInfo::default(),
             ))),
-            genesis_blockhash: Hash::default(),
+            genesis_hash: Hash::default(),
         };
 
         let req =
@@ -1515,16 +1515,16 @@ pub mod tests {
     }
 
     fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair) {
-        let GenesisBlockInfo {
-            mut genesis_block,
+        let GenesisConfigInfo {
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(TEST_MINT_LAMPORTS);
+        } = create_genesis_config(TEST_MINT_LAMPORTS);
 
-        genesis_block.rent.lamports_per_byte_year = 50;
-        genesis_block.rent.exemption_threshold = 2.0;
+        genesis_config.rent.lamports_per_byte_year = 50;
+        genesis_config.rent.exemption_threshold = 2.0;
 
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         (
             Arc::new(RwLock::new(BankForks::new(bank.slot(), bank))),
             mint_keypair,

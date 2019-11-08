@@ -41,7 +41,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Get information about the current epoch"),
         )
         .subcommand(
-            SubCommand::with_name("get-genesis-blockhash").about("Get the genesis blockhash"),
+            SubCommand::with_name("get-genesis-hash").about("Get the genesis hash"),
         )
         .subcommand(SubCommand::with_name("get-slot").about("Get current slot"))
         .subcommand(
@@ -186,9 +186,9 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient) -> ProcessResult {
     Ok("".to_string())
 }
 
-pub fn process_get_genesis_blockhash(rpc_client: &RpcClient) -> ProcessResult {
-    let genesis_blockhash = rpc_client.get_genesis_blockhash()?;
-    Ok(genesis_blockhash.to_string())
+pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
+    let genesis_hash = rpc_client.get_genesis_hash()?;
+    Ok(genesis_hash.to_string())
 }
 
 pub fn process_get_slot(rpc_client: &RpcClient) -> ProcessResult {
@@ -463,13 +463,13 @@ mod tests {
             }
         );
 
-        let test_get_genesis_blockhash = test_commands
+        let test_get_genesis_hash = test_commands
             .clone()
-            .get_matches_from(vec!["test", "get-genesis-blockhash"]);
+            .get_matches_from(vec!["test", "get-genesis-hash"]);
         assert_eq!(
-            parse_command(&test_get_genesis_blockhash).unwrap(),
+            parse_command(&test_get_genesis_hash).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetGenesisBlockhash,
+                command: CliCommand::GetGenesisHash,
                 require_keypair: false
             }
         );

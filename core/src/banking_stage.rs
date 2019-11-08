@@ -973,7 +973,7 @@ pub fn create_test_recorder(
 mod tests {
     use super::*;
     use crate::cluster_info::Node;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
     use crossbeam_channel::unbounded;
@@ -989,8 +989,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown1() {
-        let genesis_block = create_genesis_block(2).genesis_block;
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let genesis_config = create_genesis_config(2).genesis_config;
+        let bank = Arc::new(Bank::new(&genesis_config));
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
@@ -1020,12 +1020,12 @@ mod tests {
     #[test]
     fn test_banking_stage_tick() {
         solana_logger::setup();
-        let GenesisBlockInfo {
-            mut genesis_block, ..
-        } = create_genesis_block(2);
-        genesis_block.ticks_per_slot = 4;
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(2);
+        genesis_config.ticks_per_slot = 4;
         let num_extra_ticks = 2;
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Arc::new(Bank::new(&genesis_config));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
@@ -1059,7 +1059,7 @@ mod tests {
                 .map(|(_bank, (entry, _tick_height))| entry)
                 .collect();
             trace!("done");
-            assert_eq!(entries.len(), genesis_block.ticks_per_slot as usize);
+            assert_eq!(entries.len(), genesis_config.ticks_per_slot as usize);
             assert!(entries.verify(&start_hash));
             assert_eq!(entries[entries.len() - 1].hash, bank.last_blockhash());
             banking_stage.join().unwrap();
@@ -1080,12 +1080,12 @@ mod tests {
     #[test]
     fn test_banking_stage_entries_only() {
         solana_logger::setup();
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(10);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
@@ -1152,7 +1152,7 @@ mod tests {
             drop(poh_recorder);
 
             let mut blockhash = start_hash;
-            let bank = Bank::new(&genesis_block);
+            let bank = Bank::new(&genesis_config);
             bank.process_transaction(&fund_tx).unwrap();
             //receive entries + ticks
             loop {
@@ -1192,17 +1192,17 @@ mod tests {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(2);
+        } = create_genesis_config(2);
         let (verified_sender, verified_receiver) = unbounded();
 
         // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
         let tx =
-            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 2, genesis_block.hash());
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 2, genesis_config.hash());
 
         let packets = to_packets(&[tx]);
         let packets = packets
@@ -1214,7 +1214,7 @@ mod tests {
 
         // Process a second batch that uses the same from account, so conflicts with above TX
         let tx =
-            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_block.hash());
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_config.hash());
         let packets = to_packets(&[tx]);
         let packets = packets
             .into_iter()
@@ -1228,7 +1228,7 @@ mod tests {
         {
             let entry_receiver = {
                 // start a banking_stage to eat verified receiver
-                let bank = Arc::new(Bank::new(&genesis_block));
+                let bank = Arc::new(Bank::new(&genesis_config));
                 let blocktree = Arc::new(
                     Blocktree::open(&ledger_path)
                         .expect("Expected to be able to open database ledger"),
@@ -1267,7 +1267,7 @@ mod tests {
                 .map(|(_bank, (entry, _tick_height))| entry)
                 .collect();
 
-            let bank = Bank::new(&genesis_block);
+            let bank = Bank::new(&genesis_config);
             for entry in &entries {
                 bank.process_transactions(&entry.transactions)
                     .iter()
@@ -1284,12 +1284,12 @@ mod tests {
 
     #[test]
     fn test_bank_record_transactions() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(10_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let working_bank = WorkingBank {
             bank: bank.clone(),
             min_tick_height: bank.tick_height(),
@@ -1318,8 +1318,8 @@ mod tests {
             let pubkey2 = Pubkey::new_rand();
 
             let transactions = vec![
-                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-                system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_block.hash()),
+                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+                system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_config.hash()),
             ];
 
             let mut results = vec![Ok(()), Ok(())];
@@ -1385,11 +1385,11 @@ mod tests {
 
     #[test]
     fn test_bank_filter_transaction_indexes() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
+        } = create_genesis_config(10_000);
         let pubkey = Pubkey::new_rand();
 
         let transactions = vec![
@@ -1398,53 +1398,53 @@ mod tests {
                 &mint_keypair,
                 &pubkey,
                 1,
-                genesis_block.hash(),
+                genesis_config.hash(),
             )),
             Some(system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
                 1,
-                genesis_block.hash(),
+                genesis_config.hash(),
             )),
             Some(system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
                 1,
-                genesis_block.hash(),
+                genesis_config.hash(),
             )),
             None,
-            None,
-            Some(system_transaction::transfer(
-                &mint_keypair,
-                &pubkey,
-                1,
-                genesis_block.hash(),
-            )),
             None,
             Some(system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
                 1,
-                genesis_block.hash(),
+                genesis_config.hash(),
             )),
             None,
             Some(system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
                 1,
-                genesis_block.hash(),
+                genesis_config.hash(),
+            )),
+            None,
+            Some(system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
             )),
             None,
             None,
         ];
 
         let filtered_transactions = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
         ];
 
         assert_eq!(
@@ -1466,20 +1466,20 @@ mod tests {
 
     #[test]
     fn test_bank_prepare_filter_for_pending_transaction() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
+        } = create_genesis_config(10_000);
         let pubkey = Pubkey::new_rand();
 
         let transactions = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
         ];
 
         assert_eq!(
@@ -1608,19 +1608,19 @@ mod tests {
     #[test]
     fn test_bank_process_and_record_transactions() {
         solana_logger::setup();
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(10_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let pubkey = Pubkey::new_rand();
 
         let transactions = vec![system_transaction::transfer(
             &mint_keypair,
             &pubkey,
             1,
-            genesis_block.hash(),
+            genesis_config.hash(),
         )];
 
         let working_bank = WorkingBank {
@@ -1673,7 +1673,7 @@ mod tests {
                 &mint_keypair,
                 &pubkey,
                 2,
-                genesis_block.hash(),
+                genesis_config.hash(),
             )];
 
             assert_matches!(
@@ -1695,18 +1695,18 @@ mod tests {
     #[test]
     fn test_bank_process_and_record_transactions_account_in_use() {
         solana_logger::setup();
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(10_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let pubkey = Pubkey::new_rand();
         let pubkey1 = Pubkey::new_rand();
 
         let transactions = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
-            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()),
         ];
 
         let working_bank = WorkingBank {
@@ -1786,17 +1786,20 @@ mod tests {
     #[test]
     fn test_process_transactions_returns_unprocessed_txs() {
         solana_logger::setup();
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(10_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
 
         let pubkey = Pubkey::new_rand();
 
         let transactions =
-            vec![system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(),); 3];
+            vec![
+                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash(),);
+                3
+            ];
 
         let ledger_path = get_tmp_ledger_path!();
         {

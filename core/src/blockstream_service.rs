@@ -101,7 +101,7 @@ impl Service for BlockstreamService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use bincode::{deserialize, serialize};
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
@@ -118,13 +118,13 @@ mod test {
         let ticks_per_slot = 5;
         let leader_pubkey = Pubkey::new_rand();
 
-        // Set up genesis block and blocktree
-        let GenesisBlockInfo {
-            mut genesis_block, ..
-        } = create_genesis_block(1000);
-        genesis_block.ticks_per_slot = ticks_per_slot;
+        // Set up genesis config and blocktree
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(1000);
+        genesis_config.ticks_per_slot = ticks_per_slot;
 
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blocktree = Blocktree::open(&ledger_path).unwrap();
 
         // Set up blockstream

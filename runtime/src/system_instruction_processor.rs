@@ -144,7 +144,7 @@ mod tests {
     use bincode::serialize;
     use solana_sdk::account::Account;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_program;
@@ -472,13 +472,13 @@ mod tests {
 
     #[test]
     fn test_system_unsigned_transaction() {
-        let (genesis_block, alice_keypair) = create_genesis_block(100);
+        let (genesis_config, alice_keypair) = create_genesis_config(100);
         let alice_pubkey = alice_keypair.pubkey();
         let mallory_keypair = Keypair::new();
         let mallory_pubkey = mallory_keypair.pubkey();
 
         // Fund to account to bypass AccountNotFound error
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
         bank_client
             .transfer(50, &alice_keypair, &mallory_pubkey)

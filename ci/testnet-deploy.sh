@@ -75,11 +75,11 @@ Deploys a CD testnet
    -S                   - Stop network software without tearing down nodes.
    -f                   - Discard validator nodes that didn't bootup successfully
    --no-airdrop
-                        - If set, disables airdrops.  Nodes must be funded in genesis block when airdrops are disabled.
+                        - If set, disables airdrops.  Nodes must be funded in genesis config when airdrops are disabled.
    --internal-nodes-stake-lamports NUM_LAMPORTS
                         - Amount to stake internal nodes.
    --internal-nodes-lamports NUM_LAMPORTS
-                        - Amount to fund internal nodes in genesis block
+                        - Amount to fund internal nodes in genesis config
    --external-accounts-file FILE_PATH
                         - Path to external Primordial Accounts file, if it exists.
    --hashes-per-tick NUM_HASHES|sleep|auto

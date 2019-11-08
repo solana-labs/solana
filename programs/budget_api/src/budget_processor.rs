@@ -190,7 +190,7 @@ mod tests {
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::account::Account;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::hash::hash;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::message::Message;
@@ -198,8 +198,8 @@ mod tests {
     use solana_sdk::transaction::TransactionError;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
-        let (genesis_block, mint_keypair) = create_genesis_block(lamports);
-        let mut bank = Bank::new(&genesis_block);
+        let (genesis_config, mint_keypair) = create_genesis_config(lamports);
+        let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(id(), process_instruction);
         (bank, mint_keypair)
     }

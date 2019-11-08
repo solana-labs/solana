@@ -21,7 +21,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
-* [getGenesisBlockhash](jsonrpc-api.md#getgenesisblockhash)
+* [getGenesisHash](jsonrpc-api.md#getgenesishash)
 * [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
 * [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 * [getNumBlocksSinceSignatureConfirmation](jsonrpc-api.md#getnumblockssincesignatureconfirmation)
@@ -255,7 +255,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### getEpochSchedule
 
-Returns epoch schedule information from this cluster's genesis block
+Returns epoch schedule information from this cluster's genesis config
 
 #### Parameters:
 
@@ -281,9 +281,9 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":{"first_normal_epoch":8,"first_normal_slot":8160,"leader_schedule_slot_offset":8192,"slots_per_epoch":8192,"warmup":true},"id":1}
 ```
 
-### getGenesisBlockhash
+### getGenesisHash
 
-Returns the genesis block hash
+Returns the genesis hash
 
 #### Parameters:
 
@@ -297,7 +297,7 @@ None
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getGenesisBlockhash"}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getGenesisHash"}' http://localhost:8899
 
 // Result
 {"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}

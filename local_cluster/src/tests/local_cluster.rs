@@ -17,7 +17,7 @@ use solana_sdk::{
     clock,
     commitment_config::CommitmentConfig,
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
-    genesis_block::OperatingMode,
+    genesis_config::OperatingMode,
     poh_config::PohConfig,
 };
 use std::{
@@ -206,7 +206,7 @@ fn test_two_unbalanced_stakes() {
 
     cluster_tests::sleep_n_epochs(
         10.0,
-        &cluster.genesis_block.poh_config,
+        &cluster.genesis_config.poh_config,
         num_ticks_per_slot,
         num_slots_per_epoch,
     );
@@ -265,14 +265,14 @@ fn test_restart_node() {
     let nodes = cluster.get_node_pubkeys();
     cluster_tests::sleep_n_epochs(
         1.0,
-        &cluster.genesis_block.poh_config,
+        &cluster.genesis_config.poh_config,
         clock::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
     cluster.exit_restart_node(&nodes[0], validator_config);
     cluster_tests::sleep_n_epochs(
         0.5,
-        &cluster.genesis_block.poh_config,
+        &cluster.genesis_config.poh_config,
         clock::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
@@ -608,7 +608,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     // Wait for the corrupted leader to be scheduled afer the warmup epochs expire
     cluster_tests::sleep_n_epochs(
         (num_warmup_epochs + 1) as f64,
-        &cluster.genesis_block.poh_config,
+        &cluster.genesis_config.poh_config,
         cluster_config.ticks_per_slot,
         cluster_config.slots_per_epoch,
     );
@@ -735,7 +735,7 @@ fn run_repairman_catchup(num_repairmen: u64) {
     // Sleep for longer than the first N warmup epochs, with a one epoch buffer for timing issues
     cluster_tests::sleep_n_epochs(
         num_warmup_epochs as f64 + 1.0,
-        &cluster.genesis_block.poh_config,
+        &cluster.genesis_config.poh_config,
         num_ticks_per_slot,
         num_slots_per_epoch,
     );

@@ -457,7 +457,7 @@ mod test {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction;
@@ -541,8 +541,8 @@ mod test {
     }
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
-        let (genesis_block, mint_keypair) = create_genesis_block(lamports);
-        let mut bank = Bank::new(&genesis_block);
+        let (genesis_config, mint_keypair) = create_genesis_config(lamports);
+        let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(id(), process_instruction);
         (bank, mint_keypair)
     }

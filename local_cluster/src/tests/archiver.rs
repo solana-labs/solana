@@ -12,7 +12,7 @@ use solana_core::{
 use solana_ledger::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
-    genesis_block::create_genesis_block,
+    genesis_config::create_genesis_config,
     signature::{Keypair, KeypairUtil},
 };
 use std::{
@@ -87,8 +87,8 @@ fn test_archiver_startup_leader_hang() {
     info!("starting archiver test");
 
     let leader_ledger_path = std::path::PathBuf::from("archiver_test_leader_ledger");
-    let (genesis_block, _mint_keypair) = create_genesis_block(10_000);
-    let (archiver_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+    let (genesis_config, _mint_keypair) = create_genesis_config(10_000);
+    let (archiver_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
     {
         let archiver_keypair = Arc::new(Keypair::new());
@@ -134,7 +134,7 @@ fn test_archiver_startup_ledger_hang() {
 
     // Pass bad TVU sockets to prevent successful ledger download
     archiver_node.sockets.tvu = vec![std::net::UdpSocket::bind("0.0.0.0:0").unwrap()];
-    let (archiver_ledger_path, _blockhash) = create_new_tmp_ledger!(&cluster.genesis_block);
+    let (archiver_ledger_path, _blockhash) = create_new_tmp_ledger!(&cluster.genesis_config);
 
     let archiver_res = Archiver::new(
         &archiver_ledger_path,

@@ -298,7 +298,7 @@ impl BroadcastRun for StandardBroadcastRun {
 mod test {
     use super::*;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::genesis_utils::create_genesis_block;
+    use crate::genesis_utils::create_genesis_config;
     use solana_ledger::{
         blocktree::{get_tmp_ledger_path, Blocktree},
         entry::create_ticks,
@@ -307,7 +307,7 @@ mod test {
     use solana_runtime::bank::Bank;
     use solana_sdk::{
         clock::Slot,
-        genesis_block::GenesisBlock,
+        genesis_config::GenesisConfig,
         signature::{Keypair, KeypairUtil},
     };
     use std::sync::{Arc, RwLock};
@@ -317,7 +317,7 @@ mod test {
         num_shreds_per_slot: Slot,
     ) -> (
         Arc<Blocktree>,
-        GenesisBlock,
+        GenesisConfig,
         Arc<RwLock<ClusterInfo>>,
         Arc<Bank>,
         Arc<Keypair>,
@@ -335,12 +335,12 @@ mod test {
             leader_info.info.clone(),
         )));
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut genesis_block = create_genesis_block(10_000).genesis_block;
-        genesis_block.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot) + 1;
-        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let mut genesis_config = create_genesis_config(10_000).genesis_config;
+        genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot) + 1;
+        let bank0 = Arc::new(Bank::new(&genesis_config));
         (
             blocktree,
-            genesis_block,
+            genesis_config,
             cluster_info,
             bank0,
             leader_keypair,
@@ -384,11 +384,11 @@ mod test {
     fn test_slot_interrupt() {
         // Setup
         let num_shreds_per_slot = 2;
-        let (blocktree, genesis_block, cluster_info, bank0, leader_keypair, socket) =
+        let (blocktree, genesis_config, cluster_info, bank0, leader_keypair, socket) =
             setup(num_shreds_per_slot);
 
         // Insert 1 less than the number of ticks needed to finish the slot
-        let ticks0 = create_ticks(genesis_block.ticks_per_slot - 1, 0, genesis_block.hash());
+        let ticks0 = create_ticks(genesis_config.ticks_per_slot - 1, 0, genesis_config.hash());
         let receive_results = ReceiveResults {
             entries: ticks0.clone(),
             time_elapsed: Duration::new(3, 0),
@@ -426,7 +426,7 @@ mod test {
         // Interrupting the slot should cause the unfinished_slot and stats to reset
         let num_shreds = 1;
         assert!(num_shreds < num_shreds_per_slot);
-        let ticks1 = create_ticks(max_ticks_per_n_shreds(num_shreds), 0, genesis_block.hash());
+        let ticks1 = create_ticks(max_ticks_per_n_shreds(num_shreds), 0, genesis_config.hash());
         let receive_results = ReceiveResults {
             entries: ticks1.clone(),
             time_elapsed: Duration::new(2, 0),
@@ -461,11 +461,11 @@ mod test {
     fn test_slot_finish() {
         // Setup
         let num_shreds_per_slot = 2;
-        let (blocktree, genesis_block, cluster_info, bank0, leader_keypair, socket) =
+        let (blocktree, genesis_config, cluster_info, bank0, leader_keypair, socket) =
             setup(num_shreds_per_slot);
 
         // Insert complete slot of ticks needed to finish the slot
-        let ticks = create_ticks(genesis_block.ticks_per_slot, 0, genesis_block.hash());
+        let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
         let receive_results = ReceiveResults {
             entries: ticks.clone(),
             time_elapsed: Duration::new(3, 0),

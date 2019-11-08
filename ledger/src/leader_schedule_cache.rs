@@ -237,7 +237,7 @@ mod tests {
     use crate::{
         blocktree::{get_tmp_ledger_path, make_slot_entries},
         genesis_utils::{
-            create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
+            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             BOOTSTRAP_LEADER_LAMPORTS,
         },
         staking_utils::tests::setup_vote_and_stake_accounts,
@@ -252,8 +252,8 @@ mod tests {
 
     #[test]
     fn test_new_cache() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
-        let bank = Bank::new(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
+        let bank = Bank::new(&genesis_config);
         let cache = LeaderScheduleCache::new_from_bank(&bank);
         assert_eq!(bank.slot(), 0);
         assert_eq!(cache.max_schedules(), MAX_SCHEDULES);
@@ -315,8 +315,8 @@ mod tests {
     fn run_thread_race() {
         let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
         let epoch_schedule = EpochSchedule::custom(slots_per_epoch, slots_per_epoch / 2, true);
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule, &bank));
 
         let num_threads = 10;
@@ -354,19 +354,19 @@ mod tests {
     #[test]
     fn test_next_leader_slot() {
         let pubkey = Pubkey::new_rand();
-        let mut genesis_block = create_genesis_block_with_leader(
+        let mut genesis_config = create_genesis_config_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         )
-        .genesis_block;
-        genesis_block.epoch_schedule = EpochSchedule::custom(
+        .genesis_config;
+        genesis_config.epoch_schedule = EpochSchedule::custom(
             DEFAULT_SLOTS_PER_EPOCH,
             DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET,
             false,
         );
 
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         assert_eq!(
@@ -384,7 +384,7 @@ mod tests {
         assert_eq!(
             cache.next_leader_slot(
                 &pubkey,
-                2 * genesis_block.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
+                2 * genesis_config.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
                 &bank,
                 None
             ),
@@ -405,15 +405,15 @@ mod tests {
     #[test]
     fn test_next_leader_slot_blocktree() {
         let pubkey = Pubkey::new_rand();
-        let mut genesis_block = create_genesis_block_with_leader(
+        let mut genesis_config = create_genesis_config_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         )
-        .genesis_block;
-        genesis_block.epoch_schedule.warmup = false;
+        .genesis_config;
+        genesis_config.epoch_schedule.warmup = false;
 
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -463,7 +463,7 @@ mod tests {
             assert_eq!(
                 cache.next_leader_slot(
                     &pubkey,
-                    2 * genesis_block.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
+                    2 * genesis_config.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
                     &bank,
                     Some(&blocktree)
                 ),
@@ -485,14 +485,14 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot_next_epoch() {
-        let GenesisBlockInfo {
-            mut genesis_block,
+        let GenesisConfigInfo {
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
-        genesis_block.epoch_schedule.warmup = false;
+        } = create_genesis_config(10_000);
+        genesis_config.epoch_schedule.warmup = false;
 
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         // Create new vote account
@@ -525,7 +525,7 @@ mod tests {
         let mut index = 0;
         while schedule[index] != node_pubkey {
             index += 1;
-            assert_ne!(index, genesis_block.epoch_schedule.slots_per_epoch);
+            assert_ne!(index, genesis_config.epoch_schedule.slots_per_epoch);
         }
         expected_slot += index;
 
@@ -546,8 +546,8 @@ mod tests {
 
     #[test]
     fn test_schedule_for_unconfirmed_epoch() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let cache = LeaderScheduleCache::new_from_bank(&bank);
 
         assert_eq!(*cache.max_epoch.read().unwrap(), 1);
@@ -577,8 +577,8 @@ mod tests {
 
     #[test]
     fn test_set_max_schedules() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let mut cache = LeaderScheduleCache::new_from_bank(&bank);
 
         // Max schedules must be greater than 0

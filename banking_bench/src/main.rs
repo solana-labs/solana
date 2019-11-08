@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use solana_core::banking_stage::{create_test_recorder, BankingStage};
 use solana_core::cluster_info::ClusterInfo;
 use solana_core::cluster_info::Node;
-use solana_core::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+use solana_core::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_core::packet::to_packets_chunked;
 use solana_core::poh_recorder::PohRecorder;
 use solana_core::poh_recorder::WorkingBankEntry;
@@ -102,21 +102,21 @@ fn main() {
     const PACKETS_PER_BATCH: usize = 192;
     let txes = PACKETS_PER_BATCH * num_threads * CHUNKS;
     let mint_total = 1_000_000_000_000;
-    let GenesisBlockInfo {
-        genesis_block,
+    let GenesisConfigInfo {
+        genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_block(mint_total);
+    } = create_genesis_config(mint_total);
 
     let (verified_sender, verified_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
-    let bank0 = Bank::new(&genesis_block);
+    let bank0 = Bank::new(&genesis_config);
     let mut bank_forks = BankForks::new(0, bank0);
     let mut bank = bank_forks.working_bank();
 
     info!("threads: {} txs: {}", num_threads, txes);
 
-    let mut transactions = make_accounts_txs(txes, &mint_keypair, genesis_block.hash());
+    let mut transactions = make_accounts_txs(txes, &mint_keypair, genesis_config.hash());
 
     // fund all the accounts
     transactions.iter().for_each(|tx| {
@@ -124,7 +124,7 @@ fn main() {
             &mint_keypair,
             &tx.message.account_keys[0],
             mint_total / txes as u64,
-            genesis_block.hash(),
+            genesis_config.hash(),
         );
         let x = bank.process_transaction(&fund);
         x.unwrap();

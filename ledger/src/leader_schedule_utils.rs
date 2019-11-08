@@ -55,22 +55,22 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 mod tests {
     use super::*;
     use solana_runtime::genesis_utils::{
-        create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS,
+        create_genesis_config_with_leader, BOOTSTRAP_LEADER_LAMPORTS,
     };
 
     #[test]
     fn test_leader_schedule_via_bank() {
         let pubkey = Pubkey::new_rand();
-        let genesis_block =
-            create_genesis_block_with_leader(0, &pubkey, BOOTSTRAP_LEADER_LAMPORTS).genesis_block;
-        let bank = Bank::new(&genesis_block);
+        let genesis_config =
+            create_genesis_config_with_leader(0, &pubkey, BOOTSTRAP_LEADER_LAMPORTS).genesis_config;
+        let bank = Bank::new(&genesis_config);
 
         let pubkeys_and_stakes: Vec<_> = staking_utils::staked_nodes(&bank).into_iter().collect();
         let seed = [0u8; 32];
         let leader_schedule = LeaderSchedule::new(
             &pubkeys_and_stakes,
             seed,
-            genesis_block.epoch_schedule.slots_per_epoch,
+            genesis_config.epoch_schedule.slots_per_epoch,
             NUM_CONSECUTIVE_LEADER_SLOTS,
         );
 
@@ -82,13 +82,13 @@ mod tests {
     #[test]
     fn test_leader_scheduler1_basic() {
         let pubkey = Pubkey::new_rand();
-        let genesis_block = create_genesis_block_with_leader(
+        let genesis_config = create_genesis_config_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         )
-        .genesis_block;
-        let bank = Bank::new(&genesis_block);
+        .genesis_config;
+        let bank = Bank::new(&genesis_config);
         assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
     }
 

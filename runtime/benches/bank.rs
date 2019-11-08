@@ -10,7 +10,7 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::AsyncClient;
 use solana_sdk::client::SyncClient;
 use solana_sdk::clock::MAX_RECENT_BLOCKHASHES;
-use solana_sdk::genesis_block::create_genesis_block;
+use solana_sdk::genesis_config::create_genesis_config;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -121,9 +121,9 @@ fn do_bench_transactions(
 ) {
     solana_logger::setup();
     let ns_per_s = 1_000_000_000;
-    let (mut genesis_block, mint_keypair) = create_genesis_block(100_000_000);
-    genesis_block.ticks_per_slot = 100;
-    let mut bank = Bank::new(&genesis_block);
+    let (mut genesis_config, mint_keypair) = create_genesis_config(100_000_000);
+    genesis_config.ticks_per_slot = 100;
+    let mut bank = Bank::new(&genesis_config);
     bank.add_instruction_processor(Pubkey::new(&BUILTIN_PROGRAM_ID), process_instruction);
     bank.register_native_instruction_processor(
         "solana_noop_program",
@@ -178,10 +178,10 @@ fn bench_bank_async_process_native_loader_transactions(bencher: &mut Bencher) {
 #[bench]
 #[ignore]
 fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
-    let (genesis_block, _mint_keypair) = create_genesis_block(100);
-    let mut bank = Arc::new(Bank::new(&genesis_block));
+    let (genesis_config, _mint_keypair) = create_genesis_config(100);
+    let mut bank = Arc::new(Bank::new(&genesis_config));
     goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
-    let genesis_blockhash = bank.last_blockhash();
+    let genesis_hash = bank.last_blockhash();
     // Prime blockhash_queue
     for i in 0..(MAX_RECENT_BLOCKHASHES + 1) {
         bank = Arc::new(Bank::new_from_parent(
@@ -191,8 +191,8 @@ fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
         ));
         goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
     }
-    // Verify blockhash_queue is full (genesis blockhash has been kicked out)
-    assert!(!bank.check_hash_age(&genesis_blockhash, MAX_RECENT_BLOCKHASHES));
+    // Verify blockhash_queue is full (genesis hash has been kicked out)
+    assert!(!bank.check_hash_age(&genesis_hash, MAX_RECENT_BLOCKHASHES));
     bencher.iter(|| {
         bank.update_recent_blockhashes();
     });

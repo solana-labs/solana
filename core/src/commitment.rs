@@ -243,7 +243,7 @@ impl Service for AggregateCommitmentService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::pubkey::Pubkey;
     use solana_stake_api::stake_state;
     use solana_vote_api::vote_state;
@@ -431,9 +431,9 @@ mod tests {
     #[test]
     fn test_aggregate_commitment_validity() {
         let ancestors = vec![3, 4, 5, 7, 9, 10, 11];
-        let GenesisBlockInfo {
-            mut genesis_block, ..
-        } = create_genesis_block(10_000);
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(10_000);
 
         let sk1 = Pubkey::new_rand();
         let pk1 = Pubkey::new_rand();
@@ -444,7 +444,7 @@ mod tests {
         let mut vote_account2 = vote_state::create_account(&pk2, &Pubkey::new_rand(), 0, 50);
         let stake_account2 = stake_state::create_account(&sk2, &pk2, &vote_account2, 50);
 
-        genesis_block.accounts.extend(vec![
+        genesis_config.accounts.extend(vec![
             (pk1, vote_account1.clone()),
             (sk1, stake_account1),
             (pk2, vote_account2.clone()),
@@ -452,7 +452,7 @@ mod tests {
         ]);
 
         // Create bank
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Arc::new(Bank::new(&genesis_config));
 
         let mut vote_state1 = VoteState::from(&vote_account1).unwrap();
         vote_state1.process_slot_vote_unchecked(3);

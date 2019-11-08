@@ -82,7 +82,7 @@ impl SigVerifier for ShredSigVerifier {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::genesis_utils::create_genesis_block_with_leader;
+    use crate::genesis_utils::create_genesis_config_with_leader;
     use crate::packet::Packet;
     use solana_ledger::shred::{Shred, Shredder};
     use solana_runtime::bank::Bank;
@@ -131,7 +131,7 @@ pub mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let bank =
-            Bank::new(&create_genesis_block_with_leader(100, &leader_pubkey, 10).genesis_block);
+            Bank::new(&create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bf = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let verifier = ShredSigVerifier::new(bf, cache);

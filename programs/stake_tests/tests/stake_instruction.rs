@@ -2,7 +2,7 @@ use assert_matches::assert_matches;
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
-    genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo},
+    genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
 };
 use solana_sdk::{
     account::Account,
@@ -66,15 +66,15 @@ fn test_stake_account_delegate() {
     let vote_pubkey = vote_keypair.pubkey();
     let node_pubkey = Pubkey::new_rand();
 
-    let GenesisBlockInfo {
-        mut genesis_block,
+    let GenesisConfigInfo {
+        mut genesis_config,
         mint_keypair,
         ..
-    } = create_genesis_block_with_leader(100_000_000_000, &Pubkey::new_rand(), 1_000_000);
-    genesis_block
+    } = create_genesis_config_with_leader(100_000_000_000, &Pubkey::new_rand(), 1_000_000);
+    genesis_config
         .native_instruction_processors
         .push(solana_stake_program::solana_stake_program!());
-    let bank = Bank::new(&genesis_block);
+    let bank = Bank::new(&genesis_config);
     let mint_pubkey = mint_keypair.pubkey();
     let mut bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
@@ -252,7 +252,7 @@ fn test_stake_account_delegate() {
     let mut bank = Bank::new_from_parent(
         &bank,
         &Pubkey::default(),
-        genesis_block.epoch_schedule.slots_per_epoch * 10 + bank.slot(),
+        genesis_config.epoch_schedule.slots_per_epoch * 10 + bank.slot(),
     );
     bank.add_instruction_processor(id(), process_instruction);
     let bank = Arc::new(bank);
