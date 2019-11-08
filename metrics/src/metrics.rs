@@ -438,11 +438,7 @@ pub fn set_panic_hook(program: &'static str) {
                     // The 'one' field exists to give Kapacitor Alerts a numerical value
                     // to filter on
                     .add_field_i64("one", 1)
-                    .add_field_str(
-                        "message",
-                        // TODO: use ono.message() when it becomes stable
-                        &ono.to_string(),
-                    )
+                    .add_field_str("message", &ono.to_string())
                     .add_field_str("location", &location)
                     .to_owned(),
                 Level::Error,

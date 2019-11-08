@@ -178,9 +178,9 @@ colo_node_status_all() {
   done < <(colo_instance_run_foreach "$(__colo_node_status_script)")
 }
 
-# TODO: As part of COLO_TOOD_PARALLELIZE this list will need to be maintained
-# in a lockfile to work around `cloud_CreateInstance` being called in the
-# background for validators
+# Note: As part of enabling COLO_PARALLELIZE, this list will need to be maintained in a
+# lockfile to work around `cloud_CreateInstance` being called in the background
+# for validators
 export COLO_RES_REQUISITIONED=()
 colo_node_requisition() {
   declare IP=$1

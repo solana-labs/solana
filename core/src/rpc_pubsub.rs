@@ -11,7 +11,10 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction;
 use std::sync::{atomic, Arc};
 
-#[allow(clippy::needless_return)] // TODO remove me when rpc is updated?
+// Suppress needless_return due to
+//   https://github.com/paritytech/jsonrpc/blob/2d38e6424d8461cdf72e78425ce67d51af9c6586/derive/src/lib.rs#L204
+// Once https://github.com/paritytech/jsonrpc/issues/418 is resolved, try to remove this clippy allow
+#[allow(clippy::needless_return)]
 #[rpc(server)]
 pub trait RpcSolPubSub {
     type Metadata;
@@ -376,7 +379,6 @@ mod tests {
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
         let budget_program_id = solana_budget_api::id();
-        let executable = false; // TODO
         let bank = Bank::new(&genesis_block);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -428,7 +430,7 @@ mod tests {
                    "owner": budget_program_id,
                    "lamports": 51,
                    "data": expected_data,
-                   "executable": executable,
+                   "executable": false,
                    "rent_epoch": 0,
                },
                "subscription": 0,

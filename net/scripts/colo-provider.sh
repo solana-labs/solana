@@ -5,7 +5,8 @@
 # Utilities for working with Colo instances
 #
 
-declare COLO_TODO_PARALLELIZE=false
+# COLO_PARALLELIZE is not ready for use, disable it
+declare COLO_PARALLELIZE=false
 
 __cloud_colo_here="$(dirname "${BASH_SOURCE[0]}")"
 # shellcheck source=net/scripts/colo-utils.sh
@@ -40,7 +41,7 @@ __cloud_FindInstances() {
   declare filter=$1
   instances=()
 
-  if ! $COLO_TODO_PARALLELIZE; then
+  if ! $COLO_PARALLELIZE; then
     colo_load_resources
     colo_load_availability false
   fi
@@ -110,7 +111,7 @@ cloud_Initialize() {
   # networkName=$1 # unused
   # zone=$2 #unused
   colo_load_resources
-  if $COLO_TODO_PARALLELIZE; then
+  if $COLO_PARALLELIZE; then
     colo_load_availability
   fi
 }
@@ -166,7 +167,7 @@ cloud_CreateInstances() {
     done
   fi
 
-  if $COLO_TODO_PARALLELIZE; then
+  if $COLO_PARALLELIZE; then
     declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME INDEX RES LINE
     declare -a AVAILABLE
     declare AVAILABLE_TEXT
@@ -270,7 +271,7 @@ cloud_FetchFile() {
 
 cloud_StatusAll() {
   declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME
-  if ! $COLO_TODO_PARALLELIZE; then
+  if ! $COLO_PARALLELIZE; then
     colo_load_resources
     colo_load_availability false
   fi
