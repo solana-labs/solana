@@ -50,11 +50,13 @@ fi
 # marking up the code
 #
 # Ref: https://github.com/solana-labs/solana/issues/6474
+#
+# shellcheck disable=1001
 declare useGithubIssueInsteadOf=(
-  'XXX'
-  'TBD'
-  'FIXME'
-  #'TODO'  # TODO: Uncomment this line to disable TODOs
+  X\XX
+  T\BD
+  F\IXME
+  #T\ODO  # TODO: Disable TODOs once all other TODOs are purged
 )
 
 if _ git --no-pager grep -n --max-depth=0 "${useGithubIssueInsteadOf[@]/#/-e }" -- '*.rs' '*.sh' '*.md'; then
@@ -63,6 +65,6 @@ fi
 
 # TODO: Remove this `git grep` once TODOs are banned above
 #       (this command is only used to highlight the current offenders)
-_ git --no-pager grep -n --max-depth=0 "-e TODO" -- '*.rs' '*.sh' || true
+_ git --no-pager grep -n --max-depth=0 "-e TODO" -- '*.rs' '*.sh' '*.md' || true
 echo "^^^ +++"
 # END TODO
