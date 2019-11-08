@@ -1,16 +1,5 @@
-//! The `tvu` module implements the Transaction Validation Unit, a
-//! multi-stage transaction validation pipeline in software.
-//!
-//! 1. BlobFetchStage
-//! - Incoming blobs are picked up from the TVU sockets and repair socket.
-//! 2. RetransmitStage
-//! - Blobs are windowed until a contiguous chunk is available.  This stage also repairs and
-//! retransmits blobs that are in the queue.
-//! 3. ReplayStage
-//! - Transactions in blobs are processed and applied to the bank.
-//! - TODO We need to verify the signatures in the blobs.
-//! 4. StorageStage
-//! - Generating the keys used to encrypt the ledger and sample it for storage mining.
+//! The `tvu` module implements the Transaction Validation Unit, a multi-stage transaction
+//! validation pipeline in software.
 
 use crate::blockstream_service::BlockstreamService;
 use crate::cluster_info::ClusterInfo;
