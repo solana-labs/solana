@@ -170,9 +170,17 @@ impl StandardBroadcastRun {
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        self.insert_and_broadcast(data_shreds, blocktree, cluster_info, stakes.as_ref(), sock)?;
-        self.insert_and_broadcast(
+        self.maybe_insert_and_broadcast(
+            data_shreds,
+            true,
+            blocktree,
+            cluster_info,
+            stakes.as_ref(),
+            sock,
+        )?;
+        self.maybe_insert_and_broadcast(
             coding_shreds,
+            false,
             blocktree,
             cluster_info,
             stakes.as_ref(),
@@ -193,9 +201,10 @@ impl StandardBroadcastRun {
         Ok(())
     }
 
-    fn insert_and_broadcast(
+    fn maybe_insert_and_broadcast(
         &mut self,
         shreds: Vec<Shred>,
+        insert: bool,
         blocktree: &Arc<Blocktree>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         stakes: Option<&HashMap<Pubkey, u64>>,
@@ -207,9 +216,11 @@ impl StandardBroadcastRun {
 
         // Insert shreds into blocktree
         let insert_shreds_start = Instant::now();
-        blocktree
-            .insert_shreds(shreds.clone(), None)
-            .expect("Failed to insert shreds in blocktree");
+        if insert {
+            blocktree
+                .insert_shreds(shreds.clone(), None)
+                .expect("Failed to insert shreds in blocktree");
+        }
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
 
         // Broadcast the shreds
