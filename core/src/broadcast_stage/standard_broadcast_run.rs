@@ -202,10 +202,27 @@ impl StandardBroadcastRun {
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
+<<<<<<< HEAD
         let all_shred_bufs: Vec<Vec<u8>> = all_shreds.into_iter().map(|s| s.payload).collect();
         trace!("Broadcasting {:?} shreds", all_shred_bufs.len());
 
         cluster_info.read().unwrap().broadcast_shreds(
+=======
+        self.maybe_insert_and_broadcast(
+            data_shreds,
+            true,
+            blocktree,
+            cluster_info,
+            stakes.as_ref(),
+            sock,
+        )?;
+        self.maybe_insert_and_broadcast(
+            coding_shreds,
+            false,
+            blocktree,
+            cluster_info,
+            stakes.as_ref(),
+>>>>>>> da425cc22... Don't insert coding shreds into blocktree on leader (#6831)
             sock,
             all_shred_bufs,
             &all_seeds,
@@ -230,6 +247,7 @@ impl StandardBroadcastRun {
         Ok(())
     }
 
+<<<<<<< HEAD
     #[allow(clippy::too_many_arguments)]
     fn update_broadcast_stats(
         &mut self,
@@ -249,6 +267,57 @@ impl StandardBroadcastRun {
         if slot_ended {
             self.report_and_reset_stats()
         }
+=======
+    fn maybe_insert_and_broadcast(
+        &mut self,
+        shreds: Vec<Shred>,
+        insert: bool,
+        blocktree: &Arc<Blocktree>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        stakes: Option<&HashMap<Pubkey, u64>>,
+        sock: &UdpSocket,
+    ) -> Result<()> {
+        let seed_start = Instant::now();
+        let seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
+        let seed_elapsed = seed_start.elapsed();
+
+        // Insert shreds into blocktree
+        let insert_shreds_start = Instant::now();
+        if insert {
+            blocktree
+                .insert_shreds(shreds.clone(), None)
+                .expect("Failed to insert shreds in blocktree");
+        }
+        let insert_shreds_elapsed = insert_shreds_start.elapsed();
+
+        // Broadcast the shreds
+        let broadcast_start = Instant::now();
+        let shred_bufs: Vec<Vec<u8>> = shreds.into_iter().map(|s| s.payload).collect();
+        trace!("Broadcasting {:?} shreds", shred_bufs.len());
+
+        cluster_info
+            .read()
+            .unwrap()
+            .broadcast_shreds(sock, shred_bufs, &seeds, stakes)?;
+
+        let broadcast_elapsed = broadcast_start.elapsed();
+
+        self.update_broadcast_stats(BroadcastStats {
+            insert_shreds_elapsed: duration_as_us(&insert_shreds_elapsed),
+            broadcast_elapsed: duration_as_us(&broadcast_elapsed),
+            seed_elapsed: duration_as_us(&seed_elapsed),
+            ..BroadcastStats::default()
+        });
+        Ok(())
+    }
+
+    fn update_broadcast_stats(&mut self, stats: BroadcastStats) {
+        self.stats.receive_elapsed += stats.receive_elapsed;
+        self.stats.shredding_elapsed += stats.shredding_elapsed;
+        self.stats.insert_shreds_elapsed += stats.insert_shreds_elapsed;
+        self.stats.broadcast_elapsed += stats.broadcast_elapsed;
+        self.stats.seed_elapsed += stats.seed_elapsed;
+>>>>>>> da425cc22... Don't insert coding shreds into blocktree on leader (#6831)
     }
 
     fn report_and_reset_stats(&mut self) {
