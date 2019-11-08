@@ -9,7 +9,6 @@ use stdlib::stdlib_modules;
 use types::{
     account_address::AccountAddress,
     account_config,
-    byte_array::ByteArray,
     identifier::Identifier,
     transaction::Program,
     write_set::{WriteOp, WriteSet},
@@ -124,8 +123,6 @@ impl LibraAccountState {
         let state_view = DataStore::default();
         let vm_cache = VMModuleCache::new(&arena);
         let genesis_addr = account_config::association_address();
-        // TODO: Need this?
-        let genesis_auth_key = ByteArray::new(genesis_addr.to_vec());
 
         let write_set = {
             let fake_fetcher =
@@ -161,14 +158,6 @@ impl LibraAccountState {
                     &ACCOUNT_MODULE,
                     &Identifier::new("mint_to_address").unwrap(),
                     vec![Value::address(genesis_addr), Value::u64(mint_balance)],
-                )
-                .map_err(map_err_vm_status)?;
-
-            txn_executor
-                .execute_function(
-                    &ACCOUNT_MODULE,
-                    &Identifier::new("rotate_authentication_key").unwrap(),
-                    vec![Value::byte_array(genesis_auth_key)],
                 )
                 .map_err(map_err_vm_status)?;
 
