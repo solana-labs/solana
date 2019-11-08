@@ -80,9 +80,6 @@ TESTFRAMEWORK_FLAGS := \
   -rpath $(TESTFRAMEWORK_RPATH) \
   -lcriterion \
 
-# The "-rpath" in TESTFRAMEWORK_FLAGS doesn't work in macOS so rewrite the name
-# post-link.
-# TODO: Find a better way
 MACOS_ADJUST_TEST_DYLIB := \
 $(if $(filter $(OS),Darwin),\
  $(_@)install_name_tool -change libcriterion.3.dylib $(TESTFRAMEWORK_RPATH)/libcriterion.3.dylib, \
