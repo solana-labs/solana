@@ -5,9 +5,13 @@ use bytecode_verifier::verifier::{VerifiedModule, VerifiedScript};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::KeyedAccount, instruction::InstructionError,
-    instruction_processor_utils::limited_deserialize, loader_instruction::LoaderInstruction,
-    move_loader::id, pubkey::Pubkey, sysvar::rent,
+    account::KeyedAccount,
+    instruction::InstructionError,
+    instruction_processor_utils::{limited_deserialize, next_keyed_account},
+    loader_instruction::LoaderInstruction,
+    move_loader::id,
+    pubkey::Pubkey,
+    sysvar::rent,
 };
 use types::{
     account_address::AccountAddress,
@@ -297,38 +301,42 @@ impl MoveProcessor {
         offset: u32,
         bytes: &[u8],
     ) -> Result<(), InstructionError> {
-        if keyed_accounts[PROGRAM_INDEX].signer_key().is_none() {
+        let mut keyed_account_iter = keyed_accounts.iter_mut();
+        let program = next_keyed_account(&mut keyed_account_iter)?;
+
+        if program.signer_key().is_none() {
             debug!("Error: key[0] did not sign the transaction");
             return Err(InstructionError::GenericError);
         }
         let offset = offset as usize;
         let len = bytes.len();
         trace!("Write: offset={} length={}", offset, len);
-        if keyed_accounts[PROGRAM_INDEX].account.data.len() < offset + len {
+        if program.account.data.len() < offset + len {
             debug!(
                 "Error: Write overflow: {} < {}",
-                keyed_accounts[PROGRAM_INDEX].account.data.len(),
+                program.account.data.len(),
                 offset + len
             );
             return Err(InstructionError::GenericError);
         }
-        keyed_accounts[PROGRAM_INDEX].account.data[offset..offset + len].copy_from_slice(&bytes);
+        program.account.data[offset..offset + len].copy_from_slice(&bytes);
         Ok(())
     }
 
     pub fn do_finalize(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
-        if keyed_accounts.len() < 2 {
-            return Err(InstructionError::InvalidInstructionData);
-        }
-        if keyed_accounts[PROGRAM_INDEX].signer_key().is_none() {
+        let mut keyed_account_iter = keyed_accounts.iter_mut();
+        let program = next_keyed_account(&mut keyed_account_iter)?;
+        let rent = next_keyed_account(&mut keyed_account_iter)?;
+
+        if program.signer_key().is_none() {
             debug!("Error: key[0] did not sign the transaction");
             return Err(InstructionError::GenericError);
         }
 
-        rent::verify_rent_exemption(&keyed_accounts[0], &keyed_accounts[1])?;
+        rent::verify_rent_exemption(&program, &rent)?;
 
         let (compiled_script, compiled_modules) =
-            Self::deserialize_compiled_program(&keyed_accounts[PROGRAM_INDEX].account.data)?;
+            Self::deserialize_compiled_program(&program.account.data)?;
 
         let verified_script = VerifiedScript::new(compiled_script).unwrap();
         let verified_modules = compiled_modules
@@ -339,16 +347,14 @@ impl MoveProcessor {
 
         Self::serialize_and_enforce_length(
             &Self::verify_program(&verified_script, &verified_modules)?,
-            &mut keyed_accounts[PROGRAM_INDEX].account.data,
+            &mut program.account.data,
         )?;
 
-        keyed_accounts[PROGRAM_INDEX].account.executable = true;
+        program.account.executable = true;
 
         info!(
             "Finalize: {:?}",
-            keyed_accounts[PROGRAM_INDEX]
-                .signer_key()
-                .unwrap_or(&Pubkey::default())
+            program.signer_key().unwrap_or(&Pubkey::default())
         );
         Ok(())
     }
@@ -359,19 +365,18 @@ impl MoveProcessor {
     ) -> Result<(), InstructionError> {
         match limited_deserialize(&data)? {
             InvokeCommand::CreateGenesis(amount) => {
-                if keyed_accounts.is_empty() {
-                    debug!("Error: Requires an unallocated account");
-                    return Err(InstructionError::InvalidArgument);
-                }
-                if keyed_accounts[0].account.owner != id() {
+                let mut keyed_account_iter = keyed_accounts.iter_mut();
+                let program = next_keyed_account(&mut keyed_account_iter)?;
+
+                if program.account.owner != id() {
                     debug!("Error: Move program account not owned by Move loader");
                     return Err(InstructionError::InvalidArgument);
                 }
 
-                match limited_deserialize(&keyed_accounts[0].account.data)? {
+                match limited_deserialize(&program.account.data)? {
                     LibraAccountState::Unallocated => Self::serialize_and_enforce_length(
                         &LibraAccountState::create_genesis(amount)?,
-                        &mut keyed_accounts[0].account.data,
+                        &mut program.account.data,
                     ),
                     _ => {
                         debug!("Error: Must provide an unallocated account");
@@ -394,7 +399,7 @@ impl MoveProcessor {
                 }
                 if !keyed_accounts[PROGRAM_INDEX].account.executable {
                     debug!("Error: Move program account not executable");
-                    return Err(InstructionError::InvalidArgument);
+                    return Err(InstructionError::AccountNotExecutable);
                 }
 
                 let mut data_store = Self::keyed_accounts_to_data_store(
