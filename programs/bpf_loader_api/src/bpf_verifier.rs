@@ -49,7 +49,7 @@ fn check_imm_endian(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), Error> {
 fn check_load_dw(prog: &[u8], insn_ptr: usize) -> Result<(), Error> {
     if insn_ptr >= (prog.len() / ebpf::INSN_SIZE) {
         // Last instruction cannot be LD_DW because there would be no 2nd DW
-        reject(format!("LD_DW instruction cannot be last in program"))?;
+        reject("LD_DW instruction cannot be last in program".to_string())?;
     }
     let next_insn = ebpf::get_insn(prog, insn_ptr + 1);
     if next_insn.opc != 0 {
