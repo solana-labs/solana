@@ -16,10 +16,10 @@ use crate::{
     window_service::WindowService,
 };
 use crossbeam_channel::unbounded;
+use ed25519_dalek;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_client::{rpc_client::RpcClient, rpc_request::RpcRequest, thin_client::ThinClient};
-use solana_ed25519_dalek as ed25519_dalek;
 use solana_ledger::{
     blocktree::Blocktree, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
 };

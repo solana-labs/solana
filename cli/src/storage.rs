@@ -107,7 +107,7 @@ pub fn parse_storage_create_archiver_account(
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
-            storage_account,
+            storage_account: storage_account.into(),
             account_type: StorageAccountType::Archiver,
         },
         require_keypair: true,
@@ -122,7 +122,7 @@ pub fn parse_storage_create_validator_account(
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
-            storage_account,
+            storage_account: storage_account.into(),
             account_type: StorageAccountType::Validator,
         },
         require_keypair: true,
@@ -257,7 +257,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account: storage_account_keypair,
+                    storage_account: storage_account_keypair.into(),
                     account_type: StorageAccountType::Archiver,
                 },
                 require_keypair: true
@@ -281,7 +281,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account: storage_account_keypair,
+                    storage_account: storage_account_keypair.into(),
                     account_type: StorageAccountType::Validator,
                 },
                 require_keypair: true

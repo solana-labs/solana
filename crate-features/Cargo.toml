@@ -21,7 +21,7 @@ rand_chacha = { version = "0.1.1" }
 regex-syntax = { version = "0.6.12" }
 reqwest = { version = "0.9.20", default-features = false, features = ["rustls-tls"] }
 serde = { version = "1.0.100", features = ["rc"] }
-solana-ed25519-dalek = { version = "0.2.0", features = ["serde"] }
+ed25519-dalek = { version = "1.0.0-pre.1", features = ["serde"] }
 syn_0_15 = { package = "syn", version = "0.15.42", features = ["extra-traits", "fold", "full"] }
 syn_1_0 = { package = "syn", version = "1.0.3", features = ["extra-traits", "fold", "full"] }
 tokio = { version = "0.1.22",features=["bytes", "codec", "default", "fs", "io", "mio", "num_cpus", "reactor", "rt-full", "sync", "tcp", "timer", "tokio-codec", "tokio-current-thread", "tokio-executor", "tokio-io", "tokio-io", "tokio-reactor", "tokio-tcp", "tokio-tcp", "tokio-threadpool", "tokio-timer", "tokio-udp", "tokio-uds", "udp", "uds"] }

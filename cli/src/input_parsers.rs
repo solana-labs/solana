@@ -125,14 +125,17 @@ mod tests {
         let matches = app()
             .clone()
             .get_matches_from(vec!["test", "--single", &outfile]);
-        assert_eq!(keypair_of(&matches, "single"), Some(keypair));
-        assert_eq!(keypair_of(&matches, "multiple"), None);
+        assert_eq!(
+            keypair_of(&matches, "single").unwrap().pubkey(),
+            keypair.pubkey()
+        );
+        assert!(keypair_of(&matches, "multiple").is_none());
 
         let matches =
             app()
                 .clone()
                 .get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
-        assert_eq!(keypair_of(&matches, "single"), None);
+        assert!(keypair_of(&matches, "single").is_none());
 
         fs::remove_file(&outfile).unwrap();
     }

@@ -2,20 +2,19 @@
 
 use crate::pubkey::Pubkey;
 use bs58;
-use generic_array::typenum::U64;
-use generic_array::GenericArray;
+use ed25519_dalek;
+use generic_array::{typenum::U64, GenericArray};
 use rand::rngs::OsRng;
 use serde_json;
-use solana_ed25519_dalek as ed25519_dalek;
-use std::borrow::Borrow;
-use std::borrow::Cow;
-use std::error;
-use std::fmt;
-use std::fs::{self, File};
-use std::io::{Read, Write};
-use std::mem;
-use std::path::Path;
-use std::str::FromStr;
+use std::{
+    borrow::{Borrow, Cow},
+    error, fmt,
+    fs::{self, File},
+    io::{Read, Write},
+    mem,
+    path::Path,
+    str::FromStr,
+};
 
 pub type Keypair = ed25519_dalek::Keypair;
 
@@ -117,7 +116,7 @@ impl KeypairUtil for Keypair {
 
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
-        Pubkey::new(&self.public.as_ref())
+        Pubkey::new(self.public.as_ref())
     }
 
     fn sign_message(&self, message: &[u8]) -> Signature {

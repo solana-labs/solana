@@ -34,7 +34,7 @@ solana-measure = { path = "../measure", version = "0.21.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "0.21.0" }
 solana-metrics = { path = "../metrics", version = "0.21.0" }
 solana-perf = { path = "../perf", version = "0.21.0" }
-solana-ed25519-dalek = "0.2.0"
+ed25519-dalek = "1.0.0-pre.1"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.21.0" }
 solana-runtime = { path = "../runtime", version = "0.21.0" }
 solana-sdk = { path = "../sdk", version = "0.21.0" }

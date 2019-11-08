@@ -1,24 +1,24 @@
 #![allow(clippy::implicit_hasher)]
 use crate::shred::ShredType;
-use rayon::iter::IndexedParallelIterator;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::IntoParallelRefMutIterator;
-use rayon::iter::ParallelIterator;
-use rayon::ThreadPool;
+use ed25519_dalek::{Keypair, PublicKey, SecretKey};
+use rayon::{
+    iter::{
+        IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
+    },
+    ThreadPool,
+};
 use sha2::{Digest, Sha512};
-use solana_ed25519_dalek::{Keypair, PublicKey, SecretKey};
 use solana_metrics::inc_new_counter_debug;
-use solana_perf::cuda_runtime::PinnedVec;
-use solana_perf::packet::{limited_deserialize, Packet, Packets};
-use solana_perf::perf_libs;
-use solana_perf::recycler::Recycler;
-use solana_perf::sigverify::{self, TxOffset};
+use solana_perf::{
+    cuda_runtime::PinnedVec,
+    packet::{limited_deserialize, Packet, Packets},
+    perf_libs,
+    recycler::Recycler,
+    sigverify::{self, TxOffset},
+};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::signature::Signature;
-use std::collections::HashMap;
-use std::mem::size_of;
-
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap, mem::size_of};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())

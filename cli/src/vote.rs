@@ -170,7 +170,7 @@ pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandI
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateVoteAccount {
-            vote_account,
+            vote_account: vote_account.into(),
             node_pubkey,
             authorized_voter,
             authorized_withdrawer,
@@ -479,7 +479,7 @@ mod tests {
             parse_command(&test_create_vote_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account: keypair,
+                    vote_account: keypair.into(),
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
@@ -503,7 +503,7 @@ mod tests {
             parse_command(&test_create_vote_account2).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account: keypair,
+                    vote_account: keypair.into(),
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
@@ -531,7 +531,7 @@ mod tests {
             parse_command(&test_create_vote_account3).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account: keypair,
+                    vote_account: keypair.into(),
                     node_pubkey,
                     authorized_voter: Some(authed),
                     authorized_withdrawer: None,
@@ -557,7 +557,7 @@ mod tests {
             parse_command(&test_create_vote_account4).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account: keypair,
+                    vote_account: keypair.into(),
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),

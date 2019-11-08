@@ -50,7 +50,7 @@ solana-budget-program = { path = "../programs/budget_program", version = "0.21.0
 solana-chacha-sys = { path = "../chacha-sys", version = "0.21.0" }
 solana-client = { path = "../client", version = "0.21.0" }
 solana-drone = { path = "../drone", version = "0.21.0" }
-solana-ed25519-dalek = "0.2.0"
+ed25519-dalek = "1.0.0-pre.1"
 solana-ledger = { path = "../ledger", version = "0.21.0" }
 solana-logger = { path = "../logger", version = "0.21.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "0.21.0" }
