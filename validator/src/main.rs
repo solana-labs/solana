@@ -238,6 +238,14 @@ fn initialize_ledger_path(
 
 #[allow(clippy::cognitive_complexity)]
 pub fn main() {
+    solana_logger::setup_with_filter(
+        &[
+            "solana=info", /* info logging for all solana modules */
+            "rpc=trace",   /* json_rpc request/response logging */
+        ]
+        .join(","),
+    );
+
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
 
@@ -265,7 +273,7 @@ pub fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair)
-                .help("File containing the authorized voting keypair.  Default is an ephemeral keypair"),
+                .help("File containing the authorized voting keypair.  Default is an ephemeral keypair, which may disable voting without --vote-account."),
         )
         .arg(
             Arg::with_name("vote_account")
@@ -273,7 +281,7 @@ pub fn main() {
                 .value_name("PUBKEY")
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
-                .help("Public key of the vote account to vote with.  Default is the public key of the voting keypair"),
+                .help("Public key of the vote account to vote with.  Default is the public key of --voting-keypair"),
         )
         .arg(
             Arg::with_name("storage_keypair")
@@ -448,12 +456,14 @@ pub fn main() {
         Keypair::new()
     };
 
+    let mut ephemeral_voting_keypair = false;
     let voting_keypair = if let Some(identity) = matches.value_of("voting_keypair") {
         read_keypair_file(identity).unwrap_or_else(|err| {
             error!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
         })
     } else {
+        ephemeral_voting_keypair = true;
         Keypair::new()
     };
     let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
@@ -465,8 +475,20 @@ pub fn main() {
         Keypair::new()
     };
 
-    let vote_account =
-        pubkey_of(&matches, "vote_account").unwrap_or_else(|| voting_keypair.pubkey());
+    let mut validator_config = ValidatorConfig::default();
+
+    if matches.is_present("no_voting") {
+        validator_config.voting_disabled = true;
+    }
+
+    let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
+        // Disable because validator rejects non voting accounts (= ephemeral keypairs)
+        if ephemeral_voting_keypair {
+            warn!("Disabled voting due to the use of ephemeral key for vote account");
+            validator_config.voting_disabled = true;
+        };
+        voting_keypair.pubkey()
+    });
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let entrypoint = matches.value_of("entrypoint");
@@ -477,11 +499,8 @@ pub fn main() {
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
     let rpc_port = value_t!(matches, "rpc_port", u16);
 
-    let mut validator_config = ValidatorConfig::default();
     validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
     validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
-
-    validator_config.voting_disabled = matches.is_present("no_voting");
 
     validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
 
@@ -571,13 +590,6 @@ pub fn main() {
         }
     };
 
-    solana_logger::setup_with_filter(
-        &[
-            "solana=info", /* info logging for all solana modules */
-            "rpc=trace",   /* json_rpc request/response logging */
-        ]
-        .join(","),
-    );
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 
