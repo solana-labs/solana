@@ -20,10 +20,11 @@ use rocksdb::DBRawIterator;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::clock::Slot;
+use solana_sdk::clock::{Slot, DEFAULT_TICKS_PER_SECOND};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::timing::timestamp;
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::HashMap;
@@ -41,6 +42,7 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
                     .unwrap()));
 
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
+pub const MAX_TURBINE_PROPAGATION_DELAY_TICKS: u64 = 16;
 
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 
@@ -833,6 +835,7 @@ impl Blocktree {
             slot_meta,
             index as u32,
             new_consumed,
+            shred.reference_tick(),
         );
         data_index.set_present(index, true);
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
@@ -909,7 +912,7 @@ impl Blocktree {
             },
             |v| v,
         );
-        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
+        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone(), 0)
             .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];
         let mut slot_entries = vec![];
@@ -932,8 +935,14 @@ impl Blocktree {
                     shredder.entries_to_shreds(&current_entries, true, start_index);
                 all_shreds.append(&mut data_shreds);
                 all_shreds.append(&mut coding_shreds);
-                shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone())
-                    .expect("Failed to create entry shredder");
+                shredder = Shredder::new(
+                    current_slot,
+                    parent_slot,
+                    0.0,
+                    keypair.clone(),
+                    (ticks_per_slot - remaining_ticks_in_slot) as u8,
+                )
+                .expect("Failed to create entry shredder");
             }
 
             if entry.is_tick() {
@@ -970,7 +979,8 @@ impl Blocktree {
     // for the slot with the specified slot
     fn find_missing_indexes<C>(
         db_iterator: &mut DBRawIterator,
-        slot: u64,
+        slot: Slot,
+        first_timestamp: u64,
         start_index: u64,
         end_index: u64,
         max_missing: usize,
@@ -983,6 +993,8 @@ impl Blocktree {
         }
 
         let mut missing_indexes = vec![];
+        let ticks_since_first_insert =
+            DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
 
         // Seek to the first shred with index >= start_index
         db_iterator.seek(&C::key((slot, start_index)));
@@ -1010,7 +1022,15 @@ impl Blocktree {
             };
 
             let upper_index = cmp::min(current_index, end_index);
+            // the tick that will be used to figure out the timeout for this hole
+            let reference_tick = u64::from(Shred::reference_tick_from_data(
+                &db_iterator.value().expect("couldn't read value"),
+            ));
 
+            if ticks_since_first_insert < reference_tick + MAX_TURBINE_PROPAGATION_DELAY_TICKS {
+                // The higher index holes have not timed out yet
+                break 'outer;
+            }
             for i in prev_index..upper_index {
                 missing_indexes.push(i);
                 if missing_indexes.len() == max_missing {
@@ -1035,7 +1055,8 @@ impl Blocktree {
 
     pub fn find_missing_data_indexes(
         &self,
-        slot: u64,
+        slot: Slot,
+        first_timestamp: u64,
         start_index: u64,
         end_index: u64,
         max_missing: usize,
@@ -1047,6 +1068,7 @@ impl Blocktree {
             Self::find_missing_indexes::<cf::ShredData>(
                 &mut db_iterator,
                 slot,
+                first_timestamp,
                 start_index,
                 end_index,
                 max_missing,
@@ -1311,10 +1333,17 @@ fn update_slot_meta(
     slot_meta: &mut SlotMeta,
     index: u32,
     new_consumed: u64,
+    reference_tick: u8,
 ) {
+    let maybe_first_insert = slot_meta.received == 0;
     // Index is zero-indexed, while the "received" height starts from 1,
     // so received = index + 1 for the same shred.
     slot_meta.received = cmp::max((u64::from(index) + 1) as u64, slot_meta.received);
+    if maybe_first_insert && slot_meta.received > 0 {
+        // predict the timestamp of what would have been the first shred in this slot
+        let slot_time_elapsed = u64::from(reference_tick) * 1000 / DEFAULT_TICKS_PER_SECOND;
+        slot_meta.first_shred_timestamp = timestamp() - slot_time_elapsed;
+    }
     slot_meta.consumed = new_consumed;
     slot_meta.last_index = {
         // If the last index in the slot hasn't been set before, then
@@ -1707,7 +1736,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
     let entries = create_ticks(ticks_per_slot, genesis_block.hash());
     let last_hash = entries.last().unwrap().hash;
 
-    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()))
+    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0)
         .expect("Failed to create entry shredder");
     let shreds = shredder.entries_to_shreds(&entries, true, 0).0;
     assert!(shreds.last().unwrap().last_in_slot());
@@ -1792,7 +1821,7 @@ pub fn entries_to_test_shreds(
     parent_slot: u64,
     is_full_slot: bool,
 ) -> Vec<Shred> {
-    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()))
+    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()), 0)
         .expect("Failed to create entry shredder");
 
     shredder.entries_to_shreds(&entries, is_full_slot, 0).0
@@ -3163,27 +3192,27 @@ pub mod tests {
         // range of [0, gap)
         let expected: Vec<u64> = (1..gap).collect();
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, gap, gap as usize),
+            blocktree.find_missing_data_indexes(slot, 0, 0, gap, gap as usize),
             expected
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 1, gap, (gap - 1) as usize),
+            blocktree.find_missing_data_indexes(slot, 0, 1, gap, (gap - 1) as usize),
             expected,
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, gap - 1, (gap - 1) as usize),
+            blocktree.find_missing_data_indexes(slot, 0, 0, gap - 1, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, gap - 2, gap, gap as usize),
+            blocktree.find_missing_data_indexes(slot, 0, gap - 2, gap, gap as usize),
             vec![gap - 2, gap - 1],
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, gap - 2, gap, 1),
+            blocktree.find_missing_data_indexes(slot, 0, gap - 2, gap, 1),
             vec![gap - 2],
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, gap, 1),
+            blocktree.find_missing_data_indexes(slot, 0, 0, gap, 1),
             vec![1],
         );
 
@@ -3192,11 +3221,11 @@ pub mod tests {
         let mut expected: Vec<u64> = (1..gap).collect();
         expected.push(gap + 1);
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, gap + 2, (gap + 2) as usize),
+            blocktree.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap + 2) as usize),
             expected,
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, gap + 2, (gap - 1) as usize),
+            blocktree.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
 
@@ -3212,6 +3241,7 @@ pub mod tests {
                 assert_eq!(
                     blocktree.find_missing_data_indexes(
                         slot,
+                        0,
                         j * gap,
                         i * gap,
                         ((i - j) * gap) as usize
@@ -3226,6 +3256,34 @@ pub mod tests {
     }
 
     #[test]
+    fn test_find_missing_data_indexes_timeout() {
+        let slot = 0;
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // Write entries
+        let gap: u64 = 10;
+        let shreds: Vec<_> = (0..64)
+            .map(|i| Shred::new_from_data(slot, (i * gap) as u32, 0, None, false, false, i as u8))
+            .collect();
+        blocktree.insert_shreds(shreds, None).unwrap();
+
+        let empty: Vec<u64> = vec![];
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, timestamp(), 0, 50, 1),
+            empty
+        );
+        let expected: Vec<_> = (1..=9).collect();
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, timestamp() - 400, 0, 50, 9),
+            expected
+        );
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
     fn test_find_missing_data_indexes_sanity() {
         let slot = 0;
 
@@ -3234,10 +3292,10 @@ pub mod tests {
 
         // Early exit conditions
         let empty: Vec<u64> = vec![];
-        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 0, 1), empty);
-        assert_eq!(blocktree.find_missing_data_indexes(slot, 5, 5, 1), empty);
-        assert_eq!(blocktree.find_missing_data_indexes(slot, 4, 3, 1), empty);
-        assert_eq!(blocktree.find_missing_data_indexes(slot, 1, 2, 0), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 0, 0, 1), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 5, 5, 1), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 4, 3, 1), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 1, 2, 0), empty);
 
         let entries = create_ticks(100, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
@@ -3261,7 +3319,7 @@ pub mod tests {
         // [i, first_index - 1]
         for start in 0..STARTS {
             let result = blocktree.find_missing_data_indexes(
-                slot, start, // start
+                slot, 0, start, // start
                 END,   //end
                 MAX,   //max
             );
@@ -3291,7 +3349,7 @@ pub mod tests {
         for i in 0..num_shreds as u64 {
             for j in 0..i {
                 assert_eq!(
-                    blocktree.find_missing_data_indexes(slot, j, i, (i - j) as usize),
+                    blocktree.find_missing_data_indexes(slot, 0, j, i, (i - j) as usize),
                     empty
                 );
             }
@@ -3816,6 +3874,7 @@ pub mod tests {
                 Some(&[1, 1, 1]),
                 true,
                 true,
+                0,
             )];
 
             // With the corruption, nothing should be returned, even though an

@@ -42,6 +42,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             bank.parent().unwrap().slot(),
             RECOMMENDED_FEC_RATE,
             keypair.clone(),
+            (bank.tick_height() % bank.ticks_per_slot()) as u8,
         )
         .expect("Expected to create a new shredder");
 
