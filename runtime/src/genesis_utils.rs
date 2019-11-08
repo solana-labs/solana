@@ -27,7 +27,6 @@ pub fn create_genesis_block_with_leader(
     bootstrap_leader_pubkey: &Pubkey,
     bootstrap_leader_stake_lamports: u64,
 ) -> GenesisBlockInfo {
-    let bootstrap_leader_lamports = BOOTSTRAP_LEADER_LAMPORTS; // TODO: pass this in as an argument?
     let mint_keypair = Keypair::new();
     let voting_keypair = Keypair::new();
     let staking_keypair = Keypair::new();
@@ -57,7 +56,7 @@ pub fn create_genesis_block_with_leader(
         //  airdrops at some point to cover fees...
         (
             *bootstrap_leader_pubkey,
-            Account::new(bootstrap_leader_lamports, 0, &system_program::id()),
+            Account::new(BOOTSTRAP_LEADER_LAMPORTS, 0, &system_program::id()),
         ),
         // where votes go to
         (voting_keypair.pubkey(), vote_account),

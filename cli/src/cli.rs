@@ -1237,11 +1237,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("program_location")
                         .index(1)
-                        .value_name("PATH TO PROGRAM")
+                        .value_name("PATH TO BPF PROGRAM")
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
-                ), // TODO: Add "loader" argument; current default is bpf_loader
+                ),
         )
         .stake_subcommands()
         .storage_subcommands()
