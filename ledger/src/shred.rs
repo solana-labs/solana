@@ -45,12 +45,8 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
 pub const DATA_SHRED: u8 = 0b1010_0101;
 pub const CODING_SHRED: u8 = 0b0101_1010;
 
-/// This limit comes from reed solomon library, but unfortunately they don't have
-/// a public constant defined for it.
-pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 16;
-
-/// Based on rse benchmarks, the optimal erasure config uses 16 data shreds and 4 coding shreds
-pub const RECOMMENDED_FEC_RATE: f32 = 0.25;
+pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
+pub const RECOMMENDED_FEC_RATE: f32 = 1.0;
 
 pub const SHRED_TICK_REFERENCE_MASK: u8 = 0b0011_1111;
 const LAST_SHRED_IN_SLOT: u8 = 0b1000_0000;
