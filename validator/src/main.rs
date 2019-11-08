@@ -12,6 +12,7 @@ use solana_core::service::Service;
 use solana_core::socketaddr;
 use solana_core::validator::{Validator, ValidatorConfig};
 use solana_ledger::bank_forks::SnapshotConfig;
+use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
@@ -574,6 +575,7 @@ pub fn main() {
 
     if cuda {
         solana_perf::perf_libs::init_cuda();
+        enable_recycler_warming();
     }
 
     let mut gossip_addr = solana_netutil::parse_port_or_addr(

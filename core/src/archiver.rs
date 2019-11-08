@@ -921,7 +921,7 @@ impl Archiver {
             let res = r_reader.recv_timeout(Duration::new(1, 0));
             if let Ok(mut packets) = res {
                 while let Ok(mut more) = r_reader.try_recv() {
-                    packets.packets.append(&mut more.packets);
+                    packets.packets.append_pinned(&mut more.packets);
                 }
                 let shreds: Vec<Shred> = packets
                     .packets

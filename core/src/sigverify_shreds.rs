@@ -30,8 +30,8 @@ impl ShredSigVerifier {
         Self {
             bank_forks,
             leader_schedule_cache,
-            recycler_offsets: Recycler::default(),
-            recycler_out: Recycler::default(),
+            recycler_offsets: Recycler::warmed(50, 4096),
+            recycler_out: Recycler::warmed(50, 4096),
         }
     }
     fn read_slots(batches: &[Packets]) -> HashSet<u64> {

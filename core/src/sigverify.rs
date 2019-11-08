@@ -23,8 +23,8 @@ impl Default for TransactionSigVerifier {
     fn default() -> Self {
         init();
         Self {
-            recycler: Recycler::default(),
-            recycler_out: Recycler::default(),
+            recycler: Recycler::warmed(50, 4096),
+            recycler_out: Recycler::warmed(50, 4096),
         }
     }
 }

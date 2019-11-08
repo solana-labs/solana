@@ -1,6 +1,6 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
-use crate::packet::Packet;
+use crate::packet::{Packet, PacketsRecycler};
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
 use solana_perf::cuda_runtime::PinnedVec;
@@ -67,7 +67,8 @@ impl ShredFetchStage {
         sender: &PacketSender,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let recycler = Recycler::default();
+        let recycler: PacketsRecycler = Recycler::warmed(100, 1024);
+
         let tvu_threads = sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,

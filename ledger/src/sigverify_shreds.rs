@@ -127,14 +127,22 @@ fn slot_key_data_for_gpu<
         }
     }
     let mut keyvec = recycler_keys.allocate("shred_gpu_pubkeys");
+    keyvec.set_pinnable();
     let mut slot_to_key_ix = HashMap::new();
-    for (i, (k, slots)) in keys_to_slots.iter().enumerate() {
-        keyvec.extend(k.as_ref());
+
+    let keyvec_size = keys_to_slots.len() * size_of::<T>();
+    keyvec.resize(keyvec_size, 0);
+
+    for (i, (k, slots)) in keys_to_slots.iter_mut().enumerate() {
+        let start = i * size_of::<T>();
+        let end = start + size_of::<T>();
+        keyvec[start..end].copy_from_slice(k.as_ref());
         for s in slots {
             slot_to_key_ix.insert(s, i);
         }
     }
     let mut offsets = recycler_offsets.allocate("shred_offsets");
+    offsets.set_pinnable();
     slots.iter().for_each(|packet_slots| {
         packet_slots.iter().for_each(|slot| {
             offsets
@@ -145,18 +153,10 @@ fn slot_key_data_for_gpu<
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
     //Pad the Pubkeys buffer such that it is bigger than a buffer of Packet sized elems
     let num_in_packets = (keyvec.len() + (size_of::<Packet>() - 1)) / size_of::<Packet>();
-    trace!("num_in_packets {}", num_in_packets);
-    //number of bytes missing
-    let missing = num_in_packets * size_of::<Packet>() - keyvec.len();
-    trace!("missing {}", missing);
-    //extra Pubkeys needed to fill the buffer
-    let extra = (missing + size_of::<T>() - 1) / size_of::<T>();
-    trace!("extra {}", extra);
-    trace!("keyvec {}", keyvec.len());
-    keyvec.resize(keyvec.len() + extra, 0u8);
-    trace!("keyvec {}", keyvec.len());
-    trace!("keyvec {:?}", keyvec);
-    trace!("offsets {:?}", offsets);
+    keyvec.resize(num_in_packets * size_of::<Packet>(), 0u8);
+    trace!("keyvec.len: {}", keyvec.len());
+    trace!("keyvec: {:?}", keyvec);
+    trace!("offsets: {:?}", offsets);
     (keyvec, offsets, num_in_packets)
 }
 
@@ -166,8 +166,11 @@ fn shred_gpu_offsets(
     recycler_offsets: &Recycler<TxOffset>,
 ) -> (TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>) {
     let mut signature_offsets = recycler_offsets.allocate("shred_signatures");
+    signature_offsets.set_pinnable();
     let mut msg_start_offsets = recycler_offsets.allocate("shred_msg_starts");
+    msg_start_offsets.set_pinnable();
     let mut msg_sizes = recycler_offsets.allocate("shred_msg_sizes");
+    msg_sizes.set_pinnable();
     let mut v_sig_lens = vec![];
     for batch in batches {
         let mut sig_lens = Vec::new();
@@ -402,6 +405,7 @@ pub fn sign_shreds_gpu(
         shred_gpu_offsets(offset, batches, recycler_offsets);
     let total_sigs = signature_offsets.len();
     let mut signatures_out = recycler_out.allocate("ed25519 signatures");
+    signatures_out.set_pinnable();
     signatures_out.resize(total_sigs * sig_size, 0);
     elems.push(
         perf_libs::Elems {

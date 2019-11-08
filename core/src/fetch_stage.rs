@@ -1,6 +1,7 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
 use crate::banking_stage::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET;
+use crate::packet::PacketsRecycler;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -92,7 +93,8 @@ impl FetchStage {
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Self {
-        let recycler = Recycler::default();
+        let recycler: PacketsRecycler = Recycler::warmed(1000, 1024);
+
         let tpu_threads = sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,
