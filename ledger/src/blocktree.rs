@@ -904,7 +904,15 @@ impl Blocktree {
         let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
 
         let mut current_slot = start_slot;
-        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone(), 0)#6772)
+        let mut parent_slot = parent.map_or(
+            if current_slot == 0 {
+                current_slot
+            } else {
+                current_slot - 1
+            },
+            |v| v,
+        );
+        let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone(), 0)
             .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];
         let mut slot_entries = vec![];
