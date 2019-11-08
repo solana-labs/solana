@@ -388,6 +388,7 @@ impl ReplayStage {
                 ("leader", next_leader.to_string(), String),
             );
 
+            info!("new fork:{} parent:{} (leader)", poh_slot, parent_slot);
             let tpu_bank = bank_forks
                 .write()
                 .unwrap()
@@ -895,21 +896,21 @@ impl ReplayStage {
             next_slots.sort();
             next_slots
         });
-        for (parent_id, children) in next_slots {
+        for (parent_slot, children) in next_slots {
             let parent_bank = frozen_banks
-                .get(&parent_id)
+                .get(&parent_slot)
                 .expect("missing parent in bank forks")
                 .clone();
-            for child_id in children {
-                if forks.get(child_id).is_some() {
-                    trace!("child already active or frozen {}", child_id);
+            for child_slot in children {
+                if forks.get(child_slot).is_some() {
+                    trace!("child already active or frozen {}", child_slot);
                     continue;
                 }
                 let leader = leader_schedule_cache
-                    .slot_leader_at(child_id, Some(&parent_bank))
+                    .slot_leader_at(child_slot, Some(&parent_bank))
                     .unwrap();
-                info!("new fork:{} parent:{}", child_id, parent_id);
-                forks.insert(Bank::new_from_parent(&parent_bank, &leader, child_id));
+                info!("new fork:{} parent:{}", child_slot, parent_slot);
+                forks.insert(Bank::new_from_parent(&parent_bank, &leader, child_slot));
             }
         }
     }
