@@ -9,7 +9,6 @@ use stdlib::stdlib_modules;
 use types::{
     account_address::AccountAddress,
     account_config,
-    byte_array::ByteArray,
     identifier::Identifier,
     transaction::Program,
     write_set::{WriteOp, WriteSet},
