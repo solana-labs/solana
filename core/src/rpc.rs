@@ -13,7 +13,9 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
 use solana_drone::drone::request_airdrop_transaction;
-use solana_ledger::bank_forks::BankForks;
+use solana_ledger::{
+    bank_forks::BankForks, blocktree::Blocktree, rooted_slot_iterator::RootedSlotIterator,
+};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
@@ -54,8 +56,9 @@ impl Default for JsonRpcConfig {
 pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-    storage_state: StorageState,
+    blocktree: Arc<Blocktree>,
     config: JsonRpcConfig,
+    storage_state: StorageState,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
 }
 
@@ -75,17 +78,19 @@ impl JsonRpcRequestProcessor {
     }
 
     pub fn new(
-        storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        blocktree: Arc<Blocktree>,
+        storage_state: StorageState,
         validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         JsonRpcRequestProcessor {
+            config,
             bank_forks,
             block_commitment_cache,
+            blocktree,
             storage_state,
-            config,
             validator_exit: validator_exit.clone(),
         }
     }
@@ -257,6 +262,14 @@ impl JsonRpcRequestProcessor {
             debug!("validator_exit ignored");
             Ok(false)
         }
+    }
+
+    pub fn get_blocks_since(&self, slot: Slot) -> Result<Vec<Slot>> {
+        Ok(RootedSlotIterator::new(slot, &self.blocktree)
+            .map_err(|err| Error::invalid_params(format!("Slot {:?}: {:?}", slot, err)))?
+            .into_iter()
+            .map(|(slot, _)| slot)
+            .collect())
     }
 }
 
@@ -479,6 +492,9 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "setLogFilter")]
     fn set_log_filter(&self, _meta: Self::Metadata, filter: String) -> Result<()>;
+
+    #[rpc(meta, name = "getBlocksSince")]
+    fn get_blocks_since(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Slot>>;
 }
 
 pub struct RpcSolImpl;
@@ -929,6 +945,13 @@ impl RpcSol for RpcSolImpl {
         solana_logger::setup_with_filter(&filter);
         Ok(())
     }
+
+    fn get_blocks_since(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Slot>> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_blocks_since(slot)
+    }
 }
 
 #[cfg(test)]
@@ -939,6 +962,7 @@ pub mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
+    use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_sdk::{
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
@@ -980,6 +1004,8 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache =
             Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
+        let ledger_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
 
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
@@ -993,10 +1019,11 @@ pub mod tests {
         let _ = bank.process_transaction(&tx);
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
-            StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
             block_commitment_cache.clone(),
+            Arc::new(blocktree),
+            StorageState::default(),
             &validator_exit,
         )));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
@@ -1038,11 +1065,14 @@ pub mod tests {
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let ledger_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
         let request_processor = JsonRpcRequestProcessor::new(
-            StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
             block_commitment_cache,
+            Arc::new(blocktree),
+            StorageState::default(),
             &validator_exit,
         );
         thread::spawn(move || {
@@ -1453,6 +1483,8 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let ledger_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -1460,10 +1492,11 @@ pub mod tests {
         let meta = Meta {
             request_processor: {
                 let request_processor = JsonRpcRequestProcessor::new(
-                    StorageState::default(),
                     JsonRpcConfig::default(),
                     new_bank_forks().0,
                     block_commitment_cache,
+                    Arc::new(blocktree),
+                    StorageState::default(),
                     &validator_exit,
                 );
                 Arc::new(RwLock::new(request_processor))
@@ -1551,11 +1584,14 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let ledger_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
         let request_processor = JsonRpcRequestProcessor::new(
-            StorageState::default(),
             JsonRpcConfig::default(),
             new_bank_forks().0,
             block_commitment_cache,
+            Arc::new(blocktree),
+            StorageState::default(),
             &validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
@@ -1567,13 +1603,16 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let ledger_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
-            StorageState::default(),
             config,
             new_bank_forks().0,
             block_commitment_cache,
+            Arc::new(blocktree),
+            StorageState::default(),
             &validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
@@ -1616,14 +1655,17 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache =
             Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
+        let ledger_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
 
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
-            StorageState::default(),
             config,
             new_bank_forks().0,
             block_commitment_cache,
+            Arc::new(blocktree),
+            StorageState::default(),
             &validator_exit,
         );
         assert_eq!(
