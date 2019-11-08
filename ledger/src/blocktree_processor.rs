@@ -115,10 +115,10 @@ fn process_entries_with_callback(
     let mut tick_hashes = vec![];
     for entry in entries {
         if entry.is_tick() {
-            // if its a tick, save it for later
+            // If it's a tick, save it for later
             tick_hashes.push(entry.hash);
             if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
-                // if its a tick that will cause a new blockhash to be created,
+                // If it's a tick that will cause a new blockhash to be created,
                 // execute the group and register the tick
                 execute_batches(bank, &batches, entry_callback)?;
                 batches.clear();
