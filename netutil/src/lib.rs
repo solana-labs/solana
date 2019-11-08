@@ -323,10 +323,7 @@ pub fn find_available_port_in_range(range: PortRange) -> io::Result<u16> {
     let mut tries_left = end - start;
     let mut rand_port = thread_rng().gen_range(start, end);
     loop {
-        match TcpListener::bind(SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            rand_port,
-        )) {
+        match bind_common(rand_port, false) {
             Ok(_) => {
                 break Ok(rand_port);
             }
@@ -386,6 +383,12 @@ mod tests {
     }
 
     #[test]
+    fn test_is_host_port() {
+        assert!(is_host_port("localhost:1234".to_string()).is_ok());
+        assert!(is_host_port("localhost".to_string()).is_err());
+    }
+
+    #[test]
     fn test_bind() {
         assert_eq!(bind_in_range((2000, 2001)).unwrap().0, 2000);
         let x = bind_to(2002, true).unwrap();
@@ -394,6 +397,9 @@ mod tests {
             x.local_addr().unwrap().port(),
             y.local_addr().unwrap().port()
         );
+        bind_to(2002, false).unwrap_err();
+        bind_in_range((2002, 2003)).unwrap_err();
+
         let (port, v) = multi_bind_in_range((2010, 2110), 10).unwrap();
         for sock in &v {
             assert_eq!(port, sock.local_addr().unwrap().port());
@@ -411,11 +417,35 @@ mod tests {
         assert_eq!(find_available_port_in_range((3000, 3001)).unwrap(), 3000);
         let port = find_available_port_in_range((3000, 3050)).unwrap();
         assert!(3000 <= port && port < 3050);
+
+        let _socket = bind_to(port, false).unwrap();
+        find_available_port_in_range((port, port + 1)).unwrap_err();
     }
 
     #[test]
     fn test_bind_common_in_range() {
-        let (port, _) = bind_common_in_range((3000, 3050)).unwrap();
-        assert!(3000 <= port && port < 3050);
+        let (port, _sockets) = bind_common_in_range((3100, 3150)).unwrap();
+        assert!(3100 <= port && port < 3150);
+
+        bind_common_in_range((port, port + 1)).unwrap_err();
+    }
+
+    #[test]
+    fn test_get_public_ip_addr() {
+        let (_server_port, (server_udp_socket, server_tcp_listener)) =
+            bind_common_in_range((3200, 3250)).unwrap();
+        let (client_port, (client_udp_socket, client_tcp_listener)) =
+            bind_common_in_range((3200, 3250)).unwrap();
+
+        let _runtime = ip_echo_server(server_tcp_listener);
+
+        let ip_echo_server_addr = server_udp_socket.local_addr().unwrap();
+        get_public_ip_addr(&ip_echo_server_addr).unwrap();
+
+        verify_reachable_ports(
+            &ip_echo_server_addr,
+            vec![(client_port, client_tcp_listener)],
+            &[&client_udp_socket],
+        );
     }
 }
