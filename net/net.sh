@@ -826,7 +826,7 @@ stopNode() {
       ! tmux list-sessions || tmux kill-session
       declare sudo=
       if sudo true; then
-        sudo="sudo -n"
+        sudo=\"sudo -n\"
       fi
 
       for pid in solana/*.pid; do
