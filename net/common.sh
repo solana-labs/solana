@@ -17,6 +17,8 @@ netLogDir="$netDir"/log
 if [[ -d $netLogDir && ! -L $netLogDir ]]; then
   echo "Warning: moving $netLogDir to make way for symlink."
   mv "$netLogDir" "$netDir"/log.old
+elif [[ -L $netLogDir ]]; then
+  rm "$netLogDir"
 fi
 mkdir -p "$netConfigDir" "$netLogDateDir"
 ln -sf "$netLogDateDir" "$netLogDir"
@@ -131,4 +133,3 @@ _setup_secondary_mount() {
     fi
   )
 }
-
