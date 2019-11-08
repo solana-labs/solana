@@ -20,11 +20,11 @@ A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [
 
 ## blockhash
 
-A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height). Taken from the last [entry id](terminology.md#entry-id) in the slot
+A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#ledger) at a given [block height](terminology.md#block-height). Taken from the last [entry id](terminology.md#entry-id) in the slot. The genesis blockhash is not a true blockhash, but is used as one and represents the hash of the genesis configuration.
 
 ## block height
 
-The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height one.
+The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height zero.
 
 ## bootstrap leader
 
@@ -102,11 +102,7 @@ A [ledger](terminology.md#ledger) derived from common entries but then diverged.
 
 ## genesis block
 
-The first [block](terminology.md#block) in the chain.
-
-## genesis config
-
-The configuration file that prepares the [ledger](terminology.md#ledger) for the [genesis block](terminology.md#genesis-block).
+The configuration file that prepares the [ledger](terminology.md#ledger) for the first [block](terminology.md#block).
 
 ## hash
 
