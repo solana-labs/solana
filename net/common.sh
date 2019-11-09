@@ -12,6 +12,7 @@ netDir=$(
   echo "$PWD"
 )
 netConfigDir="$netDir"/config
+mkdir -p "$netConfigDir"
 
 SOLANA_ROOT="$netDir"/..
 # shellcheck source=scripts/configure-metrics.sh
