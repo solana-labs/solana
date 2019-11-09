@@ -25,8 +25,8 @@ function analyze_packet_loss {
     for i in "${!validatorIpList[@]}"; do
       iftop_log=iftop-logs/${validatorIpList[$i]}-iftop.log
       # shellcheck disable=SC2016
-      net/ssh.sh solana@${validatorIpList[$i]} 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log' \
-      ${validatorIpListPrivate[$i]} ${validatorIpList[$i]} > "$iftop_log"
+      net/ssh.sh solana@"${validatorIpList[$i]}" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log' \
+      "${validatorIpListPrivate[$i]}" "${validatorIpList[$i]}" > "$iftop_log"
       upload-ci-artifact "$iftop_log"
     done
     echo --- Analyzing Packet Loss
