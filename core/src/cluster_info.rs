@@ -267,11 +267,10 @@ impl ClusterInfo {
                 }
 
                 let ip_addr = node.gossip.ip();
-
                 format!(
-                    "{:15} {:4}| {:5}ms | {:45} | {:5} | {:5} | {:5} | {:5} | {:5} | {:5} | {:5} | {:5} | {:5}\n",
+                    "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5} | {:5}| {:5} | {:5}| {:5} | {:5}| {:5}\n",
                     ip_addr.to_string(),
-                    if node.id == my_pubkey { "(me)" } else { "" }.to_string(),
+                    if node.id == my_pubkey { "me" } else { "" }.to_string(),
                     now.saturating_sub(last_updated),
                     node.id.to_string(),
                     addr_to_string(&ip_addr, &node.gossip),
@@ -288,10 +287,10 @@ impl ClusterInfo {
             .collect();
 
         format!(
-            " IP Address         | Age     | Node identifier                               \
-             | Gossip| TPU   |TPU fwd| TVU   |TVU fwd|Repair |Storage| RPC   | PubSub\n\
-             --------------------+---------+-----------------------------------------------+\
-             -------+-------+-------+-------+-------+-------+-------+-------+-------\n\
+            "IP Address        |Age(ms)| Node identifier                              \
+             |Gossip| TPU  |TPU fwd| TVU  |TVU fwd|Repair|Storage| RPC  |PubSub\n\
+             ------------------+-------+----------------------------------------------+\
+             ------+------+-------+------+-------+------+-------+------+------\n\
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
