@@ -28,18 +28,13 @@ rm -rf target/xargo # Issue #3105
 
 # Run the appropriate test based on entrypoint
 testName=$(basename "$0" .sh)
+echo "Executing $testName"
 case $testName in
 test-stable)
-  echo "Executing $testName"
   _ cargo +"$rust_stable" test --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   _ cargo +"$rust_stable" test --manifest-path local_cluster/Cargo.toml --features=move ${V:+--verbose} test_bench_tps_local_cluster_move -- --nocapture
-  _ cargo +"$rust_stable" test --manifest-path programs/move_loader_api/Cargo.toml ${V:+--verbose} -- --nocapture
-  _ cargo +"$rust_stable" test --manifest-path programs/move_loader_program/Cargo.toml ${V:+--verbose} -- --nocapture
-  _ cargo +"$rust_stable" test --manifest-path programs/librapay_api/Cargo.toml ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
-  echo "Executing $testName"
-
   ci/affects-files.sh \
     .rs$ \
     Cargo.lock$ \
@@ -54,7 +49,7 @@ test-stable-perf)
     ^sdk/ \
   || {
     annotate --style info \
-      "Skipped test-stable-perf as no relevant files were modified"
+      "Skipped $testName as no relevant files were modified"
     exit 0
   }
 
@@ -83,8 +78,30 @@ test-stable-perf)
   _ cargo +"$rust_stable" build --bins ${V:+--verbose}
   _ cargo +"$rust_stable" test --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
   ;;
+test-move)
+  ci/affects-files.sh \
+    Cargo.lock$ \
+    Cargo.toml$ \
+    ^ci/rust-version.sh \
+    ^ci/test-stable.sh \
+    ^ci/test-move.sh \
+    ^programs/move_loader_api \
+    ^programs/move_loader_program \
+    ^programs/librapay_api \
+    ^logger/ \
+    ^runtime/ \
+    ^sdk/ \
+  || {
+    annotate --style info \
+      "Skipped $testName as no relevant files were modified"
+    exit 0
+  }
+  _ cargo +"$rust_stable" test --manifest-path programs/move_loader_api/Cargo.toml ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --manifest-path programs/move_loader_program/Cargo.toml ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --manifest-path programs/librapay_api/Cargo.toml ${V:+--verbose} -- --nocapture
+  exit 0
+  ;;
 test-local-cluster)
-  echo "Executing $testName"
   _ cargo +"$rust_stable" build --release --bins ${V:+--verbose}
   _ cargo +"$rust_stable" test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture
   exit 0
