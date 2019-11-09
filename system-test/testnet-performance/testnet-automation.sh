@@ -114,7 +114,7 @@ function launchTestnet() {
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
       net/colo.sh create \
-        -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" "$maybeEnableGpu" \
+        -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" $maybeEnableGpu \
         -p "$TESTNET_TAG" ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     *)
@@ -129,11 +129,15 @@ function launchTestnet() {
   if [[ -n $CHANNEL ]]; then
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-    net/net.sh restart -t "$CHANNEL" "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures
+    net/net.sh restart -t "$CHANNEL" \
+      "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures \
+      --gpu-mode $startGpuMode
   else
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-    net/net.sh restart -T solana-release*.tar.bz2 "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures
+    net/net.sh restart -T solana-release*.tar.bz2 \
+      "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures \
+      --gpu-mode $startGpuMode
   fi
 
   echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
@@ -204,11 +208,13 @@ if [[ -z $NUMBER_OF_VALIDATOR_NODES ]] ; then
   exit 1
 fi
 
+startGpuMode="off"
 if [[ -z $ENABLE_GPU ]] ; then
   ENABLE_GPU=false
 fi
 if [[ "$ENABLE_GPU" = "true" ]] ; then
   maybeEnableGpu="--enable-gpu"
+  startGpuMode="on"
 fi
 
 if [[ -z $NUMBER_OF_CLIENT_NODES ]] ; then
