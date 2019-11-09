@@ -1847,7 +1847,7 @@ pub mod tests {
         let keypair = Keypair::new();
 
         // Simulate a slot of virtual ticks, creates a new blockhash
-        let mut entries = create_ticks(genesis_block.ticks_per_slot, 1, genesis_hash);
+        let mut entries = create_ticks(genesis_block.ticks_per_slot, genesis_hash);
 
         // The new blockhash is going to be the hash of the last tick in the block
         let new_blockhash = entries.last().unwrap().hash;
