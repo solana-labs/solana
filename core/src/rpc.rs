@@ -4,6 +4,7 @@ use crate::{
     cluster_info::ClusterInfo,
     commitment::{BlockCommitment, BlockCommitmentCache},
     contact_info::ContactInfo,
+    gen_keys::GenKeys,
     packet::PACKET_DATA_SIZE,
     storage_stage::StorageState,
     validator::ValidatorExit,
@@ -25,9 +26,11 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     inflation::Inflation,
+    instruction::InstructionError,
     pubkey::Pubkey,
-    signature::Signature,
-    transaction::{self, Transaction},
+    signature::{KeypairUtil, Signature},
+    system_transaction,
+    transaction::{self, Transaction, TransactionError},
 };
 use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
@@ -271,6 +274,10 @@ impl JsonRpcRequestProcessor {
             .map(|(slot, _)| slot)
             .collect())
     }
+
+    pub fn get_block(&self, slot: Slot) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
+        Ok(make_test_transactions(slot))
+    }
 }
 
 fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
@@ -495,6 +502,13 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getBlocksSince")]
     fn get_blocks_since(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Slot>>;
+
+    #[rpc(meta, name = "getBlock")]
+    fn get_block(
+        &self,
+        meta: Self::Metadata,
+        slot: Slot,
+    ) -> Result<Vec<(Transaction, transaction::Result<()>)>>;
 }
 
 pub struct RpcSolImpl;
@@ -952,6 +966,43 @@ impl RpcSol for RpcSolImpl {
             .unwrap()
             .get_blocks_since(slot)
     }
+
+    fn get_block(
+        &self,
+        meta: Self::Metadata,
+        slot: Slot,
+    ) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
+        meta.request_processor.read().unwrap().get_block(slot)
+    }
+}
+
+fn make_test_transactions(count: u64) -> Vec<(Transaction, transaction::Result<()>)> {
+    let seed = [42u8; 32];
+    let keys = GenKeys::new(seed).gen_n_keypairs(count + 1);
+    let mut transactions: Vec<(Transaction, transaction::Result<()>)> = Vec::new();
+    for x in 0..count {
+        let tx = system_transaction::transfer(
+            &keys[x as usize],
+            &keys[(x + 1) as usize].pubkey(),
+            123,
+            Hash::default(),
+        );
+        let status = if x % 3 == 0 {
+            Ok(())
+        } else if x % 3 == 1 {
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InsufficientFunds,
+            ))
+        } else {
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::CustomError(3),
+            ))
+        };
+        transactions.push((tx, status))
+    }
+    transactions
 }
 
 #[cfg(test)]
@@ -967,7 +1018,7 @@ pub mod tests {
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
         instruction::InstructionError,
-        signature::{Keypair, KeypairUtil},
+        signature::Keypair,
         system_transaction,
         transaction::TransactionError,
     };
