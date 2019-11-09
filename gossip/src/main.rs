@@ -203,10 +203,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             let rpc_addrs: Vec<_> = nodes
                 .iter()
-                .filter_map(ContactInfo::valid_client_facing_addr)
-                .map(|addrs| addrs.0)
-                .filter(|rpc_addr| {
-                    matches.is_present("all") || rpc_addr.ip() == entrypoint_addr.ip()
+                .filter_map(|contact_info| {
+                    if (matches.is_present("all") || contact_info.gossip == entrypoint_addr)
+                        && ContactInfo::is_valid_address(&contact_info.rpc)
+                    {
+                        return Some(contact_info.rpc);
+                    }
+                    None
                 })
                 .collect();
 
