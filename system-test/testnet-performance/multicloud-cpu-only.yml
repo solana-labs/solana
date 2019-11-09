@@ -1,0 +1,43 @@
+steps:
+  - command: "system-test/testnet-performance/testnet-automation-multicloud.sh"
+    label: "Multicloud test"
+    env:
+      UPLOAD_RESULTS_TO_SLACK: "true"
+
+      TESTNET_TAG: "testnet-multicloud"
+      RAMP_UP_TIME: 0
+      TEST_DURATION_SECONDS: 600
+
+      ENABLE_GPU: "false"
+      BOOTSTRAP_LEADER_CLOUD_PROVIDER: "azure"
+
+      AZURE_ENABLE: "true"
+      AZURE_NUMBER_OF_VALIDATOR_NODES: 2
+      AZURE_VALIDATOR_NODE_MACHINE_TYPE: "Standard_D16s_v3"
+      AZURE_NUMBER_OF_CLIENT_NODES: 1
+      AZURE_ZONES: "westus"
+      AZURE_ADDITIONAL_FLAGS: ""
+
+      EC2_ENABLE: "true"
+      EC2_NUMBER_OF_VALIDATOR_NODES: 3
+      EC2_VALIDATOR_NODE_MACHINE_TYPE: "m5.4xlarge"
+      EC2_NUMBER_OF_CLIENT_NODES: 0
+      EC2_ZONES: "us-east-1b"
+      EC2_ADDITIONAL_FLAGS: ""
+
+      GCE_ENABLE: "true"
+      GCE_NUMBER_OF_VALIDATOR_NODES: 3
+      GCE_VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
+      GCE_NUMBER_OF_CLIENT_NODES: 0
+      GCE_ZONES: "us-central1-a"
+      GCE_ADDITIONAL_FLAGS: ""
+
+      COLO_ENABLE: "true"
+      COLO_NUMBER_OF_VALIDATOR_NODES: 1
+      COLO_NUMBER_OF_CLIENT_NODES: 0
+      COLO_ADDITIONAL_FLAGS: ""
+
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 15000 --thread-batch-sleep-ms 250"
+
+    agents:
+      - "queue=testnet-deploy"
