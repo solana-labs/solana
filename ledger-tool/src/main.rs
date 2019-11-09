@@ -287,6 +287,10 @@ fn main() {
             )
         )
         .subcommand(
+            SubCommand::with_name("print-genesis-hash")
+            .about("Prints the ledger's genesis hash")
+        )
+        .subcommand(
             SubCommand::with_name("bounds")
             .about("Print lowest and highest non-empty slots. Note: This ignores gaps in slots")
         )
@@ -396,6 +400,9 @@ fn main() {
         ("print", Some(args_matches)) => {
             let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
             output_ledger(blocktree, starting_slot, LedgerOutputMethod::Print);
+        }
+        ("print-genesis-hash", Some(_args_matches)) => {
+            println!("{}", genesis_config.hash());
         }
         ("print-slot", Some(args_matches)) => {
             let slot = value_t_or_exit!(args_matches, "slot", Slot);
