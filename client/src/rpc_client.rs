@@ -620,31 +620,31 @@ impl RpcClient {
         ))
     }
 
-    pub fn get_genesis_blockhash(&self) -> io::Result<Hash> {
+    pub fn get_genesis_hash(&self) -> io::Result<Hash> {
         let response = self
             .client
-            .send(&RpcRequest::GetGenesisBlockhash, None, 0, None)
+            .send(&RpcRequest::GetGenesisHash, None, 0, None)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("GetGenesisBlockhash request failure: {:?}", err),
+                    format!("GetGenesisHash request failure: {:?}", err),
                 )
             })?;
 
-        let blockhash = serde_json::from_value::<String>(response).map_err(|err| {
+        let hash = serde_json::from_value::<String>(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetGenesisBlockhash parse failure: {:?}", err),
+                format!("GetGenesisHash parse failure: {:?}", err),
             )
         })?;
 
-        let blockhash = blockhash.parse().map_err(|err| {
+        let hash = hash.parse().map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetGenesisBlockhash hash parse failure: {:?}", err),
+                format!("GetGenesisHash hash parse failure: {:?}", err),
             )
         })?;
-        Ok(blockhash)
+        Ok(hash)
     }
 
     pub fn poll_balance_with_timeout_and_commitment(

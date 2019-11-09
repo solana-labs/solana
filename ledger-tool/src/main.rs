@@ -8,7 +8,7 @@ use solana_ledger::{
     blocktree_processor,
     rooted_slot_iterator::RootedSlotIterator,
 };
-use solana_sdk::{clock::Slot, genesis_block::GenesisBlock, native_token::lamports_to_sol};
+use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol};
 use solana_vote_api::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -376,9 +376,9 @@ fn main() {
 
     let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger", String));
 
-    let genesis_block = GenesisBlock::load(&ledger_path).unwrap_or_else(|err| {
+    let genesis_config = GenesisConfig::load(&ledger_path).unwrap_or_else(|err| {
         eprintln!(
-            "Failed to open ledger genesis_block at {:?}: {}",
+            "Failed to open ledger genesis_config at {:?}: {}",
             ledger_path, err
         );
         exit(1);
@@ -433,7 +433,7 @@ fn main() {
             };
 
             match bank_forks_utils::load(
-                &genesis_block,
+                &genesis_config,
                 &blocktree,
                 account_paths,
                 snapshot_config.as_ref(),

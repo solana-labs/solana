@@ -15,7 +15,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{bank::Bank, transaction_batch::TransactionBatch};
 use solana_sdk::{
     clock::{Slot, MAX_RECENT_BLOCKHASHES},
-    genesis_block::GenesisBlock,
+    genesis_config::GenesisConfig,
     hash::Hash,
     signature::{Keypair, KeypairUtil},
     timing::duration_as_ms,
@@ -214,7 +214,7 @@ pub struct ProcessOptions {
 }
 
 pub fn process_blocktree(
-    genesis_block: &GenesisBlock,
+    genesis_config: &GenesisConfig,
     blocktree: &Blocktree,
     account_paths: Option<String>,
     opts: ProcessOptions,
@@ -229,15 +229,15 @@ pub fn process_blocktree(
     }
 
     // Setup bank for slot 0
-    let bank0 = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
+    let bank0 = Arc::new(Bank::new_with_paths(&genesis_config, account_paths));
     info!("processing ledger for bank 0...");
     process_bank_0(&bank0, blocktree, &opts)?;
-    process_blocktree_from_root(genesis_block, blocktree, bank0, &opts)
+    process_blocktree_from_root(genesis_config, blocktree, bank0, &opts)
 }
 
 // Process blocktree from a known root bank
 pub fn process_blocktree_from_root(
-    genesis_block: &GenesisBlock,
+    genesis_config: &GenesisConfig,
     blocktree: &Blocktree,
     bank: Arc<Bank>,
     opts: &ProcessOptions,
@@ -250,7 +250,7 @@ pub fn process_blocktree_from_root(
     let mut rooted_path = vec![start_slot];
 
     bank.set_entered_epoch_callback(solana_genesis_programs::get_entered_epoch_callback(
-        genesis_block.operating_mode,
+        genesis_config.operating_mode,
     ));
 
     blocktree
@@ -540,7 +540,7 @@ pub mod tests {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::entry::{create_ticks, next_entry, next_entry_mut};
     use crate::genesis_utils::{
-        create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
+        create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
     };
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
@@ -561,13 +561,13 @@ pub mod tests {
         solana_logger::setup();
 
         let hashes_per_tick = 2;
-        let GenesisBlockInfo {
-            mut genesis_block, ..
-        } = create_genesis_block(10_000);
-        genesis_block.poh_config.hashes_per_tick = Some(hashes_per_tick);
-        let ticks_per_slot = genesis_block.ticks_per_slot;
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(10_000);
+        genesis_config.poh_config.hashes_per_tick = Some(hashes_per_tick);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
 
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
 
@@ -592,7 +592,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         assert_eq!(
-            process_blocktree(&genesis_block, &blocktree, None, opts).err(),
+            process_blocktree(&genesis_config, &blocktree, None, opts).err(),
             Some(BlocktreeProcessorError::InvalidBlock(
                 BlockError::InvalidTickHashCount
             )),
@@ -603,11 +603,11 @@ pub mod tests {
     fn test_process_blocktree_with_invalid_slot_tick_count() {
         solana_logger::setup();
 
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let ticks_per_slot = genesis_block.ticks_per_slot;
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blocktree = Blocktree::open(&ledger_path).unwrap();
 
         // Write slot 1 with one tick missing
@@ -632,7 +632,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         assert_eq!(
-            process_blocktree(&genesis_block, &blocktree, None, opts).err(),
+            process_blocktree(&genesis_config, &blocktree, None, opts).err(),
             Some(BlocktreeProcessorError::InvalidBlock(
                 BlockError::InvalidTickCount
             )),
@@ -643,14 +643,14 @@ pub mod tests {
     fn test_process_blocktree_with_slot_with_trailing_entry() {
         solana_logger::setup();
 
-        let GenesisBlockInfo {
+        let GenesisConfigInfo {
             mint_keypair,
-            genesis_block,
+            genesis_config,
             ..
-        } = create_genesis_block(10_000);
-        let ticks_per_slot = genesis_block.ticks_per_slot;
+        } = create_genesis_config(10_000);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
 
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blocktree = Blocktree::open(&ledger_path).unwrap();
 
         let mut entries = create_ticks(ticks_per_slot, 0, blockhash);
@@ -683,7 +683,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         assert_eq!(
-            process_blocktree(&genesis_block, &blocktree, None, opts).err(),
+            process_blocktree(&genesis_config, &blocktree, None, opts).err(),
             Some(BlocktreeProcessorError::InvalidBlock(
                 BlockError::TrailingEntry
             )),
@@ -694,8 +694,8 @@ pub mod tests {
     fn test_process_blocktree_with_incomplete_slot() {
         solana_logger::setup();
 
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let ticks_per_slot = genesis_block.ticks_per_slot;
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
 
         /*
           Build a blocktree in the ledger with the following fork structure:
@@ -710,7 +710,7 @@ pub mod tests {
         */
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, mut blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, mut blockhash) = create_new_tmp_ledger!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
 
         let blocktree =
@@ -749,7 +749,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (mut _bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
@@ -764,11 +764,11 @@ pub mod tests {
     fn test_process_blocktree_with_two_forks_and_squash() {
         solana_logger::setup();
 
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let ticks_per_slot = genesis_block.ticks_per_slot;
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
         let mut last_entry_hash = blockhash;
 
@@ -811,7 +811,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // One fork, other one is ignored b/c not a descendant of the root
 
@@ -838,11 +838,11 @@ pub mod tests {
     fn test_process_blocktree_with_two_forks() {
         solana_logger::setup();
 
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let ticks_per_slot = genesis_block.ticks_per_slot;
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
         let mut last_entry_hash = blockhash;
 
@@ -885,7 +885,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 2); // There are two forks
         assert_eq!(
@@ -927,18 +927,18 @@ pub mod tests {
     fn test_process_blocktree_epoch_boundary_root() {
         solana_logger::setup();
 
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let ticks_per_slot = genesis_block.ticks_per_slot;
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
         let mut last_entry_hash = blockhash;
 
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         // Let last_slot be the number of slots in the first two epochs
-        let epoch_schedule = get_epoch_schedule(&genesis_block, None);
+        let epoch_schedule = get_epoch_schedule(&genesis_config, None);
         let last_slot = epoch_schedule.get_last_slot_in_epoch(1);
 
         // Create a single chain of slots with all indexes in the range [0, last_slot + 1]
@@ -965,7 +965,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // There is one fork
         assert_eq!(
@@ -1021,14 +1021,14 @@ pub mod tests {
     fn test_process_empty_entry_is_registered() {
         solana_logger::setup();
 
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(2);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let keypair = Keypair::new();
-        let slot_entries = create_ticks(genesis_block.ticks_per_slot, 1, genesis_block.hash());
+        let slot_entries = create_ticks(genesis_config.ticks_per_slot, 1, genesis_config.hash());
         let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair.pubkey(),
@@ -1053,18 +1053,18 @@ pub mod tests {
         let leader_pubkey = Pubkey::new_rand();
         let mint = 100;
         let hashes_per_tick = 10;
-        let GenesisBlockInfo {
-            mut genesis_block,
+        let GenesisConfigInfo {
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block_with_leader(mint, &leader_pubkey, 50);
-        genesis_block.poh_config.hashes_per_tick = Some(hashes_per_tick);
-        let (ledger_path, mut last_entry_hash) = create_new_tmp_ledger!(&genesis_block);
+        } = create_genesis_config_with_leader(mint, &leader_pubkey, 50);
+        genesis_config.poh_config.hashes_per_tick = Some(hashes_per_tick);
+        let (ledger_path, mut last_entry_hash) = create_new_tmp_ledger!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
 
         let deducted_from_mint = 3;
         let mut entries = vec![];
-        let blockhash = genesis_block.hash();
+        let blockhash = genesis_config.hash();
         for _ in 0..deducted_from_mint {
             // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
@@ -1087,8 +1087,8 @@ pub mod tests {
 
         // Fill up the rest of slot 1 with ticks
         entries.extend(create_ticks(
-            genesis_block.ticks_per_slot - 1,
-            genesis_block.poh_config.hashes_per_tick.unwrap(),
+            genesis_config.ticks_per_slot - 1,
+            genesis_config.poh_config.hashes_per_tick.unwrap(),
             last_entry_hash,
         ));
         let last_blockhash = entries.last().unwrap().hash;
@@ -1100,7 +1100,7 @@ pub mod tests {
                 1,
                 0,
                 0,
-                genesis_block.ticks_per_slot,
+                genesis_config.ticks_per_slot,
                 None,
                 true,
                 &Arc::new(Keypair::new()),
@@ -1112,7 +1112,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks.root(), 0);
@@ -1123,17 +1123,17 @@ pub mod tests {
             bank.get_balance(&mint_keypair.pubkey()),
             mint - deducted_from_mint
         );
-        assert_eq!(bank.tick_height(), 2 * genesis_block.ticks_per_slot);
+        assert_eq!(bank.tick_height(), 2 * genesis_config.ticks_per_slot);
         assert_eq!(bank.last_blockhash(), last_blockhash);
     }
 
     #[test]
     fn test_process_ledger_with_one_tick_per_slot() {
-        let GenesisBlockInfo {
-            mut genesis_block, ..
-        } = create_genesis_block(123);
-        genesis_block.ticks_per_slot = 1;
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(123);
+        genesis_config.ticks_per_slot = 1;
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
@@ -1141,7 +1141,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 0 });
@@ -1151,15 +1151,15 @@ pub mod tests {
 
     #[test]
     fn test_process_ledger_options_override_threads() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(123);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
             override_num_threads: Some(1),
             ..ProcessOptions::default()
         };
-        process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+        process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
         PAR_THREAD_POOL.with(|pool| {
             assert_eq!(pool.borrow().current_num_threads(), 1);
         });
@@ -1167,8 +1167,8 @@ pub mod tests {
 
     #[test]
     fn test_process_ledger_options_full_leader_cache() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(123);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
@@ -1176,21 +1176,21 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (_bank_forks, _bank_forks_info, cached_leader_schedule) =
-            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
         assert_eq!(cached_leader_schedule.max_schedules(), std::usize::MAX);
     }
 
     #[test]
     fn test_process_ledger_options_entry_callback() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(100);
-        let (ledger_path, last_entry_hash) = create_new_tmp_ledger!(&genesis_block);
+        } = create_genesis_config(100);
+        let (ledger_path, last_entry_hash) = create_new_tmp_ledger!(&genesis_config);
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
-        let blockhash = genesis_block.hash();
+        let blockhash = genesis_config.hash();
         let keypairs = [Keypair::new(), Keypair::new(), Keypair::new()];
 
         let tx = system_transaction::transfer(&mint_keypair, &keypairs[0].pubkey(), 1, blockhash);
@@ -1201,7 +1201,7 @@ pub mod tests {
 
         let mut entries = vec![entry_1, entry_2];
         entries.extend(create_ticks(
-            genesis_block.ticks_per_slot,
+            genesis_config.ticks_per_slot,
             0,
             last_entry_hash,
         ));
@@ -1210,7 +1210,7 @@ pub mod tests {
                 1,
                 0,
                 0,
-                genesis_block.ticks_per_slot,
+                genesis_config.ticks_per_slot,
                 None,
                 true,
                 &Arc::new(Keypair::new()),
@@ -1235,30 +1235,30 @@ pub mod tests {
             entry_callback: Some(entry_callback),
             ..ProcessOptions::default()
         };
-        process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+        process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
         assert_eq!(*callback_counter.write().unwrap(), 2);
     }
 
     #[test]
     fn test_process_entries_tick() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(1000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
+        let bank = Arc::new(Bank::new(&genesis_config));
 
         // ensure bank can process a tick
         assert_eq!(bank.tick_height(), 0);
-        let tick = next_entry(&genesis_block.hash(), 1, vec![]);
+        let tick = next_entry(&genesis_config.hash(), 1, vec![]);
         assert_eq!(process_entries(&bank, &[tick.clone()], true), Ok(()));
         assert_eq!(bank.tick_height(), 1);
     }
 
     #[test]
     fn test_process_entries_2_entries_collision() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(1000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(1000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
 
@@ -1287,12 +1287,12 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2_txes_collision() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(1000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(1000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -1344,12 +1344,12 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2_txes_collision_and_error() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(1000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(1000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -1429,12 +1429,12 @@ pub mod tests {
     fn test_process_entries_2nd_entry_collision_with_self_and_error() {
         solana_logger::setup();
 
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(1000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(1000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -1524,12 +1524,12 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2_entries_par() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(1000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(1000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -1567,12 +1567,12 @@ pub mod tests {
 
     #[test]
     fn test_process_entry_tx_random_execution_with_error() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(1_000_000_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(1_000_000_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
 
         const NUM_TRANSFERS_PER_ENTRY: usize = 8;
         const NUM_TRANSFERS: usize = NUM_TRANSFERS_PER_ENTRY * 32;
@@ -1630,13 +1630,13 @@ pub mod tests {
         // number of accounts need to be in multiple of 4 for correct
         // execution of the test.
         let num_accounts = entropy_multiplier * 4;
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block((num_accounts + 1) as u64 * initial_lamports);
+        } = create_genesis_config((num_accounts + 1) as u64 * initial_lamports);
 
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Arc::new(Bank::new(&genesis_config));
 
         let mut keypairs: Vec<Keypair> = vec![];
 
@@ -1698,12 +1698,12 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2_entries_tick() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(1000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(1000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -1761,12 +1761,12 @@ pub mod tests {
     #[test]
     fn test_update_transaction_statuses() {
         // Make sure instruction errors still update the signature cache
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(11_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(11_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let pubkey = Pubkey::new_rand();
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.transaction_count(), 1);
@@ -1802,12 +1802,12 @@ pub mod tests {
 
     #[test]
     fn test_update_transaction_statuses_fail() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(11_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(11_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let success_tx = system_transaction::transfer(
@@ -1843,13 +1843,13 @@ pub mod tests {
 
     #[test]
     fn test_process_blocktree_from_root() {
-        let GenesisBlockInfo {
-            mut genesis_block, ..
-        } = create_genesis_block(123);
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(123);
 
         let ticks_per_slot = 1;
-        genesis_block.ticks_per_slot = ticks_per_slot;
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        genesis_config.ticks_per_slot = ticks_per_slot;
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blocktree = Blocktree::open(&ledger_path).unwrap();
 
         /*
@@ -1878,7 +1878,7 @@ pub mod tests {
         blocktree.set_roots(&[3, 5]).unwrap();
 
         // Set up bank1
-        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let bank0 = Arc::new(Bank::new(&genesis_config));
         let opts = ProcessOptions {
             poh_verify: true,
             ..ProcessOptions::default()
@@ -1892,7 +1892,7 @@ pub mod tests {
 
         // Test process_blocktree_from_root() from slot 1 onwards
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree_from_root(&genesis_block, &blocktree, bank1, &opts).unwrap();
+            process_blocktree_from_root(&genesis_config, &blocktree, bank1, &opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // One fork
         assert_eq!(
@@ -1923,12 +1923,12 @@ pub mod tests {
         // this test throws lots of rayon threads at process_entries()
         //  finds bugs in very low-layer stuff
         solana_logger::setup();
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(1_000_000_000);
-        let mut bank = Arc::new(Bank::new(&genesis_block));
+        } = create_genesis_config(1_000_000_000);
+        let mut bank = Arc::new(Bank::new(&genesis_config));
 
         const NUM_TRANSFERS_PER_ENTRY: usize = 8;
         const NUM_TRANSFERS: usize = NUM_TRANSFERS_PER_ENTRY * 32;
@@ -2028,17 +2028,17 @@ pub mod tests {
 
     #[test]
     fn test_process_ledger_ticks_ordering() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(100);
-        let bank0 = Arc::new(Bank::new(&genesis_block));
-        let genesis_hash = genesis_block.hash();
+        } = create_genesis_config(100);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let genesis_hash = genesis_config.hash();
         let keypair = Keypair::new();
 
         // Simulate a slot of virtual ticks, creates a new blockhash
-        let mut entries = create_ticks(genesis_block.ticks_per_slot, 1, genesis_hash);
+        let mut entries = create_ticks(genesis_config.ticks_per_slot, 1, genesis_hash);
 
         // The new blockhash is going to be the hash of the last tick in the block
         let new_blockhash = entries.last().unwrap().hash;
@@ -2054,10 +2054,10 @@ pub mod tests {
     }
 
     fn get_epoch_schedule(
-        genesis_block: &GenesisBlock,
+        genesis_config: &GenesisConfig,
         account_paths: Option<String>,
     ) -> EpochSchedule {
-        let bank = Bank::new_with_paths(&genesis_block, account_paths);
+        let bank = Bank::new_with_paths(&genesis_config, account_paths);
         bank.epoch_schedule().clone()
     }
 

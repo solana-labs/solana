@@ -2,7 +2,7 @@
 mod bpf {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
-    use solana_runtime::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use solana_runtime::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_runtime::loader_utils::load_program;
     use std::env;
     use std::fs::File;
@@ -52,12 +52,12 @@ mod bpf {
                 let mut elf = Vec::new();
                 file.read_to_end(&mut elf).unwrap();
 
-                let GenesisBlockInfo {
-                    genesis_block,
+                let GenesisConfigInfo {
+                    genesis_config,
                     mint_keypair,
                     ..
-                } = create_genesis_block(50);
-                let bank = Bank::new(&genesis_block);
+                } = create_genesis_config(50);
+                let bank = Bank::new(&genesis_config);
                 let bank_client = BankClient::new(bank);
 
                 // Call user program
@@ -110,12 +110,12 @@ mod bpf {
                 let mut elf = Vec::new();
                 file.read_to_end(&mut elf).unwrap();
 
-                let GenesisBlockInfo {
-                    genesis_block,
+                let GenesisConfigInfo {
+                    genesis_config,
                     mint_keypair,
                     ..
-                } = create_genesis_block(50);
-                let bank = Arc::new(Bank::new(&genesis_block));
+                } = create_genesis_config(50);
+                let bank = Arc::new(Bank::new(&genesis_config));
                 // Create bank with specific slot, used by solana_bpf_rust_sysvar test
                 let bank =
                     Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);

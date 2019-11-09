@@ -200,7 +200,7 @@ SUBCOMMANDS:
     claim-storage-reward                 Redeem storage reward credits
     cluster-version                      Get the version of the cluster entrypoint
     confirm                              Confirm transaction by signature
-    create-archiver-storage-account    Create an archiver storage account
+    create-archiver-storage-account      Create an archiver storage account
     create-stake-account                 Create a stake account
     create-validator-storage-account     Create a validator storage account
     create-vote-account                  Create a vote account
@@ -210,7 +210,7 @@ SUBCOMMANDS:
     fees                                 Display current cluster fees
     get                                  Get cli config settings
     get-epoch-info                       Get information about the current epoch
-    get-genesis-blockhash                Get the genesis blockhash
+    get-genesis-hash                     Get the genesis hash
     get-slot                             Get current slot
     get-transaction-count                Get current transaction count
     help                                 Prints this message or the help of the given subcommand(s)
@@ -236,7 +236,7 @@ SUBCOMMANDS:
 
 #### solana-address
 ```text
-solana-address 
+solana-address
 Get your public key
 
 USAGE:
@@ -254,7 +254,7 @@ OPTIONS:
 
 #### solana-airdrop
 ```text
-solana-airdrop 
+solana-airdrop
 Request lamports
 
 USAGE:
@@ -278,7 +278,7 @@ ARGS:
 
 #### solana-balance
 ```text
-solana-balance 
+solana-balance
 Get your balance
 
 USAGE:
@@ -300,7 +300,7 @@ ARGS:
 
 #### solana-cancel
 ```text
-solana-cancel 
+solana-cancel
 Cancel a transfer
 
 USAGE:
@@ -321,7 +321,7 @@ ARGS:
 
 #### solana-claim-storage-reward
 ```text
-solana-claim-storage-reward 
+solana-claim-storage-reward
 Redeem storage reward credits
 
 USAGE:
@@ -343,7 +343,7 @@ ARGS:
 
 #### solana-cluster-version
 ```text
-solana-cluster-version 
+solana-cluster-version
 Get the version of the cluster entrypoint
 
 USAGE:
@@ -361,7 +361,7 @@ OPTIONS:
 
 #### solana-confirm
 ```text
-solana-confirm 
+solana-confirm
 Confirm transaction by signature
 
 USAGE:
@@ -382,7 +382,7 @@ ARGS:
 
 #### solana-create-archiver-storage-account
 ```text
-solana-create-archiver-storage-account 
+solana-create-archiver-storage-account
 Create an archiver storage account
 
 USAGE:
@@ -404,7 +404,7 @@ ARGS:
 
 #### solana-create-stake-account
 ```text
-solana-create-stake-account 
+solana-create-stake-account
 Create a stake account
 
 USAGE:
@@ -432,7 +432,7 @@ ARGS:
 
 #### solana-create-validator-storage-account
 ```text
-solana-create-validator-storage-account 
+solana-create-validator-storage-account
 Create a validator storage account
 
 USAGE:
@@ -454,7 +454,7 @@ ARGS:
 
 #### solana-create-vote-account
 ```text
-solana-create-vote-account 
+solana-create-vote-account
 Create a vote account
 
 USAGE:
@@ -480,7 +480,7 @@ ARGS:
 
 #### solana-deactivate-stake
 ```text
-solana-deactivate-stake 
+solana-deactivate-stake
 Deactivate the delegated stake from the stake account
 
 USAGE:
@@ -501,7 +501,7 @@ ARGS:
 
 #### solana-delegate-stake
 ```text
-solana-delegate-stake 
+solana-delegate-stake
 Delegate stake to a vote account
 
 USAGE:
@@ -523,7 +523,7 @@ ARGS:
 
 #### solana-deploy
 ```text
-solana-deploy 
+solana-deploy
 Deploy a program
 
 USAGE:
@@ -544,7 +544,7 @@ ARGS:
 
 #### solana-fees
 ```text
-solana-fees 
+solana-fees
 Display current cluster fees
 
 USAGE:
@@ -562,7 +562,7 @@ OPTIONS:
 
 #### solana-get
 ```text
-solana-get 
+solana-get
 Get cli config settings
 
 USAGE:
@@ -583,7 +583,7 @@ ARGS:
 
 #### solana-get-epoch-info
 ```text
-solana-get-epoch-info 
+solana-get-epoch-info
 Get information about the current epoch
 
 USAGE:
@@ -599,13 +599,13 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 ```
 
-#### solana-get-genesis-blockhash
+#### solana-get-genesis-hash
 ```text
-solana-get-genesis-blockhash 
-Get the genesis blockhash
+solana-get-genesis-hash
+Get the genesis hash
 
 USAGE:
-    solana get-genesis-blockhash [OPTIONS]
+    solana get-genesis-hash [OPTIONS]
 
 FLAGS:
     -h, --help       Prints help information
@@ -619,7 +619,7 @@ OPTIONS:
 
 #### solana-get-slot
 ```text
-solana-get-slot 
+solana-get-slot
 Get current slot
 
 USAGE:
@@ -637,7 +637,7 @@ OPTIONS:
 
 #### solana-get-transaction-count
 ```text
-solana-get-transaction-count 
+solana-get-transaction-count
 Get current transaction count
 
 USAGE:
@@ -655,7 +655,7 @@ OPTIONS:
 
 #### solana-help
 ```text
-solana-help 
+solana-help
 Prints this message or the help of the given subcommand(s)
 
 USAGE:
@@ -667,7 +667,7 @@ ARGS:
 
 #### solana-pay
 ```text
-solana-pay 
+solana-pay
 Send a payment
 
 USAGE:
@@ -695,7 +695,7 @@ ARGS:
 
 #### solana-ping
 ```text
-solana-ping 
+solana-ping
 Submit transactions sequentially
 
 USAGE:
@@ -716,7 +716,7 @@ OPTIONS:
 
 #### solana-redeem-vote-credits
 ```text
-solana-redeem-vote-credits 
+solana-redeem-vote-credits
 Redeem credits in the stake account
 
 USAGE:
@@ -738,7 +738,7 @@ ARGS:
 
 #### solana-send-signature
 ```text
-solana-send-signature 
+solana-send-signature
 Send a signature to authorize a transfer
 
 USAGE:
@@ -760,7 +760,7 @@ ARGS:
 
 #### solana-send-timestamp
 ```text
-solana-send-timestamp 
+solana-send-timestamp
 Send a timestamp to unlock a transfer
 
 USAGE:
@@ -783,7 +783,7 @@ ARGS:
 
 #### solana-set
 ```text
-solana-set 
+solana-set
 Set a cli config setting
 
 USAGE:
@@ -801,7 +801,7 @@ OPTIONS:
 
 #### solana-show-account
 ```text
-solana-show-account 
+solana-show-account
 Show the contents of an account
 
 USAGE:
@@ -824,7 +824,7 @@ ARGS:
 
 #### solana-show-stake-account
 ```text
-solana-show-stake-account 
+solana-show-stake-account
 Show the contents of a stake account
 
 USAGE:
@@ -846,7 +846,7 @@ ARGS:
 
 #### solana-show-storage-account
 ```text
-solana-show-storage-account 
+solana-show-storage-account
 Show the contents of a storage account
 
 USAGE:
@@ -867,7 +867,7 @@ ARGS:
 
 #### solana-show-validators
 ```text
-solana-show-validators 
+solana-show-validators
 Show information about the current validators
 
 USAGE:
@@ -886,7 +886,7 @@ OPTIONS:
 
 #### solana-show-vote-account
 ```text
-solana-show-vote-account 
+solana-show-vote-account
 Show the contents of a vote account
 
 USAGE:
@@ -908,7 +908,7 @@ ARGS:
 
 #### solana-stake-authorize-staker
 ```text
-solana-stake-authorize-staker 
+solana-stake-authorize-staker
 Authorize a new stake signing keypair for the given stake account
 
 USAGE:
@@ -930,7 +930,7 @@ ARGS:
 
 #### solana-stake-authorize-withdrawer
 ```text
-solana-stake-authorize-withdrawer 
+solana-stake-authorize-withdrawer
 Authorize a new withdraw signing keypair for the given stake account
 
 USAGE:
@@ -952,7 +952,7 @@ ARGS:
 
 #### solana-uptime
 ```text
-solana-uptime 
+solana-uptime
 Show the uptime of a validator, based on epoch voting history
 
 USAGE:
@@ -975,7 +975,7 @@ ARGS:
 
 #### solana-validator-info
 ```text
-solana-validator-info 
+solana-validator-info
 Publish/get Validator info on Solana
 
 USAGE:
@@ -998,7 +998,7 @@ SUBCOMMANDS:
 
 #### solana-vote-authorize-voter
 ```text
-solana-vote-authorize-voter 
+solana-vote-authorize-voter
 Authorize a new vote signing keypair for the given vote account
 
 USAGE:
@@ -1020,7 +1020,7 @@ ARGS:
 
 #### solana-vote-authorize-withdrawer
 ```text
-solana-vote-authorize-withdrawer 
+solana-vote-authorize-withdrawer
 Authorize a new withdraw signing keypair for the given vote account
 
 USAGE:
@@ -1042,7 +1042,7 @@ ARGS:
 
 #### solana-withdraw-stake
 ```text
-solana-withdraw-stake 
+solana-withdraw-stake
 Withdraw the unstaked lamports from the stake account
 
 USAGE:
@@ -1063,4 +1063,3 @@ ARGS:
     <AMOUNT>                 The amount to withdraw from the stake account (default unit SOL)
     <UNIT>                   Specify unit to use for request [possible values: SOL, lamports]
 ```
-

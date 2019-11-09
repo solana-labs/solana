@@ -6,7 +6,7 @@ extern crate solana_ledger;
 #[cfg(test)]
 mod tests {
     use log::*;
-    use solana_core::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use solana_core::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_core::service::Service;
     use solana_core::storage_stage::{test_cluster_info, SLOTS_PER_TURN_TEST};
     use solana_core::storage_stage::{StorageStage, StorageState};
@@ -38,19 +38,19 @@ mod tests {
         let archiver_keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let GenesisBlockInfo {
-            mut genesis_block,
+        let GenesisConfigInfo {
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(1000);
-        genesis_block
+        } = create_genesis_config(1000);
+        genesis_config
             .native_instruction_processors
             .push(solana_storage_program::solana_storage_program!());
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
 
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let bank = Arc::new(bank);
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
             &[bank.clone()],
@@ -164,12 +164,12 @@ mod tests {
         let storage_keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(1000);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let slot = 1;
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Arc::new(Bank::new(&genesis_config));
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
             &[bank.clone()],
             vec![0],

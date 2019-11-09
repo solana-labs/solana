@@ -3,7 +3,7 @@ extern crate solana_ledger;
 
 use assert_cmd::prelude::*;
 use solana_ledger::blocktree::create_new_tmp_ledger;
-use solana_ledger::genesis_utils::create_genesis_block;
+use solana_ledger::genesis_utils::create_genesis_config;
 use std::process::Command;
 use std::process::Output;
 
@@ -32,10 +32,10 @@ fn bad_arguments() {
 
 #[test]
 fn nominal() {
-    let genesis_block = create_genesis_block(100).genesis_block;
-    let ticks_per_slot = genesis_block.ticks_per_slot;
+    let genesis_config = create_genesis_config(100).genesis_config;
+    let ticks_per_slot = genesis_config.ticks_per_slot;
 
-    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
     let ticks = ticks_per_slot as usize;
 
     let ledger_path = ledger_path.to_str().unwrap();

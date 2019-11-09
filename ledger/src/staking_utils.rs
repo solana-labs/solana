@@ -100,7 +100,9 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS};
+    use crate::genesis_utils::{
+        create_genesis_config, GenesisConfigInfo, BOOTSTRAP_LEADER_LAMPORTS,
+    };
     use solana_sdk::{
         instruction::Instruction,
         pubkey::Pubkey,
@@ -187,18 +189,18 @@ pub(crate) mod tests {
 
         let validator = Keypair::new();
 
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_block(10_000);
+        } = create_genesis_config(10_000);
 
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let vote_account = Keypair::new();
 
         // Give the validator some stake but don't setup a staking account
         // Validator has no lamports staked, so they get filtered out. Only the bootstrap leader
-        // created by the genesis block will get included
+        // created by the genesis config will get included
         bank.transfer(1, &mint_keypair, &validator.pubkey())
             .unwrap();
 

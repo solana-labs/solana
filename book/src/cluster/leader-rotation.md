@@ -40,7 +40,7 @@ After observing the cluster for a sufficient amount of time, the leader schedule
 
 ## Leader Schedule Generation at Genesis
 
-The genesis block declares the first leader for the first epoch. This leader ends up scheduled for the first two epochs because the leader schedule is also generated at slot 0 for the next epoch. The length of the first two epochs can be specified in the genesis block as well. The minimum length of the first epochs must be greater than or equal to the maximum rollback depth as defined in [Tower BFT](../implemented-proposals/tower-bft.md).
+The genesis config declares the first leader for the first epoch. This leader ends up scheduled for the first two epochs because the leader schedule is also generated at slot 0 for the next epoch. The length of the first two epochs can be specified in the genesis config as well. The minimum length of the first epochs must be greater than or equal to the maximum rollback depth as defined in [Tower BFT](../implemented-proposals/tower-bft.md).
 
 ## Leader Schedule Generation Algorithm
 
@@ -73,7 +73,7 @@ The seed that is selected is predictable but unbiasable. There is no grinding at
 
 A leader can bias the active set by censoring validator votes. Two possible ways exist for leaders to censor the active set:
 
-* Ignore votes from validators 
+* Ignore votes from validators
 * Refuse to vote for blocks with votes from validators
 
 To reduce the likelihood of censorship, the active set is calculated at the leader schedule offset boundary over an _active set sampling duration_. The active set sampling duration is long enough such that votes will have been collected by multiple leaders.
@@ -95,4 +95,3 @@ The lifetime of a leader schedule is called an _epoch_. The epoch is split into 
 A leader transmits entries during its slot. After `T` ticks, all the validators switch to the next scheduled leader. Validators must ignore entries sent outside a leader's assigned slot.
 
 All `T` ticks must be observed by the next leader for it to build its own entries on. If entries are not observed \(leader is down\) or entries are invalid \(leader is buggy or malicious\), the next leader must produce ticks to fill the previous leader's slot. Note that the next leader should do repair requests in parallel, and postpone sending ticks until it is confident other validators also failed to observe the previous leader's entries. If a leader incorrectly builds on its own ticks, the leader following it must replace all its ticks.
-

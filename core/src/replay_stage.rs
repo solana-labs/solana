@@ -940,7 +940,7 @@ impl Service for ReplayStage {
 mod test {
     use super::*;
     use crate::commitment::BlockCommitment;
-    use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
+    use crate::genesis_utils::{create_genesis_config, create_genesis_config_with_leader};
     use crate::replay_stage::ReplayStage;
     use solana_ledger::blocktree::make_slot_entries;
     use solana_ledger::blocktree::{entries_to_test_shreds, get_tmp_ledger_path, BlocktreeError};
@@ -949,7 +949,7 @@ mod test {
         CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
         SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
     };
-    use solana_runtime::genesis_utils::GenesisBlockInfo;
+    use solana_runtime::genesis_utils::GenesisConfigInfo;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::packet::PACKET_DATA_SIZE;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -967,8 +967,8 @@ mod test {
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
 
-            let genesis_block = create_genesis_block(10_000).genesis_block;
-            let bank0 = Bank::new(&genesis_block);
+            let genesis_config = create_genesis_config(10_000).genesis_config;
+            let bank0 = Bank::new(&genesis_config);
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let mut bank_forks = BankForks::new(0, bank0);
             bank_forks.working_bank().freeze();
@@ -1002,8 +1002,8 @@ mod test {
 
     #[test]
     fn test_handle_new_root() {
-        let genesis_block = create_genesis_block(10_000).genesis_block;
-        let bank0 = Bank::new(&genesis_block);
+        let genesis_config = create_genesis_config(10_000).genesis_config;
+        let bank0 = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
         let mut progress = HashMap::new();
         progress.insert(5, ForkProgress::new(0, Hash::default()));
@@ -1221,13 +1221,13 @@ mod test {
             let blocktree = Arc::new(
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
-            let GenesisBlockInfo {
-                mut genesis_block,
+            let GenesisConfigInfo {
+                mut genesis_config,
                 mint_keypair,
                 ..
-            } = create_genesis_block(1000);
-            genesis_block.poh_config.hashes_per_tick = Some(2);
-            let bank0 = Arc::new(Bank::new(&genesis_block));
+            } = create_genesis_config(1000);
+            genesis_config.poh_config.hashes_per_tick = Some(2);
+            let bank0 = Arc::new(Bank::new(&genesis_config));
             let mut progress = HashMap::new();
             let last_blockhash = bank0.last_blockhash();
             progress.insert(bank0.slot(), ForkProgress::new(0, last_blockhash));
@@ -1268,14 +1268,14 @@ mod test {
 
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
-        let genesis_block_info =
-            create_genesis_block_with_leader(50, &leader_pubkey, leader_lamports);
-        let mut genesis_block = genesis_block_info.genesis_block;
-        let leader_voting_pubkey = genesis_block_info.voting_keypair.pubkey();
-        genesis_block.epoch_schedule.warmup = false;
-        genesis_block.ticks_per_slot = 4;
-        let bank0 = Bank::new(&genesis_block);
-        for _ in 0..genesis_block.ticks_per_slot {
+        let genesis_config_info =
+            create_genesis_config_with_leader(50, &leader_pubkey, leader_lamports);
+        let mut genesis_config = genesis_config_info.genesis_config;
+        let leader_voting_pubkey = genesis_config_info.voting_keypair.pubkey();
+        genesis_config.epoch_schedule.warmup = false;
+        genesis_config.ticks_per_slot = 4;
+        let bank0 = Bank::new(&genesis_config);
+        for _ in 0..genesis_config.ticks_per_slot {
             bank0.register_tick(&Hash::default());
         }
         bank0.freeze();
@@ -1297,8 +1297,8 @@ mod test {
             .is_none());
 
         let bank1 = Bank::new_from_parent(&arc_bank0, &Pubkey::default(), arc_bank0.slot() + 1);
-        let _res = bank1.transfer(10, &genesis_block_info.mint_keypair, &Pubkey::new_rand());
-        for _ in 0..genesis_block.ticks_per_slot {
+        let _res = bank1.transfer(10, &genesis_config_info.mint_keypair, &Pubkey::new_rand());
+        for _ in 0..genesis_config.ticks_per_slot {
             bank1.register_tick(&Hash::default());
         }
         bank1.freeze();
@@ -1308,8 +1308,8 @@ mod test {
         ReplayStage::update_commitment_cache(arc_bank1.clone(), leader_lamports, &lockouts_sender);
 
         let bank2 = Bank::new_from_parent(&arc_bank1, &Pubkey::default(), arc_bank1.slot() + 1);
-        let _res = bank2.transfer(10, &genesis_block_info.mint_keypair, &Pubkey::new_rand());
-        for _ in 0..genesis_block.ticks_per_slot {
+        let _res = bank2.transfer(10, &genesis_config_info.mint_keypair, &Pubkey::new_rand());
+        for _ in 0..genesis_config.ticks_per_slot {
             bank2.register_tick(&Hash::default());
         }
         bank2.freeze();

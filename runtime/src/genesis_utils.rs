@@ -1,7 +1,7 @@
 use solana_sdk::{
     account::Account,
     fee_calculator::FeeCalculator,
-    genesis_block::GenesisBlock,
+    genesis_config::GenesisConfig,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_program::{self, solana_system_program},
@@ -12,21 +12,21 @@ use solana_vote_api::vote_state;
 // The default stake placed with the bootstrap leader
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
-pub struct GenesisBlockInfo {
-    pub genesis_block: GenesisBlock,
+pub struct GenesisConfigInfo {
+    pub genesis_config: GenesisConfig,
     pub mint_keypair: Keypair,
     pub voting_keypair: Keypair,
 }
 
-pub fn create_genesis_block(mint_lamports: u64) -> GenesisBlockInfo {
-    create_genesis_block_with_leader(mint_lamports, &Pubkey::new_rand(), 0)
+pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
+    create_genesis_config_with_leader(mint_lamports, &Pubkey::new_rand(), 0)
 }
 
-pub fn create_genesis_block_with_leader(
+pub fn create_genesis_config_with_leader(
     mint_lamports: u64,
     bootstrap_leader_pubkey: &Pubkey,
     bootstrap_leader_stake_lamports: u64,
-) -> GenesisBlockInfo {
+) -> GenesisConfigInfo {
     let mint_keypair = Keypair::new();
     let voting_keypair = Keypair::new();
     let staking_keypair = Keypair::new();
@@ -73,18 +73,18 @@ pub fn create_genesis_block_with_leader(
     ];
     let fee_calculator = FeeCalculator::new(0, 0); // most tests don't want fees
 
-    let mut genesis_block = GenesisBlock {
+    let mut genesis_config = GenesisConfig {
         accounts,
         native_instruction_processors,
         fee_calculator,
-        ..GenesisBlock::default()
+        ..GenesisConfig::default()
     };
 
-    solana_stake_api::add_genesis_accounts(&mut genesis_block);
-    solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_block);
+    solana_stake_api::add_genesis_accounts(&mut genesis_config);
+    solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_config);
 
-    GenesisBlockInfo {
-        genesis_block,
+    GenesisConfigInfo {
+        genesis_config,
         mint_keypair,
         voting_keypair,
     }

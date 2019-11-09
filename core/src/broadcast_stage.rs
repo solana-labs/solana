@@ -192,7 +192,7 @@ impl Service for BroadcastStage {
 mod test {
     use super::*;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::service::Service;
     use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
     use solana_ledger::entry::create_ticks;
@@ -235,8 +235,8 @@ mod test {
 
         let exit_sender = Arc::new(AtomicBool::new(false));
 
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
 
         let leader_keypair = cluster_info.read().unwrap().keypair.clone();
         // Start up the broadcast stage

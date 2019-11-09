@@ -4,7 +4,7 @@ Transactions currently include a fee field that indicates the maximum fee field 
 
 ## Congestion-driven fees
 
-Each validator uses _signatures per slot_ \(SPS\) to estimate network congestion and _SPS target_ to estimate the desired processing capacity of the cluster. The validator learns the SPS target from the genesis block, whereas it calculates SPS from recently processed transactions. The genesis block also defines a target `lamports_per_signature`, which is the fee to charge per signature when the cluster is operating at _SPS target_.
+Each validator uses _signatures per slot_ \(SPS\) to estimate network congestion and _SPS target_ to estimate the desired processing capacity of the cluster. The validator learns the SPS target from the genesis config, whereas it calculates SPS from recently processed transactions. The genesis config also defines a target `lamports_per_signature`, which is the fee to charge per signature when the cluster is operating at _SPS target_.
 
 ## Calculating fees
 
@@ -28,4 +28,3 @@ Future parameters might include:
 ### Hijacking the SPS Target
 
 A group of validators can centralize the cluster if they can convince it to raise the SPS Target above a point where the rest of the validators can keep up. Raising the target will cause fees to drop, presumably creating more demand and therefore higher TPS. If the validator doesn't have hardware that can process that many transactions that fast, its confirmation votes will eventually get so long that the cluster will be forced to boot it.
-

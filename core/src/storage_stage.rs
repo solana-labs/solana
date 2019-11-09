@@ -650,7 +650,7 @@ pub fn test_cluster_info(id: &Pubkey) -> Arc<RwLock<ClusterInfo>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::service::Service;
     use rayon::prelude::*;
     use solana_runtime::bank::Bank;
@@ -668,8 +668,8 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(1000);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
+        let bank = Arc::new(Bank::new(&genesis_config));
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
             &[bank.clone()],
             vec![0],

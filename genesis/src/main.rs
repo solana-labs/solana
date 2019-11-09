@@ -1,4 +1,4 @@
-//! A command-line executable for generating the chain's genesis block.
+//! A command-line executable for generating the chain's genesis config.
 
 mod genesis_accounts;
 
@@ -12,7 +12,7 @@ use solana_sdk::{
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
-    genesis_block::{GenesisBlock, OperatingMode},
+    genesis_config::{GenesisConfig, OperatingMode},
     native_token::sol_to_lamports,
     poh_config::PohConfig,
     pubkey::{read_pubkey_file, Pubkey},
@@ -44,7 +44,7 @@ fn pubkey_from_str(key_str: &str) -> Result<Pubkey, Box<dyn error::Error>> {
     })
 }
 
-pub fn add_genesis_accounts(file: &str, genesis_block: &mut GenesisBlock) -> io::Result<()> {
+pub fn add_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> io::Result<()> {
     let accounts_file = File::open(file.to_string())?;
 
     let genesis_accounts: HashMap<String, Base64Account> =
@@ -77,7 +77,7 @@ pub fn add_genesis_accounts(file: &str, genesis_block: &mut GenesisBlock) -> io:
         }
         account.executable = account_details.executable;
 
-        genesis_block.add_account(pubkey, account);
+        genesis_config.add_account(pubkey, account);
     }
 
     Ok(())
@@ -385,7 +385,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let native_instruction_processors =
         solana_genesis_programs::get_programs(operating_mode, 0).unwrap();
     let inflation = solana_genesis_programs::get_inflation(operating_mode, 0).unwrap();
-    let mut genesis_block = GenesisBlock {
+    let mut genesis_config = GenesisConfig {
         accounts,
         native_instruction_processors,
         ticks_per_slot,
@@ -395,27 +395,27 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         rent,
         poh_config,
         operating_mode,
-        ..GenesisBlock::default()
+        ..GenesisConfig::default()
     };
 
     if let Some(files) = matches.values_of("primordial_accounts_file") {
         for file in files {
-            add_genesis_accounts(file, &mut genesis_block)?;
+            add_genesis_accounts(file, &mut genesis_config)?;
         }
     }
 
     // add genesis stuff from storage and stake
-    solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_block);
-    solana_stake_api::add_genesis_accounts(&mut genesis_block);
+    solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_config);
+    solana_stake_api::add_genesis_accounts(&mut genesis_config);
 
-    create_new_ledger(&ledger_path, &genesis_block)?;
+    create_new_ledger(&ledger_path, &genesis_config)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_config::GenesisConfig;
     use solana_sdk::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::fs::remove_file;
@@ -426,9 +426,9 @@ mod tests {
     #[test]
     fn test_append_primordial_accounts_to_genesis() {
         // Test invalid file returns error
-        assert!(add_genesis_accounts("unknownfile", &mut GenesisBlock::default()).is_err());
+        assert!(add_genesis_accounts("unknownfile", &mut GenesisConfig::default()).is_err());
 
-        let mut genesis_block = GenesisBlock::default();
+        let mut genesis_config = GenesisConfig::default();
 
         let mut genesis_accounts = HashMap::new();
         genesis_accounts.insert(
@@ -466,7 +466,7 @@ mod tests {
 
         add_genesis_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
-            &mut genesis_block,
+            &mut genesis_config,
         )
         .expect("test_append_primordial_accounts_to_genesis.yml");
         // Test valid file returns ok
@@ -475,28 +475,28 @@ mod tests {
 
         {
             // Test all accounts were added
-            assert_eq!(genesis_block.accounts.len(), genesis_accounts.len());
+            assert_eq!(genesis_config.accounts.len(), genesis_accounts.len());
 
             // Test account data matches
             (0..genesis_accounts.len()).for_each(|i| {
                 assert_eq!(
-                    genesis_accounts[&genesis_block.accounts[i].0.to_string()].owner,
-                    genesis_block.accounts[i].1.owner.to_string()
+                    genesis_accounts[&genesis_config.accounts[i].0.to_string()].owner,
+                    genesis_config.accounts[i].1.owner.to_string()
                 );
 
                 assert_eq!(
-                    genesis_accounts[&genesis_block.accounts[i].0.to_string()].balance,
-                    genesis_block.accounts[i].1.lamports
+                    genesis_accounts[&genesis_config.accounts[i].0.to_string()].balance,
+                    genesis_config.accounts[i].1.lamports
                 );
 
                 assert_eq!(
-                    genesis_accounts[&genesis_block.accounts[i].0.to_string()].executable,
-                    genesis_block.accounts[i].1.executable
+                    genesis_accounts[&genesis_config.accounts[i].0.to_string()].executable,
+                    genesis_config.accounts[i].1.executable
                 );
 
                 assert_eq!(
-                    genesis_accounts[&genesis_block.accounts[i].0.to_string()].data,
-                    base64::encode(&genesis_block.accounts[i].1.data)
+                    genesis_accounts[&genesis_config.accounts[i].0.to_string()].data,
+                    base64::encode(&genesis_config.accounts[i].1.data)
                 );
             });
         }
@@ -538,7 +538,7 @@ mod tests {
 
         add_genesis_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
-            &mut genesis_block,
+            &mut genesis_config,
         )
         .expect("test_append_primordial_accounts_to_genesis.yml");
 
@@ -546,57 +546,57 @@ mod tests {
 
         // Test total number of accounts is correct
         assert_eq!(
-            genesis_block.accounts.len(),
+            genesis_config.accounts.len(),
             genesis_accounts.len() + genesis_accounts1.len()
         );
 
         // Test old accounts are still there
         (0..genesis_accounts.len()).for_each(|i| {
             assert_eq!(
-                genesis_accounts[&genesis_block.accounts[i].0.to_string()].balance,
-                genesis_block.accounts[i].1.lamports,
+                genesis_accounts[&genesis_config.accounts[i].0.to_string()].balance,
+                genesis_config.accounts[i].1.lamports,
             );
         });
 
         // Test new account data matches
         (0..genesis_accounts1.len()).for_each(|i| {
             assert_eq!(
-                genesis_accounts1[&genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
                     .0
                     .to_string()]
                     .owner,
-                genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_config.accounts[genesis_accounts.len() + i]
                     .1
                     .owner
                     .to_string(),
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
                     .0
                     .to_string()]
                     .balance,
-                genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_config.accounts[genesis_accounts.len() + i]
                     .1
                     .lamports,
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
                     .0
                     .to_string()]
                     .executable,
-                genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_config.accounts[genesis_accounts.len() + i]
                     .1
                     .executable,
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
                     .0
                     .to_string()]
                     .data,
-                base64::encode(&genesis_block.accounts[genesis_accounts.len() + i].1.data),
+                base64::encode(&genesis_config.accounts[genesis_accounts.len() + i].1.data),
             );
         });
 
@@ -638,67 +638,67 @@ mod tests {
 
         add_genesis_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
-            &mut genesis_block,
+            &mut genesis_config,
         )
         .expect("genesis");
 
-        solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_block);
+        solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_config);
 
         remove_file(path).unwrap();
 
         // Test total number of accounts is correct
         assert_eq!(
-            genesis_block.accounts.len(),
+            genesis_config.accounts.len(),
             genesis_accounts.len() + genesis_accounts1.len() + genesis_accounts2.len()
         );
 
         // Test old accounts are still there
         (0..genesis_accounts.len()).for_each(|i| {
             assert_eq!(
-                genesis_accounts[&genesis_block.accounts[i].0.to_string()].balance,
-                genesis_block.accounts[i].1.lamports,
+                genesis_accounts[&genesis_config.accounts[i].0.to_string()].balance,
+                genesis_config.accounts[i].1.lamports,
             );
         });
 
         // Test new account data matches
         (0..genesis_accounts1.len()).for_each(|i| {
             assert_eq!(
-                genesis_accounts1[&genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
                     .0
                     .to_string()]
                     .owner,
-                genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_config.accounts[genesis_accounts.len() + i]
                     .1
                     .owner
                     .to_string(),
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
                     .0
                     .to_string()]
                     .balance,
-                genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_config.accounts[genesis_accounts.len() + i]
                     .1
                     .lamports,
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
                     .0
                     .to_string()]
                     .executable,
-                genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_config.accounts[genesis_accounts.len() + i]
                     .1
                     .executable,
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_block.accounts[genesis_accounts.len() + i]
+                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
                     .0
                     .to_string()]
                     .data,
-                base64::encode(&genesis_block.accounts[genesis_accounts.len() + i].1.data),
+                base64::encode(&genesis_config.accounts[genesis_accounts.len() + i].1.data),
             );
         });
 
@@ -707,7 +707,7 @@ mod tests {
         account_keypairs.iter().for_each(|keypair| {
             let mut i = 0;
             (offset..(offset + account_keypairs.len())).for_each(|n| {
-                if keypair.pubkey() == genesis_block.accounts[n].0 {
+                if keypair.pubkey() == genesis_config.accounts[n].0 {
                     i = n;
                 }
             });
@@ -717,25 +717,25 @@ mod tests {
             assert_eq!(
                 genesis_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
                     .owner,
-                genesis_block.accounts[i].1.owner.to_string(),
+                genesis_config.accounts[i].1.owner.to_string(),
             );
 
             assert_eq!(
                 genesis_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
                     .balance,
-                genesis_block.accounts[i].1.lamports,
+                genesis_config.accounts[i].1.lamports,
             );
 
             assert_eq!(
                 genesis_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
                     .executable,
-                genesis_block.accounts[i].1.executable,
+                genesis_config.accounts[i].1.executable,
             );
 
             assert_eq!(
                 genesis_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
                     .data,
-                base64::encode(&genesis_block.accounts[i].1.data),
+                base64::encode(&genesis_config.accounts[i].1.data),
             );
         });
     }
@@ -769,11 +769,11 @@ mod tests {
         let mut file = File::create(path).unwrap();
         file.write_all(yaml_string_pubkey.as_bytes()).unwrap();
 
-        let mut genesis_block = GenesisBlock::default();
-        add_genesis_accounts(path.to_str().unwrap(), &mut genesis_block).expect("genesis");
+        let mut genesis_config = GenesisConfig::default();
+        add_genesis_accounts(path.to_str().unwrap(), &mut genesis_config).expect("genesis");
         remove_file(path).unwrap();
 
-        assert_eq!(genesis_block.accounts.len(), 4);
+        assert_eq!(genesis_config.accounts.len(), 4);
 
         let yaml_string_keypair = "---
 \"[17,12,234,59,35,246,168,6,64,36,169,164,219,96,253,79,238,202,164,160,195,89,9,96,179,117,255,239,32,64,124,66,233,130,19,107,172,54,86,32,119,148,4,39,199,40,122,230,249,47,150,168,163,159,83,233,97,18,25,238,103,25,253,108]\":
@@ -797,10 +797,10 @@ mod tests {
         let mut file = File::create(path).unwrap();
         file.write_all(yaml_string_keypair.as_bytes()).unwrap();
 
-        let mut genesis_block = GenesisBlock::default();
-        add_genesis_accounts(path.to_str().unwrap(), &mut genesis_block).expect("genesis");
+        let mut genesis_config = GenesisConfig::default();
+        add_genesis_accounts(path.to_str().unwrap(), &mut genesis_config).expect("genesis");
         remove_file(path).unwrap();
 
-        assert_eq!(genesis_block.accounts.len(), 3);
+        assert_eq!(genesis_config.accounts.len(), 3);
     }
 }

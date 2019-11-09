@@ -274,7 +274,7 @@ impl Service for RetransmitStage {
 mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::packet::{self, Meta, Packet, Packets};
     use solana_ledger::blocktree::create_new_tmp_ledger;
     use solana_ledger::blocktree_processor::{process_blocktree, ProcessOptions};
@@ -283,15 +283,15 @@ mod tests {
 
     #[test]
     fn test_skip_repair() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(123);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
             full_leader_cache: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _, cached_leader_schedule) =
-            process_blocktree(&genesis_block, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
         let leader_schedule_cache = Arc::new(cached_leader_schedule);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 

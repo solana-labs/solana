@@ -28,7 +28,7 @@ use solana_ledger::{
 use solana_metrics::datapoint_info;
 use solana_sdk::{
     clock::{Slot, DEFAULT_SLOTS_PER_TURN},
-    genesis_block::GenesisBlock,
+    genesis_config::GenesisConfig,
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -50,7 +50,7 @@ use std::{
 pub struct ValidatorConfig {
     pub dev_sigverify_disabled: bool,
     pub dev_halt_at_slot: Option<Slot>,
-    pub expected_genesis_blockhash: Option<Hash>,
+    pub expected_genesis_hash: Option<Hash>,
     pub voting_disabled: bool,
     pub blockstream_unix_socket: Option<PathBuf>,
     pub storage_slots_per_turn: u64,
@@ -66,7 +66,7 @@ impl Default for ValidatorConfig {
         Self {
             dev_sigverify_disabled: false,
             dev_halt_at_slot: None,
-            expected_genesis_blockhash: None,
+            expected_genesis_hash: None,
             voting_disabled: false,
             blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
@@ -158,7 +158,7 @@ impl Validator {
 
         info!("creating bank...");
         let (
-            genesis_blockhash,
+            genesis_hash,
             bank_forks,
             bank_forks_info,
             blocktree,
@@ -167,7 +167,7 @@ impl Validator {
             leader_schedule_cache,
             poh_config,
         ) = new_banks_from_blocktree(
-            config.expected_genesis_blockhash,
+            config.expected_genesis_hash,
             ledger_path,
             config.account_paths.clone(),
             config.snapshot_config.clone(),
@@ -210,7 +210,7 @@ impl Validator {
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
                 ledger_path,
-                genesis_blockhash,
+                genesis_hash,
                 &validator_exit,
             ))
         };
@@ -409,7 +409,7 @@ impl Validator {
 }
 
 pub fn new_banks_from_blocktree(
-    expected_genesis_blockhash: Option<Hash>,
+    expected_genesis_hash: Option<Hash>,
     blocktree_path: &Path,
     account_paths: Option<String>,
     snapshot_config: Option<SnapshotConfig>,
@@ -425,16 +425,14 @@ pub fn new_banks_from_blocktree(
     LeaderScheduleCache,
     PohConfig,
 ) {
-    let genesis_block = GenesisBlock::load(blocktree_path).expect("Failed to load genesis block");
-    let genesis_blockhash = genesis_block.hash();
-    info!("genesis blockhash: {}", genesis_blockhash);
+    let genesis_config =
+        GenesisConfig::load(blocktree_path).expect("Failed to load genesis config");
+    let genesis_hash = genesis_config.hash();
+    info!("genesis hash: {}", genesis_hash);
 
-    if let Some(expected_genesis_blockhash) = expected_genesis_blockhash {
-        if genesis_blockhash != expected_genesis_blockhash {
-            error!(
-                "genesis blockhash mismatch: expected {}",
-                expected_genesis_blockhash
-            );
+    if let Some(expected_genesis_hash) = expected_genesis_hash {
+        if genesis_hash != expected_genesis_hash {
+            error!("genesis hash mismatch: expected {}", expected_genesis_hash);
             error!(
                 "Delete the ledger directory to continue: {:?}",
                 blocktree_path
@@ -453,7 +451,7 @@ pub fn new_banks_from_blocktree(
     };
 
     let (mut bank_forks, bank_forks_info, leader_schedule_cache) = bank_forks_utils::load(
-        &genesis_block,
+        &genesis_config,
         &blocktree,
         account_paths,
         snapshot_config.as_ref(),
@@ -467,14 +465,14 @@ pub fn new_banks_from_blocktree(
     bank_forks.set_snapshot_config(snapshot_config);
 
     (
-        genesis_blockhash,
+        genesis_hash,
         bank_forks,
         bank_forks_info,
         blocktree,
         ledger_signal_receiver,
         completed_slots_receiver,
         leader_schedule_cache,
-        genesis_block.poh_config,
+        genesis_config.poh_config,
     )
 }
 
@@ -501,26 +499,26 @@ impl Service for Validator {
 }
 
 pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
-    use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
     use solana_ledger::blocktree::create_new_tmp_ledger;
 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
     let contact_info = node.info.clone();
 
-    let GenesisBlockInfo {
-        mut genesis_block,
+    let GenesisConfigInfo {
+        mut genesis_config,
         mint_keypair,
         voting_keypair,
-    } = create_genesis_block_with_leader(10_000, &contact_info.id, 42);
-    genesis_block
+    } = create_genesis_config_with_leader(10_000, &contact_info.id, 42);
+    genesis_config
         .native_instruction_processors
         .push(solana_budget_program!());
 
-    genesis_block.rent.lamports_per_byte_year = 1;
-    genesis_block.rent.exemption_threshold = 1.0;
+    genesis_config.rent.lamports_per_byte_year = 1;
+    genesis_config.rent.exemption_threshold = 1.0;
 
-    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
     let leader_voting_keypair = Arc::new(voting_keypair);
     let storage_keypair = Arc::new(Keypair::new());
@@ -542,7 +540,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::create_genesis_block_with_leader;
+    use crate::genesis_utils::create_genesis_config_with_leader;
     use solana_ledger::blocktree::create_new_tmp_ledger;
     use std::fs::remove_dir_all;
 
@@ -554,9 +552,10 @@ mod tests {
 
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
-        let genesis_block =
-            create_genesis_block_with_leader(10_000, &leader_keypair.pubkey(), 1000).genesis_block;
-        let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let genesis_config =
+            create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
+                .genesis_config;
+        let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let voting_keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
@@ -585,10 +584,10 @@ mod tests {
             .map(|_| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
-                let genesis_block =
-                    create_genesis_block_with_leader(10_000, &leader_keypair.pubkey(), 1000)
-                        .genesis_block;
-                let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+                let genesis_config =
+                    create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
+                        .genesis_config;
+                let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
                 ledger_paths.push(validator_ledger_path.clone());
                 let voting_keypair = Arc::new(Keypair::new());
                 let storage_keypair = Arc::new(Keypair::new());

@@ -235,7 +235,7 @@ pub mod tests {
     use super::*;
     use crate::banking_stage::create_test_recorder;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::blocktree::create_new_tmp_ledger;
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
@@ -248,16 +248,16 @@ pub mod tests {
         let target1 = Node::new_localhost_with_pubkey(&target1_keypair.pubkey());
 
         let starting_balance = 10_000;
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(starting_balance);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(starting_balance);
 
-        let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+        let bank_forks = BankForks::new(0, Bank::new(&genesis_config));
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
         cluster_info1.insert_info(leader.info.clone());
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
-        let (blocktree_path, _) = create_new_tmp_ledger!(&genesis_block);
+        let (blocktree_path, _) = create_new_tmp_ledger!(&genesis_config);
         let (blocktree, l_receiver, completed_slots_receiver) =
             Blocktree::open_with_signal(&blocktree_path)
                 .expect("Expected to successfully open ledger");

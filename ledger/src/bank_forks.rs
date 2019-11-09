@@ -304,14 +304,14 @@ impl BankForks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_bank_forks() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let bank = Bank::new(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         child_bank.register_tick(&Hash::default());
@@ -322,8 +322,8 @@ mod tests {
 
     #[test]
     fn test_bank_forks_descendants() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let bank = Bank::new(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
         let mut bank_forks = BankForks::new(0, bank);
         let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
@@ -339,8 +339,8 @@ mod tests {
 
     #[test]
     fn test_bank_forks_ancestors() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let bank = Bank::new(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
         let mut bank_forks = BankForks::new(0, bank);
         let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
@@ -357,8 +357,8 @@ mod tests {
 
     #[test]
     fn test_bank_forks_frozen_banks() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let bank = Bank::new(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
@@ -368,8 +368,8 @@ mod tests {
 
     #[test]
     fn test_bank_forks_active_banks() {
-        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
-        let bank = Bank::new(&genesis_block);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);

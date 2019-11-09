@@ -6,11 +6,11 @@ use crate::{
     snapshot_utils,
 };
 use log::*;
-use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::genesis_config::GenesisConfig;
 use std::{fs, sync::Arc};
 
 pub fn load(
-    genesis_block: &GenesisBlock,
+    genesis_config: &GenesisConfig,
     blocktree: &Blocktree,
     account_paths: Option<String>,
     snapshot_config: Option<&SnapshotConfig>,
@@ -40,7 +40,7 @@ pub fn load(
             .expect("Load from snapshot failed");
 
             return blocktree_processor::process_blocktree_from_root(
-                genesis_block,
+                genesis_config,
                 blocktree,
                 Arc::new(deserialized_bank),
                 &process_options,
@@ -54,7 +54,7 @@ pub fn load(
 
     info!("Processing ledger from genesis");
     blocktree_processor::process_blocktree(
-        &genesis_block,
+        &genesis_config,
         &blocktree,
         account_paths,
         process_options,

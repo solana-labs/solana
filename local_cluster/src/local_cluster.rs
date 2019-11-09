@@ -4,7 +4,7 @@ use solana_core::{
     archiver::Archiver,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
-    genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo},
+    genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     gossip_service::discover_cluster,
     service::Service,
     validator::{Validator, ValidatorConfig},
@@ -15,7 +15,7 @@ use solana_sdk::{
     clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
     commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
-    genesis_block::{GenesisBlock, OperatingMode},
+    genesis_config::{GenesisConfig, OperatingMode},
     message::Message,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -106,7 +106,7 @@ pub struct LocalCluster {
     pub validator_infos: HashMap<Pubkey, ClusterValidatorInfo>,
     pub listener_infos: HashMap<Pubkey, ClusterValidatorInfo>,
     validators: HashMap<Pubkey, Validator>,
-    pub genesis_block: GenesisBlock,
+    pub genesis_config: GenesisConfig,
     archivers: Vec<Archiver>,
     pub archiver_infos: HashMap<Pubkey, ArchiverInfo>,
 }
@@ -132,55 +132,55 @@ impl LocalCluster {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
-        let GenesisBlockInfo {
-            mut genesis_block,
+        let GenesisConfigInfo {
+            mut genesis_config,
             mint_keypair,
             voting_keypair,
-        } = create_genesis_block_with_leader(
+        } = create_genesis_config_with_leader(
             config.cluster_lamports,
             &leader_pubkey,
             config.node_stakes[0],
         );
-        genesis_block.ticks_per_slot = config.ticks_per_slot;
-        genesis_block.slots_per_segment = config.slots_per_segment;
-        genesis_block.epoch_schedule =
+        genesis_config.ticks_per_slot = config.ticks_per_slot;
+        genesis_config.slots_per_segment = config.slots_per_segment;
+        genesis_config.epoch_schedule =
             EpochSchedule::custom(config.slots_per_epoch, config.stakers_slot_offset, true);
-        genesis_block.operating_mode = config.operating_mode;
-        genesis_block.poh_config = config.poh_config.clone();
+        genesis_config.operating_mode = config.operating_mode;
+        genesis_config.poh_config = config.poh_config.clone();
 
-        match genesis_block.operating_mode {
+        match genesis_config.operating_mode {
             OperatingMode::SoftLaunch => {
-                genesis_block.native_instruction_processors =
-                    solana_genesis_programs::get_programs(genesis_block.operating_mode, 0).unwrap()
+                genesis_config.native_instruction_processors =
+                    solana_genesis_programs::get_programs(genesis_config.operating_mode, 0).unwrap()
             }
-            // create_genesis_block_with_leader() assumes OperatingMode::Development so do
+            // create_genesis_config_with_leader() assumes OperatingMode::Development so do
             // nothing...
             OperatingMode::Development => (),
         }
 
-        genesis_block.inflation =
-            solana_genesis_programs::get_inflation(genesis_block.operating_mode, 0).unwrap();
+        genesis_config.inflation =
+            solana_genesis_programs::get_inflation(genesis_config.operating_mode, 0).unwrap();
 
-        genesis_block
+        genesis_config
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
-        genesis_block
+        genesis_config
             .native_instruction_processors
             .push(solana_storage_program!());
 
         let storage_keypair = Keypair::new();
-        genesis_block.accounts.push((
+        genesis_config.accounts.push((
             storage_keypair.pubkey(),
             storage_contract::create_validator_storage_account(leader_pubkey, 1),
         ));
 
         // Replace staking config
-        genesis_block.accounts = genesis_block
+        genesis_config.accounts = genesis_config
             .accounts
             .into_iter()
             .filter(|(pubkey, _)| *pubkey != stake_config::id())
             .collect();
-        genesis_block.accounts.push((
+        genesis_config.accounts.push((
             stake_config::id(),
             stake_config::create_account(
                 1,
@@ -192,7 +192,7 @@ impl LocalCluster {
             ),
         ));
 
-        let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
         let leader_storage_keypair = Arc::new(storage_keypair);
         let leader_voting_keypair = Arc::new(voting_keypair);
@@ -229,7 +229,7 @@ impl LocalCluster {
             entry_point_info: leader_contact_info,
             validators,
             archivers: vec![],
-            genesis_block,
+            genesis_config,
             validator_infos,
             archiver_infos: HashMap::new(),
             listener_infos: HashMap::new(),
@@ -297,7 +297,7 @@ impl LocalCluster {
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let contact_info = validator_node.info.clone();
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_block);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_config);
 
         if validator_config.voting_disabled {
             // setup as a listener
@@ -383,7 +383,7 @@ impl LocalCluster {
 
         Self::setup_storage_account(&client, &storage_keypair, &archiver_keypair, true).unwrap();
 
-        let (archiver_ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_block);
+        let (archiver_ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_config);
         let archiver = Archiver::new(
             &archiver_ledger_path,
             archiver_node,

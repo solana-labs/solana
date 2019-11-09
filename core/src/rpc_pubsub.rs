@@ -241,7 +241,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
+    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use jsonrpc_core::futures::sync::mpsc;
     use jsonrpc_core::Response;
     use jsonrpc_pubsub::{PubSubHandler, Session};
@@ -280,14 +280,14 @@ mod tests {
 
     #[test]
     fn test_signature_subscribe() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair: alice,
             ..
-        } = create_genesis_block(10_000);
+        } = create_genesis_config(10_000);
         let bob = Keypair::new();
         let bob_pubkey = bob.pubkey();
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
 
@@ -317,13 +317,13 @@ mod tests {
 
     #[test]
     fn test_signature_unsubscribe() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair: alice,
             ..
-        } = create_genesis_block(10_000);
+        } = create_genesis_config(10_000);
         let bob_pubkey = Pubkey::new_rand();
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let arc_bank = Arc::new(bank);
         let blockhash = arc_bank.last_blockhash();
 
@@ -363,14 +363,14 @@ mod tests {
 
     #[test]
     fn test_account_subscribe() {
-        let GenesisBlockInfo {
-            mut genesis_block,
+        let GenesisConfigInfo {
+            mut genesis_config,
             mint_keypair: alice,
             ..
-        } = create_genesis_block(10_000);
+        } = create_genesis_config(10_000);
 
         // This test depends on the budget program
-        genesis_block
+        genesis_config
             .native_instruction_processors
             .push(solana_budget_program!());
 
@@ -379,7 +379,7 @@ mod tests {
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
         let budget_program_id = solana_budget_api::id();
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
 
@@ -504,12 +504,12 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_account_confirmations_not_fulfilled() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair: alice,
             ..
-        } = create_genesis_block(10_000);
-        let bank = Bank::new(&genesis_block);
+        } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let bob = Keypair::new();
@@ -533,12 +533,12 @@ mod tests {
 
     #[test]
     fn test_account_confirmations() {
-        let GenesisBlockInfo {
-            genesis_block,
+        let GenesisConfigInfo {
+            genesis_config,
             mint_keypair: alice,
             ..
-        } = create_genesis_block(10_000);
-        let bank = Bank::new(&genesis_block);
+        } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let bob = Keypair::new();

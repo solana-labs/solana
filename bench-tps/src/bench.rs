@@ -1038,7 +1038,7 @@ mod tests {
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
     use solana_sdk::fee_calculator::FeeCalculator;
-    use solana_sdk::genesis_block::create_genesis_block;
+    use solana_sdk::genesis_config::create_genesis_config;
 
     #[test]
     fn test_switch_directions() {
@@ -1057,8 +1057,8 @@ mod tests {
 
     #[test]
     fn test_bench_tps_bank_client() {
-        let (genesis_block, id) = create_genesis_block(10_000);
-        let bank = Bank::new(&genesis_block);
+        let (genesis_config, id) = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
         let clients = vec![BankClient::new(bank)];
 
         let mut config = Config::default();
@@ -1075,8 +1075,8 @@ mod tests {
 
     #[test]
     fn test_bench_tps_fund_keys() {
-        let (genesis_block, id) = create_genesis_block(10_000);
-        let bank = Bank::new(&genesis_block);
+        let (genesis_config, id) = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
         let client = BankClient::new(bank);
         let tx_count = 10;
         let lamports = 20;
@@ -1096,10 +1096,10 @@ mod tests {
 
     #[test]
     fn test_bench_tps_fund_keys_with_fees() {
-        let (mut genesis_block, id) = create_genesis_block(10_000);
+        let (mut genesis_config, id) = create_genesis_config(10_000);
         let fee_calculator = FeeCalculator::new(11, 0);
-        genesis_block.fee_calculator = fee_calculator;
-        let bank = Bank::new(&genesis_block);
+        genesis_config.fee_calculator = fee_calculator;
+        let bank = Bank::new(&genesis_config);
         let client = BankClient::new(bank);
         let tx_count = 10;
         let lamports = 20;

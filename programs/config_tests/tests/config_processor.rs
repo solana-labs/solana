@@ -9,7 +9,7 @@ use solana_config_api::{
 use solana_runtime::{bank::Bank, bank_client::BankClient};
 use solana_sdk::{
     client::SyncClient,
-    genesis_block::create_genesis_block,
+    genesis_config::create_genesis_config,
     instruction::InstructionError,
     message::Message,
     pubkey::Pubkey,
@@ -43,8 +43,8 @@ impl ConfigState for MyConfig {
 }
 
 fn create_bank(lamports: u64) -> (Bank, Keypair) {
-    let (genesis_block, mint_keypair) = create_genesis_block(lamports);
-    let mut bank = Bank::new(&genesis_block);
+    let (genesis_config, mint_keypair) = create_genesis_config(lamports);
+    let mut bank = Bank::new(&genesis_config);
     bank.add_instruction_processor(id(), process_instruction);
     (bank, mint_keypair)
 }
