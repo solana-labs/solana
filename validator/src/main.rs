@@ -181,13 +181,20 @@ fn initialize_ledger_path(
 
     let rpc_addr = nodes
         .iter()
-        .filter_map(ContactInfo::valid_client_facing_addr)
-        .map(|addrs| addrs.0)
-        .find(|rpc_addr| rpc_addr.ip() == entrypoint.gossip.ip())
+        .filter_map(|contact_info| {
+            if contact_info.gossip == entrypoint.gossip
+                && ContactInfo::is_valid_address(&contact_info.rpc)
+            {
+                Some(contact_info.rpc)
+            } else {
+                None
+            }
+        })
+        .next()
         .unwrap_or_else(|| {
             error!(
                 "Entrypoint ({:?}) is not running the RPC service",
-                entrypoint.gossip.ip()
+                entrypoint.gossip
             );
             exit(1);
         });
