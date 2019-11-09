@@ -79,6 +79,5 @@
   * [Reliable Vote Transmission](implemented-proposals/reliable-vote-transmission.md)
   * [Repair Service](implemented-proposals/repair-service.md)
   * [Testing Programs](implemented-proposals/testing-programs.md)
-  * [Credit-only Accounts](implemented-proposals/credit-only-credit-debit-accounts.md)
+  * [Credit-only Accounts](implemented-proposals/readonly-accounts.md)
   * [Embedding the Move Langauge](implemented-proposals/embedding-move.md)
-
