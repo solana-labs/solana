@@ -205,8 +205,6 @@ impl WindowService {
         let leader_schedule_cache = leader_schedule_cache.clone();
         let t_window = Builder::new()
             .name("solana-window".to_string())
-            // TODO: Mark: Why is it overflowing
-            .stack_size(8 * 1024 * 1024)
             .spawn(move || {
                 let _exit = Finalizer::new(exit.clone());
                 let id = cluster_info.read().unwrap().id();
