@@ -85,6 +85,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
 }
 
 impl JsonRpcService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rpc_addr: SocketAddr,
         config: JsonRpcConfig,

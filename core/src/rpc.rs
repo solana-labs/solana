@@ -270,7 +270,6 @@ impl JsonRpcRequestProcessor {
     pub fn get_blocks_since(&self, slot: Slot) -> Result<Vec<Slot>> {
         Ok(RootedSlotIterator::new(slot, &self.blocktree)
             .map_err(|err| Error::invalid_params(format!("Slot {:?}: {:?}", slot, err)))?
-            .into_iter()
             .map(|(slot, _)| slot)
             .collect())
     }
