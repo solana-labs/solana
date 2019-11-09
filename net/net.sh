@@ -330,6 +330,24 @@ done
 
 loadConfigFile
 
+netLogDir=
+initLogDir() { # Initializes the netLogDir global variable.  Idempotent
+  [[ -z $netLogDir ]] || return 0
+
+  netLogDir="$netDir"/log
+  declare netLogDateDir
+  netLogDateDir="$netDir"/log-$(date +"%Y-%m-%d_%H_%M_%S")
+  if [[ -d $netLogDir && ! -L $netLogDir ]]; then
+    echo "Warning: moving $netLogDir to make way for symlink."
+    mv "$netLogDir" "$netDir"/log.old
+  elif [[ -L $netLogDir ]]; then
+    rm "$netLogDir"
+  fi
+  mkdir -p "$netConfigDir" "$netLogDateDir"
+  ln -sf "$netLogDateDir" "$netLogDir"
+  echo "Log directory: $netLogDateDir"
+}
+
 if [[ -n $numValidatorsRequested ]]; then
   truncatedNodeList=( "${validatorIpList[@]:0:$numValidatorsRequested}" )
   unset validatorIpList
@@ -484,6 +502,8 @@ startNode() {
   declare ipAddress=$1
   declare nodeType=$2
   declare nodeIndex="$3"
+
+  initLogDir
   declare logFile="$netLogDir/validator-$ipAddress.log"
 
   if [[ -z $nodeType ]]; then
@@ -549,7 +569,10 @@ startClient() {
   declare ipAddress=$1
   declare clientToRun="$2"
   declare clientIndex="$3"
+
+  initLogDir
   declare logFile="$netLogDir/client-$clientToRun-$ipAddress.log"
+
   echo "--- Starting client: $ipAddress - $clientToRun"
   echo "start log: $logFile"
   (
@@ -716,6 +739,8 @@ prepare_deploy() {
 }
 
 deploy() {
+  initLogDir
+
   echo "Deployment started at $(date)"
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
@@ -814,7 +839,10 @@ deploy() {
 stopNode() {
   local ipAddress=$1
   local block=$2
+
+  initLogDir
   declare logFile="$netLogDir/stop-validator-$ipAddress.log"
+
   echo "--- Stopping node: $ipAddress"
   echo "stop log: $logFile"
   (
@@ -942,6 +970,7 @@ startnode)
   startNode "$nodeAddress" $nodeType $nodeIndex
   ;;
 logs)
+  initLogDir
   fetchRemoteLog() {
     declare ipAddress=$1
     declare log=$2
