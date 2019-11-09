@@ -3,6 +3,9 @@ pub enum BlockError {
     /// Block entries hashes must all be valid
     InvalidEntryHash,
 
+    /// Blocks must end in a tick that has been marked as the last tick.
+    InvalidLastTick,
+
     /// Blocks can not have extra ticks or missing ticks
     InvalidTickCount,
 

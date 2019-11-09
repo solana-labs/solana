@@ -1073,19 +1073,21 @@ impl Blocktree {
         shred_start_index: u64,
         _max_entries: Option<u64>,
     ) -> Result<Vec<Entry>> {
-        self.get_slot_entries_with_shred_count(slot, shred_start_index)
+        self.get_slot_entries_with_shred_info(slot, shred_start_index)
             .map(|x| x.0)
     }
 
-    pub fn get_slot_entries_with_shred_count(
+    /// Returns the entry vector for the slot starting with `shred_start_index`, the number of
+    /// shreds that comprise the entry vector, and whether the slot is full (consumed all shreds).
+    pub fn get_slot_entries_with_shred_info(
         &self,
         slot: Slot,
         start_index: u64,
-    ) -> Result<(Vec<Entry>, usize)> {
+    ) -> Result<(Vec<Entry>, usize, bool)> {
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
         let slot_meta = slot_meta_cf.get(slot)?;
         if slot_meta.is_none() {
-            return Ok((vec![], 0));
+            return Ok((vec![], 0, false));
         }
 
         let slot_meta = slot_meta.unwrap();
@@ -1096,13 +1098,14 @@ impl Blocktree {
             slot_meta.consumed as u32,
         );
         if completed_ranges.is_empty() {
-            return Ok((vec![], 0));
+            return Ok((vec![], 0, false));
         }
         let num_shreds = completed_ranges
             .last()
-            .map(|(_, end_index)| u64::from(*end_index) - start_index + 1);
+            .map(|(_, end_index)| u64::from(*end_index) - start_index + 1)
+            .unwrap_or(0) as usize;
 
-        let all_entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
+        let entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 completed_ranges
                     .par_iter()
@@ -1113,8 +1116,8 @@ impl Blocktree {
             })
         });
 
-        let all_entries: Vec<Entry> = all_entries?.into_iter().flatten().collect();
-        Ok((all_entries, num_shreds.unwrap_or(0) as usize))
+        let entries: Vec<Entry> = entries?.into_iter().flatten().collect();
+        Ok((entries, num_shreds, slot_meta.is_full()))
     }
 
     // Get the range of indexes [start_index, end_index] of every completed data block
