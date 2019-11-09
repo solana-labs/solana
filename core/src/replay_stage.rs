@@ -435,22 +435,16 @@ impl ReplayStage {
             bank_progress.stats.fetch_entries_elapsed += fetch_entries_elapsed as u64;
         }
 
-        let replay_result = load_result.and_then(|(entries, num_shreds, received_last_shred)| {
+        let replay_result = load_result.and_then(|(entries, num_shreds, slot_full)| {
             trace!(
-                "Fetch entries for slot {}, {:?} entries, num shreds {}, received_last_shred: {}",
+                "Fetch entries for slot {}, {:?} entries, num shreds {}, slot_full: {}",
                 bank.slot(),
                 entries.len(),
                 num_shreds,
-                received_last_shred,
+                slot_full,
             );
             tx_count += entries.iter().map(|e| e.transactions.len()).sum::<usize>();
-            Self::replay_entries_into_bank(
-                bank,
-                bank_progress,
-                entries,
-                num_shreds,
-                received_last_shred,
-            )
+            Self::replay_entries_into_bank(bank, bank_progress, entries, num_shreds, slot_full)
         });
 
         if Self::is_replay_result_fatal(&replay_result) {
@@ -765,12 +759,12 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
         entries: Vec<Entry>,
         num_shreds: usize,
-        received_last_shred: bool,
+        slot_full: bool,
     ) -> Result<()> {
         let result = Self::verify_and_process_entries(
             &bank,
             &entries,
-            received_last_shred,
+            slot_full,
             bank_progress.num_shreds,
             bank_progress,
         );
@@ -786,7 +780,7 @@ impl ReplayStage {
     fn verify_ticks(
         bank: &Arc<Bank>,
         entries: &[Entry],
-        received_last_shred: bool,
+        slot_full: bool,
         tick_hash_count: &mut u64,
     ) -> std::result::Result<(), BlockError> {
         let next_bank_tick_height = bank.tick_height() + entries.tick_count();
@@ -795,7 +789,7 @@ impl ReplayStage {
             return Err(BlockError::InvalidTickCount);
         }
 
-        if next_bank_tick_height < max_bank_tick_height && received_last_shred {
+        if next_bank_tick_height < max_bank_tick_height && slot_full {
             return Err(BlockError::InvalidTickCount);
         }
 
@@ -805,7 +799,7 @@ impl ReplayStage {
                 return Err(BlockError::TrailingEntry);
             }
 
-            if !received_last_shred {
+            if !slot_full {
                 return Err(BlockError::InvalidLastTick);
             }
         }
@@ -821,7 +815,7 @@ impl ReplayStage {
     fn verify_and_process_entries(
         bank: &Arc<Bank>,
         entries: &[Entry],
-        received_last_shred: bool,
+        slot_full: bool,
         shred_index: usize,
         bank_progress: &mut ForkProgress,
     ) -> Result<()> {
@@ -829,7 +823,7 @@ impl ReplayStage {
         let tick_hash_count = &mut bank_progress.tick_hash_count;
         let handle_block_error = move |block_error: BlockError| -> Result<()> {
             warn!(
-                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}",
+                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}, slot_full: {}",
                 block_error,
                 bank.slot(),
                 entries.len(),
@@ -837,6 +831,7 @@ impl ReplayStage {
                 last_entry,
                 bank.last_blockhash(),
                 shred_index,
+                slot_full,
             );
 
             datapoint_error!(
@@ -848,9 +843,7 @@ impl ReplayStage {
             Err(Error::BlockError(block_error))
         };
 
-        if let Err(block_error) =
-            Self::verify_ticks(bank, entries, received_last_shred, tick_hash_count)
-        {
+        if let Err(block_error) = Self::verify_ticks(bank, entries, slot_full, tick_hash_count) {
             return handle_block_error(block_error);
         }
 

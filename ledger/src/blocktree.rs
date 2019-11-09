@@ -1078,8 +1078,7 @@ impl Blocktree {
     }
 
     /// Returns the entry vector for the slot starting with `shred_start_index`, the number of
-    /// shreds that comprise the entry vector, and whether the last shred has been received for
-    /// the slot.
+    /// shreds that comprise the entry vector, and whether the slot is full (consumed all shreds).
     pub fn get_slot_entries_with_shred_info(
         &self,
         slot: Slot,
