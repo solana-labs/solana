@@ -15,6 +15,14 @@ function collect_logs {
 }
 
 function cleanup_testnet {
+  RC=$?
+  if [[ $RC != 0 ]] ; then
+    RESULT_DETAILS="Test failed while executing: ${1}"
+    echo "--- $RESULT_DETAILS"
+  else
+    echo "--- Test succeeded"
+  fi
+
   FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
   if [[ "$UPLOAD_RESULTS_TO_SLACK" = "true" ]] ; then
     upload_results_to_slack
@@ -76,7 +84,7 @@ EOF
     ;;
   esac
 }
-trap cleanup_testnet EXIT
+trap 'cleanup_testnet "$BASH_COMMAND"' EXIT
 
 function launchTestnet() {
   set -x
@@ -255,7 +263,6 @@ IFS=, read -r -a TESTNET_CLOUD_ZONES <<<"${TESTNET_ZONES}"
 
 RESULT_FILE="$TESTNET_TAG"_SUMMARY_STATS_"$NUMBER_OF_VALIDATOR_NODES".log
 rm -f "$RESULT_FILE"
-RESULT_DETAILS="Test failed to finish"
 
 TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         NUMBER_OF_VALIDATOR_NODES \
