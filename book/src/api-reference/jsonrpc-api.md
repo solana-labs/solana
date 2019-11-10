@@ -105,11 +105,11 @@ Returns a transaction receipt
 #### Parameters:
 
 * `string` - Signature of Transaction to confirm, as base-58 encoded string
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
 * `boolean` - Transaction status, true if Transaction is confirmed
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Example:
 
@@ -589,12 +589,11 @@ Returns the current total supply in Lamports
 
 #### Parameters:
 
-None
+* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
 * `integer` - Total supply, as unsigned 64-bit integer
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Example:
 
