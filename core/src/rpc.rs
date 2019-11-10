@@ -804,8 +804,8 @@ impl RpcSol for RpcSolImpl {
         let now = Instant::now();
         let mut signature_status;
         let signature_timeout = match &commitment {
-            Some(config) if config.commitment == CommitmentLevel::Max => 30,
-            _ => 5,
+            Some(config) if config.commitment == CommitmentLevel::Recent => 5,
+            _ => 30,
         };
         loop {
             signature_status = meta
