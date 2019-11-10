@@ -757,7 +757,12 @@ impl RpcSol for RpcSolImpl {
         lamports: u64,
         commitment: Option<CommitmentConfig>,
     ) -> Result<String> {
-        trace!("request_airdrop id={} lamports={}", pubkey_str, lamports);
+        trace!(
+            "request_airdrop id={} lamports={} commitment: {:?}",
+            pubkey_str,
+            lamports,
+            &commitment
+        );
 
         let drone_addr = meta
             .request_processor
