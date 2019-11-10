@@ -757,7 +757,12 @@ impl RpcSol for RpcSolImpl {
         lamports: u64,
         commitment: Option<CommitmentConfig>,
     ) -> Result<String> {
-        trace!("request_airdrop id={} lamports={}", pubkey_str, lamports);
+        trace!(
+            "request_airdrop id={} lamports={} commitment: {:?}",
+            pubkey_str,
+            lamports,
+            &commitment
+        );
 
         let drone_addr = meta
             .request_processor
@@ -798,6 +803,10 @@ impl RpcSol for RpcSolImpl {
         let signature = transaction.signatures[0];
         let now = Instant::now();
         let mut signature_status;
+        let signature_timeout = match &commitment {
+            Some(config) if config.commitment == CommitmentLevel::Recent => 5,
+            _ => 30,
+        };
         loop {
             signature_status = meta
                 .request_processor
@@ -809,7 +818,7 @@ impl RpcSol for RpcSolImpl {
             if signature_status == Some(Ok(())) {
                 info!("airdrop signature ok");
                 return Ok(signature.to_string());
-            } else if now.elapsed().as_secs() > 5 {
+            } else if now.elapsed().as_secs() > signature_timeout {
                 info!("airdrop signature timeout");
                 return Err(Error::internal_error());
             }
