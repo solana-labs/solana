@@ -220,7 +220,7 @@ fn initialize_ledger_path(
     no_snapshot_fetch: bool,
 ) -> Result<Hash, String> {
     let genesis_hash = rpc_client
-        .get_genesis_blockhash()
+        .get_genesis_hash()
         .map_err(|err| err.to_string())?;
 
     fs::create_dir_all(ledger_path).map_err(|err| err.to_string())?;
