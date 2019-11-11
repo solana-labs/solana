@@ -169,7 +169,9 @@ fn download_tar_bz2(
     Ok(())
 }
 
-fn create_rpc_client(entrypoint: &ContactInfo) -> Result<(std::net::SocketAddr, RpcClient), String> {
+fn create_rpc_client(
+    entrypoint: &ContactInfo,
+) -> Result<(std::net::SocketAddr, RpcClient), String> {
     let (nodes, _archivers) = discover(
         &entrypoint.gossip,
         Some(1),
@@ -182,30 +184,32 @@ fn create_rpc_client(entrypoint: &ContactInfo) -> Result<(std::net::SocketAddr, 
 
     let rpc_addr = nodes
         .iter()
-        .filter_map(|contact_info| {
-            if contact_info.gossip == entrypoint.gossip
-                && ContactInfo::is_valid_address(&contact_info.rpc)
-            {
-                Some(contact_info.rpc)
-            } else {
-                None
-            }
-        })
-        .next();
+        .filter_map(ContactInfo::valid_client_facing_addr)
+        .map(|addrs| addrs.0)
+        .find(|rpc_addr| rpc_addr.ip() == entrypoint.gossip.ip());
 
     if let Some(rpc_addr) = rpc_addr {
         Ok((rpc_addr, RpcClient::new_socket(rpc_addr)))
     } else {
-        Err(format!("No node including entrypoint ({:?}) is running the RPC service", entrypoint.gossip))
+        Err(format!(
+            "No node including entrypoint ({:?}) is running the RPC service",
+            entrypoint.gossip
+        ))
     }
 }
 
 fn check_vote_account(rpc_client: &RpcClient, vote_account: &Pubkey) -> Result<(), String> {
-    let found_vote_account = rpc_client.get_account(vote_account).map_err(|err| err.to_string())?;
+    let found_vote_account = rpc_client
+        .get_account(vote_account)
+        .map_err(|err| err.to_string())?;
+
     if found_vote_account.owner == solana_vote_api::id() {
         Ok(())
     } else {
-        Err(format!("not correct vote account (owned by {})): {}", found_vote_account.owner, vote_account))
+        Err(format!(
+            "not correct vote account (owned by {})): {}",
+            found_vote_account.owner, vote_account
+        ))
     }
 }
 
@@ -679,11 +683,10 @@ pub fn main() {
 
         if let Ok((rpc_addr, rpc_client)) = create_rpc_client(cluster_entrypoint) {
             if !validator_config.voting_disabled {
-                check_vote_account(&rpc_client, &vote_account)
-                    .unwrap_or_else(|err| {
-                        error!("Failed to check vote account: {}", err);
-                        exit(1);
-                    });
+                check_vote_account(&rpc_client, &vote_account).unwrap_or_else(|err| {
+                    error!("Failed to check vote account: {}", err);
+                    exit(1);
+                });
             }
 
             let genesis_hash =
@@ -704,7 +707,7 @@ pub fn main() {
             }
             validator_config.expected_genesis_hash = Some(genesis_hash);
         } else {
-          error!("unable to create rpc client");
+            error!("unable to create rpc client");
         }
     } else {
         // Without a cluster entrypoint, ledger_path must already be present
