@@ -274,6 +274,10 @@ impl JsonRpcRequestProcessor {
             .collect())
     }
 
+    // The `get_block` method is not fully implemented. It currenlty returns a batch of test transaction
+    // tuples (Transaction, transaction::Result) to demonstrate message format and
+    // TransactionErrors. Transaction count == slot, and transaction keys are derived
+    // deterministically to allow testers to track the pubkeys across slots.
     pub fn get_block(&self, slot: Slot) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
         Ok(make_test_transactions(slot))
     }
