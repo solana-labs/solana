@@ -1,5 +1,6 @@
 use clap::{
-    crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg, SubCommand,
+    crate_description, crate_name, crate_version, value_t, value_t_or_exit, values_t_or_exit, App,
+    Arg, SubCommand,
 };
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
@@ -8,8 +9,10 @@ use solana_ledger::{
     blocktree_processor,
     rooted_slot_iterator::RootedSlotIterator,
 };
-use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol};
-use solana_vote_api::vote_state::VoteState;
+use solana_sdk::{
+    clock::Slot, genesis_config::GenesisConfig, instruction_processor_utils::limited_deserialize,
+    native_token::lamports_to_sol,
+};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::File,
@@ -33,9 +36,71 @@ fn output_slot(blocktree: &Blocktree, slot: Slot, method: &LedgerOutputMethod) {
             exit(1);
         });
 
-    for entry in entries {
+    for (entry_index, entry) in entries.iter().enumerate() {
         match method {
-            LedgerOutputMethod::Print => println!("{:?}", entry),
+            LedgerOutputMethod::Print => {
+                println!(
+                    "  Entry {} - num_hashes: {}, hashes: {}, transactions: {}",
+                    entry_index,
+                    entry.num_hashes,
+                    entry.hash,
+                    entry.transactions.len()
+                );
+                for (transactions_index, transaction) in entry.transactions.iter().enumerate() {
+                    let message = &transaction.message;
+                    println!("    Transaction {}", transactions_index);
+                    println!("      Recent Blockhash: {:?}", message.recent_blockhash);
+                    for (signature_index, signature) in transaction.signatures.iter().enumerate() {
+                        println!("      Signature {}: {:?}", signature_index, signature);
+                    }
+                    println!("      Header: {:?}", message.header);
+                    for (account_index, account) in message.account_keys.iter().enumerate() {
+                        println!("      Account {}: {:?}", account_index, account);
+                    }
+                    for (instruction_index, instruction) in message.instructions.iter().enumerate()
+                    {
+                        let program_pubkey =
+                            message.account_keys[instruction.program_id_index as usize];
+                        println!("      Instruction {}", instruction_index);
+                        println!(
+                            "        Program: {} ({})",
+                            program_pubkey, instruction.program_id_index
+                        );
+                        for (account_index, account) in instruction.accounts.iter().enumerate() {
+                            let account_pubkey = message.account_keys[*account as usize];
+                            println!(
+                                "        Account {}: {} ({})",
+                                account_index, account_pubkey, account
+                            );
+                        }
+
+                        let mut raw = true;
+                        if program_pubkey == solana_vote_api::id() {
+                            if let Ok(vote_instruction) =
+                                limited_deserialize::<
+                                    solana_vote_api::vote_instruction::VoteInstruction,
+                                >(&instruction.data)
+                            {
+                                println!("        {:?}", vote_instruction);
+                                raw = false;
+                            }
+                        } else if program_pubkey == solana_sdk::system_program::id() {
+                            if let Ok(system_instruction) =
+                                limited_deserialize::<
+                                    solana_sdk::system_instruction::SystemInstruction,
+                                >(&instruction.data)
+                            {
+                                println!("        {:?}", system_instruction);
+                                raw = false;
+                            }
+                        }
+
+                        if raw {
+                            println!("        Data: {:?}", instruction.data);
+                        }
+                    }
+                }
+            }
             LedgerOutputMethod::Json => {
                 serde_json::to_writer(stdout(), &entry).expect("serialize entry");
                 stdout().write_all(b",\n").expect("newline");
@@ -90,7 +155,8 @@ fn graph_forks(
             .iter()
             .fold(0, |acc, (_, (stake, _))| acc + stake);
         for (_, (stake, vote_account)) in bank.vote_accounts() {
-            let vote_state = VoteState::from(&vote_account).unwrap_or_default();
+            let vote_state =
+                solana_vote_api::vote_state::VoteState::from(&vote_account).unwrap_or_default();
             if let Some(last_vote) = vote_state.votes.iter().last() {
                 let entry = last_votes.entry(vote_state.node_pubkey).or_insert((
                     last_vote.slot,
@@ -276,14 +342,15 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("print-slot")
-            .about("Print the contents of one slot")
+            .about("Print the contents of one or more slots")
             .arg(
-                Arg::with_name("slot")
+                Arg::with_name("slots")
                     .index(1)
-                    .value_name("SLOT")
+                    .value_name("SLOTS")
                     .takes_value(true)
+                    .multiple(true)
                     .required(true)
-                    .help("The slot to print"),
+                    .help("List of slots to print"),
             )
         )
         .subcommand(
@@ -405,8 +472,11 @@ fn main() {
             println!("{}", genesis_config.hash());
         }
         ("print-slot", Some(args_matches)) => {
-            let slot = value_t_or_exit!(args_matches, "slot", Slot);
-            output_slot(&blocktree, slot, &LedgerOutputMethod::Print);
+            let slots = values_t_or_exit!(args_matches, "slots", Slot);
+            for slot in slots {
+                println!("Slot {}", slot);
+                output_slot(&blocktree, slot, &LedgerOutputMethod::Print);
+            }
         }
         ("json", Some(args_matches)) => {
             let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
