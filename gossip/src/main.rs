@@ -197,7 +197,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 Some(1),
                 Some(timeout),
                 None,
-                Some(entrypoint_addr.ip()),
+                Some(entrypoint_addr),
                 None,
             )?;
 
