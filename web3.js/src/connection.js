@@ -366,6 +366,11 @@ const GetTotalSupplyRpcResult = jsonRpcResult('number');
 const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult('number');
 
 /**
+ * Expected JSON RPC response for the "getBlocksSince" message
+ */
+const GetBlocksSinceRpcResult = jsonRpcResult(struct.list(['number']));
+
+/**
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
 const GetRecentBlockhash = jsonRpcResult([
@@ -846,6 +851,19 @@ export class Connection {
     // End Legacy v0.16 response
 
     const res = GetRecentBlockhash(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch a list of rooted blocks from the cluster
+   */
+  async getBlocksSince(slot: number): Promise<Array<number>> {
+    const unsafeRes = await this._rpcRequest('getBlocksSince', [slot]);
+    const res = GetBlocksSinceRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }

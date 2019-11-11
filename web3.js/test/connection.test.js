@@ -419,6 +419,49 @@ test('get minimum balance for rent exemption', async () => {
   expect(count).toBeGreaterThanOrEqual(0);
 });
 
+test('get blocks since slot', async () => {
+  const connection = new Connection(url);
+
+  const expectedBlocks = [0, 1, 3, 4, 7, 8];
+  mockRpc.push([
+    url,
+    {
+      method: 'getBlocksSince',
+      params: [0],
+    },
+    {
+      error: null,
+      result: expectedBlocks,
+    },
+  ]);
+
+  const blocks = await connection.getBlocksSince(0);
+
+  if (mockRpcEnabled) {
+    expect(blocks.length).toEqual(6);
+  } else {
+    // No idea how many blocks since slot 0 on a live cluster
+    expect(blocks.length).toBeGreaterThan(0);
+  }
+
+  const errorMessage = 'Slot 10000: SlotNotRooted';
+  mockRpc.push([
+    url,
+    {
+      method: 'getBlocksSince',
+      params: [10000],
+    },
+    {
+      error: {
+        message: errorMessage,
+      },
+      result: undefined,
+    },
+  ]);
+
+  await expect(connection.getBlocksSince(10000)).rejects.toThrow(errorMessage);
+});
+
 test('get recent blockhash', async () => {
   const connection = new Connection(url);
 
