@@ -19,6 +19,7 @@ use solana_ledger::bank_forks::SnapshotConfig;
 use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::{Pubkey};
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
 use std::fs::{self, File};
 use std::io::{self, Read};
@@ -168,12 +169,7 @@ fn download_tar_bz2(
     Ok(())
 }
 
-fn initialize_ledger_path(
-    entrypoint: &ContactInfo,
-    ledger_path: &Path,
-    no_genesis_fetch: bool,
-    no_snapshot_fetch: bool,
-) -> Result<Hash, String> {
+fn create_rpc_client(entrypoint: &ContactInfo) -> Result<(std::net::SocketAddr, RpcClient), String> {
     let (nodes, _archivers) = discover(
         &entrypoint.gossip,
         Some(1),
@@ -204,8 +200,25 @@ fn initialize_ledger_path(
             exit(1);
         });
 
-    let client = RpcClient::new_socket(rpc_addr);
-    let genesis_hash = client.get_genesis_hash().map_err(|err| err.to_string())?;
+    Ok((rpc_addr, RpcClient::new_socket(rpc_addr)))
+}
+
+fn initialize_ledger_path(
+    rpc_address: &std::net::SocketAddr,
+    rpc_client: &RpcClient,
+    ledger_path: &Path,
+    no_snapshot_fetch: bool,
+    vote_account: &Pubkey,
+) -> Result<Hash, String> {
+    let genesis_blockhash = rpc_client
+        .get_genesis_blockhash()
+        .map_err(|err| err.to_string())?;
+
+    let found_vote_account = rpc_client.get_account(vote_account).map_err(|err| err.to_string())?;
+    if found_vote_account.owner != solana_vote_api::id() {
+        panic!("not correct vote account: {}", vote_account);
+    }
+    panic!("23");
 
     fs::create_dir_all(ledger_path).map_err(|err| err.to_string())?;
 
@@ -220,7 +233,7 @@ fn initialize_ledger_path(
                 .unwrap_or_else(|err| warn!("error removing {:?}: {}", snapshot_package, err));
         }
         download_tar_bz2(
-            &rpc_addr,
+            &rpc_address,
             snapshot_package.file_name().unwrap().to_str().unwrap(),
             snapshot_package.parent().unwrap(),
             false,
@@ -228,7 +241,7 @@ fn initialize_ledger_path(
         .unwrap_or_else(|err| warn!("Unable to fetch snapshot: {:?}", err));
     }
 
-    match client.get_slot() {
+    match rpc_client.get_slot() {
         Ok(slot) => info!("Entrypoint currently at slot {}", slot),
         Err(err) => warn!("Failed to get_slot from entrypoint: {}", err),
     }
@@ -665,27 +678,27 @@ pub fn main() {
             &udp_sockets,
         );
 
-        let genesis_hash = initialize_ledger_path(
-            cluster_entrypoint,
-            &ledger_path,
-            no_genesis_fetch,
-            no_snapshot_fetch,
-        )
-        .unwrap_or_else(|err| {
-            error!("Failed to download ledger: {}", err);
-            exit(1);
-        });
+        if let Ok((rpc_address, rpc_client)) = create_rpc_client(cluster_entrypoint) {
+            let genesis_hash =
+                initialize_ledger_path(&rpc_address, &rpc_client, &ledger_path, no_genesis_fetch, no_snapshot_fetch, &vote_account)
+                    .unwrap_or_else(|err| {
+                        error!("Failed to download ledger: {}", err);
+                        exit(1);
+                    });
 
-        if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
-            if expected_genesis_hash != genesis_hash {
-                error!(
-                    "Genesis hash mismatch: expected {} but local genesis hash is {}",
-                    expected_genesis_hash, genesis_hash,
-                );
-                exit(1);
+            if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
+                if expected_genesis_hash != genesis_hash {
+                    error!(
+                        "Genesis hash mismatch: expected {} but local genesis hash is {}",
+                        expected_genesis_hash, genesis_hash,
+                    );
+                    exit(1);
+                }
             }
+            validator_config.expected_genesis_hash = Some(genesis_hash);
+        } else {
+          error!("unable to create rpc client");
         }
-        validator_config.expected_genesis_hash = Some(genesis_hash);
     } else {
         // Without a cluster entrypoint, ledger_path must already be present
         if !ledger_path.is_dir() {
