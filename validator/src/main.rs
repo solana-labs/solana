@@ -582,6 +582,7 @@ pub fn main() {
     validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
 
     validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
+    validator_config.enable_ctrl_c_handler = true;
 
     validator_config.rpc_config.faucet_addr = matches.value_of("rpc_faucet_addr").map(|address| {
         solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")

@@ -45,11 +45,14 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
     process,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
     thread::Result,
 };
+
+use ctrlc::set_handler;
+use solana_vote_program::vote_state::VoteState;
 
 #[derive(Clone, Debug)]
 pub struct ValidatorConfig {
@@ -67,6 +70,7 @@ pub struct ValidatorConfig {
     pub broadcast_stage_type: BroadcastStageType,
     pub partition_cfg: Option<PartitionCfg>,
     pub fixed_leader_schedule: Option<FixedSchedule>,
+    pub enable_ctrl_c_handler: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -86,6 +90,7 @@ impl Default for ValidatorConfig {
             broadcast_stage_type: BroadcastStageType::Standard,
             partition_cfg: None,
             fixed_leader_schedule: None,
+            enable_ctrl_c_handler: false,
         }
     }
 }
@@ -215,6 +220,32 @@ impl Validator {
         );
 
         let blocktree = Arc::new(blocktree);
+
+        if config.enable_ctrl_c_handler {
+            let bank_forks = bank_forks.clone();
+            let counter = Arc::new(AtomicUsize::new(0));
+            set_handler(move || {
+                if counter.fetch_add(1, Ordering::Relaxed) > 0 {
+                    std::process::exit(1);
+                }
+                let bank = bank_forks.read().unwrap().working_bank();
+                let stake: Option<u64> = bank
+                    .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
+                    .and_then(|account| {
+                        account.iter().find(|(pubkey, (stake, account))| {
+                            **pubkey == id
+                                && *stake > 0
+                                && VoteState::deserialize(&account.data).is_ok()
+                        })
+                    })
+                    .map(|(_, (n, _))| *n);
+                match stake {
+                    Some(_val) => warn!("Validator is staked!  Press ^C again to exit"),
+                    None => std::process::exit(1),
+                }
+            })
+            .expect("Error setting Ctrl-C handler");
+        }
 
         let rpc_service = if node.info.rpc.port() == 0 {
             None
