@@ -22,11 +22,9 @@ download() {
   wget "${args[@]}"
 }
 
-# Install xargo
-if [[ ! -r xargo.md ]]; then
-  cargo install xargo
-  xargo --version > xargo.md 2>&1
-fi
+# Install or upgrade xargo
+cargo +nightly install xargo -Z install-upgrade
+xargo --version > xargo.md 2>&1
 
 # Install Criterion
 version=v2.3.2
