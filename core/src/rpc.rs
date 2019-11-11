@@ -7,7 +7,6 @@ use crate::{
     packet::PACKET_DATA_SIZE,
     storage_stage::StorageState,
     validator::ValidatorExit,
-    version::VERSION,
 };
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
@@ -922,7 +921,7 @@ impl RpcSol for RpcSolImpl {
 
     fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
         Ok(RpcVersionInfo {
-            solana_core: VERSION.to_string(),
+            solana_core: crate::version!().to_string(),
         })
     }
 
@@ -1591,7 +1590,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "solana-core": VERSION
+                "solana-core": crate::version!().to_string()
             },
             "id": 1
         });

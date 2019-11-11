@@ -1,5 +1,5 @@
 use bzip2::bufread::BzDecoder;
-use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
@@ -242,7 +242,7 @@ pub fn main() {
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
 
     let matches = App::new(crate_name!()).about(crate_description!())
-        .version(crate_version!())
+        .version(solana_core::version!())
         .arg(
             Arg::with_name("blockstream_unix_socket")
                 .long("blockstream")
@@ -532,11 +532,9 @@ pub fn main() {
         .map(|s| Hash::from_str(&s).unwrap());
 
     println!(
-        "{} version {} (branch={}, commit={})",
+        "{} {}",
         style(crate_name!()).bold(),
-        crate_version!(),
-        option_env!("CI_BRANCH").unwrap_or("unknown"),
-        option_env!("CI_COMMIT").unwrap_or("unknown")
+        solana_core::version!()
     );
 
     let _log_redirect = {
