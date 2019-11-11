@@ -133,6 +133,15 @@ function launchTestnet() {
   echo --- configure database
   net/init-metrics.sh -e
 
+  echo --- fetch reusable testnet keypairs
+  if [[ ! -d net/keypairs ]] ; then
+    git clone git@github.com:solana-labs/testnet-keypairs.git net/keypairs
+    # If we have provider-specific keys (CoLo*, GCE*, etc) use them instead of generic val*
+    if [[ -d net/keypairs/"${CLOUD_PROVIDER}" ]] ; then
+      cp net/keypairs/"${CLOUD_PROVIDER}"/* net/keypairs/
+    fi
+  fi
+
   echo --- start "$NUMBER_OF_VALIDATOR_NODES" node test
   if [[ -n $CHANNEL ]]; then
     # shellcheck disable=SC2068
