@@ -584,6 +584,7 @@ mod tests {
         } = create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000);
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
+        let voting_keypair = Arc::new(voting_keypair);
         let storage_keypair = Arc::new(Keypair::new());
         let validator = Validator::new(
             validator_node,

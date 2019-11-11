@@ -193,7 +193,7 @@ fn create_rpc_client(
                 None
             }
         })
-        .next()
+        .next();
 
     if let Some(rpc_addr) = rpc_addr {
         Ok((rpc_addr, RpcClient::new_socket(rpc_addr)))
