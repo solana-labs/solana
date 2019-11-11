@@ -219,7 +219,7 @@ fn initialize_ledger_path(
     ledger_path: &Path,
     no_snapshot_fetch: bool,
 ) -> Result<Hash, String> {
-    let genesis_blockhash = rpc_client
+    let genesis_hash = rpc_client
         .get_genesis_blockhash()
         .map_err(|err| err.to_string())?;
 
