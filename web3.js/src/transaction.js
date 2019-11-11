@@ -445,7 +445,7 @@ export class Transaction {
     const PUBKEY_LENGTH = 32;
     const SIGNATURE_LENGTH = 64;
 
-    function isCreditDebit(
+    function isWritable(
       i: number,
       numRequiredSignatures: number,
       numReadonlySignedAccounts: number,
@@ -530,7 +530,7 @@ export class Transaction {
           isSigner: transaction.signatures.some(
             keyObj => keyObj.publicKey.toString() === pubkey.toString(),
           ),
-          isWritable: isCreditDebit(
+          isWritable: isWritable(
             j,
             numRequiredSignatures,
             numReadonlySignedAccounts,
