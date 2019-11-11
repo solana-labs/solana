@@ -480,6 +480,8 @@ pub fn main() {
 
     validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
 
+    validator_config.enable_ctrl_c_handler = true;
+
     validator_config.rpc_config.drone_addr = matches.value_of("rpc_drone_addr").map(|address| {
         solana_netutil::parse_host_port(address).expect("failed to parse drone address")
     });
