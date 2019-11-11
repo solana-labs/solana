@@ -191,16 +191,13 @@ fn create_rpc_client(entrypoint: &ContactInfo) -> Result<(std::net::SocketAddr, 
                 None
             }
         })
-        .next()
-        .unwrap_or_else(|| {
-            error!(
-                "Entrypoint ({:?}) is not running the RPC service",
-                entrypoint.gossip
-            );
-            exit(1);
-        });
+        .next();
 
-    Ok((rpc_addr, RpcClient::new_socket(rpc_addr)))
+    if let Some(rpc_addr) = rpc_addr {
+        Ok((rpc_addr, RpcClient::new_socket(rpc_addr)))
+    } else {
+        Err(format!("No node including entrypoint ({:?}) is running the RPC service", entrypoint.gossip))
+    }
 }
 
 fn check_vote_account(rpc_client: &RpcClient, vote_account: &Pubkey) -> Result<(), String> {
@@ -681,11 +678,13 @@ pub fn main() {
         );
 
         if let Ok((rpc_addr, rpc_client)) = create_rpc_client(cluster_entrypoint) {
-            check_vote_account(&rpc_client, &vote_account)
-                .unwrap_or_else(|err| {
-                    error!("Failed to check vote account: {}", err);
-                    exit(1);
-                });
+            if !validator_config.voting_disabled {
+                check_vote_account(&rpc_client, &vote_account)
+                    .unwrap_or_else(|err| {
+                        error!("Failed to check vote account: {}", err);
+                        exit(1);
+                    });
+            }
 
             let genesis_hash =
                 initialize_ledger_path(&rpc_addr, &rpc_client, &ledger_path, no_genesis_fetch, no_snapshot_fetch)
