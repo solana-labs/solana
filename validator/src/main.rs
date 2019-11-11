@@ -207,7 +207,7 @@ fn check_vote_account(rpc_client: &RpcClient, vote_account: &Pubkey) -> Result<(
         Ok(())
     } else {
         Err(format!(
-            "not correct vote account (owned by {})): {}",
+            "not a vote account (owned by {}): {}",
             found_vote_account.owner, vote_account
         ))
     }
