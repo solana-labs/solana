@@ -19,7 +19,7 @@ use solana_ledger::bank_forks::SnapshotConfig;
 use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::{Pubkey};
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
 use std::fs::{self, File};
 use std::io::{self, Read};
@@ -203,22 +203,24 @@ fn create_rpc_client(entrypoint: &ContactInfo) -> Result<(std::net::SocketAddr, 
     Ok((rpc_addr, RpcClient::new_socket(rpc_addr)))
 }
 
+fn check_vote_account(rpc_client: &RpcClient, vote_account: &Pubkey) -> Result<(), String> {
+    let found_vote_account = rpc_client.get_account(vote_account).map_err(|err| err.to_string())?;
+    if found_vote_account.owner == solana_vote_api::id() {
+        Ok(())
+    } else {
+        Err(format!("not correct vote account (owned by {})): {}", found_vote_account.owner, vote_account))
+    }
+}
+
 fn initialize_ledger_path(
-    rpc_address: &std::net::SocketAddr,
+    rpc_addr: &std::net::SocketAddr,
     rpc_client: &RpcClient,
     ledger_path: &Path,
     no_snapshot_fetch: bool,
-    vote_account: &Pubkey,
 ) -> Result<Hash, String> {
     let genesis_blockhash = rpc_client
         .get_genesis_blockhash()
         .map_err(|err| err.to_string())?;
-
-    let found_vote_account = rpc_client.get_account(vote_account).map_err(|err| err.to_string())?;
-    if found_vote_account.owner != solana_vote_api::id() {
-        panic!("not correct vote account: {}", vote_account);
-    }
-    panic!("23");
 
     fs::create_dir_all(ledger_path).map_err(|err| err.to_string())?;
 
@@ -233,7 +235,7 @@ fn initialize_ledger_path(
                 .unwrap_or_else(|err| warn!("error removing {:?}: {}", snapshot_package, err));
         }
         download_tar_bz2(
-            &rpc_address,
+            &rpc_addr,
             snapshot_package.file_name().unwrap().to_str().unwrap(),
             snapshot_package.parent().unwrap(),
             false,
@@ -678,9 +680,15 @@ pub fn main() {
             &udp_sockets,
         );
 
-        if let Ok((rpc_address, rpc_client)) = create_rpc_client(cluster_entrypoint) {
+        if let Ok((rpc_addr, rpc_client)) = create_rpc_client(cluster_entrypoint) {
+            check_vote_account(&rpc_client, &vote_account)
+                .unwrap_or_else(|err| {
+                    error!("Failed to check vote account: {}", err);
+                    exit(1);
+                });
+
             let genesis_hash =
-                initialize_ledger_path(&rpc_address, &rpc_client, &ledger_path, no_genesis_fetch, no_snapshot_fetch, &vote_account)
+                initialize_ledger_path(&rpc_addr, &rpc_client, &ledger_path, no_genesis_fetch, no_snapshot_fetch)
                     .unwrap_or_else(|err| {
                         error!("Failed to download ledger: {}", err);
                         exit(1);
