@@ -29,17 +29,18 @@ TODO: svgbob this into a flowchart, add prose
 Start
 Create Account
   state = Uninitialized
-InitializeInstruction(hash)
-  if hash is recent
-    stored_hash = hash
+InitializeInstruction()
+  if !sysvar.recent_blockhashes.is_empty()
+    stored_hash = sysvar.recent_blockhashes[0]
     state = Initialized
     success
   else
     error
-NonceInstruction(spend_hash, next_hash)
+NonceInstruction(spend_hash) /* spend_hash is a stand in for a TBD sysvar
+                                which will replace this "parameter" */
   if spend_hash == stored_hash
-    if next_hash is recent
-      stored_hash = next_hash
+    if !sysvar.recent_blockhashes.is_empty()
+      stored_hash = sysvar.recent_blockhashes[0]
       success
     else
       error
