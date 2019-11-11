@@ -20,8 +20,8 @@ use std::{
     time::Duration,
 };
 
-pub const MAX_REPAIR_LENGTH: usize = 1024;
-pub const REPAIR_MS: u64 = 50;
+pub const MAX_REPAIR_LENGTH: usize = 512;
+pub const REPAIR_MS: u64 = 100;
 pub const MAX_ORPHANS: usize = 5;
 
 pub enum RepairStrategy {
