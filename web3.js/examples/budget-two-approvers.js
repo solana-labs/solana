@@ -113,6 +113,7 @@ getTransactionFee().then(feeCalculator => {
         connection,
         transaction,
         account1,
+        contractState,
       );
     })
     .then(confirmTransaction)

@@ -184,7 +184,7 @@ export class SystemProgram {
     return new Transaction().add({
       keys: [
         {pubkey: from, isSigner: true, isWritable: true},
-        {pubkey: newAccount, isSigner: false, isWritable: true},
+        {pubkey: newAccount, isSigner: true, isWritable: true},
       ],
       programId: SystemProgram.programId,
       data,

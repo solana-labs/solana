@@ -75,6 +75,7 @@ showBalance()
       connection,
       transaction,
       account1,
+      contractState,
     );
   })
   .then(confirmTransaction)

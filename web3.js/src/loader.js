@@ -65,7 +65,7 @@ export class Loader {
         data.length,
         programId,
       );
-      await sendAndConfirmTransaction(connection, transaction, payer);
+      await sendAndConfirmTransaction(connection, transaction, payer, program);
     }
 
     const dataLayout = BufferLayout.struct([
