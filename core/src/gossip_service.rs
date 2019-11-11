@@ -10,7 +10,7 @@ use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::Blocktree;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use std::net::{IpAddr, SocketAddr, TcpListener, UdpSocket};
+use std::net::{SocketAddr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
@@ -66,11 +66,11 @@ pub fn discover(
     num_nodes: Option<usize>,
     timeout: Option<u64>,
     find_node_by_pubkey: Option<Pubkey>,
-    find_node_by_ipaddr: Option<IpAddr>,
-    gossip_addr: Option<&SocketAddr>,
+    find_node_by_gossip_addr: Option<SocketAddr>,
+    my_gossip_addr: Option<&SocketAddr>,
 ) -> std::io::Result<(Vec<ContactInfo>, Vec<ContactInfo>)> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, ip_echo, spy_ref) = make_gossip_node(entry_point, &exit, gossip_addr);
+    let (gossip_service, ip_echo, spy_ref) = make_gossip_node(entry_point, &exit, my_gossip_addr);
 
     let id = spy_ref.read().unwrap().keypair.pubkey();
     info!("Gossip entry point: {:?}", entry_point);
@@ -83,7 +83,7 @@ pub fn discover(
         num_nodes,
         timeout,
         find_node_by_pubkey,
-        find_node_by_ipaddr,
+        find_node_by_gossip_addr,
     );
 
     exit.store(true, Ordering::Relaxed);
@@ -156,7 +156,7 @@ fn spy(
     num_nodes: Option<usize>,
     timeout: Option<u64>,
     find_node_by_pubkey: Option<Pubkey>,
-    find_node_by_ipaddr: Option<IpAddr>,
+    find_node_by_gossip_addr: Option<SocketAddr>,
 ) -> (bool, u64, Vec<ContactInfo>, Vec<ContactInfo>) {
     let now = Instant::now();
     let mut met_criteria = false;
@@ -181,11 +181,11 @@ fn spy(
         archivers = spy_ref.read().unwrap().storage_peers();
         if let Some(num) = num_nodes {
             if tvu_peers.len() + archivers.len() >= num {
-                if let Some(ipaddr) = find_node_by_ipaddr {
+                if let Some(gossip_addr) = find_node_by_gossip_addr {
                     if tvu_peers
                         .iter()
                         .chain(archivers.iter())
-                        .any(|x| x.gossip.ip() == ipaddr)
+                        .any(|x| x.gossip == gossip_addr)
                     {
                         met_criteria = true;
                         break;
@@ -201,7 +201,7 @@ fn spy(
                         break;
                     }
                 }
-                if find_node_by_pubkey.is_none() && find_node_by_ipaddr.is_none() {
+                if find_node_by_pubkey.is_none() && find_node_by_gossip_addr.is_none() {
                     met_criteria = true;
                     break;
                 }
@@ -218,11 +218,11 @@ fn spy(
                     break;
                 }
             }
-            if let Some(ipaddr) = find_node_by_ipaddr {
+            if let Some(gossip_addr) = find_node_by_gossip_addr {
                 if tvu_peers
                     .iter()
                     .chain(archivers.iter())
-                    .any(|x| x.gossip.ip() == ipaddr)
+                    .any(|x| x.gossip == gossip_addr)
                 {
                     met_criteria = true;
                     break;
@@ -304,7 +304,7 @@ mod tests {
         let peer0_info = ContactInfo::new_localhost(&peer0, 0);
         let peer1_info = ContactInfo::new_localhost(&peer1, 0);
         let mut cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
-        cluster_info.insert_info(peer0_info);
+        cluster_info.insert_info(peer0_info.clone());
         cluster_info.insert_info(peer1_info);
 
         let spy_ref = Arc::new(RwLock::new(cluster_info));
@@ -346,21 +346,16 @@ mod tests {
         );
         assert_eq!(met_criteria, false);
 
-        // Find specific node by ip address
-        let (met_criteria, _, _, _) = spy(
-            spy_ref.clone(),
-            None,
-            None,
-            None,
-            Some("127.0.0.1".parse().unwrap()),
-        );
+        // Find specific node by gossip address
+        let (met_criteria, _, _, _) =
+            spy(spy_ref.clone(), None, None, None, Some(peer0_info.gossip));
         assert_eq!(met_criteria, true);
         let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             None,
             Some(0),
             None,
-            Some("1.1.1.1".parse().unwrap()),
+            Some("1.1.1.1:1234".parse().unwrap()),
         );
         assert_eq!(met_criteria, false);
     }
