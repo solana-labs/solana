@@ -170,7 +170,7 @@ impl RepairService {
                     })
                     .collect();
 
-                for ((to, req), repair_request) in reqs {
+                for ((to, req), _) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
                         0
