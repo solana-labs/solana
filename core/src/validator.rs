@@ -199,18 +199,21 @@ impl Validator {
             bank.slots_per_segment(),
         );
 
+        let blocktree = Arc::new(blocktree);
+
         let rpc_service = if node.info.rpc.port() == 0 {
             None
         } else {
             Some(JsonRpcService::new(
-                &cluster_info,
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
-                storage_state.clone(),
                 config.rpc_config.clone(),
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
-                ledger_path,
+                blocktree.clone(),
+                &cluster_info,
                 genesis_hash,
+                ledger_path,
+                storage_state.clone(),
                 &validator_exit,
             ))
         };
@@ -243,8 +246,6 @@ impl Validator {
             warn!("Validator halted");
             std::thread::park();
         }
-
-        let blocktree = Arc::new(blocktree);
 
         let poh_config = Arc::new(poh_config);
         let (mut poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(

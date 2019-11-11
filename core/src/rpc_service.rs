@@ -9,13 +9,12 @@ use jsonrpc_http_server::{
     hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
     RequestMiddlewareAction, ServerBuilder,
 };
-use solana_ledger::bank_forks::BankForks;
+use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
 use solana_sdk::hash::Hash;
 use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::mpsc::channel,
-    sync::{Arc, RwLock},
+    sync::{mpsc::channel, Arc, RwLock},
     thread::{self, Builder, JoinHandle},
 };
 use tokio::prelude::Future;
@@ -86,24 +85,27 @@ impl RequestMiddleware for RpcRequestMiddleware {
 }
 
 impl JsonRpcService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
         rpc_addr: SocketAddr,
-        storage_state: StorageState,
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-        ledger_path: &Path,
+        blocktree: Arc<Blocktree>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         genesis_hash: Hash,
+        ledger_path: &Path,
+        storage_state: StorageState,
         validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
-            storage_state,
             config,
             bank_forks,
             block_commitment_cache,
+            blocktree,
+            storage_state,
             validator_exit,
         )));
         let request_processor_ = request_processor.clone();
@@ -174,9 +176,12 @@ impl Service for JsonRpcService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contact_info::ContactInfo;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use crate::rpc::tests::create_validator_exit;
+    use crate::{
+        contact_info::ContactInfo,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        rpc::tests::create_validator_exit,
+    };
+    use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::KeypairUtil;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -201,15 +206,18 @@ mod tests {
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let ledger_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
         let mut rpc_service = JsonRpcService::new(
-            &cluster_info,
             rpc_addr,
-            StorageState::default(),
             JsonRpcConfig::default(),
             bank_forks,
             block_commitment_cache,
-            &PathBuf::from("farf"),
+            Arc::new(blocktree),
+            &cluster_info,
             Hash::default(),
+            &PathBuf::from("farf"),
+            StorageState::default(),
             &validator_exit,
         );
         let thread = rpc_service.thread_hdl.thread();
