@@ -15,7 +15,7 @@ import {url} from './url';
 import {sleep} from '../src/util/sleep';
 
 if (!mockRpcEnabled) {
-  // The default of 5 seconds is too slow for live testing sometimes
+  // Testing max commitment level takes around 20s to complete
   jest.setTimeout(30000);
 }
 
@@ -51,7 +51,7 @@ test('get program accounts', async () => {
     return;
   }
 
-  const connection = new Connection(url);
+  const connection = new Connection(url, 'recent');
   const account0 = new Account();
   const account1 = new Account();
   const programId = new Account();
@@ -171,18 +171,18 @@ test('get inflation', async () => {
 });
 
 test('get epoch info', async () => {
-  const connection = new Connection(url);
+  const connection = new Connection(url, 'recent');
 
   mockRpc.push([
     url,
     {
       method: 'getEpochInfo',
-      params: [],
+      params: [{commitment: 'recent'}],
     },
     {
       error: null,
       result: {
-        epoch: 1,
+        epoch: 0,
         slotIndex: 1,
         slotsInEpoch: 8192,
         absoluteSlot: 1,
@@ -194,7 +194,7 @@ test('get epoch info', async () => {
 
   for (const key of ['epoch', 'slotIndex', 'slotsInEpoch', 'absoluteSlot']) {
     expect(epochInfo).toHaveProperty(key);
-    expect(epochInfo[key]).toBeGreaterThan(0);
+    expect(epochInfo[key]).toBeGreaterThanOrEqual(0);
   }
 });
 
@@ -434,13 +434,13 @@ test('get recent blockhash', async () => {
 
 test('request airdrop', async () => {
   const account = new Account();
-  const connection = new Connection(url);
+  const connection = new Connection(url, 'recent');
 
   mockRpc.push([
     url,
     {
       method: 'requestAirdrop',
-      params: [account.publicKey.toBase58(), 40],
+      params: [account.publicKey.toBase58(), 40, {commitment: 'recent'}],
     },
     {
       error: null,
@@ -452,7 +452,7 @@ test('request airdrop', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [account.publicKey.toBase58(), 2],
+      params: [account.publicKey.toBase58(), 2, {commitment: 'recent'}],
     },
     {
       error: null,
@@ -464,7 +464,7 @@ test('request airdrop', async () => {
     url,
     {
       method: 'getBalance',
-      params: [account.publicKey.toBase58()],
+      params: [account.publicKey.toBase58(), {commitment: 'recent'}],
     },
     {
       error: null,
@@ -482,7 +482,7 @@ test('request airdrop', async () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58()],
+      params: [account.publicKey.toBase58(), {commitment: 'recent'}],
     },
     {
       error: null,
@@ -534,16 +534,54 @@ test('request airdrop', async () => {
   expect(accountInfo.owner).toEqual(SystemProgram.programId);
 });
 
-test('transaction', async () => {
-  const accountFrom = new Account();
-  const accountTo = new Account();
-  const connection = new Connection(url);
+// expected to take around 20s
+test('request airdrop - max commitment', async () => {
+  const account = new Account();
+  const connection = new Connection(url, 'max');
 
   mockRpc.push([
     url,
     {
       method: 'requestAirdrop',
-      params: [accountFrom.publicKey.toBase58(), 100010],
+      params: [account.publicKey.toBase58(), 40, {commitment: 'max'}],
+    },
+    {
+      error: null,
+      result:
+        '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+  mockRpc.push([
+    url,
+    {
+      method: 'getBalance',
+      params: [account.publicKey.toBase58(), {commitment: 'max'}],
+    },
+    {
+      error: null,
+      result: 40,
+    },
+  ]);
+
+  await connection.requestAirdrop(account.publicKey, 40);
+  const balance = await connection.getBalance(account.publicKey);
+  expect(balance).toBe(40);
+});
+
+test('transaction', async () => {
+  const accountFrom = new Account();
+  const accountTo = new Account();
+  const connection = new Connection(url, 'recent');
+
+  mockRpc.push([
+    url,
+    {
+      method: 'requestAirdrop',
+      params: [
+        accountFrom.publicKey.toBase58(),
+        100010,
+        {commitment: 'recent'},
+      ],
     },
     {
       error: null,
@@ -555,7 +593,7 @@ test('transaction', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountFrom.publicKey.toBase58()],
+      params: [accountFrom.publicKey.toBase58(), {commitment: 'recent'}],
     },
     {
       error: null,
@@ -569,7 +607,7 @@ test('transaction', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountTo.publicKey.toBase58(), 21],
+      params: [accountTo.publicKey.toBase58(), 21, {commitment: 'recent'}],
     },
     {
       error: null,
@@ -581,7 +619,7 @@ test('transaction', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountTo.publicKey.toBase58()],
+      params: [accountTo.publicKey.toBase58(), {commitment: 'recent'}],
     },
     {
       error: null,
@@ -591,7 +629,7 @@ test('transaction', async () => {
   await connection.requestAirdrop(accountTo.publicKey, 21);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
 
-  mockGetRecentBlockhash();
+  mockGetRecentBlockhash('recent');
   mockRpc.push([
     url,
     {
@@ -617,6 +655,7 @@ test('transaction', async () => {
       method: 'confirmTransaction',
       params: [
         '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        {commitment: 'recent'},
       ],
     },
     {
@@ -642,6 +681,7 @@ test('transaction', async () => {
       method: 'getSignatureStatus',
       params: [
         '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        {commitment: 'recent'},
       ],
     },
     {
@@ -657,7 +697,7 @@ test('transaction', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountFrom.publicKey.toBase58()],
+      params: [accountFrom.publicKey.toBase58(), {commitment: 'recent'}],
     },
     {
       error: null,
@@ -674,7 +714,7 @@ test('transaction', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountTo.publicKey.toBase58()],
+      params: [accountTo.publicKey.toBase58(), {commitment: 'recent'}],
     },
     {
       error: null,
@@ -692,7 +732,7 @@ test('multi-instruction transaction', async () => {
 
   const accountFrom = new Account();
   const accountTo = new Account();
-  const connection = new Connection(url);
+  const connection = new Connection(url, 'recent');
 
   await connection.requestAirdrop(accountFrom.publicKey, SOL_LAMPORTS);
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(SOL_LAMPORTS);
@@ -743,7 +783,7 @@ test('account change notification', async () => {
     return;
   }
 
-  const connection = new Connection(url);
+  const connection = new Connection(url, 'recent');
   const owner = new Account();
   const programAccount = new Account();
 
@@ -755,11 +795,16 @@ test('account change notification', async () => {
   );
 
   await connection.requestAirdrop(owner.publicKey, SOL_LAMPORTS);
-  await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
-    1,
-    2,
-    3,
-  ]);
+  try {
+    await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
+      1,
+      2,
+      3,
+    ]);
+  } catch (err) {
+    await connection.removeAccountChangeListener(subscriptionId);
+    throw err;
+  }
 
   // Wait for mockCallback to receive a call
   let i = 0;
@@ -788,7 +833,7 @@ test('program account change notification', async () => {
     return;
   }
 
-  const connection = new Connection(url);
+  const connection = new Connection(url, 'recent');
   const owner = new Account();
   const programAccount = new Account();
 
@@ -809,11 +854,16 @@ test('program account change notification', async () => {
   );
 
   await connection.requestAirdrop(owner.publicKey, SOL_LAMPORTS);
-  await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
-    1,
-    2,
-    3,
-  ]);
+  try {
+    await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
+      1,
+      2,
+      3,
+    ]);
+  } catch (err) {
+    await connection.removeProgramAccountChangeListener(subscriptionId);
+    throw err;
+  }
 
   // Wait for mockCallback to receive a call
   let i = 0;

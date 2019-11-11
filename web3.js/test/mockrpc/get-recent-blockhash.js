@@ -1,17 +1,22 @@
 // @flow
 
 import {Account} from '../../src';
+import type {Commitment} from '../../src/connection';
 import {url} from '../url';
 import {mockRpc} from '../__mocks__/node-fetch';
 
-export function mockGetRecentBlockhash() {
+export function mockGetRecentBlockhash(commitment: ?Commitment) {
   const recentBlockhash = new Account();
+  const params = [];
+  if (commitment) {
+    params.push({commitment});
+  }
 
   mockRpc.push([
     url,
     {
       method: 'getRecentBlockhash',
-      params: [],
+      params,
     },
     {
       error: null,

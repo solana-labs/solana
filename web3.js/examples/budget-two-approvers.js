@@ -16,7 +16,7 @@ const approver2 = new solanaWeb3.Account();
 let url;
 url = 'http://localhost:8899';
 //url = 'http://testnet.solana.com:8899';
-const connection = new solanaWeb3.Connection(url);
+const connection = new solanaWeb3.Connection(url, 'recent');
 
 function getTransactionFee() {
   return connection.getRecentBlockhash().then(response => {
@@ -59,7 +59,7 @@ function confirmTransaction(signature) {
 }
 
 function airDrop(feeCalculator) {
-  const airdrop = 100 + 3 * feeCalculator.targetLamportsPerSignature;
+  const airdrop = 100 + 5 * feeCalculator.targetLamportsPerSignature;
   console.log(`\n== Requesting airdrop of ${airdrop} to ${account1.publicKey}`);
   return connection
     .requestAirdrop(account1.publicKey, airdrop)
