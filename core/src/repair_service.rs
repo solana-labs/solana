@@ -170,15 +170,7 @@ impl RepairService {
                     })
                     .collect();
 
-                for ((to, req), repair_request) in reqs {
-                    if let Ok(local_addr) = repair_socket.local_addr() {
-                        datapoint_debug!(
-                            "repair_service",
-                            ("repair_request", format!("{:?}", repair_request), String),
-                            ("to", to.to_string(), String),
-                            ("from", local_addr.to_string(), String),
-                        );
-                    }
+                for ((to, req), _) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
                         0
