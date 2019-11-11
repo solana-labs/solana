@@ -1,6 +1,7 @@
 // @flow
 
 import {Connection} from '../connection';
+import type {Commitment} from '../connection';
 import {sleep} from './sleep';
 import type {TransactionSignature} from '../transaction';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../timing';
@@ -11,6 +12,7 @@ import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../timing';
 export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
+  commitment: ?Commitment,
 ): Promise<TransactionSignature> {
   const start = Date.now();
   let signature = await connection.sendRawTransaction(rawTransaction);
@@ -19,7 +21,7 @@ export async function sendAndConfirmRawTransaction(
   let status = null;
   let statusRetries = 6;
   for (;;) {
-    status = await connection.getSignatureStatus(signature);
+    status = await connection.getSignatureStatus(signature, commitment);
     if (status) {
       break;
     }

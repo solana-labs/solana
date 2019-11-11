@@ -47,6 +47,8 @@ declare module '@solana/web3.js' {
   /* TODO */
 
   // === src/connection.js ===
+  declare export type Commitment = 'max' | 'recent';
+
   declare export type AccountInfo = {
     executable: boolean,
     owner: PublicKey,
@@ -104,28 +106,39 @@ declare module '@solana/web3.js' {
   };
 
   declare export class Connection {
-    constructor(endpoint: string): Connection;
-    getAccountInfo(publicKey: PublicKey): Promise<AccountInfo>;
+    constructor(endpoint: string, commitment: ?Commitment): Connection;
+    getAccountInfo(
+      publicKey: PublicKey,
+      commitment: ?Commitment,
+    ): Promise<AccountInfo>;
     getProgramAccounts(
       programId: PublicKey,
+      commitment: ?Commitment,
     ): Promise<Array<[PublicKey, AccountInfo]>>;
-    getBalance(publicKey: PublicKey): Promise<number>;
+    getBalance(publicKey: PublicKey, commitment: ?Commitment): Promise<number>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
-    getVoteAccounts(): Promise<VoteAccountStatus>;
-    confirmTransaction(signature: TransactionSignature): Promise<boolean>;
-    getSlot(): Promise<number>;
-    getSlotLeader(): Promise<string>;
+    getVoteAccounts(commitment: ?Commitment): Promise<VoteAccountStatus>;
+    confirmTransaction(
+      signature: TransactionSignature,
+      commitment: ?Commitment,
+    ): Promise<boolean>;
+    getSlot(commitment: ?Commitment): Promise<number>;
+    getSlotLeader(commitment: ?Commitment): Promise<string>;
     getSignatureStatus(
       signature: TransactionSignature,
+      commitment: ?Commitment,
     ): Promise<SignatureSuccess | TransactionError | null>;
-    getTransactionCount(): Promise<number>;
-    getTotalSupply(): Promise<number>;
-    getInflation(): Promise<Inflation>;
+    getTransactionCount(commitment: ?Commitment): Promise<number>;
+    getTotalSupply(commitment: ?Commitment): Promise<number>;
+    getInflation(commitment: ?Commitment): Promise<Inflation>;
     getEpochSchedule(): Promise<EpochSchedule>;
-    getRecentBlockhash(): Promise<[Blockhash, FeeCalculator]>;
+    getRecentBlockhash(
+      commitment: ?Commitment,
+    ): Promise<[Blockhash, FeeCalculator]>;
     requestAirdrop(
       to: PublicKey,
       amount: number,
+      commitment: ?Commitment,
     ): Promise<TransactionSignature>;
     sendTransaction(
       transaction: Transaction,
@@ -287,10 +300,17 @@ declare module '@solana/web3.js' {
     ...signers: Array<Account>
   ): Promise<TransactionSignature>;
 
+  declare export function sendAndConfirmRecentTransaction(
+    connection: Connection,
+    transaction: Transaction,
+    ...signers: Array<Account>
+  ): Promise<TransactionSignature>;
+
   // === src/util/send-and-confirm-raw-transaction.js ===
   declare export function sendAndConfirmRawTransaction(
     connection: Connection,
     wireTransaction: Buffer,
+    commitment: ?Commitment,
   ): Promise<TransactionSignature>;
 
   // === src/util/testnet.js ===

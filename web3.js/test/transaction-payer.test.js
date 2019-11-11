@@ -14,13 +14,17 @@ test('transaction-payer', async () => {
   const accountPayer = new Account();
   const accountFrom = new Account();
   const accountTo = new Account();
-  const connection = new Connection(url);
+  const connection = new Connection(url, 'recent');
 
   mockRpc.push([
     url,
     {
       method: 'requestAirdrop',
-      params: [accountPayer.publicKey.toBase58(), SOL_LAMPORTS],
+      params: [
+        accountPayer.publicKey.toBase58(),
+        SOL_LAMPORTS,
+        {commitment: 'recent'},
+      ],
     },
     {
       error: null,
@@ -34,7 +38,7 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountFrom.publicKey.toBase58(), 12],
+      params: [accountFrom.publicKey.toBase58(), 12, {commitment: 'recent'}],
     },
     {
       error: null,
@@ -48,7 +52,7 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountTo.publicKey.toBase58(), 21],
+      params: [accountTo.publicKey.toBase58(), 21, {commitment: 'recent'}],
     },
     {
       error: null,
@@ -58,7 +62,7 @@ test('transaction-payer', async () => {
   ]);
   await connection.requestAirdrop(accountTo.publicKey, 21);
 
-  mockGetRecentBlockhash();
+  mockGetRecentBlockhash('recent');
   mockRpc.push([
     url,
     {
@@ -89,6 +93,7 @@ test('transaction-payer', async () => {
       method: 'confirmTransaction',
       params: [
         '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        {commitment: 'recent'},
       ],
     },
     {
@@ -114,6 +119,7 @@ test('transaction-payer', async () => {
       method: 'getSignatureStatus',
       params: [
         '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        {commitment: 'recent'},
       ],
     },
     {
@@ -129,7 +135,7 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountPayer.publicKey.toBase58()],
+      params: [accountPayer.publicKey.toBase58(), {commitment: 'recent'}],
     },
     {
       error: null,
@@ -148,7 +154,7 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountFrom.publicKey.toBase58()],
+      params: [accountFrom.publicKey.toBase58(), {commitment: 'recent'}],
     },
     {
       error: null,

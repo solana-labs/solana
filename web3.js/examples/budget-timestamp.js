@@ -13,7 +13,7 @@ const contractState = new solanaWeb3.Account();
 
 let url;
 url = 'http://localhost:8899';
-const connection = new solanaWeb3.Connection(url);
+const connection = new solanaWeb3.Connection(url, 'recent');
 
 function showBalance() {
   console.log(`\n== Account State`);
@@ -50,9 +50,9 @@ function confirmTransaction(signature) {
 }
 
 function airDrop() {
-  console.log(`\n== Requesting airdrop of 100 to ${account1.publicKey}`);
+  console.log(`\n== Requesting airdrop of 100000 to ${account1.publicKey}`);
   return connection
-    .requestAirdrop(account1.publicKey, 100)
+    .requestAirdrop(account1.publicKey, 100000)
     .then(confirmTransaction);
 }
 

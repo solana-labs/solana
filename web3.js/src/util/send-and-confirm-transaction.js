@@ -3,11 +3,28 @@
 import invariant from 'assert';
 
 import {Connection} from '../connection';
+import type {Commitment} from '../connection';
 import {Transaction} from '../transaction';
 import {sleep} from './sleep';
 import type {Account} from '../account';
 import type {TransactionSignature} from '../transaction';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../timing';
+
+/**
+ * Sign, send and confirm a transaction with recent commitment level
+ */
+export async function sendAndConfirmRecentTransaction(
+  connection: Connection,
+  transaction: Transaction,
+  ...signers: Array<Account>
+): Promise<TransactionSignature> {
+  return await _sendAndConfirmTransaction(
+    connection,
+    transaction,
+    signers,
+    'recent',
+  );
+}
 
 /**
  * Sign, send and confirm a transaction
@@ -16,6 +33,15 @@ export async function sendAndConfirmTransaction(
   connection: Connection,
   transaction: Transaction,
   ...signers: Array<Account>
+): Promise<TransactionSignature> {
+  return await _sendAndConfirmTransaction(connection, transaction, signers);
+}
+
+async function _sendAndConfirmTransaction(
+  connection: Connection,
+  transaction: Transaction,
+  signers: Array<Account>,
+  commitment: ?Commitment,
 ): Promise<TransactionSignature> {
   let sendRetries = 10;
   let signature;
@@ -27,7 +53,7 @@ export async function sendAndConfirmTransaction(
     let status = null;
     let statusRetries = 6;
     for (;;) {
-      status = await connection.getSignatureStatus(signature);
+      status = await connection.getSignatureStatus(signature, commitment);
       if (status) {
         break;
       }

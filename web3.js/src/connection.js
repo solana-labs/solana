@@ -19,6 +19,15 @@ import type {TransactionSignature} from './transaction';
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 /**
+ * The level of commitment desired when querying state
+ *   'max':    Query the most recent block which has reached max voter lockout
+ *   'recent': Query the most recent block
+ *
+ * @typedef {'max' | 'recent'} Commitment
+ */
+export type Commitment = 'max' | 'recent';
+
+/**
  * Information describing a cluster node
  *
  * @typedef {Object} ContactInfo
@@ -488,6 +497,7 @@ export class Connection {
   _rpcWebSocket: RpcWebSocketClient;
   _rpcWebSocketConnected: boolean = false;
 
+  _commitment: ?Commitment;
   _blockhashInfo: {
     recentBlockhash: Blockhash | null,
     seconds: number,
@@ -505,11 +515,13 @@ export class Connection {
    * Establish a JSON RPC connection
    *
    * @param endpoint URL to the fullnode JSON RPC endpoint
+   * @param commitment optional default commitment level
    */
-  constructor(endpoint: string) {
+  constructor(endpoint: string, commitment: ?Commitment) {
     let url = urlParse(endpoint);
 
     this._rpcRequest = createRpcRequest(url.href);
+    this._commitment = commitment;
     this._blockhashInfo = {
       recentBlockhash: null,
       seconds: -1,
@@ -542,10 +554,12 @@ export class Connection {
   /**
    * Fetch the balance for the specified public key
    */
-  async getBalance(publicKey: PublicKey): Promise<number> {
-    const unsafeRes = await this._rpcRequest('getBalance', [
-      publicKey.toBase58(),
-    ]);
+  async getBalance(
+    publicKey: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<number> {
+    const args = this._argsWithCommitment([publicKey.toBase58()], commitment);
+    const unsafeRes = await this._rpcRequest('getBalance', args);
     const res = GetBalanceRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -557,10 +571,12 @@ export class Connection {
   /**
    * Fetch all the account info for the specified public key
    */
-  async getAccountInfo(publicKey: PublicKey): Promise<AccountInfo> {
-    const unsafeRes = await this._rpcRequest('getAccountInfo', [
-      publicKey.toBase58(),
-    ]);
+  async getAccountInfo(
+    publicKey: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<AccountInfo> {
+    const args = this._argsWithCommitment([publicKey.toBase58()], commitment);
+    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = GetAccountInfoRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -582,10 +598,10 @@ export class Connection {
    */
   async getProgramAccounts(
     programId: PublicKey,
+    commitment: ?Commitment,
   ): Promise<Array<PublicKeyAndAccount>> {
-    const unsafeRes = await this._rpcRequest('getProgramAccounts', [
-      programId.toBase58(),
-    ]);
+    const args = this._argsWithCommitment([programId.toBase58()], commitment);
+    const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = GetProgramAccountsRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -610,8 +626,12 @@ export class Connection {
   /**
    * Confirm the transaction identified by the specified signature
    */
-  async confirmTransaction(signature: TransactionSignature): Promise<boolean> {
-    const unsafeRes = await this._rpcRequest('confirmTransaction', [signature]);
+  async confirmTransaction(
+    signature: TransactionSignature,
+    commitment: ?Commitment,
+  ): Promise<boolean> {
+    const args = this._argsWithCommitment([signature], commitment);
+    const unsafeRes = await this._rpcRequest('confirmTransaction', args);
     const res = ConfirmTransactionRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -654,8 +674,9 @@ export class Connection {
   /**
    * Return the list of nodes that are currently participating in the cluster
    */
-  async getVoteAccounts(): Promise<VoteAccountStatus> {
-    const unsafeRes = await this._rpcRequest('getVoteAccounts', []);
+  async getVoteAccounts(commitment: ?Commitment): Promise<VoteAccountStatus> {
+    const args = this._argsWithCommitment([], commitment);
+    const unsafeRes = await this._rpcRequest('getVoteAccounts', args);
     const res = GetVoteAccounts(unsafeRes);
     //const res = unsafeRes;
     if (res.error) {
@@ -668,8 +689,9 @@ export class Connection {
   /**
    * Fetch the current slot that the node is processing
    */
-  async getSlot(): Promise<number> {
-    const unsafeRes = await this._rpcRequest('getSlot', []);
+  async getSlot(commitment: ?Commitment): Promise<number> {
+    const args = this._argsWithCommitment([], commitment);
+    const unsafeRes = await this._rpcRequest('getSlot', args);
     const res = GetSlot(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -681,8 +703,9 @@ export class Connection {
   /**
    * Fetch the current slot leader of the cluster
    */
-  async getSlotLeader(): Promise<string> {
-    const unsafeRes = await this._rpcRequest('getSlotLeader', []);
+  async getSlotLeader(commitment: ?Commitment): Promise<string> {
+    const args = this._argsWithCommitment([], commitment);
+    const unsafeRes = await this._rpcRequest('getSlotLeader', args);
     const res = GetSlotLeader(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -696,8 +719,10 @@ export class Connection {
    */
   async getSignatureStatus(
     signature: TransactionSignature,
+    commitment: ?Commitment,
   ): Promise<SignatureSuccess | TransactionError | null> {
-    const unsafeRes = await this._rpcRequest('getSignatureStatus', [signature]);
+    const args = this._argsWithCommitment([signature], commitment);
+    const unsafeRes = await this._rpcRequest('getSignatureStatus', args);
     const res = GetSignatureStatusRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -709,8 +734,9 @@ export class Connection {
   /**
    * Fetch the current transaction count of the cluster
    */
-  async getTransactionCount(): Promise<number> {
-    const unsafeRes = await this._rpcRequest('getTransactionCount', []);
+  async getTransactionCount(commitment: ?Commitment): Promise<number> {
+    const args = this._argsWithCommitment([], commitment);
+    const unsafeRes = await this._rpcRequest('getTransactionCount', args);
     const res = GetTransactionCountRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -722,8 +748,9 @@ export class Connection {
   /**
    * Fetch the current total currency supply of the cluster in lamports
    */
-  async getTotalSupply(): Promise<number> {
-    const unsafeRes = await this._rpcRequest('getTotalSupply', []);
+  async getTotalSupply(commitment: ?Commitment): Promise<number> {
+    const args = this._argsWithCommitment([], commitment);
+    const unsafeRes = await this._rpcRequest('getTotalSupply', args);
     const res = GetTotalSupplyRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -735,8 +762,9 @@ export class Connection {
   /**
    * Fetch the cluster Inflation parameters
    */
-  async getInflation(): Promise<GetInflationRpcResult> {
-    const unsafeRes = await this._rpcRequest('getInflation', []);
+  async getInflation(commitment: ?Commitment): Promise<GetInflationRpcResult> {
+    const args = this._argsWithCommitment([], commitment);
+    const unsafeRes = await this._rpcRequest('getInflation', args);
     const res = GetInflationRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -748,8 +776,9 @@ export class Connection {
   /**
    * Fetch the Epoch Info parameters
    */
-  async getEpochInfo(): Promise<GetEpochInfoRpcResult> {
-    const unsafeRes = await this._rpcRequest('getEpochInfo', []);
+  async getEpochInfo(commitment: ?Commitment): Promise<GetEpochInfoRpcResult> {
+    const args = this._argsWithCommitment([], commitment);
+    const unsafeRes = await this._rpcRequest('getEpochInfo', args);
     const res = GetEpochInfoRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -775,10 +804,14 @@ export class Connection {
    * Fetch the minimum balance needed to exempt an account of `dataLength`
    * size from rent
    */
-  async getMinimumBalanceForRentExemption(dataLength: number): Promise<number> {
+  async getMinimumBalanceForRentExemption(
+    dataLength: number,
+    commitment: ?Commitment,
+  ): Promise<number> {
+    const args = this._argsWithCommitment([dataLength], commitment);
     const unsafeRes = await this._rpcRequest(
       'getMinimumBalanceForRentExemption',
-      [dataLength],
+      args,
     );
     const res = GetMinimumBalanceForRentExemptionRpcResult(unsafeRes);
     if (res.error) {
@@ -792,8 +825,11 @@ export class Connection {
   /**
    * Fetch a recent blockhash from the cluster
    */
-  async getRecentBlockhash(): Promise<BlockhashAndFeeCalculator> {
-    const unsafeRes = await this._rpcRequest('getRecentBlockhash', []);
+  async getRecentBlockhash(
+    commitment: ?Commitment,
+  ): Promise<BlockhashAndFeeCalculator> {
+    const args = this._argsWithCommitment([], commitment);
+    const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
 
     // Legacy v0.16 response.  TODO: Remove in September 2019
     try {
@@ -823,17 +859,15 @@ export class Connection {
   async requestAirdrop(
     to: PublicKey,
     amount: number,
+    commitment: ?Commitment,
   ): Promise<TransactionSignature> {
-    const unsafeRes = await this._rpcRequest('requestAirdrop', [
-      to.toBase58(),
-      amount,
-    ]);
+    const args = this._argsWithCommitment([to.toBase58(), amount], commitment);
+    const unsafeRes = await this._rpcRequest('requestAirdrop', args);
     const res = RequestAirdropRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    await sleep(500);
     return res.result;
   }
 
@@ -1169,5 +1203,13 @@ export class Connection {
     } else {
       throw new Error(`Unknown account change id: ${id}`);
     }
+  }
+
+  _argsWithCommitment(args: Array<any>, override: ?Commitment): Array<any> {
+    const commitment = override || this._commitment;
+    if (commitment) {
+      args.push({commitment});
+    }
+    return args;
   }
 }
