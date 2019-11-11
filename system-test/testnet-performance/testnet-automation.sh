@@ -137,8 +137,8 @@ function launchTestnet() {
   if [[ ! -d net/keypairs ]] ; then
     git clone git@github.com:solana-labs/testnet-keypairs.git net/keypairs
     # If we have provider-specific keys (CoLo*, GCE*, etc) use them instead of generic val*
-    if [[ -d net/keypairs/${CLOUD_PROVIDER} ]] ; then
-      cp net/keypairs/${CLOUD_PROVIDER}/* net/keypairs/
+    if [[ -d net/keypairs/"${CLOUD_PROVIDER}" ]] ; then
+      cp net/keypairs/"${CLOUD_PROVIDER}"/* net/keypairs/
     fi
   fi
 
