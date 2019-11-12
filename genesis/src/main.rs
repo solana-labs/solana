@@ -97,14 +97,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         default_lamports_per_byte_year,
         default_rent_exemption_threshold,
         default_rent_burn_percentage,
-        default_base_rent_per_year,
     ) = {
         let rent = Rent::default();
         (
             &rent.lamports_per_byte_year.to_string(),
             &rent.exemption_threshold.to_string(),
             &rent.burn_percent.to_string(),
-            &rent.base_rent_per_year.to_string(),
         )
     };
     let default_target_tick_duration =
@@ -215,7 +213,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .default_value(default_lamports_per_byte_year)
                 .help(
                     "The cost in lamports that the cluster will charge per byte per year \
-                     for accounts.",
+                     for accounts with data.",
                 ),
         )
         .arg(
@@ -236,16 +234,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .default_value(default_rent_burn_percentage)
                 .help("amount of rent to burn, as a fraction of std::u8::MAX."),
-        )
-        .arg(
-            Arg::with_name("base_rent_per_year")
-                .long("base-rent-per-year")
-                .value_name("LAMPORTS")
-                .takes_value(true)
-                .default_value(default_base_rent_per_year)
-                .help(
-                    "The cost in lamports that the cluster will charge as base rent for accounts",
-                ),
         )
         .arg(
             Arg::with_name("target_signatures_per_slot")
@@ -368,7 +356,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
         exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
         burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
-        base_rent_per_year: value_t_or_exit!(matches, "base_rent_per_year", u64),
     };
 
     let mut poh_config = PohConfig::default();

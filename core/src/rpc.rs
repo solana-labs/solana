@@ -1372,7 +1372,7 @@ pub mod tests {
                     "lamports": 20,
                     "data": [],
                     "executable": false,
-                    "rent_epoch": 1
+                    "rent_epoch": 0
                 }}]],
                 "id":1}}
             "#,
@@ -1383,7 +1383,7 @@ pub mod tests {
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        assert_eq!(result, expected);
+        assert_eq!(expected, result);
     }
 
     #[test]

@@ -11,8 +11,6 @@ pub struct Rent {
 
     // What portion of collected rent are to be destroyed, percentage-wise
     pub burn_percent: u8,
-
-    pub base_rent_per_year: u64,
 }
 
 /// default rental rate in lamports/byte-year, based on:
@@ -28,11 +26,8 @@ pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 /// default amount of rent to burn, as a fraction of std::u8::MAX
 pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
 
-/// default account size (determined by size_of::<Account>())
-pub const DEFAULT_ACCOUNT_SIZE: u64 = 112;
-
-/// default base rent to be payable per account apart from rent charged on data bytes per year
-pub const DEFAULT_BASE_RENT_PER_YEAR: u64 = DEFAULT_ACCOUNT_SIZE * DEFAULT_LAMPORTS_PER_BYTE_YEAR;
+/// default account storage over head for calculation of base rent
+pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 32;
 
 impl Default for Rent {
     fn default() -> Self {
@@ -40,7 +35,6 @@ impl Default for Rent {
             lamports_per_byte_year: DEFAULT_LAMPORTS_PER_BYTE_YEAR,
             exemption_threshold: DEFAULT_EXEMPTION_THRESHOLD,
             burn_percent: DEFAULT_BURN_PERCENT,
-            base_rent_per_year: DEFAULT_BASE_RENT_PER_YEAR,
         }
     }
 }
@@ -49,7 +43,8 @@ impl Rent {
     /// minimum balance due for a given size Account::data.len()
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
-        ((self.base_rent_per_year + (bytes * self.lamports_per_byte_year)) as f64
+        let base_rent_per_year = ACCOUNT_STORAGE_OVERHEAD * self.lamports_per_byte_year;
+        ((base_rent_per_year + (bytes * self.lamports_per_byte_year)) as f64
             * self.exemption_threshold) as u64
     }
 
@@ -64,7 +59,8 @@ impl Rent {
             (0, true)
         } else {
             (
-                ((self.base_rent_per_year + (self.lamports_per_byte_year * data_len as u64)) as f64
+                (((ACCOUNT_STORAGE_OVERHEAD * self.lamports_per_byte_year)
+                    + (self.lamports_per_byte_year * data_len as u64)) as f64
                     * years_elapsed) as u64,
                 false,
             )
@@ -97,18 +93,18 @@ mod tests {
         );
 
         let mut rent_with_nonzero_base = Rent::default();
-        rent_with_nonzero_base.base_rent_per_year = 1;
+        rent_with_nonzero_base.lamports_per_byte_year = 1;
 
         assert_eq!(
             rent_with_nonzero_base.due(0, 1, 1.0),
             (
-                DEFAULT_LAMPORTS_PER_BYTE_YEAR + rent_with_nonzero_base.base_rent_per_year,
+                (1 + ACCOUNT_STORAGE_OVERHEAD) * rent_with_nonzero_base.lamports_per_byte_year,
                 false
             )
         );
         assert_eq!(
             rent_with_nonzero_base.due(
-                (DEFAULT_LAMPORTS_PER_BYTE_YEAR + rent_with_nonzero_base.base_rent_per_year)
+                ((1 + ACCOUNT_STORAGE_OVERHEAD) * rent_with_nonzero_base.lamports_per_byte_year)
                     * DEFAULT_EXEMPTION_THRESHOLD as u64,
                 1,
                 1.0
