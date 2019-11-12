@@ -43,8 +43,7 @@ impl Rent {
     /// minimum balance due for a given size Account::data.len()
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
-        (((ACCOUNT_STORAGE_OVERHEAD * self.lamports_per_byte_year)
-            + (bytes * self.lamports_per_byte_year)) as f64
+        (((ACCOUNT_STORAGE_OVERHEAD * bytes) * self.lamports_per_byte_year) as f64
             * self.exemption_threshold) as u64
     }
 
@@ -59,8 +58,8 @@ impl Rent {
             (0, true)
         } else {
             (
-                (((ACCOUNT_STORAGE_OVERHEAD * self.lamports_per_byte_year)
-                    + (self.lamports_per_byte_year * data_len as u64)) as f64
+                ((self.lamports_per_byte_year * (data_len as u64 + ACCOUNT_STORAGE_OVERHEAD))
+                    as f64
                     * years_elapsed) as u64,
                 false,
             )
@@ -74,17 +73,17 @@ mod tests {
 
     #[test]
     fn test_due() {
-        let rent_with_base_zero = Rent::default();
+        let zero_rent = Rent::default();
 
         assert_eq!(
-            rent_with_base_zero.due(0, 1, 1.0),
+            zero_rent.due(0, 1, 1.0),
             (
                 DEFAULT_LAMPORTS_PER_BYTE_YEAR,
                 DEFAULT_LAMPORTS_PER_BYTE_YEAR == 0
             )
         );
         assert_eq!(
-            rent_with_base_zero.due(
+            zero_rent.due(
                 DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64,
                 1,
                 1.0
@@ -92,19 +91,19 @@ mod tests {
             (0, true)
         );
 
-        let mut rent_with_nonzero_base = Rent::default();
-        rent_with_nonzero_base.lamports_per_byte_year = 1;
+        let mut nonzero_rent = Rent::default();
+        nonzero_rent.lamports_per_byte_year = 1;
 
         assert_eq!(
-            rent_with_nonzero_base.due(0, 1, 1.0),
+            nonzero_rent.due(0, 1, 1.0),
             (
-                (1 + ACCOUNT_STORAGE_OVERHEAD) * rent_with_nonzero_base.lamports_per_byte_year,
+                (1 + ACCOUNT_STORAGE_OVERHEAD) * nonzero_rent.lamports_per_byte_year,
                 false
             )
         );
         assert_eq!(
-            rent_with_nonzero_base.due(
-                ((1 + ACCOUNT_STORAGE_OVERHEAD) * rent_with_nonzero_base.lamports_per_byte_year)
+            nonzero_rent.due(
+                ((1 + ACCOUNT_STORAGE_OVERHEAD) * nonzero_rent.lamports_per_byte_year)
                     * DEFAULT_EXEMPTION_THRESHOLD as u64,
                 1,
                 1.0
