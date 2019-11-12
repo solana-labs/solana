@@ -141,6 +141,7 @@ fn output_ledger(blocktree: Blocktree, starting_slot: u64, method: LedgerOutputM
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn graph_forks(
     bank_forks: BankForks,
     bank_forks_info: Vec<blocktree_processor::BankForksInfo>,
@@ -202,7 +203,7 @@ fn graph_forks(
                     let validator_votes = all_votes.entry(vote_state.node_pubkey).or_default();
                     validator_votes
                         .entry(last_vote.slot)
-                        .or_insert(vote_state.clone());
+                        .or_insert_with(|| vote_state.clone());
                 }
             }
 
