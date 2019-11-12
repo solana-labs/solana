@@ -1673,6 +1673,7 @@ mod tests {
             lamports_per_byte_year: 5,
             exemption_threshold: 1.2,
             burn_percent: 5,
+            base_rent_per_year: 0,
         };
 
         let bank = Bank::new(&genesis_config);
