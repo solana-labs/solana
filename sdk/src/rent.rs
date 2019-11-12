@@ -27,7 +27,7 @@ pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
 
 /// default account storage over head for calculation of base rent
-pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 32;
+pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 128;
 
 impl Default for Rent {
     fn default() -> Self {
@@ -43,8 +43,8 @@ impl Rent {
     /// minimum balance due for a given size Account::data.len()
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
-        let base_rent_per_year = ACCOUNT_STORAGE_OVERHEAD * self.lamports_per_byte_year;
-        ((base_rent_per_year + (bytes * self.lamports_per_byte_year)) as f64
+        (((ACCOUNT_STORAGE_OVERHEAD * self.lamports_per_byte_year)
+            + (bytes * self.lamports_per_byte_year)) as f64
             * self.exemption_threshold) as u64
     }
 
