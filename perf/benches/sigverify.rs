@@ -3,6 +3,7 @@
 extern crate test;
 
 use solana_perf::packet::to_packets;
+use solana_perf::perf_libs::init_cuda;
 use solana_perf::recycler::Recycler;
 use solana_perf::sigverify;
 use solana_perf::test_tx::test_tx;
@@ -13,10 +14,11 @@ fn bench_sigverify(bencher: &mut Bencher) {
     let tx = test_tx();
 
     // generate packet vector
-    let batches = to_packets(&vec![tx; 128]);
+    let batches = to_packets(&vec![tx; 2048]);
 
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
+    //    init_cuda();
     // verify packets
     bencher.iter(|| {
         let _ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);

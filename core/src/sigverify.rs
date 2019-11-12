@@ -61,4 +61,130 @@ mod tests {
         mark_disabled(&mut batches, &[vec![1]]);
         assert_eq!(batches[0].packets[0].meta.discard, false);
     }
+
+    use rayon::iter::IntoParallelIterator;
+    use rayon::iter::ParallelIterator;
+    use solana_perf::packet::to_packets;
+    use solana_perf::perf_libs::init_cuda;
+    use solana_perf::recycler::Recycler;
+    use solana_perf::sigverify;
+    use solana_perf::test_tx::test_tx;
+    use std::thread::Builder;
+    use std::time::Instant;
+
+    fn run_verify(
+        batch_size: usize,
+        recycler: &Recycler<TxOffset>,
+        recycler_out: &Recycler<PinnedVec<u8>>,
+        use_gpu: bool,
+    ) {
+        if use_gpu {
+            init_cuda();
+        }
+        let tx = test_tx();
+        let batches = to_packets(&vec![tx; batch_size]);
+        let now = Instant::now();
+        let _ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
+        println!(
+            "verifying {:?} txs took {:?} with GPU:{:?} ",
+            batch_size,
+            now.elapsed(),
+            use_gpu
+        );
+    }
+
+    #[test]
+    fn test_sigverify() {
+        //        let recycler = Recycler::default();
+        //        let recycler_out = Recycler::default();
+        //first do it without cuda
+        //128
+        println!("manual thread creation");
+        let handles: Vec<_> = (0..16)
+            .map(|_| {
+                let recycler = Recycler::warmed(10, 256);
+                let recycler_out = Recycler::warmed(10, 256);
+                Builder::new()
+                    .name("solana-bench-verify-tx".to_string())
+                    .spawn(move || run_verify(128, &recycler, &recycler_out, false))
+                    .unwrap()
+            })
+            .collect();
+        handles.into_iter().for_each(|h| h.join().unwrap());
+
+        //        println!("par_iter thread handling");
+        //        (0..16)
+        //            .into_par_iter()
+        //            .for_each(|_| run_verify(128, &recycler, &recycler_out, false));
+
+        //512
+        //        run_verify(512, &recycler, &recycler_out, false);
+        //        //1024
+        //        run_verify(1024, &recycler, &recycler_out, false);
+        //        //2048
+        //        run_verify(2048, &recycler, &recycler_out, false);
+        //        //15360
+        //        run_verify(15360, &recycler, &recycler_out, false);
+        //128
+        //        (0..16)
+        //            .into_par_iter()
+        //            .for_each(|_| run_verify(15360, &recycler, &recycler_out, false));
+        let handles: Vec<_> = (0..16)
+            .map(|_| {
+                let recycler = Recycler::warmed(10, 256);
+                let recycler_out = Recycler::warmed(10, 256);
+                Builder::new()
+                    .name("solana-bench-verify-tx".to_string())
+                    .spawn(move || run_verify(15360, &recycler, &recycler_out, false))
+                    .unwrap()
+            })
+            .collect();
+        handles.into_iter().for_each(|h| h.join().unwrap());
+
+        //        //128
+        //        run_verify(128, &recycler, &recycler_out, true);
+        //        //128
+        //        run_verify(128, &recycler, &recycler_out, true);
+        //        (0..16)
+        //            .into_par_iter()
+        //            .for_each(|_| run_verify(128, &recycler, &recycler_out, true));
+        //        //512
+        //        run_verify(512, &recycler, &recycler_out, true);
+        //        //1024
+        //        run_verify(1024, &recycler, &recycler_out, true);
+        //        //2048
+        //        run_verify(2048, &recycler, &recycler_out, true);
+        //        //15360
+        //        run_verify(15360, &recycler, &recycler_out, true);
+        //        (0..16)
+        //            .into_par_iter()
+        //            .for_each(|_| run_verify(15360, &recycler, &recycler_out, true));
+        //128
+        let recycler = Recycler::warmed(10, 256);
+        let recycler_out = Recycler::warmed(10, 256);
+        run_verify(128, &recycler, &recycler_out, true);
+        let handles: Vec<_> = (0..16)
+            .map(|_| {
+                let recycler = Recycler::warmed(10, 256);
+                let recycler_out = Recycler::warmed(10, 256);
+                Builder::new()
+                    .name("solana-bench-verify-tx".to_string())
+                    .spawn(move || run_verify(128, &recycler, &recycler_out, true))
+                    .unwrap()
+            })
+            .collect();
+        handles.into_iter().for_each(|h| h.join().unwrap());
+        let handles: Vec<_> = (0..16)
+            .map(|_| {
+                let recycler = Recycler::warmed(10, 256);
+                let recycler_out = Recycler::warmed(10, 256);
+                Builder::new()
+                    .name("solana-bench-verify-tx".to_string())
+                    .spawn(move || run_verify(15360, &recycler, &recycler_out, true))
+                    .unwrap()
+            })
+            .collect();
+        handles.into_iter().for_each(|h| h.join().unwrap());
+    }
+
 }
