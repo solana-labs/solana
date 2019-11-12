@@ -73,40 +73,27 @@ mod tests {
 
     #[test]
     fn test_due() {
-        let mut zero_rent = Rent::default();
-        zero_rent.lamports_per_byte_year = 0;
+        let rent = Rent::default();
 
         assert_eq!(
-            zero_rent.due(0, 1, 1.0),
-            (zero_rent.lamports_per_byte_year, true)
-        );
-        assert_eq!(
-            zero_rent.due(
-                zero_rent.lamports_per_byte_year * DEFAULT_EXEMPTION_THRESHOLD as u64,
-                1,
-                1.0
-            ),
-            (zero_rent.lamports_per_byte_year, true)
-        );
-
-        let mut nonzero_rent = Rent::default();
-        nonzero_rent.lamports_per_byte_year = 1;
-
-        assert_eq!(
-            nonzero_rent.due(0, 1, 1.0),
+            rent.due(0, 1, 1.0),
             (
-                (1 + ACCOUNT_STORAGE_OVERHEAD) * nonzero_rent.lamports_per_byte_year,
-                false
+                (1 + ACCOUNT_STORAGE_OVERHEAD) * DEFAULT_LAMPORTS_PER_BYTE_YEAR,
+                DEFAULT_LAMPORTS_PER_BYTE_YEAR == 0
             )
         );
         assert_eq!(
-            nonzero_rent.due(
-                ((1 + ACCOUNT_STORAGE_OVERHEAD) * nonzero_rent.lamports_per_byte_year)
+            rent.due(
+                ((1 + ACCOUNT_STORAGE_OVERHEAD) * DEFAULT_LAMPORTS_PER_BYTE_YEAR)
                     * DEFAULT_EXEMPTION_THRESHOLD as u64,
                 1,
                 1.0
             ),
-            (0, true)
+            (
+                ((1 + ACCOUNT_STORAGE_OVERHEAD) * DEFAULT_LAMPORTS_PER_BYTE_YEAR)
+                    * DEFAULT_EXEMPTION_THRESHOLD as u64,
+                DEFAULT_LAMPORTS_PER_BYTE_YEAR == 0
+            )
         );
     }
 
