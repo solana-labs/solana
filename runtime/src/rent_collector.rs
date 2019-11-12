@@ -34,7 +34,7 @@ impl RentCollector {
     //  the account rent collected, if any
     //
     pub fn update(&self, account: &mut Account) -> u64 {
-        if account.rent_epoch > self.epoch {
+        if account.data.is_empty() || account.rent_epoch > self.epoch {
             0
         } else {
             let slots_elapsed: u64 = (account.rent_epoch..=self.epoch)
