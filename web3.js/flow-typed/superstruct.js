@@ -4,7 +4,7 @@ declare module 'superstruct' {
       union(schema: any): any;
       list(schema: any): any;
       literal(schema: any): any;
-
+      tuple(schema: any): any;
   };
 
   declare module.exports: {
