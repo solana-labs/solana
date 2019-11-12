@@ -132,7 +132,8 @@ where
         }
     }
 
-    let blocktree_insert_metrics = blocktree.insert_shreds(shreds, Some(leader_schedule_cache))?;
+    let blocktree_insert_metrics =
+        blocktree.insert_shreds(shreds, Some(leader_schedule_cache), false)?;
     blocktree_insert_metrics.report_metrics("recv-window-insert-shreds");
 
     trace!(
@@ -322,7 +323,7 @@ mod test {
         let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Arc::new(Keypair::new()));
         shreds.reverse();
         blocktree
-            .insert_shreds(shreds, None)
+            .insert_shreds(shreds, None, false)
             .expect("Expect successful processing of shred");
 
         assert_eq!(
