@@ -351,7 +351,7 @@ export class BudgetProgram {
       keys: [
         {pubkey: from, isSigner: true, isWritable: true},
         {pubkey: program, isSigner: false, isWritable: true},
-        {pubkey: to, isSigner: false, isWritable: false},
+        {pubkey: to, isSigner: false, isWritable: true},
       ],
       programId: this.programId,
       data,
