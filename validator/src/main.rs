@@ -624,8 +624,9 @@ pub fn main() {
     }
 
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
-        // Disable because validator rejects non voting accounts (= ephemeral keypairs)
-        if ephemeral_voting_keypair {
+        // Disable voting because normal (=not bootstrapping) validator rejects
+        // non-voting accounts (= ephemeral keypairs).
+        if ephemeral_voting_keypair && entrypoint.is_some() {
             warn!("Disabled voting due to the use of ephemeral key for vote account");
             validator_config.voting_disabled = true;
         };
