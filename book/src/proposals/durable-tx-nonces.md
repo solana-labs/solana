@@ -23,7 +23,7 @@ implemented by some CPU ISAs.
 
 ### Contract Mechanics
 
-TODO: svgbob this into a flowchart, add prose
+TODO: svgbob this into a flowchart
 
 ```text
 Start
@@ -47,6 +47,34 @@ NonceInstruction(spend_hash) /* spend_hash is a stand in for a TBD sysvar
   else
     error
 ```
+
+A client wishing to use this feature starts by creating a system account and
+depositing sufficient lamports as to make it rent-exempt. The resultant account
+will be in the `Uninitialized` state with no stored hash and thus unusable.
+
+To begin using the account an `Initialize` instruction is executed on it,
+advancing its state to `Initialized` and storing a durable nonce, chosen by the
+contract from the `recent_blockhashes` sysvar, in the data field.
+
+When making use of a durable nonce, the client must first query its value from
+account data. A transaction is now constructed in the normal way, but with the
+following additional requirements:
+
+ 1) The durable nonce value is used in the `recent_blockhash` field
+ 2) A `Nonce` instruction is issued (first?)
+ 3) The appropriate transaction flag (TBD) is set, signaling that the usual hash
+   age check should be skipped and the previous requirements enforced
+
+For the `Nonce` instruction to succeed, the nonce account MUST be in the
+`Initialized` state, the nonce value in the transaction's `recent_blockhash`
+field MUST match the value stored in the nonce account data field and the nonce
+value MUST NOT reside in the `recent_blockhashes` sysvar. If these requirements
+are met, the contract replaces the stored nonce with a new one from the current
+values in the `recent_blockhashes` sysvar.
+
+To discard a nonce account, the client should include a `Nonce` instruction in
+a transaction which withdrawals all lamports, leaving a zero balance and making
+it eligible for deletion.
 
 ### Runtime Support
 
