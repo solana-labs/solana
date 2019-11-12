@@ -14,6 +14,26 @@ function collect_logs {
   done
 }
 
+function analyze_packet_loss {
+  (
+    set -x
+    # shellcheck disable=SC1091
+    source net/config/config
+    mkdir -p iftop-logs
+    echo --- Collecting iftop logs
+    # shellcheck disable=SC2154
+    for i in "${!validatorIpList[@]}"; do
+      iftop_log=iftop-logs/${validatorIpList[$i]}-iftop.log
+      # shellcheck disable=SC2016
+      net/ssh.sh solana@"${validatorIpList[$i]}" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log' \
+      "${validatorIpListPrivate[$i]}" "${validatorIpList[$i]}" > "$iftop_log"
+      #upload-ci-artifact "$iftop_log"
+    done
+    echo --- Analyzing Packet Loss
+    solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
+  )
+}
+
 function cleanup_testnet {
   RC=$?
   if [[ $RC != 0 ]] ; then
@@ -30,6 +50,7 @@ function cleanup_testnet {
 
   (
     set +e
+    echo --- Collecting Logfiles from Nodes
     collect_logs
   )
 
@@ -39,6 +60,12 @@ function cleanup_testnet {
     net/net.sh stop
   )
 
+  (
+    set +e
+    analyze_packet_loss
+  )
+
+  echo --- Deleting Testnet
   case $CLOUD_PROVIDER in
   gce)
   (
