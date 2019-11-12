@@ -23,14 +23,14 @@ ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
   source "$here"/scripts/ec2-provider.sh
 
-  cpuBootstrapLeaderMachineType=c5.2xlarge
+  cpuBootstrapLeaderMachineType=m5.4xlarge
 
   # NOTE: At this time only the p3dn.24xlarge EC2 instance type has GPU and
   #       AVX-512 support.  The default, p2.xlarge, does not support
   #       AVX-512
   gpuBootstrapLeaderMachineType=p2.xlarge
   clientMachineType=c5.2xlarge
-  blockstreamerMachineType=c5.2xlarge
+  blockstreamerMachineType=m5.4xlarge
   archiverMachineType=c5.xlarge
   selfDestructHours=0
   ;;
