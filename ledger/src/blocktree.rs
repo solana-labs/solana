@@ -3965,4 +3965,28 @@ pub mod tests {
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
+
+    #[test]
+    fn test_trusted_insert_shreds() {
+        // Make shred for slot 1
+        let (shreds1, _) = make_slot_entries(1, 0, 1);
+        let blocktree_path = get_tmp_ledger_path!();
+        let last_root = 100;
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            blocktree.set_roots(&[last_root]).unwrap();
+
+            // Insert will fail, slot < root
+            blocktree
+                .insert_shreds(shreds1.clone()[..].to_vec(), None, false)
+                .unwrap();
+            assert!(blocktree.get_data_shred(1, 0).unwrap().is_none());
+
+            // Insert through trusted path will succeed
+            blocktree
+                .insert_shreds(shreds1[..].to_vec(), None, true)
+                .unwrap();
+            assert!(blocktree.get_data_shred(1, 0).unwrap().is_some());
+        }
+    }
 }
