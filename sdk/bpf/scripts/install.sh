@@ -39,7 +39,6 @@ then
     echo "Updating xargo from $current to $latest"
     cargo install xargo --force
 fi
-xargo --version > xargo.md 2>&1
 
 # Install Criterion
 version=v2.3.2
