@@ -89,11 +89,7 @@ mod tests {
                 1,
                 1.0
             ),
-            (
-                ((1 + ACCOUNT_STORAGE_OVERHEAD) * DEFAULT_LAMPORTS_PER_BYTE_YEAR)
-                    * DEFAULT_EXEMPTION_THRESHOLD as u64,
-                DEFAULT_LAMPORTS_PER_BYTE_YEAR == 0
-            )
+            (0, true)
         );
     }
 
