@@ -73,7 +73,8 @@ mod tests {
 
     #[test]
     fn test_due() {
-        let zero_rent = Rent::default();
+        let mut zero_rent = Rent::default();
+        zero_rent.lamports_per_byte_year = 0;
 
         assert_eq!(
             zero_rent.due(0, 1, 1.0),
