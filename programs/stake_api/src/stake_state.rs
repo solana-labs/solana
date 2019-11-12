@@ -356,16 +356,6 @@ impl Stake {
         ))
     }
 
-    fn new_bootstrap(stake: u64, voter_pubkey: &Pubkey, vote_state: &VoteState) -> Self {
-        Self::new(
-            stake,
-            voter_pubkey,
-            vote_state,
-            std::u64::MAX,
-            &Config::default(),
-        )
-    }
-
     fn redelegate(
         &mut self,
         voter_pubkey: &Pubkey,
@@ -779,24 +769,30 @@ pub fn create_account(
     authorized: &Pubkey,
     voter_pubkey: &Pubkey,
     vote_account: &Account,
+    rent: &Rent,
     lamports: u64,
 ) -> Account {
     let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
 
     let vote_state = VoteState::from(vote_account).expect("vote_state");
-
+    let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
     stake_account
         .set_state(&StakeState::Stake(
             Meta {
-                rent_exempt_reserve: Rent::default()
-                    .minimum_balance(std::mem::size_of::<StakeState>()),
+                rent_exempt_reserve,
                 authorized: Authorized {
                     staker: *authorized,
                     withdrawer: *authorized,
                 },
                 lockup: Lockup::default(),
             },
-            Stake::new_bootstrap(lamports, voter_pubkey, &vote_state),
+            Stake::new(
+                lamports - rent_exempt_reserve, // underflow is an error, assert!(lamports> rent_exempt_reserve);
+                voter_pubkey,
+                &vote_state,
+                std::u64::MAX,
+                &Config::default(),
+            ),
         ))
         .expect("set_state");
 
@@ -1737,7 +1733,13 @@ mod tests {
         let mut vote_state = VoteState::default();
         // assume stake.stake() is right
         // bootstrap means fully-vested stake at epoch 0
-        let mut stake = Stake::new_bootstrap(1, &Pubkey::default(), &vote_state);
+        let mut stake = Stake::new(
+            1,
+            &Pubkey::default(),
+            &vote_state,
+            std::u64::MAX,
+            &Config::default(),
+        );
 
         // this one can't collect now, credits_observed == vote_state.credits()
         assert_eq!(

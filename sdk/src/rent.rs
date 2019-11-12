@@ -59,6 +59,13 @@ impl Rent {
             )
         }
     }
+
+    pub fn free() -> Self {
+        Self {
+            lamports_per_byte_year: 0,
+            ..Rent::default()
+        }
+    }
 }
 
 #[cfg(test)]
