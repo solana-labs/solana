@@ -3,6 +3,10 @@ use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
+use solana_clap_utils::{
+    input_parsers::pubkey_of,
+    input_validators::{is_keypair, is_pubkey_or_keypair},
+};
 use solana_client::rpc_client::RpcClient;
 use solana_core::cluster_info::{Node, VALIDATOR_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
@@ -229,13 +233,6 @@ fn initialize_ledger_path(
     Ok(genesis_hash)
 }
 
-// Return an error if a keypair file cannot be parsed.
-fn is_keypair(string: String) -> Result<(), String> {
-    read_keypair_file(&string)
-        .map(|_| ())
-        .map_err(|err| format!("{:?}", err))
-}
-
 #[allow(clippy::cognitive_complexity)]
 pub fn main() {
     let default_dynamic_port_range =
@@ -272,7 +269,7 @@ pub fn main() {
                 .long("vote-account")
                 .value_name("PUBKEY")
                 .takes_value(true)
-                .validator(is_keypair)
+                .validator(is_pubkey_or_keypair)
                 .help("Public key of the vote account to vote with.  Default is the public key of the voting keypair"),
         )
         .arg(
@@ -458,11 +455,8 @@ pub fn main() {
         Keypair::new()
     };
 
-    let vote_account = matches
-        .value_of("vote_account")
-        .map_or(voting_keypair.pubkey(), |pubkey| {
-            pubkey.parse().expect("failed to parse vote_account")
-        });
+    let vote_account =
+        pubkey_of(&matches, "vote_account").unwrap_or_else(|| voting_keypair.pubkey());
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let entrypoint = matches.value_of("entrypoint");

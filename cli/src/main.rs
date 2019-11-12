@@ -1,12 +1,14 @@
 use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
+
+use solana_clap_utils::input_validators::is_url;
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliError},
     config::{self, Config},
     display::{println_name_value, println_name_value_or},
-    input_validators::is_url,
 };
 use solana_sdk::signature::read_keypair_file;
+
 use std::error;
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {

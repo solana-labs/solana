@@ -4,19 +4,13 @@ use clap::{
     crate_description, crate_name, crate_version, value_t_or_exit, App, AppSettings, Arg,
     SubCommand,
 };
+use solana_clap_utils::input_validators::is_pubkey;
 use solana_client::rpc_client::RpcClient;
 use solana_core::{contact_info::ContactInfo, gossip_service::discover};
 use solana_sdk::pubkey::Pubkey;
 use std::error;
 use std::net::SocketAddr;
 use std::process::exit;
-
-fn is_pubkey(pubkey: String) -> Result<(), String> {
-    match pubkey.parse::<Pubkey>() {
-        Ok(_) => Ok(()),
-        Err(err) => Err(format!("{:?}", err)),
-    }
-}
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_filter("solana=info");

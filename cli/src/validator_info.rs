@@ -1,14 +1,17 @@
 use crate::{
     cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     display::println_name_value,
-    input_parsers::pubkey_of,
-    input_validators::{is_pubkey, is_url},
 };
 use bincode::deserialize;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+
+use solana_clap_utils::{
+    input_parsers::pubkey_of,
+    input_validators::{is_pubkey, is_url},
+};
 use solana_client::rpc_client::RpcClient;
 use solana_config_api::{config_instruction, get_config_data, ConfigKeys, ConfigState};
 use solana_sdk::{
@@ -19,6 +22,7 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil},
     transaction::Transaction,
 };
+
 use std::error;
 
 pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
