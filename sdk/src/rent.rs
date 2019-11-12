@@ -29,7 +29,7 @@ pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
 
 /// default base rent
-pub const DEFAULT_BASE_RENT_PER_YEAR: u64 = 0;
+pub const DEFAULT_BASE_RENT_PER_YEAR: u64 = 112 * DEFAULT_LAMPORTS_PER_BYTE_YEAR;
 
 impl Default for Rent {
     fn default() -> Self {
