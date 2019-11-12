@@ -132,6 +132,16 @@ const GetEpochScheduleResult = struct({
   first_normal_slot: 'number',
 });
 
+/**
+ * Version info for a node
+ *
+ * @typedef {Object} Version
+ * @property {string} solana-core Version of solana-core
+ */
+const Version = struct({
+  'solana-core': 'string',
+});
+
 function createRpcRequest(url): RpcRequest {
   const server = jayson(async (request, callback) => {
     const options = {
@@ -202,6 +212,16 @@ const GetBalanceRpcResult = struct({
   id: 'string',
   error: 'any?',
   result: 'number?',
+});
+
+/**
+ * Expected JSON RPC response for the "getVersion" message
+ */
+const GetVersionRpcResult = struct({
+  jsonrpc: struct.literal('2.0'),
+  id: 'string',
+  error: 'any?',
+  result: Version,
 });
 
 /**
@@ -864,6 +884,19 @@ export class Connection {
   async getBlocksSince(slot: number): Promise<Array<number>> {
     const unsafeRes = await this._rpcRequest('getBlocksSince', [slot]);
     const res = GetBlocksSinceRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch the node version
+   */
+  async getVersion(): Promise<Version> {
+    const unsafeRes = await this._rpcRequest('getVersion', []);
+    const res = GetVersionRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }

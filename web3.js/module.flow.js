@@ -69,6 +69,10 @@ declare module '@solana/web3.js' {
     accountInfo: AccountInfo,
   };
 
+  declare export type Version = {
+    'solana-core': string,
+  };
+
   declare export type VoteAccountInfo = {
     votePubkey: string,
     nodePubkey: string,
@@ -130,6 +134,7 @@ declare module '@solana/web3.js' {
     ): Promise<SignatureSuccess | TransactionError | null>;
     getTransactionCount(commitment: ?Commitment): Promise<number>;
     getTotalSupply(commitment: ?Commitment): Promise<number>;
+    getVersion(): Promise<Version>;
     getInflation(commitment: ?Commitment): Promise<Inflation>;
     getEpochSchedule(): Promise<EpochSchedule>;
     getRecentBlockhash(
