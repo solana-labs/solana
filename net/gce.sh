@@ -17,6 +17,7 @@ gce)
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
   blockstreamerMachineType="--machine-type n1-standard-8"
   archiverMachineType="--custom-cpu 4 --custom-memory 16GB"
+  selfDestructHours=8
   ;;
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
@@ -31,6 +32,7 @@ ec2)
   clientMachineType=c5.2xlarge
   blockstreamerMachineType=c5.2xlarge
   archiverMachineType=c5.xlarge
+  selfDestructHours=0
   ;;
 azure)
   # shellcheck source=net/scripts/azure-provider.sh
@@ -41,6 +43,7 @@ azure)
   clientMachineType=Standard_D16s_v3
   blockstreamerMachineType=Standard_D16s_v3
   archiverMachineType=Standard_D4s_v3
+  selfDestructHours=0
   ;;
 colo)
   # shellcheck source=net/scripts/colo-provider.sh
@@ -51,6 +54,7 @@ colo)
   clientMachineType=0
   blockstreamerMachineType=0
   archiverMachineType=0
+  selfDestructHours=0
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -77,7 +81,6 @@ letsEncryptDomainName=
 enableGpu=false
 customMachineType=
 customAddress=
-selfDestructHours=8
 zones=()
 
 containsZone() {
