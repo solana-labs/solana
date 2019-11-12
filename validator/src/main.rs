@@ -632,7 +632,6 @@ pub fn main() {
         voting_keypair.pubkey()
     });
 
-
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 

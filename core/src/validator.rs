@@ -26,7 +26,6 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_metrics::datapoint_info;
-use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Slot, DEFAULT_SLOTS_PER_TURN},
     genesis_config::GenesisConfig,
@@ -180,13 +179,6 @@ impl Validator {
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
-
-        // Only do this check if started as a bootstrap leader.
-        // Normal validators can encounter newly-created vote accounts, which to be synced with this new validator.
-        if entrypoint_info_option.is_none() && !config.voting_disabled {
-            Self::check_vote_account(&bank, vote_account);
-        }
-
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
@@ -415,20 +407,6 @@ impl Validator {
             node.sockets.retransmit_sockets[0].local_addr().unwrap()
         );
     }
-
-    fn check_vote_account(bank: &Bank, vote_account: &Pubkey) {
-        if bank.vote_accounts().get(vote_account).is_none() {
-            if let Some(found_account) = bank.get_account(vote_account) {
-                error!(
-                    "Account is not a vote account (but owned by {}): {}",
-                    found_account.owner, vote_account
-                );
-            } else {
-                error!("Vote account not found: {}", vote_account);
-            }
-            panic!("aaaaaaa");
-        }
-    }
 }
 
 pub fn new_banks_from_blocktree(
@@ -484,7 +462,7 @@ pub fn new_banks_from_blocktree(
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
-        process::exit(1);
+        std::process::exit(1);
     });
 
     bank_forks.set_snapshot_config(snapshot_config);
@@ -565,7 +543,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
+    use crate::genesis_utils::create_genesis_config_with_leader;
     use solana_ledger::blocktree::create_new_tmp_ledger;
     use std::fs::remove_dir_all;
 
@@ -575,20 +553,18 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
-        // Abuse leader_keypair which is backed by voting_keypair instead of manually creating
-        let validator_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
-        let GenesisConfigInfo {
-            genesis_config,
-            voting_keypair,
-            ..
-        } = create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000);
+        let validator_keypair = Keypair::new();
+        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
+        let genesis_config =
+            create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
+                .genesis_config;
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-        let voting_keypair = Arc::new(voting_keypair);
+        let voting_keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
         let validator = Validator::new(
             validator_node,
-            &Arc::new(leader_keypair),
+            &Arc::new(validator_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             &voting_keypair,
@@ -603,26 +579,24 @@ mod tests {
 
     #[test]
     fn validator_parallel_exit() {
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         let mut ledger_paths = vec![];
         let mut validators: Vec<Validator> = (0..2)
             .map(|_| {
-                // Abuse leader_keypair which is backed by voting_keypair instead of manually creating
-                let validator_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
-                let GenesisConfigInfo {
-                    genesis_config,
-                    voting_keypair,
-                    ..
-                } = create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000);
+                let validator_keypair = Keypair::new();
+                let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
+                let genesis_config =
+                    create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
+                        .genesis_config;
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
                 ledger_paths.push(validator_ledger_path.clone());
-                let voting_keypair = Arc::new(voting_keypair);
+                let voting_keypair = Arc::new(Keypair::new());
                 let storage_keypair = Arc::new(Keypair::new());
                 Validator::new(
                     validator_node,
-                    &leader_keypair,
+                    &Arc::new(validator_keypair),
                     &validator_ledger_path,
                     &voting_keypair.pubkey(),
                     &voting_keypair,
