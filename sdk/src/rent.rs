@@ -28,8 +28,11 @@ pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 /// default amount of rent to burn, as a fraction of std::u8::MAX
 pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
 
-/// default base rent
-pub const DEFAULT_BASE_RENT_PER_YEAR: u64 = 112 * DEFAULT_LAMPORTS_PER_BYTE_YEAR;
+/// default account size (determined by size_of::<Account>())
+pub const DEFAULT_ACCOUNT_SIZE: u64 = 112;
+
+/// default base rent to be payable per account apart from rent charged on data bytes per year
+pub const DEFAULT_BASE_RENT_PER_YEAR: u64 = DEFAULT_ACCOUNT_SIZE * DEFAULT_LAMPORTS_PER_BYTE_YEAR;
 
 impl Default for Rent {
     fn default() -> Self {
