@@ -1593,7 +1593,7 @@ mod tests {
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
 
-        // Stake some lamports (available lampoorts for withdrawals will reduce)
+        // Stake some lamports (available lamports for withdrawals will reduce)
         let vote_pubkey = Pubkey::new_rand();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);

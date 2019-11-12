@@ -5,7 +5,7 @@ use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
 #[cfg(feature = "move")]
-use solana_librapay_api::{create_genesis, upload_mint_program, upload_payment_program};
+use solana_librapay_api::{create_genesis, upload_mint_script, upload_payment_script};
 use solana_measure::measure::Measure;
 use solana_metrics::{self, datapoint_debug};
 use solana_sdk::{
@@ -789,7 +789,7 @@ fn fund_move_keys<T: Client>(
     total: u64,
     libra_pay_program_id: &Pubkey,
     libra_mint_program_id: &Pubkey,
-    libra_mint_key: &Keypair,
+    libra_genesis_key: &Keypair,
 ) {
     let (mut blockhash, _fee_calculator) = get_recent_blockhash(client);
 
@@ -804,17 +804,18 @@ fn fund_move_keys<T: Client>(
     let tx = librapay_transaction::mint_tokens(
         &libra_mint_program_id,
         funding_key,
-        libra_mint_key,
+        libra_genesis_key,
         &libra_funding_key.pubkey(),
         total,
         blockhash,
     );
     client
-        .send_message(&[funding_key, libra_mint_key], tx.message)
+        .send_message(&[funding_key, libra_genesis_key], tx.message)
         .unwrap();
 
     info!("creating {} move accounts...", keypairs.len());
-    let create_len = 8;
+    let total_len = keypairs.len();
+    let create_len = 5;
     let mut funding_time = Measure::start("funding_time");
     for (i, keys) in keypairs.chunks(create_len).enumerate() {
         if client
@@ -828,24 +829,22 @@ fn fund_move_keys<T: Client>(
 
         let keypairs: Vec<_> = keys.iter().map(|k| k).collect();
         let tx = librapay_transaction::create_accounts(funding_key, &keypairs, 1, blockhash);
-
         let ser_size = bincode::serialized_size(&tx).unwrap();
-
-        client.send_message(&[funding_key], tx.message).unwrap();
+        let mut keys = vec![funding_key];
+        keys.extend(&keypairs);
+        client.send_message(&keys, tx.message).unwrap();
 
         if i % 10 == 0 {
             info!(
-                "size: {} created {} accounts of {}",
-                ser_size,
+                "created {} accounts of {} (size {})",
                 i,
-                (keypairs.len() / create_len),
+                total_len / create_len,
+                ser_size,
             );
         }
     }
-    funding_time.stop();
-    info!("funding accounts {}ms", funding_time.as_ms());
 
-    const NUM_FUNDING_KEYS: usize = 4;
+    const NUM_FUNDING_KEYS: usize = 10;
     let funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| Keypair::new()).collect();
     let pubkey_amounts: Vec<_> = funding_keys
         .iter()
@@ -870,7 +869,10 @@ fn fund_move_keys<T: Client>(
         sleep(Duration::from_millis(100));
     }
     assert!(balance > 0);
-    info!("funded multiple funding accounts.. {:?}", balance);
+    info!(
+        "funded multiple funding accounts with {:?} lanports",
+        balance
+    );
 
     let libra_funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| Keypair::new()).collect();
     for (i, key) in libra_funding_keys.iter().enumerate() {
@@ -881,7 +883,7 @@ fn fund_move_keys<T: Client>(
 
         let tx = librapay_transaction::transfer(
             libra_pay_program_id,
-            &libra_mint_key.pubkey(),
+            &libra_genesis_key.pubkey(),
             &funding_keys[i],
             &libra_funding_key,
             &key.pubkey(),
@@ -901,7 +903,7 @@ fn fund_move_keys<T: Client>(
         for (j, key) in keys.iter().enumerate() {
             let tx = librapay_transaction::transfer(
                 libra_pay_program_id,
-                &libra_mint_key.pubkey(),
+                &libra_genesis_key.pubkey(),
                 &funding_keys[j],
                 &libra_funding_keys[j],
                 &key.pubkey(),
@@ -914,7 +916,6 @@ fn fund_move_keys<T: Client>(
                 .expect("create_account in generate_and_fund_keypairs");
         }
 
-        info!("sent... checking balance {}", i);
         for (j, key) in keys.iter().enumerate() {
             let mut times = 0;
             loop {
@@ -932,11 +933,16 @@ fn fund_move_keys<T: Client>(
             }
         }
 
-        info!("funded: {} of {}", i, keypairs.len() / NUM_FUNDING_KEYS);
+        info!(
+            "funded group {} of {}",
+            i + 1,
+            keypairs.len() / NUM_FUNDING_KEYS
+        );
         blockhash = get_recent_blockhash(client).0;
     }
 
-    info!("done funding keys..");
+    funding_time.stop();
+    info!("done funding keys, took {} ms", funding_time.as_ms());
 }
 
 pub fn generate_and_fund_keypairs<T: Client>(
@@ -986,8 +992,8 @@ pub fn generate_and_fund_keypairs<T: Client>(
         {
             if use_move {
                 let libra_genesis_keypair = create_genesis(&funding_key, client, 10_000_000);
-                let libra_mint_program_id = upload_mint_program(&funding_key, client);
-                let libra_pay_program_id = upload_payment_program(&funding_key, client);
+                let libra_mint_program_id = upload_mint_script(&funding_key, client);
+                let libra_pay_program_id = upload_payment_script(&funding_key, client);
 
                 // Generate another set of keypairs for move accounts.
                 // Still fund the solana ones which will be used for fees.
