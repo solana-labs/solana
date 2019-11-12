@@ -171,6 +171,7 @@ fn download_tar_bz2(
 fn initialize_ledger_path(
     entrypoint: &ContactInfo,
     ledger_path: &Path,
+    no_genesis_fetch: bool,
     no_snapshot_fetch: bool,
 ) -> Result<Hash, String> {
     let (nodes, _archivers) = discover(
@@ -208,7 +209,9 @@ fn initialize_ledger_path(
 
     fs::create_dir_all(ledger_path).map_err(|err| err.to_string())?;
 
-    download_tar_bz2(&rpc_addr, "genesis.tar.bz2", ledger_path, true)?;
+    if !no_genesis_fetch {
+        download_tar_bz2(&rpc_addr, "genesis.tar.bz2", ledger_path, true)?;
+    }
 
     if !no_snapshot_fetch {
         let snapshot_package = solana_ledger::snapshot_utils::get_snapshot_tar_path(ledger_path);
@@ -311,6 +314,13 @@ pub fn main() {
                 .takes_value(false)
                 .requires("entrypoint")
                 .help("Do not attempt to fetch a new snapshot from the cluster entrypoint, start from a local snapshot if present"),
+        )
+        .arg(
+            Arg::with_name("no_genesis_fetch")
+                .long("no-genesis-fetch")
+                .takes_value(false)
+                .requires("entrypoint")
+                .help("Do not attempt to fetch a new genesis from the cluster entrypoint, start from a local genesis if present"),
         )
         .arg(
             Arg::with_name("no_voting")
@@ -463,6 +473,7 @@ pub fn main() {
     let init_complete_file = matches.value_of("init_complete_file");
     let skip_poh_verify = matches.is_present("skip_poh_verify");
     let cuda = matches.is_present("cuda");
+    let no_genesis_fetch = matches.is_present("no_genesis_fetch");
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
     let rpc_port = value_t!(matches, "rpc_port", u16);
 
@@ -641,12 +652,16 @@ pub fn main() {
             &udp_sockets,
         );
 
-        let genesis_hash =
-            initialize_ledger_path(cluster_entrypoint, &ledger_path, no_snapshot_fetch)
-                .unwrap_or_else(|err| {
-                    error!("Failed to download ledger: {}", err);
-                    exit(1);
-                });
+        let genesis_hash = initialize_ledger_path(
+            cluster_entrypoint,
+            &ledger_path,
+            no_genesis_fetch,
+            no_snapshot_fetch,
+        )
+        .unwrap_or_else(|err| {
+            error!("Failed to download ledger: {}", err);
+            exit(1);
+        });
 
         if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
             if expected_genesis_hash != genesis_hash {
