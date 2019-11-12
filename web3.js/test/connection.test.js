@@ -462,6 +462,21 @@ test('get blocks since slot', async () => {
   await expect(connection.getBlocksSince(10000)).rejects.toThrow(errorMessage);
 });
 
+test('get block', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+  const connection = new Connection(url);
+
+  // These test cases need to be updated when upstream solana RPC api is fleshed out
+  const zeroTransactions = await connection.getBlock(0);
+  expect(zeroTransactions.length).toBe(0);
+
+  const oneTransaction = await connection.getBlock(1);
+  expect(oneTransaction.length).toBe(1);
+});
+
 test('get recent blockhash', async () => {
   const connection = new Connection(url);
 

@@ -391,6 +391,18 @@ const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult('number');
 const GetBlocksSinceRpcResult = jsonRpcResult(struct.list(['number']));
 
 /**
+ * Expected JSON RPC response for the "getBlock" message
+ */
+const GetBlockRpcResult = jsonRpcResult(
+  struct.list([
+    struct.tuple([
+      struct.list(['number']),
+      struct.union([struct({Ok: 'null'}), struct({Err: 'object'})]),
+    ]),
+  ]),
+);
+
+/**
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
 const GetRecentBlockhash = jsonRpcResult([
@@ -902,6 +914,25 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
+  }
+
+  /**
+   * Fetch a list of Transactions and transaction statuses from the cluster
+   */
+  async getBlock(
+    slot: number,
+  ): Promise<
+    Array<[Transaction, SignatureSuccess] | [Transaction, TransactionError]>,
+  > {
+    const unsafeRes = await this._rpcRequest('getBlock', [slot]);
+    const result = GetBlockRpcResult(unsafeRes);
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+    assert(typeof result.result !== 'undefined');
+    return result.result.map(result => {
+      return [Transaction.from(result[0]), result[1]];
+    });
   }
 
   /**
