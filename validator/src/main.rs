@@ -184,7 +184,7 @@ fn create_rpc_client(
 
     let rpc_addr = nodes
         .iter()
-        .filter_map(|contact_info| {
+        .find_map(|contact_info| {
             if contact_info.gossip == entrypoint.gossip
                 && ContactInfo::is_valid_address(&contact_info.rpc)
             {
@@ -192,14 +192,13 @@ fn create_rpc_client(
             } else {
                 None
             }
-        })
-        .next();
+        });
 
     if let Some(rpc_addr) = rpc_addr {
         Ok((rpc_addr, RpcClient::new_socket(rpc_addr)))
     } else {
         Err(format!(
-            "No node including entrypoint ({:?}) is running the RPC service",
+            "Entrypoint ({:?}) is not running the RPC service",
             entrypoint.gossip
         ))
     }
