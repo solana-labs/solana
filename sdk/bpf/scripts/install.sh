@@ -23,7 +23,8 @@ download() {
 }
 
 # Install or upgrade xargo
-cargo +nightly install xargo -Z install-upgrade
+cargo install cargo-update
+cargo install-update -i xargo
 xargo --version > xargo.md 2>&1
 
 # Install Criterion
