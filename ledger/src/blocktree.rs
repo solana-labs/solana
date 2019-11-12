@@ -465,9 +465,9 @@ impl Blocktree {
         let mut start = Measure::start("Shred insertion");
         let mut num_inserted = 0;
         let mut index_meta_time = 0;
-        for shred in shreds {
+        shreds.into_iter().for_each(|shred| {
             if shred.is_data() {
-                self.check_insert_data_shred(
+                if self.check_insert_data_shred(
                     shred,
                     &mut index_working_set,
                     &mut slot_meta_working_set,
@@ -475,8 +475,9 @@ impl Blocktree {
                     &mut just_inserted_data_shreds,
                     &mut index_meta_time,
                     is_trusted,
-                )?;
-                num_inserted += 1;
+                ) {
+                    num_inserted += 1;
+                }
             } else if shred.is_code() {
                 self.check_cache_coding_shred(
                     shred,
@@ -489,7 +490,7 @@ impl Blocktree {
             } else {
                 panic!("There should be no other case");
             }
-        }
+        });
         start.stop();
 
         let insert_shreds_elapsed = start.as_us();
@@ -505,7 +506,7 @@ impl Blocktree {
             );
 
             num_recovered = recovered_data.len();
-            for shred in recovered_data {
+            recovered_data.into_iter().for_each(|shred| {
                 if let Some(leader) = leader_schedule_cache.slot_leader_at(shred.slot(), None) {
                     if shred.verify(&leader) {
                         self.check_insert_data_shred(
@@ -516,23 +517,25 @@ impl Blocktree {
                             &mut just_inserted_data_shreds,
                             &mut index_meta_time,
                             is_trusted,
-                        )?;
+                        );
                     }
                 }
-            }
+            });
         }
         start.stop();
         let shred_recovery_elapsed = start.as_us();
 
-        for ((_, _), shred) in just_inserted_coding_shreds {
-            self.check_insert_coding_shred(
-                shred,
-                &mut index_working_set,
-                &mut write_batch,
-                &mut index_meta_time,
-            )?;
-            num_inserted += 1;
-        }
+        just_inserted_coding_shreds
+            .into_iter()
+            .for_each(|((_, _), shred)| {
+                self.check_insert_coding_shred(
+                    shred,
+                    &mut index_working_set,
+                    &mut write_batch,
+                    &mut index_meta_time,
+                );
+                num_inserted += 1;
+            });
 
         let mut start = Measure::start("Shred recovery");
         // Handle chaining for the members of the slot_meta_working_set that were inserted into,
@@ -589,14 +592,13 @@ impl Blocktree {
         })
     }
 
-    // Should only error if there's a database error
     fn check_insert_coding_shred(
         &self,
         shred: Shred,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
         index_meta_time: &mut u64,
-    ) -> Result<()> {
+    ) -> bool {
         let slot = shred.slot();
 
         let index_meta_working_set_entry =
@@ -609,6 +611,7 @@ impl Blocktree {
             .map(|_| {
                 index_meta_working_set_entry.did_insert_occur = true;
             })
+            .is_ok()
     }
 
     fn check_cache_coding_shred(
@@ -664,7 +667,6 @@ impl Blocktree {
         }
     }
 
-    // Should only error if there's a database error
     fn check_insert_data_shred(
         &self,
         shred: Shred,
@@ -674,7 +676,7 @@ impl Blocktree {
         just_inserted_data_shreds: &mut HashMap<(u64, u64), Shred>,
         index_meta_time: &mut u64,
         is_trusted: bool,
-    ) -> Result<bool> {
+    ) -> bool {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
 
@@ -687,24 +689,27 @@ impl Blocktree {
 
         let slot_meta = &mut slot_meta_entry.new_slot_meta.borrow_mut();
 
-        let should_insert = is_trusted
+        if is_trusted
             || Blocktree::should_insert_data_shred(
                 &shred,
                 slot_meta,
                 index_meta.data(),
                 &self.last_root,
-            );
-
-        if should_insert {
-            // Can't call `insert_data_shred.map` here b/c slot_meta is borrowed and cannot be
-            // reborrowed into a closure
-            self.insert_data_shred(slot_meta, index_meta.data_mut(), &shred, write_batch)?;
-            just_inserted_data_shreds.insert((slot, shred_index), shred);
-            index_meta_working_set_entry.did_insert_occur = true;
-            slot_meta_entry.did_insert_occur = true;
+            )
+        {
+            if let Ok(()) =
+                self.insert_data_shred(slot_meta, index_meta.data_mut(), &shred, write_batch)
+            {
+                just_inserted_data_shreds.insert((slot, shred_index), shred);
+                index_meta_working_set_entry.did_insert_occur = true;
+                slot_meta_entry.did_insert_occur = true;
+                true
+            } else {
+                false
+            }
+        } else {
+            false
         }
-
-        Ok(should_insert)
     }
 
     fn should_insert_coding_shred(
