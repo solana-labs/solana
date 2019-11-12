@@ -237,10 +237,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             output_keypair(&keypair, &outfile, "recovered")?;
         }
         ("grind", Some(matches)) => {
-            let ignore_case = matches.is_present("ignore-case");
+            let ignore_case = matches.is_present("ignore_case");
             let includes = if matches.is_present("includes") {
                 values_t_or_exit!(matches, "includes", String)
                     .into_iter()
+                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
                     .collect()
             } else {
                 HashSet::new()
@@ -249,6 +250,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let starts_with = if matches.is_present("starts_with") {
                 values_t_or_exit!(matches, "starts_with", String)
                     .into_iter()
+                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
                     .collect()
             } else {
                 HashSet::new()
