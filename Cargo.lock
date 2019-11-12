@@ -2997,7 +2997,7 @@ dependencies = [
  "solana-core 0.21.0",
  "solana-logger 0.21.0",
  "solana-metrics 0.21.0",
- "solana-netutil 0.21.0",
+ "solana-net-utils 0.21.0",
  "solana-sdk 0.21.0",
 ]
 
@@ -3043,7 +3043,7 @@ dependencies = [
  "solana-genesis 0.21.0",
  "solana-logger 0.21.0",
  "solana-metrics 0.21.0",
- "solana-netutil 0.21.0",
+ "solana-net-utils 0.21.0",
  "solana-runtime 0.21.0",
  "solana-sdk 0.21.0",
  "untrusted 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3057,7 +3057,7 @@ dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-core 0.21.0",
  "solana-logger 0.21.0",
- "solana-netutil 0.21.0",
+ "solana-net-utils 0.21.0",
 ]
 
 [[package]]
@@ -3084,7 +3084,7 @@ dependencies = [
  "solana-metrics 0.21.0",
  "solana-move-loader-api 0.21.0",
  "solana-move-loader-program 0.21.0",
- "solana-netutil 0.21.0",
+ "solana-net-utils 0.21.0",
  "solana-runtime 0.21.0",
  "solana-sdk 0.21.0",
 ]
@@ -3214,7 +3214,7 @@ dependencies = [
  "solana-core 0.21.0",
  "solana-drone 0.21.0",
  "solana-logger 0.21.0",
- "solana-netutil 0.21.0",
+ "solana-net-utils 0.21.0",
  "solana-runtime 0.21.0",
  "solana-sdk 0.21.0",
  "solana-stake-api 0.21.0",
@@ -3241,7 +3241,7 @@ dependencies = [
  "serde_derive 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 0.21.0",
- "solana-netutil 0.21.0",
+ "solana-net-utils 0.21.0",
  "solana-sdk 0.21.0",
 ]
 
@@ -3330,7 +3330,7 @@ dependencies = [
  "solana-measure 0.21.0",
  "solana-merkle-tree 0.21.0",
  "solana-metrics 0.21.0",
- "solana-netutil 0.21.0",
+ "solana-net-utils 0.21.0",
  "solana-perf 0.21.0",
  "solana-rayon-threadlimit 0.21.0",
  "solana-reed-solomon-erasure 4.0.1-3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3487,7 +3487,7 @@ dependencies = [
  "solana-client 0.21.0",
  "solana-core 0.21.0",
  "solana-logger 0.21.0",
- "solana-netutil 0.21.0",
+ "solana-net-utils 0.21.0",
  "solana-sdk 0.21.0",
 ]
 
@@ -3725,7 +3725,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-netutil"
+name = "solana-net-utils"
 version = "0.21.0"
 dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3986,7 +3986,7 @@ dependencies = [
  "solana-ledger 0.21.0",
  "solana-logger 0.21.0",
  "solana-metrics 0.21.0",
- "solana-netutil 0.21.0",
+ "solana-net-utils 0.21.0",
  "solana-perf 0.21.0",
  "solana-runtime 0.21.0",
  "solana-sdk 0.21.0",
