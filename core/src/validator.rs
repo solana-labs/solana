@@ -426,8 +426,10 @@ pub fn new_banks_from_blocktree(
     LeaderScheduleCache,
     PohConfig,
 ) {
-    let genesis_config =
-        GenesisConfig::load(blocktree_path).expect("Failed to load genesis config");
+    let genesis_config = GenesisConfig::load(blocktree_path).unwrap_or_else(|err| {
+        error!("Failed to load genesis from {:?}: {}", blocktree_path, err);
+        process::exit(1);
+    });
     let genesis_hash = genesis_config.hash();
     info!("genesis hash: {}", genesis_hash);
 

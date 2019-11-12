@@ -18,7 +18,7 @@ use memmap::Mmap;
 use std::{
     fs::{File, OpenOptions},
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -92,26 +92,50 @@ impl GenesisConfig {
         hash(&serialized.into_bytes())
     }
 
+    fn genesis_filename(ledger_path: &Path) -> PathBuf {
+        Path::new(ledger_path).join("genesis.bin")
+    }
+
     pub fn load(ledger_path: &Path) -> Result<Self, std::io::Error> {
+        let filename = Self::genesis_filename(&ledger_path);
         let file = OpenOptions::new()
             .read(true)
-            .open(&Path::new(ledger_path).join("genesis.bin"))
-            .expect("Unable to open genesis file");
+            .open(&filename)
+            .map_err(|err| {
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Unable to open {:?}: {:?}", filename, err),
+                )
+            })?;
 
         //UNSAFE: Required to create a Mmap
-        let mem = unsafe { Mmap::map(&file).expect("failed to map the genesis file") };
-        let genesis_config = deserialize(&mem)
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))?;
+        let mem = unsafe { Mmap::map(&file) }.map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Unable to map {:?}: {:?}", filename, err),
+            )
+        })?;
+
+        let genesis_config = deserialize(&mem).map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Unable to deserialize {:?}: {:?}", filename, err),
+            )
+        })?;
         Ok(genesis_config)
     }
 
     pub fn write(&self, ledger_path: &Path) -> Result<(), std::io::Error> {
-        let serialized = serialize(&self)
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))?;
+        let serialized = serialize(&self).map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Unable to serialize: {:?}", err),
+            )
+        })?;
 
         std::fs::create_dir_all(&ledger_path)?;
 
-        let mut file = File::create(&ledger_path.join("genesis.bin"))?;
+        let mut file = File::create(Self::genesis_filename(&ledger_path))?;
         file.write_all(&serialized)
     }
 
