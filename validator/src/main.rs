@@ -224,15 +224,13 @@ fn check_vote_account(
         if found_vote_account.authorized_voter != *voting_pubkey {
             return Err(format!(
                 "account's authorized voter ({}) does not match to the given voting keypair ({}).",
-                found_vote_account.authorized_voter,
-                voting_pubkey
+                found_vote_account.authorized_voter, voting_pubkey
             ));
         }
         if found_vote_account.node_pubkey != *node_pubkey {
             return Err(format!(
                 "account's node pubkey does ({}) not match to the given identity keypair ({}).",
-                found_vote_account.authorized_voter,
-                node_pubkey
+                found_vote_account.authorized_voter, node_pubkey
             ));
         }
     } else {
