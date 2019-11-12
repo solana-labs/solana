@@ -1,4 +1,7 @@
-use crate::local_cluster::{ClusterConfig, LocalCluster};
+#[macro_use]
+extern crate solana_ledger;
+
+use log::*;
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
 use solana_core::{
@@ -10,6 +13,7 @@ use solana_core::{
     validator::ValidatorConfig,
 };
 use solana_ledger::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
+use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     genesis_config::create_genesis_config,

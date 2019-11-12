@@ -1,8 +1,3 @@
-use crate::{
-    cluster::Cluster,
-    cluster_tests,
-    local_cluster::{ClusterConfig, LocalCluster},
-};
 use log::*;
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
@@ -11,6 +6,11 @@ use solana_core::{
     gossip_service::discover_cluster, validator::ValidatorConfig,
 };
 use solana_ledger::{bank_forks::SnapshotConfig, blocktree::Blocktree, snapshot_utils};
+use solana_local_cluster::{
+    cluster::Cluster,
+    cluster_tests,
+    local_cluster::{ClusterConfig, LocalCluster},
+};
 use solana_runtime::accounts_db::AccountsDB;
 use solana_sdk::{
     client::SyncClient,

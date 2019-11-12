@@ -1,10 +1,12 @@
-use crate::local_cluster::{ClusterConfig, LocalCluster};
+use log::*;
 use solana_bench_exchange::bench::{airdrop_lamports, do_bench_exchange, Config};
 use solana_core::gossip_service::{discover_cluster, get_multi_client};
 use solana_core::validator::ValidatorConfig;
 use solana_drone::drone::run_local_drone;
 use solana_exchange_api::exchange_processor::process_instruction;
 use solana_exchange_api::id;
+use solana_exchange_program::solana_exchange_program;
+use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;
 use solana_sdk::genesis_config::create_genesis_config;

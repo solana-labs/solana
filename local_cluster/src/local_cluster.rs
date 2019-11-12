@@ -1,4 +1,5 @@
 use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
+use log::*;
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
     archiver::Archiver,

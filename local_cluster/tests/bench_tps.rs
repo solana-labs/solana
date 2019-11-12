@@ -1,4 +1,3 @@
-use crate::local_cluster::{ClusterConfig, LocalCluster};
 use serial_test_derive::serial;
 use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs};
 use solana_bench_tps::cli::Config;
@@ -6,6 +5,7 @@ use solana_client::thin_client::create_client;
 use solana_core::cluster_info::VALIDATOR_PORT_RANGE;
 use solana_core::validator::ValidatorConfig;
 use solana_drone::drone::run_local_drone;
+use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 #[cfg(feature = "move")]
 use solana_sdk::move_loader::solana_move_loader_program;
 use solana_sdk::signature::{Keypair, KeypairUtil};
