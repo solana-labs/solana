@@ -23,7 +23,22 @@ download() {
 }
 
 # Install or upgrade xargo
-cargo +nightly install xargo -Z install-upgrade
+regex=".*xargo[= \"]+([0-9]+.[0-9]+.[0-9]+).*"
+if [[ $(xargo --version 2>&1) =~  $regex ]]; then
+    current=${BASH_REMATCH[1]}
+else
+    echo "${LINENO}: Failed to get current version of xargo!"; exit
+fi
+if [[ $(cargo search --limit 1 xargo) =~  $regex ]]; then
+    latest=${BASH_REMATCH[1]}
+else
+    echo "Failed to get latest version of xargo!"; exit
+fi
+if [[ $current != $latest ]]
+then
+    echo "Updating xargo from $current to $latest"
+    cargo install xargo --force
+fi
 xargo --version > xargo.md 2>&1
 
 # Install Criterion
