@@ -204,37 +204,39 @@ fn create_rpc_client(
 
 fn check_vote_account(
     rpc_client: &RpcClient,
-    vote_account: &Pubkey,
-    voting_keypair: &Pubkey,
-    identity_keypair: &Pubkey,
+    vote_pubkey: &Pubkey,
+    voting_pubkey: &Pubkey,
+    node_pubkey: &Pubkey,
 ) -> Result<(), String> {
     let found_account = rpc_client
-        .get_account(vote_account)
+        .get_account(vote_pubkey)
         .map_err(|err| err.to_string())?;
 
     if found_account.owner != solana_vote_api::id() {
         return Err(format!(
             "not a vote account (owned by {}): {}",
-            found_account.owner, vote_account
+            found_account.owner, vote_pubkey
         ));
     }
 
     let found_vote_account = solana_vote_api::vote_state::VoteState::from(&found_account);
     if let Some(found_vote_account) = found_vote_account {
-        if found_vote_account.authorized_voter != *voting_keypair {
+        if found_vote_account.authorized_voter != *voting_pubkey {
             return Err(format!(
-                "authorized voter does not match to given voting keypair: {}",
-                found_vote_account.authorized_voter
+                "account's authorized voter ({}) does not match to the given voting keypair ({}).",
+                found_vote_account.authorized_voter,
+                voting_pubkey
             ));
         }
-        if found_vote_account.node_pubkey != *identity_keypair {
+        if found_vote_account.node_pubkey != *node_pubkey {
             return Err(format!(
-                "node pubkey does not match to given identity keypair: {}",
-                found_vote_account.authorized_voter
+                "account's node pubkey does ({}) not match to the given identity keypair ({}).",
+                found_vote_account.authorized_voter,
+                node_pubkey
             ));
         }
     } else {
-        return Err(format!("invalid vote account data: {}", vote_account));
+        return Err(format!("invalid vote account data: {}", vote_pubkey));
     }
 
     Ok(())
