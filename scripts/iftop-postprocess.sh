@@ -26,7 +26,8 @@ awk '{ if ($3 ~ "=>") { print $2, $7 } else if ($2 ~ "<=") { print $1, $6 }} ' <
 if [ "$#" -lt 3 ]; then
   solana-log-analyzer iftop -f "$2"
 else
-  solana-log-analyzer iftop -f "$2" map-IP --list "$3"
+  list=`cat $3`
+  solana-log-analyzer iftop -f "$2" map-IP --list "$list"
 fi
 
 exit 1

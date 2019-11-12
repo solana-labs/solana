@@ -101,20 +101,19 @@ fn map_ip_address(mappings: &[IPAddrMapping], target: String) -> String {
 
 fn process_iftop_logs(matches: &ArgMatches) {
     let mut map_list: Vec<IPAddrMapping> = vec![];
-    match matches.subcommand() {
-        ("map-IP", Some(args_matches)) => {
-            let mut list = args_matches
-                .value_of("list")
-                .expect("Missing list of IP address mappings")
-                .to_string();
-            list.insert(0, '[');
-            let terminate_at = list.rfind('}').expect("Didn't find a terminating '}'") + 1;
-            let _ = list.split_off(terminate_at);
-            list.push(']');
-            map_list =
-                serde_json::from_str(&list).expect("Failed to parse IP address mapping list");
-        }
-        _ => {}
+    if let ("map-IP", Some(args_matches)) = matches.subcommand() {
+        let mut list = args_matches
+            .value_of("list")
+            .expect("Missing list of IP address mappings")
+            .to_string();
+        list.insert(0, '[');
+        let terminate_at = list
+            .rfind('}')
+            .expect("Didn't find a terminating '}' in IP list")
+            + 1;
+        let _ = list.split_off(terminate_at);
+        list.push(']');
+        map_list = serde_json::from_str(&list).expect("Failed to parse IP address mapping list");
     };
 
     let log_path = PathBuf::from(value_t_or_exit!(matches, "file", String));
