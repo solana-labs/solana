@@ -182,17 +182,15 @@ fn create_rpc_client(
     )
     .map_err(|err| err.to_string())?;
 
-    let rpc_addr = nodes
-        .iter()
-        .find_map(|contact_info| {
-            if contact_info.gossip == entrypoint.gossip
-                && ContactInfo::is_valid_address(&contact_info.rpc)
-            {
-                Some(contact_info.rpc)
-            } else {
-                None
-            }
-        });
+    let rpc_addr = nodes.iter().find_map(|contact_info| {
+        if contact_info.gossip == entrypoint.gossip
+            && ContactInfo::is_valid_address(&contact_info.rpc)
+        {
+            Some(contact_info.rpc)
+        } else {
+            None
+        }
+    });
 
     if let Some(rpc_addr) = rpc_addr {
         Ok((rpc_addr, RpcClient::new_socket(rpc_addr)))
@@ -224,10 +222,16 @@ fn check_vote_account(
     let found_vote_account = solana_vote_api::vote_state::VoteState::from(&found_account);
     if let Some(found_vote_account) = found_vote_account {
         if found_vote_account.authorized_voter != *voting_keypair {
-            return Err(format!("authorized voter does not match to given voting keypair: {}", found_vote_account.authorized_voter));
+            return Err(format!(
+                "authorized voter does not match to given voting keypair: {}",
+                found_vote_account.authorized_voter
+            ));
         }
         if found_vote_account.node_pubkey != *identity_keypair {
-            return Err(format!("node pubkey does not match to given identity keypair: {}", found_vote_account.authorized_voter));
+            return Err(format!(
+                "node pubkey does not match to given identity keypair: {}",
+                found_vote_account.authorized_voter
+            ));
         }
     } else {
         return Err(format!("invalid vote account data: {}", vote_account));
@@ -706,7 +710,13 @@ pub fn main() {
 
         if let Ok((rpc_addr, rpc_client)) = create_rpc_client(cluster_entrypoint) {
             if !validator_config.voting_disabled {
-                check_vote_account(&rpc_client, &vote_account, &voting_keypair.pubkey(), &identity_keypair.pubkey()).unwrap_or_else(|err| {
+                check_vote_account(
+                    &rpc_client,
+                    &vote_account,
+                    &voting_keypair.pubkey(),
+                    &identity_keypair.pubkey(),
+                )
+                .unwrap_or_else(|err| {
                     error!("Failed to check vote account: {}", err);
                     exit(1);
                 });
