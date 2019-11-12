@@ -1,9 +1,24 @@
+use jsonrpc_core::Result as JsonResult;
 use serde_json::{json, Value};
 use solana_sdk::{
     clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
 };
-use std::{error, fmt};
+use std::{error, fmt, io};
+
+pub type RpcResponseIn<T> = JsonResult<Response<T>>;
+pub type RpcResponse<T> = io::Result<Response<T>>;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RpcResponseContext {
+    pub slot: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Response<T> {
+    pub context: RpcResponseContext,
+    pub value: T,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]

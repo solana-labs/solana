@@ -229,7 +229,9 @@ mod tests {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_balance(&mint_keypair.pubkey(), None)
+                .get_balance(Ok(mint_keypair.pubkey()), None)
+                .unwrap()
+                .value
         );
         rpc_service.exit();
         rpc_service.join().unwrap();

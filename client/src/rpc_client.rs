@@ -1,3 +1,4 @@
+use crate::rpc_request::{Response, RpcResponse};
 use crate::{
     client_error::ClientError,
     generic_rpc_client_request::GenericRpcClientRequest,
@@ -55,31 +56,39 @@ impl RpcClient {
         }
     }
 
-    pub fn confirm_transaction(&self, signature: &str) -> Result<bool, ClientError> {
-        self.confirm_transaction_with_commitment(signature, CommitmentConfig::default())
+    pub fn confirm_transaction(&self, signature: &str) -> io::Result<bool> {
+        Ok(self
+            .confirm_transaction_with_commitment(signature, CommitmentConfig::default())?
+            .value)
     }
 
     pub fn confirm_transaction_with_commitment(
         &self,
         signature: &str,
         commitment_config: CommitmentConfig,
-    ) -> Result<bool, ClientError> {
+    ) -> RpcResponse<bool> {
         let params = json!(signature);
-        let response = self.client.send(
-            &RpcRequest::ConfirmTransaction,
-            Some(params),
-            0,
-            Some(commitment_config),
-        )?;
-        if response.as_bool().is_none() {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Received result of an unexpected type",
+        let response = self
+            .client
+            .send(
+                &RpcRequest::ConfirmTransaction,
+                Some(params),
+                0,
+                Some(commitment_config),
             )
-            .into())
-        } else {
-            Ok(response.as_bool().unwrap())
-        }
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("ConfirmTransaction request failure {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value::<Response<bool>>(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Received result of an unexpected type {:?}", err),
+            )
+        })
     }
 
     pub fn send_transaction(&self, transaction: &Transaction) -> Result<String, ClientError> {
@@ -378,46 +387,69 @@ impl RpcClient {
         retries: usize,
     ) -> Result<Option<u64>, Box<dyn error::Error>> {
         let params = json!(format!("{}", pubkey));
-        let res = self
+        let balance_json = self
             .client
-            .send(&RpcRequest::GetBalance, Some(params), retries, None)?
-            .as_u64();
-        Ok(res)
+            .send(&RpcRequest::GetBalance, Some(params), retries, None)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("RetryGetBalance request failure: {:?}", err),
+                )
+            })?;
+
+        Ok(Some(
+            serde_json::from_value::<Response<u64>>(balance_json)
+                .map_err(|err| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("RetryGetBalance parse failure: {:?}", err),
+                    )
+                })?
+                .value,
+        ))
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
-        self.get_account_with_commitment(pubkey, CommitmentConfig::default())
+        Ok(self
+            .get_account_with_commitment(pubkey, CommitmentConfig::default())
+            .map(|x| x.value.unwrap())?)
     }
 
     pub fn get_account_with_commitment(
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<Account> {
+    ) -> RpcResponse<Option<Account>> {
         let params = json!(format!("{}", pubkey));
         let response = self.client.send(
             &RpcRequest::GetAccountInfo,
             Some(params),
             0,
-            commitment_config.ok(),
+            Some(commitment_config),
         );
 
         response
-            .and_then(|account_json| {
-                let account: Account = serde_json::from_value(account_json)?;
-                trace!("Response account {:?} {:?}", pubkey, account);
-                Ok(account)
+            .map(|result_json| {
+                if result_json.is_null() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("AccountNotFound: pubkey={}", pubkey),
+                    ));
+                }
+                let result = serde_json::from_value::<Response<Option<Account>>>(result_json)?;
+                trace!("Response account {:?} {:?}", pubkey, result);
+                Ok(result)
             })
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("AccountNotFound: pubkey={}: {}", pubkey, err),
                 )
-            })
+            })?
     }
 
     pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
-        self.get_account(pubkey).map(|account| account.data)
+        Ok(self.get_account(pubkey).unwrap().data)
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> io::Result<u64> {
@@ -456,14 +488,16 @@ impl RpcClient {
 
     /// Request the balance of the account `pubkey`.
     pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.get_balance_with_commitment(pubkey, CommitmentConfig::default())
+        Ok(self
+            .get_balance_with_commitment(pubkey, CommitmentConfig::default())?
+            .value)
     }
 
     pub fn get_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<u64> {
+    ) -> RpcResponse<u64> {
         let params = json!(pubkey.to_string());
         let balance_json = self
             .client
@@ -479,7 +513,8 @@ impl RpcClient {
                     format!("GetBalance request failure: {:?}", err),
                 )
             })?;
-        serde_json::from_value(balance_json).map_err(|err| {
+
+        serde_json::from_value::<Response<u64>>(balance_json).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetBalance parse failure: {:?}", err),
@@ -553,13 +588,15 @@ impl RpcClient {
     }
 
     pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {
-        self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
+        Ok(self
+            .get_recent_blockhash_with_commitment(CommitmentConfig::default())?
+            .value)
     }
 
     pub fn get_recent_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<(Hash, FeeCalculator)> {
+    ) -> RpcResponse<(Hash, FeeCalculator)> {
         let response = self
             .client
             .send(
@@ -575,21 +612,27 @@ impl RpcClient {
                 )
             })?;
 
-        let (blockhash, fee_calculator) =
-            serde_json::from_value::<(String, FeeCalculator)>(response).map_err(|err| {
+        let Response {
+            context,
+            value: (blockhash_str, fee_calculator),
+        } = serde_json::from_value::<Response<(String, FeeCalculator)>>(response).map_err(
+            |err| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("GetRecentBlockhash parse failure: {:?}", err),
                 )
-            })?;
-
-        let blockhash = blockhash.parse().map_err(|err| {
+            },
+        )?;
+        let blockhash = blockhash_str.parse().map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetRecentBlockhash hash parse failure: {:?}", err),
             )
         })?;
-        Ok((blockhash, fee_calculator))
+        Ok(Response {
+            context,
+            value: (blockhash, fee_calculator),
+        })
     }
 
     pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)> {
@@ -658,7 +701,7 @@ impl RpcClient {
         loop {
             match self.get_balance_with_commitment(&pubkey, commitment_config.clone()) {
                 Ok(bal) => {
-                    return Ok(bal);
+                    return Ok(bal.value);
                 }
                 Err(e) => {
                     sleep(*polling_frequency);

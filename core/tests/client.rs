@@ -1,5 +1,6 @@
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::KeypairUtil;
 use solana_sdk::system_transaction;
@@ -22,7 +23,6 @@ fn test_rpc_client() {
     );
 
     assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 0);
-
     assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 10000);
 
     let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
@@ -34,14 +34,13 @@ fn test_rpc_client() {
 
     let now = Instant::now();
     while now.elapsed().as_secs() <= 20 {
-        let response = client.confirm_transaction(signature.as_str());
+        let response = client
+            .confirm_transaction_with_commitment(signature.as_str(), CommitmentConfig::default())
+            .unwrap();
 
-        match response {
-            Ok(true) => {
-                confirmed_tx = true;
-                break;
-            }
-            _ => (),
+        if response.value {
+            confirmed_tx = true;
+            break;
         }
 
         sleep(Duration::from_millis(500));

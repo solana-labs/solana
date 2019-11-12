@@ -96,6 +96,13 @@ If commitment configuration is not provided, the node will default to `"commitme
 
 Only methods that query bank state accept the commitment parameter. They are indicated in the API Reference below.
 
+#### RpcResponse Structure
+Many methods that take a commitment parameter return an RpcResponse JSON object comprised of two parts:
+
+* `context` : An RpcResponseContext JSON structure including a `slot` field at which the operation was evaluated.
+* `value` : The value returned by the operation itself.
+
+
 ## JSON RPC API Reference
 
 ### confirmTransaction
@@ -109,7 +116,7 @@ Returns a transaction receipt
 
 #### Results:
 
-* `boolean` - Transaction status, true if Transaction is confirmed
+* `RpcResponse<boolean>` - RpcResponse JSON object with `value` field set to Transaction status, boolean true if Transaction is confirmed
 
 #### Example:
 
@@ -118,7 +125,7 @@ Returns a transaction receipt
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"confirmTransaction", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":true,"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":true},"id":1}
 ```
 
 ### getAccountInfo
@@ -132,8 +139,9 @@ Returns all information associated with the account of provided Pubkey
 
 #### Results:
 
-The result field will be a JSON object with the following sub fields:
+The result value will be an RpcResponse JSON object containing an AccountInfo JSON object.
 
+* `RpcResponse<AccountInfo>`, RpcResponse JSON object with `value` field set to AccountInfo, a JSON object containing:
 * `lamports`, number of lamports assigned to this account, as a signed 64-bit integer
 * `owner`, array of 32 bytes representing the program this account has been assigned to
 * `data`, array of bytes representing any data associated with the account
@@ -146,7 +154,7 @@ The result field will be a JSON object with the following sub fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["2gVkYWexTHR5Hb2aLeQN3tnngvWzisFKXDUPrgMHpdST"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"executable":false,"owner":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lamports":1,"data":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0.21.0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"executable":false,"owner":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lamports":1,"data":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0.21.0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]}},"id":1}
 ```
 
 ### getBalance
@@ -160,7 +168,7 @@ Returns the balance of the account of provided Pubkey
 
 #### Results:
 
-* `integer` - quantity, as a signed 64-bit integer
+* `RpcResponse<integer>` - RpcResponse JSON object with `value` field set to quantity, as a signed 64-bit integer
 
 #### Example:
 
@@ -169,7 +177,7 @@ Returns the balance of the account of provided Pubkey
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":0,"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":0},"id":1}
 ```
 
 ### getBlockCommitment
@@ -410,8 +418,9 @@ Returns a recent block hash from the ledger, and a fee schedule that can be used
 
 #### Results:
 
-An array consisting of
+An RpcResponse containing an array consisting of a string blockhash and FeeCalculator JSON object.
 
+* `RpcResponse<array>` - RpcResponse JSON object with `value` field set to an array including:
 * `string` - a Hash as base-58 encoded string
 * `FeeCalculator object` - the fee schedule for this block hash
 
@@ -422,7 +431,7 @@ An array consisting of
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":["GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",{"lamportsPerSignature": 0}],"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":["GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",{"lamportsPerSignature": 0}]},"id":1}
 ```
 
 ### getSignatureStatus
