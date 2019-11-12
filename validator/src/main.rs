@@ -281,14 +281,6 @@ fn initialize_ledger_path(
 
 #[allow(clippy::cognitive_complexity)]
 pub fn main() {
-    solana_logger::setup_with_filter(
-        &[
-            "solana=info", /* info logging for all solana modules */
-            "rpc=trace",   /* json_rpc request/response logging */
-        ]
-        .join(","),
-    );
-
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
 
@@ -518,21 +510,6 @@ pub fn main() {
         Keypair::new()
     };
 
-    let mut validator_config = ValidatorConfig::default();
-
-    if matches.is_present("no_voting") {
-        validator_config.voting_disabled = true;
-    }
-
-    let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
-        // Disable because validator rejects non voting accounts (= ephemeral keypairs)
-        if ephemeral_voting_keypair {
-            warn!("Disabled voting due to the use of ephemeral key for vote account");
-            validator_config.voting_disabled = true;
-        };
-        voting_keypair.pubkey()
-    });
-
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let entrypoint = matches.value_of("entrypoint");
     let init_complete_file = matches.value_of("init_complete_file");
@@ -542,6 +519,7 @@ pub fn main() {
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
     let rpc_port = value_t!(matches, "rpc_port", u16);
 
+    let mut validator_config = ValidatorConfig::default();
     validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
     validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
 
@@ -632,6 +610,28 @@ pub fn main() {
             ()
         }
     };
+
+    solana_logger::setup_with_filter(
+        &[
+            "solana=info", /* info logging for all solana modules */
+            "rpc=trace",   /* json_rpc request/response logging */
+        ]
+        .join(","),
+    );
+
+    if matches.is_present("no_voting") {
+        validator_config.voting_disabled = true;
+    }
+
+    let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
+        // Disable because validator rejects non voting accounts (= ephemeral keypairs)
+        if ephemeral_voting_keypair {
+            warn!("Disabled voting due to the use of ephemeral key for vote account");
+            validator_config.voting_disabled = true;
+        };
+        voting_keypair.pubkey()
+    });
+
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
