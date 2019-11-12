@@ -11,8 +11,9 @@ use solana_ledger::{
 };
 use solana_sdk::{
     clock::Slot, genesis_config::GenesisConfig, instruction_processor_utils::limited_deserialize,
-    native_token::lamports_to_sol,
+    native_token::lamports_to_sol, pubkey::Pubkey,
 };
+use solana_vote_api::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::File,
@@ -140,11 +141,12 @@ fn output_ledger(blocktree: Blocktree, starting_slot: Slot, method: LedgerOutput
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn graph_forks(
-    dot_file: &str,
     bank_forks: BankForks,
     bank_forks_info: Vec<blocktree_processor::BankForksInfo>,
-) {
+    include_all_votes: bool,
+) -> String {
     // Search all forks and collect the last vote made by each validator
     let mut last_votes = HashMap::new();
     for bfi in &bank_forks_info {
@@ -155,8 +157,7 @@ fn graph_forks(
             .iter()
             .fold(0, |acc, (_, (stake, _))| acc + stake);
         for (_, (stake, vote_account)) in bank.vote_accounts() {
-            let vote_state =
-                solana_vote_api::vote_state::VoteState::from(&vote_account).unwrap_or_default();
+            let vote_state = VoteState::from(&vote_account).unwrap_or_default();
             if let Some(last_vote) = vote_state.votes.iter().last() {
                 let entry = last_votes.entry(vote_state.node_pubkey).or_insert((
                     last_vote.slot,
@@ -189,19 +190,38 @@ fn graph_forks(
     dot.push("  subgraph cluster_banks {".to_string());
     dot.push("    style=invis".to_string());
     let mut styled_slots = HashSet::new();
+    let mut all_votes: HashMap<Pubkey, HashMap<Slot, VoteState>> = HashMap::new();
     for bfi in &bank_forks_info {
         let bank = bank_forks.banks.get(&bfi.bank_slot).unwrap();
         let mut bank = bank.clone();
 
         let mut first = true;
         loop {
+            for (_, (_, vote_account)) in bank.vote_accounts() {
+                let vote_state = VoteState::from(&vote_account).unwrap_or_default();
+                if let Some(last_vote) = vote_state.votes.iter().last() {
+                    let validator_votes = all_votes.entry(vote_state.node_pubkey).or_default();
+                    validator_votes
+                        .entry(last_vote.slot)
+                        .or_insert_with(|| vote_state.clone());
+                }
+            }
+
             if !styled_slots.contains(&bank.slot()) {
                 dot.push(format!(
-                    r#"    "{}"[label="{} (epoch {})\nleader: {}{}",style="{}{}"];"#,
+                    r#"    "{}"[label="{} (epoch {})\nleader: {}{}{}",style="{}{}"];"#,
                     bank.slot(),
                     bank.slot(),
                     bank.epoch(),
                     bank.collector_id(),
+                    if let Some(parent) = bank.parent() {
+                        format!(
+                            "\ntransactions: {}",
+                            bank.transaction_count() - parent.transaction_count(),
+                        )
+                    } else {
+                        "".to_string()
+                    },
                     if let Some((votes, stake, total_stake)) =
                         slot_stake_and_vote_count.get(&bank.slot())
                     {
@@ -262,8 +282,12 @@ fn graph_forks(
     let mut lowest_last_vote_slot = std::u64::MAX;
     let mut lowest_total_stake = 0;
     for (node_pubkey, (last_vote_slot, vote_state, stake, total_stake)) in &last_votes {
+        all_votes.entry(*node_pubkey).and_modify(|validator_votes| {
+            validator_votes.remove(&last_vote_slot);
+        });
+
         dot.push(format!(
-            r#"  "{}"[shape=box,label="validator: {}\nstake: {} SOL\nroot slot: {}\nlatest votes:\n{}"];"#,
+            r#"  "last vote {}"[shape=box,label="Latest validator vote: {}\nstake: {} SOL\nroot slot: {}\nvote history:\n{}"];"#,
             node_pubkey,
             node_pubkey,
             lamports_to_sol(*stake),
@@ -277,7 +301,7 @@ fn graph_forks(
         ));
 
         dot.push(format!(
-            r#"  "{}" -> "{}" [style=dotted,label="last vote"];"#,
+            r#"  "last vote {}" -> "{}" [style=dashed,label="latest vote"];"#,
             node_pubkey,
             if styled_slots.contains(&last_vote_slot) {
                 last_vote_slot.to_string()
@@ -304,12 +328,40 @@ fn graph_forks(
         ));
     }
 
-    dot.push("}".to_string());
+    // Add for vote information from all banks.
+    if include_all_votes {
+        for (node_pubkey, validator_votes) in &all_votes {
+            for (vote_slot, vote_state) in validator_votes {
+                dot.push(format!(
+                    r#"  "{} vote {}"[shape=box,style=dotted,label="validator vote: {}\nroot slot: {}\nvote history:\n{}"];"#,
+                    node_pubkey,
+                    vote_slot,
+                    node_pubkey,
+                    vote_state.root_slot.unwrap_or(0),
+                    vote_state
+                        .votes
+                        .iter()
+                        .map(|vote| format!("slot {} (conf={})", vote.slot, vote.confirmation_count))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ));
 
-    match File::create(dot_file).and_then(|mut file| file.write_all(&dot.join("\n").into_bytes())) {
-        Ok(_) => println!("Wrote {}", dot_file),
-        Err(err) => eprintln!("Unable to write {}: {}", dot_file, err),
-    };
+                dot.push(format!(
+                    r#"  "{} vote {}" -> "{}" [style=dotted,label="vote"];"#,
+                    node_pubkey,
+                    vote_slot,
+                    if styled_slots.contains(&vote_slot) {
+                        vote_slot.to_string()
+                    } else {
+                        "...".to_string()
+                    },
+                ));
+            }
+        }
+    }
+
+    dot.push("}".to_string());
+    dot.join("\n")
 }
 
 fn main() {
@@ -401,6 +453,12 @@ fn main() {
                     .value_name("FILENAME.GV")
                     .takes_value(true)
                     .help("Create a Graphviz DOT file representing the active forks once the ledger is verified"),
+            )
+            .arg(
+                Arg::with_name("graph_forks_include_all_votes")
+                    .long("graph-forks-include-all-votes")
+                    .requires("graph_forks")
+                    .help("Include all votes in forks graph"),
             )
         ).subcommand(
             SubCommand::with_name("prune")
@@ -520,7 +578,18 @@ fn main() {
                     println!("Ok");
 
                     if let Some(dot_file) = arg_matches.value_of("graph_forks") {
-                        graph_forks(&dot_file, bank_forks, bank_forks_info);
+                        let dot = graph_forks(
+                            bank_forks,
+                            bank_forks_info,
+                            arg_matches.is_present("graph_forks_include_all_votes"),
+                        );
+
+                        match File::create(dot_file)
+                            .and_then(|mut file| file.write_all(&dot.into_bytes()))
+                        {
+                            Ok(_) => println!("Wrote {}", dot_file),
+                            Err(err) => eprintln!("Unable to write {}: {}", dot_file, err),
+                        };
                     }
                 }
                 Err(err) => {
