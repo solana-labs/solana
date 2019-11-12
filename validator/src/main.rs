@@ -204,19 +204,36 @@ fn create_rpc_client(
     }
 }
 
-fn check_vote_account(rpc_client: &RpcClient, vote_account: &Pubkey) -> Result<(), String> {
-    let found_vote_account = rpc_client
+fn check_vote_account(
+    rpc_client: &RpcClient,
+    vote_account: &Pubkey,
+    voting_keypair: &Pubkey,
+    identity_keypair: &Pubkey,
+) -> Result<(), String> {
+    let found_account = rpc_client
         .get_account(vote_account)
         .map_err(|err| err.to_string())?;
 
-    if found_vote_account.owner == solana_vote_api::id() {
-        Ok(())
-    } else {
-        Err(format!(
+    if found_account.owner != solana_vote_api::id() {
+        return Err(format!(
             "not a vote account (owned by {}): {}",
-            found_vote_account.owner, vote_account
-        ))
+            found_account.owner, vote_account
+        ));
     }
+
+    let found_vote_account = solana_vote_api::vote_state::VoteState::from(&found_account);
+    if let Some(found_vote_account) = found_vote_account {
+        if found_vote_account.authorized_voter != *voting_keypair {
+            return Err(format!("authorized voter does not match to given voting keypair: {}", found_vote_account.authorized_voter));
+        }
+        if found_vote_account.node_pubkey != *identity_keypair {
+            return Err(format!("node pubkey does not match to given identity keypair: {}", found_vote_account.authorized_voter));
+        }
+    } else {
+        return Err(format!("invalid vote account data: {}", vote_account));
+    }
+
+    Ok(())
 }
 
 fn initialize_ledger_path(
@@ -689,7 +706,7 @@ pub fn main() {
 
         if let Ok((rpc_addr, rpc_client)) = create_rpc_client(cluster_entrypoint) {
             if !validator_config.voting_disabled {
-                check_vote_account(&rpc_client, &vote_account).unwrap_or_else(|err| {
+                check_vote_account(&rpc_client, &vote_account, &voting_keypair.pubkey(), &identity_keypair.pubkey()).unwrap_or_else(|err| {
                     error!("Failed to check vote account: {}", err);
                     exit(1);
                 });
