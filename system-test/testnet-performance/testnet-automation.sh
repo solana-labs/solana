@@ -104,7 +104,7 @@ function launchTestnet() {
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
-        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures \
+        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
         ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
@@ -114,7 +114,7 @@ function launchTestnet() {
       net/ec2.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
-        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures \
+        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
         ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
@@ -123,7 +123,8 @@ function launchTestnet() {
     # shellcheck disable=SC2086
       net/colo.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" $maybeEnableGpu \
-        -p "$TESTNET_TAG" ${ADDITIONAL_FLAGS[@]/#/" "}
+        -p "$TESTNET_TAG" $maybePublicIpAddresses \
+        ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     *)
       echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
@@ -254,6 +255,13 @@ fi
 if [[ "$ALLOW_BOOT_FAILURES" = "true" ]] ; then
   maybeCreateAllowBootFailures="--allow-boot-failures"
   maybeStartAllowBootFailures="-F"
+fi
+
+if [[ -z $USE_PUBLIC_IP_ADDRESSES ]] ; then
+  USE_PUBLIC_IP_ADDRESSES=false
+fi
+if [[ "$USE_PUBLIC_IP_ADDRESSES" = "true" ]] ; then
+  maybePublicIpAddresses="-P"
 fi
 
 if [[ -z $CHANNEL ]]; then
