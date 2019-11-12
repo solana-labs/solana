@@ -46,7 +46,7 @@ impl Rent {
     /// minimum balance due for a given size Account::data.len()
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
-        ((self.base_rent_per_year + bytes * self.lamports_per_byte_year) as f64
+        ((self.base_rent_per_year + (bytes * self.lamports_per_byte_year)) as f64
             * self.exemption_threshold) as u64
     }
 
