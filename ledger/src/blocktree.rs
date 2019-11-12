@@ -1988,7 +1988,7 @@ pub mod tests {
         let last_shred = shreds.pop().unwrap();
         assert!(last_shred.index() > 0);
         ledger
-            .insert_shreds(vec![last_shred.clone()], None)
+            .insert_shreds(vec![last_shred.clone()], None, false)
             .unwrap();
 
         let serialized_shred = ledger
@@ -2161,7 +2161,7 @@ pub mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blocktree::open(&ledger_path).unwrap();
-        ledger.insert_shreds(shreds, None).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
 
         let mut buf = [0; 4096];
         let (_, bytes) = ledger.get_data_shreds(slot, 0, 1, &mut buf).unwrap();
@@ -2228,7 +2228,7 @@ pub mod tests {
         // shreds starting from slot 0, index 0 should exist.
         assert!(shreds.len() > 1);
         let last_shred = shreds.pop().unwrap();
-        ledger.insert_shreds(vec![last_shred], None).unwrap();
+        ledger.insert_shreds(vec![last_shred], None, false).unwrap();
         assert!(ledger.get_slot_entries(0, 0, None).unwrap().is_empty());
 
         let meta = ledger
@@ -2238,7 +2238,7 @@ pub mod tests {
         assert!(meta.consumed == 0 && meta.received == num_shreds);
 
         // Insert the other shreds, check for consecutive returned entries
-        ledger.insert_shreds(shreds, None).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
         let result = ledger.get_slot_entries(0, 0, None).unwrap();
 
         assert_eq!(result, entries);
@@ -2272,7 +2272,7 @@ pub mod tests {
         // Insert shreds in reverse, check for consecutive returned shreds
         for i in (0..num_shreds).rev() {
             let shred = shreds.pop().unwrap();
-            ledger.insert_shreds(vec![shred], None).unwrap();
+            ledger.insert_shreds(vec![shred], None, false).unwrap();
             let result = ledger.get_slot_entries(0, 0, None).unwrap();
 
             let meta = ledger
@@ -2350,7 +2350,7 @@ pub mod tests {
             let entries = create_ticks(8, 0, Hash::default());
             let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false);
             blocktree
-                .insert_shreds(shreds, None)
+                .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
 
             let mut shreds1 = entries_to_test_shreds(entries[4..].to_vec(), 1, 0, false);
@@ -2358,7 +2358,7 @@ pub mod tests {
                 b.set_index(8 + i as u32);
             }
             blocktree
-                .insert_shreds(shreds1, None)
+                .insert_shreds(shreds1, None, false)
                 .expect("Expected successful write of shreds");
 
             assert_eq!(
@@ -2392,7 +2392,7 @@ pub mod tests {
                     index += 1;
                 }
                 blocktree
-                    .insert_shreds(shreds, None)
+                    .insert_shreds(shreds, None, false)
                     .expect("Expected successful write of shreds");
                 assert_eq!(
                     blocktree
@@ -2425,7 +2425,7 @@ pub mod tests {
                     entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false);
                 assert!(shreds.len() as u64 >= shreds_per_slot);
                 blocktree
-                    .insert_shreds(shreds, None)
+                    .insert_shreds(shreds, None, false)
                     .expect("Expected successful write of shreds");
                 assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), entries);
             }
@@ -2460,7 +2460,7 @@ pub mod tests {
                     }
                 }
 
-                blocktree.insert_shreds(odd_shreds, None).unwrap();
+                blocktree.insert_shreds(odd_shreds, None, false).unwrap();
 
                 assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), vec![]);
 
@@ -2478,7 +2478,7 @@ pub mod tests {
                     assert_eq!(meta.last_index, std::u64::MAX);
                 }
 
-                blocktree.insert_shreds(even_shreds, None).unwrap();
+                blocktree.insert_shreds(even_shreds, None, false).unwrap();
 
                 assert_eq!(
                     blocktree.get_slot_entries(slot, 0, None).unwrap(),
@@ -2511,13 +2511,17 @@ pub mod tests {
             // Discard first shred
             original_shreds.remove(0);
 
-            blocktree.insert_shreds(original_shreds, None).unwrap();
+            blocktree
+                .insert_shreds(original_shreds, None, false)
+                .unwrap();
 
             assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), vec![]);
 
             let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true);
             let num_shreds = duplicate_shreds.len() as u64;
-            blocktree.insert_shreds(duplicate_shreds, None).unwrap();
+            blocktree
+                .insert_shreds(duplicate_shreds, None, false)
+                .unwrap();
 
             assert_eq!(
                 blocktree.get_slot_entries(0, 0, None).unwrap(),
@@ -2547,16 +2551,20 @@ pub mod tests {
 
         // Insert second shred, but we're missing the first shred, so no consecutive
         // shreds starting from slot 0, index 0 should exist.
-        ledger.insert_shreds(vec![shreds.remove(1)], None).unwrap();
+        ledger
+            .insert_shreds(vec![shreds.remove(1)], None, false)
+            .unwrap();
         let timer = Duration::new(1, 0);
         assert!(recvr.recv_timeout(timer).is_err());
         // Insert first shred, now we've made a consecutive block
-        ledger.insert_shreds(vec![shreds.remove(0)], None).unwrap();
+        ledger
+            .insert_shreds(vec![shreds.remove(0)], None, false)
+            .unwrap();
         // Wait to get notified of update, should only be one update
         assert!(recvr.recv_timeout(timer).is_ok());
         assert!(recvr.try_recv().is_err());
         // Insert the rest of the ticks
-        ledger.insert_shreds(shreds, None).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
         // Wait to get notified of update, should only be one update
         assert!(recvr.recv_timeout(timer).is_ok());
         assert!(recvr.try_recv().is_err());
@@ -2575,7 +2583,7 @@ pub mod tests {
         }
 
         // Should be no updates, since no new chains from block 0 were formed
-        ledger.insert_shreds(shreds, None).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
         assert!(recvr.recv_timeout(timer).is_err());
 
         // Insert a shred for each slot that doesn't make a consecutive block, we
@@ -2588,7 +2596,7 @@ pub mod tests {
             })
             .collect();
 
-        ledger.insert_shreds(shreds, None).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
         assert!(recvr.recv_timeout(timer).is_err());
 
         // For slots 1..num_slots/2, fill in the holes in one batch insertion,
@@ -2596,13 +2604,13 @@ pub mod tests {
         let missing_shreds2 = missing_shreds
             .drain((num_slots / 2) as usize..)
             .collect_vec();
-        ledger.insert_shreds(missing_shreds, None).unwrap();
+        ledger.insert_shreds(missing_shreds, None, false).unwrap();
         assert!(recvr.recv_timeout(timer).is_ok());
         assert!(recvr.try_recv().is_err());
 
         // Fill in the holes for each of the remaining slots, we should get a single update
         // for each
-        ledger.insert_shreds(missing_shreds2, None).unwrap();
+        ledger.insert_shreds(missing_shreds2, None, false).unwrap();
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
@@ -2623,11 +2631,11 @@ pub mod tests {
 
         let shred0 = shreds.remove(0);
         // Insert all but the first shred in the slot, should not be considered complete
-        ledger.insert_shreds(shreds, None).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
         assert!(recvr.try_recv().is_err());
 
         // Insert first shred, slot should now be considered complete
-        ledger.insert_shreds(vec![shred0], None).unwrap();
+        ledger.insert_shreds(vec![shred0], None, false).unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![0]);
     }
 
@@ -2650,20 +2658,24 @@ pub mod tests {
 
         // Insert all but the first shred in the slot, should not be considered complete
         let orphan_child0 = orphan_child.remove(0);
-        ledger.insert_shreds(orphan_child, None).unwrap();
+        ledger.insert_shreds(orphan_child, None, false).unwrap();
         assert!(recvr.try_recv().is_err());
 
         // Insert first shred, slot should now be considered complete
-        ledger.insert_shreds(vec![orphan_child0], None).unwrap();
+        ledger
+            .insert_shreds(vec![orphan_child0], None, false)
+            .unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![slots[2]]);
 
         // Insert the shreds for the orphan_slot
         let orphan_shred0 = orphan_shreds.remove(0);
-        ledger.insert_shreds(orphan_shreds, None).unwrap();
+        ledger.insert_shreds(orphan_shreds, None, false).unwrap();
         assert!(recvr.try_recv().is_err());
 
         // Insert first shred, slot should now be considered complete
-        ledger.insert_shreds(vec![orphan_shred0], None).unwrap();
+        ledger
+            .insert_shreds(vec![orphan_shred0], None, false)
+            .unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![slots[1]]);
     }
 
@@ -2690,7 +2702,7 @@ pub mod tests {
             .collect();
 
         all_shreds.shuffle(&mut thread_rng());
-        ledger.insert_shreds(all_shreds, None).unwrap();
+        ledger.insert_shreds(all_shreds, None, false).unwrap();
         let mut result = recvr.try_recv().unwrap();
         result.sort();
         slots.push(disconnected_slot);
@@ -2714,7 +2726,7 @@ pub mod tests {
             let shreds1 = shreds
                 .drain(shreds_per_slot..2 * shreds_per_slot)
                 .collect_vec();
-            blocktree.insert_shreds(shreds1, None).unwrap();
+            blocktree.insert_shreds(shreds1, None, false).unwrap();
             let s1 = blocktree.meta(1).unwrap().unwrap();
             assert!(s1.next_slots.is_empty());
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
@@ -2726,7 +2738,7 @@ pub mod tests {
             let shreds2 = shreds
                 .drain(shreds_per_slot..2 * shreds_per_slot)
                 .collect_vec();
-            blocktree.insert_shreds(shreds2, None).unwrap();
+            blocktree.insert_shreds(shreds2, None, false).unwrap();
             let s2 = blocktree.meta(2).unwrap().unwrap();
             assert!(s2.next_slots.is_empty());
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
@@ -2744,7 +2756,7 @@ pub mod tests {
 
             // 3) Write to the zeroth slot, check that every slot
             // is now part of the trunk
-            blocktree.insert_shreds(shreds, None).unwrap();
+            blocktree.insert_shreds(shreds, None, false).unwrap();
             for i in 0..3 {
                 let s = blocktree.meta(i).unwrap().unwrap();
                 // The last slot will not chain to any other slots
@@ -2794,7 +2806,7 @@ pub mod tests {
             }
 
             // Write the shreds for every other slot
-            blocktree.insert_shreds(slots, None).unwrap();
+            blocktree.insert_shreds(slots, None, false).unwrap();
 
             // Check metadata
             for i in 0..num_slots {
@@ -2820,7 +2832,7 @@ pub mod tests {
             }
 
             // Write the shreds for the other half of the slots that we didn't insert earlier
-            blocktree.insert_shreds(missing_slots, None).unwrap();
+            blocktree.insert_shreds(missing_slots, None, false).unwrap();
 
             for i in 0..num_slots {
                 // Check that all the slots chain correctly once the missing slots
@@ -2866,9 +2878,13 @@ pub mod tests {
                 if slot % 3 == 0 {
                     let shred0 = shreds_for_slot.remove(0);
                     missing_shreds.push(shred0);
-                    blocktree.insert_shreds(shreds_for_slot, None).unwrap();
+                    blocktree
+                        .insert_shreds(shreds_for_slot, None, false)
+                        .unwrap();
                 } else {
-                    blocktree.insert_shreds(shreds_for_slot, None).unwrap();
+                    blocktree
+                        .insert_shreds(shreds_for_slot, None, false)
+                        .unwrap();
                 }
             }
 
@@ -2903,7 +2919,7 @@ pub mod tests {
             for slot_index in 0..num_slots {
                 if slot_index % 3 == 0 {
                     let shred = missing_shreds.remove(0);
-                    blocktree.insert_shreds(vec![shred], None).unwrap();
+                    blocktree.insert_shreds(vec![shred], None, false).unwrap();
 
                     for i in 0..num_slots {
                         let s = blocktree.meta(i as u64).unwrap().unwrap();
@@ -3084,7 +3100,9 @@ pub mod tests {
             // Write slot 2, which chains to slot 1. We're missing slot 0,
             // so slot 1 is the orphan
             let shreds_for_slot = shreds.drain((shreds_per_slot * 2)..).collect_vec();
-            blocktree.insert_shreds(shreds_for_slot, None).unwrap();
+            blocktree
+                .insert_shreds(shreds_for_slot, None, false)
+                .unwrap();
             let meta = blocktree
                 .meta(1)
                 .expect("Expect database get to succeed")
@@ -3095,7 +3113,9 @@ pub mod tests {
             // Write slot 1 which chains to slot 0, so now slot 0 is the
             // orphan, and slot 1 is no longer the orphan.
             let shreds_for_slot = shreds.drain(shreds_per_slot..).collect_vec();
-            blocktree.insert_shreds(shreds_for_slot, None).unwrap();
+            blocktree
+                .insert_shreds(shreds_for_slot, None, false)
+                .unwrap();
             let meta = blocktree
                 .meta(1)
                 .expect("Expect database get to succeed")
@@ -3112,12 +3132,12 @@ pub mod tests {
             // nothing should change
             let (shred4, _) = make_slot_entries(4, 0, 1);
             let (shred5, _) = make_slot_entries(5, 1, 1);
-            blocktree.insert_shreds(shred4, None).unwrap();
-            blocktree.insert_shreds(shred5, None).unwrap();
+            blocktree.insert_shreds(shred4, None, false).unwrap();
+            blocktree.insert_shreds(shred5, None, false).unwrap();
             assert_eq!(blocktree.get_orphans(None), vec![0]);
 
             // Write zeroth slot, no more orphans
-            blocktree.insert_shreds(shreds, None).unwrap();
+            blocktree.insert_shreds(shreds, None, false).unwrap();
             for i in 0..3 {
                 let meta = blocktree
                     .meta(i)
@@ -3163,11 +3183,11 @@ pub mod tests {
             let num_shreds = shreds.len();
             // Write shreds to the database
             if should_bulk_write {
-                blocktree.insert_shreds(shreds, None).unwrap();
+                blocktree.insert_shreds(shreds, None, false).unwrap();
             } else {
                 for _ in 0..num_shreds {
                     let shred = shreds.remove(0);
-                    blocktree.insert_shreds(vec![shred], None).unwrap();
+                    blocktree.insert_shreds(vec![shred], None, false).unwrap();
                 }
             }
 
@@ -3211,7 +3231,7 @@ pub mod tests {
             s.set_index(i as u32 * gap as u32);
             s.set_slot(slot);
         }
-        blocktree.insert_shreds(shreds, None).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
 
         // Index of the first shred is 0
         // Index of the second shred is "gap"
@@ -3293,7 +3313,7 @@ pub mod tests {
         let shreds: Vec<_> = (0..64)
             .map(|i| Shred::new_from_data(slot, (i * gap) as u32, 0, None, false, false, i as u8))
             .collect();
-        blocktree.insert_shreds(shreds, None).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
 
         let empty: Vec<u64> = vec![];
         assert_eq!(
@@ -3336,7 +3356,7 @@ pub mod tests {
         shreds[1].set_index(OTHER as u32);
 
         // Insert one shred at index = first_index
-        blocktree.insert_shreds(shreds, None).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
 
         const STARTS: u64 = OTHER * 2;
         const END: u64 = OTHER * 3;
@@ -3370,7 +3390,7 @@ pub mod tests {
         let shreds = entries_to_test_shreds(entries, slot, 0, true);
         let num_shreds = shreds.len();
 
-        blocktree.insert_shreds(shreds, None).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
 
         let empty: Vec<u64> = vec![];
         for i in 0..num_shreds as u64 {
@@ -3397,7 +3417,7 @@ pub mod tests {
 
             // Insert the first 5 shreds, we don't have a "is_last" shred yet
             blocktree
-                .insert_shreds(shreds[0..5].to_vec(), None)
+                .insert_shreds(shreds[0..5].to_vec(), None, false)
                 .unwrap();
 
             // Trying to insert a shred less than `slot_meta.consumed` should fail
@@ -3417,7 +3437,7 @@ pub mod tests {
             // Trying to insert the same shred again should fail
             // skip over shred 5 so the `slot_meta.consumed` doesn't increment
             blocktree
-                .insert_shreds(shreds[6..7].to_vec(), None)
+                .insert_shreds(shreds[6..7].to_vec(), None, false)
                 .unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
@@ -3434,7 +3454,7 @@ pub mod tests {
             // Trying to insert another "is_last" shred with index < the received index should fail
             // skip over shred 7
             blocktree
-                .insert_shreds(shreds[8..9].to_vec(), None)
+                .insert_shreds(shreds[8..9].to_vec(), None, false)
                 .unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
@@ -3454,7 +3474,7 @@ pub mod tests {
 
             // Insert all pending shreds
             let mut shred8 = shreds[8].clone();
-            blocktree.insert_shreds(shreds, None).unwrap();
+            blocktree.insert_shreds(shreds, None, false).unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
 
@@ -3497,7 +3517,7 @@ pub mod tests {
 
             // Insertion should succeed
             blocktree
-                .insert_shreds(vec![coding_shred.clone()], None)
+                .insert_shreds(vec![coding_shred.clone()], None, false)
                 .unwrap();
 
             // Trying to insert the same shred again should fail
@@ -3604,7 +3624,9 @@ pub mod tests {
                 ));
 
                 // Insertion should succeed
-                blocktree.insert_shreds(vec![coding_shred], None).unwrap();
+                blocktree
+                    .insert_shreds(vec![coding_shred], None, false)
+                    .unwrap();
             }
 
             // Trying to insert value into slot <= than last root should fail
@@ -3634,7 +3656,7 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-        blocktree.insert_shreds(shreds, None).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
         let slot_meta = blocktree.meta(0).unwrap().unwrap();
 
         assert_eq!(slot_meta.consumed, num_shreds);
@@ -3643,7 +3665,7 @@ pub mod tests {
         assert!(slot_meta.is_full());
 
         let (shreds, _) = make_slot_entries(0, 0, 22);
-        blocktree.insert_shreds(shreds, None).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
         let slot_meta = blocktree.meta(0).unwrap().unwrap();
 
         assert_eq!(slot_meta.consumed, num_shreds);
@@ -3665,7 +3687,7 @@ pub mod tests {
         let all_shreds = make_chaining_slot_entries(&slots, shreds_per_slot);
         let slot_8_shreds = all_shreds[2].0.clone();
         for (slot_shreds, _) in all_shreds {
-            blocktree.insert_shreds(slot_shreds, None).unwrap();
+            blocktree.insert_shreds(slot_shreds, None, false).unwrap();
         }
 
         // Slot doesnt exist, iterator should be empty
@@ -3710,7 +3732,7 @@ pub mod tests {
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 6);
         let shreds_per_slot = shreds.len() as u64 / 50;
-        blocktree.insert_shreds(shreds, None).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
         blocktree
             .slot_meta_iterator(0)
             .unwrap()
@@ -3745,7 +3767,7 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
-        blocktree.insert_shreds(shreds, None).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
 
         blocktree.purge_slots(0, Some(5));
 
@@ -3771,7 +3793,7 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 5000, 10);
-        blocktree.insert_shreds(shreds, None).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
 
         blocktree.purge_slots(0, Some(4999));
 
@@ -3885,7 +3907,7 @@ pub mod tests {
             let shreds = entries_to_test_shreds(entries, slot, 0, false);
             let next_shred_index = shreds.len();
             blocktree
-                .insert_shreds(shreds, None)
+                .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
             assert_eq!(
                 blocktree.get_slot_entries(slot, 0, None).unwrap().len() as u64,
@@ -3906,7 +3928,7 @@ pub mod tests {
             // With the corruption, nothing should be returned, even though an
             // earlier data block was valid
             blocktree
-                .insert_shreds(shreds, None)
+                .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
             assert!(blocktree.get_slot_entries(slot, 0, None).is_err());
         }
@@ -3924,7 +3946,7 @@ pub mod tests {
 
             // Insert the first 5 shreds, we don't have a "is_last" shred yet
             blocktree
-                .insert_shreds(shreds0[0..5].to_vec(), None)
+                .insert_shreds(shreds0[0..5].to_vec(), None, false)
                 .unwrap();
 
             // Insert a repetitive shred for slot 's', should get ignored, but also
@@ -3934,10 +3956,10 @@ pub mod tests {
             let (mut shreds3, _) = make_slot_entries(3, 0, 200);
             shreds2.push(shreds0[1].clone());
             shreds3.insert(0, shreds0[1].clone());
-            blocktree.insert_shreds(shreds2, None).unwrap();
+            blocktree.insert_shreds(shreds2, None, false).unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
             assert_eq!(slot_meta.next_slots, vec![2]);
-            blocktree.insert_shreds(shreds3, None).unwrap();
+            blocktree.insert_shreds(shreds3, None, false).unwrap();
             let slot_meta = blocktree.meta(0).unwrap().unwrap();
             assert_eq!(slot_meta.next_slots, vec![2, 3]);
         }

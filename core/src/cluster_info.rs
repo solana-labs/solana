@@ -1992,7 +1992,7 @@ mod tests {
             );
 
             blocktree
-                .insert_shreds(vec![shred_info], None)
+                .insert_shreds(vec![shred_info], None, false)
                 .expect("Expect successful ledger write");
 
             let rv = ClusterInfo::run_window_request(
@@ -2074,7 +2074,7 @@ mod tests {
             let (shreds, _) = make_many_slot_entries(1, 3, 5);
 
             blocktree
-                .insert_shreds(shreds, None)
+                .insert_shreds(shreds, None, false)
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset

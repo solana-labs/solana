@@ -973,7 +973,7 @@ mod test {
 
             // Insert blob for slot 1, generate new forks, check result
             let (shreds, _) = make_slot_entries(1, 0, 8);
-            blocktree.insert_shreds(shreds, None).unwrap();
+            blocktree.insert_shreds(shreds, None, false).unwrap();
             assert!(bank_forks.get(1).is_none());
             ReplayStage::generate_new_bank_forks(
                 &blocktree,
@@ -984,7 +984,7 @@ mod test {
 
             // Insert blob for slot 3, generate new forks, check result
             let (shreds, _) = make_slot_entries(2, 0, 8);
-            blocktree.insert_shreds(shreds, None).unwrap();
+            blocktree.insert_shreds(shreds, None, false).unwrap();
             assert!(bank_forks.get(2).is_none());
             ReplayStage::generate_new_bank_forks(
                 &blocktree,
@@ -1230,7 +1230,7 @@ mod test {
             let last_blockhash = bank0.last_blockhash();
             progress.insert(bank0.slot(), ForkProgress::new(0, last_blockhash));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
-            blocktree.insert_shreds(shreds, None).unwrap();
+            blocktree.insert_shreds(shreds, None, false).unwrap();
             let (res, _tx_count) =
                 ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut progress);
 

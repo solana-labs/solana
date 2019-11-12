@@ -25,7 +25,7 @@ fn test_multiple_threads_insert_shred() {
                 Builder::new()
                     .name("blocktree-writer".to_string())
                     .spawn(move || {
-                        blocktree_.insert_shreds(shreds, None).unwrap();
+                        blocktree_.insert_shreds(shreds, None, false).unwrap();
                     })
                     .unwrap()
             })
