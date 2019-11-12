@@ -115,7 +115,6 @@ impl SnapshotPackagerService {
 
         // Once everything is successful, overwrite the previous tarball so that other validators
         // can fetch this newly packaged snapshot
-        let _ = fs::remove_file(&snapshot_package.tar_output_file);
         let metadata = fs::metadata(&archive_path)?;
         fs::rename(&archive_path, &snapshot_package.tar_output_file)?;
 
