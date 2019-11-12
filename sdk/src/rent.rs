@@ -78,18 +78,15 @@ mod tests {
 
         assert_eq!(
             zero_rent.due(0, 1, 1.0),
-            (
-                DEFAULT_LAMPORTS_PER_BYTE_YEAR,
-                DEFAULT_LAMPORTS_PER_BYTE_YEAR == 0
-            )
+            (zero_rent.lamports_per_byte_year, true)
         );
         assert_eq!(
             zero_rent.due(
-                DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64,
+                zero_rent.lamports_per_byte_year * DEFAULT_EXEMPTION_THRESHOLD as u64,
                 1,
                 1.0
             ),
-            (0, true)
+            (zero_rent.lamports_per_byte_year, true)
         );
 
         let mut nonzero_rent = Rent::default();
