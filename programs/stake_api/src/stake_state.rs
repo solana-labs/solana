@@ -787,7 +787,7 @@ pub fn create_account(
                 lockup: Lockup::default(),
             },
             Stake::new(
-                lamports.saturating_sub(rent_exempt_reserve),
+                lamports - rent_exempt_reserve, // underflow is an error, assert!(lamports> rent_exempt_reserve);
                 voter_pubkey,
                 &vote_state,
                 std::u64::MAX,
