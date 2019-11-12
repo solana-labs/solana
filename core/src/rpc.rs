@@ -278,7 +278,7 @@ impl JsonRpcRequestProcessor {
     // tuples (Transaction, transaction::Result) to demonstrate message format and
     // TransactionErrors. Transaction count == slot, and transaction keys are derived
     // deterministically to allow testers to track the pubkeys across slots.
-    pub fn get_block(&self, slot: Slot) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
+    pub fn get_block(&self, slot: Slot) -> Result<Vec<(Vec<u8>, transaction::Result<()>)>> {
         Ok(make_test_transactions(slot))
     }
 }
@@ -511,7 +511,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         slot: Slot,
-    ) -> Result<Vec<(Transaction, transaction::Result<()>)>>;
+    ) -> Result<Vec<(Vec<u8>, transaction::Result<()>)>>;
 }
 
 pub struct RpcSolImpl;
@@ -974,15 +974,15 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         slot: Slot,
-    ) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
+    ) -> Result<Vec<(Vec<u8>, transaction::Result<()>)>> {
         meta.request_processor.read().unwrap().get_block(slot)
     }
 }
 
-fn make_test_transactions(count: u64) -> Vec<(Transaction, transaction::Result<()>)> {
+fn make_test_transactions(count: u64) -> Vec<(Vec<u8>, transaction::Result<()>)> {
     let seed = [42u8; 32];
     let keys = GenKeys::new(seed).gen_n_keypairs(count + 1);
-    let mut transactions: Vec<(Transaction, transaction::Result<()>)> = Vec::new();
+    let mut transactions: Vec<(Vec<u8>, transaction::Result<()>)> = Vec::new();
     for x in 0..count {
         let tx = system_transaction::transfer(
             &keys[x as usize],
@@ -990,6 +990,7 @@ fn make_test_transactions(count: u64) -> Vec<(Transaction, transaction::Result<(
             123,
             Hash::default(),
         );
+        let wire_transaction = serialize(&tx).unwrap();
         let status = if x % 3 == 0 {
             Ok(())
         } else if x % 3 == 1 {
@@ -1003,7 +1004,7 @@ fn make_test_transactions(count: u64) -> Vec<(Transaction, transaction::Result<(
                 InstructionError::CustomError(3),
             ))
         };
-        transactions.push((tx, status))
+        transactions.push((wire_transaction, status))
     }
     transactions
 }
