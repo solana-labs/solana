@@ -23,7 +23,7 @@ tokio = "0.1"
 tokio-codec = "0.1"
 
 [lib]
-name = "solana_net-utils"
+name = "solana_net_utils"
 
 [[bin]]
 name = "solana-ip-address"
