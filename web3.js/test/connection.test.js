@@ -475,6 +475,25 @@ test('get recent blockhash', async () => {
   expect(feeCalculator.lamportsPerSignature).toBeGreaterThanOrEqual(0);
 });
 
+test('getVersion', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getVersion',
+      params: [],
+    },
+    {
+      error: null,
+      result: {'solana-core': '0.20.4'},
+    },
+  ]);
+
+  const version = await connection.getVersion();
+  expect(version['solana-core']).toBeTruthy();
+});
+
 test('request airdrop', async () => {
   const account = new Account();
   const connection = new Connection(url, 'recent');
