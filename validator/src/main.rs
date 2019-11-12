@@ -587,13 +587,14 @@ pub fn main() {
     let cluster_entrypoint = entrypoint.map(|entrypoint| {
         let entrypoint_addr = solana_net_utils::parse_host_port(entrypoint)
             .expect("failed to parse entrypoint address");
-        let ip_addr = solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-            error!(
-                "Failed to contact cluster entrypoint {} ({}): {}",
-                entrypoint, entrypoint_addr, err
-            );
-            exit(1);
-        });
+        let ip_addr =
+            solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                error!(
+                    "Failed to contact cluster entrypoint {} ({}): {}",
+                    entrypoint, entrypoint_addr, err
+                );
+                exit(1);
+            });
         gossip_addr.set_ip(ip_addr);
 
         ContactInfo::new_gossip_entry_point(&entrypoint_addr)

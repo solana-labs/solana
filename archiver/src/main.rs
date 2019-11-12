@@ -80,7 +80,8 @@ fn main() {
     let entrypoint_addr = matches
         .value_of("entrypoint")
         .map(|entrypoint| {
-            solana_net_utils::parse_host_port(entrypoint).expect("failed to parse entrypoint address")
+            solana_net_utils::parse_host_port(entrypoint)
+                .expect("failed to parse entrypoint address")
         })
         .unwrap();
 
