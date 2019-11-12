@@ -77,7 +77,7 @@ fn main() -> Result<()> {
     let mut read_threads = Vec::new();
     let recycler = PacketsRecycler::default();
     for _ in 0..num_sockets {
-        let read = solana_netutil::bind_to(port, false).unwrap();
+        let read = solana_net_utils::bind_to(port, false).unwrap();
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
         addr = read.local_addr().unwrap();

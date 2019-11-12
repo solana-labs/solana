@@ -32,7 +32,7 @@ use itertools::Itertools;
 use rand::{thread_rng, Rng};
 use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree, staking_utils};
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
-use solana_netutil::{
+use solana_net_utils::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
     multi_bind_in_range, PortRange,
 };

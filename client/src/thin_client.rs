@@ -594,7 +594,7 @@ impl AsyncClient for ThinClient {
 }
 
 pub fn create_client((rpc, tpu): (SocketAddr, SocketAddr), range: (u16, u16)) -> ThinClient {
-    let (_, transactions_socket) = solana_netutil::bind_in_range(range).unwrap();
+    let (_, transactions_socket) = solana_net_utils::bind_in_range(range).unwrap();
     ThinClient::new(rpc, tpu, transactions_socket)
 }
 
@@ -603,7 +603,7 @@ pub fn create_client_with_timeout(
     range: (u16, u16),
     timeout: Duration,
 ) -> ThinClient {
-    let (_, transactions_socket) = solana_netutil::bind_in_range(range).unwrap();
+    let (_, transactions_socket) = solana_net_utils::bind_in_range(range).unwrap();
     ThinClient::new_socket_with_timeout(rpc, tpu, transactions_socket, timeout)
 }
 

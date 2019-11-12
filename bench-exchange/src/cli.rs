@@ -166,13 +166,15 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
 pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     let mut args = Config::default();
 
-    args.entrypoint_addr = solana_netutil::parse_host_port(matches.value_of("entrypoint").unwrap())
-        .unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
-            exit(1)
-        });
+    args.entrypoint_addr = solana_net_utils::parse_host_port(
+        matches.value_of("entrypoint").unwrap(),
+    )
+    .unwrap_or_else(|e| {
+        eprintln!("failed to parse entrypoint address: {}", e);
+        exit(1)
+    });
 
-    args.drone_addr = solana_netutil::parse_host_port(matches.value_of("drone").unwrap())
+    args.drone_addr = solana_net_utils::parse_host_port(matches.value_of("drone").unwrap())
         .unwrap_or_else(|e| {
             eprintln!("failed to parse drone address: {}", e);
             exit(1)

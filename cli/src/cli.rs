@@ -331,7 +331,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
                 })?;
 
             let drone_host = if let Some(drone_host) = matches.value_of("drone_host") {
-                Some(solana_netutil::parse_host(drone_host).or_else(|err| {
+                Some(solana_net_utils::parse_host(drone_host).or_else(|err| {
                     Err(CliError::BadParameter(format!(
                         "Invalid drone host: {:?}",
                         err
@@ -1058,7 +1058,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
                         .host()
                         .unwrap()
                         .to_string();
-                    solana_netutil::parse_host(&drone_host).unwrap_or_else(|err| {
+                    solana_net_utils::parse_host(&drone_host).unwrap_or_else(|err| {
                         panic!("Unable to resolve {}: {}", drone_host, err);
                     })
                 }),

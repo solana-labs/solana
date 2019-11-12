@@ -1,5 +1,5 @@
 [package]
-name = "solana-netutil"
+name = "solana-net-utils"
 version = "0.21.0"
 description = "Solana Network Utilities"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
@@ -23,7 +23,7 @@ tokio = "0.1"
 tokio-codec = "0.1"
 
 [lib]
-name = "solana_netutil"
+name = "solana_net_utils"
 
 [[bin]]
 name = "solana-ip-address"

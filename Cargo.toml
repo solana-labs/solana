@@ -51,7 +51,7 @@ members = [
     "sdk",
     "sdk-c",
     "upload-perf",
-    "netutil",
+    "net-utils",
     "fixed-buf",
     "vote-signer",
     "cli",

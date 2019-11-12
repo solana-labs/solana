@@ -21,7 +21,7 @@ declare print_free_tree=(
   'core/src'
   'drone/src'
   'metrics/src'
-  'netutil/src'
+  'net-utils/src'
   'runtime/src'
   'sdk/bpf/rust/rust-utils'
   'sdk/src'

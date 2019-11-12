@@ -36,7 +36,7 @@ fn port_validator(port: String) -> Result<(), String> {
 }
 
 fn port_range_validator(port_range: String) -> Result<(), String> {
-    if solana_netutil::parse_port_range(&port_range).is_some() {
+    if solana_net_utils::parse_port_range(&port_range).is_some() {
         Ok(())
     } else {
         Err("Invalid port range".to_string())
@@ -305,7 +305,7 @@ pub fn main() {
                 .long("entrypoint")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .validator(solana_netutil::is_host_port)
+                .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the cluster at this entry point"),
         )
         .arg(
@@ -360,7 +360,7 @@ pub fn main() {
                 .long("rpc-drone-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .validator(solana_netutil::is_host_port)
+                .validator(solana_net_utils::is_host_port)
                 .help("Enable the JSON RPC 'requestAirdrop' API with this drone address."),
         )
         .arg(
@@ -369,7 +369,7 @@ pub fn main() {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .hidden(true) // Don't document this argument to discourage its use
-                .validator(solana_netutil::is_host_port)
+                .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the vote signer at this RPC end point"),
         )
         .arg(
@@ -486,11 +486,11 @@ pub fn main() {
     validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
 
     validator_config.rpc_config.drone_addr = matches.value_of("rpc_drone_addr").map(|address| {
-        solana_netutil::parse_host_port(address).expect("failed to parse drone address")
+        solana_net_utils::parse_host_port(address).expect("failed to parse drone address")
     });
 
     let dynamic_port_range =
-        solana_netutil::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
+        solana_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
             .expect("invalid dynamic_port_range");
 
     if let Some(account_paths) = matches.value_of("account_paths") {
@@ -586,25 +586,26 @@ pub fn main() {
         enable_recycler_warming();
     }
 
-    let mut gossip_addr = solana_netutil::parse_port_or_addr(
+    let mut gossip_addr = solana_net_utils::parse_port_or_addr(
         matches.value_of("gossip_port"),
         socketaddr!(
             [127, 0, 0, 1],
-            solana_netutil::find_available_port_in_range(dynamic_port_range)
+            solana_net_utils::find_available_port_in_range(dynamic_port_range)
                 .expect("unable to find an available gossip port")
         ),
     );
 
     let cluster_entrypoint = entrypoint.map(|entrypoint| {
-        let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)
+        let entrypoint_addr = solana_net_utils::parse_host_port(entrypoint)
             .expect("failed to parse entrypoint address");
-        let ip_addr = solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-            error!(
-                "Failed to contact cluster entrypoint {} ({}): {}",
-                entrypoint, entrypoint_addr, err
-            );
-            exit(1);
-        });
+        let ip_addr =
+            solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                error!(
+                    "Failed to contact cluster entrypoint {} ({}): {}",
+                    entrypoint, entrypoint_addr, err
+                );
+                exit(1);
+            });
         gossip_addr.set_ip(ip_addr);
 
         ContactInfo::new_gossip_entry_point(&entrypoint_addr)
@@ -646,7 +647,7 @@ pub fn main() {
             tcp_listeners.push((node.info.gossip.port(), ip_echo));
         }
 
-        solana_netutil::verify_reachable_ports(
+        solana_net_utils::verify_reachable_ports(
             &cluster_entrypoint.gossip,
             tcp_listeners,
             &udp_sockets,
