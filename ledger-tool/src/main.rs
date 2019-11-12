@@ -16,10 +16,11 @@ use solana_sdk::{
 use solana_vote_api::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    ffi::OsStr,
     fs::File,
-    io::{stdout, Write},
-    path::PathBuf,
-    process::exit,
+    io::{self, stdout, Write},
+    path::{Path, PathBuf},
+    process::{exit, Command, Stdio},
     str::FromStr,
 };
 
@@ -139,6 +140,30 @@ fn output_ledger(blocktree: Blocktree, starting_slot: Slot, method: LedgerOutput
     if method == LedgerOutputMethod::Json {
         stdout().write_all(b"\n]}\n").expect("close array");
     }
+}
+
+fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result<()> {
+    let mut child = Command::new("dot")
+        .arg(format!("-T{}", output_format))
+        .arg(format!("-o{}", output_file))
+        .stdin(Stdio::piped())
+        .spawn()
+        .map_err(|err| {
+            eprintln!("Failed to spawn dot: {:?}", err);
+            err
+        })?;
+
+    let stdin = child.stdin.as_mut().unwrap();
+    stdin.write_all(&dot.into_bytes())?;
+
+    let status = child.wait_with_output()?.status;
+    if !status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("dot failed with error {}", status.code().unwrap_or(-1)),
+        ));
+    }
+    Ok(())
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -450,7 +475,7 @@ fn main() {
             .arg(
                 Arg::with_name("graph_forks")
                     .long("graph-forks")
-                    .value_name("FILENAME.GV")
+                    .value_name("FILENAME")
                     .takes_value(true)
                     .help("Create a Graphviz DOT file representing the active forks once the ledger is verified"),
             )
@@ -577,19 +602,27 @@ fn main() {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache)) => {
                     println!("Ok");
 
-                    if let Some(dot_file) = arg_matches.value_of("graph_forks") {
+                    if let Some(output_file) = arg_matches.value_of("graph_forks") {
                         let dot = graph_forks(
                             bank_forks,
                             bank_forks_info,
                             arg_matches.is_present("graph_forks_include_all_votes"),
                         );
 
-                        match File::create(dot_file)
-                            .and_then(|mut file| file.write_all(&dot.into_bytes()))
-                        {
-                            Ok(_) => println!("Wrote {}", dot_file),
-                            Err(err) => eprintln!("Unable to write {}: {}", dot_file, err),
+                        let extension = Path::new(output_file).extension();
+                        let result = if extension == Some(OsStr::new("pdf")) {
+                            render_dot(dot, output_file, "pdf")
+                        } else if extension == Some(OsStr::new("png")) {
+                            render_dot(dot, output_file, "png")
+                        } else {
+                            File::create(output_file)
+                                .and_then(|mut file| file.write_all(&dot.into_bytes()))
                         };
+
+                        match result {
+                            Ok(_) => println!("Wrote {}", output_file),
+                            Err(err) => eprintln!("Unable to write {}: {}", output_file, err),
+                        }
                     }
                 }
                 Err(err) => {
