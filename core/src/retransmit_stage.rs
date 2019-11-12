@@ -278,7 +278,7 @@ mod tests {
     use crate::packet::{self, Meta, Packet, Packets};
     use solana_ledger::blocktree::create_new_tmp_ledger;
     use solana_ledger::blocktree_processor::{process_blocktree, ProcessOptions};
-    use solana_netutil::find_available_port_in_range;
+    use solana_net_utils::find_available_port_in_range;
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
