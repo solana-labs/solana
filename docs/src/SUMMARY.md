@@ -110,3 +110,4 @@
   * [Tick Verification](proposals/tick-verification.md)
   * [Block Confirmation](proposals/block-confirmation.md)
   * [ABI Management](proposals/abi-management.md)
+  * [Booting from a Snapshot](proposals/booting-from-snapshot.md)
