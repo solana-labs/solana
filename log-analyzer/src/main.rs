@@ -12,6 +12,12 @@ use std::ops::Sub;
 use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize, Debug)]
+struct IPAddrMapping {
+    private: String,
+    public: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 struct LogLine {
     a: String,
     b: String,
@@ -84,29 +90,30 @@ impl Sub for &LogLine {
     }
 }
 
+fn map_ip_address(mappings: &[IPAddrMapping], target: String) -> String {
+    for mapping in mappings {
+        if target.contains(&mapping.private) {
+            return target.replace(&mapping.private, mapping.public.as_str());
+        }
+    }
+    target.to_string()
+}
+
 fn process_iftop_logs(matches: &ArgMatches) {
-    let map_address;
-    let private_address;
-    let public_address;
-    match matches.subcommand() {
-        ("map-IP", Some(args_matches)) => {
-            map_address = true;
-            if let Some(addr) = args_matches.value_of("priv") {
-                private_address = addr;
-            } else {
-                panic!("Private IP address must be provided");
-            };
-            if let Some(addr) = args_matches.value_of("pub") {
-                public_address = addr;
-            } else {
-                panic!("Private IP address must be provided");
-            };
-        }
-        _ => {
-            map_address = false;
-            private_address = "";
-            public_address = "";
-        }
+    let mut map_list: Vec<IPAddrMapping> = vec![];
+    if let ("map-IP", Some(args_matches)) = matches.subcommand() {
+        let mut list = args_matches
+            .value_of("list")
+            .expect("Missing list of IP address mappings")
+            .to_string();
+        list.insert(0, '[');
+        let terminate_at = list
+            .rfind('}')
+            .expect("Didn't find a terminating '}' in IP list")
+            + 1;
+        let _ = list.split_off(terminate_at);
+        list.push(']');
+        map_list = serde_json::from_str(&list).expect("Failed to parse IP address mapping list");
     };
 
     let log_path = PathBuf::from(value_t_or_exit!(matches, "file", String));
@@ -128,15 +135,15 @@ fn process_iftop_logs(matches: &ArgMatches) {
     let output: Vec<LogLine> = unique_latest_logs
         .into_iter()
         .map(|(_, l)| {
-            if map_address {
+            if map_list.is_empty() {
+                l
+            } else {
                 LogLine {
-                    a: l.a.replace(private_address, public_address),
-                    b: l.b.replace(private_address, public_address),
+                    a: map_ip_address(&map_list, l.a),
+                    b: map_ip_address(&map_list, l.b),
                     a_to_b: l.a_to_b,
                     b_to_a: l.b_to_a,
                 }
-            } else {
-                l
             }
         })
         .collect();
@@ -208,22 +215,15 @@ fn main() {
                 )
                 .subcommand(
                     SubCommand::with_name("map-IP")
-                        .about("Public IP Address")
+                        .about("Map private IP to public IP Address")
                         .arg(
-                            Arg::with_name("priv")
-                                .long("priv")
-                                .value_name("IP Address")
+                            Arg::with_name("list")
+                                .short("l")
+                                .long("list")
+                                .value_name("JSON string")
                                 .takes_value(true)
                                 .required(true)
-                                .help("The private IP address that should be mapped"),
-                        )
-                        .arg(
-                            Arg::with_name("pub")
-                                .long("pub")
-                                .value_name("IP Address")
-                                .takes_value(true)
-                                .required(true)
-                                .help("The public IP address"),
+                                .help("JSON string with a list of mapping"),
                         ),
                 ),
         )

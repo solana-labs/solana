@@ -34,7 +34,7 @@ fn main() {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .required(true)
-                .validator(solana_netutil::is_host_port)
+                .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the cluster at this entry point"),
         )
         .arg(
@@ -80,14 +80,15 @@ fn main() {
     let entrypoint_addr = matches
         .value_of("entrypoint")
         .map(|entrypoint| {
-            solana_netutil::parse_host_port(entrypoint).expect("failed to parse entrypoint address")
+            solana_net_utils::parse_host_port(entrypoint)
+                .expect("failed to parse entrypoint address")
         })
         .unwrap();
 
     let gossip_addr = {
-        let ip = solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap();
+        let ip = solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap();
         let mut addr = SocketAddr::new(ip, 0);
-        addr.set_ip(solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap());
+        addr.set_ip(solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap());
         addr
     };
     let node =

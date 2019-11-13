@@ -1,9 +1,36 @@
+use jsonrpc_core::Result as JsonResult;
 use serde_json::{json, Value};
 use solana_sdk::{
     clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
 };
-use std::{error, fmt};
+use std::{error, fmt, io, net::SocketAddr};
+
+pub type RpcResponseIn<T> = JsonResult<Response<T>>;
+pub type RpcResponse<T> = io::Result<Response<T>>;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RpcResponseContext {
+    pub slot: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Response<T> {
+    pub context: RpcResponseContext,
+    pub value: T,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RpcContactInfo {
+    /// Pubkey of the node as a base-58 string
+    pub pubkey: String,
+    /// Gossip port
+    pub gossip: Option<SocketAddr>,
+    /// Tpu port
+    pub tpu: Option<SocketAddr>,
+    /// JSON RPC port
+    pub rpc: Option<SocketAddr>,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +46,13 @@ pub struct RpcEpochInfo {
 
     /// The absolute current slot
     pub absolute_slot: Slot,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct RpcVersionInfo {
+    /// The current version of solana-core
+    pub solana_core: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

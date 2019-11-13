@@ -319,10 +319,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let bootstrap_leader_vote_account =
         vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
+
+    let rent = Rent {
+        lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
+        exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
+        burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
+    };
+
     let bootstrap_leader_stake_account = stake_state::create_account(
         &bootstrap_leader_pubkey,
         &bootstrap_vote_pubkey,
         &bootstrap_leader_vote_account,
+        &rent,
         bootstrap_leader_stake_lamports,
     );
 
@@ -351,12 +359,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         value_t_or_exit!(matches, "target_lamports_per_signature", u64),
         value_t_or_exit!(matches, "target_signatures_per_slot", usize),
     );
-
-    let rent = Rent {
-        lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
-        exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
-        burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
-    };
 
     let mut poh_config = PohConfig::default();
     poh_config.target_tick_duration =

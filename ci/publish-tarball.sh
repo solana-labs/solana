@@ -67,6 +67,9 @@ echo --- Creating tarball
     echo "target: $TARGET"
   ) > solana-release/version.yml
 
+  # Make CHANNEL available to include in the software version information
+  export CHANNEL
+
   source ci/rust-version.sh stable
   scripts/cargo-install-all.sh +"$rust_stable" --use-move solana-release
 

@@ -76,7 +76,7 @@ pub fn discover(
     info!("Gossip entry point: {:?}", entry_point);
     info!("Spy node id: {:?}", id);
 
-    let _ip_echo_server = ip_echo.map(solana_netutil::ip_echo_server);
+    let _ip_echo_server = ip_echo.map(solana_net_utils::ip_echo_server);
 
     let (met_criteria, secs, tvu_peers, archivers) = spy(
         spy_ref.clone(),
@@ -143,7 +143,7 @@ pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
         .collect();
     let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
-    let (_, transactions_socket) = solana_netutil::bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
+    let (_, transactions_socket) = solana_net_utils::bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
     let num_nodes = tpu_addrs.len();
     (
         ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),

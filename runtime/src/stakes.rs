@@ -209,7 +209,7 @@ impl Stakes {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::{pubkey::Pubkey, rent::Rent};
     use solana_stake_api::stake_state;
     use solana_vote_api::vote_state::{self, VoteState, MAX_LOCKOUT_HISTORY};
 
@@ -232,6 +232,7 @@ pub mod tests {
                 &stake_pubkey,
                 &vote_pubkey,
                 &vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1),
+                &Rent::free(),
                 stake,
             ),
         )

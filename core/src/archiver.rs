@@ -23,7 +23,7 @@ use solana_client::{rpc_client::RpcClient, rpc_request::RpcRequest, thin_client:
 use solana_ledger::{
     blocktree::Blocktree, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
 };
-use solana_netutil::bind_in_range;
+use solana_net_utils::bind_in_range;
 use solana_perf::recycler::Recycler;
 use solana_sdk::{
     account_utils::State,

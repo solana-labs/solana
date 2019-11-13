@@ -464,6 +464,11 @@ fn process_pending_slots(
             last_status_report = Instant::now();
         }
 
+        if blocktree.is_dead(slot) {
+            warn!("slot {} is dead", slot);
+            continue;
+        }
+
         // Fetch all entries for this slot
         let entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
             warn!("Failed to load entries for slot {}: {:?}", slot, err);
@@ -920,6 +925,49 @@ pub mod tests {
         assert_eq!(bank_forks.root(), 1);
 
         // Ensure bank_forks holds the right banks
+        verify_fork_infos(&bank_forks, &bank_forks_info);
+    }
+
+    #[test]
+    fn test_process_blocktree_with_dead_slot() {
+        solana_logger::setup();
+
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        debug!("ledger_path: {:?}", ledger_path);
+
+        /*
+                   slot 0
+                     |
+                   slot 1
+                  /     \
+                 /       \
+           slot 2 (dead)  \
+                           \
+                        slot 3
+        */
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let slot1_blockhash =
+            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, blockhash);
+        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, slot1_blockhash);
+        blocktree.set_dead_slot(2).unwrap();
+        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 1, slot1_blockhash);
+
+        let (bank_forks, bank_forks_info, _) =
+            process_blocktree(&genesis_config, &blocktree, None, ProcessOptions::default())
+                .unwrap();
+
+        assert_eq!(bank_forks_info.len(), 1);
+        assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 3 });
+        assert_eq!(
+            &bank_forks[3]
+                .parents()
+                .iter()
+                .map(|bank| bank.slot())
+                .collect::<Vec<_>>(),
+            &[1, 0]
+        );
         verify_fork_infos(&bank_forks, &bank_forks_info);
     }
 

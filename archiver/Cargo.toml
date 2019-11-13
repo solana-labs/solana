@@ -14,6 +14,6 @@ solana-clap-utils = { path = "../clap-utils", version = "0.21.0" }
 solana-core = { path = "../core", version = "0.21.0" }
 solana-logger = { path = "../logger", version = "0.21.0" }
 solana-metrics = { path = "../metrics", version = "0.21.0" }
-solana-netutil = { path = "../netutil", version = "0.21.0" }
+solana-net-utils = { path = "../net-utils", version = "0.21.0" }
 solana-sdk = { path = "../sdk", version = "0.21.0" }
 

@@ -1,3 +1,4 @@
+use crate::rpc_request::{Response, RpcResponseContext};
 use crate::{
     client_error::ClientError, generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::RpcRequest,
@@ -48,12 +49,18 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
             }
             RpcRequest::GetBalance => {
                 let n = if self.url == "airdrop" { 0 } else { 50 };
-                Value::Number(Number::from(n))
+                serde_json::to_value(Response {
+                    context: RpcResponseContext { slot: 1 },
+                    value: Value::Number(Number::from(n)),
+                })?
             }
-            RpcRequest::GetRecentBlockhash => Value::Array(vec![
-                Value::String(PUBKEY.to_string()),
-                serde_json::to_value(FeeCalculator::default()).unwrap(),
-            ]),
+            RpcRequest::GetRecentBlockhash => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: (
+                    Value::String(PUBKEY.to_string()),
+                    serde_json::to_value(FeeCalculator::default()).unwrap(),
+                ),
+            })?,
             RpcRequest::GetSignatureStatus => {
                 let response: Option<transaction::Result<()>> = if self.url == "account_in_use" {
                     Some(Err(TransactionError::AccountInUse))

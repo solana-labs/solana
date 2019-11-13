@@ -14,6 +14,26 @@ function collect_logs {
   done
 }
 
+function analyze_packet_loss {
+  (
+    set -x
+    # shellcheck disable=SC1091
+    source net/config/config
+    mkdir -p iftop-logs
+    echo --- Collecting iftop logs
+    # shellcheck disable=SC2154
+    for i in "${!validatorIpList[@]}"; do
+      iftop_log=iftop-logs/${validatorIpList[$i]}-iftop.log
+      # shellcheck disable=SC2016
+      net/ssh.sh solana@"${validatorIpList[$i]}" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log' \
+      "${validatorIpListPrivate[$i]}" "${validatorIpList[$i]}" > "$iftop_log"
+      #upload-ci-artifact "$iftop_log"
+    done
+    echo --- Analyzing Packet Loss
+    solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
+  )
+}
+
 function cleanup_testnet {
   RC=$?
   if [[ $RC != 0 ]] ; then
@@ -30,6 +50,7 @@ function cleanup_testnet {
 
   (
     set +e
+    echo --- Collecting Logfiles from Nodes
     collect_logs
   )
 
@@ -39,6 +60,12 @@ function cleanup_testnet {
     net/net.sh stop
   )
 
+  (
+    set +e
+    analyze_packet_loss
+  )
+
+  echo --- Deleting Testnet
   case $CLOUD_PROVIDER in
   gce)
   (
@@ -104,7 +131,7 @@ function launchTestnet() {
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
-        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures \
+        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
         ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
@@ -114,7 +141,7 @@ function launchTestnet() {
       net/ec2.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
-        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures \
+        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
         ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
@@ -123,7 +150,8 @@ function launchTestnet() {
     # shellcheck disable=SC2086
       net/colo.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" $maybeEnableGpu \
-        -p "$TESTNET_TAG" ${ADDITIONAL_FLAGS[@]/#/" "}
+        -p "$TESTNET_TAG" $maybePublicIpAddresses \
+        ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     *)
       echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
@@ -254,6 +282,13 @@ fi
 if [[ "$ALLOW_BOOT_FAILURES" = "true" ]] ; then
   maybeCreateAllowBootFailures="--allow-boot-failures"
   maybeStartAllowBootFailures="-F"
+fi
+
+if [[ -z $USE_PUBLIC_IP_ADDRESSES ]] ; then
+  USE_PUBLIC_IP_ADDRESSES=false
+fi
+if [[ "$USE_PUBLIC_IP_ADDRESSES" = "true" ]] ; then
+  maybePublicIpAddresses="-P"
 fi
 
 if [[ -z $CHANNEL ]]; then

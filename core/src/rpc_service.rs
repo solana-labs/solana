@@ -202,7 +202,7 @@ mod tests {
         )));
         let rpc_addr = SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
+            solana_net_utils::find_available_port_in_range((10000, 65535)).unwrap(),
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -229,7 +229,9 @@ mod tests {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_balance(&mint_keypair.pubkey(), None)
+                .get_balance(Ok(mint_keypair.pubkey()), None)
+                .unwrap()
+                .value
         );
         rpc_service.exit();
         rpc_service.join().unwrap();

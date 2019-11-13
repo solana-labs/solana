@@ -3,6 +3,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     genesis_config::GenesisConfig,
     pubkey::Pubkey,
+    rent::Rent,
     signature::{Keypair, KeypairUtil},
     system_program::{self, solana_system_program},
 };
@@ -39,10 +40,13 @@ pub fn create_genesis_config_with_leader(
         bootstrap_leader_stake_lamports,
     );
 
+    let rent = Rent::free();
+
     let stake_account = stake_state::create_account(
         &staking_keypair.pubkey(),
         &voting_keypair.pubkey(),
         &vote_account,
+        &rent,
         bootstrap_leader_stake_lamports,
     );
 
@@ -77,6 +81,7 @@ pub fn create_genesis_config_with_leader(
         accounts,
         native_instruction_processors,
         fee_calculator,
+        rent,
         ..GenesisConfig::default()
     };
 

@@ -1,4 +1,4 @@
-//! The `netutil` module assists with networking
+//! The `net_utils` module assists with networking
 use log::*;
 use rand::{thread_rng, Rng};
 use socket2::{Domain, SockAddr, Socket, Type};

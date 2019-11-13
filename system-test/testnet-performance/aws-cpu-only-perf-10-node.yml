@@ -14,6 +14,7 @@ steps:
       NUMBER_OF_CLIENT_NODES: 2
       CLIENT_OPTIONS: "bench-tps=2=--tx_count 15000 --thread-batch-sleep-ms 250"
       TESTNET_ZONES: "us-west-1a,us-west-1c,us-east-1a,eu-west-1a"
+      USE_PUBLIC_IP_ADDRESSES: "true"
       ADDITIONAL_FLAGS: ""
     agents:
       - "queue=testnet-deploy"

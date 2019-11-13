@@ -438,11 +438,13 @@ mod tests {
         let sk1 = Pubkey::new_rand();
         let pk1 = Pubkey::new_rand();
         let mut vote_account1 = vote_state::create_account(&pk1, &Pubkey::new_rand(), 0, 100);
-        let stake_account1 = stake_state::create_account(&sk1, &pk1, &vote_account1, 100);
+        let stake_account1 =
+            stake_state::create_account(&sk1, &pk1, &vote_account1, &genesis_config.rent, 100);
         let sk2 = Pubkey::new_rand();
         let pk2 = Pubkey::new_rand();
         let mut vote_account2 = vote_state::create_account(&pk2, &Pubkey::new_rand(), 0, 50);
-        let stake_account2 = stake_state::create_account(&sk2, &pk2, &vote_account2, 50);
+        let stake_account2 =
+            stake_state::create_account(&sk2, &pk2, &vote_account2, &genesis_config.rent, 50);
 
         genesis_config.accounts.extend(vec![
             (pk1, vote_account1.clone()),

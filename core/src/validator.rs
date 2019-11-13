@@ -106,7 +106,7 @@ pub struct Validator {
     poh_service: PohService,
     tpu: Tpu,
     tvu: Tvu,
-    ip_echo_server: solana_netutil::IpEchoServer,
+    ip_echo_server: solana_net_utils::IpEchoServer,
 }
 
 impl Validator {
@@ -272,7 +272,7 @@ impl Validator {
             "New blob signal for the TVU should be the same as the clear bank signal."
         );
 
-        let ip_echo_server = solana_netutil::ip_echo_server(node.sockets.ip_echo.unwrap());
+        let ip_echo_server = solana_net_utils::ip_echo_server(node.sockets.ip_echo.unwrap());
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -426,8 +426,10 @@ pub fn new_banks_from_blocktree(
     LeaderScheduleCache,
     PohConfig,
 ) {
-    let genesis_config =
-        GenesisConfig::load(blocktree_path).expect("Failed to load genesis config");
+    let genesis_config = GenesisConfig::load(blocktree_path).unwrap_or_else(|err| {
+        error!("Failed to load genesis from {:?}: {}", blocktree_path, err);
+        process::exit(1);
+    });
     let genesis_hash = genesis_config.hash();
     info!("genesis hash: {}", genesis_hash);
 

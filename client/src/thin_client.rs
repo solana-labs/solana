@@ -4,6 +4,7 @@
 //! unstable and may change in future releases.
 
 use crate::rpc_client::RpcClient;
+use crate::rpc_request::Response;
 use bincode::{serialize_into, serialized_size};
 use log::*;
 use solana_sdk::{
@@ -383,7 +384,11 @@ impl SyncClient for ThinClient {
     }
 
     fn get_account(&self, pubkey: &Pubkey) -> TransportResult<Option<Account>> {
-        Ok(self.rpc_client().get_account(pubkey).ok())
+        let account = self.rpc_client().get_account(pubkey);
+        match account {
+            Ok(value) => Ok(Some(value)),
+            Err(_) => Ok(None),
+        }
     }
 
     fn get_account_with_commitment(
@@ -393,13 +398,12 @@ impl SyncClient for ThinClient {
     ) -> TransportResult<Option<Account>> {
         Ok(self
             .rpc_client()
-            .get_account_with_commitment(pubkey, commitment_config)
-            .ok())
+            .get_account_with_commitment(pubkey, commitment_config)?
+            .value)
     }
 
     fn get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
-        let balance = self.rpc_client().get_balance(pubkey)?;
-        Ok(balance)
+        Ok(self.rpc_client().get_balance(pubkey)?)
     }
 
     fn get_balance_with_commitment(
@@ -410,7 +414,7 @@ impl SyncClient for ThinClient {
         let balance = self
             .rpc_client()
             .get_balance_with_commitment(pubkey, commitment_config)?;
-        Ok(balance)
+        Ok(balance.value)
     }
 
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
@@ -426,9 +430,9 @@ impl SyncClient for ThinClient {
         let recent_blockhash =
             self.rpc_clients[index].get_recent_blockhash_with_commitment(commitment_config);
         match recent_blockhash {
-            Ok(recent_blockhash) => {
+            Ok(Response { value, .. }) => {
                 self.optimizer.report(index, duration_as_ms(&now.elapsed()));
-                Ok(recent_blockhash)
+                Ok(value)
             }
             Err(e) => {
                 self.optimizer.report(index, std::u64::MAX);
@@ -590,7 +594,7 @@ impl AsyncClient for ThinClient {
 }
 
 pub fn create_client((rpc, tpu): (SocketAddr, SocketAddr), range: (u16, u16)) -> ThinClient {
-    let (_, transactions_socket) = solana_netutil::bind_in_range(range).unwrap();
+    let (_, transactions_socket) = solana_net_utils::bind_in_range(range).unwrap();
     ThinClient::new(rpc, tpu, transactions_socket)
 }
 
@@ -599,7 +603,7 @@ pub fn create_client_with_timeout(
     range: (u16, u16),
     timeout: Duration,
 ) -> ThinClient {
-    let (_, transactions_socket) = solana_netutil::bind_in_range(range).unwrap();
+    let (_, transactions_socket) = solana_net_utils::bind_in_range(range).unwrap();
     ThinClient::new_socket_with_timeout(rpc, tpu, transactions_socket, timeout)
 }
 

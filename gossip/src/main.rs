@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .default_value(&entrypoint_string)
-                .validator(solana_netutil::is_host_port)
+                .validator(solana_net_utils::is_host_port)
                 .global(true)
                 .help("Rendezvous with the cluster at this entry point"),
         )
@@ -113,7 +113,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .get_matches();
 
     if let Some(addr) = matches.value_of("entrypoint") {
-        entrypoint_addr = solana_netutil::parse_host_port(addr).unwrap_or_else(|e| {
+        entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {}", e);
             exit(1);
         });
@@ -136,7 +136,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
 
             let gossip_addr = SocketAddr::new(
-                solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
                     eprintln!("failed to contact {}: {}", entrypoint_addr, err);
                     exit(1);
                 }),
