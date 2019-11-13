@@ -23,6 +23,7 @@ members = [
     "merkle-tree",
     "measure",
     "metrics",
+    "net-shaper",
     "programs/bpf_loader_api",
     "programs/bpf_loader_program",
     "programs/budget_api",
