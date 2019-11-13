@@ -222,6 +222,7 @@ cloud_CreateInstances() {
     --tags testnet
     --image UbuntuLTS
     --size "$machineType"
+    --ssh-key-values "$(cat /var/lib/buildkite-agent/.ssh/azure_id_rsa.pub)"
     --location "$zone"
     --nsg "$nsgName"
   )
