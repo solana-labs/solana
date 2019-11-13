@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use std::{error, fmt};
+use std::{error, fmt, net::SocketAddr};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +47,18 @@ pub struct RpcVoteAccountInfo {
 
     /// Current root slot for this vote account (0 if not root slot exists)
     pub root_slot: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RpcContactInfo {
+    /// Pubkey of the node as a base-58 string
+    pub pubkey: String,
+    /// Gossip port
+    pub gossip: Option<SocketAddr>,
+    /// Tpu port
+    pub tpu: Option<SocketAddr>,
+    /// JSON RPC port
+    pub rpc: Option<SocketAddr>,
 }
 
 #[derive(Debug, PartialEq)]

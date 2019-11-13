@@ -46,6 +46,9 @@ const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA
 #[allow(clippy::large_enum_variant)]
 pub enum CliCommand {
     // Cluster Query Commands
+    Catchup {
+        node_pubkey: Pubkey,
+    },
     ClusterVersion,
     Fees,
     GetEpochInfo,
@@ -211,6 +214,7 @@ impl Default for CliConfig {
 pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         // Cluster Query Commands
+        ("catchup", Some(matches)) => parse_catchup(matches),
         ("cluster-version", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ClusterVersion,
             require_keypair: false,
@@ -814,6 +818,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Cluster Query Commands
 
         // Return software version of solana-cli and cluster entrypoint node
+        CliCommand::Catchup { node_pubkey } => process_catchup(&rpc_client, node_pubkey),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client, config),
         CliCommand::Fees => process_fees(&rpc_client),
         CliCommand::GetGenesisBlockhash => process_get_genesis_blockhash(&rpc_client),
