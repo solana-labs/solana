@@ -200,11 +200,9 @@ fn shape_network(matches: &ArgMatches) {
     }
 
     delete_tc_root(interface.as_str());
-    if topology.interconnects.len() > 0 {
-        if !insert_tc_root(interface.as_str()) {
-            flush_iptables_rule();
-            return;
-        }
+    if topology.interconnects.len() > 0 && !insert_tc_root(interface.as_str()) {
+        flush_iptables_rule();
+        return;
     }
 
     topology.interconnects.iter().for_each(|i| {
