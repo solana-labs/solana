@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -e
 
+function execution_step {
+  # shellcheck disable=SC2124
+  STEP="$@"
+  echo --- "${STEP[@]}"
+}
+
 function collect_logs {
-  echo --- collect logs from remote nodes
+  execution_step "collect logs from remote nodes"
   rm -rf net/log
   net/net.sh logs
   for logfile in net/log/* ; do
@@ -20,7 +26,7 @@ function analyze_packet_loss {
     # shellcheck disable=SC1091
     source net/config/config
     mkdir -p iftop-logs
-    echo --- Collecting iftop logs
+    execution_step "Collecting iftop logs"
     # shellcheck disable=SC2154
     for i in "${!validatorIpList[@]}"; do
       iftop_log=iftop-logs/${validatorIpList[$i]}-iftop.log
@@ -29,7 +35,7 @@ function analyze_packet_loss {
       "${validatorIpListPrivate[$i]}" "${validatorIpList[$i]}" > "$iftop_log"
       #upload-ci-artifact "$iftop_log"
     done
-    echo --- Analyzing Packet Loss
+    execution_step "Analyzing Packet Loss"
     solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
   )
 }
@@ -37,10 +43,9 @@ function analyze_packet_loss {
 function cleanup_testnet {
   RC=$?
   if [[ $RC != 0 ]] ; then
-    RESULT_DETAILS="Test failed while executing: ${1}"
-    echo "--- $RESULT_DETAILS"
+    execution_step "Test failed while executing: $(eval echo "$@")"
   else
-    echo "--- Test succeeded"
+    execution_step "Test succeeded"
   fi
 
   FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
@@ -50,13 +55,13 @@ function cleanup_testnet {
 
   (
     set +e
-    echo --- Collecting Logfiles from Nodes
+    execution_step "Collecting Logfiles from Nodes"
     collect_logs
   )
 
   (
     set +e
-    echo --- Stop Network Software
+    execution_step "Stop Network Software"
     net/net.sh stop
   )
 
@@ -65,7 +70,7 @@ function cleanup_testnet {
     analyze_packet_loss
   )
 
-  echo --- Deleting Testnet
+  execution_step "Deleting Testnet"
   case $CLOUD_PROVIDER in
   gce)
   (
@@ -111,13 +116,13 @@ EOF
     ;;
   esac
 }
-trap 'cleanup_testnet "$BASH_COMMAND"' EXIT
+trap 'cleanup_testnet $BASH_COMMAND' EXIT
 
 function launchTestnet() {
   set -x
 
   # shellcheck disable=SC2068
-  echo --- create "$NUMBER_OF_VALIDATOR_NODES" nodes
+  execution_step "create ${NUMBER_OF_VALIDATOR_NODES} ${CLOUD_PROVIDER} nodes"
 
   case $CLOUD_PROVIDER in
     gce)
@@ -158,10 +163,10 @@ function launchTestnet() {
       ;;
     esac
 
-  echo --- configure database
+  execution_step "configure database"
   net/init-metrics.sh -e
 
-  echo --- fetch reusable testnet keypairs
+  execution_step "fetch reusable testnet keypairs"
   if [[ ! -d net/keypairs ]] ; then
     git clone git@github.com:solana-labs/testnet-keypairs.git net/keypairs
     # If we have provider-specific keys (CoLo*, GCE*, etc) use them instead of generic val*
@@ -170,28 +175,33 @@ function launchTestnet() {
     fi
   fi
 
-  echo --- start "$NUMBER_OF_VALIDATOR_NODES" node test
+  if [[ "$CLOUD_PROVIDER" = "colo" ]] ; then
+    execution_step "Stopping Colo nodes before we start"
+    net/net.sh stop
+  fi
+
+  execution_step "start ${NUMBER_OF_VALIDATOR_NODES} node test"
   if [[ -n $CHANNEL ]]; then
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-    net/net.sh restart -t "$CHANNEL" \
+    net/net.sh start -t "$CHANNEL" \
       "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures \
       --gpu-mode $startGpuMode
   else
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-    net/net.sh restart -T solana-release*.tar.bz2 \
+    net/net.sh start -T solana-release*.tar.bz2 \
       "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures \
       --gpu-mode $startGpuMode
   fi
 
-  echo --- wait "$RAMP_UP_TIME" seconds for network throughput to stabilize
+  execution_step "wait ${RAMP_UP_TIME} seconds for network throughput to stabilize"
   sleep "$RAMP_UP_TIME"
 
-  echo --- wait "$TEST_DURATION_SECONDS" seconds to complete test
+  execution_step "wait ${TEST_DURATION_SECONDS} seconds to complete test"
   sleep "$TEST_DURATION_SECONDS"
 
-  echo --- collect statistics about run
+  execution_step "collect statistics about run"
   declare q_mean_tps='
     SELECT ROUND(MEAN("median_sum")) as "mean_tps" FROM (
       SELECT MEDIAN(sum_count) AS "median_sum" FROM (
@@ -232,9 +242,14 @@ function launchTestnet() {
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
     python system-test/testnet-performance/testnet-automation-json-parser.py >>"$RESULT_FILE"
 
+  execution_step "Writing test results to ${RESULT_FILE}"
   RESULT_DETAILS=$(<"$RESULT_FILE")
   upload-ci-artifact "$RESULT_FILE"
 }
+
+RESULT_DETAILS=
+STEP=
+execution_step "Initialize Environment"
 
 cd "$(dirname "$0")/../.."
 
@@ -291,7 +306,7 @@ if [[ "$USE_PUBLIC_IP_ADDRESSES" = "true" ]] ; then
 fi
 
 if [[ -z $CHANNEL ]]; then
-  echo --- downloading tar from build artifacts
+  execution_step "downloading tar from build artifacts"
   buildkite-agent artifact download "solana-release*.tar.bz2" .
 fi
 
