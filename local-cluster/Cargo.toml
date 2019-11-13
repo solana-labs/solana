@@ -17,7 +17,7 @@ solana-client = { path = "../client", version = "0.21.0" }
 solana-drone = { path = "../drone", version = "0.21.0" }
 solana-exchange-api = { path = "../programs/exchange_api", version = "0.21.0" }
 solana-exchange-program = { path = "../programs/exchange_program", version = "0.21.0" }
-solana-genesis-programs = { path = "../genesis_programs", version = "0.21.0" }
+solana-genesis-programs = { path = "../genesis-programs", version = "0.21.0" }
 solana-ledger = { path = "../ledger", version = "0.21.0" }
 solana-logger = { path = "../logger", version = "0.21.0" }
 solana-runtime = { path = "../runtime", version = "0.21.0" }
