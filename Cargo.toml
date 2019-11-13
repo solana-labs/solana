@@ -11,7 +11,7 @@ members = [
     "perf",
     "validator",
     "genesis",
-    "genesis_programs",
+    "genesis-programs",
     "gossip",
     "install",
     "keygen",
