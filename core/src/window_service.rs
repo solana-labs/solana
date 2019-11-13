@@ -288,8 +288,9 @@ mod test {
     use rand::thread_rng;
     use solana_ledger::shred::DataShredHeader;
     use solana_ledger::{
-        blocktree::{get_tmp_ledger_path, make_many_slot_entries, Blocktree},
+        blocktree::{make_many_slot_entries, Blocktree},
         entry::{create_ticks, Entry},
+        get_tmp_ledger_path,
         shred::Shredder,
     };
     use solana_sdk::{

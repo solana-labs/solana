@@ -59,7 +59,7 @@ mod tests {
 
     #[test]
     fn test_rooted_slot_iterator() {
-        let blocktree_path = get_tmp_ledger_path("test_rooted_slot_iterator");
+        let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
         blocktree.set_roots(&[0]).unwrap();
         let ticks_per_slot = 5;

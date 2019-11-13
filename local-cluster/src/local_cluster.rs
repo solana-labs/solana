@@ -10,7 +10,7 @@ use solana_core::{
     service::Service,
     validator::{Validator, ValidatorConfig},
 };
-use solana_ledger::blocktree::create_new_tmp_ledger;
+use solana_ledger::create_new_tmp_ledger;
 use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},

@@ -75,7 +75,7 @@ impl Service for LedgerCleanupService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::blocktree::get_tmp_ledger_path;
+    use solana_ledger::get_tmp_ledger_path;
     use solana_ledger::blocktree::make_many_slot_entries;
     use std::sync::mpsc::channel;
 

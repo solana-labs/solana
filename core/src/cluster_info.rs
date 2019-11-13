@@ -1812,7 +1812,7 @@ mod tests {
     use crate::repair_service::RepairType;
     use crate::result::Error;
     use rayon::prelude::*;
-    use solana_ledger::blocktree::get_tmp_ledger_path;
+    use solana_ledger::get_tmp_ledger_path;
     use solana_ledger::blocktree::make_many_slot_entries;
     use solana_ledger::blocktree::Blocktree;
     use solana_ledger::blocktree_processor::fill_blocktree_slot_with_ticks;

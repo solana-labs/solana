@@ -978,8 +978,8 @@ mod tests {
     use crate::poh_recorder::WorkingBank;
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
-    use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::entry::{Entry, EntrySlice};
+    use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;

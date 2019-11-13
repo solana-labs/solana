@@ -1,7 +1,3 @@
-#[macro_use]
-extern crate solana_ledger;
-extern crate crossbeam_channel;
-
 use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
@@ -15,7 +11,7 @@ use solana_core::poh_recorder::PohRecorder;
 use solana_core::poh_recorder::WorkingBankEntry;
 use solana_core::service::Service;
 use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
+use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
 use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;

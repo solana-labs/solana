@@ -23,6 +23,7 @@ use solana_ledger::{
     bank_forks_utils,
     blocktree::{Blocktree, CompletedSlotsReceiver},
     blocktree_processor::{self, BankForksInfo},
+    create_new_tmp_ledger,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_metrics::datapoint_info;
@@ -503,7 +504,6 @@ impl Service for Validator {
 
 pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
     use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
-    use solana_ledger::blocktree::create_new_tmp_ledger;
 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
@@ -544,7 +544,6 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 mod tests {
     use super::*;
     use crate::genesis_utils::create_genesis_config_with_leader;
-    use solana_ledger::blocktree::create_new_tmp_ledger;
     use std::fs::remove_dir_all;
 
     #[test]

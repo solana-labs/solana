@@ -194,8 +194,8 @@ mod test {
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::service::Service;
-    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
     use solana_ledger::entry::create_ticks;
+    use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
@@ -259,7 +259,7 @@ mod test {
     #[test]
     fn test_broadcast_ledger() {
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path("test_broadcast_ledger");
+        let ledger_path = get_tmp_ledger_path!();
 
         {
             // Create the leader scheduler

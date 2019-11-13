@@ -12,7 +12,7 @@ use solana_core::{
     storage_stage::SLOTS_PER_TURN_TEST,
     validator::ValidatorConfig,
 };
-use solana_ledger::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path, Blocktree};
+use solana_ledger::{blocktree::Blocktree, create_new_tmp_ledger, get_tmp_ledger_path};
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
@@ -64,7 +64,7 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
     let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
         cluster_nodes[0].clone(),
     )));
-    let path = get_tmp_ledger_path("test");
+    let path = get_tmp_ledger_path!();
     let blocktree = Arc::new(Blocktree::open(&path).unwrap());
     Archiver::download_from_archiver(&cluster_info, &archiver_info, &blocktree, slots_per_segment)
         .unwrap();
