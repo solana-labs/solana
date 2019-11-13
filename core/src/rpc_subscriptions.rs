@@ -15,6 +15,13 @@ use std::sync::{Arc, RwLock};
 
 pub type Confirmations = usize;
 
+#[derive(Serialize, Clone)]
+pub struct SlotInfo {
+    pub slot: Slot,
+    pub parent: Slot,
+    pub root: Slot,
+}
+
 type RpcAccountSubscriptions =
     RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Account>, Confirmations)>>>;
 type RpcProgramSubscriptions =
@@ -22,6 +29,7 @@ type RpcProgramSubscriptions =
 type RpcSignatureSubscriptions = RwLock<
     HashMap<Signature, HashMap<SubscriptionId, (Sink<transaction::Result<()>>, Confirmations)>>,
 >;
+type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
 
 fn add_subscription<K, S>(
     subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
@@ -119,7 +127,7 @@ fn check_confirmations_and_notify<K, S, F, N, X>(
     }
 }
 
-fn notify_account<S>(result: Option<(S, u64)>, sink: &Sink<S>, root: u64)
+fn notify_account<S>(result: Option<(S, Slot)>, sink: &Sink<S>, root: Slot)
 where
     S: Clone + Serialize,
 {
@@ -130,7 +138,7 @@ where
     }
 }
 
-fn notify_signature<S>(result: Option<S>, sink: &Sink<S>, _root: u64)
+fn notify_signature<S>(result: Option<S>, sink: &Sink<S>, _root: Slot)
 where
     S: Clone + Serialize,
 {
@@ -139,7 +147,7 @@ where
     }
 }
 
-fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<(String, Account)>, _root: u64) {
+fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<(String, Account)>, _root: Slot) {
     for (pubkey, account) in accounts.iter() {
         sink.notify(Ok((pubkey.to_string(), account.clone())))
             .wait()
@@ -151,6 +159,7 @@ pub struct RpcSubscriptions {
     account_subscriptions: RpcAccountSubscriptions,
     program_subscriptions: RpcProgramSubscriptions,
     signature_subscriptions: RpcSignatureSubscriptions,
+    slot_subscriptions: RpcSlotSubscriptions,
 }
 
 impl Default for RpcSubscriptions {
@@ -159,6 +168,7 @@ impl Default for RpcSubscriptions {
             account_subscriptions: RpcAccountSubscriptions::default(),
             program_subscriptions: RpcProgramSubscriptions::default(),
             signature_subscriptions: RpcSignatureSubscriptions::default(),
+            slot_subscriptions: RpcSlotSubscriptions::default(),
         }
     }
 }
@@ -289,6 +299,26 @@ impl RpcSubscriptions {
         };
         for signature in &signatures {
             self.check_signature(signature, current_slot, bank_forks);
+        }
+    }
+
+    pub fn add_slot_subscription(&self, sub_id: &SubscriptionId, sink: &Sink<SlotInfo>) {
+        let mut subscriptions = self.slot_subscriptions.write().unwrap();
+        subscriptions.insert(sub_id.clone(), sink.clone());
+    }
+
+    pub fn remove_slot_subscription(&self, id: &SubscriptionId) -> bool {
+        let mut subscriptions = self.slot_subscriptions.write().unwrap();
+        subscriptions.remove(id).is_some()
+    }
+
+    pub fn notify_slot(&self, slot: Slot, parent: Slot, root: Slot) {
+        info!("notify_slot!! {} from {} (root={})", slot, parent, root);
+        let subscriptions = self.slot_subscriptions.read().unwrap();
+        for (_, sink) in subscriptions.iter() {
+            sink.notify(Ok(SlotInfo { slot, parent, root }))
+                .wait()
+                .unwrap();
         }
     }
 }
