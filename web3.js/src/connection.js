@@ -18,6 +18,50 @@ import type {TransactionSignature} from './transaction';
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
+type RpcResponseAndContext<T> = {
+  context: {
+    slot: number,
+  },
+  value: T,
+};
+
+/**
+ * @private
+ */
+function jsonRpcResultAndContext(resultDescription: any) {
+  return struct.union([
+    // those same methods return results with context in v0.21+ servers
+    jsonRpcResult({
+      context: struct({
+        slot: 'number',
+      }),
+      value: resultDescription,
+    }),
+    // selected methods return "bare" results in pre-v0.21 servers
+    jsonRpcResult(resultDescription),
+  ]);
+}
+
+/**
+ * @private
+ */
+function jsonRpcResult(resultDescription: any) {
+  const jsonRpcVersion = struct.literal('2.0');
+  return struct.union([
+    struct({
+      jsonrpc: jsonRpcVersion,
+      id: 'string',
+      error: 'any',
+    }),
+    struct({
+      jsonrpc: jsonRpcVersion,
+      id: 'string',
+      error: 'null?',
+      result: resultDescription,
+    }),
+  ]);
+}
+
 /**
  * The level of commitment desired when querying state
  *   'max':    Query the most recent block which has reached max voter lockout
@@ -207,12 +251,7 @@ const GetEpochScheduleRpcResult = struct({
 /**
  * Expected JSON RPC response for the "getBalance" message
  */
-const GetBalanceRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: 'number?',
-});
+const GetBalanceAndContextRpcResult = jsonRpcResultAndContext('number?');
 
 /**
  * Expected JSON RPC response for the "getVersion" message
@@ -223,26 +262,6 @@ const GetVersionRpcResult = struct({
   error: 'any?',
   result: Version,
 });
-
-/**
- * @private
- */
-function jsonRpcResult(resultDescription: any) {
-  const jsonRpcVersion = struct.literal('2.0');
-  return struct.union([
-    struct({
-      jsonrpc: jsonRpcVersion,
-      id: 'string',
-      error: 'any',
-    }),
-    struct({
-      jsonrpc: jsonRpcVersion,
-      id: 'string',
-      error: 'null?',
-      result: resultDescription,
-    }),
-  ]);
-}
 
 /**
  * @private
@@ -258,7 +277,9 @@ const AccountInfoResult = struct({
 /**
  * Expected JSON RPC response for the "getAccountInfo" message
  */
-const GetAccountInfoRpcResult = jsonRpcResult(AccountInfoResult);
+const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
+  struct.union(['null', AccountInfoResult]),
+);
 
 /***
  * Expected JSON RPC response for the "accountNotification" message
@@ -291,7 +312,9 @@ const GetProgramAccountsRpcResult = jsonRpcResult(
 /**
  * Expected JSON RPC response for the "confirmTransaction" message
  */
-const ConfirmTransactionRpcResult = jsonRpcResult('boolean');
+const ConfirmTransactionAndContextRpcResult = jsonRpcResultAndContext(
+  'boolean',
+);
 
 /**
  * Expected JSON RPC response for the "getSlot" message
@@ -405,7 +428,7 @@ const GetBlockRpcResult = jsonRpcResult(
 /**
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
-const GetRecentBlockhash = jsonRpcResult([
+const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext([
   'string',
   struct({
     burnPercent: 'number',
@@ -416,6 +439,7 @@ const GetRecentBlockhash = jsonRpcResult([
     targetSignaturesPerSlot: 'number',
   }),
 ]);
+
 /**
  * @ignore
  */
@@ -591,43 +615,94 @@ export class Connection {
   /**
    * Fetch the balance for the specified public key
    */
-  async getBalance(
+  async getBalanceAndContext(
     publicKey: PublicKey,
     commitment: ?Commitment,
-  ): Promise<number> {
+  ): Promise<RpcResponseAndContext<number>> {
     const args = this._argsWithCommitment([publicKey.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getBalance', args);
-    const res = GetBalanceRpcResult(unsafeRes);
+    const res = GetBalanceAndContextRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    return res.result;
+
+    const isV021 =
+      typeof res.result.context !== 'undefined' &&
+      typeof res.result.value !== 'undefined';
+
+    if (isV021) {
+      return res.result;
+    } else {
+      return {
+        context: {
+          slot: NaN,
+        },
+        value: res.result,
+      };
+    }
+  }
+  async getBalance(
+    publicKey: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<number> {
+    return await this.getBalanceAndContext(publicKey, commitment)
+      .then(x => x.value)
+      .catch(e => {
+        throw e;
+      });
   }
 
   /**
    * Fetch all the account info for the specified public key
    */
+  async getAccountInfoAndContext(
+    publicKey: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<RpcResponseAndContext<AccountInfo>> {
+    const args = this._argsWithCommitment([publicKey.toBase58()], commitment);
+    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
+    const res = GetAccountInfoAndContextRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+
+    const isV021 =
+      typeof res.result.context !== 'undefined' &&
+      typeof res.result.value !== 'undefined';
+
+    const slot = isV021 ? res.result.context.slot : NaN;
+    const resultValue = isV021 ? res.result.value : res.result;
+
+    if (!resultValue) {
+      throw new Error('Invalid request');
+    }
+
+    const {executable, owner, lamports, data} = resultValue;
+    const value = {
+      executable,
+      owner: new PublicKey(owner),
+      lamports,
+      data: Buffer.from(data),
+    };
+
+    return {
+      context: {
+        slot,
+      },
+      value,
+    };
+  }
   async getAccountInfo(
     publicKey: PublicKey,
     commitment: ?Commitment,
   ): Promise<AccountInfo> {
-    const args = this._argsWithCommitment([publicKey.toBase58()], commitment);
-    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
-    const res = GetAccountInfoRpcResult(unsafeRes);
-    if (res.error) {
-      throw new Error(res.error.message);
-    }
-
-    const {result} = res;
-    assert(typeof result !== 'undefined');
-
-    return {
-      executable: result.executable,
-      owner: new PublicKey(result.owner),
-      lamports: result.lamports,
-      data: Buffer.from(result.data),
-    };
+    return await this.getAccountInfoAndContext(publicKey, commitment)
+      .then(x => x.value)
+      .catch(e => {
+        throw e;
+      });
   }
 
   /**
@@ -663,18 +738,42 @@ export class Connection {
   /**
    * Confirm the transaction identified by the specified signature
    */
-  async confirmTransaction(
+  async confirmTransactionAndContext(
     signature: TransactionSignature,
     commitment: ?Commitment,
-  ): Promise<boolean> {
+  ): Promise<RpcResponseAndContext<boolean>> {
     const args = this._argsWithCommitment([signature], commitment);
     const unsafeRes = await this._rpcRequest('confirmTransaction', args);
-    const res = ConfirmTransactionRpcResult(unsafeRes);
+    const res = ConfirmTransactionAndContextRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    return res.result;
+
+    const isV021 =
+      typeof res.result.context !== 'undefined' &&
+      typeof res.result.value !== 'undefined';
+
+    if (isV021) {
+      return res.result;
+    } else {
+      return {
+        context: {
+          slot: NaN,
+        },
+        value: res.result,
+      };
+    }
+  }
+  async confirmTransaction(
+    signature: TransactionSignature,
+    commitment: ?Commitment,
+  ): Promise<boolean> {
+    return await this.confirmTransactionAndContext(signature, commitment)
+      .then(x => x.value)
+      .catch(e => {
+        throw e;
+      });
   }
 
   /**
@@ -862,9 +961,9 @@ export class Connection {
   /**
    * Fetch a recent blockhash from the cluster
    */
-  async getRecentBlockhash(
+  async getRecentBlockhashAndContext(
     commitment: ?Commitment,
-  ): Promise<BlockhashAndFeeCalculator> {
+  ): Promise<RpcResponseAndContext<BlockhashAndFeeCalculator>> {
     const args = this._argsWithCommitment([], commitment);
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
 
@@ -876,18 +975,47 @@ export class Connection {
       }
       const [blockhash, feeCalculator] = res_016.result;
       feeCalculator.burnPercent = 0;
-      return [blockhash, feeCalculator];
+
+      return {
+        context: {
+          slot: NaN,
+        },
+        value: [blockhash, feeCalculator],
+      };
     } catch (e) {
       // Not legacy format
     }
     // End Legacy v0.16 response
 
-    const res = GetRecentBlockhash(unsafeRes);
+    const res = GetRecentBlockhashAndContextRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    return res.result;
+
+    const isV021 =
+      typeof res.result.context !== 'undefined' &&
+      typeof res.result.value !== 'undefined';
+
+    if (isV021) {
+      return res.result;
+    } else {
+      return {
+        context: {
+          slot: NaN,
+        },
+        value: res.result,
+      };
+    }
+  }
+  async getRecentBlockhash(
+    commitment: ?Commitment,
+  ): Promise<BlockhashAndFeeCalculator> {
+    return await this.getRecentBlockhashAndContext(commitment)
+      .then(x => x.value)
+      .catch(e => {
+        throw e;
+      });
   }
 
   /**
