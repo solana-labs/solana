@@ -505,7 +505,7 @@ impl Blocktree {
                             &mut index_working_set,
                             &mut slot_meta_working_set,
                             &mut write_batch,
-                            &mut just_inserted_coding_shreds,
+                            &mut just_inserted_data_shreds,
                             &mut index_meta_time,
                         );
                     }
@@ -684,12 +684,7 @@ impl Blocktree {
 
         // Assert guaranteed by integrity checks on the shred that happen before
         // `insert_coding_shred` is called
-        if shred.is_data() || shred_index < u64::from(shred.coding_header.position) {
-            error!("Due to earlier validation, shred index must be >= pos");
-            return Err(BlocktreeError::InvalidShredData(Box::new(
-                bincode::ErrorKind::Custom("shred index < pos".to_string()),
-            )));
-        }
+        assert!(shred.is_code() && shred_index >= u64::from(shred.coding_header.position));
 
         let set_index = shred_index - u64::from(shred.coding_header.position);
         let erasure_config = ErasureConfig::new(
