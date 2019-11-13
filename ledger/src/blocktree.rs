@@ -140,6 +140,7 @@ impl Blocktree {
         adjust_ulimit_nofile();
 
         // Open the database
+        let measure = Measure::start("open");
         let db = Database::open(&blocktree_path)?;
 
         // Create the metadata column family
@@ -169,6 +170,7 @@ impl Blocktree {
             .unwrap_or(0);
         let last_root = Arc::new(RwLock::new(max_root));
 
+        info!("{:?} {}", blocktree_path, measure);
         Ok(Blocktree {
             db,
             meta_cf,

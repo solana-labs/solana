@@ -170,13 +170,14 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     let mut snapshot_stream = BufWriter::new(snapshot_file);
     // Create the snapshot
     serialize_into(&mut snapshot_stream, &*bank)?;
-    let mut bank_rc_serialize = Measure::start("bank_rc_serialize-ms");
+    let mut bank_rc_serialize = Measure::start("create snapshot");
     serialize_into(&mut snapshot_stream, &bank.rc)?;
     bank_rc_serialize.stop();
     inc_new_counter_info!("bank-rc-serialize-ms", bank_rc_serialize.as_ms() as usize);
 
     info!(
-        "successfully created snapshot {}, path: {:?}",
+        "{} for slot {} at {:?}",
+        bank_rc_serialize,
         bank.slot(),
         snapshot_file_path,
     );
@@ -214,6 +215,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     let unpack_dir = tempfile::tempdir_in(snapshot_path)?;
     untar_snapshot_in(&snapshot_tar, &unpack_dir)?;
 
+    let mut measure = Measure::start("bank rebuild from snapshot");
     let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
     let unpacked_snapshots_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
     let bank = rebuild_bank_from_snapshots(
@@ -225,6 +227,8 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     if !bank.verify_snapshot_bank() {
         panic!("Snapshot bank failed to verify");
     }
+    measure.stop();
+    info!("{}", measure);
 
     // Move the unpacked snapshots into `snapshot_path`
     let dir_files = fs::read_dir(&unpacked_snapshots_dir).unwrap_or_else(|err| {
@@ -251,10 +255,13 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_tar: P,
     unpack_dir: Q,
 ) -> Result<()> {
+    let mut measure = Measure::start("snapshot untar");
     let tar_bz2 = File::open(snapshot_tar)?;
     let tar = BzDecoder::new(BufReader::new(tar_bz2));
     let mut archive = Archive::new(tar);
     archive.unpack(&unpack_dir)?;
+    measure.stop();
+    info!("{}", measure);
     Ok(())
 }
 
