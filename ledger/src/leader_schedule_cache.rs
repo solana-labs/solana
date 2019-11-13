@@ -235,11 +235,12 @@ impl LeaderScheduleCache {
 mod tests {
     use super::*;
     use crate::{
-        blocktree::{get_tmp_ledger_path, make_slot_entries},
+        blocktree::make_slot_entries,
         genesis_utils::{
             create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             BOOTSTRAP_LEADER_LAMPORTS,
         },
+        get_tmp_ledger_path,
         staking_utils::tests::setup_vote_and_stake_accounts,
     };
     use solana_runtime::bank::Bank;

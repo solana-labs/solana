@@ -8,8 +8,9 @@ extern crate solana_ledger;
 
 use rand::Rng;
 use solana_ledger::{
-    blocktree::{entries_to_test_shreds, get_tmp_ledger_path, Blocktree},
+    blocktree::{entries_to_test_shreds, Blocktree},
     entry::{create_ticks, Entry},
+    get_tmp_ledger_path,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::path::Path;

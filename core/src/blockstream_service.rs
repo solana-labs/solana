@@ -105,7 +105,7 @@ mod test {
     use bincode::{deserialize, serialize};
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
-    use solana_ledger::blocktree::create_new_tmp_ledger;
+    use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::entry::{create_ticks, Entry};
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};

@@ -112,8 +112,8 @@ mod tests {
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::poh_recorder::WorkingBank;
     use crate::result::Result;
-    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
     use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+    use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
     use solana_perf::test_tx::test_tx;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::hash;

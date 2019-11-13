@@ -1030,7 +1030,7 @@ pub mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
-    use solana_ledger::blocktree::get_tmp_ledger_path;
+    use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::{
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},

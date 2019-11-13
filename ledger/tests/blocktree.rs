@@ -1,8 +1,8 @@
-#[macro_use]
-extern crate solana_ledger;
-
-use solana_ledger::blocktree::{self, get_tmp_ledger_path, Blocktree};
 use solana_ledger::entry;
+use solana_ledger::{
+    blocktree::{self, Blocktree},
+    get_tmp_ledger_path,
+};
 use solana_sdk::hash::Hash;
 use std::sync::Arc;
 use std::thread::Builder;

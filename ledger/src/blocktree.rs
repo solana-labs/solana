@@ -1776,11 +1776,11 @@ macro_rules! tmp_ledger_name {
 #[macro_export]
 macro_rules! get_tmp_ledger_path {
     () => {
-        get_tmp_ledger_path(tmp_ledger_name!())
+        $crate::blocktree::get_ledger_path_from_name($crate::tmp_ledger_name!())
     };
 }
 
-pub fn get_tmp_ledger_path(name: &str) -> PathBuf {
+pub fn get_ledger_path_from_name(name: &str) -> PathBuf {
     use std::env;
     let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
     let keypair = Keypair::new();
@@ -1802,7 +1802,7 @@ pub fn get_tmp_ledger_path(name: &str) -> PathBuf {
 #[macro_export]
 macro_rules! create_new_tmp_ledger {
     ($genesis_config:expr) => {
-        create_new_tmp_ledger(tmp_ledger_name!(), $genesis_config)
+        $crate::blocktree::create_new_ledger_from_name($crate::tmp_ledger_name!(), $genesis_config)
     };
 }
 
@@ -1828,8 +1828,8 @@ pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: u64) -> bool
 //
 // Note: like `create_new_ledger` the returned ledger will have slot 0 full of ticks (and only
 // ticks)
-pub fn create_new_tmp_ledger(name: &str, genesis_config: &GenesisConfig) -> (PathBuf, Hash) {
-    let ledger_path = get_tmp_ledger_path(name);
+pub fn create_new_ledger_from_name(name: &str, genesis_config: &GenesisConfig) -> (PathBuf, Hash) {
+    let ledger_path = get_ledger_path_from_name(name);
     let blockhash = create_new_ledger(&ledger_path, genesis_config).unwrap();
     (ledger_path, blockhash)
 }
@@ -1976,7 +1976,7 @@ pub mod tests {
 
         let (mut shreds, _) = make_slot_entries(0, 0, num_entries);
 
-        let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_basic");
+        let ledger_path = get_tmp_ledger_path!();
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Insert last shred, test we can retrieve it
@@ -2099,7 +2099,7 @@ pub mod tests {
 
     #[test]
     fn test_put_get_simple() {
-        let ledger_path = get_tmp_ledger_path("test_put_get_simple");
+        let ledger_path = get_tmp_ledger_path!();
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Test meta column family
@@ -2154,7 +2154,7 @@ pub mod tests {
         let num_shreds = shreds.len() as u64;
         let shred_bufs: Vec<_> = shreds.iter().map(|shred| shred.payload.clone()).collect();
 
-        let ledger_path = get_tmp_ledger_path("test_read_shreds_bytes");
+        let ledger_path = get_tmp_ledger_path!();
         let ledger = Blocktree::open(&ledger_path).unwrap();
         ledger.insert_shreds(shreds, None).unwrap();
 
@@ -2216,7 +2216,7 @@ pub mod tests {
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
-        let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_basic");
+        let ledger_path = get_tmp_ledger_path!();
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Insert last shred, we're missing the other shreds, so no consecutive
@@ -2261,7 +2261,7 @@ pub mod tests {
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
-        let ledger_path = get_tmp_ledger_path("test_insert_data_shreds_reverse");
+        let ledger_path = get_tmp_ledger_path!();
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Insert shreds in reverse, check for consecutive returned shreds
@@ -2300,7 +2300,7 @@ pub mod tests {
         #[test]
         pub fn test_iteration_order() {
             let slot = 0;
-            let blocktree_path = get_tmp_ledger_path("test_iteration_order");
+            let blocktree_path = get_tmp_ledger_path!();
             {
                 let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -2339,7 +2339,7 @@ pub mod tests {
 
     #[test]
     pub fn test_get_slot_entries1() {
-        let blocktree_path = get_tmp_ledger_path("test_get_slot_entries1");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let entries = create_ticks(8, 0, Hash::default());
@@ -2369,7 +2369,7 @@ pub mod tests {
     #[test]
     #[ignore]
     pub fn test_get_slot_entries2() {
-        let blocktree_path = get_tmp_ledger_path("test_get_slot_entries2");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -2403,7 +2403,7 @@ pub mod tests {
     #[test]
     pub fn test_get_slot_entries3() {
         // Test inserting/fetching shreds which contain multiple entries per shred
-        let blocktree_path = get_tmp_ledger_path("test_get_slot_entries3");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 5 as u64;
@@ -2430,7 +2430,7 @@ pub mod tests {
 
     #[test]
     pub fn test_insert_data_shreds_consecutive() {
-        let blocktree_path = get_tmp_ledger_path("test_insert_data_shreds_consecutive");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             // Create enough entries to ensure there are at least two shreds created
@@ -2494,7 +2494,7 @@ pub mod tests {
     #[test]
     pub fn test_insert_data_shreds_duplicate() {
         // Create RocksDb ledger
-        let blocktree_path = get_tmp_ledger_path("test_insert_data_shreds_duplicate");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -2531,7 +2531,7 @@ pub mod tests {
     #[test]
     pub fn test_new_shreds_signal() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_new_shreds_signal");
+        let ledger_path = get_tmp_ledger_path!();
         let (ledger, recvr, _) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
@@ -2607,7 +2607,7 @@ pub mod tests {
     #[test]
     pub fn test_completed_shreds_signal() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_completed_shreds_signal");
+        let ledger_path = get_tmp_ledger_path!();
         let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
@@ -2629,7 +2629,7 @@ pub mod tests {
     #[test]
     pub fn test_completed_shreds_signal_orphans() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_completed_shreds_signal_orphans");
+        let ledger_path = get_tmp_ledger_path!();
         let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
@@ -2665,7 +2665,7 @@ pub mod tests {
     #[test]
     pub fn test_completed_shreds_signal_many() {
         // Initialize ledger
-        let ledger_path = get_tmp_ledger_path("test_completed_shreds_signal_many");
+        let ledger_path = get_tmp_ledger_path!();
         let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
@@ -2695,7 +2695,7 @@ pub mod tests {
 
     #[test]
     pub fn test_handle_chaining_basic() {
-        let blocktree_path = get_tmp_ledger_path("test_handle_chaining_basic");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let entries_per_slot = 5;
             let num_slots = 3;
@@ -2760,7 +2760,7 @@ pub mod tests {
 
     #[test]
     pub fn test_handle_chaining_missing_slots() {
-        let blocktree_path = get_tmp_ledger_path("test_handle_chaining_missing_slots");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 30;
@@ -2842,7 +2842,7 @@ pub mod tests {
 
     #[test]
     pub fn test_forward_chaining_is_connected() {
-        let blocktree_path = get_tmp_ledger_path("test_forward_chaining_is_connected");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 15;
@@ -2929,7 +2929,7 @@ pub mod tests {
     /*
         #[test]
         pub fn test_chaining_tree() {
-            let blocktree_path = get_tmp_ledger_path("test_chaining_tree");
+            let blocktree_path = get_tmp_ledger_path!();
             {
                 let blocktree = Blocktree::open(&blocktree_path).unwrap();
                 let num_tree_levels = 6;
@@ -3030,7 +3030,7 @@ pub mod tests {
     */
     #[test]
     pub fn test_get_slots_since() {
-        let blocktree_path = get_tmp_ledger_path("test_get_slots_since");
+        let blocktree_path = get_tmp_ledger_path!();
 
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -3067,7 +3067,7 @@ pub mod tests {
 
     #[test]
     fn test_orphans() {
-        let blocktree_path = get_tmp_ledger_path("test_orphans");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -3127,7 +3127,7 @@ pub mod tests {
     }
 
     fn test_insert_data_shreds_slots(name: &str, should_bulk_write: bool) {
-        let blocktree_path = get_tmp_ledger_path(name);
+        let blocktree_path = get_ledger_path_from_name(name);
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -3871,8 +3871,7 @@ pub mod tests {
 
     #[test]
     fn test_get_slot_entries_with_shred_count_corruption() {
-        let blocktree_path =
-            get_tmp_ledger_path("test_get_slot_entries_with_shred_count_corruption");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_ticks = 8;

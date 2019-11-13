@@ -534,8 +534,8 @@ mod tests {
     use crate::blob::{Blob, SharedBlob};
     use crate::cluster_info::Node;
     use crate::streamer;
-    use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::blocktree::make_many_slot_entries;
+    use solana_ledger::get_tmp_ledger_path;
     use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;

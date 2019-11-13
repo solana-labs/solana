@@ -1,8 +1,5 @@
 // Long-running storage_stage tests
 
-#[macro_use]
-extern crate solana_ledger;
-
 #[cfg(test)]
 mod tests {
     use log::*;
@@ -11,9 +8,9 @@ mod tests {
     use solana_core::storage_stage::{test_cluster_info, SLOTS_PER_TURN_TEST};
     use solana_core::storage_stage::{StorageStage, StorageState};
     use solana_ledger::bank_forks::BankForks;
-    use solana_ledger::blocktree::{create_new_tmp_ledger, Blocktree};
     use solana_ledger::blocktree_processor;
     use solana_ledger::entry;
+    use solana_ledger::{blocktree::Blocktree, create_new_tmp_ledger};
     use solana_runtime::bank::Bank;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::Hash;

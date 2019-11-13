@@ -300,8 +300,7 @@ mod test {
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::create_genesis_config;
     use solana_ledger::{
-        blocktree::{get_tmp_ledger_path, Blocktree},
-        entry::create_ticks,
+        blocktree::Blocktree, entry::create_ticks, get_tmp_ledger_path,
         shred::max_ticks_per_n_shreds,
     };
     use solana_runtime::bank::Bank;

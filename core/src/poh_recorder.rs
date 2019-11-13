@@ -469,7 +469,7 @@ impl PohRecorder {
 mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
+    use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
     use solana_perf::test_tx::test_tx;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::hash;

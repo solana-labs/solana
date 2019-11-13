@@ -542,7 +542,6 @@ pub fn fill_blocktree_slot_with_ticks(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::blocktree::create_new_tmp_ledger;
     use crate::entry::{create_ticks, next_entry, next_entry_mut};
     use crate::genesis_utils::{
         create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,

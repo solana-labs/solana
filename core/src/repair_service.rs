@@ -397,11 +397,11 @@ mod test {
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use rand::{thread_rng, Rng};
-    use solana_ledger::blocktree::{get_tmp_ledger_path, Blocktree};
     use solana_ledger::blocktree::{
         make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
     };
     use solana_ledger::shred::max_ticks_per_n_shreds;
+    use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
     use std::sync::mpsc::channel;
     use std::thread::Builder;
 

@@ -115,8 +115,8 @@ mod tests {
     use super::*;
     use crate::archiver::sample_file;
     use crate::chacha::chacha_cbc_encrypt_ledger;
-    use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::entry::create_ticks;
+    use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::clock::DEFAULT_SLOTS_PER_SEGMENT;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::{remove_dir_all, remove_file};
@@ -132,8 +132,7 @@ mod tests {
 
         let slots_per_segment = 32;
         let entries = create_ticks(slots_per_segment, 0, Hash::default());
-        let ledger_dir = "test_encrypt_file_many_keys_single";
-        let ledger_path = get_tmp_ledger_path(ledger_dir);
+        let ledger_path = get_tmp_ledger_path!();
         let ticks_per_slot = 16;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
 
@@ -193,8 +192,7 @@ mod tests {
             return;
         }
 
-        let ledger_dir = "test_encrypt_file_many_keys_multiple";
-        let ledger_path = get_tmp_ledger_path(ledger_dir);
+        let ledger_path = get_tmp_ledger_path!();
         let ticks_per_slot = 90;
         let entries = create_ticks(2 * ticks_per_slot, 0, Hash::default());
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
@@ -265,8 +263,7 @@ mod tests {
         }
 
         let mut keys = hex!("abc123");
-        let ledger_dir = "test_encrypt_file_many_keys_bad_key_length";
-        let ledger_path = get_tmp_ledger_path(ledger_dir);
+        let ledger_path = get_tmp_ledger_path!();
         let samples = [0];
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         assert!(chacha_cbc_encrypt_file_many_keys(

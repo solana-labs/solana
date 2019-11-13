@@ -181,7 +181,7 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         rpc::tests::create_validator_exit,
     };
-    use solana_ledger::blocktree::get_tmp_ledger_path;
+    use solana_ledger::get_tmp_ledger_path;
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::KeypairUtil;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};

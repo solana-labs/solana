@@ -75,9 +75,9 @@ pub fn chacha_cbc_encrypt_ledger(
 mod tests {
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::gen_keys::GenKeys;
-    use solana_ledger::blocktree::get_tmp_ledger_path;
     use solana_ledger::blocktree::Blocktree;
     use solana_ledger::entry::Entry;
+    use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::KeypairUtil;
@@ -128,8 +128,7 @@ mod tests {
     #[test]
     fn test_encrypt_ledger() {
         solana_logger::setup();
-        let ledger_dir = "chacha_test_encrypt_file";
-        let ledger_path = get_tmp_ledger_path(ledger_dir);
+        let ledger_path = get_tmp_ledger_path!();
         let ticks_per_slot = 16;
         let slots_per_segment = 32;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
