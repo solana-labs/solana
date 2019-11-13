@@ -1,5 +1,4 @@
 use crate::{
-    blob::to_shared_blob,
     chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE},
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
@@ -23,7 +22,9 @@ use solana_ledger::{
     blocktree::Blocktree, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
 };
 use solana_net_utils::bind_in_range;
+use solana_perf::packet::Packets;
 use solana_perf::recycler::Recycler;
+use solana_sdk::packet::Packet;
 use solana_sdk::{
     account_utils::State,
     client::{AsyncClient, SyncClient},
@@ -165,9 +166,8 @@ fn create_request_processor(
                         limited_deserialize(&packet.data[..packet.meta.size]);
                     match req {
                         Ok(ArchiverRequest::GetSlotHeight(from)) => {
-                            if let Ok(blob) = to_shared_blob(slot, from) {
-                                let _ = s_responder.send(vec![blob]);
-                            }
+                            let packet = Packet::from_data(&from, slot);
+                            let _ = s_responder.send(Packets::new(vec![packet]));
                         }
                         Err(e) => {
                             info!("invalid request: {:?}", e);

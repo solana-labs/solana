@@ -1,8 +1,7 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::blob::{Blob, SharedBlobs};
-use crate::packet::{self, Packets, PacketsRecycler, PACKETS_PER_BATCH};
+use crate::packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH};
 use crate::recvmmsg::NUM_RCVMMSGS;
 use crate::result::{Error, Result};
 use solana_sdk::timing::duration_as_ms;
@@ -15,8 +14,6 @@ use std::time::{Duration, Instant};
 
 pub type PacketReceiver = Receiver<Packets>;
 pub type PacketSender = Sender<Packets>;
-pub type BlobSender = Sender<SharedBlobs>;
-pub type BlobReceiver = Receiver<SharedBlobs>;
 
 fn recv_loop(
     sock: &UdpSocket,
@@ -33,7 +30,7 @@ fn recv_loop(
         let mut msgs = Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name);
         loop {
             // Check for exit signal, even if socket is busy
-            // (for instance the leader trasaction socket)
+            // (for instance the leader transaction socket)
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
@@ -83,10 +80,10 @@ pub fn receiver(
         .unwrap()
 }
 
-fn recv_send(sock: &UdpSocket, r: &BlobReceiver) -> Result<()> {
+fn recv_send(sock: &UdpSocket, r: &PacketReceiver) -> Result<()> {
     let timer = Duration::new(1, 0);
     let msgs = r.recv_timeout(timer)?;
-    Blob::send_to(sock, msgs)?;
+    send_to(&msgs, sock)?;
     Ok(())
 }
 
@@ -110,7 +107,7 @@ pub fn recv_batch(recvr: &PacketReceiver, max_batch: usize) -> Result<(Vec<Packe
     Ok((batch, len, duration_as_ms(&recv_start.elapsed())))
 }
 
-pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: BlobReceiver) -> JoinHandle<()> {
+pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: PacketReceiver) -> JoinHandle<()> {
     Builder::new()
         .name(format!("solana-responder-{}", name))
         .spawn(move || loop {
@@ -125,43 +122,9 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: BlobReceiver) -> J
         .unwrap()
 }
 
-//TODO, we would need to stick block authentication before we create the
-//window.
-fn recv_blobs(sock: &UdpSocket, s: &BlobSender) -> Result<()> {
-    trace!("recv_blobs: receiving on {}", sock.local_addr().unwrap());
-    let dq = Blob::recv_from(sock)?;
-    if !dq.is_empty() {
-        s.send(dq)?;
-    }
-    Ok(())
-}
-
-pub fn blob_receiver(
-    sock: Arc<UdpSocket>,
-    exit: &Arc<AtomicBool>,
-    s: BlobSender,
-) -> JoinHandle<()> {
-    //DOCUMENTED SIDE-EFFECT
-    //1 second timeout on socket read
-    let timer = Duration::new(1, 0);
-    sock.set_read_timeout(Some(timer))
-        .expect("set socket timeout");
-    let exit = exit.clone();
-    Builder::new()
-        .name("solana-blob_receiver".to_string())
-        .spawn(move || loop {
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
-            let _ = recv_blobs(&sock, &s);
-        })
-        .unwrap()
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blob::{Blob, SharedBlob};
     use crate::packet::{Packet, Packets, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder};
     use solana_perf::recycler::Recycler;
@@ -193,7 +156,6 @@ mod test {
     fn streamer_debug() {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
         write!(io::sink(), "{:?}", Packets::default()).unwrap();
-        write!(io::sink(), "{:?}", Blob::default()).unwrap();
     }
     #[test]
     fn streamer_send_test() {
@@ -208,16 +170,15 @@ mod test {
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
-            let mut msgs = Vec::new();
+            let mut msgs = Packets::default();
             for i in 0..5 {
-                let b = SharedBlob::default();
+                let mut b = Packet::default();
                 {
-                    let mut w = b.write().unwrap();
-                    w.data[0] = i as u8;
-                    w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&addr);
+                    b.data[0] = i as u8;
+                    b.meta.size = PACKET_DATA_SIZE;
+                    b.meta.set_addr(&addr);
                 }
-                msgs.push(b);
+                msgs.packets.push(b);
             }
             s_responder.send(msgs).expect("send");
             t_responder

@@ -7,6 +7,7 @@ use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::blocktree::Blocktree;
+use solana_perf::recycler::Recycler;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::{SocketAddr, TcpListener, UdpSocket};
@@ -35,7 +36,13 @@ impl GossipService {
             &cluster_info.read().unwrap().my_data().id,
             gossip_socket.local_addr().unwrap()
         );
-        let t_receiver = streamer::blob_receiver(gossip_socket.clone(), &exit, request_sender);
+        let t_receiver = streamer::receiver(
+            gossip_socket.clone(),
+            &exit,
+            request_sender,
+            Recycler::default(),
+            "gossip_receiver",
+        );
         let (response_sender, response_receiver) = channel();
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
         let t_listen = ClusterInfo::listen(

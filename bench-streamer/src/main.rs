@@ -1,5 +1,4 @@
 use clap::{crate_description, crate_name, App, Arg};
-use solana_core::blob::BLOB_SIZE;
 use solana_core::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
 use solana_core::result::Result;
 use solana_core::streamer::{receiver, PacketReceiver};
@@ -29,7 +28,7 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         let mut num = 0;
         for p in &msgs.packets {
             let a = p.meta.addr();
-            assert!(p.meta.size < BLOB_SIZE);
+            assert!(p.meta.size < PACKET_DATA_SIZE);
             send.send_to(&p.data[..p.meta.size], &a).unwrap();
             num += 1;
         }
