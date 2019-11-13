@@ -47,6 +47,13 @@ declare module '@solana/web3.js' {
   /* TODO */
 
   // === src/connection.js ===
+  declare export type RpcResponseAndContext<T> = {
+    context: {
+      slot: number,
+    },
+    value: T,
+  };
+
   declare export type Commitment = 'max' | 'recent';
 
   declare export type AccountInfo = {
@@ -111,6 +118,10 @@ declare module '@solana/web3.js' {
 
   declare export class Connection {
     constructor(endpoint: string, commitment: ?Commitment): Connection;
+    getAccountInfoAndContext(
+      publicKey: PublicKey,
+      commitment: ?Commitment,
+    ): Promise<RpcResponseAndContext<AccountInfo>>;
     getAccountInfo(
       publicKey: PublicKey,
       commitment: ?Commitment,
@@ -119,9 +130,17 @@ declare module '@solana/web3.js' {
       programId: PublicKey,
       commitment: ?Commitment,
     ): Promise<Array<[PublicKey, AccountInfo]>>;
+    getBalanceAndContext(
+      publicKey: PublicKey,
+      commitment: ?Commitment,
+    ): Promise<RpcResponseAndContext<number>>;
     getBalance(publicKey: PublicKey, commitment: ?Commitment): Promise<number>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
     getVoteAccounts(commitment: ?Commitment): Promise<VoteAccountStatus>;
+    confirmTransactionAndContext(
+      signature: TransactionSignature,
+      commitment: ?Commitment,
+    ): Promise<RpcResponseAndContext<boolean>>;
     confirmTransaction(
       signature: TransactionSignature,
       commitment: ?Commitment,
@@ -137,6 +156,9 @@ declare module '@solana/web3.js' {
     getVersion(): Promise<Version>;
     getInflation(commitment: ?Commitment): Promise<Inflation>;
     getEpochSchedule(): Promise<EpochSchedule>;
+    getRecentBlockhashAndContext(
+      commitment: ?Commitment,
+    ): Promise<RpcResponseAndContext<[Blockhash, FeeCalculator]>>;
     getRecentBlockhash(
       commitment: ?Commitment,
     ): Promise<[Blockhash, FeeCalculator]>;
