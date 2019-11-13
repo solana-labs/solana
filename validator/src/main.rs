@@ -244,6 +244,7 @@ fn initialize_ledger_path(
     rpc_addr: &std::net::SocketAddr,
     rpc_client: &RpcClient,
     ledger_path: &Path,
+    no_genesis_fetch: bool,
     no_snapshot_fetch: bool,
 ) -> Result<Hash, String> {
     let genesis_hash = rpc_client
