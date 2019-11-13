@@ -23,7 +23,7 @@ download() {
 }
 
 # Install or upgrade xargo
-cargo install cargo-update
+cargo install cargo-update 2> /dev/null
 cargo install-update -i xargo
 xargo --version > xargo.md 2>&1
 
