@@ -26,15 +26,28 @@ function analyze_packet_loss {
     # shellcheck disable=SC1091
     source net/config/config
     mkdir -p iftop-logs
-    execution_step "Collecting iftop logs"
+    execution_step "Map private -> public IP addresses in iftop logs"
     # shellcheck disable=SC2154
     for i in "${!validatorIpList[@]}"; do
-      iftop_log=iftop-logs/${validatorIpList[$i]}-iftop.log
-      # shellcheck disable=SC2016
-      net/ssh.sh solana@"${validatorIpList[$i]}" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log' \
-      "${validatorIpListPrivate[$i]}" "${validatorIpList[$i]}" > "$iftop_log"
-      #upload-ci-artifact "$iftop_log"
+      # shellcheck disable=SC2154
+      # shellcheck disable=SC2086
+      # shellcheck disable=SC2027
+      echo "{\"private\": \""${validatorIpListPrivate[$i]}""\", \"public\": \""${validatorIpList[$i]}""\"},"
+    done > ip_address_map.txt
+
+    for ip in "${validatorIpList[@]}"; do
+      net/scp.sh ip_address_map.txt solana@"$ip":~/solana/
     done
+
+    execution_step "Remotely post-process iftop logs"
+    # shellcheck disable=SC2154
+    for ip in "${validatorIpList[@]}"; do
+      iftop_log=iftop-logs/$ip-iftop.log
+      # shellcheck disable=SC2016
+      net/ssh.sh solana@"$ip" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log ~solana/solana/ip_address_map.txt' > "$iftop_log"
+      upload-ci-artifact "$iftop_log"
+    done
+
     execution_step "Analyzing Packet Loss"
     solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
   )
@@ -330,6 +343,7 @@ TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         CLIENT_OPTIONS \
                         TESTNET_ZONES \
                         TEST_DURATION_SECONDS \
+                        USE_PUBLIC_IP_ADDRESSES \
                         ALLOW_BOOT_FAILURES \
                         ADDITIONAL_FLAGS)
 
