@@ -65,12 +65,16 @@ following additional requirements:
  3) The appropriate transaction flag (TBD) is set, signaling that the usual hash
    age check should be skipped and the previous requirements enforced
 
-For the `Nonce` instruction to succeed, the nonce account MUST be in the
-`Initialized` state, the nonce value in the transaction's `recent_blockhash`
-field MUST match the value stored in the nonce account data field and the nonce
-value MUST NOT reside in the `recent_blockhashes` sysvar. If these requirements
-are met, the contract replaces the stored nonce with a new one from the current
-values in the `recent_blockhashes` sysvar.
+For the `Nonce` instruction to succeed:
+  1) The nonce account MUST have been advanced to the `Initialized` state,
+ensuring that a valid nonce has been stored.
+  2) The nonce value in the transaction's `recent_blockhash` field MUST match
+the value stored in the nonce account data field. In doing so, the client
+commits to the stored nonce value by signing the transaction.
+  3) The nonce value MUST NOT reside in the `recent_blockhashes` sysvar, thus
+preventing replay by deleting, then recreating the account.
+If these requirements are met, the contract replaces the stored nonce with a
+new one from the current values in the `recent_blockhashes` sysvar.
 
 To discard a nonce account, the client should include a `Nonce` instruction in
 a transaction which withdrawals all lamports, leaving a zero balance and making
