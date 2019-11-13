@@ -13,7 +13,8 @@ use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{
-    Response, RpcEpochInfo, RpcResponseContext, RpcVoteAccountInfo, RpcVoteAccountStatus,
+    Response, RpcContactInfo, RpcEpochInfo, RpcResponseContext, RpcVersionInfo, RpcVoteAccountInfo,
+    RpcVoteAccountStatus,
 };
 use solana_drone::drone::request_airdrop_transaction;
 use solana_ledger::{
@@ -341,25 +342,6 @@ pub struct Meta {
     pub genesis_hash: Hash,
 }
 impl Metadata for Meta {}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RpcContactInfo {
-    /// Pubkey of the node as a base-58 string
-    pub pubkey: String,
-    /// Gossip port
-    pub gossip: Option<SocketAddr>,
-    /// Tpu port
-    pub tpu: Option<SocketAddr>,
-    /// JSON RPC port
-    pub rpc: Option<SocketAddr>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "kebab-case")]
-pub struct RpcVersionInfo {
-    /// The current version of solana-core
-    pub solana_core: String,
-}
 
 #[rpc(server)]
 pub trait RpcSol {

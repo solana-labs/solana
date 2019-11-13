@@ -4,7 +4,7 @@ use crate::{
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::MockRpcClientRequest,
     rpc_client_request::RpcClientRequest,
-    rpc_request::{RpcEpochInfo, RpcRequest, RpcVoteAccountStatus},
+    rpc_request::{RpcEpochInfo, RpcRequest, RpcVersionInfo, RpcVoteAccountStatus},
 };
 use bincode::serialize;
 use log::*;
@@ -234,7 +234,7 @@ impl RpcClient {
         })
     }
 
-    pub fn get_version(&self) -> io::Result<String> {
+    pub fn get_version(&self) -> io::Result<RpcVersionInfo> {
         let response = self
             .client
             .send(&RpcRequest::GetVersion, None, 0, None)
@@ -245,7 +245,7 @@ impl RpcClient {
                 )
             })?;
 
-        serde_json::to_string(&response).map_err(|err| {
+        serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetVersion parse failure: {}", err),
