@@ -83,6 +83,16 @@ upload_results_to_slack() {
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
+				"text": "Test Status: \n\`\`\`$STEP\`\`\`"
+			}
+		},
+		{
+			"type": "divider"
+		},
+ 		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
 				"text": "Result Details: \n\`\`\`$RESULT_DETAILS\`\`\`"
 			}
 		}
