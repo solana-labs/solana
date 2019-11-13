@@ -1,6 +1,8 @@
 //! A command-line executable for generating the chain's genesis config.
 
 mod genesis_accounts;
+mod investor_stakes;
+mod lockups;
 
 use crate::genesis_accounts::create_genesis_accounts;
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
