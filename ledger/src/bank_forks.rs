@@ -165,7 +165,6 @@ impl BankForks {
         bank
     }
 
-    // TODO: really want to kill this...
     pub fn working_bank(&self) -> Arc<Bank> {
         self.working_bank.clone()
     }

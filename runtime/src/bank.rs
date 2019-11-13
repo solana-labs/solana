@@ -514,7 +514,6 @@ impl Bank {
         }
         // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
 
-        // TODO: on-chain wallclock?
         //  years_elapsed =         slots_elapsed                             /     slots/year
         let year = (self.epoch_schedule.get_last_slot_in_epoch(epoch)) as f64 / self.slots_per_year;
 
@@ -1584,7 +1583,6 @@ impl Bank {
         let dbhq = dbank.blockhash_queue.read().unwrap();
         assert_eq!(*bhq, *dbhq);
 
-        // TODO: Uncomment once status cache serialization is done
         let sc = self.src.status_cache.read().unwrap();
         let dsc = dbank.src.status_cache.read().unwrap();
         assert_eq!(*sc, *dsc);

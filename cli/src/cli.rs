@@ -1122,7 +1122,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
 // Quick and dirty Keypair that assumes the client will do retries but not update the
 // blockhash. If the client updates the blockhash, the signature will be invalid.
-// TODO: Parse `msg` and use that data to make a new airdrop request.
 struct DroneKeypair {
     transaction: Transaction,
 }

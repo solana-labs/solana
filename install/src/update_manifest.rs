@@ -56,8 +56,6 @@ impl SignedUpdateManifest {
 
 impl ConfigState for SignedUpdateManifest {
     fn max_space() -> u64 {
-        // TODO: Use a fully populated manifest to compute a better value
-        //      bincode::serialized_size(&Self::default()).unwrap()
-        256
+        256 // Enough space for a fully populated SignedUpdateManifest
     }
 }

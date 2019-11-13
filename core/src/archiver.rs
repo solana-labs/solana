@@ -747,7 +747,7 @@ impl Archiver {
                 RpcClient::new_socket(rpc_peers[node_index].rpc)
             };
             Ok(rpc_client
-                .retry_make_rpc_request(
+                .send(
                     &RpcRequest::GetSlotsPerSegment,
                     None,
                     0,
@@ -804,7 +804,7 @@ impl Archiver {
                     RpcClient::new_socket(rpc_peers[node_index].rpc)
                 };
                 let response = rpc_client
-                    .retry_make_rpc_request(&RpcRequest::GetStorageTurn, None, 0, None)
+                    .send(&RpcRequest::GetStorageTurn, None, 0, None)
                     .map_err(|err| {
                         warn!("Error while making rpc request {:?}", err);
                         Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))

@@ -428,7 +428,6 @@ fn process_next_slots(
     }
 
     // Reverse sort by slot, so the next slot to be processed can be popped
-    // TODO: remove me once leader_scheduler can hang with out-of-order slots?
     pending_slots.sort_by(|a, b| b.0.cmp(&a.0));
     Ok(())
 }

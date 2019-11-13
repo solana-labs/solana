@@ -188,7 +188,7 @@ pub fn request_airdrop_transaction(
         "request_airdrop_transaction: drone_addr={} id={} lamports={} blockhash={}",
         drone_addr, id, lamports, blockhash
     );
-    // TODO: make this async tokio client
+
     let mut stream = TcpStream::connect_timeout(drone_addr, Duration::new(3, 0))?;
     stream.set_read_timeout(Some(Duration::new(10, 0)))?;
     let req = DroneRequest::GetAirdrop {

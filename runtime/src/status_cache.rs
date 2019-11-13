@@ -93,7 +93,6 @@ impl<T: Serialize + Clone> StatusCache<T> {
         None
     }
 
-    /// TODO: wallets should send the Transactions recent blockhash as well
     pub fn get_signature_status_slow(
         &self,
         sig: &Signature,
