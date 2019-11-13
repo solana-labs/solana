@@ -223,14 +223,6 @@ fn check_vote_account(
         .get_account(node_pubkey)
         .map_err(|err| format!("Failed to get identity account: {}", err.to_string()))?;
 
-    if found_node_account.lamports == 0 {
-        return Err(format!(
-            "unfunded identity account (needs some fund to vote): {}",
-            node_pubkey,
-        ));
-    }
-
-
     let found_vote_account = solana_vote_api::vote_state::VoteState::from(&found_vote_account);
     if let Some(found_vote_account) = found_vote_account {
         if found_vote_account.authorized_voter != *voting_pubkey {
@@ -247,6 +239,14 @@ fn check_vote_account(
         }
     } else {
         return Err(format!("invalid vote account data: {}", vote_pubkey));
+    }
+
+    // Maybe we can calculate minimum voting fee; rather than 1 lamport
+    if found_node_account.lamports <= 1 {
+        return Err(format!(
+            "unfunded identity account ({}): only {} lamports (needs more fund to vote)",
+            node_pubkey, found_node_account.lamports
+        ));
     }
 
     Ok(())
