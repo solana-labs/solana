@@ -2,8 +2,9 @@
 set -e
 
 function execution_step {
-  STEP="$1"
-  echo --- "$STEP"
+  # shellcheck disable=SC2124
+  STEP="$@"
+  echo --- "${STEP[@]}"
 }
 
 function collect_logs {
@@ -42,7 +43,7 @@ function analyze_packet_loss {
 function cleanup_testnet {
   RC=$?
   if [[ $RC != 0 ]] ; then
-    execution_step "Test failed while executing: ${1}"
+    execution_step "Test failed while executing: $(eval echo "$@")"
   else
     execution_step "Test succeeded"
   fi
@@ -115,7 +116,7 @@ EOF
     ;;
   esac
 }
-trap "cleanup_testnet ${BASH_COMMAND}" EXIT
+trap 'cleanup_testnet $BASH_COMMAND' EXIT
 
 function launchTestnet() {
   set -x
