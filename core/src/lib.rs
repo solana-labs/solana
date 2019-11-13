@@ -5,24 +5,6 @@
 //! command-line tools to spin up validators and a Rust library
 //!
 
-#[macro_export]
-macro_rules! version {
-    () => {
-        &*format!(
-            "{}{}",
-            env!("CARGO_PKG_VERSION"),
-            if option_env!("CI_TAG").is_none() {
-                format!(
-                    " [channel={} commit={}]",
-                    option_env!("CHANNEL").unwrap_or("unknown"),
-                    option_env!("CI_COMMIT").unwrap_or("unknown"),
-                )
-            } else {
-                "".to_string()
-            },
-        )
-    };
-}
 pub mod banking_stage;
 pub mod blob;
 pub mod broadcast_stage;

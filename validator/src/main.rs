@@ -297,7 +297,7 @@ pub fn main() {
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
 
     let matches = App::new(crate_name!()).about(crate_description!())
-        .version(solana_core::version!())
+        .version(solana_clap_utils::version!())
         .arg(
             Arg::with_name("blockstream_unix_socket")
                 .long("blockstream")
@@ -591,7 +591,7 @@ pub fn main() {
     println!(
         "{} {}",
         style(crate_name!()).bold(),
-        solana_core::version!()
+        solana_clap_utils::version!()
     );
 
     let _log_redirect = {

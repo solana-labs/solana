@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatches, SubCommand};
+use clap::{crate_description, crate_name, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 
 use solana_clap_utils::input_validators::is_url;
@@ -126,7 +126,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup();
-    let matches = app(crate_name!(), crate_description!(), crate_version!())
+    let matches = app(crate_name!(), crate_description!(), solana_clap_utils::version!())
         .arg({
             let arg = Arg::with_name("config_file")
                 .short("C")

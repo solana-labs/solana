@@ -967,7 +967,7 @@ impl RpcSol for RpcSolImpl {
 
     fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
         Ok(RpcVersionInfo {
-            solana_core: crate::version!().to_string(),
+            solana_core: solana_clap_utils::version!().to_string(),
         })
     }
 
