@@ -263,10 +263,7 @@ cloud_CreateInstances() {
 
     # For node in numNodes, create VM and put the creation process in the background with --no-wait
     for nodeName in "${nodes[@]}"; do
-      az vm create --name "$nodeName" "${args[@]}" --no-wait
-    done
-    for nodeName in "${nodes[@]}"; do
-      az vm wait --created --name "$nodeName" --resource-group "$networkName" --verbose --timeout 600
+      az vm create --name "$nodeName" "${args[@]}" --verbose
     done
 
     # If GPU is to be enabled, install the appropriate extension
@@ -277,8 +274,7 @@ cloud_CreateInstances() {
         --vm-name "$nodeName" \
         --name NvidiaGpuDriverLinux \
         --publisher Microsoft.HpcCompute \
-        --version 1.2 \
-        --no-wait
+        --version 1.2
       done
 
       # Wait until all nodes have GPU extension installed
