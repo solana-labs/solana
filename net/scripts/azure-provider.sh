@@ -222,7 +222,7 @@ cloud_CreateInstances() {
     --tags testnet
     --image UbuntuLTS
     --size "$machineType"
-    --ssh-key-values "$(cat ${sshPrivateKey}.pub)"
+    --ssh-key-values "$(cat "${sshPrivateKey}".pub)"
     --location "$zone"
     --nsg "$nsgName"
   )
@@ -277,7 +277,8 @@ cloud_CreateInstances() {
         --vm-name "$nodeName" \
         --name NvidiaGpuDriverLinux \
         --publisher Microsoft.HpcCompute \
-        --version 1.2
+        --version 1.2 \
+        --no-wait
       done
 
       # Wait until all nodes have GPU extension installed
