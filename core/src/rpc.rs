@@ -1372,7 +1372,7 @@ pub mod tests {
                     "lamports": 20,
                     "data": [],
                     "executable": false,
-                    "rent_epoch": 0
+                    "rent_epoch": 1
                 }}]],
                 "id":1}}
             "#,
