@@ -723,12 +723,17 @@ pub fn main() {
                 });
             }
 
-            let genesis_hash =
-                initialize_ledger_path(&rpc_addr, &rpc_client, &ledger_path, no_genesis_fetch, no_snapshot_fetch)
-                    .unwrap_or_else(|err| {
-                        error!("Failed to download ledger: {}", err);
-                        exit(1);
-                    });
+            let genesis_hash = initialize_ledger_path(
+                &rpc_addr,
+                &rpc_client,
+                &ledger_path,
+                no_genesis_fetch,
+                no_snapshot_fetch,
+            )
+            .unwrap_or_else(|err| {
+                error!("Failed to download ledger: {}", err);
+                exit(1);
+            });
 
             if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
                 if expected_genesis_hash != genesis_hash {
