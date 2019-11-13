@@ -19,6 +19,7 @@ use solana_ledger::bank_forks::SnapshotConfig;
 use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
 use std::fs::{self, File};
 use std::io::{self, Read};
@@ -168,12 +169,9 @@ fn download_tar_bz2(
     Ok(())
 }
 
-fn initialize_ledger_path(
+fn create_rpc_client(
     entrypoint: &ContactInfo,
-    ledger_path: &Path,
-    no_genesis_fetch: bool,
-    no_snapshot_fetch: bool,
-) -> Result<Hash, String> {
+) -> Result<(std::net::SocketAddr, RpcClient), String> {
     let (nodes, _archivers) = discover(
         &entrypoint.gossip,
         Some(1),
@@ -184,28 +182,86 @@ fn initialize_ledger_path(
     )
     .map_err(|err| err.to_string())?;
 
-    let rpc_addr = nodes
-        .iter()
-        .filter_map(|contact_info| {
-            if contact_info.gossip == entrypoint.gossip
-                && ContactInfo::is_valid_address(&contact_info.rpc)
-            {
-                Some(contact_info.rpc)
-            } else {
-                None
-            }
-        })
-        .next()
-        .unwrap_or_else(|| {
-            error!(
-                "Entrypoint ({:?}) is not running the RPC service",
-                entrypoint.gossip
-            );
-            exit(1);
-        });
+    let rpc_addr = nodes.iter().find_map(|contact_info| {
+        if contact_info.gossip == entrypoint.gossip
+            && ContactInfo::is_valid_address(&contact_info.rpc)
+        {
+            Some(contact_info.rpc)
+        } else {
+            None
+        }
+    });
 
-    let client = RpcClient::new_socket(rpc_addr);
-    let genesis_hash = client.get_genesis_hash().map_err(|err| err.to_string())?;
+    if let Some(rpc_addr) = rpc_addr {
+        Ok((rpc_addr, RpcClient::new_socket(rpc_addr)))
+    } else {
+        Err(format!(
+            "Entrypoint ({:?}) is not running the RPC service",
+            entrypoint.gossip
+        ))
+    }
+}
+
+fn check_vote_account(
+    rpc_client: &RpcClient,
+    vote_pubkey: &Pubkey,
+    voting_pubkey: &Pubkey,
+    node_pubkey: &Pubkey,
+) -> Result<(), String> {
+    let found_vote_account = rpc_client
+        .get_account(vote_pubkey)
+        .map_err(|err| format!("Failed to get vote account: {}", err.to_string()))?;
+
+    if found_vote_account.owner != solana_vote_api::id() {
+        return Err(format!(
+            "not a vote account (owned by {}): {}",
+            found_vote_account.owner, vote_pubkey
+        ));
+    }
+
+    let found_node_account = rpc_client
+        .get_account(node_pubkey)
+        .map_err(|err| format!("Failed to get identity account: {}", err.to_string()))?;
+
+    let found_vote_account = solana_vote_api::vote_state::VoteState::from(&found_vote_account);
+    if let Some(found_vote_account) = found_vote_account {
+        if found_vote_account.authorized_voter != *voting_pubkey {
+            return Err(format!(
+                "account's authorized voter ({}) does not match to the given voting keypair ({}).",
+                found_vote_account.authorized_voter, voting_pubkey
+            ));
+        }
+        if found_vote_account.node_pubkey != *node_pubkey {
+            return Err(format!(
+                "account's node pubkey ({}) does not match to the given identity keypair ({}).",
+                found_vote_account.node_pubkey, node_pubkey
+            ));
+        }
+    } else {
+        return Err(format!("invalid vote account data: {}", vote_pubkey));
+    }
+
+    // Maybe we can calculate minimum voting fee; rather than 1 lamport
+    if found_node_account.lamports <= 1 {
+        return Err(format!(
+            "unfunded identity account ({}): only {} lamports (needs more fund to vote)",
+            node_pubkey, found_node_account.lamports
+        ));
+    }
+
+    Ok(())
+}
+
+fn initialize_ledger_path(
+    rpc_addr: &std::net::SocketAddr,
+    rpc_client: &RpcClient,
+    ledger_path: &Path,
+    no_genesis_fetch: bool,
+    no_snapshot_fetch: bool,
+) -> Result<Hash, String> {
+    let genesis_hash = rpc_client
+        .get_genesis_hash()
+        .map_err(|err| err.to_string())?;
 
     fs::create_dir_all(ledger_path).map_err(|err| err.to_string())?;
 
@@ -228,7 +284,7 @@ fn initialize_ledger_path(
         .unwrap_or_else(|err| warn!("Unable to fetch snapshot: {:?}", err));
     }
 
-    match client.get_slot() {
+    match rpc_client.get_slot() {
         Ok(slot) => info!("Entrypoint currently at slot {}", slot),
         Err(err) => warn!("Failed to get_slot from entrypoint: {}", err),
     }
@@ -265,7 +321,7 @@ pub fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair)
-                .help("File containing the authorized voting keypair.  Default is an ephemeral keypair"),
+                .help("File containing the authorized voting keypair.  Default is an ephemeral keypair, which may disable voting without --vote-account."),
         )
         .arg(
             Arg::with_name("vote_account")
@@ -273,7 +329,7 @@ pub fn main() {
                 .value_name("PUBKEY")
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
-                .help("Public key of the vote account to vote with.  Default is the public key of the voting keypair"),
+                .help("Public key of the vote account to vote with.  Default is the public key of --voting-keypair"),
         )
         .arg(
             Arg::with_name("storage_keypair")
@@ -448,12 +504,14 @@ pub fn main() {
         Keypair::new()
     };
 
+    let mut ephemeral_voting_keypair = false;
     let voting_keypair = if let Some(identity) = matches.value_of("voting_keypair") {
         read_keypair_file(identity).unwrap_or_else(|err| {
             error!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
         })
     } else {
+        ephemeral_voting_keypair = true;
         Keypair::new()
     };
     let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
@@ -464,9 +522,6 @@ pub fn main() {
     } else {
         Keypair::new()
     };
-
-    let vote_account =
-        pubkey_of(&matches, "vote_account").unwrap_or_else(|| voting_keypair.pubkey());
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let entrypoint = matches.value_of("entrypoint");
@@ -480,8 +535,6 @@ pub fn main() {
     let mut validator_config = ValidatorConfig::default();
     validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
     validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
-
-    validator_config.voting_disabled = matches.is_present("no_voting");
 
     validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
 
@@ -578,6 +631,21 @@ pub fn main() {
         ]
         .join(","),
     );
+
+    if matches.is_present("no_voting") {
+        validator_config.voting_disabled = true;
+    }
+
+    let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
+        // Disable voting because normal (=not bootstrapping) validator rejects
+        // non-voting accounts (= ephemeral keypairs).
+        if ephemeral_voting_keypair && entrypoint.is_some() {
+            warn!("Disabled voting due to the use of ephemeral key for vote account");
+            validator_config.voting_disabled = true;
+        };
+        voting_keypair.pubkey()
+    });
+
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 
@@ -653,8 +721,27 @@ pub fn main() {
             &udp_sockets,
         );
 
+        let (rpc_addr, rpc_client) = create_rpc_client(cluster_entrypoint).unwrap_or_else(|err| {
+            error!("unable to create rpc client: {}", err);
+            std::process::exit(1);
+        });
+
+        if !validator_config.voting_disabled {
+            check_vote_account(
+                &rpc_client,
+                &vote_account,
+                &voting_keypair.pubkey(),
+                &identity_keypair.pubkey(),
+            )
+            .unwrap_or_else(|err| {
+                error!("Failed to check vote account: {}", err);
+                exit(1);
+            });
+        }
+
         let genesis_hash = initialize_ledger_path(
-            cluster_entrypoint,
+            &rpc_addr,
+            &rpc_client,
             &ledger_path,
             no_genesis_fetch,
             no_snapshot_fetch,
