@@ -411,6 +411,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     solana_stake_api::add_genesis_accounts(&mut genesis_config);
 
     create_new_ledger(&ledger_path, &genesis_config)?;
+    println!("Genesis hash: {}", genesis_config.hash());
     Ok(())
 }
 

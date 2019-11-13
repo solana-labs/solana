@@ -76,7 +76,6 @@ args+=(
   --identity "$identity_keypair"
   --ledger "$ledger_dir"
   --rpc-port 8899
-  --snapshot-interval-slots 100
   --storage-keypair "$storage_keypair"
   --voting-keypair "$vote_keypair"
   --rpc-drone-address 127.0.0.1:9900
