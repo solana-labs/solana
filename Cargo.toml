@@ -3,7 +3,7 @@ members = [
     "bench-exchange",
     "bench-streamer",
     "bench-tps",
-    "banking_bench",
+    "banking-bench",
     "chacha-sys",
     "client",
     "core",
