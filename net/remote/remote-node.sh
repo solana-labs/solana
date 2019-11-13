@@ -378,9 +378,12 @@ EOF
     waitForNodeToInit
 
     if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
+      # Wait for the validator to catch up to the bootstrap leader before
+      # delegating stake to it
+      solana --url http://"$entrypointIp":8899 catchup config/validator-identity.json
+
       args=(
         --url http://"$entrypointIp":8899
-        --force
         "$stake"
       )
       if [[ $airdropsEnabled != true ]]; then

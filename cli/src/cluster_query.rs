@@ -7,16 +7,20 @@ use crate::{
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
+use indicatif::{ProgressBar, ProgressStyle};
+use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::{rpc_client::RpcClient, rpc_request::RpcVoteAccountInfo};
 use solana_sdk::{
     clock,
     commitment_config::CommitmentConfig,
     hash::Hash,
+    pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_transaction,
 };
 use std::{
     collections::VecDeque,
+    thread::sleep,
     time::{Duration, Instant},
 };
 
@@ -31,6 +35,19 @@ pub trait ClusterQuerySubCommands {
 impl ClusterQuerySubCommands for App<'_, '_> {
     fn cluster_query_subcommands(self) -> Self {
         self.subcommand(
+            SubCommand::with_name("catchup")
+                .about("Wait for a validator to catch up to the cluster")
+                .arg(
+                    Arg::with_name("node_pubkey")
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("PUBKEY")
+                        .validator(is_pubkey_or_keypair)
+                        .required(true)
+                        .help("Identity pubkey of the validator"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
         )
@@ -97,6 +114,14 @@ impl ClusterQuerySubCommands for App<'_, '_> {
     }
 }
 
+pub fn parse_catchup(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
+    Ok(CliCommandInfo {
+        command: CliCommand::Catchup { node_pubkey },
+        require_keypair: false,
+    })
+}
+
 pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let count = if matches.is_present("count") {
@@ -130,7 +155,74 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
     })
 }
 
-pub fn process_cluster_version(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+/// Creates a new process bar for processing that will take an unknown amount of time
+fn new_spinner_progress_bar() -> ProgressBar {
+    let progress_bar = ProgressBar::new(42);
+    progress_bar
+        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
+    progress_bar.enable_steady_tick(100);
+    progress_bar
+}
+
+pub fn process_catchup(rpc_client: &RpcClient, node_pubkey: &Pubkey) -> ProcessResult {
+    let cluster_nodes = rpc_client.get_cluster_nodes()?;
+
+    let rpc_addr = cluster_nodes
+        .iter()
+        .find(|contact_info| contact_info.pubkey == node_pubkey.to_string())
+        .ok_or_else(|| format!("Contact information not found for {}", node_pubkey))?
+        .rpc
+        .ok_or_else(|| format!("RPC service not found for {}", node_pubkey))?;
+
+    let progress_bar = new_spinner_progress_bar();
+    progress_bar.set_message("Connecting...");
+
+    let node_client = RpcClient::new_socket(rpc_addr);
+    let mut previous_rpc_slot = std::u64::MAX;
+    let mut previous_slot_distance = 0;
+    let sleep_interval = 5;
+    loop {
+        let rpc_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
+        let node_slot = node_client.get_slot_with_commitment(CommitmentConfig::recent())?;
+        if node_slot > std::cmp::min(previous_rpc_slot, rpc_slot) {
+            progress_bar.finish_and_clear();
+            return Ok(format!(
+                "{} has caught up (us:{} them:{})",
+                node_pubkey, node_slot, rpc_slot,
+            ));
+        }
+
+        let slot_distance = rpc_slot as i64 - node_slot as i64;
+        progress_bar.set_message(&format!(
+            "Validator is {} slots away (us:{} them:{}){}",
+            slot_distance,
+            node_slot,
+            rpc_slot,
+            if previous_rpc_slot == std::u64::MAX {
+                "".to_string()
+            } else {
+                let slots_per_second =
+                    (previous_slot_distance - slot_distance) as f64 / f64::from(sleep_interval);
+
+                format!(
+                    " and {} at {:.1} slots/second",
+                    if slots_per_second < 0.0 {
+                        "falling behind"
+                    } else {
+                        "gaining"
+                    },
+                    slots_per_second,
+                )
+            }
+        ));
+
+        sleep(Duration::from_secs(sleep_interval as u64));
+        previous_rpc_slot = rpc_slot;
+        previous_slot_distance = slot_distance;
+    }
+}
+
+pub fn process_cluster_version(rpc_client: &RpcClient) -> ProcessResult {
     let remote_version = rpc_client.get_version()?;
     Ok(remote_version.solana_core)
 }
