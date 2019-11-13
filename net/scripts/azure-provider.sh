@@ -223,7 +223,6 @@ cloud_CreateInstances() {
     --image UbuntuLTS
     --size "$machineType"
     --location "$zone"
-    --generate-ssh-keys
     --nsg "$nsgName"
   )
 
