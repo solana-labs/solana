@@ -787,12 +787,11 @@ impl Bank {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `hash`.
     pub fn register_tick(&self, hash: &Hash) {
-        if self.is_frozen() {
-            warn!("=========== TODO: register_tick() working on a frozen bank! ================");
-        }
+        assert!(
+            !self.is_frozen(),
+            "register_tick() working on a frozen bank!"
+        );
 
-        // TODO: put this assert back in
-        // assert!(!self.is_frozen());
         inc_new_counter_debug!("bank-register_tick-registered", 1);
         // Grab blockhash lock before incrementing tick height so that replay stage does
         // not attempt to freeze after observing the last tick and before blockhash is
@@ -823,11 +822,10 @@ impl Bank {
         txs: &'b [Transaction],
         iteration_order: Option<Vec<usize>>,
     ) -> TransactionBatch<'a, 'b> {
-        if self.is_frozen() {
-            warn!("=========== TODO: lock_accounts() working on a frozen bank! ================");
-        }
-        // TODO: put this assert back in
-        // assert!(!self.is_frozen());
+        assert!(
+            !self.is_frozen(),
+            "prepare_batch() working on a frozen bank!"
+        );
         let results = self
             .rc
             .accounts
@@ -1153,9 +1151,10 @@ impl Bank {
         tx_count: u64,
         signature_count: u64,
     ) -> Vec<Result<()>> {
-        if self.is_frozen() {
-            warn!("=========== TODO: commit_transactions() working on a frozen bank! ================");
-        }
+        assert!(
+            !self.is_frozen(),
+            "commit_transactions() working on a frozen bank!"
+        );
 
         self.increment_transaction_count(tx_count);
         self.increment_signature_count(signature_count);
@@ -1167,8 +1166,6 @@ impl Bank {
             self.is_delta.store(true, Ordering::Relaxed);
         }
 
-        // TODO: put this assert back in
-        // assert!(!self.is_frozen());
         let mut write_time = Measure::start("write_time");
         self.rc.accounts.store_accounts(
             self.slot(),

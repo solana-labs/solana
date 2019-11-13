@@ -1931,10 +1931,10 @@ pub mod tests {
         };
         process_bank_0(&bank0, &blocktree, &opts).unwrap();
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-        bank1.squash();
         let slot1_entries = blocktree.get_slot_entries(1, 0, None).unwrap();
         verify_and_process_slot_entries(&bank1, &slot1_entries, bank0.last_blockhash(), &opts)
             .unwrap();
+        bank1.squash();
 
         // Test process_blocktree_from_root() from slot 1 onwards
         let (bank_forks, bank_forks_info, _) =
