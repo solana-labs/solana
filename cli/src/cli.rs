@@ -6,7 +6,6 @@ use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
-
 use solana_budget_api::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
@@ -33,7 +32,6 @@ use solana_sdk::{
 use solana_stake_api::stake_state::{Lockup, StakeAuthorize};
 use solana_storage_api::storage_instruction::StorageAccountType;
 use solana_vote_api::vote_state::VoteAuthorize;
-
 use std::{
     fs::File,
     io::{Read, Write},
@@ -71,6 +69,9 @@ impl std::ops::Deref for KeypairEq {
 #[allow(clippy::large_enum_variant)]
 pub enum CliCommand {
     // Cluster Query Commands
+    Catchup {
+        node_pubkey: Pubkey,
+    },
     ClusterVersion,
     Fees,
     GetEpochInfo,
@@ -237,6 +238,7 @@ impl Default for CliConfig {
 pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         // Cluster Query Commands
+        ("catchup", Some(matches)) => parse_catchup(matches),
         ("cluster-version", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ClusterVersion,
             require_keypair: false,
@@ -849,7 +851,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Cluster Query Commands
 
         // Return software version of solana-cli and cluster entrypoint node
-        CliCommand::ClusterVersion => process_cluster_version(&rpc_client, config),
+        CliCommand::Catchup { node_pubkey } => process_catchup(&rpc_client, node_pubkey),
+        CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
         CliCommand::Fees => process_fees(&rpc_client),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
         CliCommand::GetSlot => process_get_slot(&rpc_client),
