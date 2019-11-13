@@ -1,7 +1,7 @@
 //! A command-line executable for generating the chain's genesis config.
 
 mod genesis_accounts;
-mod investor_stakes;
+
 mod lockups;
 
 use crate::genesis_accounts::create_genesis_accounts;
