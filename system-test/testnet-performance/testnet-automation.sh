@@ -27,7 +27,11 @@ function analyze_packet_loss {
     source net/config/config
     mkdir -p iftop-logs
     execution_step "Map private -> public IP addresses in iftop logs"
+    # shellcheck disable=SC2154
     for i in "${!validatorIpList[@]}"; do
+      # shellcheck disable=SC2154
+      # shellcheck disable=SC2086
+      # shellcheck disable=SC2027
       echo "{\"private\": \""${validatorIpListPrivate[$i]}""\", \"public\": \""${validatorIpList[$i]}""\"},"
     done > ip_address_map.txt
 
@@ -40,7 +44,7 @@ function analyze_packet_loss {
     for ip in "${validatorIpList[@]}"; do
       iftop_log=iftop-logs/$ip-iftop.log
       # shellcheck disable=SC2016
-      net/ssh.sh solana@$ip 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log ~solana/solana/ip_address_map.txt' > "$iftop_log"
+      net/ssh.sh solana@"$ip" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log ~solana/solana/ip_address_map.txt' > "$iftop_log"
       upload-ci-artifact "$iftop_log"
     done
 
