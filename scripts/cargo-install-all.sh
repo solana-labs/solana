@@ -80,6 +80,7 @@ BINS=(
   solana-keygen
   solana-ledger-tool
   solana-log-analyzer
+  solana-net-shaper
   solana-archiver
   solana-validator
 )

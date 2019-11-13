@@ -36,7 +36,7 @@ impl NetworkTopology {
         }
 
         for x in self.interconnects.iter() {
-            if x.a as usize >= self.partitions.len() || x.b as usize >= self.partitions.len() {
+            if x.a as usize > self.partitions.len() || x.b as usize > self.partitions.len() {
                 return false;
             }
         }
@@ -45,11 +45,21 @@ impl NetworkTopology {
     }
 }
 
-fn run(cmd: &str, args: &[&str], launch_err_msg: &str, status_err_msg: &str) -> bool {
+fn run(
+    cmd: &str,
+    args: &[&str],
+    launch_err_msg: &str,
+    status_err_msg: &str,
+    ignore_err: bool,
+) -> bool {
     let output = std::process::Command::new(cmd)
         .args(args)
         .output()
         .expect(launch_err_msg);
+
+    if ignore_err {
+        return true;
+    }
 
     if !output.status.success() {
         eprintln!(
@@ -85,6 +95,7 @@ fn insert_iptables_rule(my_partition: usize) -> bool {
         ],
         "Failed to add iptables rule",
         "iptables",
+        false,
     )
 }
 
@@ -94,6 +105,7 @@ fn flush_iptables_rule() {
         &["-F", "-t", "mangle"],
         "Failed to flush iptables",
         "iptables flush",
+        true,
     );
 }
 
@@ -106,6 +118,7 @@ fn insert_tc_root(interface: &str) -> bool {
         ],
         "Failed to add root qdisc",
         "tc add root qdisc",
+        false,
     )
 }
 
@@ -118,30 +131,33 @@ fn delete_tc_root(interface: &str) {
         ],
         "Failed to delete root qdisc",
         "tc qdisc delete root",
+        true,
     );
 }
 
-fn insert_tc_netem(interface: &str, class: &str, tos: &str, filter: &str) -> bool {
+fn insert_tc_netem(interface: &str, class: &str, handle: &str, filter: &str) -> bool {
+    let mut filters: Vec<&str> = filter.split(' ').collect();
+    let mut args = vec![
+        "qdisc", "add", "dev", interface, "parent", class, "handle", handle, "netem",
+    ];
+    args.append(&mut filters);
     // tc qdisc add dev <if> parent 1:<i.a> handle <i.a>: netem <filters>
-    run(
-        "tc",
-        &[
-            "qdisc", "add", "dev", interface, "parent", class, "handle", tos, "netem", filter,
-        ],
-        "Failed to add tc child",
-        "tc add child",
-    )
+    run("tc", &args, "Failed to add tc child", "tc add child", false)
 }
 
-fn delete_tc_netem(interface: &str, class: &str, tos: &str, filter: &str) {
+fn delete_tc_netem(interface: &str, class: &str, handle: &str, filter: &str) {
+    let mut filters: Vec<&str> = filter.split(' ').collect();
+    let mut args = vec![
+        "qdisc", "delete", "dev", interface, "parent", class, "handle", handle, "netem",
+    ];
+    args.append(&mut filters);
     // tc qdisc delete dev <if> parent 1:<i.a> handle <i.a>: netem <filters>
     run(
         "tc",
-        &[
-            "qdisc", "delete", "dev", interface, "parent", class, "handle", tos, "netem", filter,
-        ],
+        &args,
         "Failed to delete child qdisc",
         "tc delete child qdisc",
+        true,
     );
 }
 
@@ -155,6 +171,7 @@ fn insert_tos_filter(interface: &str, class: &str, tos: &str) -> bool {
         ],
         "Failed to add tos filter",
         "tc add filter",
+        false,
     )
 }
 
@@ -168,6 +185,7 @@ fn delete_tos_filter(interface: &str, class: &str, tos: &str) {
         ],
         "Failed to delete tos filter",
         "tc delete filter",
+        true,
     );
 }
 
@@ -182,7 +200,7 @@ fn identify_my_partition(partitions: &[u8], index: u64, size: u64) -> usize {
         }
     }
 
-    my_partition
+    my_partition + 1
 }
 
 fn shape_network(matches: &ArgMatches) {
@@ -218,12 +236,13 @@ fn shape_network(matches: &ArgMatches) {
 
     topology.interconnects.iter().for_each(|i| {
         if i.b as usize == my_partition {
+            let handle = (i.a + 1).to_string();
             let tos_string = i.a.to_string();
             let class = format!("1:{}", i.a);
             if !insert_tc_netem(
                 interface.as_str(),
                 class.as_str(),
-                tos_string.as_str(),
+                handle.as_str(),
                 i.config.as_str(),
             ) {
                 flush_iptables_rule();
@@ -236,7 +255,7 @@ fn shape_network(matches: &ArgMatches) {
                 delete_tc_netem(
                     interface.as_str(),
                     class.as_str(),
-                    tos_string.as_str(),
+                    handle.as_str(),
                     i.config.as_str(),
                 );
                 delete_tc_root(interface.as_str());
@@ -267,13 +286,14 @@ fn cleanup_network(matches: &ArgMatches) {
 
     topology.interconnects.iter().for_each(|i| {
         if i.b as usize == my_partition {
+            let handle = (i.a + 1).to_string();
             let tos_string = i.a.to_string();
             let class = format!("1:{}", i.a);
             delete_tos_filter(interface.as_str(), class.as_str(), tos_string.as_str());
             delete_tc_netem(
                 interface.as_str(),
                 class.as_str(),
-                tos_string.as_str(),
+                handle.as_str(),
                 i.config.as_str(),
             );
         }
