@@ -37,3 +37,6 @@ solana-runtime = { path = "../runtime", version = "0.21.0" }
 solana-sdk = { path = "../sdk", version = "0.21.0" }
 untrusted = "0.7.0"
 ws = "0.9.1"
+
+[dev-dependencies]
+solana-local-cluster = { path = "../local_cluster", version = "0.21.0" }

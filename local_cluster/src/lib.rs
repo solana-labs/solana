@@ -1,40 +1,9 @@
-#[cfg(test)]
-mod cluster;
-#[cfg(test)]
-mod cluster_tests;
-#[cfg(test)]
-mod local_cluster;
-#[cfg(test)]
-mod tests;
+pub mod cluster;
+pub mod cluster_tests;
+pub mod local_cluster;
 
 #[macro_use]
-#[cfg(test)]
-extern crate log;
-
-#[cfg(test)]
-extern crate solana_bench_exchange;
-
-#[cfg(test)]
-extern crate solana_bench_tps;
-
-#[macro_use]
-#[cfg(test)]
 extern crate solana_ledger;
 
-#[cfg(test)]
-extern crate solana_drone;
-
 #[macro_use]
-#[cfg(test)]
-extern crate solana_exchange_program;
-
-#[cfg(feature = "move")]
-#[cfg(test)]
-extern crate solana_move_loader_program;
-
-#[macro_use]
-#[cfg(test)]
 extern crate solana_storage_program;
-
-#[cfg(test)]
-extern crate tempfile;
