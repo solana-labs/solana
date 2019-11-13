@@ -165,7 +165,7 @@ fn identify_my_partition(partitions: &[u8], index: u64, size: u64) -> usize {
     let mut watermark = 0;
     for (i, p) in partitions.iter().enumerate() {
         watermark += *p;
-        if watermark as u64 >= index * 100 / size {
+        if u64::from(watermark) >= index * 100 / size {
             my_partition = i;
             break;
         }
@@ -200,7 +200,7 @@ fn shape_network(matches: &ArgMatches) {
     }
 
     delete_tc_root(interface.as_str());
-    if topology.interconnects.len() > 0 && !insert_tc_root(interface.as_str()) {
+    if !topology.interconnects.is_empty() && !insert_tc_root(interface.as_str()) {
         flush_iptables_rule();
         return;
     }
