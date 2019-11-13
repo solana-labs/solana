@@ -48,7 +48,7 @@ NonceInstruction(spend_hash) /* spend_hash is a stand in for a TBD sysvar
     error
 ```
 
-A client wishing to use this feature starts by creating a system account and
+A client wishing to use this feature starts by creating a nonce account and
 depositing sufficient lamports as to make it rent-exempt. The resultant account
 will be in the `Uninitialized` state with no stored hash and thus unusable.
 
@@ -60,10 +60,10 @@ When making use of a durable nonce, the client must first query its value from
 account data. A transaction is now constructed in the normal way, but with the
 following additional requirements:
 
- 1) The durable nonce value is used in the `recent_blockhash` field
- 2) A `Nonce` instruction is issued (first?)
- 3) The appropriate transaction flag (TBD) is set, signaling that the usual hash
-   age check should be skipped and the previous requirements enforced
+  1) The durable nonce value is used in the `recent_blockhash` field
+  2) A `Nonce` instruction is issued (first?)
+  3) The appropriate transaction flag (TBD) is set, signaling that the usual
+hash age check should be skipped and the previous requirements enforced
 
 For the `Nonce` instruction to succeed:
   1) The nonce account MUST have been advanced to the `Initialized` state,
@@ -77,7 +77,7 @@ If these requirements are met, the contract replaces the stored nonce with a
 new one from the current values in the `recent_blockhashes` sysvar.
 
 To discard a nonce account, the client should include a `Nonce` instruction in
-a transaction which withdrawals all lamports, leaving a zero balance and making
+a transaction which withdraws all lamports, leaving a zero balance and making
 it eligible for deletion.
 
 ### Runtime Support
