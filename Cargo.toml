@@ -17,7 +17,7 @@ members = [
     "keygen",
     "ledger",
     "ledger-tool",
-    "local_cluster",
+    "local-cluster",
     "logger",
     "log-analyzer",
     "merkle-tree",

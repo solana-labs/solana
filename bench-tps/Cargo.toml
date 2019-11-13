@@ -33,7 +33,7 @@ solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.21
 [dev-dependencies]
 serial_test = "0.2.0"
 serial_test_derive = "0.2.0"
-solana-local-cluster = { path = "../local_cluster", version = "0.21.0" }
+solana-local-cluster = { path = "../local-cluster", version = "0.21.0" }
 
 [features]
 move = ["solana-librapay-api", "solana-move-loader-program", "solana-move-loader-api"]
