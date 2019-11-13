@@ -721,11 +721,10 @@ pub fn main() {
             &udp_sockets,
         );
 
-        let (rpc_addr, rpc_client) = create_rpc_client(cluster_entrypoint)
-            .unwrap_or_else(|err| {
-                error!("unable to create rpc client: {}", err);
-                std::process::exit(1);
-            });
+        let (rpc_addr, rpc_client) = create_rpc_client(cluster_entrypoint).unwrap_or_else(|err| {
+            error!("unable to create rpc client: {}", err);
+            std::process::exit(1);
+        });
 
         if !validator_config.voting_disabled {
             check_vote_account(
