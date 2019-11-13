@@ -263,7 +263,10 @@ cloud_CreateInstances() {
 
     # For node in numNodes, create VM and put the creation process in the background with --no-wait
     for nodeName in "${nodes[@]}"; do
-      az vm create --name "$nodeName" "${args[@]}" --verbose
+      az vm create --name "$nodeName" "${args[@]}" --no-wait
+    done
+    for nodeName in "${nodes[@]}"; do
+      az vm wait --created --name "$nodeName" --resource-group "$networkName" --verbose --timeout 600
     done
 
     # If GPU is to be enabled, install the appropriate extension
