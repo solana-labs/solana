@@ -67,29 +67,31 @@ fn run(cmd: &str, args: &[&str], launch_err_msg: &str, status_err_msg: &str) -> 
 
 fn insert_iptables_rule(my_partition: usize) -> bool {
     let my_tos = my_partition.to_string();
-    let args = vec![
-        "-t",
-        "mangle",
-        "-A",
-        "PREROUTING",
-        "-p",
-        "udp",
-        "-j",
-        "TOS",
-        "--set-tos",
-        my_tos.as_str(),
-    ];
 
     // iptables -t mangle -A PREROUTING -p udp -j TOS --set-tos <my_parition_index>
-    run("iptables", &args, "Failed to add iptables rule", "iptables")
+    run(
+        "iptables",
+        &[
+            "-t",
+            "mangle",
+            "-A",
+            "PREROUTING",
+            "-p",
+            "udp",
+            "-j",
+            "TOS",
+            "--set-tos",
+            my_tos.as_str(),
+        ],
+        "Failed to add iptables rule",
+        "iptables",
+    )
 }
 
 fn flush_iptables_rule() {
-    let args = vec!["-F", "-t", "mangle"];
-
-    let _ = run(
+    run(
         "iptables",
-        &args,
+        &["-F", "-t", "mangle"],
         "Failed to flush iptables",
         "iptables flush",
     );
@@ -97,20 +99,23 @@ fn flush_iptables_rule() {
 
 fn insert_tc_root(interface: &str) -> bool {
     // tc qdisc add dev <if> root handle 1: prio
-    let args = vec![
-        "qdisc", "add", "dev", interface, "root", "handle", "1:", "prio",
-    ];
-    run("tc", &args, "Failed to add root qdisc", "tc add root qdisc")
+    run(
+        "tc",
+        &[
+            "qdisc", "add", "dev", interface, "root", "handle", "1:", "prio",
+        ],
+        "Failed to add root qdisc",
+        "tc add root qdisc",
+    )
 }
 
 fn delete_tc_root(interface: &str) {
     // tc qdisc delete dev <if> root handle 1: prio
-    let args = vec![
-        "qdisc", "delete", "dev", interface, "root", "handle", "1:", "prio",
-    ];
-    let _ = run(
+    run(
         "tc",
-        &args,
+        &[
+            "qdisc", "delete", "dev", interface, "root", "handle", "1:", "prio",
+        ],
         "Failed to delete root qdisc",
         "tc qdisc delete root",
     );
@@ -118,20 +123,23 @@ fn delete_tc_root(interface: &str) {
 
 fn insert_tc_netem(interface: &str, class: &str, tos: &str, filter: &str) -> bool {
     // tc qdisc add dev <if> parent 1:<i.a> handle <i.a>: netem <filters>
-    let args = vec![
-        "qdisc", "add", "dev", interface, "parent", class, "handle", tos, "netem", filter,
-    ];
-    run("tc", &args, "Failed to add tc child", "tc add child")
+    run(
+        "tc",
+        &[
+            "qdisc", "add", "dev", interface, "parent", class, "handle", tos, "netem", filter,
+        ],
+        "Failed to add tc child",
+        "tc add child",
+    )
 }
 
 fn delete_tc_netem(interface: &str, class: &str, tos: &str, filter: &str) {
     // tc qdisc delete dev <if> parent 1:<i.a> handle <i.a>: netem <filters>
-    let args = vec![
-        "qdisc", "delete", "dev", interface, "parent", class, "handle", tos, "netem", filter,
-    ];
-    let _ = run(
+    run(
         "tc",
-        &args,
+        &[
+            "qdisc", "delete", "dev", interface, "parent", class, "handle", tos, "netem", filter,
+        ],
         "Failed to delete child qdisc",
         "tc delete child qdisc",
     );
@@ -139,22 +147,25 @@ fn delete_tc_netem(interface: &str, class: &str, tos: &str, filter: &str) {
 
 fn insert_tos_filter(interface: &str, class: &str, tos: &str) -> bool {
     // tc filter add dev <if> parent 1:0 protocol ip prio 10 u32 match ip tos <i.a> 0xff flowid 1:<i.a>
-    let args = vec![
-        "filter", "add", "dev", interface, "parent", "1:0", "protocol", "ip", "prio", "10", "u32",
-        "match", "ip", "tos", tos, "0xff", "flowid", class,
-    ];
-    run("tc", &args, "Failed to add tos filter", "tc add filter")
+    run(
+        "tc",
+        &[
+            "filter", "add", "dev", interface, "parent", "1:0", "protocol", "ip", "prio", "10",
+            "u32", "match", "ip", "tos", tos, "0xff", "flowid", class,
+        ],
+        "Failed to add tos filter",
+        "tc add filter",
+    )
 }
 
 fn delete_tos_filter(interface: &str, class: &str, tos: &str) {
     // tc filter delete dev <if> parent 1:0 protocol ip prio 10 u32 match ip tos <i.a> 0xff flowid 1:<i.a>
-    let args = vec![
-        "filter", "delete", "dev", interface, "parent", "1:0", "protocol", "ip", "prio", "10",
-        "u32", "match", "ip", "tos", tos, "0xff", "flowid", class,
-    ];
-    let _ = run(
+    run(
         "tc",
-        &args,
+        &[
+            "filter", "delete", "dev", interface, "parent", "1:0", "protocol", "ip", "prio", "10",
+            "u32", "match", "ip", "tos", tos, "0xff", "flowid", class,
+        ],
         "Failed to delete tos filter",
         "tc delete filter",
     );
