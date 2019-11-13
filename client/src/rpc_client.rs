@@ -410,9 +410,14 @@ impl RpcClient {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
-        Ok(self
-            .get_account_with_commitment(pubkey, CommitmentConfig::default())
-            .map(|x| x.value.unwrap())?)
+        self.get_account_with_commitment(pubkey, CommitmentConfig::default())?
+            .value
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("AccountNotFound: pubkey={}", pubkey),
+                )
+            })
     }
 
     pub fn get_account_with_commitment(
@@ -449,7 +454,7 @@ impl RpcClient {
     }
 
     pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
-        Ok(self.get_account(pubkey).unwrap().data)
+        Ok(self.get_account(pubkey)?.data)
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> io::Result<u64> {
@@ -802,8 +807,7 @@ impl RpcClient {
             );
 
             match response {
-                Ok(confirmation) => {
-                    let signature_status = confirmation.as_bool().unwrap();
+                Ok(Value::Bool(signature_status)) => {
                     if signature_status {
                         trace!("Response found signature");
                     } else {
@@ -811,6 +815,12 @@ impl RpcClient {
                     }
 
                     return signature_status;
+                }
+                Ok(other) => {
+                    debug!(
+                        "check_signature request failed, expected bool, got: {:?}",
+                        other
+                    );
                 }
                 Err(err) => {
                     debug!("check_signature request failed: {:?}", err);
