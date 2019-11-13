@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate solana_ledger;
-
 use log::*;
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
