@@ -7,7 +7,6 @@ use crate::{
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
-use serde_json::Value;
 use solana_client::{rpc_client::RpcClient, rpc_request::RpcVoteAccountInfo};
 use solana_sdk::{
     clock,
@@ -131,21 +130,9 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
     })
 }
 
-pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let remote_version: Value = serde_json::from_str(&rpc_client.get_version()?)?;
-    println!(
-        "{} {}",
-        style("Cluster versions from:").bold(),
-        config.json_rpc_url
-    );
-    if let Some(versions) = remote_version.as_object() {
-        for (key, value) in versions.iter() {
-            if let Some(value_string) = value.as_str() {
-                println_name_value(&format!("* {}:", key), &value_string);
-            }
-        }
-    }
-    Ok("".to_string())
+pub fn process_cluster_version(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+    let remote_version = rpc_client.get_version()?;
+    Ok(remote_version.solana_core)
 }
 
 pub fn process_fees(rpc_client: &RpcClient) -> ProcessResult {

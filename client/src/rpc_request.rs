@@ -4,7 +4,7 @@ use solana_sdk::{
     clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
 };
-use std::{error, fmt, io};
+use std::{error, fmt, io, net::SocketAddr};
 
 pub type RpcResponseIn<T> = JsonResult<Response<T>>;
 pub type RpcResponse<T> = io::Result<Response<T>>;
@@ -21,6 +21,18 @@ pub struct Response<T> {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RpcContactInfo {
+    /// Pubkey of the node as a base-58 string
+    pub pubkey: String,
+    /// Gossip port
+    pub gossip: Option<SocketAddr>,
+    /// Tpu port
+    pub tpu: Option<SocketAddr>,
+    /// JSON RPC port
+    pub rpc: Option<SocketAddr>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcEpochInfo {
     /// The current epoch
@@ -34,6 +46,13 @@ pub struct RpcEpochInfo {
 
     /// The absolute current slot
     pub absolute_slot: Slot,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct RpcVersionInfo {
+    /// The current version of solana-core
+    pub solana_core: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

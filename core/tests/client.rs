@@ -18,8 +18,8 @@ fn test_rpc_client() {
     let client = RpcClient::new_socket(leader_data.rpc);
 
     assert_eq!(
-        client.get_version().unwrap(),
-        format!("{{\"solana-core\":\"{}\"}}", solana_core::version!())
+        client.get_version().unwrap().solana_core,
+        solana_core::version!()
     );
 
     assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 0);
