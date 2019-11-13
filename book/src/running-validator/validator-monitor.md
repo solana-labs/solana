@@ -14,45 +14,39 @@ From another console, confirm the IP address and **identity pubkey** of your val
 solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
-## Check Vote Activity
+## Monitoring Catch Up
 
-The vote pubkey for the validator can be found by running:
-
-```bash
-solana-keygen pubkey ~/validator-vote-keypair.json
-```
-
-Provide the **vote pubkey** to the `solana show-vote-account` command to view the recent voting activity from your validator:
+It may take some time to catch up with the cluster after your validator boots.
+Use the `catchup` command to monitor your validator through this process:
 
 ```bash
-solana show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
+solana catchup ~/validator-keypair.json
 ```
+
+Until your validator has caught up, it will not be able to vote successfully and
+stake cannot be delegated to it.
+
+Also if you find the cluster's slot advancing faster than yours, you will likely
+never catch up. This typically implies some kind of networking issue between
+your validator and the rest of the cluster.
 
 ## Check Your Balance
 
-Your account balance should decrease by the transaction fee amount as your validator submits votes, and increase after serving as the leader. Pass the `--lamports` are to observe in finer detail:
+Your account balance should decrease by the transaction fee amount as your
+validator submits votes, and increase after serving as the leader. Pass the
+`--lamports` are to observe in finer detail:
 
 ```bash
 solana balance --lamports
 ```
 
-## Check Slot Number
+## Check Vote Activity
 
-After your validator boots, it may take some time to catch up with the cluster. Use the `get-slot` command to view the current slot that the cluster is processing:
-
-```bash
-solana get-slot
-```
-
-The current slot that your validator is processing can then been seen with:
+The `solana show-vote-account` command displays the recent voting activity from your validator:
 
 ```bash
-solana --url http://127.0.0.1:8899 get-slot
+solana show-vote-account ~/validator-vote-keypair.json
 ```
-
-Until your validator has caught up, it will not be able to vote successfully and stake cannot be delegated to it.
-
-Also if you find the cluster's slot advancing faster than yours, you will likely never catch up. This typically implies some kind of networking issue between your validator and the rest of the cluster.
 
 ## Get Cluster Info
 
@@ -68,6 +62,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 # Returns info about the current epoch. slotIndex should progress on subsequent calls.
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://testnet.solana.com:8899
 ```
+
 
 ## Validator Metrics
 

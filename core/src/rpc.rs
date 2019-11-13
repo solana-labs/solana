@@ -11,7 +11,9 @@ use crate::{
 use bincode::{deserialize, serialize};
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_client::rpc_request::{RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus};
+use solana_client::rpc_request::{
+    RpcContactInfo, RpcEpochInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
+};
 use solana_drone::drone::request_airdrop_transaction;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
@@ -254,18 +256,6 @@ pub struct Meta {
     pub genesis_blockhash: Hash,
 }
 impl Metadata for Meta {}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RpcContactInfo {
-    /// Pubkey of the node as a base-58 string
-    pub pubkey: String,
-    /// Gossip port
-    pub gossip: Option<SocketAddr>,
-    /// Tpu port
-    pub tpu: Option<SocketAddr>,
-    /// JSON RPC port
-    pub rpc: Option<SocketAddr>,
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]

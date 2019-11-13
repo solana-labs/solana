@@ -2,7 +2,7 @@ use crate::client_error::ClientError;
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
 use crate::mock_rpc_client_request::MockRpcClientRequest;
 use crate::rpc_client_request::RpcClientRequest;
-use crate::rpc_request::{RpcEpochInfo, RpcRequest, RpcVoteAccountStatus};
+use crate::rpc_request::{RpcContactInfo, RpcEpochInfo, RpcRequest, RpcVoteAccountStatus};
 use bincode::serialize;
 use log::*;
 use serde_json::{json, Value};
@@ -116,6 +116,25 @@ impl RpcClient {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetVoteAccounts parse failure: {}", err),
+            )
+        })
+    }
+
+    pub fn get_cluster_nodes(&self) -> io::Result<Vec<RpcContactInfo>> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetClusterNodes, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetClusterNodes request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetClusterNodes parse failure: {}", err),
             )
         })
     }
