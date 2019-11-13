@@ -29,12 +29,11 @@ pub fn create_genesis_config_with_leader(
     bootstrap_leader_stake_lamports: u64,
 ) -> GenesisConfigInfo {
     let mint_keypair = Keypair::new();
-    let voting_keypair = Keypair::new();
-    let staking_keypair = Keypair::new();
+    let bootstrap_leader_voting_keypair = Keypair::new();
+    let bootstrap_leader_staking_keypair = Keypair::new();
 
-    // TODO: de-duplicate the stake... passive staking is fully implemented
-    let vote_account = vote_state::create_account(
-        &voting_keypair.pubkey(),
+    let bootstrap_leader_vote_account = vote_state::create_account(
+        &bootstrap_leader_voting_keypair.pubkey(),
         &bootstrap_leader_pubkey,
         0,
         bootstrap_leader_stake_lamports,
@@ -42,30 +41,31 @@ pub fn create_genesis_config_with_leader(
 
     let rent = Rent::free();
 
-    let stake_account = stake_state::create_account(
-        &staking_keypair.pubkey(),
-        &voting_keypair.pubkey(),
-        &vote_account,
+    let bootstrap_leader_stake_account = stake_state::create_account(
+        &bootstrap_leader_staking_keypair.pubkey(),
+        &bootstrap_leader_voting_keypair.pubkey(),
+        &bootstrap_leader_vote_account,
         &rent,
         bootstrap_leader_stake_lamports,
     );
 
     let accounts = vec![
-        // the mint
         (
             mint_keypair.pubkey(),
             Account::new(mint_lamports, 0, &system_program::id()),
         ),
-        // node needs an account to issue votes and storage proofs from, this will require
-        //  airdrops at some point to cover fees...
         (
             *bootstrap_leader_pubkey,
             Account::new(BOOTSTRAP_LEADER_LAMPORTS, 0, &system_program::id()),
         ),
-        // where votes go to
-        (voting_keypair.pubkey(), vote_account),
-        // passive bootstrap leader stake, duplicates above temporarily
-        (staking_keypair.pubkey(), stake_account),
+        (
+            bootstrap_leader_voting_keypair.pubkey(),
+            bootstrap_leader_vote_account,
+        ),
+        (
+            bootstrap_leader_staking_keypair.pubkey(),
+            bootstrap_leader_stake_account,
+        ),
     ];
 
     // Bare minimum program set
@@ -75,8 +75,8 @@ pub fn create_genesis_config_with_leader(
         solana_vote_program!(),
         solana_stake_program!(),
     ];
-    let fee_calculator = FeeCalculator::new(0, 0); // most tests don't want fees
 
+    let fee_calculator = FeeCalculator::new(0, 0); // most tests can't handle transaction fees
     let mut genesis_config = GenesisConfig {
         accounts,
         native_instruction_processors,
@@ -91,6 +91,6 @@ pub fn create_genesis_config_with_leader(
     GenesisConfigInfo {
         genesis_config,
         mint_keypair,
-        voting_keypair,
+        voting_keypair: bootstrap_leader_voting_keypair,
     }
 }

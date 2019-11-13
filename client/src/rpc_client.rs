@@ -775,8 +775,13 @@ impl RpcClient {
                 break;
             }
             if now.elapsed().as_secs() > 15 {
-                // TODO: Return a better error.
-                return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "signature not found after {} seconds",
+                        now.elapsed().as_secs()
+                    ),
+                ));
             }
             sleep(Duration::from_millis(250));
         }
@@ -859,8 +864,13 @@ impl RpcClient {
                 if confirmed_blocks > 0 {
                     return Ok(confirmed_blocks);
                 } else {
-                    // TODO: Return a better error.
-                    return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!(
+                            "signature not found after {} seconds",
+                            now.elapsed().as_secs()
+                        ),
+                    ));
                 }
             }
             sleep(Duration::from_millis(250));
@@ -919,8 +929,7 @@ impl RpcClient {
         })
     }
 
-    // TODO: Remove
-    pub fn retry_make_rpc_request(
+    pub fn send(
         &self,
         request: &RpcRequest,
         params: Option<Value>,
@@ -955,7 +964,7 @@ mod tests {
     use std::{sync::mpsc::channel, thread};
 
     #[test]
-    fn test_make_rpc_request() {
+    fn test_send() {
         let (sender, receiver) = channel();
         thread::spawn(move || {
             let rpc_addr = "0.0.0.0:0".parse().unwrap();
@@ -989,7 +998,7 @@ mod tests {
         let rpc_addr = receiver.recv().unwrap();
         let rpc_client = RpcClient::new_socket(rpc_addr);
 
-        let balance = rpc_client.retry_make_rpc_request(
+        let balance = rpc_client.send(
             &RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
             0,
@@ -997,15 +1006,14 @@ mod tests {
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let blockhash =
-            rpc_client.retry_make_rpc_request(&RpcRequest::GetRecentBlockhash, None, 0, None);
+        let blockhash = rpc_client.send(&RpcRequest::GetRecentBlockhash, None, 0, None);
         assert_eq!(
             blockhash.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
         );
 
         // Send erroneous parameter
-        let blockhash = rpc_client.retry_make_rpc_request(
+        let blockhash = rpc_client.send(
             &RpcRequest::GetRecentBlockhash,
             Some(json!("parameter")),
             0,
@@ -1015,7 +1023,7 @@ mod tests {
     }
 
     #[test]
-    fn test_retry_make_rpc_request() {
+    fn test_retry_send() {
         solana_logger::setup();
         let (sender, receiver) = channel();
         thread::spawn(move || {
@@ -1044,7 +1052,7 @@ mod tests {
         let rpc_addr = receiver.recv().unwrap();
         let rpc_client = RpcClient::new_socket(rpc_addr);
 
-        let balance = rpc_client.retry_make_rpc_request(
+        let balance = rpc_client.send(
             &RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"])),
             10,

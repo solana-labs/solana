@@ -176,7 +176,6 @@ pub fn process_instruction(
     let (me, rest) = &mut keyed_accounts.split_at_mut(1);
     let me = &mut me[0];
 
-    // TODO: data-driven unpack and dispatch of KeyedAccounts
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             if rest.is_empty() {

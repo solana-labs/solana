@@ -191,10 +191,12 @@ impl SyncClient for BankClient {
                 }
             };
             if now.elapsed().as_secs() > 15 {
-                // TODO: Return a better error.
                 return Err(TransportError::IoError(io::Error::new(
                     io::ErrorKind::Other,
-                    "signature not found",
+                    format!(
+                        "signature not found after {} seconds",
+                        now.elapsed().as_secs()
+                    ),
                 )));
             }
             sleep(Duration::from_millis(250));
@@ -212,10 +214,12 @@ impl SyncClient for BankClient {
                 }
             }
             if now.elapsed().as_secs() > 15 {
-                // TODO: Return a better error.
                 return Err(TransportError::IoError(io::Error::new(
                     io::ErrorKind::Other,
-                    "signature not found",
+                    format!(
+                        "signature not found after {} seconds",
+                        now.elapsed().as_secs()
+                    ),
                 )));
             }
             sleep(Duration::from_millis(250));

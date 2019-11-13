@@ -238,7 +238,6 @@ function launchTestnet() {
 
 cd "$(dirname "$0")/../.."
 
-# TODO: Make sure a dB named $TESTNET_TAG exists in the influxDB host, or can be created
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
 [[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=0

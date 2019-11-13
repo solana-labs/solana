@@ -328,7 +328,6 @@ pub fn process_instruction(
     let keyed_accounts = &mut keyed_accounts.iter_mut();
     let me = &mut next_keyed_account(keyed_accounts)?;
 
-    // TODO: data-driven unpack and dispatch of KeyedAccounts
     match limited_deserialize(data)? {
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
             &authorized,
