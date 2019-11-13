@@ -208,18 +208,30 @@ fn check_vote_account(
     voting_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
 ) -> Result<(), String> {
-    let found_account = rpc_client
+    let found_vote_account = rpc_client
         .get_account(vote_pubkey)
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| format!("Failed to get vote account: {}", err.to_string()))?;
 
-    if found_account.owner != solana_vote_api::id() {
+    if found_vote_account.owner != solana_vote_api::id() {
         return Err(format!(
             "not a vote account (owned by {}): {}",
-            found_account.owner, vote_pubkey
+            found_vote_account.owner, vote_pubkey
         ));
     }
 
-    let found_vote_account = solana_vote_api::vote_state::VoteState::from(&found_account);
+    let found_node_account = rpc_client
+        .get_account(node_pubkey)
+        .map_err(|err| format!("Failed to get identity account: {}", err.to_string()))?;
+
+    if found_node_account.lamports == 0 {
+        return Err(format!(
+            "unfunded identity account (needs some fund to vote): {}",
+            node_pubkey,
+        ));
+    }
+
+
+    let found_vote_account = solana_vote_api::vote_state::VoteState::from(&found_vote_account);
     if let Some(found_vote_account) = found_vote_account {
         if found_vote_account.authorized_voter != *voting_pubkey {
             return Err(format!(
