@@ -7,7 +7,6 @@ use solana_core::{
     contact_info::ContactInfo,
     genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     gossip_service::discover_cluster,
-    service::Service,
     validator::{Validator, ValidatorConfig},
 };
 use solana_ledger::create_new_tmp_ledger;

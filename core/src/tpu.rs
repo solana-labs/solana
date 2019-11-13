@@ -7,7 +7,6 @@ use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
 use crate::poh_recorder::{PohRecorder, WorkingBankEntry};
-use crate::service::Service;
 use crate::sigverify::TransactionSigVerifier;
 use crate::sigverify_stage::{DisabledSigVerifier, SigVerifyStage};
 use crossbeam_channel::unbounded;
@@ -90,12 +89,8 @@ impl Tpu {
             broadcast_stage,
         }
     }
-}
 
-impl Service for Tpu {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         let mut results = vec![];
         results.push(self.fetch_stage.join());
         results.push(self.sigverify_stage.join());

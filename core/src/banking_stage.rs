@@ -7,7 +7,6 @@ use crate::{
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
     result::{Error, Result},
-    service::Service,
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
@@ -925,12 +924,8 @@ impl BankingStage {
             unprocessed_packets.push((packets, packet_indexes));
         }
     }
-}
 
-impl Service for BankingStage {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         for bank_thread_hdl in self.bank_thread_hdls {
             bank_thread_hdl.join()?;
         }

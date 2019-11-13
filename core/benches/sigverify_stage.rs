@@ -7,7 +7,6 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_core::packet::to_packets_chunked;
-use solana_core::service::Service;
 use solana_core::sigverify::TransactionSigVerifier;
 use solana_core::sigverify_stage::SigVerifyStage;
 use solana_perf::test_tx::test_tx;

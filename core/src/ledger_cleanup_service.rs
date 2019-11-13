@@ -1,7 +1,6 @@
 //! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
 
 use crate::result::{Error, Result};
-use crate::service::Service;
 use solana_ledger::blocktree::Blocktree;
 use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::pubkey::Pubkey;
@@ -63,12 +62,8 @@ impl LedgerCleanupService {
         }
         Ok(())
     }
-}
 
-impl Service for LedgerCleanupService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.t_cleanup.join()
     }
 }

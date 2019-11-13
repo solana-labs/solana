@@ -8,7 +8,6 @@ use crate::{
     repair_service,
     repair_service::{RepairService, RepairSlotRange, RepairStrategy},
     result::{Error, Result},
-    service::Service,
     shred_fetch_stage::ShredFetchStage,
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
     storage_stage::NUM_STORAGE_SAMPLES,

@@ -1,7 +1,6 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::PohRecorder;
-use crate::service::Service;
 use core_affinity;
 use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -96,12 +95,8 @@ impl PohService {
             }
         }
     }
-}
 
-impl Service for PohService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.tick_producer.join()
     }
 }

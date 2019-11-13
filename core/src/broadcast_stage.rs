@@ -5,7 +5,6 @@ use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::{Error, Result};
-use crate::service::Service;
 use solana_ledger::blocktree::Blocktree;
 use solana_ledger::staking_utils;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
@@ -178,12 +177,8 @@ impl BroadcastStage {
 
         Self { thread_hdl }
     }
-}
 
-impl Service for BroadcastStage {
-    type JoinReturnType = BroadcastStageReturnType;
-
-    fn join(self) -> thread::Result<BroadcastStageReturnType> {
+    pub fn join(self) -> thread::Result<BroadcastStageReturnType> {
         self.thread_hdl.join()
     }
 }
@@ -193,7 +188,6 @@ mod test {
     use super::*;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use crate::service::Service;
     use solana_ledger::entry::create_ticks;
     use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
     use solana_runtime::bank::Bank;

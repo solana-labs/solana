@@ -7,7 +7,6 @@
 
 use crate::packet::Packets;
 use crate::result::{Error, Result};
-use crate::service::Service;
 use crate::sigverify;
 use crate::streamer::{self, PacketReceiver};
 use crossbeam_channel::Sender as CrossbeamSender;
@@ -148,12 +147,8 @@ impl SigVerifyStage {
             })
             .collect()
     }
-}
 
-impl Service for SigVerifyStage {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }

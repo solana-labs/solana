@@ -1,7 +1,4 @@
-use crate::{
-    result::{Error, Result},
-    service::Service,
-};
+use crate::result::{Error, Result};
 use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_api::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
@@ -230,12 +227,8 @@ impl AggregateCommitmentService {
             }
         }
     }
-}
 
-impl Service for AggregateCommitmentService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.t_commitment.join()
     }
 }

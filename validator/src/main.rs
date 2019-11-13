@@ -12,7 +12,6 @@ use solana_core::cluster_info::{Node, VALIDATOR_PORT_RANGE};
 use solana_core::contact_info::ContactInfo;
 use solana_core::gossip_service::discover;
 use solana_core::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS;
-use solana_core::service::Service;
 use solana_core::socketaddr;
 use solana_core::validator::{Validator, ValidatorConfig};
 use solana_ledger::bank_forks::SnapshotConfig;

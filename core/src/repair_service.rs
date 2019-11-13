@@ -2,7 +2,7 @@
 //! regularly finds missing blobs in the ledger and sends repair requests for those blobs
 use crate::{
     cluster_info::ClusterInfo, cluster_info_repair_listener::ClusterInfoRepairListener,
-    result::Result, service::Service,
+    result::Result,
 };
 use solana_ledger::{
     bank_forks::BankForks,
@@ -373,12 +373,8 @@ impl RepairService {
             .cloned()
             .collect();
     }
-}
 
-impl Service for RepairService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         let mut results = vec![self.t_repair.join()];
         if let Some(cluster_info_repair_listener) = self.cluster_info_repair_listener {
             results.push(cluster_info_repair_listener.join());

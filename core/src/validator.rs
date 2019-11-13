@@ -12,7 +12,6 @@ use crate::{
     rpc_pubsub_service::PubSubService,
     rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
-    service::Service,
     sigverify,
     storage_stage::StorageState,
     tpu::Tpu,
@@ -408,6 +407,24 @@ impl Validator {
             node.sockets.retransmit_sockets[0].local_addr().unwrap()
         );
     }
+
+    pub fn join(self) -> Result<()> {
+        self.poh_service.join()?;
+        drop(self.poh_recorder);
+        if let Some(rpc_service) = self.rpc_service {
+            rpc_service.join()?;
+        }
+        if let Some(rpc_pubsub_service) = self.rpc_pubsub_service {
+            rpc_pubsub_service.join()?;
+        }
+
+        self.gossip_service.join()?;
+        self.tpu.join()?;
+        self.tvu.join()?;
+        self.ip_echo_server.shutdown_now();
+
+        Ok(())
+    }
 }
 
 pub fn new_banks_from_blocktree(
@@ -478,28 +495,6 @@ pub fn new_banks_from_blocktree(
         leader_schedule_cache,
         genesis_config.poh_config,
     )
-}
-
-impl Service for Validator {
-    type JoinReturnType = ();
-
-    fn join(self) -> Result<()> {
-        self.poh_service.join()?;
-        drop(self.poh_recorder);
-        if let Some(rpc_service) = self.rpc_service {
-            rpc_service.join()?;
-        }
-        if let Some(rpc_pubsub_service) = self.rpc_pubsub_service {
-            rpc_pubsub_service.join()?;
-        }
-
-        self.gossip_service.join()?;
-        self.tpu.join()?;
-        self.tvu.join()?;
-        self.ip_echo_server.shutdown_now();
-
-        Ok(())
-    }
 }
 
 pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {

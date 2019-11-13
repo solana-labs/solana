@@ -4,7 +4,6 @@ use crate::banking_stage::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET;
 use crate::packet::PacketsRecycler;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
-use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::recycler::Recycler;
@@ -140,12 +139,8 @@ impl FetchStage {
         thread_hdls.push(fwd_thread_hdl);
         Self { thread_hdls }
     }
-}
 
-impl Service for FetchStage {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }

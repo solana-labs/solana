@@ -2,7 +2,6 @@ use crate::cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS};
 use crate::packet::Packets;
 use crate::poh_recorder::PohRecorder;
 use crate::result::Result;
-use crate::service::Service;
 use crate::{packet, sigverify};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_metrics::inc_new_counter_debug;
@@ -72,12 +71,8 @@ impl ClusterInfoVoteListener {
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
         }
     }
-}
 
-impl Service for ClusterInfoVoteListener {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }

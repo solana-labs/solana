@@ -1,6 +1,5 @@
 //! The `local_vote_signer_service` can be started locally to sign validator votes
 
-use crate::service::Service;
 use solana_net_utils::PortRange;
 use solana_vote_signer::rpc::VoteSignerRpcService;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -11,15 +10,6 @@ use std::thread::{self, Builder, JoinHandle};
 pub struct LocalVoteSignerService {
     thread: JoinHandle<()>,
     exit: Arc<AtomicBool>,
-}
-
-impl Service for LocalVoteSignerService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
-        self.exit.store(true, Ordering::Relaxed);
-        self.thread.join()
-    }
 }
 
 impl LocalVoteSignerService {
@@ -40,5 +30,10 @@ impl LocalVoteSignerService {
             .unwrap();
 
         (Self { thread, exit }, addr)
+    }
+
+    pub fn join(self) -> thread::Result<()> {
+        self.exit.store(true, Ordering::Relaxed);
+        self.thread.join()
     }
 }

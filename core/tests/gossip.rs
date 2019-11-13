@@ -7,7 +7,6 @@ use solana_core::gossip_service::GossipService;
 
 use solana_core::packet::Packet;
 use solana_core::result;
-use solana_core::service::Service;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;

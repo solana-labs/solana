@@ -4,7 +4,6 @@
 mod tests {
     use log::*;
     use solana_core::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_core::service::Service;
     use solana_core::storage_stage::{test_cluster_info, SLOTS_PER_TURN_TEST};
     use solana_core::storage_stage::{StorageStage, StorageState};
     use solana_ledger::bank_forks::BankForks;
