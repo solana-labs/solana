@@ -8,7 +8,6 @@ use crate::consensus::{StakeLockout, Tower};
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
-use crate::service::Service;
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
@@ -925,12 +924,8 @@ impl ReplayStage {
             }
         }
     }
-}
 
-impl Service for ReplayStage {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.commitment_service.join()?;
         self.t_replay.join().map(|_| ())
     }

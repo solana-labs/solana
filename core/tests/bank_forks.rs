@@ -7,7 +7,6 @@ mod tests {
     use itertools::Itertools;
     use solana_core::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        service::Service,
         snapshot_packager_service::SnapshotPackagerService,
     };
     use solana_ledger::{

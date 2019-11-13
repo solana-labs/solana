@@ -9,7 +9,6 @@ use solana_core::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_core::packet::to_packets_chunked;
 use solana_core::poh_recorder::PohRecorder;
 use solana_core::poh_recorder::WorkingBankEntry;
-use solana_core::service::Service;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
 use solana_measure::measure::Measure;

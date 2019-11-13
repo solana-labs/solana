@@ -1,8 +1,6 @@
 #![feature(test)]
 
 extern crate test;
-#[macro_use]
-extern crate solana_ledger;
 
 use crossbeam_channel::unbounded;
 use log::*;
@@ -14,7 +12,6 @@ use solana_core::cluster_info::Node;
 use solana_core::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_core::packet::to_packets_chunked;
 use solana_core::poh_recorder::WorkingBankEntry;
-use solana_core::service::Service;
 use solana_ledger::blocktree_processor::process_entries;
 use solana_ledger::entry::{next_hash, Entry};
 use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};

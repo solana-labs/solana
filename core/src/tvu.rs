@@ -9,7 +9,6 @@ use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
-use crate::service::Service;
 use crate::shred_fetch_stage::ShredFetchStage;
 use crate::sigverify_shreds::ShredSigVerifier;
 use crate::sigverify_stage::{DisabledSigVerifier, SigVerifyStage};
@@ -206,12 +205,8 @@ impl Tvu {
             snapshot_packager_service,
         }
     }
-}
 
-impl Service for Tvu {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;

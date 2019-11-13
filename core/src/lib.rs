@@ -65,7 +65,6 @@ pub mod rpc_pubsub_service;
 pub mod rpc_service;
 pub mod rpc_subscriptions;
 pub mod sendmmsg;
-pub mod service;
 pub mod sigverify;
 pub mod sigverify_shreds;
 pub mod sigverify_stage;

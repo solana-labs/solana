@@ -1,7 +1,6 @@
 use crate::cluster_info::ClusterInfo;
 use crate::crds_value::EpochSlots;
 use crate::result::Result;
-use crate::service::Service;
 use byteorder::{ByteOrder, LittleEndian};
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -515,12 +514,8 @@ impl ClusterInfoRepairListener {
     fn get_last_ts(pubkey: &Pubkey, peer_infos: &mut HashMap<Pubkey, RepaireeInfo>) -> Option<u64> {
         peer_infos.get(pubkey).map(|p| p.last_ts)
     }
-}
 
-impl Service for ClusterInfoRepairListener {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }

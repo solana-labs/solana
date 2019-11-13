@@ -7,7 +7,6 @@ use crate::{
     cluster_info::ClusterInfo,
     contact_info::ContactInfo,
     result::{Error, Result},
-    service::Service,
 };
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
@@ -630,12 +629,8 @@ impl StorageStage {
         res?;
         Ok(())
     }
-}
 
-impl Service for StorageStage {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.t_storage_create_accounts.join().unwrap();
         self.t_storage_mining_verifier.join()
     }
@@ -651,7 +646,6 @@ pub fn test_cluster_info(id: &Pubkey) -> Arc<RwLock<ClusterInfo>> {
 mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use crate::service::Service;
     use rayon::prelude::*;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hasher;

@@ -1,7 +1,6 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use crate::packet::{Packet, PacketsRecycler};
-use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
 use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::recycler::Recycler;
@@ -104,12 +103,8 @@ impl ShredFetchStage {
 
         Self { thread_hdls }
     }
-}
 
-impl Service for ShredFetchStage {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }

@@ -1,5 +1,4 @@
 use crate::result::{Error, Result};
-use crate::service::Service;
 use bincode::serialize_into;
 use solana_ledger::snapshot_package::{SnapshotPackage, SnapshotPackageReceiver};
 use solana_ledger::snapshot_utils::{self, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
@@ -173,12 +172,8 @@ impl SnapshotPackagerService {
         );
         Ok(())
     }
-}
 
-impl Service for SnapshotPackagerService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.t_snapshot_packager.join()
     }
 }

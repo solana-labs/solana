@@ -2,7 +2,6 @@
 
 use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
 use crate::contact_info::ContactInfo;
-use crate::service::Service;
 use crate::streamer;
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
@@ -50,6 +49,13 @@ impl GossipService {
         let t_gossip = ClusterInfo::gossip(cluster_info.clone(), bank_forks, response_sender, exit);
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
         Self { thread_hdls }
+    }
+
+    pub fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }
 
@@ -262,17 +268,6 @@ fn make_gossip_node(
     let gossip_service =
         GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);
     (gossip_service, ip_echo, cluster_info)
-}
-
-impl Service for GossipService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls {
-            thread_hdl.join()?;
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]

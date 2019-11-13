@@ -8,7 +8,6 @@ use crate::blockstream::MockBlockstream as Blockstream;
 #[cfg(not(test))]
 use crate::blockstream::SocketBlockstream as Blockstream;
 use crate::result::{Error, Result};
-use crate::service::Service;
 use solana_ledger::blocktree::Blocktree;
 use solana_sdk::pubkey::Pubkey;
 use std::path::Path;
@@ -88,12 +87,8 @@ impl BlockstreamService {
         }
         Ok(())
     }
-}
 
-impl Service for BlockstreamService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.t_blockstream.join()
     }
 }

@@ -5,7 +5,6 @@ use crate::cluster_info::ClusterInfo;
 use crate::packet::Packets;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
-use crate::service::Service;
 use crate::streamer::PacketSender;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use rayon::iter::IntoParallelRefMutIterator;
@@ -262,12 +261,8 @@ impl WindowService {
             repair_service,
         }
     }
-}
 
-impl Service for WindowService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.t_window.join()?;
         self.repair_service.join()
     }
@@ -282,7 +277,6 @@ mod test {
         genesis_utils::create_genesis_config_with_leader,
         packet::{Packet, Packets},
         repair_service::RepairSlotRange,
-        service::Service,
     };
     use crossbeam_channel::unbounded;
     use rand::thread_rng;

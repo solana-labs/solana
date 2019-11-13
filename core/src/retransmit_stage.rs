@@ -5,7 +5,6 @@ use crate::{
     packet::Packets,
     repair_service::RepairStrategy,
     result::{Error, Result},
-    service::Service,
     streamer::PacketReceiver,
     window_service::{should_retransmit_and_persist, WindowService},
 };
@@ -256,12 +255,8 @@ impl RetransmitStage {
             window_service,
         }
     }
-}
 
-impl Service for RetransmitStage {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }

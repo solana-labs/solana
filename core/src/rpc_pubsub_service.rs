@@ -2,7 +2,6 @@
 
 use crate::rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl};
 use crate::rpc_subscriptions::RpcSubscriptions;
-use crate::service::Service;
 use jsonrpc_pubsub::{PubSubHandler, Session};
 use jsonrpc_ws_server::{RequestContext, ServerBuilder};
 use std::net::SocketAddr;
@@ -13,14 +12,6 @@ use std::time::Duration;
 
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
-}
-
-impl Service for PubSubService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()
-    }
 }
 
 impl PubSubService {
@@ -63,6 +54,10 @@ impl PubSubService {
 
     pub fn close(self) -> thread::Result<()> {
         self.join()
+    }
+
+    pub fn join(self) -> thread::Result<()> {
+        self.thread_hdl.join()
     }
 }
 

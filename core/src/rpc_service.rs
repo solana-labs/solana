@@ -1,7 +1,7 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
 use crate::{
-    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*, service::Service,
+    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, rpc::*,
     storage_stage::StorageState, validator::ValidatorExit,
 };
 use jsonrpc_core::MetaIoHandler;
@@ -163,12 +163,8 @@ impl JsonRpcService {
             c.close()
         }
     }
-}
 
-impl Service for JsonRpcService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.thread_hdl.join()
     }
 }
