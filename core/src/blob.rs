@@ -6,10 +6,8 @@ use crate::{
 use bincode;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
-use solana_ledger::erasure::ErasureConfig;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
 use solana_sdk::{
-    clock::Slot,
     pubkey::Pubkey,
     signature::{Signable, Signature},
 };
@@ -130,15 +128,8 @@ macro_rules! range {
 }
 
 const SIGNATURE_RANGE: std::ops::Range<usize> = range!(0, Signature);
-const FORWARDED_RANGE: std::ops::Range<usize> = range!(SIGNATURE_RANGE.end, bool);
-const PARENT_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, u64);
-const VERSION_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
-const SLOT_RANGE: std::ops::Range<usize> = range!(VERSION_RANGE.end, u64);
-const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
-const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
-const FLAGS_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u32);
-const ERASURE_CONFIG_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, ErasureConfig);
-const SIZE_RANGE: std::ops::Range<usize> = range!(ERASURE_CONFIG_RANGE.end, u64);
+const ID_RANGE: std::ops::Range<usize> = range!(SIGNATURE_RANGE.end, Pubkey);
+const SIZE_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u64);
 
 macro_rules! align {
     ($x:expr, $align:expr) => {
@@ -147,11 +138,7 @@ macro_rules! align {
 }
 
 pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, BLOB_DATA_ALIGN); // make sure data() is safe for erasure
-pub const SIGNABLE_START: usize = PARENT_RANGE.start;
-
-pub const BLOB_FLAG_IS_LAST_IN_SLOT: u32 = 0x2;
-
-pub const BLOB_FLAG_IS_CODING: u32 = 0x1;
+pub const SIGNABLE_START: usize = SIGNATURE_RANGE.end;
 
 impl Blob {
     pub fn new(data: &[u8]) -> Self {
@@ -175,41 +162,7 @@ impl Blob {
             out.position() as usize
         };
         blob.set_size(pos);
-        blob.set_erasure_config(&ErasureConfig::default());
         blob
-    }
-
-    pub fn parent(&self) -> u64 {
-        LittleEndian::read_u64(&self.data[PARENT_RANGE])
-    }
-    pub fn set_parent(&mut self, ix: u64) {
-        LittleEndian::write_u64(&mut self.data[PARENT_RANGE], ix);
-    }
-    pub fn version(&self) -> u64 {
-        LittleEndian::read_u64(&self.data[VERSION_RANGE])
-    }
-    pub fn set_version(&mut self, version: u64) {
-        LittleEndian::write_u64(&mut self.data[VERSION_RANGE], version);
-    }
-    pub fn slot(&self) -> u64 {
-        LittleEndian::read_u64(&self.data[SLOT_RANGE])
-    }
-    pub fn set_slot(&mut self, ix: u64) {
-        LittleEndian::write_u64(&mut self.data[SLOT_RANGE], ix);
-    }
-    pub fn index(&self) -> u64 {
-        LittleEndian::read_u64(&self.data[INDEX_RANGE])
-    }
-    pub fn set_index(&mut self, ix: u64) {
-        LittleEndian::write_u64(&mut self.data[INDEX_RANGE], ix);
-    }
-
-    pub fn set_erasure_config(&mut self, config: &ErasureConfig) {
-        self.data[ERASURE_CONFIG_RANGE].copy_from_slice(&bincode::serialize(config).unwrap())
-    }
-
-    pub fn erasure_config(&self) -> ErasureConfig {
-        bincode::deserialize(&self.data[ERASURE_CONFIG_RANGE]).unwrap_or_default()
     }
 
     pub fn seed(&self) -> [u8; 32] {
@@ -228,43 +181,6 @@ impl Blob {
 
     pub fn set_id(&mut self, id: &Pubkey) {
         self.data[ID_RANGE].copy_from_slice(id.as_ref())
-    }
-
-    /// Used to determine whether or not this blob should be forwarded in retransmit
-    /// A bool is used here instead of a flag because this item is not intended to be signed when
-    /// blob signatures are introduced
-    pub fn should_forward(&self) -> bool {
-        self.data[FORWARDED_RANGE][0] & 0x1 == 0
-    }
-
-    /// Mark this blob's forwarded status
-    pub fn set_forwarded(&mut self, forward: bool) {
-        self.data[FORWARDED_RANGE][0] = u8::from(forward)
-    }
-
-    pub fn flags(&self) -> u32 {
-        LittleEndian::read_u32(&self.data[FLAGS_RANGE])
-    }
-    pub fn set_flags(&mut self, ix: u32) {
-        LittleEndian::write_u32(&mut self.data[FLAGS_RANGE], ix);
-    }
-
-    pub fn is_coding(&self) -> bool {
-        (self.flags() & BLOB_FLAG_IS_CODING) != 0
-    }
-
-    pub fn set_coding(&mut self) {
-        let flags = self.flags();
-        self.set_flags(flags | BLOB_FLAG_IS_CODING);
-    }
-
-    pub fn set_is_last_in_slot(&mut self) {
-        let flags = self.flags();
-        self.set_flags(flags | BLOB_FLAG_IS_LAST_IN_SLOT);
-    }
-
-    pub fn is_last_in_slot(&self) -> bool {
-        (self.flags() & BLOB_FLAG_IS_LAST_IN_SLOT) != 0
     }
 
     pub fn data_size(&self) -> u64 {
@@ -386,24 +302,6 @@ impl Signable for Blob {
     }
 }
 
-pub fn index_blobs(
-    blobs: &[SharedBlob],
-    id: &Pubkey,
-    mut blob_index: u64,
-    slot: Slot,
-    parent: Slot,
-) {
-    // enumerate all the blobs, those are the indices
-    for blob in blobs.iter() {
-        let mut blob = blob.write().unwrap();
-        blob.set_index(blob_index);
-        blob.set_slot(slot);
-        blob.set_parent(parent);
-        blob.set_id(id);
-        blob_index += 1;
-    }
-}
-
 pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
 where
     T: serde::de::DeserializeOwned,
@@ -457,28 +355,9 @@ mod tests {
     #[test]
     pub fn blob_test() {
         let mut b = Blob::default();
-        b.set_index(<u64>::max_value());
-        assert_eq!(b.index(), <u64>::max_value());
         b.data_mut()[0] = 1;
         assert_eq!(b.data()[0], 1);
-        assert_eq!(b.index(), <u64>::max_value());
         assert_eq!(b.meta, Meta::default());
-    }
-    #[test]
-    fn test_blob_forward() {
-        let mut b = Blob::default();
-        assert!(b.should_forward());
-        b.set_forwarded(true);
-        assert!(!b.should_forward());
-    }
-
-    #[test]
-    fn test_blob_erasure_config() {
-        let mut b = Blob::default();
-        let config = ErasureConfig::new(32, 16);
-        b.set_erasure_config(&config);
-
-        assert_eq!(config, b.erasure_config());
     }
 
     #[test]
@@ -509,14 +388,6 @@ mod tests {
         b.set_size(80);
         b.sign(&k);
         assert!(b.verify());
-    }
-
-    #[test]
-    fn test_version() {
-        let mut b = Blob::default();
-        assert_eq!(b.version(), 0);
-        b.set_version(1);
-        assert_eq!(b.version(), 1);
     }
 
     #[test]
