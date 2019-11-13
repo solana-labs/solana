@@ -721,45 +721,47 @@ pub fn main() {
             &udp_sockets,
         );
 
-        if let Ok((rpc_addr, rpc_client)) = create_rpc_client(cluster_entrypoint) {
-            if !validator_config.voting_disabled {
-                check_vote_account(
-                    &rpc_client,
-                    &vote_account,
-                    &voting_keypair.pubkey(),
-                    &identity_keypair.pubkey(),
-                )
-                .unwrap_or_else(|err| {
-                    error!("Failed to check vote account: {}", err);
-                    exit(1);
-                });
-            }
-
-            let genesis_hash = initialize_ledger_path(
-                &rpc_addr,
-                &rpc_client,
-                &ledger_path,
-                no_genesis_fetch,
-                no_snapshot_fetch,
-            )
+        let (rpc_addr, rpc_client) = create_rpc_client(cluster_entrypoint)
             .unwrap_or_else(|err| {
-                error!("Failed to download ledger: {}", err);
-                exit(1);
+                error!("unable to create rpc client: {}", err);
+                std::process::exit(1);
             });
 
-            if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
-                if expected_genesis_hash != genesis_hash {
-                    error!(
-                        "Genesis hash mismatch: expected {} but local genesis hash is {}",
-                        expected_genesis_hash, genesis_hash,
-                    );
-                    exit(1);
-                }
-            }
-            validator_config.expected_genesis_hash = Some(genesis_hash);
-        } else {
-            error!("unable to create rpc client");
+        if !validator_config.voting_disabled {
+            check_vote_account(
+                &rpc_client,
+                &vote_account,
+                &voting_keypair.pubkey(),
+                &identity_keypair.pubkey(),
+            )
+            .unwrap_or_else(|err| {
+                error!("Failed to check vote account: {}", err);
+                exit(1);
+            });
         }
+
+        let genesis_hash = initialize_ledger_path(
+            &rpc_addr,
+            &rpc_client,
+            &ledger_path,
+            no_genesis_fetch,
+            no_snapshot_fetch,
+        )
+        .unwrap_or_else(|err| {
+            error!("Failed to download ledger: {}", err);
+            exit(1);
+        });
+
+        if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
+            if expected_genesis_hash != genesis_hash {
+                error!(
+                    "Genesis hash mismatch: expected {} but local genesis hash is {}",
+                    expected_genesis_hash, genesis_hash,
+                );
+                exit(1);
+            }
+        }
+        validator_config.expected_genesis_hash = Some(genesis_hash);
     } else {
         // Without a cluster entrypoint, ledger_path must already be present
         if !ledger_path.is_dir() {
