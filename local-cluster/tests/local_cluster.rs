@@ -183,6 +183,14 @@ fn test_leader_failure_4() {
         config.ticks_per_slot * config.poh_config.target_tick_duration.as_millis() as u64,
     );
 }
+
+#[test]
+#[serial]
+fn test_network_partition_3_2() {
+    let first_two_epoch_slots = MINIMUM_SLOTS_PER_EPOCH * 3;
+    let slot_millis = config.ticks_per_slot * config.poh_config.target_tick_duration.as_millis() as u64,
+    let partition_start = MINIMUM_SLOTS_PER_EPOCH * 3;
+}
 #[test]
 #[serial]
 fn test_two_unbalanced_stakes() {
