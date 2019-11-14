@@ -188,12 +188,10 @@ fn test_leader_failure_4() {
     );
 }
 
-#[test]
-#[serial]
-fn test_network_partition_2_3() {
+fn run_network_partition(partitions: &[usize]) {
     solana_logger::setup();
-    let num_nodes = 5;
     info!("PARTITION_TEST!");
+    let num_nodes = partitions.iter().sum();
     let validator_config = ValidatorConfig::default();
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -204,25 +202,27 @@ fn test_network_partition_2_3() {
     let now = timestamp();
     let partition_start = now + 30_000;
     let partition_end = partition_start + 10_000;
-    for i in 0..num_nodes / 2 {
-        let mut p1 = Partition::default();
-        p1.num_partitions = 2;
-        p1.my_partition = 0;
-        p1.start_ts = partition_start;
-        p1.end_ts = partition_end;
-        config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p1]));
-    }
-    for i in num_nodes / 2..num_nodes {
-        let mut p2 = Partition::default();
-        p2.num_partitions = 2;
-        p2.my_partition = 1;
-        p2.start_ts = partition_start;
-        p2.end_ts = partition_end;
-        config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p2]));
+    let mut total = 0;
+    for (j, pn) in partitions.iter().enumerate() {
+        info!(
+            "PARTITION_TEST configuring partition {} for nodes {} - {}",
+            j,
+            total,
+            total + *pn
+        );
+        for i in total..(total + *pn) {
+            let mut p1 = Partition::default();
+            p1.num_partitions = partitions.len();
+            p1.my_partition = j;
+            p1.start_ts = partition_start;
+            p1.end_ts = partition_end;
+            config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p1]));
+        }
+        total += *pn;
     }
     info!(
-        "PARTITION_TEST starting cluster with {} nodes and 2 partitions",
-        num_nodes
+        "PARTITION_TEST starting cluster with {:?} partitions",
+        partitions
     );
     let cluster = LocalCluster::new(&config);
     let now = timestamp();
@@ -254,6 +254,19 @@ fn test_network_partition_2_3() {
     );
     info!("PARTITION_TEST done spending on all ndoes");
 }
+
+#[test]
+#[serial]
+fn test_network_partition_2_3() {
+    run_network_partition(&[2, 3])
+}
+
+#[test]
+#[serial]
+fn test_network_partition_2_2() {
+    run_network_partition(&[2, 2])
+}
+
 #[test]
 #[serial]
 fn test_two_unbalanced_stakes() {
