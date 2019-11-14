@@ -17,9 +17,7 @@ use solana_client::rpc_request::{
     RpcVoteAccountStatus,
 };
 use solana_drone::drone::request_airdrop_transaction;
-use solana_ledger::{
-    bank_forks::BankForks, blocktree::Blocktree, rooted_slot_iterator::RootedSlotIterator,
-};
+use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
@@ -306,18 +304,14 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_blocks_since(&self, slot: Slot) -> Result<Vec<Slot>> {
-        Ok(RootedSlotIterator::new(slot, &self.blocktree)
-            .map_err(|err| Error::invalid_params(format!("Slot {:?}: {:?}", slot, err)))?
-            .map(|(slot, _)| slot)
-            .collect())
-    }
-
-    // The `get_block` method is not fully implemented. It currenlty returns a batch of test transaction
-    // tuples (Transaction, transaction::Result) to demonstrate message format and
+    // The `get_confirmed_block` method is not fully implemented. It currenlty returns a batch of
+    // test transaction tuples (Transaction, transaction::Result) to demonstrate message format and
     // TransactionErrors. Transaction count == slot, and transaction keys are derived
     // deterministically to allow testers to track the pubkeys across slots.
-    pub fn get_block(&self, slot: Slot) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
+    pub fn get_confirmed_block(
+        &self,
+        slot: Slot,
+    ) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
         Ok(make_test_transactions(slot))
     }
 }
@@ -523,11 +517,8 @@ pub trait RpcSol {
     #[rpc(meta, name = "setLogFilter")]
     fn set_log_filter(&self, _meta: Self::Metadata, filter: String) -> Result<()>;
 
-    #[rpc(meta, name = "getBlocksSince")]
-    fn get_blocks_since(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Slot>>;
-
-    #[rpc(meta, name = "getBlock")]
-    fn get_block(
+    #[rpc(meta, name = "getConfirmedBlock")]
+    fn get_confirmed_block(
         &self,
         meta: Self::Metadata,
         slot: Slot,
@@ -976,19 +967,15 @@ impl RpcSol for RpcSolImpl {
         Ok(())
     }
 
-    fn get_blocks_since(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Slot>> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_blocks_since(slot)
-    }
-
-    fn get_block(
+    fn get_confirmed_block(
         &self,
         meta: Self::Metadata,
         slot: Slot,
     ) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
-        meta.request_processor.read().unwrap().get_block(slot)
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_confirmed_block(slot)
     }
 }
 
