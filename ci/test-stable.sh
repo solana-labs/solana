@@ -10,6 +10,18 @@ annotate() {
   }
 }
 
+# Run the appropriate test based on entrypoint
+testName=$(basename "$0" .sh)
+
+# Skip if only the book has been modified
+ci/affects-files.sh \
+  \!^book/ \
+|| {
+  annotate --style info \
+    "Skipped $testName as only book files were modified"
+  exit 0
+}
+
 source ci/rust-version.sh stable
 
 export RUST_BACKTRACE=1
@@ -26,8 +38,6 @@ test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
 # Clear the BPF sysroot files, they are not automatically rebuilt
 rm -rf target/xargo # Issue #3105
 
-# Run the appropriate test based on entrypoint
-testName=$(basename "$0" .sh)
 echo "Executing $testName"
 case $testName in
 test-stable)
