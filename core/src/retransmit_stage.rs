@@ -212,7 +212,7 @@ impl RetransmitStage {
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
-        _cfg: Option<PartitionCfg>,
+        cfg: Option<PartitionCfg>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -241,6 +241,10 @@ impl RetransmitStage {
             repair_strategy,
             &leader_schedule_cache.clone(),
             move |id, shred, working_bank, last_root| {
+                let is_connected = cfg
+                    .as_ref()
+                    .map(|x| x.is_connected(&working_bank, &leader_schedule_cache, shred))
+                    .unwrap_or(true);
                 let rv = should_retransmit_and_persist(
                     shred,
                     working_bank,
@@ -248,12 +252,7 @@ impl RetransmitStage {
                     id,
                     last_root,
                 );
-                #[cfg(test)]
-                let rv = _cfg
-                    .map(|x| x.is_connected(&working_bank, &leader_schedule_cache, shred))
-                    .unwrap_or(true)
-                    && rv;
-                rv
+                rv && is_connected
             },
         );
 

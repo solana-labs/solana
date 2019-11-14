@@ -65,7 +65,7 @@ impl PartitionCfg {
                 let mut leaders: Vec<Pubkey> = bank.vote_accounts().keys().cloned().collect();
                 leaders.sort();
                 *leader_vec = leaders;
-                info!("partition enabled {}", p.my_partition);
+                info!("PARTITION_TEST partition enabled {}", p.my_partition);
             }
             let is_connected: bool = {
                 let leaders = p.leaders.read().unwrap();
