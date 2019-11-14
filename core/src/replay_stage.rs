@@ -205,6 +205,7 @@ impl ReplayStage {
                 let mut progress = HashMap::new();
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
+                let mut partition = false;
                 loop {
                     let now = Instant::now();
                     // Stop getting entries if we get exit signal
@@ -277,9 +278,14 @@ impl ReplayStage {
                                 last_reset = bank.last_blockhash();
                                 tpu_has_bank = false;
                                 info!("vote bank: {} reset bank: {}", vote_bank_slot, bank.slot());
-                                if vote_bank_slot != bank.slot() {
+                                if !partition && vote_bank_slot != bank.slot() {
                                     warn!("PARTITION DETECTED waiting to join fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
-                                    inc_new_counter_info!("replay_stage-poh_reset_without_vote", 1);
+                                    inc_new_counter_info!("replay_stage-partition_detected", 1);
+                                    partition = true;
+                                } else if partition && vote_bank_slot == bank.slot() {
+                                    warn!("PARTITION resolved fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
+                                    partition = false;
+                                    inc_new_counter_info!("replay_stage-partition_resolved", 1);
                                 }
                             }
                         }
