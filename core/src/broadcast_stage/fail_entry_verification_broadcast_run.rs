@@ -59,7 +59,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             .collect::<Vec<_>>();
         let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
         blocktree
-            .insert_shreds(all_shreds, None)
+            .insert_shreds(all_shreds, None, true)
             .expect("Failed to insert shreds in blocktree");
 
         // 3) Start broadcast step
