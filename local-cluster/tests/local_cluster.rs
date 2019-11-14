@@ -221,20 +221,34 @@ fn test_network_partition_2_3() {
         p2.end_ts = partition_start;
         config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p2]));
     }
-    info!("starting cluster with {} nodes and 2 partitions", num_nodes);
+    info!(
+        "PARTITION_TEST starting cluster with {} nodes and 2 partitions",
+        num_nodes
+    );
     let cluster = LocalCluster::new(&config);
-    info!("discovering cluster");
+    info!("PARTITION_TEST discovering cluster");
     let (nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
-    info!("done discovering cluster: {}", nodes.len());
-    info!("sleeping until partition timeout {}", partition_end - now);
-    sleep(Duration::from_millis(partition_end - now));
-    info!("done sleeping until partition timeout");
+    info!("PARTITION_TEST done discovering cluster: {}", nodes.len());
+    info!(
+        "PARTITION_TEST sleeping until partition start timeout {}",
+        partition_start - now
+    );
+    sleep(Duration::from_millis(partition_start - now));
+    info!("PARTITION_TEST done sleeping until partition start timeout");
+    info!(
+        "PARTITION_TEST sleeping until partition end timeout {}",
+        partition_start - partition_end
+    );
+    sleep(Duration::from_millis(partition_end - partition_start));
+    info!("PARTITION_TEST done sleeping until partition end timeout");
+    info!("PARTITION_TEST spending on all ndoes");
     cluster_tests::spend_and_verify_all_nodes(
         &cluster.entry_point_info,
         &cluster.funding_keypair,
         num_nodes,
         HashSet::new(),
     );
+    info!("PARTITION_TEST done spending on all ndoes");
 }
 #[test]
 #[serial]
