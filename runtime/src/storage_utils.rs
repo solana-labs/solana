@@ -62,7 +62,7 @@ pub fn validator_accounts(bank: &Bank) -> HashMap<Pubkey, Account> {
         .iter()
         .filter_map(|account_id| {
             bank.get_account(account_id)
-                .and_then(|account| Some((*account_id, account)))
+                .map(|account| (*account_id, account))
         })
         .collect()
 }
@@ -73,7 +73,7 @@ pub fn archiver_accounts(bank: &Bank) -> HashMap<Pubkey, Account> {
         .iter()
         .filter_map(|account_id| {
             bank.get_account(account_id)
-                .and_then(|account| Some((*account_id, account)))
+                .map(|account| (*account_id, account))
         })
         .collect()
 }
