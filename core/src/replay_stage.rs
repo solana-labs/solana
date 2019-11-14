@@ -42,6 +42,8 @@ use std::{
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 
+type VoteAndPoHBank = (Option<(Arc<Bank>, u64)>, Option<Arc<Bank>>);
+
 // Implement a destructor for the ReplayStage thread to signal it exited
 // even on panics
 struct Finalizer {
@@ -675,7 +677,7 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         tower: &Tower,
         progress: &mut HashMap<u64, ForkProgress>,
-    ) -> (Option<(Arc<Bank>, u64)>, Option<Arc<Bank>>) {
+    ) -> VoteAndPoHBank {
         let tower_start = Instant::now();
         let mut frozen_banks: Vec<_> = bank_forks
             .read()
@@ -763,7 +765,7 @@ impl ReplayStage {
     fn pick_best_fork(
         ancestors: &HashMap<u64, HashSet<u64>>,
         best_banks: &[(&Arc<Bank>, &ForkStats)],
-    ) -> (Option<(Arc<Bank>, u64)>, Option<Arc<Bank>>) {
+    ) -> VoteAndPoHBank {
         if best_banks.is_empty() {
             return (None, None);
         }
