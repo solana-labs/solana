@@ -400,6 +400,8 @@ impl Shredder {
             bincode::serialize(entries).expect("Expect to serialize all entries");
         let serialize_time = now.elapsed().as_millis();
 
+        let now = Instant::now();
+
         let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD;
         let num_shreds = (serialized_shreds.len() + no_header_size - 1) / no_header_size;
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
@@ -437,7 +439,9 @@ impl Shredder {
                     .collect()
             })
         });
+        let gen_data_time = now.elapsed().as_millis();
 
+        let now = Instant::now();
         // 2) Generate coding shreds
         let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
@@ -449,7 +453,9 @@ impl Shredder {
                     .collect()
             })
         });
+        let gen_coding_time = now.elapsed().as_millis();
 
+        let now = Instant::now();
         // 3) Sign coding shreds
         PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
@@ -458,16 +464,17 @@ impl Shredder {
                 })
             })
         });
-
-        let elapsed = now.elapsed().as_millis();
+        let sign_coding_time = now.elapsed().as_millis();
 
         datapoint_debug!(
             "shredding-stats",
             ("slot", self.slot as i64, i64),
             ("num_data_shreds", data_shreds.len() as i64, i64),
             ("num_coding_shreds", coding_shreds.len() as i64, i64),
-            ("signing_coding", (elapsed - serialize_time) as i64, i64),
-            ("serialzing", serialize_time as i64, i64),
+            ("serializing", serialize_time as i64, i64),
+            ("gen_data", gen_data_time as i64, i64),
+            ("gen_coding", gen_coding_time as i64, i64),
+            ("sign_coding", sign_coding_time as i64, i64),
         );
 
         (data_shreds, coding_shreds, last_shred_index + 1)
