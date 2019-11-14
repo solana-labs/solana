@@ -3,6 +3,7 @@
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     packet::Packets,
+    partition_cfg::PartitionCfg,
     repair_service::RepairStrategy,
     result::{Error, Result},
     streamer::PacketReceiver,
@@ -211,6 +212,7 @@ impl RetransmitStage {
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
+        _cfg: Option<PartitionCfg>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -239,13 +241,19 @@ impl RetransmitStage {
             repair_strategy,
             &leader_schedule_cache.clone(),
             move |id, shred, working_bank, last_root| {
-                should_retransmit_and_persist(
+                let rv = should_retransmit_and_persist(
                     shred,
                     working_bank,
                     &leader_schedule_cache,
                     id,
                     last_root,
-                )
+                );
+                #[cfg(test)]
+                let rv = _cfg
+                    .map(|x| x.is_connected(&working_bank, &leader_schedule_cache, shred))
+                    .unwrap_or(true)
+                    && rv;
+                rv
             },
         );
 
