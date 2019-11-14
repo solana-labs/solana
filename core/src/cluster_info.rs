@@ -804,14 +804,14 @@ impl ClusterInfo {
         Ok(())
     }
 
-    pub fn window_index_request_bytes(&self, slot: Slot, blob_index: u64) -> Result<Vec<u8>> {
-        let req = Protocol::RequestWindowIndex(self.my_data().clone(), slot, blob_index);
+    pub fn window_index_request_bytes(&self, slot: Slot, shred_index: u64) -> Result<Vec<u8>> {
+        let req = Protocol::RequestWindowIndex(self.my_data().clone(), slot, shred_index);
         let out = serialize(&req)?;
         Ok(out)
     }
 
-    fn window_highest_index_request_bytes(&self, slot: Slot, blob_index: u64) -> Result<Vec<u8>> {
-        let req = Protocol::RequestHighestWindowIndex(self.my_data().clone(), slot, blob_index);
+    fn window_highest_index_request_bytes(&self, slot: Slot, shred_index: u64) -> Result<Vec<u8>> {
+        let req = Protocol::RequestHighestWindowIndex(self.my_data().clone(), slot, shred_index);
         let out = serialize(&req)?;
         Ok(out)
     }
@@ -837,21 +837,21 @@ impl ClusterInfo {
     }
     pub fn map_repair_request(&self, repair_request: &RepairType) -> Result<Vec<u8>> {
         match repair_request {
-            RepairType::Shred(slot, blob_index) => {
+            RepairType::Shred(slot, shred_index) => {
                 datapoint_debug!(
                     "cluster_info-repair",
                     ("repair-slot", *slot, i64),
-                    ("repair-ix", *blob_index, i64)
+                    ("repair-ix", *shred_index, i64)
                 );
-                Ok(self.window_index_request_bytes(*slot, *blob_index)?)
+                Ok(self.window_index_request_bytes(*slot, *shred_index)?)
             }
-            RepairType::HighestBlob(slot, blob_index) => {
+            RepairType::HighestShred(slot, shred_index) => {
                 datapoint_debug!(
                     "cluster_info-repair_highest",
                     ("repair-highest-slot", *slot, i64),
-                    ("repair-highest-ix", *blob_index, i64)
+                    ("repair-highest-ix", *shred_index, i64)
                 );
-                Ok(self.window_highest_index_request_bytes(*slot, *blob_index)?)
+                Ok(self.window_highest_index_request_bytes(*slot, *shred_index)?)
             }
             RepairType::Orphan(slot) => {
                 datapoint_debug!("cluster_info-repair_orphan", ("repair-orphan", *slot, i64));
@@ -1165,7 +1165,7 @@ impl ClusterInfo {
         packets: Packets,
         response_sender: &PacketSender,
     ) {
-        // iter over the blobs, collect pulls separately and process everything else
+        // iter over the packets, collect pulls separately and process everything else
         let mut gossip_pull_data: Vec<PullData> = vec![];
         packets.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();
@@ -1404,7 +1404,7 @@ impl ClusterInfo {
 
         let (res, label) = {
             match &request {
-                Protocol::RequestWindowIndex(from, slot, blob_index) => {
+                Protocol::RequestWindowIndex(from, slot, shred_index) => {
                     inc_new_counter_debug!("cluster_info-request-window-index", 1);
                     (
                         Self::run_window_request(
@@ -1413,7 +1413,7 @@ impl ClusterInfo {
                             blocktree,
                             &my_info,
                             *slot,
-                            *blob_index,
+                            *shred_index,
                         ),
                         "RequestWindowIndex",
                     )
@@ -1944,7 +1944,7 @@ mod tests {
         assert!(one && two);
     }
 
-    /// test window requests respond with the right blob, and do not overrun
+    /// test window requests respond with the right shred, and do not overrun
     #[test]
     fn run_window_request() {
         solana_logger::setup();
@@ -2009,7 +2009,7 @@ mod tests {
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
-    /// test run_window_requestwindow requests respond with the right blob, and do not overrun
+    /// test run_window_requestwindow requests respond with the right shred, and do not overrun
     #[test]
     fn run_highest_window_request() {
         solana_logger::setup();
@@ -2061,7 +2061,7 @@ mod tests {
             let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 2, 0);
             assert!(rv.is_empty());
 
-            // Create slots 1, 2, 3 with 5 blobs apiece
+            // Create slots 1, 2, 3 with 5 shreds apiece
             let (shreds, _) = make_many_slot_entries(1, 3, 5);
 
             blocktree
@@ -2072,7 +2072,7 @@ mod tests {
             let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 4, 5);
             assert!(rv.is_empty());
 
-            // For slot 3, we should return the highest blobs from slots 3, 2, 1 respectively
+            // For slot 3, we should return the highest shreds from slots 3, 2, 1 respectively
             // for this request
             let rv: Vec<_> = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 3, 5)
                 .packets

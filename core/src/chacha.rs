@@ -164,7 +164,7 @@ mod tests {
         let mut hasher = Hasher::default();
         hasher.hash(&buf[..size]);
 
-        //  golden needs to be updated if blob stuff changes....
+        //  golden needs to be updated if shred structure changes....
         let golden: Hash = "HLzH7Nrh4q2K5WTh3e9vPNFZ1QVYhVDRMN9u5v51GqpJ"
             .parse()
             .unwrap();

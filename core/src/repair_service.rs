@@ -36,7 +36,7 @@ pub enum RepairStrategy {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairType {
     Orphan(u64),
-    HighestBlob(u64, u64),
+    HighestShred(u64, u64),
     Shred(u64, u64),
 }
 
@@ -242,7 +242,7 @@ impl RepairService {
         if slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
-            vec![RepairType::HighestBlob(slot, slot_meta.received)]
+            vec![RepairType::HighestShred(slot, slot_meta.received)]
         } else {
             let reqs = blocktree.find_missing_data_indexes(
                 slot,
@@ -414,7 +414,7 @@ mod test {
             blocktree.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 0, 2).unwrap(),
-                vec![RepairType::HighestBlob(0, 0), RepairType::Orphan(2)]
+                vec![RepairType::HighestShred(0, 0), RepairType::Orphan(2)]
             );
         }
 
@@ -436,7 +436,7 @@ mod test {
             // Check that repair tries to patch the empty slot
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 0, 2).unwrap(),
-                vec![RepairType::HighestBlob(0, 0)]
+                vec![RepairType::HighestShred(0, 0)]
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -512,7 +512,7 @@ mod test {
 
             // We didn't get the last blob for this slot, so ask for the highest blob for that slot
             let expected: Vec<RepairType> =
-                vec![RepairType::HighestBlob(0, num_shreds_per_slot - 1)];
+                vec![RepairType::HighestShred(0, num_shreds_per_slot - 1)];
 
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 0, std::usize::MAX).unwrap(),
@@ -551,7 +551,7 @@ mod test {
                             if slots.contains(&(slot_index as u64)) {
                                 RepairType::Shred(slot_index as u64, 0)
                             } else {
-                                RepairType::HighestBlob(slot_index as u64, 0)
+                                RepairType::HighestShred(slot_index as u64, 0)
                             }
                         })
                         .collect();
@@ -592,9 +592,9 @@ mod test {
 
             let end = 4;
             let expected: Vec<RepairType> = vec![
-                RepairType::HighestBlob(end - 2, 0),
-                RepairType::HighestBlob(end - 1, 0),
-                RepairType::HighestBlob(end, 0),
+                RepairType::HighestShred(end - 2, 0),
+                RepairType::HighestShred(end - 1, 0),
+                RepairType::HighestShred(end, 0),
             ];
 
             let mut repair_slot_range = RepairSlotRange::default();
