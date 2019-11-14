@@ -92,7 +92,7 @@ tar jcfS "$ledgerDir/genesis.tar.bz2" -C "$ledgerDir" genesis.bin rocksdb
 abort() {
   set +e
   kill "$drone" "$validator"
-  wait $validator
+  wait "$validator"
 }
 trap abort INT TERM EXIT
 

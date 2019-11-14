@@ -7,6 +7,7 @@ rm -f config/run/init-completed
 timeout 15 ./run.sh &
 run=$!
 
+# shellcheck disable=SC2034
 for _i in $(seq 10)
 do
   if [ -e config/run/init-completed ]
