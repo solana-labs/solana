@@ -51,10 +51,12 @@ impl PartitionCfg {
         let slot_leader_pubkey = slot_leader_pubkey.unwrap_or_default();
         let time = timestamp();
         for p in &self.partitions {
-            if !(p.start_ts..p.end_ts).contains(&time) {
+            let is_time = (p.start_ts..p.end_ts).contains(&time);
+            if !is_time {
                 continue;
             }
-            info!("PARTITION_TEST running {}", p.my_partition);
+            assert!(false);
+            info!("PARTITION_TEST partition time! {}", p.my_partition);
             if p.num_partitions == 0 {
                 continue;
             }

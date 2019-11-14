@@ -209,7 +209,7 @@ fn test_network_partition_2_3() {
         p1.num_partitions = 2;
         p1.my_partition = 0;
         p1.start_ts = partition_start;
-        p1.end_ts = partition_start;
+        p1.end_ts = partition_end;
         config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p1]));
     }
     for i in num_nodes / 2..num_nodes {
@@ -217,7 +217,7 @@ fn test_network_partition_2_3() {
         p2.num_partitions = 2;
         p2.my_partition = 1;
         p2.start_ts = partition_start;
-        p2.end_ts = partition_start;
+        p2.end_ts = partition_end;
         config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p2]));
     }
     info!(
@@ -225,9 +225,6 @@ fn test_network_partition_2_3() {
         num_nodes
     );
     let cluster = LocalCluster::new(&config);
-    info!("PARTITION_TEST discovering cluster");
-    let (nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
-    info!("PARTITION_TEST done discovering cluster: {}", nodes.len());
     let now = timestamp();
     let timeout = partition_start as i64 - now as i64;
     info!(
