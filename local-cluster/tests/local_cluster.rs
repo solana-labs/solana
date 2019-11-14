@@ -575,7 +575,7 @@ fn test_fail_entry_verification_leader() {
 #[allow(unused_attributes)]
 #[ignore]
 fn test_fake_blobs_broadcast_leader() {
-    test_faulty_node(BroadcastStageType::BroadcastFakeBlobs);
+    test_faulty_node(BroadcastStageType::BroadcastFakeShreds);
 }
 
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {

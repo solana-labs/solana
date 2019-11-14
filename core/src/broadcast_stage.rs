@@ -1,5 +1,5 @@
 //! A stage to broadcast data from a leader node to validators
-use self::broadcast_fake_blobs_run::BroadcastFakeBlobsRun;
+use self::broadcast_fake_shreds_run::BroadcastFakeShredsRun;
 use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun;
 use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
@@ -15,7 +15,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
-mod broadcast_fake_blobs_run;
+mod broadcast_fake_shreds_run;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
@@ -31,7 +31,7 @@ pub enum BroadcastStageReturnType {
 pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
-    BroadcastFakeBlobs,
+    BroadcastFakeShreds,
 }
 
 impl BroadcastStageType {
@@ -65,13 +65,13 @@ impl BroadcastStageType {
                 FailEntryVerificationBroadcastRun::new(),
             ),
 
-            BroadcastStageType::BroadcastFakeBlobs => BroadcastStage::new(
+            BroadcastStageType::BroadcastFakeShreds => BroadcastStage::new(
                 sock,
                 cluster_info,
                 receiver,
                 exit_sender,
                 blocktree,
-                BroadcastFakeBlobsRun::new(0),
+                BroadcastFakeShredsRun::new(0),
             ),
         }
     }
@@ -141,8 +141,8 @@ impl BroadcastStage {
     /// * `sock` - Socket to send from.
     /// * `exit` - Boolean to signal system exit.
     /// * `cluster_info` - ClusterInfo structure
-    /// * `window` - Cache of blobs that we have broadcast
-    /// * `receiver` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
+    /// * `window` - Cache of Shreds that we have broadcast
+    /// * `receiver` - Receive channel for Shreds to be retransmitted to all the layer 1 nodes.
     /// * `exit_sender` - Set to true when this service exits, allows rest of Tpu to exit cleanly.
     /// Otherwise, when a Tpu closes, it only closes the stages that come after it. The stages
     /// that come before could be blocked on a receive, and never notice that they need to

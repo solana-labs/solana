@@ -23,7 +23,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 
-        // 2) Convert entries to blobs + generate coding blobs. Set a garbage PoH on the last entry
+        // 2) Convert entries to shreds + generate coding shreds. Set a garbage PoH on the last entry
         // in the slot to make verification fail on validators
         if last_tick_height == bank.max_tick_height() {
             let mut last_entry = receive_results.entries.last_mut().unwrap();
