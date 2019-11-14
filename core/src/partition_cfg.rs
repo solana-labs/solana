@@ -55,7 +55,7 @@ impl PartitionCfg {
             if !is_time {
                 continue;
             }
-            info!("PARTITION_TEST partition time! {}", p.my_partition);
+            trace!("PARTITION_TEST partition time! {}", p.my_partition);
             if p.num_partitions == 0 {
                 continue;
             }
@@ -64,7 +64,7 @@ impl PartitionCfg {
                 let mut leaders: Vec<Pubkey> = bank.vote_accounts().keys().cloned().collect();
                 leaders.sort();
                 *leader_vec = leaders;
-                info!("PARTITION_TEST partition enabled {}", p.my_partition);
+                warn!("PARTITION_TEST partition enabled {}", p.my_partition);
             }
             let is_connected: bool = {
                 let leaders = p.leaders.read().unwrap();
@@ -80,10 +80,10 @@ impl PartitionCfg {
                 my_leaders.contains(&slot_leader_pubkey)
             };
             if is_connected {
-                info!("PARTITION_TEST connected {}", p.my_partition);
+                trace!("PARTITION_TEST connected {}", p.my_partition);
                 continue;
             }
-            info!("PARTITION_TEST not connected {}", p.my_partition);
+            trace!("PARTITION_TEST not connected {}", p.my_partition);
             return false;
         }
         trace!("PARTITION_TEST connected");
