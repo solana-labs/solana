@@ -8,7 +8,7 @@ function execution_step {
 }
 
 function collect_logs {
-  execution_step "collect logs from remote nodes"
+  execution_step "Collect logs from remote nodes"
   rm -rf net/log
   net/net.sh logs
   for logfile in net/log/* ; do
@@ -56,9 +56,12 @@ function analyze_packet_loss {
 function cleanup_testnet {
   RC=$?
   if [[ $RC != 0 ]] ; then
-    execution_step "Test failed while executing: $(eval echo "$@")"
-  else
-    execution_step "Test succeeded"
+    RESULT_DETAILS="
+Test failed during step:
+${STEP}
+
+Failure occured when running the following command:
+$(eval echo "$@")"
   fi
 
   FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
@@ -148,7 +151,7 @@ function launchTestnet() {
   set -x
 
   # shellcheck disable=SC2068
-  execution_step "create ${NUMBER_OF_VALIDATOR_NODES} ${CLOUD_PROVIDER} nodes"
+  execution_step "Create ${NUMBER_OF_VALIDATOR_NODES} ${CLOUD_PROVIDER} nodes"
 
   case $CLOUD_PROVIDER in
     gce)
@@ -199,10 +202,10 @@ function launchTestnet() {
       ;;
     esac
 
-  execution_step "configure database"
+  execution_step "Configure database"
   net/init-metrics.sh -e
 
-  execution_step "fetch reusable testnet keypairs"
+  execution_step "Fetch reusable testnet keypairs"
   if [[ ! -d net/keypairs ]] ; then
     git clone git@github.com:solana-labs/testnet-keypairs.git net/keypairs
     # If we have provider-specific keys (CoLo*, GCE*, etc) use them instead of generic val*
@@ -216,7 +219,7 @@ function launchTestnet() {
     net/net.sh stop
   fi
 
-  execution_step "start ${NUMBER_OF_VALIDATOR_NODES} node test"
+  execution_step "Start ${NUMBER_OF_VALIDATOR_NODES} node test"
   if [[ -n $CHANNEL ]]; then
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
@@ -231,13 +234,13 @@ function launchTestnet() {
       --gpu-mode $startGpuMode
   fi
 
-  execution_step "wait ${RAMP_UP_TIME} seconds for network throughput to stabilize"
+  execution_step "Wait ${RAMP_UP_TIME} seconds for network throughput to stabilize"
   sleep "$RAMP_UP_TIME"
 
-  execution_step "wait ${TEST_DURATION_SECONDS} seconds to complete test"
+  execution_step "Wait ${TEST_DURATION_SECONDS} seconds to complete test"
   sleep "$TEST_DURATION_SECONDS"
 
-  execution_step "collect statistics about run"
+  execution_step "Collect statistics about run"
   declare q_mean_tps='
     SELECT ROUND(MEAN("median_sum")) as "mean_tps" FROM (
       SELECT MEDIAN(sum_count) AS "median_sum" FROM (
@@ -342,7 +345,7 @@ if [[ "$USE_PUBLIC_IP_ADDRESSES" = "true" ]] ; then
 fi
 
 if [[ -z $CHANNEL ]]; then
-  execution_step "downloading tar from build artifacts"
+  execution_step "Downloading tar from build artifacts"
   buildkite-agent artifact download "solana-release*.tar.bz2" .
 fi
 
