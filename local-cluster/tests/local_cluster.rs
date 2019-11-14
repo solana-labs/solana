@@ -2,8 +2,11 @@ use log::*;
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
 use solana_core::{
-    broadcast_stage::BroadcastStageType, consensus::VOTE_THRESHOLD_DEPTH,
-    gossip_service::discover_cluster, validator::ValidatorConfig,
+    broadcast_stage::BroadcastStageType,
+    consensus::VOTE_THRESHOLD_DEPTH,
+    gossip_service::discover_cluster,
+    partition_cfg::{Partition, PartitionCfg},
+    validator::ValidatorConfig,
 };
 use solana_ledger::{bank_forks::SnapshotConfig, blocktree::Blocktree, snapshot_utils};
 use solana_local_cluster::{
@@ -12,6 +15,7 @@ use solana_local_cluster::{
     local_cluster::{ClusterConfig, LocalCluster},
 };
 use solana_runtime::accounts_db::AccountsDB;
+use solana_sdk::timing::timestamp;
 use solana_sdk::{
     client::SyncClient,
     clock,
@@ -182,6 +186,73 @@ fn test_leader_failure_4() {
         num_nodes,
         config.ticks_per_slot * config.poh_config.target_tick_duration.as_millis() as u64,
     );
+}
+
+#[test]
+#[serial]
+fn test_network_partition_2_3() {
+    solana_logger::setup();
+    let num_nodes = 5;
+    info!("PARTITION_TEST!");
+    let validator_config = ValidatorConfig::default();
+    let mut config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes: vec![100; num_nodes],
+        validator_configs: vec![validator_config.clone(); num_nodes],
+        ..ClusterConfig::default()
+    };
+    let now = timestamp();
+    let partition_start = now + 30_000;
+    let partition_end = partition_start + 10_000;
+    for i in 0..num_nodes / 2 {
+        let mut p1 = Partition::default();
+        p1.num_partitions = 2;
+        p1.my_partition = 0;
+        p1.start_ts = partition_start;
+        p1.end_ts = partition_end;
+        config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p1]));
+    }
+    for i in num_nodes / 2..num_nodes {
+        let mut p2 = Partition::default();
+        p2.num_partitions = 2;
+        p2.my_partition = 1;
+        p2.start_ts = partition_start;
+        p2.end_ts = partition_end;
+        config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p2]));
+    }
+    info!(
+        "PARTITION_TEST starting cluster with {} nodes and 2 partitions",
+        num_nodes
+    );
+    let cluster = LocalCluster::new(&config);
+    let now = timestamp();
+    let timeout = partition_start as i64 - now as i64;
+    info!(
+        "PARTITION_TEST sleeping until partition start timeout {}",
+        timeout
+    );
+    if timeout > 0 {
+        sleep(Duration::from_millis(timeout as u64));
+    }
+    info!("PARTITION_TEST done sleeping until partition start timeout");
+    let now = timestamp();
+    let timeout = partition_end as i64 - now as i64;
+    info!(
+        "PARTITION_TEST sleeping until partition end timeout {}",
+        timeout
+    );
+    if timeout > 0 {
+        sleep(Duration::from_millis(timeout as u64));
+    }
+    info!("PARTITION_TEST done sleeping until partition end timeout");
+    info!("PARTITION_TEST spending on all ndoes");
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        num_nodes,
+        HashSet::new(),
+    );
+    info!("PARTITION_TEST done spending on all ndoes");
 }
 #[test]
 #[serial]
