@@ -19,10 +19,10 @@ fn num_threads() -> usize {
 }
 
 /// Search for the a node with the given balance
-fn find_insert_blob(id: &Pubkey, blob: i32, batches: &mut [Nodes]) {
+fn find_insert_shred(id: &Pubkey, shred: i32, batches: &mut [Nodes]) {
     batches.par_iter_mut().for_each(|batch| {
         if batch.contains_key(id) {
-            let _ = batch.get_mut(id).unwrap().1.insert(blob);
+            let _ = batch.get_mut(id).unwrap().1.insert(shred);
         }
     });
 }
@@ -32,7 +32,7 @@ fn retransmit(
     senders: &HashMap<Pubkey, Sender<(i32, bool)>>,
     cluster: &ClusterInfo,
     fanout: usize,
-    blob: i32,
+    shred: i32,
     retransmit: bool,
 ) -> i32 {
     let mut seed = [0; 32];
@@ -47,22 +47,22 @@ fn retransmit(
             true
         }
     });
-    seed[0..4].copy_from_slice(&blob.to_le_bytes());
+    seed[0..4].copy_from_slice(&shred.to_le_bytes());
     let shuffled_indices = (0..shuffled_nodes.len()).collect();
     let (neighbors, children) = compute_retransmit_peers(fanout, my_index, shuffled_indices);
     children.into_iter().for_each(|i| {
         let s = senders.get(&shuffled_nodes[i].id).unwrap();
-        let _ = s.send((blob, retransmit));
+        let _ = s.send((shred, retransmit));
     });
 
     if retransmit {
         neighbors.into_iter().for_each(|i| {
             let s = senders.get(&shuffled_nodes[i].id).unwrap();
-            let _ = s.send((blob, false));
+            let _ = s.send((shred, false));
         });
     }
 
-    blob
+    shred
 }
 
 fn run_simulation(stakes: &[u64], fanout: usize) {
@@ -107,8 +107,8 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     });
     let c_info = cluster_info.clone();
 
-    let blobs_len = 100;
-    let shuffled_peers: Vec<Vec<ContactInfo>> = (0..blobs_len as i32)
+    let shreds_len = 100;
+    let shuffled_peers: Vec<Vec<ContactInfo>> = (0..shreds_len as i32)
         .map(|i| {
             let mut seed = [0; 32];
             seed[0..4].copy_from_slice(&i.to_le_bytes());
@@ -128,10 +128,10 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
         })
         .collect();
 
-    // create some "blobs".
-    (0..blobs_len).into_iter().for_each(|i| {
+    // create some "shreds".
+    (0..shreds_len).into_iter().for_each(|i| {
         let broadcast_table = &shuffled_peers[i];
-        find_insert_blob(&broadcast_table[0].id, i as i32, &mut batches);
+        find_insert_shred(&broadcast_table[0].id, i as i32, &mut batches);
     });
 
     assert!(!batches.is_empty());
@@ -165,7 +165,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                 }
 
                 //send and recv
-                if recv.len() < blobs_len {
+                if recv.len() < shreds_len {
                     loop {
                         match r.try_recv() {
                             Ok((data, retx)) => {
@@ -179,7 +179,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                                         retx,
                                     );
                                 }
-                                if recv.len() == blobs_len {
+                                if recv.len() == shreds_len {
                                     remaining -= 1;
                                     break;
                                 }
