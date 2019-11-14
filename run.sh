@@ -64,8 +64,18 @@ if [[ -e $leader_stake_account_keypair ]]; then
 else
   solana-keygen new -o "$leader_stake_account_keypair"
 fi
-solana-keygen new -f -o "$dataDir"/faucet-keypair.json
-solana-keygen new -f -o "$dataDir"/leader-storage-account-keypair.json
+faucet_keypair="$dataDir"/faucet-keypair.json
+if [[ -e $faucet_keypair ]]; then
+  echo "Use existing faucet keypair"
+else
+  solana-keygen new -f -o "$faucet_keypair"
+fi
+leader_storage_account_keypair="$dataDir"/leader-storage-account-keypair.json
+if [[ -e $leader_storage_account_keypair ]]; then
+  echo "Use existing leader storage account keypair"
+else
+  solana-keygen new -f -o "$leader_storage_account_keypair"
+fi
 
 solana-genesis \
   --hashes-per-tick sleep \
