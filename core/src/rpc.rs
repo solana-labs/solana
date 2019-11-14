@@ -4,7 +4,6 @@ use crate::{
     cluster_info::ClusterInfo,
     commitment::{BlockCommitment, BlockCommitmentCache},
     contact_info::ContactInfo,
-    gen_keys::GenKeys,
     packet::PACKET_DATA_SIZE,
     storage_stage::StorageState,
     validator::ValidatorExit,
@@ -29,8 +28,7 @@ use solana_sdk::{
     inflation::Inflation,
     instruction::InstructionError,
     pubkey::Pubkey,
-    signature::{KeypairUtil, Signature},
-    system_transaction,
+    signature::Signature,
     transaction::{self, Transaction, TransactionError},
 };
 use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
@@ -305,14 +303,36 @@ impl JsonRpcRequestProcessor {
     }
 
     // The `get_confirmed_block` method is not fully implemented. It currenlty returns a batch of
-    // test transaction tuples (Transaction, transaction::Result) to demonstrate message format and
-    // TransactionErrors. Transaction count == slot, and transaction keys are derived
-    // deterministically to allow testers to track the pubkeys across slots.
+    // transaction tuples (Transaction, transaction::Result), where the Transaction is a legitimate
+    // transaction, but the Result is mocked to demonstrate Ok results and TransactionErrors.
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
     ) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
-        Ok(make_test_transactions(slot))
+        let transactions = self
+            .blocktree
+            .get_confirmed_block_transactions(slot)
+            .unwrap_or_else(|_| vec![]);
+        Ok(transactions
+            .iter()
+            .enumerate()
+            .map(|(i, transaction)| {
+                let status = if i % 3 == 0 {
+                    Ok(())
+                } else if i % 3 == 1 {
+                    Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::InsufficientFunds,
+                    ))
+                } else {
+                    Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::CustomError(3),
+                    ))
+                };
+                (transaction.clone(), status)
+            })
+            .collect())
     }
 }
 
@@ -979,35 +999,6 @@ impl RpcSol for RpcSolImpl {
     }
 }
 
-fn make_test_transactions(count: u64) -> Vec<(Transaction, transaction::Result<()>)> {
-    let seed = [42u8; 32];
-    let keys = GenKeys::new(seed).gen_n_keypairs(count + 1);
-    let mut transactions: Vec<(Transaction, transaction::Result<()>)> = Vec::new();
-    for x in 0..count {
-        let tx = system_transaction::transfer(
-            &keys[x as usize],
-            &keys[(x + 1) as usize].pubkey(),
-            123,
-            Hash::default(),
-        );
-        let status = if x % 3 == 0 {
-            Ok(())
-        } else if x % 3 == 1 {
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InsufficientFunds,
-            ))
-        } else {
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::CustomError(3),
-            ))
-        };
-        transactions.push((tx, status))
-    }
-    transactions
-}
-
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -1021,7 +1012,7 @@ pub mod tests {
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
         instruction::InstructionError,
-        signature::Keypair,
+        signature::{Keypair, KeypairUtil},
         system_transaction,
         transaction::TransactionError,
     };

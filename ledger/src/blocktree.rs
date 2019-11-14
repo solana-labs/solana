@@ -1,38 +1,50 @@
 //! The `blocktree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-use crate::blocktree_db::{
-    columns as cf, Column, Database, IteratorDirection, IteratorMode, LedgerColumn, WriteBatch,
+use crate::{
+    blocktree_db::{
+        columns as cf, Column, Database, IteratorDirection, IteratorMode, LedgerColumn, WriteBatch,
+    },
+    blocktree_meta::*,
+    entry::{create_ticks, Entry},
+    erasure::ErasureConfig,
+    leader_schedule_cache::LeaderScheduleCache,
+    shred::{Shred, Shredder},
 };
-pub use crate::blocktree_db::{BlocktreeError, Result};
-pub use crate::blocktree_meta::SlotMeta;
-use crate::blocktree_meta::*;
-use crate::entry::{create_ticks, Entry};
-use crate::erasure::ErasureConfig;
-use crate::leader_schedule_cache::LeaderScheduleCache;
-use crate::shred::{Shred, Shredder};
+pub use crate::{
+    blocktree_db::{BlocktreeError, Result},
+    blocktree_meta::SlotMeta,
+};
 use bincode::deserialize;
 use log::*;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
-use rayon::ThreadPool;
+use rayon::{
+    iter::{IntoParallelRefIterator, ParallelIterator},
+    ThreadPool,
+};
 use rocksdb::DBRawIterator;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::clock::{Slot, DEFAULT_TICKS_PER_SECOND};
-use solana_sdk::genesis_config::GenesisConfig;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::timestamp;
-use std::cell::RefCell;
-use std::cmp;
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex, RwLock};
+use solana_sdk::{
+    clock::{Slot, DEFAULT_TICKS_PER_SECOND},
+    genesis_config::GenesisConfig,
+    hash::Hash,
+    signature::{Keypair, KeypairUtil},
+    timing::timestamp,
+    transaction::Transaction,
+};
+use std::{
+    cell::RefCell,
+    cmp,
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::{
+        mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
+        Arc, Mutex, RwLock,
+    },
+};
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 
@@ -1104,6 +1116,19 @@ impl Blocktree {
         }
     }
 
+    pub fn get_confirmed_block_transactions(&self, slot: Slot) -> Result<Vec<Transaction>> {
+        if self.is_root(slot) {
+            Ok(self
+                .get_slot_entries(slot, 0, None)?
+                .iter()
+                .cloned()
+                .flat_map(|entry| entry.transactions)
+                .collect())
+        } else {
+            Err(BlocktreeError::SlotNotRooted)
+        }
+    }
+
     /// Returns the entry vector for the slot starting with `shred_start_index`
     pub fn get_slot_entries(
         &self,
@@ -1951,15 +1976,40 @@ fn adjust_ulimit_nofile() {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use crate::shred::{max_ticks_per_n_shreds, DataShredHeader};
+    use crate::{
+        entry::next_entry_mut,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        shred::{max_ticks_per_n_shreds, DataShredHeader},
+    };
     use itertools::Itertools;
-    use rand::seq::SliceRandom;
-    use rand::thread_rng;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::packet::PACKET_DATA_SIZE;
-    use std::iter::FromIterator;
-    use std::time::Duration;
+    use rand::{seq::SliceRandom, thread_rng};
+    use solana_sdk::{
+        hash::Hash, instruction::CompiledInstruction, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
+    };
+    use std::{iter::FromIterator, time::Duration};
+
+    // used for tests only
+    fn make_slot_entries_with_transactions(
+        slot: Slot,
+        parent_slot: Slot,
+        num_entries: u64,
+    ) -> (Vec<Shred>, Vec<Entry>) {
+        let mut entries: Vec<Entry> = Vec::new();
+        for _ in 0..num_entries {
+            let transaction = Transaction::new_with_compiled_instructions(
+                &[&Keypair::new()],
+                &[Pubkey::new_rand()],
+                Hash::default(),
+                vec![Pubkey::new_rand()],
+                vec![CompiledInstruction::new(1, &(), vec![0])],
+            );
+            entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
+            let mut tick = create_ticks(1, 0, Hash::default());
+            entries.append(&mut tick);
+        }
+        let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true);
+        (shreds, entries)
+    }
 
     #[test]
     fn test_create_new_ledger() {
@@ -3993,5 +4043,32 @@ pub mod tests {
                 .unwrap();
             assert!(blocktree.get_data_shred(1, 0).unwrap().is_some());
         }
+    }
+
+    #[test]
+    fn test_get_confirmed_block_transactions() {
+        let slot = 0;
+        let (shreds, entries) = make_slot_entries_with_transactions(slot, 0, 100);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blocktree::open(&ledger_path).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger.set_roots(&[0]).unwrap();
+
+        let transactions = ledger.get_confirmed_block_transactions(0).unwrap();
+        assert_eq!(transactions.len(), 100);
+        let expected_transactions: Vec<Transaction> = entries
+            .iter()
+            .cloned()
+            .filter(|entry| !entry.is_tick())
+            .flat_map(|entry| entry.transactions)
+            .collect();
+        assert_eq!(transactions, expected_transactions);
+
+        let not_root = ledger.get_confirmed_block_transactions(1);
+        assert!(not_root.is_err());
+
+        drop(ledger);
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 }
