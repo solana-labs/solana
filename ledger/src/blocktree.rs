@@ -1977,22 +1977,39 @@ fn adjust_ulimit_nofile() {
 pub mod tests {
     use super::*;
     use crate::{
+        entry::next_entry_mut,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         shred::{max_ticks_per_n_shreds, DataShredHeader},
     };
     use itertools::Itertools;
-    use rand::{
-        seq::SliceRandom,
-        thread_rng,
-    };
+    use rand::{seq::SliceRandom, thread_rng};
     use solana_sdk::{
-        hash::Hash,
-        packet::PACKET_DATA_SIZE,
+        hash::Hash, instruction::CompiledInstruction, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
     };
-    use std::{
-        iter::FromIterator,
-        time::Duration,
-    };
+    use std::{iter::FromIterator, time::Duration};
+
+    // used for tests only
+    fn make_slot_entries_with_transactions(
+        slot: Slot,
+        parent_slot: Slot,
+        num_entries: u64,
+    ) -> (Vec<Shred>, Vec<Entry>) {
+        let mut entries: Vec<Entry> = Vec::new();
+        for _ in 0..num_entries {
+            let transaction = Transaction::new_with_compiled_instructions(
+                &[&Keypair::new()],
+                &[Pubkey::new_rand()],
+                Hash::default(),
+                vec![Pubkey::new_rand()],
+                vec![CompiledInstruction::new(1, &(), vec![0])],
+            );
+            entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
+            let mut tick = create_ticks(1, 0, Hash::default());
+            entries.append(&mut tick);
+        }
+        let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true);
+        (shreds, entries)
+    }
 
     #[test]
     fn test_create_new_ledger() {
@@ -4026,5 +4043,32 @@ pub mod tests {
                 .unwrap();
             assert!(blocktree.get_data_shred(1, 0).unwrap().is_some());
         }
+    }
+
+    #[test]
+    fn test_get_confirmed_block_transactions() {
+        let slot = 0;
+        let (shreds, entries) = make_slot_entries_with_transactions(slot, 0, 100);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blocktree::open(&ledger_path).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger.set_roots(&[0]).unwrap();
+
+        let transactions = ledger.get_confirmed_block_transactions(0).unwrap();
+        assert_eq!(transactions.len(), 100);
+        let expected_transactions: Vec<Transaction> = entries
+            .iter()
+            .cloned()
+            .filter(|entry| !entry.is_tick())
+            .flat_map(|entry| entry.transactions)
+            .collect();
+        assert_eq!(transactions, expected_transactions);
+
+        let not_root = ledger.get_confirmed_block_transactions(1);
+        assert!(not_root.is_err());
+
+        drop(ledger);
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 }
