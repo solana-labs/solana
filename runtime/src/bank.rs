@@ -230,6 +230,11 @@ pub struct Bank {
     /// Latest transaction fees for transactions processed by this bank
     fee_calculator: FeeCalculator,
 
+    /// Rent that have been collected
+    #[serde(serialize_with = "serialize_atomicu64")]
+    #[serde(deserialize_with = "deserialize_atomicu64")]
+    collected_rent: AtomicU64,
+
     /// latest rent collector, knows the epoch
     rent_collector: RentCollector,
 
@@ -333,6 +338,7 @@ impl Bank {
             slots_per_segment: parent.slots_per_segment,
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
+            collected_rent: AtomicU64::new(0),
             rent_collector: parent.rent_collector.clone_with_epoch(epoch),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
@@ -596,6 +602,7 @@ impl Bank {
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
             self.collect_fees();
+            self.distribute_rent();
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
@@ -1169,7 +1176,10 @@ impl Bank {
             iteration_order,
             executed,
             loaded_accounts,
+            &self.rent_collector,
+            self.epoch,
         );
+        self.collect_rent(txs, iteration_order, executed, loaded_accounts);
 
         self.update_cached_accounts(txs, iteration_order, executed, loaded_accounts);
 
@@ -1178,6 +1188,52 @@ impl Bank {
         debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
         self.update_transaction_statuses(txs, iteration_order, &executed);
         self.filter_program_errors_and_collect_fee(txs, iteration_order, executed)
+    }
+
+    fn distribute_rent(&self) {
+        let total_rent_collected = self.collected_rent.load(Ordering::Relaxed);
+
+        if total_rent_collected != 0 {
+            let burned_portion =
+                (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
+            let _rent_to_be_distributed = total_rent_collected - burned_portion;
+            // TODO: distribute remaining rent amount to validators
+            // self.capitalization.fetch_sub(burned_portion, Ordering::Relaxed);
+        }
+    }
+
+    fn collect_rent(
+        &self,
+        txs: &[Transaction],
+        iteration_order: Option<&[usize]>,
+        res: &[Result<()>],
+        loaded_accounts: &[Result<TransactionLoadResult>],
+    ) {
+        let mut collected_rent: u64 = 0;
+        for (i, (raccs, tx)) in loaded_accounts
+            .iter()
+            .zip(OrderedIterator::new(txs, iteration_order))
+            .enumerate()
+        {
+            if res[i].is_err() || raccs.is_err() {
+                continue;
+            }
+
+            let message = &tx.message();
+            let acc = raccs.as_ref().unwrap();
+
+            for (_i, rent) in acc
+                .2
+                .iter()
+                .enumerate()
+                .filter(|(i, _rent)| message.is_writable(*i))
+            {
+                collected_rent += *rent;
+            }
+        }
+
+        self.collected_rent
+            .fetch_add(collected_rent, Ordering::Relaxed);
     }
 
     /// Process a batch of transactions.

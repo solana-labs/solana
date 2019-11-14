@@ -9,7 +9,7 @@ use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
-use solana_sdk::clock::Slot;
+use solana_sdk::clock::{Epoch, Slot};
 use solana_sdk::message::Message;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
@@ -514,9 +514,17 @@ impl Accounts {
         txs_iteration_order: Option<&[usize]>,
         res: &[Result<()>],
         loaded: &mut [Result<TransactionLoadResult>],
+        rent_collector: &RentCollector,
+        current_epoch: Epoch,
     ) {
-        let accounts_to_store =
-            self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded);
+        let accounts_to_store = self.collect_accounts_to_store(
+            txs,
+            txs_iteration_order,
+            res,
+            loaded,
+            rent_collector,
+            current_epoch,
+        );
         self.accounts_db.store(slot, &accounts_to_store);
     }
 
@@ -536,6 +544,8 @@ impl Accounts {
         txs_iteration_order: Option<&'a [usize]>,
         res: &'a [Result<()>],
         loaded: &'a mut [Result<TransactionLoadResult>],
+        rent_collector: &RentCollector,
+        current_epoch: Epoch,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, (raccs, tx)) in loaded
@@ -549,9 +559,18 @@ impl Accounts {
 
             let message = &tx.message();
             let acc = raccs.as_mut().unwrap();
-            for ((i, key), account) in message.account_keys.iter().enumerate().zip(acc.0.iter()) {
+            for ((i, key), (account, rent)) in message
+                .account_keys
+                .iter()
+                .enumerate()
+                .zip(acc.0.iter_mut().zip(acc.2.iter_mut()))
+            {
                 if message.is_writable(i) {
-                    accounts.push((key, account));
+                    if account.rent_epoch == 0 {
+                        account.rent_epoch = current_epoch;
+                        *rent += rent_collector.update(account);
+                    }
+                    accounts.push((key, &*account));
                 }
             }
         }
@@ -1327,6 +1346,8 @@ mod tests {
         let keypair1 = Keypair::new();
         let pubkey = Pubkey::new_rand();
 
+        let rent_collector = RentCollector::default();
+
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -1387,8 +1408,14 @@ mod tests {
                 },
             );
         }
-        let collected_accounts =
-            accounts.collect_accounts_to_store(&txs, None, &loaders, &mut loaded);
+        let collected_accounts = accounts.collect_accounts_to_store(
+            &txs,
+            None,
+            &loaders,
+            &mut loaded,
+            &rent_collector,
+            0,
+        );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()
