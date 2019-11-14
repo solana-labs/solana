@@ -26,7 +26,7 @@ pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 /// default amount of rent to burn, as a fraction of std::u8::MAX
 pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
 
-/// default account storage over head for calculation of base rent
+/// account storage overhead for calculation of base rent
 pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 128;
 
 impl Default for Rent {
