@@ -23,7 +23,8 @@ fn test_rpc_client() {
     );
 
     assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 0);
-    assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 10000);
+
+    assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 1_000_000);
 
     let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
 
@@ -49,7 +50,7 @@ fn test_rpc_client() {
     assert!(confirmed_tx);
 
     assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 20);
-    assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 9980);
+    assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 999980);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

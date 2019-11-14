@@ -114,7 +114,10 @@ impl Accounts {
                 .filter(|key| !message.program_ids().contains(key))
             {
                 let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
-                    .and_then(|(account, _)| rent_collector.update(account))
+                    .and_then(|(mut account, _)| {
+                        let rent_due = rent_collector.update(&mut account);
+                        Some((account, rent_due))
+                    })
                     .unwrap_or_default();
 
                 accounts.push(account);

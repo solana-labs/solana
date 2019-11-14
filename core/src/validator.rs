@@ -508,7 +508,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
         mut genesis_config,
         mint_keypair,
         voting_keypair,
-    } = create_genesis_config_with_leader(10_000, &contact_info.id, 42);
+    } = create_genesis_config_with_leader(1_000_000, &contact_info.id, 42);
     genesis_config
         .native_instruction_processors
         .push(solana_budget_program!());
