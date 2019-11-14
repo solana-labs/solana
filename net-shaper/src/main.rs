@@ -250,7 +250,7 @@ fn shape_network(matches: &ArgMatches) {
                 return;
             }
 
-            if !insert_tos_filter(interface.as_str(), tos_string.as_str(), class.as_str()) {
+            if !insert_tos_filter(interface.as_str(), class.as_str(), tos_string.as_str()) {
                 flush_iptables_rule();
                 delete_tc_netem(
                     interface.as_str(),
