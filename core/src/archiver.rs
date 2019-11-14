@@ -927,7 +927,7 @@ impl Archiver {
                     .into_iter()
                     .filter_map(|p| Shred::new_from_serialized_shred(p.data.to_vec()).ok())
                     .collect();
-                blocktree.insert_shreds(shreds, None)?;
+                blocktree.insert_shreds(shreds, None, false)?;
             }
             // check if all the slots in the segment are complete
             if Self::segment_complete(start_slot, slots_per_segment, blocktree) {
