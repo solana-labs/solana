@@ -6,7 +6,7 @@ steps:
       CLOUD_PROVIDER: "ec2"
       TESTNET_TAG: "aws-perf-cpu-only"
       RAMP_UP_TIME: 0
-      TEST_DURATION_SECONDS: 300
+      TEST_DURATION_SECONDS: 600
       NUMBER_OF_VALIDATOR_NODES: 5
       ENABLE_GPU: "false"
       # Up to 3.1 GHz Intel Xeon® Platinum 8175, 16 vCPU, 64GB RAM
