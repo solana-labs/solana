@@ -43,7 +43,7 @@ impl Rent {
     /// minimum balance due for a given size Account::data.len()
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
-        (((ACCOUNT_STORAGE_OVERHEAD * bytes) * self.lamports_per_byte_year) as f64
+        (((ACCOUNT_STORAGE_OVERHEAD + bytes) * self.lamports_per_byte_year) as f64
             * self.exemption_threshold) as u64
     }
 
@@ -80,21 +80,45 @@ mod tests {
 
     #[test]
     fn test_due() {
-        let rent = Rent::default();
+        let default_rent = Rent::default();
 
         assert_eq!(
-            rent.due(0, 1, 1.0),
+            default_rent.due(0, 2, 1.2),
             (
-                (1 + ACCOUNT_STORAGE_OVERHEAD) * DEFAULT_LAMPORTS_PER_BYTE_YEAR,
+                (((2 + ACCOUNT_STORAGE_OVERHEAD) * DEFAULT_LAMPORTS_PER_BYTE_YEAR) as f64 * 1.2)
+                    as u64,
                 DEFAULT_LAMPORTS_PER_BYTE_YEAR == 0
             )
         );
         assert_eq!(
-            rent.due(
-                ((1 + ACCOUNT_STORAGE_OVERHEAD) * DEFAULT_LAMPORTS_PER_BYTE_YEAR)
-                    * DEFAULT_EXEMPTION_THRESHOLD as u64,
-                1,
-                1.0
+            default_rent.due(
+                (((2 + ACCOUNT_STORAGE_OVERHEAD) * DEFAULT_LAMPORTS_PER_BYTE_YEAR) as f64
+                    * DEFAULT_EXEMPTION_THRESHOLD) as u64,
+                2,
+                1.2
+            ),
+            (0, true)
+        );
+
+        let mut custom_rent = Rent::default();
+        custom_rent.lamports_per_byte_year = 5;
+        custom_rent.exemption_threshold = 2.5;
+
+        assert_eq!(
+            custom_rent.due(0, 2, 1.2),
+            (
+                (((2 + ACCOUNT_STORAGE_OVERHEAD) * custom_rent.lamports_per_byte_year) as f64 * 1.2)
+                    as u64,
+                false
+            )
+        );
+
+        assert_eq!(
+            custom_rent.due(
+                (((2 + ACCOUNT_STORAGE_OVERHEAD) * custom_rent.lamports_per_byte_year) as f64
+                    * custom_rent.exemption_threshold) as u64,
+                2,
+                1.2
             ),
             (0, true)
         );
