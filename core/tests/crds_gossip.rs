@@ -1,7 +1,7 @@
 use bincode::serialized_size;
 use log::*;
 use rayon::prelude::*;
-use solana_core::cluster_info::ClusterInfo;
+use solana_core::cluster_info;
 use solana_core::contact_info::ContactInfo;
 use solana_core::crds_gossip::*;
 use solana_core::crds_gossip_error::CrdsGossipError;
@@ -403,7 +403,7 @@ fn network_run_pull(
                 .filter_map(|from| {
                     from.lock()
                         .unwrap()
-                        .new_pull_request(now, &HashMap::new(), ClusterInfo::max_bloom_size())
+                        .new_pull_request(now, &HashMap::new(), cluster_info::MAX_BLOOM_SIZE)
                         .ok()
                 })
                 .collect()

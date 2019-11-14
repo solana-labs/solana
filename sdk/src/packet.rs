@@ -1,6 +1,8 @@
 use crate::clock::Slot;
-use std::fmt;
+use bincode::Result;
+use serde::Serialize;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::{fmt, io};
 
 /// Maximum over-the-wire size of a Transaction
 ///   1280 is IPv6 minimum MTU
@@ -32,6 +34,29 @@ pub struct Packet {
 impl Packet {
     pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
         Self { data, meta }
+    }
+
+    pub fn from_data<T: Serialize>(dest: &SocketAddr, data: T) -> Self {
+        let mut me = Packet::default();
+        if let Err(e) = Self::populate_packet(&mut me, Some(dest), &data) {
+            logger::error!("Couldn't write to packet {:?}. Data skipped.", e);
+        }
+        me
+    }
+
+    pub fn populate_packet<T: Serialize>(
+        packet: &mut Packet,
+        dest: Option<&SocketAddr>,
+        data: &T,
+    ) -> Result<()> {
+        let mut wr = io::Cursor::new(&mut packet.data[..]);
+        bincode::serialize_into(&mut wr, data)?;
+        let len = wr.position() as usize;
+        packet.meta.size = len;
+        if let Some(dest) = dest {
+            packet.meta.set_addr(dest);
+        }
+        Ok(())
     }
 }
 

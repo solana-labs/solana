@@ -8,7 +8,6 @@
 //!    the local nodes wallclock window they are drooped silently.
 //! 2. The prune set is stored in a Bloom filter.
 
-use crate::blob::BLOB_DATA_SIZE;
 use crate::contact_info::ContactInfo;
 use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
@@ -23,6 +22,7 @@ use rand::seq::SliceRandom;
 use rand::{thread_rng, RngCore};
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
+use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use std::cmp;
@@ -53,7 +53,8 @@ pub struct CrdsGossipPush {
 impl Default for CrdsGossipPush {
     fn default() -> Self {
         Self {
-            max_bytes: BLOB_DATA_SIZE,
+            // Allow upto 64 Crds Values per PUSH
+            max_bytes: PACKET_DATA_SIZE * 64,
             active_set: IndexMap::new(),
             push_messages: HashMap::new(),
             received_cache: HashMap::new(),

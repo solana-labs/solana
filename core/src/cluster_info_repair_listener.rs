@@ -526,22 +526,23 @@ impl ClusterInfoRepairListener {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blob::{Blob, SharedBlob};
     use crate::cluster_info::Node;
+    use crate::packet::Packets;
     use crate::streamer;
+    use crate::streamer::PacketReceiver;
     use solana_ledger::blocktree::make_many_slot_entries;
     use solana_ledger::get_tmp_ledger_path;
+    use solana_perf::recycler::Recycler;
     use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
-    use std::sync::mpsc::Receiver;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
 
     struct MockRepairee {
         id: Pubkey,
-        receiver: Receiver<Vec<SharedBlob>>,
+        receiver: PacketReceiver,
         tvu_address: SocketAddr,
         repairee_exit: Arc<AtomicBool>,
         repairee_receiver_thread_hdl: JoinHandle<()>,
@@ -550,7 +551,7 @@ mod tests {
     impl MockRepairee {
         pub fn new(
             id: Pubkey,
-            receiver: Receiver<Vec<SharedBlob>>,
+            receiver: PacketReceiver,
             tvu_address: SocketAddr,
             repairee_exit: Arc<AtomicBool>,
             repairee_receiver_thread_hdl: JoinHandle<()>,
@@ -570,8 +571,13 @@ mod tests {
             let repairee_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
             let repairee_tvu_addr = repairee_socket.local_addr().unwrap();
             let repairee_exit = Arc::new(AtomicBool::new(false));
-            let repairee_receiver_thread_hdl =
-                streamer::blob_receiver(repairee_socket, &repairee_exit, repairee_sender);
+            let repairee_receiver_thread_hdl = streamer::receiver(
+                repairee_socket,
+                &repairee_exit,
+                repairee_sender,
+                Recycler::default(),
+                "mock_repairee_receiver",
+            );
 
             Self::new(
                 id,
@@ -788,19 +794,30 @@ mod tests {
             .unwrap();
         }
 
-        let mut received_shreds: Vec<Arc<RwLock<Blob>>> = vec![];
+        let mut received_shreds: Vec<Packets> = vec![];
 
         // This repairee was missing exactly `num_slots / 2` slots, so we expect to get
         // `(num_slots / 2) * num_shreds_per_slot * REPAIR_REDUNDANCY` blobs.
         let num_expected_shreds = (num_slots / 2) * num_shreds_per_slot * REPAIR_REDUNDANCY as u64;
-        while (received_shreds.len() as u64) < num_expected_shreds {
-            received_shreds.extend(mock_repairee.receiver.recv().unwrap());
+        while (received_shreds
+            .iter()
+            .map(|p| p.packets.len() as u64)
+            .sum::<u64>())
+            < num_expected_shreds
+        {
+            received_shreds.push(mock_repairee.receiver.recv().unwrap());
         }
 
-        // Make sure no extra blobs get sent
+        // Make sure no extra shreds get sent
         sleep(Duration::from_millis(1000));
         assert!(mock_repairee.receiver.try_recv().is_err());
-        assert_eq!(received_shreds.len() as u64, num_expected_shreds);
+        assert_eq!(
+            received_shreds
+                .iter()
+                .map(|p| p.packets.len() as u64)
+                .sum::<u64>(),
+            num_expected_shreds
+        );
 
         // Shutdown
         mock_repairee.close().unwrap();

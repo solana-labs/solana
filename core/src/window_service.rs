@@ -126,7 +126,7 @@ where
     trace!("{} num total shreds received: {}", my_pubkey, total_packets);
 
     for packets in packets.into_iter() {
-        if !packets.packets.is_empty() {
+        if !packets.is_empty() {
             // Ignore the send error, as the retransmit is optional (e.g. archivers don't retransmit)
             let _ = retransmit.send(packets);
         }

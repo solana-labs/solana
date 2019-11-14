@@ -6,7 +6,6 @@
 //!
 
 pub mod banking_stage;
-pub mod blob;
 pub mod broadcast_stage;
 pub mod chacha;
 pub mod chacha_cuda;

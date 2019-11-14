@@ -51,3 +51,5 @@ pub mod transport;
 
 #[macro_use]
 extern crate serde_derive;
+
+extern crate log as logger;

@@ -5,7 +5,7 @@ use crate::{
 };
 use serde::Serialize;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use std::{io, mem, net::SocketAddr};
+use std::{mem, net::SocketAddr};
 
 pub const NUM_PACKETS: usize = 1024 * 8;
 
@@ -76,6 +76,10 @@ impl Packets {
             m.meta.set_addr(&addr);
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.packets.is_empty()
+    }
 }
 
 pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets> {
@@ -84,10 +88,7 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets>
         let mut p = Packets::default();
         p.packets.resize(x.len(), Packet::default());
         for (i, o) in x.iter().zip(p.packets.iter_mut()) {
-            let mut wr = io::Cursor::new(&mut o.data[..]);
-            bincode::serialize_into(&mut wr, &i).expect("serialize request");
-            let len = wr.position() as usize;
-            o.meta.size = len;
+            Packet::populate_packet(o, None, i).expect("serialize request");
         }
         out.push(p);
     }
@@ -96,6 +97,17 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets>
 
 pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<Packets> {
     to_packets_chunked(xs, NUM_PACKETS)
+}
+
+pub fn to_packets_with_destination<T: Serialize>(dests_and_data: &[(SocketAddr, T)]) -> Packets {
+    let mut out = Packets::default();
+    out.packets.resize(dests_and_data.len(), Packet::default());
+    for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
+        if let Err(e) = Packet::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1) {
+            error!("Couldn't write to packet {:?}. Data skipped.", e);
+        }
+    }
+    out
 }
 
 pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
