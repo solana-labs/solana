@@ -193,6 +193,10 @@ fn test_leader_failure_4() {
 fn test_network_partition_2_3() {
     solana_logger::setup();
     let num_nodes = 5;
+    info!(
+        "PARTITION_TEST starting cluster with {} nodes and 2 partitions",
+        num_nodes
+    );
     let validator_config = ValidatorConfig::default();
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -221,42 +225,42 @@ fn test_network_partition_2_3() {
         p2.end_ts = partition_start;
         config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p2]));
     }
-    println!(
+    info!(
         "PARTITION_TEST starting cluster with {} nodes and 2 partitions",
         num_nodes
     );
     let cluster = LocalCluster::new(&config);
-    println!("PARTITION_TEST discovering cluster");
+    info!("PARTITION_TEST discovering cluster");
     let (nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
-    println!("PARTITION_TEST done discovering cluster: {}", nodes.len());
+    info!("PARTITION_TEST done discovering cluster: {}", nodes.len());
     let now = timestamp();
     let timeout = partition_start as i64 - now as i64;
-    println!(
+    info!(
         "PARTITION_TEST sleeping until partition start timeout {}",
         timeout
     );
-    if timeout > 0 { 
+    if timeout > 0 {
         sleep(Duration::from_millis(timeout as u64));
     }
-    println!("PARTITION_TEST done sleeping until partition start timeout");
+    info!("PARTITION_TEST done sleeping until partition start timeout");
     let now = timestamp();
     let timeout = partition_end as i64 - now as i64;
-    println!(
+    info!(
         "PARTITION_TEST sleeping until partition end timeout {}",
         timeout
     );
-    if timeout > 0 { 
+    if timeout > 0 {
         sleep(Duration::from_millis(timeout as u64));
     }
-    println!("PARTITION_TEST done sleeping until partition end timeout");
-    println!("PARTITION_TEST spending on all ndoes");
+    info!("PARTITION_TEST done sleeping until partition end timeout");
+    info!("PARTITION_TEST spending on all ndoes");
     cluster_tests::spend_and_verify_all_nodes(
         &cluster.entry_point_info,
         &cluster.funding_keypair,
         num_nodes,
         HashSet::new(),
     );
-    println!("PARTITION_TEST done spending on all ndoes");
+    info!("PARTITION_TEST done spending on all ndoes");
 }
 #[test]
 #[serial]
