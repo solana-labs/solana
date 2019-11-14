@@ -47,6 +47,7 @@ serde_json = "1.0.41"
 sha2 = "0.8.0"
 solana-budget-api = { path = "../programs/budget_api", version = "0.21.0" }
 solana-budget-program = { path = "../programs/budget_program", version = "0.21.0" }
+solana-clap-utils = { path = "../clap-utils", version = "0.21.0" }
 solana-chacha-sys = { path = "../chacha-sys", version = "0.21.0" }
 solana-client = { path = "../client", version = "0.21.0" }
 solana-drone = { path = "../drone", version = "0.21.0" }

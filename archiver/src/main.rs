@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, App, Arg};
+use clap::{crate_description, crate_name, App, Arg};
 use console::style;
 use solana_clap_utils::input_validators::is_keypair;
 use solana_core::{
@@ -17,7 +17,7 @@ fn main() {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .arg(
             Arg::with_name("identity")
                 .short("i")
@@ -97,7 +97,7 @@ fn main() {
     println!(
         "{} version {} (branch={}, commit={})",
         style(crate_name!()).bold(),
-        crate_version!(),
+        solana_clap_utils::version!(),
         option_env!("CI_BRANCH").unwrap_or("unknown"),
         option_env!("CI_COMMIT").unwrap_or("unknown")
     );

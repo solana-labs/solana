@@ -1,8 +1,7 @@
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use bs58;
 use clap::{
-    crate_description, crate_name, crate_version, values_t_or_exit, App, AppSettings, Arg,
-    ArgMatches, SubCommand,
+    crate_description, crate_name, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
 use num_cpus;
 use solana_sdk::{
@@ -53,7 +52,7 @@ fn output_keypair(
 fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(
             SubCommand::with_name("new")

@@ -967,7 +967,7 @@ impl RpcSol for RpcSolImpl {
 
     fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
         Ok(RpcVersionInfo {
-            solana_core: crate::version!().to_string(),
+            solana_core: solana_clap_utils::version!().to_string(),
         })
     }
 
@@ -1714,7 +1714,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "solana-core": crate::version!().to_string()
+                "solana-core": solana_clap_utils::version!().to_string()
             },
             "id": 1
         });

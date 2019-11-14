@@ -18,6 +18,7 @@ rand = "0.6.1"
 serde = "1.0.102"
 serde_derive = "1.0.102"
 socket2 = "0.3.11"
+solana-clap-utils = { path = "../clap-utils", version = "0.21.0" }
 solana-logger = { path = "../logger", version = "0.21.0" }
 tokio = "0.1"
 tokio-codec = "0.1"

@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, Arg, ArgGroup, ArgMatches, SubCommand};
+use clap::{crate_description, crate_name, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 
 use solana_clap_utils::input_validators::is_url;
@@ -126,63 +126,67 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup();
-    let matches = app(crate_name!(), crate_description!(), crate_version!())
-        .arg({
-            let arg = Arg::with_name("config_file")
-                .short("C")
-                .long("config")
-                .value_name("PATH")
-                .takes_value(true)
-                .global(true)
-                .help("Configuration file to use");
-            if let Some(ref config_file) = *config::CONFIG_FILE {
-                arg.default_value(&config_file)
-            } else {
-                arg
-            }
-        })
-        .arg(
-            Arg::with_name("json_rpc_url")
-                .short("u")
-                .long("url")
-                .value_name("URL")
-                .takes_value(true)
-                .global(true)
-                .validator(is_url)
-                .help("JSON RPC URL for the solana cluster"),
-        )
-        .arg(
-            Arg::with_name("keypair")
-                .short("k")
-                .long("keypair")
-                .value_name("PATH")
-                .global(true)
-                .takes_value(true)
-                .help("/path/to/id.json"),
-        )
-        .subcommand(
-            SubCommand::with_name("get")
-                .about("Get cli config settings")
-                .arg(
-                    Arg::with_name("specific_setting")
-                        .index(1)
-                        .value_name("CONFIG_FIELD")
-                        .takes_value(true)
-                        .possible_values(&["url", "keypair"])
-                        .help("Return a specific config setting"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("set")
-                .about("Set a cli config setting")
-                .group(
-                    ArgGroup::with_name("config_settings")
-                        .args(&["json_rpc_url", "keypair"])
-                        .multiple(true)
-                        .required(true),
-                ),
-        )
-        .get_matches();
+    let matches = app(
+        crate_name!(),
+        crate_description!(),
+        solana_clap_utils::version!(),
+    )
+    .arg({
+        let arg = Arg::with_name("config_file")
+            .short("C")
+            .long("config")
+            .value_name("PATH")
+            .takes_value(true)
+            .global(true)
+            .help("Configuration file to use");
+        if let Some(ref config_file) = *config::CONFIG_FILE {
+            arg.default_value(&config_file)
+        } else {
+            arg
+        }
+    })
+    .arg(
+        Arg::with_name("json_rpc_url")
+            .short("u")
+            .long("url")
+            .value_name("URL")
+            .takes_value(true)
+            .global(true)
+            .validator(is_url)
+            .help("JSON RPC URL for the solana cluster"),
+    )
+    .arg(
+        Arg::with_name("keypair")
+            .short("k")
+            .long("keypair")
+            .value_name("PATH")
+            .global(true)
+            .takes_value(true)
+            .help("/path/to/id.json"),
+    )
+    .subcommand(
+        SubCommand::with_name("get")
+            .about("Get cli config settings")
+            .arg(
+                Arg::with_name("specific_setting")
+                    .index(1)
+                    .value_name("CONFIG_FIELD")
+                    .takes_value(true)
+                    .possible_values(&["url", "keypair"])
+                    .help("Return a specific config setting"),
+            ),
+    )
+    .subcommand(
+        SubCommand::with_name("set")
+            .about("Set a cli config setting")
+            .group(
+                ArgGroup::with_name("config_settings")
+                    .args(&["json_rpc_url", "keypair"])
+                    .multiple(true)
+                    .required(true),
+            ),
+    )
+    .get_matches();
 
     if parse_settings(&matches)? {
         let config = parse_args(&matches)?;

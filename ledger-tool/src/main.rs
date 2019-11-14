@@ -1,6 +1,5 @@
 use clap::{
-    crate_description, crate_name, crate_version, value_t, value_t_or_exit, values_t_or_exit, App,
-    Arg, SubCommand,
+    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg, SubCommand,
 };
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
@@ -402,7 +401,7 @@ fn main() {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .arg(
             Arg::with_name("ledger")
                 .short("l")

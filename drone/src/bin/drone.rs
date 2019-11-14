@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, App, Arg};
+use clap::{crate_description, crate_name, App, Arg};
 use solana_drone::drone::{run_drone, Drone, DRONE_PORT};
 use solana_drone::socketaddr;
 use solana_sdk::signature::read_keypair_file;
@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     solana_metrics::set_panic_hook("drone");
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .arg(
             Arg::with_name("keypair")
                 .short("k")

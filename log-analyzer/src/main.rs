@@ -1,9 +1,7 @@
 extern crate byte_unit;
 
 use byte_unit::Byte;
-use clap::{
-    crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
-};
+use clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -201,7 +199,7 @@ fn main() {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .subcommand(
             SubCommand::with_name("iftop")
                 .about("Process iftop log file")
