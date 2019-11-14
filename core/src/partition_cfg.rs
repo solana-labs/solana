@@ -51,12 +51,10 @@ impl PartitionCfg {
         let slot_leader_pubkey = slot_leader_pubkey.unwrap_or_default();
         let time = timestamp();
         for p in &self.partitions {
-            if p.start_ts < time {
+            if !(p.start_ts..p.end_ts).contains(&time) {
                 continue;
             }
-            if p.end_ts >= time {
-                continue;
-            }
+            info!("PARTITION_TEST running {}", p.my_partition);
             if p.num_partitions == 0 {
                 continue;
             }
@@ -81,10 +79,13 @@ impl PartitionCfg {
                 my_leaders.contains(&slot_leader_pubkey)
             };
             if is_connected {
+                info!("PARTITION_TEST connected {}", p.my_partition);
                 continue;
             }
+            info!("PARTITION_TEST not connected {}", p.my_partition);
             return false;
         }
+        trace!("PARTITION_TEST connected");
         true
     }
 }

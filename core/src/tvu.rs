@@ -293,6 +293,7 @@ pub mod tests {
             completed_slots_receiver,
             block_commitment_cache,
             false,
+            None,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
