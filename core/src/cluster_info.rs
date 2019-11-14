@@ -990,7 +990,7 @@ impl ClusterInfo {
     fn gossip_request(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let pulls: Vec<_> = self.new_pull_requests(stakes);
         let pushes: Vec<_> = self.new_push_requests();
-        vec![pulls, pushes].into_iter().flat_map(|x| x).collect()
+        vec![pulls, pushes].into_iter().flatten().collect()
     }
 
     /// At random pick a node and try to get updated changes from them
