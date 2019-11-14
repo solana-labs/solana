@@ -221,6 +221,7 @@ fn test_network_partition_2_3() {
         p2.end_ts = partition_start;
         config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p2]));
     }
+    info!("starting cluster with {} nodes and 2 partitions", num_nodes);
     let cluster = LocalCluster::new(&config);
     info!("discovering cluster");
     let (nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
