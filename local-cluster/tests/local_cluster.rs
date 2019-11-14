@@ -12,6 +12,7 @@ use solana_local_cluster::{
     local_cluster::{ClusterConfig, LocalCluster},
 };
 use solana_runtime::accounts_db::AccountsDB;
+use solana_sdk::timing::timestamp;
 use solana_sdk::{
     client::SyncClient,
     clock,
@@ -187,9 +188,45 @@ fn test_leader_failure_4() {
 #[test]
 #[serial]
 fn test_network_partition_3_2() {
+    let num_nodes = 5;
+    let mut config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes: vec![100; num_nodes],
+        validator_configs: vec![validator_config.clone(); num_nodes],
+        ..ClusterConfig::default()
+    };
     let first_two_epoch_slots = MINIMUM_SLOTS_PER_EPOCH * 3;
-    let slot_millis = config.ticks_per_slot * config.poh_config.target_tick_duration.as_millis() as u64,
-    let partition_start = MINIMUM_SLOTS_PER_EPOCH * 3;
+    let slot_millis =
+        config.ticks_per_slot * config.poh_config.target_tick_duration.as_millis() as u64;
+    let partition_start = timestamp() + MINIMUM_SLOTS_PER_EPOCH * 3 * slot_millis;
+    let partition_end = partition_start + slot_millis * 8;
+    let validator_config = ValidatorConfig::default();
+    for _ in 0..num_nodes/2 {
+        let mut p1 = Partition::default();
+        p1.num_partitions = 2;
+        p1.my_partition = 0;
+        p1.start_ts = partition_start;
+        p1.end_ts = partition_start;
+        config.validator_configs.partition_cfg.partitions.push(p1);
+    }
+    for _ in num_nodes/2..num_nodes {
+        let mut p2 = Partition::default();
+        p2.num_partitions = 2;
+        p2.my_partition = 1;
+        p2.start_ts = partition_start;
+        p2.end_ts = partition_start;
+        config.validator_configs.partition_cfg.partitions.push(p2);
+    }
+    let cluster = LocalCluster::new(&config);
+    let _ = discover_cluster(&entry_point_info.gossip, num_nodes).unwrap();
+    sleep(Duration::from_millis(partition_end - partition_start));
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        num_nodes,
+        HashSet::new(),
+    );
+
 }
 #[test]
 #[serial]
