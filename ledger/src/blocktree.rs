@@ -1,39 +1,50 @@
 //! The `blocktree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-use crate::blocktree_db::{
-    columns as cf, Column, Database, IteratorDirection, IteratorMode, LedgerColumn, WriteBatch,
+use crate::{
+    blocktree_db::{
+        columns as cf, Column, Database, IteratorDirection, IteratorMode, LedgerColumn, WriteBatch,
+    },
+    blocktree_meta::*,
+    entry::{create_ticks, Entry},
+    erasure::ErasureConfig,
+    leader_schedule_cache::LeaderScheduleCache,
+    shred::{Shred, Shredder},
 };
-pub use crate::blocktree_db::{BlocktreeError, Result};
-pub use crate::blocktree_meta::SlotMeta;
-use crate::blocktree_meta::*;
-use crate::entry::{create_ticks, Entry};
-use crate::erasure::ErasureConfig;
-use crate::leader_schedule_cache::LeaderScheduleCache;
-use crate::shred::{Shred, Shredder};
+pub use crate::{
+    blocktree_db::{BlocktreeError, Result},
+    blocktree_meta::SlotMeta,
+};
 use bincode::deserialize;
 use log::*;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
-use rayon::ThreadPool;
+use rayon::{
+    iter::{IntoParallelRefIterator, ParallelIterator},
+    ThreadPool,
+};
 use rocksdb::DBRawIterator;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::clock::{Slot, DEFAULT_TICKS_PER_SECOND};
-use solana_sdk::genesis_config::GenesisConfig;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::timestamp;
-use solana_sdk::transaction::Transaction;
-use std::cell::RefCell;
-use std::cmp;
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex, RwLock};
+use solana_sdk::{
+    clock::{Slot, DEFAULT_TICKS_PER_SECOND},
+    genesis_config::GenesisConfig,
+    hash::Hash,
+    signature::{Keypair, KeypairUtil},
+    timing::timestamp,
+    transaction::Transaction,
+};
+use std::{
+    cell::RefCell,
+    cmp,
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::{
+        mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
+        Arc, Mutex, RwLock,
+    },
+};
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 
@@ -1107,9 +1118,12 @@ impl Blocktree {
 
     pub fn get_confirmed_block_transactions(&self, slot: Slot) -> Result<Vec<Transaction>> {
         if self.is_root(slot) {
-            Ok(self.get_slot_entries(slot, 0, None)?.iter().cloned().flat_map(|entry| {
-                entry.transactions
-            }).collect())
+            Ok(self
+                .get_slot_entries(slot, 0, None)?
+                .iter()
+                .cloned()
+                .flat_map(|entry| entry.transactions)
+                .collect())
         } else {
             Err(BlocktreeError::SlotNotRooted)
         }
@@ -1962,15 +1976,23 @@ fn adjust_ulimit_nofile() {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use crate::shred::{max_ticks_per_n_shreds, DataShredHeader};
+    use crate::{
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        shred::{max_ticks_per_n_shreds, DataShredHeader},
+    };
     use itertools::Itertools;
-    use rand::seq::SliceRandom;
-    use rand::thread_rng;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::packet::PACKET_DATA_SIZE;
-    use std::iter::FromIterator;
-    use std::time::Duration;
+    use rand::{
+        seq::SliceRandom,
+        thread_rng,
+    };
+    use solana_sdk::{
+        hash::Hash,
+        packet::PACKET_DATA_SIZE,
+    };
+    use std::{
+        iter::FromIterator,
+        time::Duration,
+    };
 
     #[test]
     fn test_create_new_ledger() {
