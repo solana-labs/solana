@@ -431,7 +431,7 @@ mod tests {
                    "lamports": 51,
                    "data": expected_data,
                    "executable": false,
-                   "rent_epoch": 0,
+                   "rent_epoch": 1,
                },
                "subscription": 0,
            }
@@ -576,7 +576,7 @@ mod tests {
                    "lamports": 100,
                    "data": [],
                    "executable": false,
-                   "rent_epoch": 0,
+                   "rent_epoch": 1,
                },
                "subscription": 0,
            }
