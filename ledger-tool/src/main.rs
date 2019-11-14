@@ -1,6 +1,5 @@
 use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
-    Arg, SubCommand,
+    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg, SubCommand,
 };
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},

@@ -1,8 +1,7 @@
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use bs58;
 use clap::{
-    crate_description, crate_name, values_t_or_exit, App, AppSettings, Arg,
-    ArgMatches, SubCommand,
+    crate_description, crate_name, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
 use num_cpus;
 use solana_sdk::{

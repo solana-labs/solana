@@ -1,9 +1,6 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
-use clap::{
-    crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg,
-    SubCommand,
-};
+use clap::{crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg, SubCommand};
 use solana_clap_utils::input_validators::is_pubkey;
 use solana_client::rpc_client::RpcClient;
 use solana_core::{contact_info::ContactInfo, gossip_service::discover};

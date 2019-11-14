@@ -1,9 +1,7 @@
 extern crate byte_unit;
 
 use byte_unit::Byte;
-use clap::{
-    crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
-};
+use clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
