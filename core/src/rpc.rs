@@ -1714,7 +1714,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "solana-core": crate::version!().to_string()
+                "solana-core": solana_clap_utils::version!().to_string()
             },
             "id": 1
         });

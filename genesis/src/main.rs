@@ -3,7 +3,7 @@
 mod genesis_accounts;
 
 use crate::genesis_accounts::create_genesis_accounts;
-use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
 use solana_genesis::Base64Account;
 use solana_ledger::blocktree::create_new_ledger;
 use solana_ledger::poh::compute_hashes_per_tick;
@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .arg(
             Arg::with_name("bootstrap_leader_pubkey_file")
                 .short("b")

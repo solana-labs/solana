@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, value_t, App, Arg, ArgMatches};
+use clap::{crate_description, crate_name, value_t, App, Arg, ArgMatches};
 use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
@@ -44,10 +44,10 @@ impl Default for Config {
     }
 }
 
-pub fn build_args<'a, 'b>() -> App<'a, 'b> {
+pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
     App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(version)
         .arg(
             Arg::with_name("entrypoint")
                 .short("n")

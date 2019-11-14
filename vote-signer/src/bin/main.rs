@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, App, Arg};
+use clap::{crate_description, crate_name, App, Arg};
 use solana_vote_signer::rpc::VoteSignerRpcService;
 use std::error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .arg(
             Arg::with_name("port")
                 .long("port")

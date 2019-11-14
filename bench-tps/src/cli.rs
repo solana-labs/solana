@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, App, Arg, ArgMatches};
+use clap::{crate_description, crate_name, App, Arg, ArgMatches};
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
@@ -50,9 +50,9 @@ impl Default for Config {
 }
 
 /// Defines and builds the CLI args for a run of the benchmark
-pub fn build_args<'a, 'b>() -> App<'a, 'b> {
+pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
     App::new(crate_name!()).about(crate_description!())
-        .version(crate_version!())
+        .version(version)
         .arg(
             Arg::with_name("entrypoint")
                 .short("n")

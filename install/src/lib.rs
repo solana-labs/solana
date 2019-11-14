@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg, SubCommand};
+use clap::{crate_description, crate_name, App, AppSettings, Arg, SubCommand};
 use solana_clap_utils::input_validators::{is_pubkey, is_release_channel, is_semver, is_url};
 use solana_sdk::pubkey::Pubkey;
 
@@ -17,7 +17,7 @@ pub fn main() -> Result<(), String> {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")
@@ -234,7 +234,7 @@ pub fn main_init() -> Result<(), String> {
 
     let matches = App::new("solana-install-init")
         .about("initializes a new installation")
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .arg({
             let arg = Arg::with_name("config_file")
                 .short("c")

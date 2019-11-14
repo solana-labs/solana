@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, App, Arg};
+use clap::{crate_description, crate_name, App, Arg};
 use solana_core::blob::BLOB_SIZE;
 use solana_core::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
 use solana_core::result::Result;
@@ -54,7 +54,7 @@ fn main() -> Result<()> {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .arg(
             Arg::with_name("num-recv-sockets")
                 .long("num-recv-sockets")

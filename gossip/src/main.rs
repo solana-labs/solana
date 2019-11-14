@@ -1,7 +1,7 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
 use clap::{
-    crate_description, crate_name, crate_version, value_t_or_exit, App, AppSettings, Arg,
+    crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg,
     SubCommand,
 };
 use solana_clap_utils::input_validators::is_pubkey;
@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let entrypoint_string = entrypoint_addr.to_string();
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
             Arg::with_name("entrypoint")
