@@ -1862,7 +1862,10 @@ mod tests {
             stake_account: bob_keypair.into(),
             staker: None,
             withdrawer: None,
-            lockup: Lockup { slot: 0, custodian },
+            lockup: Lockup {
+                epoch: 0,
+                custodian,
+            },
             lamports: 1234,
         };
         let signature = process_command(&config);

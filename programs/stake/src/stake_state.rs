@@ -72,9 +72,9 @@ pub enum StakeAuthorize {
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Lockup {
-    /// slot height at which this stake will allow withdrawal, unless
+    /// epoch at which this stake will allow withdrawal, unless
     ///  to the custodian
-    pub slot: Slot,
+    pub epoch: Epoch,
     /// custodian account, the only account to which this stake will honor a
     ///  withdrawal before lockup expires.  After lockup expires, custodian
     ///  is irrelevant
@@ -92,16 +92,6 @@ pub struct Meta {
     pub rent_exempt_reserve: u64,
     pub authorized: Authorized,
     pub lockup: Lockup,
-}
-
-impl Meta {
-    pub fn auto(authorized: &Pubkey) -> Self {
-        Self {
-            authorized: Authorized::auto(authorized),
-            rent_exempt_reserve: Rent::default().minimum_balance(std::mem::size_of::<StakeState>()),
-            ..Meta::default()
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -715,7 +705,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
         // verify that lockup has expired or that the withdrawal is going back
         //   to the custodian
-        if lockup.slot > clock.slot && lockup.custodian != *to.unsigned_key() {
+        if lockup.epoch > clock.epoch && lockup.custodian != *to.unsigned_key() {
             return Err(StakeError::LockupInForce.into());
         }
 
@@ -764,7 +754,34 @@ where
     }
 }
 
-// utility function, used by Bank, tests, genesis
+pub fn get_stake_rent_exempt_reserve(rent: &Rent) -> u64 {
+    rent.minimum_balance(std::mem::size_of::<StakeState>())
+}
+
+// genesis investor accounts
+pub fn create_lockup_stake_account(
+    authorized: &Authorized,
+    lockup: &Lockup,
+    rent: &Rent,
+    lamports: u64,
+) -> Account {
+    let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
+
+    let rent_exempt_reserve = rent.minimum_balance(stake_account.data.len());
+    assert!(lamports >= rent_exempt_reserve);
+
+    stake_account
+        .set_state(&StakeState::Initialized(Meta {
+            authorized: *authorized,
+            lockup: *lockup,
+            rent_exempt_reserve,
+        }))
+        .expect("set_state");
+
+    stake_account
+}
+
+// utility function, used by Bank, tests, genesis for bootstrap
 pub fn create_account(
     authorized: &Pubkey,
     voter_pubkey: &Pubkey,
@@ -775,19 +792,18 @@ pub fn create_account(
     let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
 
     let vote_state = VoteState::from(vote_account).expect("vote_state");
-    let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+
+    let rent_exempt_reserve = rent.minimum_balance(stake_account.data.len());
+
     stake_account
         .set_state(&StakeState::Stake(
             Meta {
+                authorized: Authorized::auto(authorized),
                 rent_exempt_reserve,
-                authorized: Authorized {
-                    staker: *authorized,
-                    withdrawer: *authorized,
-                },
-                lockup: Lockup::default(),
+                ..Meta::default()
             },
             Stake::new(
-                lamports - rent_exempt_reserve, // underflow is an error, assert!(lamports> rent_exempt_reserve);
+                lamports - rent_exempt_reserve, // underflow is an error, is basically: assert!(lamports > rent_exempt_reserve);
                 voter_pubkey,
                 &vote_state,
                 std::u64::MAX,
@@ -805,6 +821,15 @@ mod tests {
     use crate::id;
     use solana_sdk::{account::Account, pubkey::Pubkey, system_program};
     use solana_vote_program::vote_state;
+
+    impl Meta {
+        pub fn auto(authorized: &Pubkey) -> Self {
+            Self {
+                authorized: Authorized::auto(authorized),
+                ..Meta::default()
+            }
+        }
+    }
 
     #[test]
     fn test_stake_state_stake_from_fail() {
@@ -1324,7 +1349,10 @@ mod tests {
         assert_eq!(
             stake_keyed_account.initialize(
                 &Authorized::auto(&stake_pubkey),
-                &Lockup { slot: 1, custodian },
+                &Lockup {
+                    epoch: 1,
+                    custodian
+                },
                 &Rent::default(),
             ),
             Ok(())
@@ -1333,8 +1361,14 @@ mod tests {
         assert_eq!(
             StakeState::from(&stake_keyed_account.account).unwrap(),
             StakeState::Initialized(Meta {
-                lockup: Lockup { slot: 1, custodian },
-                ..Meta::auto(&stake_pubkey)
+                lockup: Lockup {
+                    epoch: 1,
+                    custodian
+                },
+                ..Meta {
+                    authorized: Authorized::auto(&stake_pubkey),
+                    ..Meta::default()
+                }
             })
         );
 
@@ -1467,7 +1501,10 @@ mod tests {
         stake_keyed_account
             .initialize(
                 &Authorized::auto(&stake_pubkey),
-                &Lockup { slot: 0, custodian },
+                &Lockup {
+                    epoch: 0,
+                    custodian,
+                },
                 &Rent::default(),
             )
             .unwrap();
@@ -1666,7 +1703,10 @@ mod tests {
         let mut stake_account = Account::new_data_with_space(
             total_lamports,
             &StakeState::Initialized(Meta {
-                lockup: Lockup { slot: 1, custodian },
+                lockup: Lockup {
+                    epoch: 1,
+                    custodian,
+                },
                 ..Meta::auto(&stake_pubkey)
             }),
             std::mem::size_of::<StakeState>(),
@@ -1715,7 +1755,7 @@ mod tests {
 
         // lockup has expired
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
-        clock.slot += 1;
+        clock.epoch += 1;
         assert_eq!(
             stake_keyed_account.withdraw(
                 total_lamports,

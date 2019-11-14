@@ -271,7 +271,7 @@ impl StakeSubCommands for App<'_, '_> {
 
 pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account = keypair_of(matches, "stake_account").unwrap();
-    let slot = value_of(&matches, "lockup").unwrap_or(0);
+    let epoch = value_of(&matches, "lockup").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
     let staker = pubkey_of(matches, "authorized_staker");
     let withdrawer = pubkey_of(matches, "authorized_withdrawer");
@@ -282,7 +282,7 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
             stake_account: stake_account.into(),
             staker,
             withdrawer,
-            lockup: Lockup { custodian, slot },
+            lockup: Lockup { custodian, epoch },
             lamports,
         },
         require_keypair: true,
@@ -547,7 +547,7 @@ pub fn process_show_stake_account(
         println!("authorized withdrawer: {}", authorized.staker);
     }
     fn show_lockup(lockup: &Lockup) {
-        println!("lockup slot: {}", lockup.slot);
+        println!("lockup epoch: {}", lockup.epoch);
         println!("lockup custodian: {}", lockup.custodian);
     }
     match stake_account.state() {
@@ -789,7 +789,7 @@ mod tests {
                     staker: Some(authorized),
                     withdrawer: Some(authorized),
                     lockup: Lockup {
-                        slot: 43,
+                        epoch: 43,
                         custodian,
                     },
                     lamports: 50
@@ -819,10 +819,7 @@ mod tests {
                     stake_account: stake_account_keypair.into(),
                     staker: None,
                     withdrawer: None,
-                    lockup: Lockup {
-                        slot: 0,
-                        custodian: Pubkey::default(),
-                    },
+                    lockup: Lockup::default(),
                     lamports: 50
                 },
                 require_keypair: true
