@@ -1680,6 +1680,7 @@ mod tests {
         status_cache::MAX_CACHE_ENTRIES,
     };
     use bincode::{deserialize_from, serialize_into, serialized_size};
+    use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
         account::KeyedAccount,
         clock::DEFAULT_TICKS_PER_SLOT,
@@ -1787,6 +1788,224 @@ mod tests {
         }));
         let bank2 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH * 2 + 1);
         assert_eq!(bank.capitalization(), bank2.capitalization());
+    }
+
+    #[test]
+    fn test_credit_debit_rent_no_side_effect_on_hash() {
+        let (mut genesis_block, _mint_keypair) = create_genesis_config(10);
+        let keypair1: Keypair = Keypair::new();
+        let keypair2: Keypair = Keypair::new();
+        let keypair3: Keypair = Keypair::new();
+        let keypair4: Keypair = Keypair::new();
+
+        // Transaction between these two keypairs will fail
+        let keypair5: Keypair = Keypair::new();
+        let keypair6: Keypair = Keypair::new();
+
+        genesis_block.rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 21.0,
+            burn_percent: 10,
+        };
+
+        let root_bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Bank::new_from_parent(
+            &root_bank,
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+
+        let root_bank_2 = Arc::new(Bank::new(&genesis_block));
+        let bank_with_success_txs = Bank::new_from_parent(
+            &root_bank_2,
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+        assert_eq!(bank.last_blockhash(), genesis_block.hash());
+
+        // Initialize credit-debit and credit only accounts
+        let account1 = Account::new(260, 1, &Pubkey::default());
+        let account2 = Account::new(260, 1, &Pubkey::default());
+        let account3 = Account::new(260, 1, &Pubkey::default());
+        let account4 = Account::new(260, 1, &Pubkey::default());
+        let account5 = Account::new(10, 1, &Pubkey::default());
+        let account6 = Account::new(10, 1, &Pubkey::default());
+
+        bank.store_account(&keypair1.pubkey(), &account1);
+        bank.store_account(&keypair2.pubkey(), &account2);
+        bank.store_account(&keypair3.pubkey(), &account3);
+        bank.store_account(&keypair4.pubkey(), &account4);
+        bank.store_account(&keypair5.pubkey(), &account5);
+        bank.store_account(&keypair6.pubkey(), &account6);
+
+        bank_with_success_txs.store_account(&keypair1.pubkey(), &account1);
+        bank_with_success_txs.store_account(&keypair2.pubkey(), &account2);
+        bank_with_success_txs.store_account(&keypair3.pubkey(), &account3);
+        bank_with_success_txs.store_account(&keypair4.pubkey(), &account4);
+        bank_with_success_txs.store_account(&keypair5.pubkey(), &account5);
+        bank_with_success_txs.store_account(&keypair6.pubkey(), &account6);
+
+        // Make native instruction loader rent exempt
+        let system_program_id = solana_system_program().1;
+        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
+        system_program_account.lamports =
+            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
+        bank.store_account(&system_program_id, &system_program_account);
+        bank_with_success_txs.store_account(&system_program_id, &system_program_account);
+
+        let t1 =
+            system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, genesis_block.hash());
+        let t2 =
+            system_transaction::transfer(&keypair3, &keypair4.pubkey(), 1, genesis_block.hash());
+        let t3 =
+            system_transaction::transfer(&keypair5, &keypair6.pubkey(), 1, genesis_block.hash());
+
+        let res = bank.process_transactions(&vec![t1.clone(), t2.clone(), t3.clone()]);
+
+        assert_eq!(res.len(), 3);
+        assert_eq!(res[0], Ok(()));
+        assert_eq!(res[1], Ok(()));
+        assert_eq!(res[2], Err(TransactionError::AccountNotFound));
+
+        bank.freeze();
+
+        let rwlockguard_bank_hash = bank.hash.read().unwrap();
+        let bank_hash = rwlockguard_bank_hash.as_ref();
+
+        let res = bank_with_success_txs.process_transactions(&vec![t2.clone(), t1.clone()]);
+
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0], Ok(()));
+        assert_eq!(res[1], Ok(()));
+
+        bank_with_success_txs.freeze();
+
+        let rwlockguard_bank_with_success_txs_hash = bank_with_success_txs.hash.read().unwrap();
+        let bank_with_success_txs_hash = rwlockguard_bank_with_success_txs_hash.as_ref();
+
+        assert_eq!(bank_with_success_txs_hash, bank_hash);
+    }
+
+    #[test]
+    fn test_credit_debit_rent() {
+        let (mut genesis_block, _mint_keypair) = create_genesis_config(10);
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+        let keypair4 = Keypair::new();
+
+        // Transaction between these two keypairs will fail
+        let keypair5 = Keypair::new();
+        let keypair6 = Keypair::new();
+
+        // This will create a new account using transfer instruction
+        let keypair7 = Keypair::new();
+        let keypair8 = Keypair::new();
+
+        genesis_block.rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 21.0,
+            burn_percent: 10,
+        };
+
+        let root_bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Bank::new_from_parent(
+            &root_bank,
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+
+        assert_eq!(bank.last_blockhash(), genesis_block.hash());
+
+        // Initialize credit-debit and credit only accounts
+        let account1 = Account::new(260, 1, &Pubkey::default());
+        let account2 = Account::new(260, 1, &Pubkey::default());
+        let account3 = Account::new(260, 1, &Pubkey::default());
+        let account4 = Account::new(260, 1, &Pubkey::default());
+        let account5 = Account::new(10, 1, &Pubkey::default());
+        let account6 = Account::new(10, 1, &Pubkey::default());
+        let account7 = Account::new(540, 1, &Pubkey::default());
+
+        bank.store_account(&keypair1.pubkey(), &account1);
+        bank.store_account(&keypair2.pubkey(), &account2);
+        bank.store_account(&keypair3.pubkey(), &account3);
+        bank.store_account(&keypair4.pubkey(), &account4);
+        bank.store_account(&keypair5.pubkey(), &account5);
+        bank.store_account(&keypair6.pubkey(), &account6);
+        bank.store_account(&keypair7.pubkey(), &account7);
+
+        // Make native instruction loader rent exempt
+        let system_program_id = solana_system_program().1;
+        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
+        system_program_account.lamports =
+            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
+        bank.store_account(&system_program_id, &system_program_account);
+
+        let t1 =
+            system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, genesis_block.hash());
+        let t2 =
+            system_transaction::transfer(&keypair3, &keypair4.pubkey(), 1, genesis_block.hash());
+        let t3 =
+            system_transaction::transfer(&keypair5, &keypair6.pubkey(), 1, genesis_block.hash());
+        let t4 =
+            system_transaction::transfer(&keypair7, &keypair8.pubkey(), 259, genesis_block.hash());
+
+        let res = bank.process_transactions(&vec![t4.clone(), t1.clone(), t2.clone(), t3.clone()]);
+
+        assert_eq!(res.len(), 4);
+        assert_eq!(res[0], Ok(()));
+        assert_eq!(res[1], Ok(()));
+        assert_eq!(res[2], Ok(()));
+        assert_eq!(res[3], Err(TransactionError::AccountNotFound));
+
+        bank.freeze();
+
+        let mut rent_collected = 0;
+
+        // 260 - 258(Rent) - 1 (transfer)
+        assert_eq!(bank.get_balance(&keypair1.pubkey()), 1);
+        rent_collected += 258;
+
+        // 260 - 258(Rent) + 1(transfer)
+        assert_eq!(bank.get_balance(&keypair2.pubkey()), 3);
+        rent_collected += 258;
+
+        // 260 - 258(Rent) - 1 (transfer)
+        assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
+        rent_collected += 258;
+
+        // 260 - 258(Rent) + 1(transfer)
+        assert_eq!(bank.get_balance(&keypair4.pubkey()), 3);
+        rent_collected += 258;
+
+        // No rent deducted
+        assert_eq!(bank.get_balance(&keypair5.pubkey()), 10);
+        assert_eq!(bank.get_balance(&keypair6.pubkey()), 10);
+
+        // 540 - 258(Rent) - 259(transfer)
+        assert_eq!(bank.get_balance(&keypair7.pubkey()), 23);
+        rent_collected += 258;
+        // 0 + 259(transfer) - 0 (Rent)
+        assert_eq!(bank.get_balance(&keypair8.pubkey()), 259);
+        // Epoch should be updated
+        let account8 = bank.get_account(&keypair8.pubkey()).unwrap();
+        // Epoch should be set correctly.
+        assert_eq!(bank.epoch, account8.rent_epoch);
+
+        // Bank's collected rent should be sum of rent collected from all accounts
+        assert_eq!(bank.collected_rent.load(Ordering::Relaxed), rent_collected);
     }
 
     #[test]
