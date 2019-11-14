@@ -269,6 +269,12 @@ fn test_network_partition_2_2() {
 
 #[test]
 #[serial]
+fn test_network_partition_3_3_3() {
+    run_network_partition(&[3, 3, 3])
+}
+
+#[test]
+#[serial]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     error!("test_two_unbalanced_stakes");
