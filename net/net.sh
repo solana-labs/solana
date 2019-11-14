@@ -88,6 +88,8 @@ Operate a configured testnet
 
    --use-move                         - Build the move-loader-program and add it to the cluster
 
+   --restricted-environment           - Configure genesis block and cluster only to enable certain features for production launch
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -147,6 +149,7 @@ gpuMode=auto
 maybeUseMove=""
 netemPartition=""
 netemConfig=""
+maybeRestrictedEnvironment=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -227,6 +230,9 @@ while [[ -n $1 ]]; do
           ;;
       esac
       shift 2
+    elif [[ $1 = --restricted-environment ]]; then
+      maybeRestrictedEnvironment="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
@@ -489,6 +495,7 @@ startBootstrapLeader() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
+         \"$maybeRestrictedEnvironment\" \
       "
 
   ) >> "$logFile" 2>&1 || {
