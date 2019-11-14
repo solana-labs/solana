@@ -9,7 +9,7 @@ use rocksdb::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use solana_sdk::clock::Slot;
+use solana_sdk::{clock::Slot, signature::Signature};
 use std::collections::HashMap;
 use std::fs;
 use std::marker::PhantomData;
@@ -35,6 +35,8 @@ const INDEX_CF: &str = "index";
 const DATA_SHRED_CF: &str = "data_shred";
 /// Column family for Code Shreds
 const CODE_SHRED_CF: &str = "code_shred";
+/// Column family for Transaction Status
+const TRANSACTION_STATUS_CF: &str = "transaction_status";
 
 #[derive(Debug)]
 pub enum BlocktreeError {
@@ -111,6 +113,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The shred erasure code column
     pub struct ShredCode;
+
+    #[derive(Debug)]
+    /// The transaction status column
+    pub struct TransactionStatus;
 }
 
 #[derive(Debug)]
@@ -120,6 +126,7 @@ impl Rocks {
     fn open(path: &Path) -> Result<Rocks> {
         use columns::{
             DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
+            TransactionStatus,
         };
 
         fs::create_dir_all(&path)?;
@@ -140,6 +147,8 @@ impl Rocks {
             ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options());
         let shred_code_cf_descriptor =
             ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options());
+        let transaction_status_cf_descriptor =
+            ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options());
 
         let cfs = vec![
             meta_cf_descriptor,
@@ -150,6 +159,7 @@ impl Rocks {
             index_cf_descriptor,
             shred_data_cf_descriptor,
             shred_code_cf_descriptor,
+            transaction_status_cf_descriptor,
         ];
 
         // Open the database
@@ -161,6 +171,7 @@ impl Rocks {
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
             DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
+            TransactionStatus,
         };
 
         vec![
@@ -172,6 +183,7 @@ impl Rocks {
             SlotMeta::NAME,
             ShredData::NAME,
             ShredCode::NAME,
+            TransactionStatus::NAME,
         ]
     }
 
@@ -246,6 +258,36 @@ pub trait Column {
 
 pub trait TypedColumn: Column {
     type Type: Serialize + DeserializeOwned;
+}
+
+impl TypedColumn for columns::TransactionStatus {
+    type Type = (solana_sdk::transaction::Result<()>, u64);
+}
+
+impl Column for columns::TransactionStatus {
+    const NAME: &'static str = TRANSACTION_STATUS_CF;
+    type Index = (Slot, Signature);
+
+    fn key((slot, index): (Slot, Signature)) -> Vec<u8> {
+        let mut key = vec![0; 8 + 64];
+        BigEndian::write_u64(&mut key[..8], slot);
+        key[8..72].clone_from_slice(&index.as_ref()[0..64]);
+        key
+    }
+
+    fn index<'a>(key: &[u8]) -> (Slot, Signature) {
+        let slot = BigEndian::read_u64(&key[..8]);
+        let index = Signature::new(&key[8..72]);
+        (slot, index)
+    }
+
+    fn slot(index: Self::Index) -> Slot {
+        index.0
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        (slot, Signature::default())
+    }
 }
 
 impl Column for columns::ShredCode {
