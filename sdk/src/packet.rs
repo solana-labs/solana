@@ -1,4 +1,5 @@
 use crate::clock::Slot;
+use bincode::Result;
 use serde::Serialize;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::{fmt, io};
@@ -37,18 +38,25 @@ impl Packet {
 
     pub fn from_data<T: Serialize>(dest: &SocketAddr, data: T) -> Self {
         let mut me = Packet::default();
-        Self::populate_packet(&mut me, Some(dest), &data);
+        if let Err(e) = Self::populate_packet(&mut me, Some(dest), &data) {
+            error!("Couldn't write to packet {:?}. Data skipped.", e);
+        }
         me
     }
 
-    pub fn populate_packet<T: Serialize>(packet: &mut Packet, dest: Option<&SocketAddr>, data: &T) {
+    pub fn populate_packet<T: Serialize>(
+        packet: &mut Packet,
+        dest: Option<&SocketAddr>,
+        data: &T,
+    ) -> Result<()> {
         let mut wr = io::Cursor::new(&mut packet.data[..]);
-        bincode::serialize_into(&mut wr, data).expect("serialize request");
+        bincode::serialize_into(&mut wr, data)?;
         let len = wr.position() as usize;
         packet.meta.size = len;
         if let Some(dest) = dest {
             packet.meta.set_addr(dest);
         }
+        Ok(())
     }
 }
 

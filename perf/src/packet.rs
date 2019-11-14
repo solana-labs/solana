@@ -88,7 +88,7 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets>
         let mut p = Packets::default();
         p.packets.resize(x.len(), Packet::default());
         for (i, o) in x.iter().zip(p.packets.iter_mut()) {
-            Packet::populate_packet(o, None, i);
+            Packet::populate_packet(o, None, i).expect("serialize request");
         }
         out.push(p);
     }
@@ -103,7 +103,9 @@ pub fn to_packets_with_destination<T: Serialize>(dests_and_data: &[(SocketAddr, 
     let mut out = Packets::default();
     out.packets.resize(dests_and_data.len(), Packet::default());
     for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
-        Packet::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1);
+        if let Err(e) = Packet::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1) {
+            error!("Couldn't write to packet {:?}. Data skipped.", e);
+        }
     }
     out
 }
