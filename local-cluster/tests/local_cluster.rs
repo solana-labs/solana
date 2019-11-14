@@ -191,6 +191,7 @@ fn test_leader_failure_4() {
 #[test]
 #[serial]
 fn test_network_partition_2_3() {
+    solana_logger::setup();
     let num_nodes = 5;
     let validator_config = ValidatorConfig::default();
     let mut config = ClusterConfig {
