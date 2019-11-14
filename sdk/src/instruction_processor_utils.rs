@@ -41,7 +41,7 @@ pub fn next_keyed_account<I: Iterator>(iter: &mut I) -> Result<I::Item, Instruct
     iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
 }
 
-pub fn limited_deserialize<T>(data: &[u8]) -> Result<(T), InstructionError>
+pub fn limited_deserialize<T>(data: &[u8]) -> Result<T, InstructionError>
 where
     T: serde::de::DeserializeOwned,
 {

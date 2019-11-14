@@ -76,6 +76,7 @@ pub fn add_genesis_accounts(
     Ok(())
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_bootstrap_leader_lamports = &sol_to_lamports(500.0).to_string();
     let default_bootstrap_leader_stake_lamports = &sol_to_lamports(0.5).to_string();
