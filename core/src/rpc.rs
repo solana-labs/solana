@@ -17,9 +17,7 @@ use solana_client::rpc_request::{
     RpcVoteAccountStatus,
 };
 use solana_drone::drone::request_airdrop_transaction;
-use solana_ledger::{
-    bank_forks::BankForks, blocktree::Blocktree, rooted_slot_iterator::RootedSlotIterator,
-};
+use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
@@ -306,18 +304,14 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_blocks_since(&self, slot: Slot) -> Result<Vec<Slot>> {
-        Ok(RootedSlotIterator::new(slot, &self.blocktree)
-            .map_err(|err| Error::invalid_params(format!("Slot {:?}: {:?}", slot, err)))?
-            .map(|(slot, _)| slot)
-            .collect())
-    }
-
-    // The `get_block` method is not fully implemented. It currenlty returns a batch of test transaction
-    // tuples (Transaction, transaction::Result) to demonstrate message format and
+    // The `get_confirmed_block` method is not fully implemented. It currenlty returns a batch of
+    // test transaction tuples (Transaction, transaction::Result) to demonstrate message format and
     // TransactionErrors. Transaction count == slot, and transaction keys are derived
     // deterministically to allow testers to track the pubkeys across slots.
-    pub fn get_block(&self, slot: Slot) -> Result<Vec<(Vec<u8>, transaction::Result<()>)>> {
+    pub fn get_confirmed_block(
+        &self,
+        slot: Slot,
+    ) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
         Ok(make_test_transactions(slot))
     }
 }
@@ -523,15 +517,12 @@ pub trait RpcSol {
     #[rpc(meta, name = "setLogFilter")]
     fn set_log_filter(&self, _meta: Self::Metadata, filter: String) -> Result<()>;
 
-    #[rpc(meta, name = "getBlocksSince")]
-    fn get_blocks_since(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Slot>>;
-
-    #[rpc(meta, name = "getBlock")]
-    fn get_block(
+    #[rpc(meta, name = "getConfirmedBlock")]
+    fn get_confirmed_block(
         &self,
         meta: Self::Metadata,
         slot: Slot,
-    ) -> Result<Vec<(Vec<u8>, transaction::Result<()>)>>;
+    ) -> Result<Vec<(Transaction, transaction::Result<()>)>>;
 }
 
 pub struct RpcSolImpl;
@@ -976,26 +967,22 @@ impl RpcSol for RpcSolImpl {
         Ok(())
     }
 
-    fn get_blocks_since(&self, meta: Self::Metadata, slot: Slot) -> Result<Vec<Slot>> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_blocks_since(slot)
-    }
-
-    fn get_block(
+    fn get_confirmed_block(
         &self,
         meta: Self::Metadata,
         slot: Slot,
-    ) -> Result<Vec<(Vec<u8>, transaction::Result<()>)>> {
-        meta.request_processor.read().unwrap().get_block(slot)
+    ) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_confirmed_block(slot)
     }
 }
 
-fn make_test_transactions(count: u64) -> Vec<(Vec<u8>, transaction::Result<()>)> {
+fn make_test_transactions(count: u64) -> Vec<(Transaction, transaction::Result<()>)> {
     let seed = [42u8; 32];
     let keys = GenKeys::new(seed).gen_n_keypairs(count + 1);
-    let mut transactions: Vec<(Vec<u8>, transaction::Result<()>)> = Vec::new();
+    let mut transactions: Vec<(Transaction, transaction::Result<()>)> = Vec::new();
     for x in 0..count {
         let tx = system_transaction::transfer(
             &keys[x as usize],
@@ -1003,7 +990,6 @@ fn make_test_transactions(count: u64) -> Vec<(Vec<u8>, transaction::Result<()>)>
             123,
             Hash::default(),
         );
-        let wire_transaction = serialize(&tx).unwrap();
         let status = if x % 3 == 0 {
             Ok(())
         } else if x % 3 == 1 {
@@ -1017,7 +1003,7 @@ fn make_test_transactions(count: u64) -> Vec<(Vec<u8>, transaction::Result<()>)>
                 InstructionError::CustomError(3),
             ))
         };
-        transactions.push((wire_transaction, status))
+        transactions.push((tx, status))
     }
     transactions
 }
