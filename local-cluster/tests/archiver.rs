@@ -22,7 +22,7 @@ use std::{
 };
 
 /// Start the cluster with the given configuration and wait till the archivers are discovered
-/// Then download blobs from one of them.
+/// Then download shreds from one of them.
 fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
     solana_logger::setup();
     info!("starting archiver test");

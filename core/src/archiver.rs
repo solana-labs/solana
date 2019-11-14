@@ -261,20 +261,20 @@ impl Archiver {
         };
 
         let repair_socket = Arc::new(node.sockets.repair);
-        let blob_sockets: Vec<Arc<UdpSocket>> =
+        let shred_sockets: Vec<Arc<UdpSocket>> =
             node.sockets.tvu.into_iter().map(Arc::new).collect();
-        let blob_forward_sockets: Vec<Arc<UdpSocket>> = node
+        let shred_forward_sockets: Vec<Arc<UdpSocket>> = node
             .sockets
             .tvu_forwards
             .into_iter()
             .map(Arc::new)
             .collect();
-        let (blob_fetch_sender, blob_fetch_receiver) = channel();
+        let (shred_fetch_sender, shred_fetch_receiver) = channel();
         let fetch_stage = ShredFetchStage::new(
-            blob_sockets,
-            blob_forward_sockets,
+            shred_sockets,
+            shred_forward_sockets,
             repair_socket.clone(),
-            &blob_fetch_sender,
+            &shred_fetch_sender,
             &exit,
         );
         let (slot_sender, slot_receiver) = channel();
@@ -299,7 +299,7 @@ impl Archiver {
                     &node_info,
                     &storage_keypair,
                     repair_socket,
-                    blob_fetch_receiver,
+                    shred_fetch_receiver,
                     slot_sender,
                 ) {
                     Ok(window_service) => window_service,
@@ -448,7 +448,7 @@ impl Archiver {
         node_info: &ContactInfo,
         storage_keypair: &Arc<Keypair>,
         repair_socket: Arc<UdpSocket>,
-        blob_fetch_receiver: PacketReceiver,
+        shred_fetch_receiver: PacketReceiver,
         slot_sender: Sender<u64>,
     ) -> Result<(WindowService)> {
         let slots_per_segment =
@@ -492,7 +492,7 @@ impl Archiver {
         let (verified_sender, verified_receiver) = unbounded();
 
         let _sigverify_stage = SigVerifyStage::new(
-            blob_fetch_receiver,
+            shred_fetch_receiver,
             verified_sender.clone(),
             DisabledSigVerifier::default(),
         );
@@ -845,7 +845,7 @@ impl Archiver {
     /// Return the slot at the start of the archiver's segment
     ///
     /// It is recommended to use a temporary blocktree for this since the download will not verify
-    /// blobs received and might impact the chaining of blobs across slots
+    /// shreds received and might impact the chaining of shreds across slots
     pub fn download_from_archiver(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         archiver_info: &ContactInfo,
@@ -853,7 +853,7 @@ impl Archiver {
         slots_per_segment: u64,
     ) -> Result<(u64)> {
         // Create a client which downloads from the archiver and see that it
-        // can respond with blobs.
+        // can respond with shreds.
         let start_slot = Self::get_archiver_segment_slot(archiver_info.storage_addr);
         info!("Archiver download: start at {}", start_slot);
 

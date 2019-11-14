@@ -1,14 +1,14 @@
 //! # Erasure Coding and Recovery
 //!
-//! Blobs are logically grouped into erasure sets or blocks. Each set contains 16 sequential data
-//! blobs and 4 sequential coding blobs.
+//! Shreds are logically grouped into erasure sets or blocks. Each set contains 16 sequential data
+//! shreds and 4 sequential coding shreds.
 //!
-//! Coding blobs in each set starting from `start_idx`:
+//! Coding shreds in each set starting from `start_idx`:
 //!   For each erasure set:
-//!     generate `NUM_CODING` coding_blobs.
-//!     index the coding blobs from `start_idx` to `start_idx + NUM_CODING - 1`.
+//!     generate `NUM_CODING` coding_shreds.
+//!     index the coding shreds from `start_idx` to `start_idx + NUM_CODING - 1`.
 //!
-//!  model of an erasure set, with top row being data blobs and second being coding
+//!  model of an erasure set, with top row being data shreds and second being coding
 //!  |<======================= NUM_DATA ==============================>|
 //!  |<==== NUM_CODING ===>|
 //!  +---+ +---+ +---+ +---+ +---+         +---+ +---+ +---+ +---+ +---+
@@ -17,10 +17,10 @@
 //!  | C | | C | | C | | C | |   |         |   | |   | |   | |   | |   |
 //!  +---+ +---+ +---+ +---+ +---+         +---+ +---+ +---+ +---+ +---+
 //!
-//!  blob structure for coding blobs
+//!  shred structure for coding shreds
 //!
 //!   + ------- meta is set and used by transport, meta.size is actual length
-//!   |           of data in the byte array blob.data
+//!   |           of data in the byte array shred.data
 //!   |
 //!   |          + -- data is stuff shipped over the wire, and has an included
 //!   |          |        header
@@ -30,14 +30,14 @@
 //!  |+---+--   |+---+---+---+---+------------------------------------------+|
 //!  || s | .   || i |   | f | s |                                          ||
 //!  || i | .   || n | i | l | i |                                          ||
-//!  || z | .   || d | d | a | z |     blob.data(), or blob.data_mut()      ||
+//!  || z | .   || d | d | a | z |     shred.data(), or shred.data_mut()      ||
 //!  || e |     || e |   | g | e |                                          ||
 //!  |+---+--   || x |   | s |   |                                          ||
 //!  |          |+---+---+---+---+------------------------------------------+|
 //!  +----------+------------------------------------------------------------+
-//!             |                |<=== coding blob part for "coding" =======>|
+//!             |                |<=== coding shred part for "coding" =======>|
 //!             |                                                            |
-//!             |<============== data blob part for "coding"  ==============>|
+//!             |<============== data shred part for "coding"  ==============>|
 //!
 //!
 
@@ -46,9 +46,9 @@ use reed_solomon_erasure::ReedSolomon;
 use serde::{Deserialize, Serialize};
 
 //TODO(sakridge) pick these values
-/// Number of data blobs
+/// Number of data shreds
 pub const NUM_DATA: usize = 8;
-/// Number of coding blobs; also the maximum number that can go missing.
+/// Number of coding shreds; also the maximum number that can go missing.
 pub const NUM_CODING: usize = 8;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -86,7 +86,7 @@ impl ErasureConfig {
 type Result<T> = std::result::Result<T, reed_solomon_erasure::Error>;
 
 /// Represents an erasure "session" with a particular configuration and number of data and coding
-/// blobs
+/// shreds
 #[derive(Debug, Clone)]
 pub struct Session(ReedSolomon<Field>);
 
@@ -134,11 +134,11 @@ pub mod test {
     use log::*;
     use solana_sdk::clock::Slot;
 
-    /// Specifies the contents of a 16-data-blob and 4-coding-blob erasure set
+    /// Specifies the contents of a 16-data-shred and 4-coding-shred erasure set
     /// Exists to be passed to `generate_blocktree_with_coding`
     #[derive(Debug, Copy, Clone)]
     pub struct ErasureSpec {
-        /// Which 16-blob erasure set this represents
+        /// Which 16-shred erasure set this represents
         pub set_index: u64,
         pub num_data: usize,
         pub num_coding: usize,

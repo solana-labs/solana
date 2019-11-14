@@ -3,12 +3,12 @@ use solana_ledger::entry::Entry;
 use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 
-pub(super) struct BroadcastFakeBlobsRun {
+pub(super) struct BroadcastFakeShredsRun {
     last_blockhash: Hash,
     partition: usize,
 }
 
-impl BroadcastFakeBlobsRun {
+impl BroadcastFakeShredsRun {
     pub(super) fn new(partition: usize) -> Self {
         Self {
             last_blockhash: Hash::default(),
@@ -17,7 +17,7 @@ impl BroadcastFakeBlobsRun {
     }
 }
 
-impl BroadcastRun for BroadcastFakeBlobsRun {
+impl BroadcastRun for BroadcastFakeShredsRun {
     fn run(
         &mut self,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -82,7 +82,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
         let peers = cluster_info.read().unwrap().tvu_peers();
         peers.iter().enumerate().for_each(|(i, peer)| {
             if i <= self.partition {
-                // Send fake blobs to the first N peers
+                // Send fake shreds to the first N peers
                 fake_data_shreds
                     .iter()
                     .chain(fake_coding_shreds.iter())

@@ -1,5 +1,5 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
-//! regularly finds missing blobs in the ledger and sends repair requests for those blobs
+//! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 use crate::{
     cluster_info::ClusterInfo, cluster_info_repair_listener::ClusterInfoRepairListener,
     result::Result,
@@ -36,7 +36,7 @@ pub enum RepairStrategy {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairType {
     Orphan(u64),
-    HighestBlob(u64, u64),
+    HighestShred(u64, u64),
     Shred(u64, u64),
 }
 
@@ -187,7 +187,7 @@ impl RepairService {
         max_repairs: usize,
         repair_range: &RepairSlotRange,
     ) -> Result<(Vec<RepairType>)> {
-        // Slot height and blob indexes for blobs we want to repair
+        // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<RepairType> = vec![];
         for slot in repair_range.start..=repair_range.end {
             if repairs.len() >= max_repairs {
@@ -219,7 +219,7 @@ impl RepairService {
         root: u64,
         max_repairs: usize,
     ) -> Result<(Vec<RepairType>)> {
-        // Slot height and blob indexes for blobs we want to repair
+        // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<RepairType> = vec![];
         Self::generate_repairs_for_fork(blocktree, &mut repairs, max_repairs, root);
 
@@ -242,7 +242,7 @@ impl RepairService {
         if slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
-            vec![RepairType::HighestBlob(slot, slot_meta.received)]
+            vec![RepairType::HighestShred(slot, slot_meta.received)]
         } else {
             let reqs = blocktree.find_missing_data_indexes(
                 slot,
@@ -322,7 +322,7 @@ impl RepairService {
 
         // Safe to set into gossip because by this time, the leader schedule cache should
         // also be updated with the latest root (done in blocktree_processor) and thus
-        // will provide a schedule to window_service for any incoming blobs up to the
+        // will provide a schedule to window_service for any incoming shreds up to the
         // last_confirmed_epoch.
         cluster_info
             .write()
@@ -414,7 +414,7 @@ mod test {
             blocktree.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 0, 2).unwrap(),
-                vec![RepairType::HighestBlob(0, 0), RepairType::Orphan(2)]
+                vec![RepairType::HighestShred(0, 0), RepairType::Orphan(2)]
             );
         }
 
@@ -429,14 +429,14 @@ mod test {
 
             let (shreds, _) = make_slot_entries(2, 0, 1);
 
-            // Write this blob to slot 2, should chain to slot 0, which we haven't received
-            // any blobs for
+            // Write this shred to slot 2, should chain to slot 0, which we haven't received
+            // any shreds for
             blocktree.insert_shreds(shreds, None, false).unwrap();
 
             // Check that repair tries to patch the empty slot
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 0, 2).unwrap(),
-                vec![RepairType::HighestBlob(0, 0)]
+                vec![RepairType::HighestShred(0, 0)]
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -451,12 +451,12 @@ mod test {
             let nth = 3;
             let num_slots = 2;
 
-            // Create some blobs
+            // Create some shreds
             let (mut shreds, _) = make_many_slot_entries(0, num_slots as u64, 150 as u64);
             let num_shreds = shreds.len() as u64;
             let num_shreds_per_slot = num_shreds / num_slots;
 
-            // write every nth blob
+            // write every nth shred
             let mut shreds_to_write = vec![];
             let mut missing_indexes_per_slot = vec![];
             for i in (0..num_shreds).rev() {
@@ -476,7 +476,7 @@ mod test {
                 .flat_map(|slot| {
                     missing_indexes_per_slot
                         .iter()
-                        .map(move |blob_index| RepairType::Shred(slot as u64, *blob_index))
+                        .map(move |shred_index| RepairType::Shred(slot as u64, *shred_index))
                 })
                 .collect();
 
@@ -501,7 +501,7 @@ mod test {
 
             let num_entries_per_slot = 100;
 
-            // Create some blobs
+            // Create some shreds
             let (mut shreds, _) = make_slot_entries(0, 0, num_entries_per_slot as u64);
             let num_shreds_per_slot = shreds.len() as u64;
 
@@ -510,9 +510,9 @@ mod test {
 
             blocktree.insert_shreds(shreds, None, false).unwrap();
 
-            // We didn't get the last blob for this slot, so ask for the highest blob for that slot
+            // We didn't get the last shred for this slot, so ask for the highest shred for that slot
             let expected: Vec<RepairType> =
-                vec![RepairType::HighestBlob(0, num_shreds_per_slot - 1)];
+                vec![RepairType::HighestShred(0, num_shreds_per_slot - 1)];
 
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 0, std::usize::MAX).unwrap(),
@@ -551,7 +551,7 @@ mod test {
                             if slots.contains(&(slot_index as u64)) {
                                 RepairType::Shred(slot_index as u64, 0)
                             } else {
-                                RepairType::HighestBlob(slot_index as u64, 0)
+                                RepairType::HighestShred(slot_index as u64, 0)
                             }
                         })
                         .collect();
@@ -582,7 +582,7 @@ mod test {
             let num_slots = 1;
             let start = 5;
 
-            // Create some blobs in slots 0..num_slots
+            // Create some shreds in slots 0..num_slots
             for i in start..start + num_slots {
                 let parent = if i > 0 { i - 1 } else { 0 };
                 let (shreds, _) = make_slot_entries(i, parent, num_entries_per_slot as u64);
@@ -592,9 +592,9 @@ mod test {
 
             let end = 4;
             let expected: Vec<RepairType> = vec![
-                RepairType::HighestBlob(end - 2, 0),
-                RepairType::HighestBlob(end - 1, 0),
-                RepairType::HighestBlob(end, 0),
+                RepairType::HighestShred(end - 2, 0),
+                RepairType::HighestShred(end - 1, 0),
+                RepairType::HighestShred(end, 0),
             ];
 
             let mut repair_slot_range = RepairSlotRange::default();
@@ -630,7 +630,7 @@ mod test {
             let fork2 = vec![8, 12];
             let fork2_shreds = make_chaining_slot_entries(&fork2, num_entries_per_slot);
 
-            // Remove the last blob from each slot to make an incomplete slot
+            // Remove the last shred from each slot to make an incomplete slot
             let fork2_incomplete_shreds: Vec<_> = fork2_shreds
                 .into_iter()
                 .flat_map(|(mut shreds, _)| {

@@ -12,7 +12,7 @@ Nodes take turns being leader and generating the PoH that encodes state changes.
 2. Leader filters valid transactions.
 3. Leader executes valid transactions updating its state.
 4. Leader packages transactions into entries based off its current PoH slot.
-5. Leader transmits the entries to validator nodes \(in signed blobs\) 1. The PoH stream includes ticks; empty entries that indicate liveness of
+5. Leader transmits the entries to validator nodes \(in signed shreds\) 1. The PoH stream includes ticks; empty entries that indicate liveness of
 
    the leader and the passage of time on the cluster.
 

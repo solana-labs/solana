@@ -30,7 +30,7 @@ Gossip is designed for efficient propagation of state. Messages that are sent th
 ## Performance
 
 1. Worst case propagation time to the next leader is Log\(N\) hops with a base depending on the fanout. With our current default fanout of 6, it is about 6 hops to 20k nodes.
-2. The leader should receive 20k validation votes aggregated by gossip-push into 64kb blobs. Which would reduce the number of packets for 20k network to 80 blobs.
+2. The leader should receive 20k validation votes aggregated by gossip-push into MTU-sized shreds. Which would reduce the number of packets for 20k network to 80 shreds.
 3. Each validators votes is replicated across the entire network. To maintain a queue of 5 previous votes the Crds table would grow by 25 megabytes. `(20,000 nodes * 256 bytes * 5)`.
 
 ## Two step implementation rollout
@@ -44,7 +44,7 @@ Initially the network can perform reliably with just 1 vote transmitted and main
 3. Fanout of 6.
 4. Worst case 256kb memory overhead per node.
 5. Worst case 4 hops to propagate to every node.
-6. Leader should receive the entire validator vote set in 4 push message blobs.
+6. Leader should receive the entire validator vote set in 4 push message shreds.
 
 ### Sub 20k network
 
@@ -55,5 +55,5 @@ Everything above plus the following:
 3. Increase fanout to 20.
 4. Worst case 25mb memory overhead per node.
 5. Sub 4 hops worst case to deliver to the entire network.
-6. 80 blobs received by the leader for all the validator messages.
+6. 80 shreds received by the leader for all the validator messages.
 

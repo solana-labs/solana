@@ -7,7 +7,7 @@
                   |  TVU                               |                    |
                   |                                    |                    |
                   |  .-------.   .------------.   .----+---.   .---------.  |
- .------------.   |  | Blob  |   | Retransmit |   | Replay |   | Storage |  |
+ .------------.   |  | Shred |   | Retransmit |   | Replay |   | Storage |  |
  | Upstream   +----->| Fetch +-->| Stage      +-->| Stage  +-->| Stage   |  |
  | Validators |   |  | Stage |   |            |   |        |   |         |  |
  `------------`   |  `-------`   `----+-------`   `----+---`   `---------`  |

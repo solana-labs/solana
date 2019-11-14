@@ -269,7 +269,7 @@ impl Validator {
         assert_eq!(
             blocktree.new_shreds_signals.len(),
             1,
-            "New blob signal for the TVU should be the same as the clear bank signal."
+            "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
         let ip_echo_server = solana_net_utils::ip_echo_server(node.sockets.ip_echo.unwrap());

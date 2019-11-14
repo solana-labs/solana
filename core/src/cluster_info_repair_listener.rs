@@ -29,47 +29,47 @@ pub const NUM_SLOTS_PER_UPDATE: usize = 2;
 pub const REPAIR_SAME_SLOT_THRESHOLD: u64 = 5000;
 use solana_sdk::timing::timestamp;
 
-// Represents the blobs that a repairman is responsible for repairing in specific slot. More
-// specifically, a repairman is responsible for every blob in this slot with index
-// `(start_index + step_size * i) % num_blobs_in_slot`, for all `0 <= i <= num_blobs_to_send - 1`
+// Represents the shreds that a repairman is responsible for repairing in specific slot. More
+// specifically, a repairman is responsible for every shred in this slot with index
+// `(start_index + step_size * i) % num_shreds_in_slot`, for all `0 <= i <= num_shreds_to_send - 1`
 // in this slot.
-struct BlobIndexesToRepairIterator {
+struct ShredIndexesToRepairIterator {
     start_index: usize,
-    num_blobs_to_send: usize,
+    num_shreds_to_send: usize,
     step_size: usize,
-    num_blobs_in_slot: usize,
-    blobs_sent: usize,
+    num_shreds_in_slot: usize,
+    shreds_sent: usize,
 }
 
-impl BlobIndexesToRepairIterator {
+impl ShredIndexesToRepairIterator {
     fn new(
         start_index: usize,
-        num_blobs_to_send: usize,
+        num_shreds_to_send: usize,
         step_size: usize,
-        num_blobs_in_slot: usize,
+        num_shreds_in_slot: usize,
     ) -> Self {
         Self {
             start_index,
-            num_blobs_to_send,
+            num_shreds_to_send,
             step_size,
-            num_blobs_in_slot,
-            blobs_sent: 0,
+            num_shreds_in_slot,
+            shreds_sent: 0,
         }
     }
 }
 
-impl Iterator for BlobIndexesToRepairIterator {
+impl Iterator for ShredIndexesToRepairIterator {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.blobs_sent == self.num_blobs_to_send {
+        if self.shreds_sent == self.num_shreds_to_send {
             None
         } else {
-            let blob_index = Some(
-                (self.start_index + self.step_size * self.blobs_sent) % self.num_blobs_in_slot,
+            let shred_index = Some(
+                (self.start_index + self.step_size * self.shreds_sent) % self.num_shreds_in_slot,
             );
-            self.blobs_sent += 1;
-            blob_index
+            self.shreds_sent += 1;
+            shred_index
         }
     }
 }
@@ -295,8 +295,8 @@ impl ClusterInfoRepairListener {
 
         let mut slot_iter = slot_iter?;
 
-        let mut total_data_blobs_sent = 0;
-        let mut total_coding_blobs_sent = 0;
+        let mut total_data_shreds_sent = 0;
+        let mut total_coding_shreds_sent = 0;
         let mut num_slots_repaired = 0;
         let max_confirmed_repairee_epoch =
             epoch_schedule.get_leader_schedule_epoch(repairee_epoch_slots.root);
@@ -318,23 +318,23 @@ impl ClusterInfoRepairListener {
                 break;
             }
             if !repairee_epoch_slots.slots.contains(&slot) {
-                // Calculate the blob indexes this node is responsible for repairing. Note that
+                // Calculate the shred indexes this node is responsible for repairing. Note that
                 // because we are only repairing slots that are before our root, the slot.received
-                // should be equal to the actual total number of blobs in the slot. Optimistically
-                // this means that most repairmen should observe the same "total" number of blobs
+                // should be equal to the actual total number of shreds in the slot. Optimistically
+                // this means that most repairmen should observe the same "total" number of shreds
                 // for a particular slot, and thus the calculation in
                 // calculate_my_repairman_index_for_slot() will divide responsibility evenly across
                 // the cluster
-                let num_blobs_in_slot = slot_meta.received as usize;
+                let num_shreds_in_slot = slot_meta.received as usize;
 
                 // Check if I'm responsible for repairing this slots
                 if let Some(my_repair_indexes) = Self::calculate_my_repairman_index_for_slot(
                     my_pubkey,
                     &eligible_repairmen,
-                    num_blobs_in_slot,
+                    num_shreds_in_slot,
                     REPAIR_REDUNDANCY,
                 ) {
-                    // If I've already sent blobs >= this slot before, then don't send them again
+                    // If I've already sent shreds >= this slot before, then don't send them again
                     // until the timeout has expired
                     if slot > last_repaired_slot
                         || timestamp() - last_repaired_ts > REPAIR_SAME_SLOT_THRESHOLD
@@ -343,27 +343,27 @@ impl ClusterInfoRepairListener {
                             "Serving repair for slot {} to {}. Repairee slots: {:?}",
                             slot, repairee_pubkey, repairee_epoch_slots.slots
                         );
-                        // Repairee is missing this slot, send them the blobs for this slot
-                        for blob_index in my_repair_indexes {
-                            // Loop over the blob indexes and query the database for these blob that
+                        // Repairee is missing this slot, send them the shreds for this slot
+                        for shred_index in my_repair_indexes {
+                            // Loop over the shred indexes and query the database for these shred that
                             // this node is reponsible for repairing. This should be faster than using
                             // a database iterator over the slots because by the time this node is
-                            // sending the blobs in this slot for repair, we expect these slots
+                            // sending the shreds in this slot for repair, we expect these slots
                             // to be full.
-                            if let Some(blob_data) = blocktree
-                                .get_data_shred(slot, blob_index as u64)
-                                .expect("Failed to read data blob from blocktree")
+                            if let Some(shred_data) = blocktree
+                                .get_data_shred(slot, shred_index as u64)
+                                .expect("Failed to read data shred from blocktree")
                             {
-                                socket.send_to(&blob_data[..], repairee_addr)?;
-                                total_data_blobs_sent += 1;
+                                socket.send_to(&shred_data[..], repairee_addr)?;
+                                total_data_shreds_sent += 1;
                             }
 
                             if let Some(coding_bytes) = blocktree
-                                .get_coding_shred(slot, blob_index as u64)
-                                .expect("Failed to read coding blob from blocktree")
+                                .get_coding_shred(slot, shred_index as u64)
+                                .expect("Failed to read coding shred from blocktree")
                             {
                                 socket.send_to(&coding_bytes[..], repairee_addr)?;
-                                total_coding_blobs_sent += 1;
+                                total_coding_shreds_sent += 1;
                             }
                         }
 
@@ -371,11 +371,11 @@ impl ClusterInfoRepairListener {
                         Self::report_repair_metrics(
                             slot,
                             repairee_pubkey,
-                            total_data_blobs_sent,
-                            total_coding_blobs_sent,
+                            total_data_shreds_sent,
+                            total_coding_shreds_sent,
                         );
-                        total_data_blobs_sent = 0;
-                        total_coding_blobs_sent = 0;
+                        total_data_shreds_sent = 0;
+                        total_coding_shreds_sent = 0;
                     }
                     num_slots_repaired += 1;
                 }
@@ -388,16 +388,16 @@ impl ClusterInfoRepairListener {
     fn report_repair_metrics(
         slot: u64,
         repairee_id: &Pubkey,
-        total_data_blobs_sent: u64,
-        total_coding_blobs_sent: u64,
+        total_data_shreds_sent: u64,
+        total_coding_shreds_sent: u64,
     ) {
-        if total_data_blobs_sent > 0 || total_coding_blobs_sent > 0 {
+        if total_data_shreds_sent > 0 || total_coding_shreds_sent > 0 {
             datapoint!(
                 "repairman_activity",
                 ("slot", slot, i64),
                 ("repairee_id", repairee_id.to_string(), String),
-                ("data_sent", total_data_blobs_sent, i64),
-                ("coding_sent", total_coding_blobs_sent, i64)
+                ("data_sent", total_data_shreds_sent, i64),
+                ("coding_sent", total_coding_shreds_sent, i64)
             );
         }
     }
@@ -418,21 +418,21 @@ impl ClusterInfoRepairListener {
         eligible_repairmen.shuffle(&mut rng);
     }
 
-    // The calculation should partition the blobs in the slot across the repairmen in the cluster
-    // such that each blob in the slot is the responsibility of `repair_redundancy` or
+    // The calculation should partition the shreds in the slot across the repairmen in the cluster
+    // such that each shred in the slot is the responsibility of `repair_redundancy` or
     // `repair_redundancy + 1` number of repairmen in the cluster.
     fn calculate_my_repairman_index_for_slot(
         my_pubkey: &Pubkey,
         eligible_repairmen: &[&Pubkey],
-        num_blobs_in_slot: usize,
+        num_shreds_in_slot: usize,
         repair_redundancy: usize,
-    ) -> Option<BlobIndexesToRepairIterator> {
-        let total_blobs = num_blobs_in_slot * repair_redundancy;
-        let total_repairmen_for_slot = cmp::min(total_blobs, eligible_repairmen.len());
+    ) -> Option<ShredIndexesToRepairIterator> {
+        let total_shreds = num_shreds_in_slot * repair_redundancy;
+        let total_repairmen_for_slot = cmp::min(total_shreds, eligible_repairmen.len());
 
-        let blobs_per_repairman = cmp::min(
-            (total_blobs + total_repairmen_for_slot - 1) / total_repairmen_for_slot,
-            num_blobs_in_slot,
+        let shreds_per_repairman = cmp::min(
+            (total_shreds + total_repairmen_for_slot - 1) / total_repairmen_for_slot,
+            num_shreds_in_slot,
         );
 
         // Calculate the indexes this node is responsible for
@@ -440,15 +440,15 @@ impl ClusterInfoRepairListener {
             .iter()
             .position(|id| *id == my_pubkey)
         {
-            let start_index = my_position % num_blobs_in_slot;
-            Some(BlobIndexesToRepairIterator::new(
+            let start_index = my_position % num_shreds_in_slot;
+            Some(ShredIndexesToRepairIterator::new(
                 start_index,
-                blobs_per_repairman,
+                shreds_per_repairman,
                 total_repairmen_for_slot,
-                num_blobs_in_slot,
+                num_shreds_in_slot,
             ))
         } else {
-            // If there are more repairmen than `total_blobs`, then some repairmen
+            // If there are more repairmen than `total_shreds`, then some repairmen
             // will not have any responsibility to repair this slot
             None
         }
@@ -797,7 +797,7 @@ mod tests {
         let mut received_shreds: Vec<Packets> = vec![];
 
         // This repairee was missing exactly `num_slots / 2` slots, so we expect to get
-        // `(num_slots / 2) * num_shreds_per_slot * REPAIR_REDUNDANCY` blobs.
+        // `(num_slots / 2) * num_shreds_per_slot * REPAIR_REDUNDANCY` shreds.
         let num_expected_shreds = (num_slots / 2) * num_shreds_per_slot * REPAIR_REDUNDANCY as u64;
         while (received_shreds
             .iter()
@@ -833,7 +833,7 @@ mod tests {
         let slots_per_epoch = stakers_slot_offset * 2;
         let epoch_schedule = EpochSchedule::custom(slots_per_epoch, stakers_slot_offset, false);
 
-        // Create blobs for first two epochs and write them to blocktree
+        // Create shreds for first two epochs and write them to blocktree
         let total_slots = slots_per_epoch * 2;
         let (shreds, _) = make_many_slot_entries(0, total_slots, 1);
         blocktree.insert_shreds(shreds, None, false).unwrap();
@@ -853,7 +853,7 @@ mod tests {
         // 1) They are missing all of the second epoch, but have all of the first epoch.
         // 2) The root only confirms epoch 1, so the leader for epoch 2 is unconfirmed.
         //
-        // Thus, no repairmen should send any blobs to this repairee b/c this repairee
+        // Thus, no repairmen should send any shreds to this repairee b/c this repairee
         // already has all the slots for which they have a confirmed leader schedule
         let repairee_root = 0;
         let repairee_slots: BTreeSet<_> = (0..=slots_per_epoch).collect();
@@ -898,7 +898,7 @@ mod tests {
         )
         .unwrap();
 
-        // Make sure some blobs get sent this time
+        // Make sure some shreds get sent this time
         sleep(Duration::from_millis(1000));
         assert!(mock_repairee.receiver.try_recv().is_ok());
 
@@ -932,79 +932,79 @@ mod tests {
 
     #[test]
     fn test_calculate_my_repairman_index_for_slot() {
-        // Test when the number of blobs in the slot > number of repairmen
+        // Test when the number of shreds in the slot > number of repairmen
         let num_repairmen = 10;
-        let num_blobs_in_slot = 42;
+        let num_shreds_in_slot = 42;
         let repair_redundancy = 3;
 
         run_calculate_my_repairman_index_for_slot(
             num_repairmen,
-            num_blobs_in_slot,
+            num_shreds_in_slot,
             repair_redundancy,
         );
 
-        // Test when num_blobs_in_slot is a multiple of num_repairmen
+        // Test when num_shreds_in_slot is a multiple of num_repairmen
         let num_repairmen = 12;
-        let num_blobs_in_slot = 48;
+        let num_shreds_in_slot = 48;
         let repair_redundancy = 3;
 
         run_calculate_my_repairman_index_for_slot(
             num_repairmen,
-            num_blobs_in_slot,
+            num_shreds_in_slot,
             repair_redundancy,
         );
 
-        // Test when num_repairmen and num_blobs_in_slot are relatively prime
+        // Test when num_repairmen and num_shreds_in_slot are relatively prime
         let num_repairmen = 12;
-        let num_blobs_in_slot = 47;
+        let num_shreds_in_slot = 47;
         let repair_redundancy = 12;
 
         run_calculate_my_repairman_index_for_slot(
             num_repairmen,
-            num_blobs_in_slot,
+            num_shreds_in_slot,
             repair_redundancy,
         );
 
         // Test 1 repairman
         let num_repairmen = 1;
-        let num_blobs_in_slot = 30;
+        let num_shreds_in_slot = 30;
         let repair_redundancy = 3;
 
         run_calculate_my_repairman_index_for_slot(
             num_repairmen,
-            num_blobs_in_slot,
+            num_shreds_in_slot,
             repair_redundancy,
         );
 
-        // Test when repair_redundancy is 1, and num_blobs_in_slot does not evenly
+        // Test when repair_redundancy is 1, and num_shreds_in_slot does not evenly
         // divide num_repairmen
         let num_repairmen = 12;
-        let num_blobs_in_slot = 47;
+        let num_shreds_in_slot = 47;
         let repair_redundancy = 1;
 
         run_calculate_my_repairman_index_for_slot(
             num_repairmen,
-            num_blobs_in_slot,
+            num_shreds_in_slot,
             repair_redundancy,
         );
 
-        // Test when the number of blobs in the slot <= number of repairmen
+        // Test when the number of shreds in the slot <= number of repairmen
         let num_repairmen = 10;
-        let num_blobs_in_slot = 10;
+        let num_shreds_in_slot = 10;
         let repair_redundancy = 3;
         run_calculate_my_repairman_index_for_slot(
             num_repairmen,
-            num_blobs_in_slot,
+            num_shreds_in_slot,
             repair_redundancy,
         );
 
-        // Test when there are more repairmen than repair_redundancy * num_blobs_in_slot
+        // Test when there are more repairmen than repair_redundancy * num_shreds_in_slot
         let num_repairmen = 42;
-        let num_blobs_in_slot = 10;
+        let num_shreds_in_slot = 10;
         let repair_redundancy = 3;
         run_calculate_my_repairman_index_for_slot(
             num_repairmen,
-            num_blobs_in_slot,
+            num_shreds_in_slot,
             repair_redundancy,
         );
     }
@@ -1059,7 +1059,7 @@ mod tests {
 
     fn run_calculate_my_repairman_index_for_slot(
         num_repairmen: usize,
-        num_blobs_in_slot: usize,
+        num_shreds_in_slot: usize,
         repair_redundancy: usize,
     ) {
         let eligible_repairmen: Vec<_> = (0..num_repairmen).map(|_| Pubkey::new_rand()).collect();
@@ -1071,13 +1071,13 @@ mod tests {
                 ClusterInfoRepairListener::calculate_my_repairman_index_for_slot(
                     pk,
                     &eligible_repairmen_ref[..],
-                    num_blobs_in_slot,
+                    num_shreds_in_slot,
                     repair_redundancy,
                 )
             {
-                for blob_index in my_repair_indexes {
+                for shred_index in my_repair_indexes {
                     results
-                        .entry(blob_index)
+                        .entry(shred_index)
                         .and_modify(|e| *e += 1)
                         .or_insert(1);
                 }
@@ -1089,7 +1089,7 @@ mod tests {
 
         // Analyze the results:
 
-        // 1) If there are a sufficient number of repairmen, then each blob should be sent
+        // 1) If there are a sufficient number of repairmen, then each shred should be sent
         // `repair_redundancy` OR `repair_redundancy + 1` times.
         let num_expected_redundancy = cmp::min(num_repairmen, repair_redundancy);
         for b in results.keys() {
@@ -1098,18 +1098,18 @@ mod tests {
             );
         }
 
-        // 2) The number of times each blob is sent should be evenly distributed
-        let max_times_blob_sent = results.values().min_by(|x, y| x.cmp(y)).unwrap();
-        let min_times_blob_sent = results.values().max_by(|x, y| x.cmp(y)).unwrap();
-        assert!(*max_times_blob_sent <= *min_times_blob_sent + 1);
+        // 2) The number of times each shred is sent should be evenly distributed
+        let max_times_shred_sent = results.values().min_by(|x, y| x.cmp(y)).unwrap();
+        let min_times_shred_sent = results.values().max_by(|x, y| x.cmp(y)).unwrap();
+        assert!(*max_times_shred_sent <= *min_times_shred_sent + 1);
 
         // 3) There should only be repairmen who are not responsible for repairing this slot
-        // if we have more repairman than `num_blobs_in_slot * repair_redundancy`. In this case the
-        // first `num_blobs_in_slot * repair_redundancy` repairmen would send one blob, and the rest
+        // if we have more repairman than `num_shreds_in_slot * repair_redundancy`. In this case the
+        // first `num_shreds_in_slot * repair_redundancy` repairmen would send one shred, and the rest
         // would not be responsible for sending any repairs
         assert_eq!(
             none_results,
-            num_repairmen.saturating_sub(num_blobs_in_slot * repair_redundancy)
+            num_repairmen.saturating_sub(num_shreds_in_slot * repair_redundancy)
         );
     }
 }

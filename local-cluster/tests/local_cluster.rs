@@ -574,8 +574,8 @@ fn test_fail_entry_verification_leader() {
 #[test]
 #[allow(unused_attributes)]
 #[ignore]
-fn test_fake_blobs_broadcast_leader() {
-    test_faulty_node(BroadcastStageType::BroadcastFakeBlobs);
+fn test_fake_shreds_broadcast_leader() {
+    test_faulty_node(BroadcastStageType::BroadcastFakeShreds);
 }
 
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {
@@ -741,7 +741,7 @@ fn run_repairman_catchup(num_repairmen: u64) {
     );
 
     // Start up a new node, wait for catchup. Backwards repair won't be sufficient because the
-    // leader is sending blobs past this validator's first two confirmed epochs. Thus, the repairman
+    // leader is sending shreds past this validator's first two confirmed epochs. Thus, the repairman
     // protocol will have to kick in for this validator to repair.
     cluster.add_validator(&validator_config, repairee_stake);
 
