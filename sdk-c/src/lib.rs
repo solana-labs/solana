@@ -44,6 +44,7 @@ impl Transaction {
         }
     }
 
+    /// # Safety
     pub unsafe fn into_native(self) -> TransactionNative {
         TransactionNative {
             signatures: CVec::into_native(self.signatures)
@@ -54,6 +55,7 @@ impl Transaction {
         }
     }
 
+    /// # Safety
     #[allow(clippy::should_implement_trait)]
     pub unsafe fn clone(&self) -> Self {
         Self {
@@ -283,36 +285,43 @@ impl CVec<CompiledInstruction> {
     }
 }
 
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn free_transaction(tx: *mut Transaction) {
     Box::from_raw(tx);
 }
 
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn free_message(m: *mut Message) {
     Box::from_raw(m);
 }
 
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn free_message_header(mh: *mut MessageHeader) {
     Box::from_raw(mh);
 }
 
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn free_signature(s: *mut Signature) {
     Box::from_raw(s);
 }
 
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn free_compiled_instruction(i: *mut CompiledInstruction) {
     Box::from_raw(i);
 }
 
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn free_c_string(s: *mut c_char) {
     CString::from_raw(s);
 }
 
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn new_unsigned_transaction(message: *mut Message) -> *mut Transaction {
     let message = Box::from_raw(message);
@@ -327,6 +336,8 @@ pub unsafe extern "C" fn new_unsigned_transaction(message: *mut Message) -> *mut
 /// # Undefined Behavior
 ///
 /// Causes UB if `seed` is not a pointer to an array of length 32 or if `seed` is `NULL`
+///
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn generate_keypair(seed: *const u8) -> *mut Keypair {
     let seed = <&[u8] as TryInto<&[u8; PUBLIC_KEY_LENGTH]>>::try_into(slice::from_raw_parts(
@@ -345,6 +356,8 @@ pub unsafe extern "C" fn generate_keypair(seed: *const u8) -> *mut Keypair {
 /// # Undefined Behavior
 ///
 /// Causes UB if `keypair` is `NULL` or if `keypair` in not a pointer to a valid `Keypair`
+///
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn get_keypair_pubkey(keypair: *const Keypair) -> *mut Pubkey {
     let keypair = if let Ok(k) = (*keypair).new_native() {
@@ -362,6 +375,8 @@ pub unsafe extern "C" fn get_keypair_pubkey(keypair: *const Keypair) -> *mut Pub
 /// # Undefined Behavior
 ///
 /// Causes UB if any of the input pointers is `NULL`, or if `tx` is not a valid `Transaction`
+///
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn serialize_transaction(
     tx: *mut Transaction,
@@ -387,6 +402,8 @@ pub unsafe extern "C" fn serialize_transaction(
 /// # Undefined Behavior
 ///
 /// Causes UB if `bytes` is `NULL`, or if `bytes` does not point to a valid array of length `len`
+///
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn deserialize_transaction(
     bytes: *const u8,
@@ -410,6 +427,8 @@ pub unsafe extern "C" fn deserialize_transaction(
 ///
 /// Causes UB if any of the pointers is `NULL`, or if `keypairs` does not point to a valid array of
 /// `Keypairs` of length `num_keypairs`
+///
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn transaction_partial_sign(
     tx: *mut Transaction,
@@ -459,6 +478,8 @@ pub unsafe extern "C" fn transaction_partial_sign(
 ///
 /// Causes UB if `pubkey` is `NULL`, or if the returned c-string is freed by any method other than
 /// calling `free_c_string()`
+///
+/// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn get_pubkey_string(pubkey: *const Pubkey) -> *mut c_char {
     if let Ok(s) = CString::new(format!("{}", *pubkey)) {

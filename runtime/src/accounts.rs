@@ -300,7 +300,7 @@ impl Accounts {
             },
         );
 
-        let mut versions: Vec<(Pubkey, u64, B)> = accumulator.into_iter().flat_map(|x| x).collect();
+        let mut versions: Vec<(Pubkey, u64, B)> = accumulator.into_iter().flatten().collect();
         self.accounts_db.thread_pool.install(|| {
             versions.par_sort_by_key(|s| (s.0, s.1));
         });

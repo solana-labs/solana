@@ -38,6 +38,8 @@ macro_rules! entrypoint {
 }
 
 /// Deserialize the input parameters
+///
+/// # Safety
 #[allow(clippy::type_complexity)]
 pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a>>, &'a [u8]) {
     let mut offset: usize = 0;

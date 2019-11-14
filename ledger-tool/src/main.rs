@@ -388,6 +388,7 @@ fn graph_forks(
     dot.join("\n")
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
     solana_logger::setup_with_filter("solana=info");

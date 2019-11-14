@@ -150,7 +150,7 @@ impl LeaderScheduleCache {
             }
             start_index = 0;
         }
-        first_slot.and_then(|slot| Some((slot, last_slot)))
+        first_slot.map(|slot| (slot, last_slot))
     }
 
     fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<Pubkey> {
