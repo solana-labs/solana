@@ -222,8 +222,8 @@ cloud_CreateInstances() {
     --tags testnet
     --image UbuntuLTS
     --size "$machineType"
+    --ssh-key-values "$(cat "${sshPrivateKey}".pub)"
     --location "$zone"
-    --generate-ssh-keys
     --nsg "$nsgName"
   )
 

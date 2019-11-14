@@ -1,0 +1,19 @@
+steps:
+  - command: "system-test/testnet-performance/testnet-automation.sh"
+    label: "Azure - CPU Only 5 Node"
+    env:
+      UPLOAD_RESULTS_TO_SLACK: "true"
+      CLOUD_PROVIDER: "azure"
+      TESTNET_TAG: "azure-perf-cpu-only"
+      RAMP_UP_TIME: 0
+      TEST_DURATION_SECONDS: 600
+      NUMBER_OF_VALIDATOR_NODES: 5
+      ENABLE_GPU: "false"
+      VALIDATOR_NODE_MACHINE_TYPE: "Standard_D16s_v3"
+      NUMBER_OF_CLIENT_NODES: 2
+      CLIENT_OPTIONS: "bench-tps=2=--tx_count 15000 --thread-batch-sleep-ms 250"
+      TESTNET_ZONES: "westus"
+      USE_PUBLIC_IP_ADDRESSES: "true"
+      ADDITIONAL_FLAGS: ""
+    agents:
+      - "queue=testnet-deploy"

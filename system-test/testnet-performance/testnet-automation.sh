@@ -111,6 +111,19 @@ EOF
 EOF
   ) | buildkite-agent pipeline upload
   ;;
+  azure)
+  (
+    cat <<EOF
+- wait: ~
+  continue_on_failure: true
+
+- command: "net/azure.sh delete -p ${TESTNET_TAG}"
+  label: "Delete Testnet"
+  agents:
+    - "queue=testnet-deploy"
+EOF
+  ) | buildkite-agent pipeline upload
+  ;;
   colo)
     (
     cat <<EOF
@@ -157,6 +170,16 @@ function launchTestnet() {
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
       net/ec2.sh create \
+        -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
+        $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
+        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
+        ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
+        ${ADDITIONAL_FLAGS[@]/#/" "}
+      ;;
+    azure)
+    # shellcheck disable=SC2068
+    # shellcheck disable=SC2086
+      net/azure.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
         -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
