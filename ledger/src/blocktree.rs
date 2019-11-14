@@ -25,6 +25,7 @@ use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
+use solana_sdk::transaction::Transaction;
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::HashMap;
@@ -1101,6 +1102,16 @@ impl Blocktree {
             )
         } else {
             vec![]
+        }
+    }
+
+    pub fn get_confirmed_block_transactions(&self, slot: Slot) -> Result<Vec<Transaction>> {
+        if self.is_root(slot) {
+            Ok(self.get_slot_entries(slot, 0, None)?.iter().cloned().flat_map(|entry| {
+                entry.transactions
+            }).collect())
+        } else {
+            Err(BlocktreeError::SlotNotRooted)
         }
     }
 
