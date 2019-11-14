@@ -193,10 +193,7 @@ fn test_leader_failure_4() {
 fn test_network_partition_2_3() {
     solana_logger::setup();
     let num_nodes = 5;
-    info!(
-        "PARTITION_TEST starting cluster with {} nodes and 2 partitions",
-        num_nodes
-    );
+    info!("PARTITION_TEST!");
     let validator_config = ValidatorConfig::default();
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -204,11 +201,9 @@ fn test_network_partition_2_3() {
         validator_configs: vec![validator_config.clone(); num_nodes],
         ..ClusterConfig::default()
     };
-    let slot_millis =
-        config.ticks_per_slot * config.poh_config.target_tick_duration.as_millis() as u64;
     let now = timestamp();
-    let partition_start = now + MINIMUM_SLOTS_PER_EPOCH * 3 * slot_millis;
-    let partition_end = partition_start + slot_millis * 8;
+    let partition_start = now + 60_000;
+    let partition_end = partition_start + 10_000;
     for i in 0..num_nodes / 2 {
         let mut p1 = Partition::default();
         p1.num_partitions = 2;
