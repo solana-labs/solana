@@ -181,25 +181,25 @@ impl Rocks {
         Ok(())
     }
 
-    fn cf_handle(&self, cf: &str) -> ColumnFamily {
+    fn cf_handle(&self, cf: &str) -> &ColumnFamily {
         self.0
             .cf_handle(cf)
             .expect("should never get an unknown column")
     }
 
-    fn get_cf(&self, cf: ColumnFamily, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    fn get_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let opt = self.0.get_cf(cf, key)?.map(|db_vec| db_vec.to_vec());
         Ok(opt)
     }
 
-    fn put_cf(&self, cf: ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
+    fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
         self.0.put_cf(cf, key, value)?;
         Ok(())
     }
 
     fn iterator_cf<C>(
         &self,
-        cf: ColumnFamily,
+        cf: &ColumnFamily,
         iterator_mode: IteratorMode<C::Index>,
     ) -> Result<DBIterator>
     where
@@ -218,7 +218,7 @@ impl Rocks {
         Ok(iter)
     }
 
-    fn raw_iterator_cf(&self, cf: ColumnFamily) -> Result<DBRawIterator> {
+    fn raw_iterator_cf(&self, cf: &ColumnFamily) -> Result<DBRawIterator> {
         let raw_iter = self.0.raw_iterator_cf(cf)?;
 
         Ok(raw_iter)
@@ -477,7 +477,7 @@ where
 
 pub struct WriteBatch<'a> {
     write_batch: RWriteBatch,
-    map: HashMap<&'static str, ColumnFamily<'a>>,
+    map: HashMap<&'static str, &'a ColumnFamily>,
 }
 
 impl Database {
@@ -519,7 +519,7 @@ impl Database {
     }
 
     #[inline]
-    pub fn cf_handle<C>(&self) -> ColumnFamily
+    pub fn cf_handle<C>(&self) -> &ColumnFamily
     where
         C: Column,
     {
@@ -537,7 +537,7 @@ impl Database {
     }
 
     #[inline]
-    pub fn raw_iterator_cf(&self, cf: ColumnFamily) -> Result<DBRawIterator> {
+    pub fn raw_iterator_cf(&self, cf: &ColumnFamily) -> Result<DBRawIterator> {
         self.backend.raw_iterator_cf(cf)
     }
 
@@ -610,7 +610,7 @@ where
     }
 
     #[inline]
-    pub fn handle(&self) -> ColumnFamily {
+    pub fn handle(&self) -> &ColumnFamily {
         self.backend.cf_handle(C::NAME)
     }
 
@@ -669,7 +669,7 @@ impl<'a> WriteBatch<'a> {
     }
 
     #[inline]
-    fn get_cf<C: Column>(&self) -> ColumnFamily<'a> {
+    fn get_cf<C: Column>(&self) -> &'a ColumnFamily {
         self.map[C::NAME]
     }
 }
