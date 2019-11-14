@@ -4,7 +4,7 @@ steps:
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "gce"
-      TESTNET_TAG: "gce-edge-perf-gpu-enabled"
+      TESTNET_TAG: "gce-perf-gpu-enabled"
       RAMP_UP_TIME: 0
       TEST_DURATION_SECONDS: 600
       NUMBER_OF_VALIDATOR_NODES: 100
