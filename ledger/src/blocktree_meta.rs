@@ -10,7 +10,7 @@ pub struct SlotMeta {
     // The number of slots above the root (the genesis block). The first
     // slot has slot 0.
     pub slot: Slot,
-    // The total number of consecutive blobs starting from index 0
+    // The total number of consecutive shreds starting from index 0
     // we have received for this slot.
     pub consumed: u64,
     // The index *plus one* of the highest shred received for this slot.  Useful

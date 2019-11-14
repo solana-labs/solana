@@ -29,7 +29,6 @@ pub enum Error {
     BlockError(block_error::BlockError),
     BlocktreeError(blocktree::BlocktreeError),
     FsExtra(fs_extra::error::Error),
-    ToBlobError,
     SnapshotError(snapshot_utils::SnapshotError),
 }
 

@@ -1,4 +1,4 @@
-//! `window_service` handles the data plane incoming blobs, storing them in
+//! `window_service` handles the data plane incoming shreds, storing them in
 //!   blocktree and retransmitting where required
 //!
 use crate::cluster_info::ClusterInfo;
@@ -34,8 +34,8 @@ fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
     }
 }
 
-/// drop blobs that are from myself or not from the correct leader for the
-/// blob's slot
+/// drop shreds that are from myself or not from the correct leader for the
+/// shred's slot
 pub fn should_retransmit_and_persist(
     shred: &Shred,
     bank: Option<Arc<Bank>>,
@@ -347,7 +347,7 @@ mod test {
 
         let mut shreds = local_entries_to_shred(&[Entry::default()], 0, 0, &leader_keypair);
 
-        // with a Bank for slot 0, blob continues
+        // with a Bank for slot 0, shred continues
         assert_eq!(
             should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0,),
             true
@@ -371,14 +371,14 @@ mod test {
             false
         );
 
-        // with a Bank and no idea who leader is, blob gets thrown out
+        // with a Bank and no idea who leader is, shred gets thrown out
         shreds[0].set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
         assert_eq!(
             should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0),
             false
         );
 
-        // with a shred where shred.slot() == root, blob gets thrown out
+        // with a shred where shred.slot() == root, shred gets thrown out
         let slot = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
         let shreds = local_entries_to_shred(&[Entry::default()], slot, slot - 1, &leader_keypair);
         assert_eq!(
@@ -386,7 +386,7 @@ mod test {
             false
         );
 
-        // with a shred where shred.parent() < root, blob gets thrown out
+        // with a shred where shred.parent() < root, shred gets thrown out
         let slot = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
         let shreds =
             local_entries_to_shred(&[Entry::default()], slot + 1, slot - 1, &leader_keypair);
@@ -395,7 +395,7 @@ mod test {
             false
         );
 
-        // if the blob came back from me, it doesn't continue, whether or not I have a bank
+        // if the shred came back from me, it doesn't continue, whether or not I have a bank
         assert_eq!(
             should_retransmit_and_persist(&shreds[0], None, &cache, &me_id, 0),
             false

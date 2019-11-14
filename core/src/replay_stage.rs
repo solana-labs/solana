@@ -511,7 +511,7 @@ impl ReplayStage {
             let rooted_slots: Vec<_> = rooted_banks.iter().map(|bank| bank.slot()).collect();
             // Call leader schedule_cache.set_root() before blocktree.set_root() because
             // bank_forks.root is consumed by repair_service to update gossip, so we don't want to
-            // get blobs for repair on gossip before we update leader schedule, otherwise they may
+            // get shreds for repair on gossip before we update leader schedule, otherwise they may
             // get dropped.
             leader_schedule_cache.set_root(rooted_banks.last().unwrap());
             blocktree
@@ -971,7 +971,7 @@ mod test {
             let mut bank_forks = BankForks::new(0, bank0);
             bank_forks.working_bank().freeze();
 
-            // Insert blob for slot 1, generate new forks, check result
+            // Insert shred for slot 1, generate new forks, check result
             let (shreds, _) = make_slot_entries(1, 0, 8);
             blocktree.insert_shreds(shreds, None, false).unwrap();
             assert!(bank_forks.get(1).is_none());
@@ -982,7 +982,7 @@ mod test {
             );
             assert!(bank_forks.get(1).is_some());
 
-            // Insert blob for slot 3, generate new forks, check result
+            // Insert shred for slot 3, generate new forks, check result
             let (shreds, _) = make_slot_entries(2, 0, 8);
             blocktree.insert_shreds(shreds, None, false).unwrap();
             assert!(bank_forks.get(2).is_none());
@@ -1208,7 +1208,7 @@ mod test {
         );
     }
 
-    // Given a blob and a fatal expected error, check that replaying that blob causes causes the fork to be
+    // Given a shred and a fatal expected error, check that replaying that shred causes causes the fork to be
     // marked as dead. Returns the error for caller to verify.
     fn check_dead_fork<F>(shred_to_insert: F) -> Result<()>
     where

@@ -1,4 +1,4 @@
-//! The `retransmit_stage` retransmits blobs between validators
+//! The `retransmit_stage` retransmits shreds between validators
 
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
@@ -143,11 +143,11 @@ fn retransmit(
 /// Service to retransmit messages from the leader or layer 1 to relevant peer nodes.
 /// See `cluster_info` for network layer definitions.
 /// # Arguments
-/// * `sock` - Socket to read from.  Read timeout is set to 1.
-/// * `exit` - Boolean to signal system exit.
+/// * `sockets` - Sockets to read from.
+/// * `bank_forks` - The BankForks structure
+/// * `leader_schedule_cache` - The leader schedule to verify shreds
 /// * `cluster_info` - This structure needs to be updated and populated by the bank and via gossip.
-/// * `recycler` - Blob recycler.
-/// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
+/// * `r` - Receive channel for shreds to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
     sockets: Arc<Vec<UdpSocket>>,
     bank_forks: Arc<RwLock<BankForks>>,

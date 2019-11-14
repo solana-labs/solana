@@ -790,7 +790,7 @@ impl Blocktree {
             );
             return false;
         }
-        // Check that we do not receive a blob with "last_index" true, but shred_index
+        // Check that we do not receive a shred with "last_index" true, but shred_index
         // less than our current received
         if last_in_slot && shred_index < slot_meta.received {
             datapoint_error!(
@@ -1430,7 +1430,7 @@ fn get_slot_meta_entry<'a>(
 ) -> &'a mut SlotMetaWorkingSetEntry {
     let meta_cf = db.column::<cf::SlotMeta>();
 
-    // Check if we've already inserted the slot metadata for this blob's slot
+    // Check if we've already inserted the slot metadata for this shred's slot
     slot_meta_working_set.entry(slot).or_insert_with(|| {
         // Store a 2-tuple of the metadata (working copy, backup copy)
         if let Some(mut meta) = meta_cf.get(slot).expect("Expect database get to succeed") {
@@ -1823,7 +1823,7 @@ pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: u64) -> bool
             return false;
         }
 
-        // Ignore blobs that chain to slots before the last root
+        // Ignore shreds that chain to slots before the last root
         if parent_slot < last_root {
             return false;
         }
@@ -3602,7 +3602,7 @@ pub mod tests {
                 ));
             }
 
-            // Trying to insert with set_index with num_coding that would imply the last blob
+            // Trying to insert with set_index with num_coding that would imply the last shred
             // has index > u32::MAX should fail
             {
                 let mut coding_shred = Shred::new_empty_from_header(
