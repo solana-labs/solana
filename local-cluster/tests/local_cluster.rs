@@ -202,7 +202,7 @@ fn test_network_partition_2_3() {
         ..ClusterConfig::default()
     };
     let now = timestamp();
-    let partition_start = now + 75_000;
+    let partition_start = now + 30_000;
     let partition_end = partition_start + 10_000;
     for i in 0..num_nodes / 2 {
         let mut p1 = Partition::default();
