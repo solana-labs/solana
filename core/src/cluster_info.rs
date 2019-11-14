@@ -67,7 +67,11 @@ pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 
 /// The maximum size of a protocol payload
-const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64;
+const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64 - MAX_PROTOCOL_HEADER_SIZE;
+/// The maximum size of a bloom filter
+const MAX_BLOOM_SIZE: usize = 1030;
+/// The largest protocol header size
+const MAX_PROTOCOL_HEADER_SIZE: u64 = 202;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -110,7 +114,7 @@ impl fmt::Debug for Locality {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct PruneData {
     /// Pubkey of the node that sent this prune data
     pub pubkey: Pubkey,
@@ -893,7 +897,7 @@ impl ClusterInfo {
                 return self
                     .gossip
                     .pull
-                    .build_crds_filters(&self.gossip.crds, Self::max_bloom_size())
+                    .build_crds_filters(&self.gossip.crds, MAX_BLOOM_SIZE)
                     .into_iter()
                     .for_each(|filter| {
                         pulls.push((entrypoint.id, filter, entrypoint.gossip, self_info.clone()))
@@ -909,8 +913,8 @@ impl ClusterInfo {
     fn split_gossip_messages(mut msgs: Vec<CrdsValue>) -> Vec<Vec<CrdsValue>> {
         let mut messages = vec![];
         while !msgs.is_empty() {
-            let mut size = 0;
             let mut payload = vec![];
+            let mut size = serialized_size(&payload).expect("Couldn't check size");
             while let Some(msg) = msgs.pop() {
                 let msg_size = msg.size();
                 if size + msg_size > MAX_PROTOCOL_PAYLOAD_SIZE as u64 {
@@ -932,24 +936,11 @@ impl ClusterInfo {
         messages
     }
 
-    // computes the maximum size for pull request blooms
-    pub fn max_bloom_size() -> usize {
-        let filter_size = serialized_size(&CrdsFilter::default())
-            .expect("unable to serialize default filter") as usize;
-        let protocol = Protocol::PullRequest(
-            CrdsFilter::default(),
-            CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default())),
-        );
-        let protocol_size =
-            serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
-        PACKET_DATA_SIZE - (protocol_size - filter_size)
-    }
-
     fn new_pull_requests(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
         let mut pulls: Vec<_> = self
             .gossip
-            .new_pull_request(now, stakes, Self::max_bloom_size())
+            .new_pull_request(now, stakes, MAX_BLOOM_SIZE)
             .ok()
             .into_iter()
             .filter_map(|(peer, filters, me)| {
@@ -2207,7 +2198,7 @@ mod tests {
 
         let (_, _, val) = cluster_info
             .gossip
-            .new_pull_request(timestamp(), &HashMap::new(), ClusterInfo::max_bloom_size())
+            .new_pull_request(timestamp(), &HashMap::new(), MAX_BLOOM_SIZE)
             .ok()
             .unwrap();
         assert!(val.verify());
@@ -2464,7 +2455,7 @@ mod tests {
         check_pull_request_size(CrdsFilter::new_rand(1000, 10));
         check_pull_request_size(CrdsFilter::new_rand(1000, 1000));
         check_pull_request_size(CrdsFilter::new_rand(100000, 1000));
-        check_pull_request_size(CrdsFilter::new_rand(100000, ClusterInfo::max_bloom_size()));
+        check_pull_request_size(CrdsFilter::new_rand(100000, MAX_BLOOM_SIZE));
     }
 
     fn check_pull_request_size(filter: CrdsFilter) {
@@ -2549,5 +2540,78 @@ mod tests {
         let pulls = cluster_info.new_pull_requests(&stakes);
         assert_eq!(1, pulls.len() as u64);
         assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
+    }
+
+    #[test]
+    fn test_max_bloom_size() {
+        assert_eq!(MAX_BLOOM_SIZE, max_bloom_size());
+    }
+
+    #[test]
+    fn test_protocol_size() {
+        let contact_info = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
+        let dummy_vec =
+            vec![CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default())); 10];
+        let dummy_vec_size = serialized_size(&dummy_vec).unwrap();
+        let mut max_protocol_size;
+
+        max_protocol_size =
+            serialized_size(&Protocol::PullRequest(CrdsFilter::default(), contact_info)).unwrap()
+                - serialized_size(&CrdsFilter::default()).unwrap();
+        max_protocol_size = max_protocol_size.max(
+            serialized_size(&Protocol::PullResponse(
+                Pubkey::default(),
+                dummy_vec.clone(),
+            ))
+            .unwrap()
+                - dummy_vec_size,
+        );
+        max_protocol_size = max_protocol_size.max(
+            serialized_size(&Protocol::PushMessage(Pubkey::default(), dummy_vec)).unwrap()
+                - dummy_vec_size,
+        );
+        max_protocol_size = max_protocol_size.max(
+            serialized_size(&Protocol::PruneMessage(
+                Pubkey::default(),
+                PruneData::default(),
+            ))
+            .unwrap()
+                - serialized_size(&PruneData::default()).unwrap(),
+        );
+
+        // make sure repairs are always smaller than the gossip messages
+        assert!(
+            max_protocol_size
+                > serialized_size(&Protocol::RequestWindowIndex(ContactInfo::default(), 0, 0))
+                    .unwrap()
+        );
+        assert!(
+            max_protocol_size
+                > serialized_size(&Protocol::RequestHighestWindowIndex(
+                    ContactInfo::default(),
+                    0,
+                    0
+                ))
+                .unwrap()
+        );
+        assert!(
+            max_protocol_size
+                > serialized_size(&Protocol::RequestOrphan(ContactInfo::default(), 0)).unwrap()
+        );
+        // finally assert the header size estimation is correct
+        assert_eq!(MAX_PROTOCOL_HEADER_SIZE, max_protocol_size);
+    }
+
+    // computes the maximum size for pull request blooms
+    fn max_bloom_size() -> usize {
+        let filter_size = serialized_size(&CrdsFilter::default())
+            .expect("unable to serialize default filter") as usize;
+        let protocol = Protocol::PullRequest(
+            CrdsFilter::default(),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default())),
+        );
+        let protocol_size =
+            serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
+        PACKET_DATA_SIZE - (protocol_size - filter_size)
     }
 }
