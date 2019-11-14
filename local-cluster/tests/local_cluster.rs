@@ -221,8 +221,12 @@ fn test_network_partition_2_3() {
         config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p2]));
     }
     let cluster = LocalCluster::new(&config);
-    let _ = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
+    info!("discovering cluster");
+    let (nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
+    info!("done discovering cluster: {}", nodes.len());
+    info!("sleeping until partition timeout");
     sleep(Duration::from_millis(partition_end - now));
+    info!("done sleeping until partition timeout");
     cluster_tests::spend_and_verify_all_nodes(
         &cluster.entry_point_info,
         &cluster.funding_keypair,
