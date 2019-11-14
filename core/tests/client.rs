@@ -22,6 +22,8 @@ fn test_rpc_client() {
         solana_clap_utils::version!()
     );
 
+    assert!(client.get_account(&bob_pubkey).is_err());
+
     assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 0);
 
     assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 1_000_000);
