@@ -127,3 +127,10 @@ export CARGO_TOOLCHAIN=+"$rust_stable"
   set -x
   ci/localnet-sanity.sh -x
 )
+
+echo --- ci/run-sanity.sh
+export CARGO_TOOLCHAIN=+"$rust_stable"
+(
+  set -x
+  ci/run-sanity.sh -x
+)

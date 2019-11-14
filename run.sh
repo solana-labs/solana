@@ -82,6 +82,7 @@ tar jcfS "$ledgerDir/genesis.tar.bz2" -C "$ledgerDir" genesis.bin rocksdb
 abort() {
   set +e
   kill "$drone" "$validator"
+  wait $validator
 }
 trap abort INT TERM EXIT
 
@@ -98,6 +99,8 @@ args=(
   --rpc-drone-address 127.0.0.1:9900
   --accounts "$dataDir"/accounts
   --log -
+  --enable-rpc-exit
+  --init-complete-file "$dataDir"/init-completed
 )
 if [[ -n $blockstreamSocket ]]; then
   args+=(--blockstream "$blockstreamSocket")
