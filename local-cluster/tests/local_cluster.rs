@@ -230,18 +230,24 @@ fn test_network_partition_2_3() {
     let (nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
     println!("PARTITION_TEST done discovering cluster: {}", nodes.len());
     let now = timestamp();
+    let timeout = partition_start as i64 - now as i64;
     println!(
         "PARTITION_TEST sleeping until partition start timeout {}",
-        partition_start - now
+        timeout
     );
-    sleep(Duration::from_millis(partition_start - now));
+    if timeout > 0 { 
+        sleep(Duration::from_millis(timeout as u64));
+    }
     println!("PARTITION_TEST done sleeping until partition start timeout");
     let now = timestamp();
+    let timeout = partition_end as i64 - now as i64;
     println!(
         "PARTITION_TEST sleeping until partition end timeout {}",
-        partition_end - now
+        timeout
     );
-    sleep(Duration::from_millis(partition_end - now));
+    if timeout > 0 { 
+        sleep(Duration::from_millis(timeout as u64));
+    }
     println!("PARTITION_TEST done sleeping until partition end timeout");
     println!("PARTITION_TEST spending on all ndoes");
     cluster_tests::spend_and_verify_all_nodes(
