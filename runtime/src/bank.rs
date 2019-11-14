@@ -822,10 +822,6 @@ impl Bank {
         txs: &'b [Transaction],
         iteration_order: Option<Vec<usize>>,
     ) -> TransactionBatch<'a, 'b> {
-        assert!(
-            !self.is_frozen(),
-            "prepare_batch() working on a frozen bank!"
-        );
         let results = self
             .rc
             .accounts
