@@ -65,11 +65,10 @@ pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
-
+/// The maximum size of a bloom filter
+pub const MAX_BLOOM_SIZE: usize = 1030;
 /// The maximum size of a protocol payload
 const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64 - MAX_PROTOCOL_HEADER_SIZE;
-/// The maximum size of a bloom filter
-const MAX_BLOOM_SIZE: usize = 1030;
 /// The largest protocol header size
 const MAX_PROTOCOL_HEADER_SIZE: u64 = 202;
 
