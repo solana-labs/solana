@@ -16,6 +16,7 @@ use crate::blockstream_service::BlockstreamService;
 use crate::cluster_info::ClusterInfo;
 use crate::confidence::ForkConfidenceCache;
 use crate::ledger_cleanup_service::LedgerCleanupService;
+use crate::partition_cfg::PartitionCfg;
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
@@ -79,6 +80,7 @@ impl Tvu {
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
+        cfg: Option<PartitionCfg>,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -124,6 +126,7 @@ impl Tvu {
             &exit,
             completed_slots_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
+            cfg,
         );
 
         let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
@@ -286,6 +289,7 @@ pub mod tests {
             &exit,
             completed_slots_receiver,
             fork_confidence_cache,
+            None,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
