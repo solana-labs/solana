@@ -13,9 +13,6 @@ edition = "2018"
 [badges]
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 
-[features]
-pin_gpu_memory = []
-
 [dependencies]
 bincode = "1.2.0"
 bs58 = "0.3.0"
