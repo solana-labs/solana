@@ -9,7 +9,7 @@ use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
-use solana_sdk::clock::{Epoch, Slot};
+use solana_sdk::clock::Slot;
 use solana_sdk::message::Message;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
@@ -515,16 +515,9 @@ impl Accounts {
         res: &[Result<()>],
         loaded: &mut [Result<TransactionLoadResult>],
         rent_collector: &RentCollector,
-        current_epoch: Epoch,
     ) {
-        let accounts_to_store = self.collect_accounts_to_store(
-            txs,
-            txs_iteration_order,
-            res,
-            loaded,
-            rent_collector,
-            current_epoch,
-        );
+        let accounts_to_store =
+            self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded, rent_collector);
         self.accounts_db.store(slot, &accounts_to_store);
     }
 
@@ -545,7 +538,6 @@ impl Accounts {
         res: &'a [Result<()>],
         loaded: &'a mut [Result<TransactionLoadResult>],
         rent_collector: &RentCollector,
-        current_epoch: Epoch,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, (raccs, tx)) in loaded
@@ -567,7 +559,7 @@ impl Accounts {
             {
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
-                        account.rent_epoch = current_epoch;
+                        account.rent_epoch = rent_collector.epoch;
                         *rent += rent_collector.update(account);
                     }
                     accounts.push((key, &*account));
@@ -1408,14 +1400,8 @@ mod tests {
                 },
             );
         }
-        let collected_accounts = accounts.collect_accounts_to_store(
-            &txs,
-            None,
-            &loaders,
-            &mut loaded,
-            &rent_collector,
-            0,
-        );
+        let collected_accounts =
+            accounts.collect_accounts_to_store(&txs, None, &loaders, &mut loaded, &rent_collector);
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()

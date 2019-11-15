@@ -1177,7 +1177,6 @@ impl Bank {
             executed,
             loaded_accounts,
             &self.rent_collector,
-            self.epoch,
         );
         self.collect_rent(txs, iteration_order, executed, loaded_accounts);
 
@@ -1918,12 +1917,12 @@ mod tests {
 
         genesis_block.rent = Rent {
             lamports_per_byte_year: 1,
-            exemption_threshold: 21.0,
+            exemption_threshold: 1000.0,
             burn_percent: 10,
         };
 
         let root_bank = Arc::new(Bank::new(&genesis_block));
-        let bank = Bank::new_from_parent(
+        let mut bank = Bank::new_from_parent(
             &root_bank,
             &Pubkey::default(),
             2 * (SECONDS_PER_YEAR
@@ -1932,19 +1931,20 @@ mod tests {
                 //  / ticks/slot
                 / genesis_block.ticks_per_slot as f64) as u64,
         );
+        bank.rent_collector.slots_per_year = 421_812.0;
 
         assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
         // Initialize credit-debit and credit only accounts
-        let account1 = Account::new(260, 1, &Pubkey::default());
-        let account2 = Account::new(260, 1, &Pubkey::default());
-        let account3 = Account::new(260, 1, &Pubkey::default());
-        let account4 = Account::new(260, 1, &Pubkey::default());
+        let account1 = Account::new(50270, 1, &Pubkey::default());
+        let account2 = Account::new(50270, 1, &Pubkey::default());
+        let account3 = Account::new(50270, 1, &Pubkey::default());
+        let account4 = Account::new(50270, 1, &Pubkey::default());
         let account5 = Account::new(10, 1, &Pubkey::default());
         let account6 = Account::new(10, 1, &Pubkey::default());
-        let account7 = Account::new(540, 1, &Pubkey::default());
+        let account7 = Account::new(100_560, 1, &Pubkey::default());
 
-        let account9 = Account::new(274, 1, &Pubkey::default());
+        let account9 = Account::new(50284, 1, &Pubkey::default());
         let account10 = Account::new(10, 1, &Pubkey::default());
 
         bank.store_account(&keypair1.pubkey(), &account1);
@@ -1971,8 +1971,12 @@ mod tests {
             system_transaction::transfer(&keypair3, &keypair4.pubkey(), 1, genesis_block.hash());
         let t3 =
             system_transaction::transfer(&keypair5, &keypair6.pubkey(), 1, genesis_block.hash());
-        let t4 =
-            system_transaction::transfer(&keypair7, &keypair8.pubkey(), 259, genesis_block.hash());
+        let t4 = system_transaction::transfer(
+            &keypair7,
+            &keypair8.pubkey(),
+            50269,
+            genesis_block.hash(),
+        );
         let t5 =
             system_transaction::transfer(&keypair9, &keypair10.pubkey(), 14, genesis_block.hash());
 
@@ -1995,48 +1999,52 @@ mod tests {
 
         let mut rent_collected = 0;
 
-        // 260 - 258(Rent) - 1(transfer)
+        // 50270 - 50268(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 1);
-        rent_collected += 258;
+        rent_collected += 50268;
 
-        // 260 - 258(Rent) + 1(transfer)
+        // 50270 - 50268(Rent) + 1(transfer)
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 3);
-        rent_collected += 258;
+        rent_collected += 50268;
 
-        // 260 - 258(Rent) - 1(transfer)
+        // 50270 - 50268(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
-        rent_collected += 258;
+        rent_collected += 50268;
 
-        // 260 - 258(Rent) + 1(transfer)
+        // 50270 - 50268(Rent) + 1(transfer)
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 3);
-        rent_collected += 258;
+        rent_collected += 50268;
 
         // No rent deducted
         assert_eq!(bank.get_balance(&keypair5.pubkey()), 10);
         assert_eq!(bank.get_balance(&keypair6.pubkey()), 10);
 
-        // 540 - 258(Rent) - 259(transfer)
+        // 100_560 - 50268(Rent) - 50269(transfer)
         assert_eq!(bank.get_balance(&keypair7.pubkey()), 23);
-        rent_collected += 258;
-        // 0 + 259(transfer) - 0(Rent)
-        assert_eq!(bank.get_balance(&keypair8.pubkey()), 259);
+        rent_collected += 50268;
+
+        // 0 + 50269(transfer) - 2(Rent)
+        assert_eq!(bank.get_balance(&keypair8.pubkey()), 50267);
         // Epoch should be updated
+        // Rent deducted on store side
         let account8 = bank.get_account(&keypair8.pubkey()).unwrap();
         // Epoch should be set correctly.
-        assert_eq!(account8.rent_epoch, bank.epoch);
+        assert_eq!(account8.rent_epoch, bank.epoch + 1);
+        rent_collected += 2;
 
-        // 274 - 258(Rent) - 14(Transfer)
+        // 50284 - 50268(Rent) - 14(Transfer)
         assert_eq!(bank.get_balance(&keypair9.pubkey()), 2);
-        rent_collected += 258;
+        rent_collected += 50268;
 
         let account10 = bank.get_account(&keypair10.pubkey()).unwrap();
         // Account was overwritten at load time, since it didn't have sufficient balance to pay rent
-        assert_eq!(account10.rent_epoch, bank.epoch);
+        // Then, at store time we deducted 2 rent for the current epoch, once it has balance
+        assert_eq!(account10.rent_epoch, bank.epoch + 1);
         // account data is blank now
         assert_eq!(account10.data.len(), 0);
-        // 10 - 10(Rent) + 14(Transfer)
-        assert_eq!(account10.lamports, 14);
-        rent_collected += 10;
+        // 10 - 10(Rent) + 14(Transfer) - 2(Rent)
+        assert_eq!(account10.lamports, 12);
+        rent_collected += 12;
 
         // Bank's collected rent should be sum of rent collected from all accounts
         assert_eq!(bank.collected_rent.load(Ordering::Relaxed), rent_collected);
