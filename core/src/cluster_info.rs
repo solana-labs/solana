@@ -273,7 +273,11 @@ impl ClusterInfo {
                 let ip_addr = node.gossip.ip();
                 format!(
                     "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5} | {:5}| {:5} | {:5}| {:5} | {:5}| {:5}\n",
-                    ip_addr.to_string(),
+                    if ContactInfo::is_valid_address(&node.gossip) {
+                        ip_addr.to_string()
+                    } else {
+                        "none".to_string()
+                    },
                     if node.id == my_pubkey { "me" } else { "" }.to_string(),
                     now.saturating_sub(last_updated),
                     node.id.to_string(),
