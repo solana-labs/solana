@@ -88,6 +88,10 @@ Operate a configured testnet
 
    --use-move                         - Build the move-loader-program and add it to the cluster
 
+   --operating-mode development|softlaunch
+                                      - Specify whether or not to launch the cluster in "development" mode with all features enabled at epoch 0,
+                                        or "softlaunch" mode with some features disabled at epoch 0 (default: development)
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -169,6 +173,17 @@ while [[ -n $1 ]]; do
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --lamports ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    elif [[ $1 = --operating-mode ]]; then
+      case "$2" in
+        development|softlaunch)
+          ;;
+        *)
+          echo "Unexpected operating mode: \"$2\""
+          exit 1
+          ;;
+      esac
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --no-snapshot-fetch ]]; then
@@ -845,7 +860,6 @@ deploy() {
   echo "Network start logs in $netLogDir"
 }
 
-
 stopNode() {
   local ipAddress=$1
   local block=$2
@@ -916,7 +930,6 @@ stop() {
   $metricsWriteDatapoint "testnet-deploy net-stop-complete=1"
   echo "Stopping nodes took $SECONDS seconds"
 }
-
 
 checkPremptibleInstances() {
   # The validatorIpList nodes may be preemptible instances that can disappear at

@@ -34,7 +34,7 @@ default_arg --bootstrap-storage-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-leader/sto
 default_arg --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader
 default_arg --mint "$SOLANA_CONFIG_DIR"/mint-keypair.json
 default_arg --hashes-per-tick auto
-default_arg --dev
+default_arg --operating-mode development
 $solana_genesis "${args[@]}"
 
 (
