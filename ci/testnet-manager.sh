@@ -546,7 +546,7 @@ deploy() {
         ${maybeInternalNodesLamports} \
         ${maybeExternalAccountsFile} \
         ${maybeLamports} \
-        --target-lamports-per-signature 1 \
+        --target-lamports-per-signature 0 \
         --slots-per-epoch 4096 \
         ${maybeAdditionalDisk}
     )
