@@ -12,7 +12,7 @@ use solana_core::{
 use solana_ledger::create_new_tmp_ledger;
 use solana_sdk::{
     client::SyncClient,
-    clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
+    clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
     commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     genesis_config::{GenesisConfig, OperatingMode},
@@ -88,9 +88,9 @@ impl Default for ClusterConfig {
             node_stakes: vec![],
             cluster_lamports: 0,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
-            slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
+            slots_per_epoch: DEFAULT_DEV_SLOTS_PER_EPOCH,
             slots_per_segment: DEFAULT_SLOTS_PER_SEGMENT,
-            stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
+            stakers_slot_offset: DEFAULT_DEV_SLOTS_PER_EPOCH,
             native_instruction_processors: vec![],
             operating_mode: OperatingMode::Development,
             poh_config: PohConfig::default(),

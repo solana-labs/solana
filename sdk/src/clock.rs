@@ -8,8 +8,19 @@ pub const DEFAULT_TICKS_PER_SECOND: u64 = 160;
 // every 400 ms. A fast voting cadence ensures faster finality and convergence
 pub const DEFAULT_TICKS_PER_SLOT: u64 = 64;
 
-// 1 Epoch = 400 * 8192 ms ~= 55 minutes
-pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 8192;
+// GCP n1-standard hardware and also a xeon e5-2520 v4 are about this rate of hashes/s
+pub const DEFAULT_HASHES_PER_SECOND: u64 = 2_000_000;
+
+// 1 Dev Epoch = 400 ms * 8192 ~= 55 minutes
+pub const DEFAULT_DEV_SLOTS_PER_EPOCH: u64 = 8192;
+
+pub const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+pub const SECONDS_PER_WEEK: u64 = 7 * SECONDS_PER_DAY;
+pub const SECONDS_PER_FORTNIGHT: u64 = 2 * SECONDS_PER_WEEK;
+pub const TICKS_PER_FORTNIGHT: u64 = DEFAULT_TICKS_PER_SECOND * SECONDS_PER_FORTNIGHT;
+
+// 1 Epoch ~= 2 weeks
+pub const DEFAULT_SLOTS_PER_EPOCH: u64 = TICKS_PER_FORTNIGHT / DEFAULT_TICKS_PER_SLOT;
 
 // Storage segment configuration
 pub const DEFAULT_SLOTS_PER_SEGMENT: u64 = 1024;
