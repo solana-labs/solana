@@ -6,6 +6,7 @@ use crate::{
     confidence::ForkConfidenceCache,
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
+    partition_cfg::PartitionCfg,
     poh_recorder::PohRecorder,
     poh_service::PohService,
     rpc::JsonRpcConfig,
@@ -59,6 +60,7 @@ pub struct ValidatorConfig {
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
+    pub partition_cfg: Option<PartitionCfg>,
 }
 
 impl Default for ValidatorConfig {
@@ -75,6 +77,7 @@ impl Default for ValidatorConfig {
             rpc_config: JsonRpcConfig::default(),
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
+            partition_cfg: None,
         }
     }
 }
@@ -340,6 +343,7 @@ impl Validator {
             &exit,
             completed_slots_receiver,
             fork_confidence_cache,
+            config.partition_cfg.clone(),
         );
 
         if config.dev_sigverify_disabled {
