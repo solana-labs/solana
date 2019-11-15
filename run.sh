@@ -59,12 +59,12 @@ if [[ -e $leader_stake_account_keypair ]]; then
 else
   solana-keygen new -o "$leader_stake_account_keypair"
 fi
-solana-keygen new -f -o "$dataDir"/drone-keypair.json
+solana-keygen new -f -o "$dataDir"/faucet-keypair.json
 solana-keygen new -f -o "$dataDir"/leader-storage-account-keypair.json
 
 solana-genesis \
   --hashes-per-tick sleep \
-  --mint "$dataDir"/drone-keypair.json \
+  --faucet-keypair "$dataDir"/faucet-keypair.json \
   --bootstrap-leader-pubkey "$dataDir"/leader-keypair.json \
   --bootstrap-vote-pubkey "$dataDir"/leader-vote-account-keypair.json \
   --bootstrap-stake-pubkey "$dataDir"/leader-stake-account-keypair.json \
@@ -78,7 +78,7 @@ abort() {
 }
 trap abort INT TERM EXIT
 
-solana-drone --keypair "$dataDir"/drone-keypair.json &
+solana-drone --keypair "$dataDir"/faucet-keypair.json &
 drone=$!
 
 args=(

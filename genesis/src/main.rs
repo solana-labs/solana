@@ -134,22 +134,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Use directory as persistent ledger location"),
         )
         .arg(
-            Arg::with_name("mint_lamports")
+            Arg::with_name("faucet_lamports")
                 .short("t")
-                .long("mint-lamports")
+                .long("faucet-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
-                .requires("mint_pubkey_file")
-                .help("Number of lamports to assign to the mint"),
+                .requires("faucet_pubkey_file")
+                .help("Number of lamports to assign to the faucet"),
         )
         .arg(
-            Arg::with_name("mint_pubkey_file")
+            Arg::with_name("faucet_pubkey_file")
                 .short("m")
-                .long("mint-pubkey")
+                .long("faucet-pubkey")
                 .value_name("MINT")
                 .takes_value(true)
-                .requires("mint_lamports")
-                .help("Path to file containing the mint's pubkey"),
+                .requires("faucet_lamports")
+                .help("Path to file containing the faucet's pubkey"),
         )
         .arg(
             Arg::with_name("bootstrap_vote_pubkey_file")
@@ -312,8 +312,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_vote_pubkey_file = matches.value_of("bootstrap_vote_pubkey_file").unwrap();
     let bootstrap_stake_pubkey_file = matches.value_of("bootstrap_stake_pubkey_file").unwrap();
     let bootstrap_storage_pubkey_file = matches.value_of("bootstrap_storage_pubkey_file").unwrap();
-    let mint_pubkey_file = matches.value_of("mint_pubkey_file");
-    let mint_lamports = value_t!(matches, "mint_lamports", u64);
+    let faucet_pubkey_file = matches.value_of("faucet_pubkey_file");
+    let faucet_lamports = value_t!(matches, "faucet_lamports", u64);
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
     let bootstrap_leader_stake_lamports =
@@ -357,11 +357,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ),
     ];
 
-    if let Some(mint_pubkey_file) = mint_pubkey_file {
-        let mint_pubkey = pubkey_from_file(mint_pubkey_file)?;
+    if let Some(faucet_pubkey_file) = faucet_pubkey_file {
+        let faucet_pubkey = pubkey_from_file(faucet_pubkey_file)?;
         accounts.append(&mut create_genesis_accounts(
-            &mint_pubkey,
-            mint_lamports.unwrap(),
+            &faucet_pubkey,
+            faucet_lamports.unwrap(),
         ));
     }
 

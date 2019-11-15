@@ -230,7 +230,7 @@ EOF
       args+=($genesisOptions)
 
       if [[ -f net/keypairs/mint.json ]]; then
-        export MINT_KEYPAIR=net/keypairs/mint.json
+        export FAUCET_KEYPAIR=net/keypairs/mint.json
       fi
       if [[ -f net/keypairs/bootstrap-leader-identity.json ]]; then
         export BOOTSTRAP_LEADER_IDENTITY_KEYPAIR=net/keypairs/bootstrap-leader-identity.json
@@ -312,13 +312,13 @@ EOF
     set -x
     # Add the mint keypair to validators for convenient access from tools
     # like bench-tps and add to blocktreamers to run a drone
-    scp "$entrypointIp":~/solana/config/mint-keypair.json config/
+    scp "$entrypointIp":~/solana/config/faucet-keypair.json config/
     if [[ $nodeType = blockstreamer ]]; then
       # Run another drone with the mint keypair on the blockstreamer node.
       # Typically the blockstreamer node has a static IP/DNS name for hosting
       # the blockexplorer web app, and is a location that somebody would expect
       # to be able to airdrop from
-      scp "$entrypointIp":~/solana/config/mint-keypair.json config/
+      scp "$entrypointIp":~/solana/config/faucet-keypair.json config/
       if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
         multinode-demo/drone.sh > drone.log 2>&1 &
