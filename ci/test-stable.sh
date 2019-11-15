@@ -122,15 +122,13 @@ test-local-cluster)
 esac
 
 echo --- ci/localnet-sanity.sh
-export CARGO_TOOLCHAIN=+"$rust_stable"
 (
   set -x
-  ci/localnet-sanity.sh -x
+  CARGO_TOOLCHAIN=+"$rust_stable" ci/localnet-sanity.sh -x
 )
 
 echo --- ci/run-sanity.sh
-export CARGO_TOOLCHAIN=+"$rust_stable"
 (
   set -x
-  ci/run-sanity.sh -x
+  CARGO_TOOLCHAIN=+"$rust_stable" ci/run-sanity.sh -x
 )
