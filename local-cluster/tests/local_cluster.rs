@@ -257,20 +257,20 @@ fn run_network_partition(partitions: &[usize]) {
 
 #[test]
 #[serial]
-fn test_network_partition_2_3() {
-    run_network_partition(&[2, 3])
+fn test_network_partition_1_2() {
+    run_network_partition(&[1, 2])
 }
 
 #[test]
 #[serial]
-fn test_network_partition_2_2() {
-    run_network_partition(&[2, 2])
+fn test_network_partition_1_1() {
+    run_network_partition(&[1, 1])
 }
 
 #[test]
 #[serial]
-fn test_network_partition_3_3_3() {
-    run_network_partition(&[3, 3, 3])
+fn test_network_partition_1_1_1() {
+    run_network_partition(&[1, 1, 1])
 }
 
 #[test]
