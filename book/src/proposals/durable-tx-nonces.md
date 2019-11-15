@@ -38,31 +38,27 @@ TODO: svgbob this into a flowchart
 Start
 Create Account
   state = Uninitialized
-InitializeInstruction()
-  if !sysvar.recent_blockhashes.is_empty()
-    stored_hash = sysvar.recent_blockhashes[0]
-    state = Initialized
-    success
-  else
-    error
 NonceInstruction
-  if !sysvar.recent_blockhashes.is_empty()
-    stored_hash = sysvar.recent_blockhashes[0]
-    success
-  else
-    error
+  if state == Uninitialized
+    if account.balance < rent_exempt
+      error InsufficientFunds
+    state = Initialized
+  elif state != Initialized
+    error BadState
+  if sysvar.recent_blockhashes.is_empty()
+    error EmptyRecentBlockhashes
+  stored_hash = sysvar.recent_blockhashes[0]
+  success
 ```
 
 A client wishing to use this feature starts by creating a nonce account and
 depositing sufficient lamports as to make it rent-exempt. The resultant account
 will be in the `Uninitialized` state with no stored hash and thus unusable.
 
-To begin using the account an `Initialize` instruction is executed on it,
-advancing its state to `Initialized` and storing a durable nonce, chosen by the
-contract from the `recent_blockhashes` sysvar, in the data field.
-
 The `Nonce` instruction is used to request that a new nonce be stored for the
-calling account.
+calling account. The first `Nonce` instruction run on a newly created account
+will drive the account's state to `Initialized`. As such, a `Nonce` instruction
+MUST be issued before the account can be used.
 
 To discard a nonce account, the client should include a `Nonce` instruction in
 a transaction which withdraws all lamports, leaving a zero balance and making
