@@ -3,7 +3,7 @@
 mod genesis_accounts;
 
 use crate::genesis_accounts::create_genesis_accounts;
-use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use solana_genesis::Base64Account;
 use solana_ledger::blocktree::create_new_ledger;
 use solana_ledger::poh::compute_hashes_per_tick;
@@ -88,7 +88,6 @@ pub fn add_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> i
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_bootstrap_leader_lamports = &sol_to_lamports(500.0).to_string();
     let default_bootstrap_leader_stake_lamports = &sol_to_lamports(0.5).to_string();
-    let default_lamports = &sol_to_lamports(500_000_000.0).to_string();
     let default_target_lamports_per_signature = &FeeCalculator::default()
         .target_lamports_per_signature
         .to_string();
@@ -135,23 +134,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Use directory as persistent ledger location"),
         )
         .arg(
-            Arg::with_name("lamports")
+            Arg::with_name("faucet_lamports")
                 .short("t")
-                .long("lamports")
+                .long("faucet-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
-                .default_value(default_lamports)
-                .required(true)
-                .help("Number of lamports to create in the mint"),
+                .requires("faucet_pubkey_file")
+                .help("Number of lamports to assign to the faucet"),
         )
         .arg(
-            Arg::with_name("mint_pubkey_file")
+            Arg::with_name("faucet_pubkey_file")
                 .short("m")
-                .long("mint")
-                .value_name("MINT")
+                .long("faucet-pubkey")
+                .value_name("PUBKEY")
                 .takes_value(true)
-                .required(true)
-                .help("Path to file containing keys of the mint"),
+                .requires("faucet_lamports")
+                .help("Path to file containing the faucet's pubkey"),
         )
         .arg(
             Arg::with_name("bootstrap_vote_pubkey_file")
@@ -314,9 +312,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_vote_pubkey_file = matches.value_of("bootstrap_vote_pubkey_file").unwrap();
     let bootstrap_stake_pubkey_file = matches.value_of("bootstrap_stake_pubkey_file").unwrap();
     let bootstrap_storage_pubkey_file = matches.value_of("bootstrap_storage_pubkey_file").unwrap();
-    let mint_pubkey_file = matches.value_of("mint_pubkey_file").unwrap();
+    let faucet_pubkey_file = matches.value_of("faucet_pubkey_file");
+    let faucet_lamports = value_t!(matches, "faucet_lamports", u64);
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
-    let lamports = value_t_or_exit!(matches, "lamports", u64);
     let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
     let bootstrap_leader_stake_lamports =
         value_t_or_exit!(matches, "bootstrap_leader_stake_lamports", u64);
@@ -325,7 +323,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_vote_pubkey = pubkey_from_file(bootstrap_vote_pubkey_file)?;
     let bootstrap_stake_pubkey = pubkey_from_file(bootstrap_stake_pubkey_file)?;
     let bootstrap_storage_pubkey = pubkey_from_file(bootstrap_storage_pubkey_file)?;
-    let mint_pubkey = pubkey_from_file(mint_pubkey_file)?;
 
     let bootstrap_leader_vote_account =
         vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
@@ -359,7 +356,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             storage_contract::create_validator_storage_account(bootstrap_leader_pubkey, 1),
         ),
     ];
-    accounts.append(&mut create_genesis_accounts(&mint_pubkey, lamports));
+
+    if let Some(faucet_pubkey_file) = faucet_pubkey_file {
+        accounts.append(&mut vec![(
+            pubkey_from_file(faucet_pubkey_file)?,
+            Account::new(faucet_lamports.unwrap(), 0, &system_program::id()),
+        )]);
+    }
+    accounts.append(&mut create_genesis_accounts());
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
     let slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);

@@ -506,14 +506,6 @@ deploy() {
         maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
       fi
 
-      if [[ -z $LAMPORTS ]]; then
-        maybeLamports="--lamports 500000000000000000"
-      elif [[ $LAMPORTS == skip ]]; then
-        maybeLamports=""
-      else
-        maybeLamports="--lamports ${LAMPORTS}"
-      fi
-
       if [[ -z $ADDITIONAL_DISK_SIZE_GB ]]; then
         maybeAdditionalDisk="--validator-additional-disk-size-gb 32000"
       elif [[ $ADDITIONAL_DISK_SIZE_GB == skip ]]; then
@@ -521,7 +513,6 @@ deploy() {
       else
         maybeAdditionalDisk="--validator-additional-disk-size-gb ${ADDITIONAL_DISK_SIZE_GB}"
       fi
-
 
       # Multiple V100 GPUs are available in us-west1, us-central1 and europe-west4
       # shellcheck disable=SC2068
@@ -545,7 +536,6 @@ deploy() {
         ${maybeInternalNodesStakeLamports} \
         ${maybeInternalNodesLamports} \
         ${maybeExternalAccountsFile} \
-        ${maybeLamports} \
         --target-lamports-per-signature 1 \
         --slots-per-epoch 4096 \
         ${maybeAdditionalDisk}

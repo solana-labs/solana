@@ -44,16 +44,16 @@ pub struct GenesisConfig {
 
 // useful for basic tests
 pub fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
-    let mint_keypair = Keypair::new();
+    let faucet_keypair = Keypair::new();
     (
         GenesisConfig::new(
             &[(
-                mint_keypair.pubkey(),
+                faucet_keypair.pubkey(),
                 Account::new(lamports, 0, &system_program::id()),
             )],
             &[solana_system_program()],
         ),
-        mint_keypair,
+        faucet_keypair,
     )
 }
 
@@ -180,19 +180,21 @@ mod tests {
 
     #[test]
     fn test_genesis_config() {
-        let mint_keypair = Keypair::new();
+        let faucet_keypair = Keypair::new();
         let mut config = GenesisConfig::default();
         config.add_account(
-            mint_keypair.pubkey(),
+            faucet_keypair.pubkey(),
             Account::new(10_000, 0, &Pubkey::default()),
         );
         config.add_account(Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default()));
         config.add_native_instruction_processor("hi".to_string(), Pubkey::new_rand());
 
         assert_eq!(config.accounts.len(), 2);
-        assert!(config.accounts.iter().any(
-            |(pubkey, account)| *pubkey == mint_keypair.pubkey() && account.lamports == 10_000
-        ));
+        assert!(config
+            .accounts
+            .iter()
+            .any(|(pubkey, account)| *pubkey == faucet_keypair.pubkey()
+                && account.lamports == 10_000));
 
         let path = &make_tmp_path("genesis_config");
         config.write(&path).expect("write");

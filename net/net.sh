@@ -61,7 +61,7 @@ Operate a configured testnet
                                       - Override the default --hashes-per-tick for the cluster
    --no-airdrop
                                       - If set, disables airdrops.  Nodes must be funded in genesis config when airdrops are disabled.
-   --lamports NUM_LAMPORTS_TO_MINT
+   --faucet-lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 500000000000000000 lamports minted in genesis
    --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE
                                       - Amount to stake internal nodes.
@@ -172,7 +172,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --target-lamports-per-signature ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
-    elif [[ $1 = --lamports ]]; then
+    elif [[ $1 = --faucet-lamports ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --operating-mode ]]; then

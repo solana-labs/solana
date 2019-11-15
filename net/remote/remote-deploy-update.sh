@@ -36,5 +36,5 @@ PATH="$HOME"/.cargo/bin:"$PATH"
 
 set -x
 scripts/solana-install-deploy.sh \
-  --keypair config/mint-keypair.json \
+  --keypair config/faucet-keypair.json \
   localhost "$releaseChannel" "$updatePlatform"
