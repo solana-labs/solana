@@ -1903,12 +1903,18 @@ mod tests {
         let keypair4 = Keypair::new();
 
         // Transaction between these two keypairs will fail
+        // So, no rent will be charged
         let keypair5 = Keypair::new();
         let keypair6 = Keypair::new();
 
         // This will create a new account using transfer instruction
         let keypair7 = Keypair::new();
         let keypair8 = Keypair::new();
+
+        // Insufficient lamports keypair10 have, so account gets overwritten and
+        // lamports are claimed
+        let keypair9 = Keypair::new();
+        let keypair10 = Keypair::new();
 
         genesis_block.rent = Rent {
             lamports_per_byte_year: 1,
@@ -1938,6 +1944,9 @@ mod tests {
         let account6 = Account::new(10, 1, &Pubkey::default());
         let account7 = Account::new(540, 1, &Pubkey::default());
 
+        let account9 = Account::new(274, 1, &Pubkey::default());
+        let account10 = Account::new(10, 1, &Pubkey::default());
+
         bank.store_account(&keypair1.pubkey(), &account1);
         bank.store_account(&keypair2.pubkey(), &account2);
         bank.store_account(&keypair3.pubkey(), &account3);
@@ -1945,6 +1954,9 @@ mod tests {
         bank.store_account(&keypair5.pubkey(), &account5);
         bank.store_account(&keypair6.pubkey(), &account6);
         bank.store_account(&keypair7.pubkey(), &account7);
+
+        bank.store_account(&keypair9.pubkey(), &account9);
+        bank.store_account(&keypair10.pubkey(), &account10);
 
         // Make native instruction loader rent exempt
         let system_program_id = solana_system_program().1;
@@ -1961,20 +1973,29 @@ mod tests {
             system_transaction::transfer(&keypair5, &keypair6.pubkey(), 1, genesis_block.hash());
         let t4 =
             system_transaction::transfer(&keypair7, &keypair8.pubkey(), 259, genesis_block.hash());
+        let t5 =
+            system_transaction::transfer(&keypair9, &keypair10.pubkey(), 14, genesis_block.hash());
 
-        let res = bank.process_transactions(&vec![t4.clone(), t1.clone(), t2.clone(), t3.clone()]);
+        let res = bank.process_transactions(&[
+            t5.clone(),
+            t1.clone(),
+            t2.clone(),
+            t3.clone(),
+            t4.clone(),
+        ]);
 
-        assert_eq!(res.len(), 4);
+        assert_eq!(res.len(), 5);
         assert_eq!(res[0], Ok(()));
         assert_eq!(res[1], Ok(()));
         assert_eq!(res[2], Ok(()));
         assert_eq!(res[3], Err(TransactionError::AccountNotFound));
+        assert_eq!(res[4], Ok(()));
 
         bank.freeze();
 
         let mut rent_collected = 0;
 
-        // 260 - 258(Rent) - 1 (transfer)
+        // 260 - 258(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 1);
         rent_collected += 258;
 
@@ -1982,7 +2003,7 @@ mod tests {
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 3);
         rent_collected += 258;
 
-        // 260 - 258(Rent) - 1 (transfer)
+        // 260 - 258(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         rent_collected += 258;
 
@@ -1997,12 +2018,25 @@ mod tests {
         // 540 - 258(Rent) - 259(transfer)
         assert_eq!(bank.get_balance(&keypair7.pubkey()), 23);
         rent_collected += 258;
-        // 0 + 259(transfer) - 0 (Rent)
+        // 0 + 259(transfer) - 0(Rent)
         assert_eq!(bank.get_balance(&keypair8.pubkey()), 259);
         // Epoch should be updated
         let account8 = bank.get_account(&keypair8.pubkey()).unwrap();
         // Epoch should be set correctly.
-        assert_eq!(bank.epoch, account8.rent_epoch);
+        assert_eq!(account8.rent_epoch, bank.epoch);
+
+        // 274 - 258(Rent) - 14(Transfer)
+        assert_eq!(bank.get_balance(&keypair9.pubkey()), 2);
+        rent_collected += 258;
+
+        let account10 = bank.get_account(&keypair10.pubkey()).unwrap();
+        // Account was overwritten at load time, since it didn't have sufficient balance to pay rent
+        assert_eq!(account10.rent_epoch, bank.epoch);
+        // account data is blank now
+        assert_eq!(account10.data.len(), 0);
+        // 10 - 10(Rent) + 14(Transfer)
+        assert_eq!(account10.lamports, 14);
+        rent_collected += 10;
 
         // Bank's collected rent should be sum of rent collected from all accounts
         assert_eq!(bank.collected_rent.load(Ordering::Relaxed), rent_collected);
