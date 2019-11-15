@@ -42,6 +42,8 @@ use std::{
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 
+type VoteAndPoHBank = (Option<(Arc<Bank>, u64)>, Option<Arc<Bank>>);
+
 // Implement a destructor for the ReplayStage thread to signal it exited
 // even on panics
 struct Finalizer {
@@ -74,6 +76,20 @@ struct ReplaySlotStats {
     entry_verification_elapsed: u64,
     replay_elapsed: u64,
     replay_start: Instant,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ForkStats {
+    weight: u128,
+    total_staked: u64,
+    slot: Slot,
+    block_height: u64,
+    has_voted: bool,
+    is_recent: bool,
+    vote_threshold: bool,
+    is_locked_out: bool,
+    stake_lockouts: HashMap<u64, StakeLockout>,
+    computed: bool,
 }
 
 impl ReplaySlotStats {
@@ -123,6 +139,7 @@ struct ForkProgress {
     started_ms: u64,
     is_dead: bool,
     stats: ReplaySlotStats,
+    fork_stats: ForkStats,
 }
 
 impl ForkProgress {
@@ -135,6 +152,7 @@ impl ForkProgress {
             started_ms: timing::timestamp(),
             is_dead: false,
             stats: ReplaySlotStats::new(slot),
+            fork_stats: ForkStats::default(),
         }
     }
 }
@@ -186,7 +204,8 @@ impl ReplayStage {
                 let _exit = Finalizer::new(exit_.clone());
                 let mut progress = HashMap::new();
                 let mut current_leader = None;
-
+                let mut last_reset = Hash::default();
+                let mut partition = false;
                 loop {
                     let now = Instant::now();
                     // Stop getting entries if we get exit signal
@@ -211,51 +230,68 @@ impl ReplayStage {
                     );
 
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
-                    let votable = Self::generate_votable_banks(
-                        &ancestors,
-                        &bank_forks,
-                        &tower,
-                        &mut progress,
-                    );
-
-                    if let Some((_, bank, _, total_staked)) = votable.into_iter().last() {
-                        subscriptions.notify_subscribers(bank.slot(), &bank_forks);
-
-                        if let Some(votable_leader) =
-                            leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
-                        {
-                            Self::log_leader_change(
-                                &my_pubkey,
-                                bank.slot(),
-                                &mut current_leader,
-                                &votable_leader,
-                            );
+                    loop {
+                        let (vote_bank, heaviest) =
+                            Self::select_fork(&ancestors, &bank_forks, &tower, &mut progress);
+                        let done = vote_bank.is_none();
+                        let mut vote_bank_slot = 0;
+                        let reset_bank = vote_bank.as_ref().map(|b| b.0.clone()).or(heaviest);
+                        if let Some((bank, total_staked)) = vote_bank {
+                            info!("voting: {}", bank.slot());
+                            subscriptions.notify_subscribers(bank.slot(), &bank_forks);
+                            if let Some(votable_leader) =
+                                leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
+                            {
+                                Self::log_leader_change(
+                                    &my_pubkey,
+                                    bank.slot(),
+                                    &mut current_leader,
+                                    &votable_leader,
+                                );
+                            }
+                            vote_bank_slot = bank.slot();
+                            Self::handle_votable_bank(
+                                &bank,
+                                &bank_forks,
+                                &mut tower,
+                                &mut progress,
+                                &vote_account,
+                                &voting_keypair,
+                                &cluster_info,
+                                &blocktree,
+                                &leader_schedule_cache,
+                                &root_bank_sender,
+                                total_staked,
+                                &lockouts_sender,
+                                &snapshot_package_sender,
+                            )?;
                         }
-
-                        Self::handle_votable_bank(
-                            &bank,
-                            &bank_forks,
-                            &mut tower,
-                            &mut progress,
-                            &vote_account,
-                            &voting_keypair,
-                            &cluster_info,
-                            &blocktree,
-                            &leader_schedule_cache,
-                            &root_bank_sender,
-                            total_staked,
-                            &lockouts_sender,
-                            &snapshot_package_sender,
-                        )?;
-
-                        Self::reset_poh_recorder(
-                            &my_pubkey,
-                            &blocktree,
-                            &bank,
-                            &poh_recorder,
-                            &leader_schedule_cache,
-                        );
-                        tpu_has_bank = false;
+                        if let Some(bank) = reset_bank {
+                            if last_reset != bank.last_blockhash() {
+                                Self::reset_poh_recorder(
+                                    &my_pubkey,
+                                    &blocktree,
+                                    &bank,
+                                    &poh_recorder,
+                                    &leader_schedule_cache,
+                                );
+                                last_reset = bank.last_blockhash();
+                                tpu_has_bank = false;
+                                info!("vote bank: {} reset bank: {}", vote_bank_slot, bank.slot());
+                                if !partition && vote_bank_slot != bank.slot() {
+                                    warn!("PARTITION DETECTED waiting to join fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
+                                    inc_new_counter_info!("replay_stage-partition_detected", 1);
+                                    partition = true;
+                                } else if partition && vote_bank_slot == bank.slot() {
+                                    warn!("PARTITION resolved fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
+                                    partition = false;
+                                    inc_new_counter_info!("replay_stage-partition_resolved", 1);
+                                }
+                            }
+                        }
+                        if done {
+                            break;
+                        }
                     }
 
                     if !tpu_has_bank {
@@ -277,7 +313,7 @@ impl ReplayStage {
                     }
 
                     inc_new_counter_info!(
-                        "replicate_stage-duration",
+                        "replay_stage-duration",
                         duration_as_ms(&now.elapsed()) as usize
                     );
                     if did_complete_bank {
@@ -582,7 +618,7 @@ impl ReplayStage {
         };
 
         info!(
-            "{} voted and reset PoH to tick {} (within slot {}). {}",
+            "{} reset PoH to tick {} (within slot {}). {}",
             my_pubkey,
             bank.tick_height(),
             bank.slot(),
@@ -643,72 +679,145 @@ impl ReplayStage {
         did_complete_bank
     }
 
-    #[allow(clippy::type_complexity)]
-    fn generate_votable_banks(
+    fn select_fork(
         ancestors: &HashMap<u64, HashSet<u64>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         tower: &Tower,
         progress: &mut HashMap<u64, ForkProgress>,
-    ) -> Vec<(u128, Arc<Bank>, HashMap<u64, StakeLockout>, u64)> {
+    ) -> VoteAndPoHBank {
         let tower_start = Instant::now();
-        let frozen_banks = bank_forks.read().unwrap().frozen_banks();
-        trace!("frozen_banks {}", frozen_banks.len());
-        let mut votable: Vec<(u128, Arc<Bank>, HashMap<u64, StakeLockout>, u64)> = frozen_banks
+        let mut frozen_banks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
             .values()
-            .filter(|b| {
-                let has_voted = tower.has_voted(b.slot());
-                trace!("bank has_voted: {} {}", b.slot(), has_voted);
-                !has_voted
-            })
-            .filter(|b| {
-                let is_locked_out = tower.is_locked_out(b.slot(), &ancestors);
-                trace!("bank is is_locked_out: {} {}", b.slot(), is_locked_out);
-                !is_locked_out
-            })
+            .cloned()
+            .collect();
+        frozen_banks.sort_by_key(|bank| bank.slot());
+
+        trace!("frozen_banks {}", frozen_banks.len());
+        let stats: Vec<ForkStats> = frozen_banks
+            .iter()
             .map(|bank| {
-                (
-                    bank,
-                    tower.collect_vote_lockouts(
+                let mut stats = progress
+                    .get(&bank.slot())
+                    .map(|s| s.fork_stats.clone())
+                    .unwrap_or_default();
+                if !stats.computed {
+                    stats.slot = bank.slot();
+                    let (stake_lockouts, total_staked) = tower.collect_vote_lockouts(
                         bank.slot(),
                         bank.vote_accounts().into_iter(),
                         &ancestors,
-                    ),
-                )
-            })
-            .filter(|(b, (stake_lockouts, total_staked))| {
-                let vote_threshold =
-                    tower.check_vote_stake_threshold(b.slot(), &stake_lockouts, *total_staked);
-                Self::confirm_forks(tower, &stake_lockouts, *total_staked, progress, bank_forks);
-                debug!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
-                vote_threshold
-            })
-            .map(|(b, (stake_lockouts, total_staked))| {
-                (
-                    tower.calculate_weight(&stake_lockouts),
-                    b.clone(),
-                    stake_lockouts,
-                    total_staked,
-                )
+                    );
+                    Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
+                    stats.total_staked = total_staked;
+                    stats.weight = tower.calculate_weight(&stake_lockouts);
+                    stats.stake_lockouts = stake_lockouts;
+                    stats.block_height = bank.block_height();
+                    stats.computed = true;
+                }
+                stats.vote_threshold = tower.check_vote_stake_threshold(
+                    bank.slot(),
+                    &stats.stake_lockouts,
+                    stats.total_staked,
+                );
+                stats.is_locked_out = tower.is_locked_out(bank.slot(), &ancestors);
+                stats.has_voted = tower.has_voted(bank.slot());
+                stats.is_recent = tower.is_recent(bank.slot());
+                if let Some(fp) = progress.get_mut(&bank.slot()) {
+                    fp.fork_stats = stats.clone();
+                }
+                stats
             })
             .collect();
+        let mut votable: Vec<_> = frozen_banks
+            .iter()
+            .zip(stats.iter())
+            .filter(|(_, stats)| stats.is_recent && !stats.has_voted && stats.vote_threshold)
+            .collect();
 
-        votable.sort_by_key(|b| b.0);
-        let ms = timing::duration_as_ms(&tower_start.elapsed());
+        //highest weight, lowest slot first
+        votable.sort_by_key(|b| (b.1.weight, 0i64 - b.1.slot as i64));
 
+        votable.iter().for_each(|(_, stats)| {
+            let mut parents: Vec<_> = if let Some(set) = ancestors.get(&stats.slot) {
+                set.iter().collect()
+            } else {
+                vec![]
+            };
+            parents.sort();
+            debug!("{}: {:?} {:?}", stats.slot, stats, parents,);
+        });
         trace!("votable_banks {}", votable.len());
-        if !votable.is_empty() {
-            let weights: Vec<u128> = votable.iter().map(|x| x.0).collect();
-            info!(
-                "@{:?} tower duration: {:?} len: {} weights: {:?}",
-                timing::timestamp(),
-                ms,
-                votable.len(),
-                weights
-            );
-        }
+        let rv = Self::pick_best_fork(ancestors, &votable);
+        let ms = timing::duration_as_ms(&tower_start.elapsed());
+        let weights: Vec<(u128, u64, u64)> = votable
+            .iter()
+            .map(|x| (x.1.weight, x.1.slot, x.1.block_height))
+            .collect();
+        debug!(
+            "@{:?} tower duration: {:?} len: {}/{} weights: {:?} voting: {}",
+            timing::timestamp(),
+            ms,
+            votable.len(),
+            stats.iter().filter(|s| !s.has_voted).count(),
+            weights,
+            rv.0.is_some()
+        );
         inc_new_counter_info!("replay_stage-tower_duration", ms as usize);
+        rv
+    }
 
-        votable
+    fn pick_best_fork(
+        ancestors: &HashMap<u64, HashSet<u64>>,
+        best_banks: &[(&Arc<Bank>, &ForkStats)],
+    ) -> VoteAndPoHBank {
+        if best_banks.is_empty() {
+            return (None, None);
+        }
+        let mut rv = None;
+        let (best_bank, best_stats) = best_banks.last().unwrap();
+        debug!("best bank: {:?}", best_stats);
+        let mut by_slot: Vec<_> = best_banks.iter().collect();
+        by_slot.sort_by_key(|x| x.1.slot);
+        //look for the oldest ancestors of the best bank
+        if let Some(best_ancestors) = ancestors.get(&best_stats.slot) {
+            for (parent, parent_stats) in by_slot.iter() {
+                if parent_stats.is_locked_out {
+                    continue;
+                }
+                if !best_ancestors.contains(&parent_stats.slot) {
+                    continue;
+                }
+                debug!("best bank found ancestor: {}", parent_stats.slot);
+                inc_new_counter_info!("replay_stage-pick_best_fork-ancestor", 1);
+                rv = Some(((*parent).clone(), parent_stats.total_staked));
+            }
+        }
+        //look for the oldest child of the best bank
+        if rv.is_none() {
+            for (child, child_stats) in by_slot.iter().rev() {
+                if child_stats.is_locked_out {
+                    continue;
+                }
+                let has_best = best_stats.slot == child_stats.slot
+                    || ancestors
+                        .get(&child.slot())
+                        .map(|set| set.contains(&best_stats.slot))
+                        .unwrap_or(false);
+                if !has_best {
+                    continue;
+                }
+                inc_new_counter_info!("replay_stage-pick_best_fork-child", 1);
+                debug!("best bank found child: {}", child_stats.slot);
+                rv = Some(((*child).clone(), child_stats.total_staked));
+            }
+        }
+        if rv.is_none() {
+            inc_new_counter_info!("replay_stage-fork_selection-heavy_bank_lockout", 1);
+        }
+        (rv, Some((*best_bank).clone()))
     }
 
     fn confirm_forks(

@@ -192,7 +192,8 @@ pub fn kill_entry_and_spend_and_verify_rest(
     let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), VALIDATOR_PORT_RANGE);
-    let first_two_epoch_slots = MINIMUM_SLOTS_PER_EPOCH * 3;
+    // sleep long enough to make sure we are in epoch 3
+    let first_two_epoch_slots = MINIMUM_SLOTS_PER_EPOCH * (3 + 1);
 
     for ingress_node in &cluster_nodes {
         client

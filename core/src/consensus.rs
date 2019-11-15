@@ -11,7 +11,7 @@ use std::{
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct StakeLockout {
     lockout: u64,
     stake: u64,
@@ -258,7 +258,7 @@ impl Tower {
     }
 
     // a slot is not recent if it's older than the newest vote we have
-    fn is_recent(&self, slot: u64) -> bool {
+    pub fn is_recent(&self, slot: u64) -> bool {
         if let Some(last_vote) = self.lockouts.votes.back() {
             if slot <= last_vote.slot {
                 return false;
@@ -316,7 +316,15 @@ impl Tower {
         let vote = lockouts.nth_recent_vote(self.threshold_depth);
         if let Some(vote) = vote {
             if let Some(fork_stake) = stake_lockouts.get(&vote.slot) {
-                (fork_stake.stake as f64 / total_staked as f64) > self.threshold_size
+                let lockout = fork_stake.stake as f64 / total_staked as f64;
+                trace!(
+                    "fork_stake {} {} {} {}",
+                    slot,
+                    lockout,
+                    fork_stake.stake,
+                    total_staked
+                );
+                lockout > self.threshold_size
             } else {
                 false
             }
