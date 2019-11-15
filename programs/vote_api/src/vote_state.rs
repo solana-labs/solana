@@ -1,3 +1,4 @@
+#![allow(clippy::implicit_hasher)]
 //! Vote state, vote program
 //! Receive and processes votes from validators
 use crate::{id, vote_instruction::VoteError};
@@ -14,7 +15,7 @@ use solana_sdk::{
     slot_hashes::SlotHash,
     sysvar::clock::Clock,
 };
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 // Maximum number of votes to keep around, tightly coupled with epoch_schedule::MIN_SLOTS_PER_EPOCH
 pub const MAX_LOCKOUT_HISTORY: usize = 31;
@@ -340,24 +341,20 @@ impl VoteState {
 /// key
 pub fn authorize(
     vote_account: &mut KeyedAccount,
-    other_signers: &[KeyedAccount],
     authorized: &Pubkey,
     vote_authorize: VoteAuthorize,
+    signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
     // current authorized signer must say "yay"
     match vote_authorize {
         VoteAuthorize::Voter => {
-            verify_authorized_signer(&vote_state.authorized_voter, vote_account, other_signers)?;
+            verify_authorized_signer(&vote_state.authorized_voter, signers)?;
             vote_state.authorized_voter = *authorized;
         }
         VoteAuthorize::Withdrawer => {
-            verify_authorized_signer(
-                &vote_state.authorized_withdrawer,
-                vote_account,
-                other_signers,
-            )?;
+            verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
             vote_state.authorized_withdrawer = *authorized;
         }
     }
@@ -367,36 +364,25 @@ pub fn authorize(
 
 fn verify_authorized_signer(
     authorized: &Pubkey,
-    account: &KeyedAccount,
-    other_signers: &[KeyedAccount],
+    signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    let authorized = Some(authorized);
-
-    // find a signer that matches authorized
-    if account.signer_key() != authorized
-        && other_signers
-            .iter()
-            .all(|account| account.signer_key() != authorized)
-    {
-        return Err(InstructionError::MissingRequiredSignature);
+    if signers.contains(authorized) {
+        Ok(())
+    } else {
+        Err(InstructionError::MissingRequiredSignature)
     }
-    Ok(())
 }
 
 /// Withdraw funds from the vote account
 pub fn withdraw(
     vote_account: &mut KeyedAccount,
-    other_signers: &[KeyedAccount],
     lamports: u64,
     to_account: &mut KeyedAccount,
+    signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
 
-    verify_authorized_signer(
-        &vote_state.authorized_withdrawer,
-        vote_account,
-        other_signers,
-    )?;
+    verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
     if vote_account.account.lamports < lamports {
         return Err(InstructionError::InsufficientFunds);
@@ -425,8 +411,8 @@ pub fn process_vote(
     vote_account: &mut KeyedAccount,
     slot_hashes: &[SlotHash],
     clock: &Clock,
-    other_signers: &[KeyedAccount],
     vote: &Vote,
+    signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
@@ -434,7 +420,7 @@ pub fn process_vote(
         return Err(InstructionError::UninitializedAccount);
     }
 
-    verify_authorized_signer(&vote_state.authorized_voter, vote_account, other_signers)?;
+    verify_authorized_signer(&vote_state.authorized_voter, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
     vote_account.set_state(&vote_state)
@@ -465,7 +451,12 @@ pub fn create_account(
 mod tests {
     use super::*;
     use crate::vote_state;
-    use solana_sdk::{account::Account, account_utils::State, hash::hash};
+    use solana_sdk::{
+        account::{get_signers, Account},
+        account_utils::State,
+        hash::hash,
+        instruction_processor_utils::next_keyed_account,
+    };
 
     const MAX_RECENT_VOTES: usize = 16;
 
@@ -528,15 +519,17 @@ mod tests {
         slot_hashes: &[SlotHash],
         epoch: Epoch,
     ) -> Result<VoteState, InstructionError> {
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, vote_account)];
+        let signers = get_signers(keyed_accounts);
         process_vote(
-            &mut KeyedAccount::new(vote_pubkey, true, vote_account),
+            &mut keyed_accounts[0],
             slot_hashes,
             &Clock {
                 epoch,
                 ..Clock::default()
             },
-            &[],
             &vote.clone(),
+            &signers,
         )?;
         vote_account.state()
     }
@@ -626,106 +619,132 @@ mod tests {
     #[test]
     fn test_vote_signature() {
         let (vote_pubkey, mut vote_account) = create_test_account();
-
         let vote = Vote::new(vec![1], Hash::default());
 
         // unsigned
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, false, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
         let res = process_vote(
-            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            &mut keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
-            &[],
             &vote,
+            &signers,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
-        // unsigned
+        // signed
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
         let res = process_vote(
-            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
+            &mut keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
-            &[],
             &vote,
+            &signers,
         );
         assert_eq!(res, Ok(()));
 
-        // another voter
+        // another voter, unsigned
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, false, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
         let authorized_voter_pubkey = Pubkey::new_rand();
         let res = authorize(
-            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &[],
+            &mut keyed_accounts[0],
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
+            &signers,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
         let res = authorize(
-            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
-            &[],
+            &mut keyed_accounts[0],
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
+            &signers,
         );
         assert_eq!(res, Ok(()));
+
         // verify authorized_voter_pubkey can authorize authorized_voter_pubkey ;)
-        let res = authorize(
-            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &[KeyedAccount::new(
+        let mut authorized_voter_account = Account::default();
+        let keyed_accounts = &mut [
+            KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            KeyedAccount::new(
                 &authorized_voter_pubkey,
                 true,
-                &mut Account::default(),
-            )],
+                &mut authorized_voter_account,
+            ),
+        ];
+        let signers = get_signers(keyed_accounts);
+        let res = authorize(
+            &mut keyed_accounts[0],
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
+            &signers,
         );
         assert_eq!(res, Ok(()));
 
         // authorize another withdrawer
         // another voter
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
         let authorized_withdrawer_pubkey = Pubkey::new_rand();
         let res = authorize(
-            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
-            &[],
+            &mut keyed_accounts[0],
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
+            &signers,
         );
         assert_eq!(res, Ok(()));
 
         // verify authorized_withdrawer can authorize authorized_withdrawer ;)
+        let mut withdrawer_account = Account::default();
+        let keyed_accounts = &mut [
+            KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &mut withdrawer_account),
+        ];
+        let signers = get_signers(keyed_accounts);
         let res = authorize(
-            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &[KeyedAccount::new(
-                &authorized_withdrawer_pubkey,
-                true,
-                &mut Account::default(),
-            )],
+            &mut keyed_accounts[0],
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
+            &signers,
         );
         assert_eq!(res, Ok(()));
 
         // not signed by authorized voter
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
         let vote = Vote::new(vec![2], Hash::default());
         let res = process_vote(
-            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
+            &mut keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
-            &[],
             &vote,
+            &signers,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // signed by authorized voter
-        let vote = Vote::new(vec![2], Hash::default());
-        let res = process_vote(
-            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &[(*vote.slots.last().unwrap(), vote.hash)],
-            &Clock::default(),
-            &[KeyedAccount::new(
+        let mut authorized_voter_account = Account::default();
+        let keyed_accounts = &mut [
+            KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            KeyedAccount::new(
                 &authorized_voter_pubkey,
                 true,
-                &mut Account::default(),
-            )],
+                &mut authorized_voter_account,
+            ),
+        ];
+        let signers = get_signers(keyed_accounts);
+        let vote = Vote::new(vec![2], Hash::default());
+        let res = process_vote(
+            &mut keyed_accounts[0],
+            &[(*vote.slots.last().unwrap(), vote.hash)],
+            &Clock::default(),
             &vote,
+            &signers,
         );
         assert_eq!(res, Ok(()));
     }
@@ -1056,31 +1075,37 @@ mod tests {
         let (vote_pubkey, mut vote_account) = create_test_account();
 
         // unsigned request
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, false, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
         let res = withdraw(
-            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &[],
+            &mut keyed_accounts[0],
             0,
             &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut Account::default()),
+            &signers,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // insufficient funds
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
         let res = withdraw(
-            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
-            &[],
+            &mut keyed_accounts[0],
             101,
             &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut Account::default()),
+            &signers,
         );
         assert_eq!(res, Err(InstructionError::InsufficientFunds));
 
         // all good
         let mut to_account = Account::default();
         let lamports = vote_account.lamports;
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
         let res = withdraw(
-            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
-            &[],
+            &mut keyed_accounts[0],
             lamports,
             &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut to_account),
+            &signers,
         );
         assert_eq!(res, Ok(()));
         assert_eq!(vote_account.lamports, 0);
@@ -1088,21 +1113,38 @@ mod tests {
 
         // reset balance, verify that authorized_withdrawer works
         vote_account.lamports = lamports;
-        to_account.lamports = 0;
-        let mut authorized_withdrawer_account = Account::new(0, 0, &vote_pubkey);
+
+        // authorize authorized_withdrawer
+        let authorized_withdrawer_pubkey = Pubkey::new_rand();
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
+        let res = authorize(
+            &mut keyed_accounts[0],
+            &authorized_withdrawer_pubkey,
+            VoteAuthorize::Withdrawer,
+            &signers,
+        );
+        assert_eq!(res, Ok(()));
+
+        // withdraw using authorized_withdrawer to authorized_withdrawer's account
+        let mut withdrawer_account = Account::default();
+        let keyed_accounts = &mut [
+            KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &mut withdrawer_account),
+        ];
+        let signers = get_signers(keyed_accounts);
+        let keyed_accounts = &mut keyed_accounts.iter_mut();
+        let vote_keyed_account = next_keyed_account(keyed_accounts).unwrap();
+        let withdrawer_keyed_account = next_keyed_account(keyed_accounts).unwrap();
         let res = withdraw(
-            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            &[KeyedAccount::new(
-                &vote_pubkey,
-                true,
-                &mut authorized_withdrawer_account,
-            )],
+            vote_keyed_account,
             lamports,
-            &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut to_account),
+            withdrawer_keyed_account,
+            &signers,
         );
         assert_eq!(res, Ok(()));
         assert_eq!(vote_account.lamports, 0);
-        assert_eq!(to_account.lamports, lamports);
+        assert_eq!(withdrawer_account.lamports, lamports);
     }
 
     #[test]
