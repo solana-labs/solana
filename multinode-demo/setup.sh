@@ -32,7 +32,8 @@ default_arg --bootstrap-vote-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-k
 default_arg --bootstrap-stake-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-leader/stake-keypair.json
 default_arg --bootstrap-storage-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-leader/storage-keypair.json
 default_arg --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader
-default_arg --mint "$SOLANA_CONFIG_DIR"/mint-keypair.json
+default_arg --mint-pubkey "$SOLANA_CONFIG_DIR"/mint-keypair.json
+default_arg --mint-lamports 500000000000000000
 default_arg --hashes-per-tick auto
 default_arg --operating-mode development
 $solana_genesis "${args[@]}"
