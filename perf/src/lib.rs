@@ -2,6 +2,7 @@ pub mod cuda_runtime;
 pub mod packet;
 pub mod perf_libs;
 pub mod recycler;
+pub mod recycler_cache;
 pub mod sigverify;
 pub mod test_tx;
 
