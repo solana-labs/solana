@@ -64,46 +64,54 @@ Thus to achieve safety, we want to design the snapshotting system such that the 
 
 # Implementing "Safety Criteria"
 
-In our implementation, we assume that at the time the validator starts from the snapshot, `L_i + N >= S` for some large `N`. 
+"Range Assumption": In our implementation, we assume that at the time the validator starts from the snapshot, `L_i + N >= S` for some large `N`. 
 
-Design: 
+Snapshot Design:
 
-1) The snapshot is augmented to store the last `N` ancestors of `S`. These ancestors are  incorporated into the bank hash so they can be verified when a validator unpacks a snapshot. Call this set `N_Ancestors`.
+The snapshot is augmented to store the last `N` ancestors of `S`. These ancestors are  incorporated into the bank hash so they can be verified when a validator unpacks a snapshot. Call this set `N_Ancestors`.
 
-2) We reject any snapshots `S` where `S` is less than the root of `L` and `S` is not in the list of roots in blocktree because this means `S` is for a different fork than the one this validiator last rooted. Thus it's critical for consistency in `replay_stage` that the order of events when setting a new root is:
+Boot Procedure: 
+
+1) We reject any snapshots `S` where `S` is less than the root of `L` and `S` is not in the list of roots in blocktree because this means `S` is for a different fork than the one this validiator last rooted. Thus it's critical for consistency in `replay_stage` that the order of events when setting a new root is:
     a) Write the root to locktower
     b) Write the root to blocktree
     c) Generate snapshot for that root
 
-3) On startup, make sure the current root in locktower exists in blocktree, if not (there was a crash between 2a and 2b), then rewrite the root to blocktree.
+2) On startup, make sure the current root in locktower exists in blocktree, if not (there was a crash between 2a and 2b), then rewrite the root to blocktree.
 
-4) On startup, the validator boots from the snapshot `S`, then replays all descendant blocks of `S` that exist in this validator's ledger, building banks which are then stored in an output `BankForks`. This is done in `blocktree_processor.rs`. The root of this `BankForks` is set to `S`.
+3) On startup, the validator boots from the snapshot `S`, then replays all descendant blocks of `S` that exist in this validator's ledger, building banks which are then stored in an output `BankForks`. This is done in `blocktree_processor.rs`. The root of this `BankForks` is set to `S`.
 
 
 We now implement the "Safety Criteria" in cases:
 
 Case 1: Calculating `is_ancestor(L_i, S_d)` when `L_i` < `S`:
 
-Search the list of `N_Ancestors` ancestors of `S` to check if `L_i` is an ancestor of `S`.
+Protocol: Search the list of `N_Ancestors` ancestors of `S` to check if `L_i` is an ancestor of `S`.
 
-Proof of Correctness for Case 1:
-This case is equivalent to determining `is_ancestor(L_i, S)`. Because `L_i >= S + N`, and `N_Ancestors` has length `N`, then if `L_i`,is an ancestor, it has to be a member of `N_Ancestors`. 
+Proof of Correctness for Protocol:
+This case is equivalent to determining `is_ancestor(L_i, S)`. This is because `is_ancestor(L_i, S_d) <=> ( is_ancestor(L_i, S) && is_ancestor(S, S_d))`, and `is_ancestor(S, S_d)` is true by the definition of `S_d`.
+
+Now we show the protocol  is sufficient to determine `is_ancestor(L_i, S)`. Because `L_i + N >= S` by the "Range Assumption", and `N_Ancestors` has length `N`, then if `L_i`,is an ancestor, it has to be a member of `N_Ancestors`, so the protocol is sufficient.
+
 
 Case 2: Calculating `is_ancestor(L_i, S_d)` when `L_i` > `S`:
 
+Protocol: 
 If `S_d < L_i`, return false, because an ancestor cannot have a greater slot number. Otherwise,
 Let the bank state for slot `S_d` be called `B_d`. Check `B_d.ancestors().contains(L_i)`.
 
-Proof of Correctness for Case 3:
+Proof of Correctness for Protocol:
 
-Lemma 1: `B_d.ancestors()` must include all ancestors of `B_d` that are `>= R`
-Proof: Let `R` be the latest root bank in `BankForks`. By construction, because `B_d` must be a frozen bank, `B_d.ancestors()` must include all ancestors `>= R`. Because `R == S` and `BankForks` only contained descendants of `S` at boot time, we know this is true at boot time. Furthermore, `BankForks` prunes ancestry in bank state after setting a new root `R'`, so this invariant is always true.
+Lemma 1: Given any `BankForks` and its root `R`, the bank state `B_d` for some slot `S_d`, where `B_d` is present in `BankForks.banks`, `B_d.ancestors()` must include all ancestors of `B_d` that are `>= R`
+
+Proof: Let `R` be the latest root bank in `BankForks`. The lemma holds at boot time because    `R == S` and by step 3 of the "Boot Procedure", BankForks will only contain descendants of `S`,so each descendants' `ancestors` will only contain ancestors `>=R`. 
+Going  orward, by construction, ReplayStage only adds banks to `BankForks` if all of its ancestors are present and frozen. Thus because `B_d` is present in `BankForks.banks`, `B_d.ancestors()` must include all frozen ancestors `>= R`. Furthermore, `BankForks` prunes ancestors in its set of `banks` that are `< R'` after setting a new root `R'`, so this invariant is always true.
 
 Lemma 2: Given a root bank `R` of `BankForks` and some `L_i` in locktower, if `L_i >= S`, then `L_i >= R`.
 
 When we boot from a snapshot, we set `R == S`, and in this case because we are assuming `L_i > S`, then we know `L_i >= R` at bootup. Then when we set a new root in BankForks `R'` after booting, we guarantee this only happens if the locktower root is also set to `R'`. By the construction of locktower, all votes in the tower must be greater than the locktower root, so `L_i >= R'`. 
 
-In this `Case 3` we assumed `L_i` > `S`, so from Lemma 2 we know `L_i` >= `R`. Then from Lemma 1 we know its sufficient to check `B_d.ancestors().contains(L_i)`.
+In this `Case 2` we assumed `L_i` > `S`, so from Lemma 2 we know `L_i` >= `R`. Then from Lemma 1 we know its sufficient to check `B_d.ancestors().contains(L_i)`.
 
 
 
