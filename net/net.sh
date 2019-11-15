@@ -1011,7 +1011,7 @@ netem)
       "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":~/solana
     done
     for i in "${!validatorIpList[@]}"; do
-      "$here"/ssh.sh solana@${validatorIpList[$i]} 'PATH=$PATH:~solana/.cargo/bin/ ~/solana/scripts/net-shaper.sh' \
+      "$here"/ssh.sh solana@"${validatorIpList[$i]}" '~/solana/scripts/net-shaper.sh' \
       "$netemCommand" ~solana/solana/"$netemConfigFile" "${#validatorIpList[@]}" "$i"
     done
   else
