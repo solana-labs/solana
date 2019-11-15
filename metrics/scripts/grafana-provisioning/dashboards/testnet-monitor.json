@@ -9707,7 +9707,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT max(\"ram_usage\") as \"ram_usage\" FROM \"$testnet\".\"autogen\".\"system-stats\" WHERE  hostname =~ /$hostid/ AND $timeFilter   GROUP BY time(1s) fill(null)\n",
+          "query": "SELECT max(\"ram_usage\") as \"ram_usage\" FROM \"$testnet\".\"autogen\".\"system-stats\" WHERE  hostname =~ /$hostid/ AND $timeFilter   GROUP BY time(5s) fill(null)\n",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
