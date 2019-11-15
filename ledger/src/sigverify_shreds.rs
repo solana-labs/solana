@@ -558,8 +558,7 @@ pub mod tests {
     #[test]
     fn test_sigverify_shreds_gpu() {
         solana_logger::setup();
-        let recycler_offsets = Recycler::default();
-        let recycler_out = Recycler::default();
+        let recycler_cache = RecyclerCache::default();
 
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
@@ -578,7 +577,7 @@ pub mod tests {
         .iter()
         .cloned()
         .collect();
-        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![1]]);
 
         let wrong_keypair = Keypair::new();
@@ -589,11 +588,11 @@ pub mod tests {
         .iter()
         .cloned()
         .collect();
-        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
 
         let leader_slots = [(std::u64::MAX, [0u8; 32])].iter().cloned().collect();
-        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
 
         batch[0].packets[0].meta.size = 0;
@@ -604,15 +603,14 @@ pub mod tests {
         .iter()
         .cloned()
         .collect();
-        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
     }
 
     #[test]
     fn test_sigverify_shreds_sign_gpu() {
         solana_logger::setup();
-        let recycler_offsets = Recycler::default();
-        let recycler_out = Recycler::default();
+        let recycler_cache = RecyclerCache::default();
 
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
@@ -636,20 +634,14 @@ pub mod tests {
         .cloned()
         .collect();
         //unsigned
-        let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
         //signed
-        sign_shreds_gpu(
-            &mut batch,
-            &pubkeys,
-            &privkeys,
-            &recycler_offsets,
-            &recycler_out,
-        );
+        sign_shreds_gpu(&mut batch, &pubkeys, &privkeys, &recycler_cache);
         let rv = verify_shreds_cpu(&batch, &pubkeys);
         assert_eq!(rv, vec![vec![1]]);
 
-        let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_cache);
         assert_eq!(rv, vec![vec![1]]);
     }
 

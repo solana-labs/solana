@@ -65,11 +65,7 @@ impl SigVerifier for ShredSigVerifier {
             .collect();
         leader_slots.insert(std::u64::MAX, [0u8; 32]);
 
-        let r = verify_shreds_gpu(
-            &batches,
-            &leader_slots,
-            &self.recycler_cache,
-        );
+        let r = verify_shreds_gpu(&batches, &leader_slots, &self.recycler_cache);
         sigverify::mark_disabled(&mut batches, &r);
         batches
     }
