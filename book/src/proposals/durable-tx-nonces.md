@@ -45,14 +45,10 @@ InitializeInstruction()
     success
   else
     error
-NonceInstruction(spend_hash) /* spend_hash is a stand in for a TBD sysvar
-                                which will replace this "parameter" */
-  if spend_hash == stored_hash
-    if !sysvar.recent_blockhashes.is_empty()
-      stored_hash = sysvar.recent_blockhashes[0]
-      success
-    else
-      error
+NonceInstruction
+  if !sysvar.recent_blockhashes.is_empty()
+    stored_hash = sysvar.recent_blockhashes[0]
+    success
   else
     error
 ```
@@ -65,16 +61,8 @@ To begin using the account an `Initialize` instruction is executed on it,
 advancing its state to `Initialized` and storing a durable nonce, chosen by the
 contract from the `recent_blockhashes` sysvar, in the data field.
 
-For the `Nonce` instruction to succeed:
-  1) The nonce account MUST have been advanced to the `Initialized` state,
-ensuring that a valid nonce has been stored.
-  2) The nonce value in the transaction's `recent_blockhash` field MUST match
-the value stored in the nonce account data field. In doing so, the client
-commits to the stored nonce value by signing the transaction.
-  3) The nonce value MUST NOT reside in the `recent_blockhashes` sysvar, thus
-preventing replay by deleting, then recreating the account.
-If these requirements are met, the contract replaces the stored nonce with a
-new one from the current values in the `recent_blockhashes` sysvar.
+The `Nonce` instruction is used to request that a new nonce be stored for the
+calling account.
 
 To discard a nonce account, the client should include a `Nonce` instruction in
 a transaction which withdraws all lamports, leaving a zero balance and making
@@ -82,11 +70,37 @@ it eligible for deletion.
 
 ### Runtime Support
 
-The contract alone is not sufficient for implementing this feature, as an extant
-`recent_blockhash` is still required on any transaction executing the `Nonce`
-instruction. To alleviate this, a `flags` field will be added to the transaction
-message and one bit reserved to signal the use of a Durable Transaction Nonce,
-which skips the typical age check.
+The contract alone is not sufficient for implementing this feature. To enforce
+an extant `recent_blockhash` on the transaction and prevent fee theft via
+failed transaction replay, runtime modifications are necessary.
+
+Any transaction failing the usual `check_hash_age` validation will be tested
+for using a Durable Transaction Nonce. This test is TBD, some options:
+
+  1) Require that the `Nonce` instruction be the first in the TX
+    * + No ABI changes
+    * + Fast and simple
+    * - Sets a precedent that may lead to incompatible instruction combinations
+  2) Blind search for a `Nonce` instruction over all instructions in the TX
+    * + No ABI changes
+    * - Potentially slow
+  3) [2], but guarded by a TX flag
+    * - ABI changes
+    * - Wire size increase
+    * + We'll probably end up with some sort of flags eventually anyway
+
+Current prototyping will use [1]. If it is determined that a Durable Transaction
+Nonce is in use, the runtime will take the following actions to validate the
+transaction:
+
+  1) The `NonceAccount` specified in the `Nonce` instruction is loaded.
+  2) The `NonceState` is deserialized from the `NonceAccount`'s data field and
+confirmed to be in the `Initialized` state.
+  3) The nonce value stored in the `NonceAccount` is tested to match against the
+one specified in the transaction's `recent_blockhash` field.
+
+If all three of the above checks succeed, the transaction is allowed to continue
+validation.
 
 ### Open Questions
 
