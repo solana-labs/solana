@@ -10,9 +10,9 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
 use solana_sdk::{
-    account::KeyedAccount,
+    account::{get_signers, KeyedAccount},
     instruction::{AccountMeta, Instruction, InstructionError},
-    instruction_processor_utils::{limited_deserialize, DecodeError},
+    instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
     sysvar::{self, clock::Clock, slot_hashes::SlotHashes, Sysvar},
@@ -168,48 +168,32 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    if keyed_accounts.is_empty() {
-        return Err(InstructionError::InvalidInstructionData);
-    }
+    let signers = get_signers(keyed_accounts);
 
-    // 0th index is vote account
-    let (me, rest) = &mut keyed_accounts.split_at_mut(1);
-    let me = &mut me[0];
+    let keyed_accounts = &mut keyed_accounts.iter_mut();
+    let me = &mut next_keyed_account(keyed_accounts)?;
 
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
-            if rest.is_empty() {
-                return Err(InstructionError::InvalidInstructionData);
-            }
-            sysvar::rent::verify_rent_exemption(me, &rest[0])?;
+            sysvar::rent::verify_rent_exemption(me, next_keyed_account(keyed_accounts)?)?;
             vote_state::initialize_account(me, &vote_init)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
-            vote_state::authorize(me, rest, &voter_pubkey, vote_authorize)
+            vote_state::authorize(me, &voter_pubkey, vote_authorize, &signers)
         }
         VoteInstruction::Vote(vote) => {
             datapoint_debug!("vote-native", ("count", 1, i64));
-            if rest.len() < 2 {
-                return Err(InstructionError::InvalidInstructionData);
-            }
-            let (slot_hashes_and_clock, other_signers) = rest.split_at_mut(2);
-
             vote_state::process_vote(
                 me,
-                &SlotHashes::from_keyed_account(&slot_hashes_and_clock[0])?,
-                &Clock::from_keyed_account(&slot_hashes_and_clock[1])?,
-                other_signers,
+                &SlotHashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &vote,
+                &signers,
             )
         }
         VoteInstruction::Withdraw(lamports) => {
-            if rest.is_empty() {
-                return Err(InstructionError::InvalidInstructionData);
-            }
-            let (to, rest) = rest.split_at_mut(1);
-            let to = &mut to[0];
-
-            vote_state::withdraw(me, rest, lamports, to)
+            let to = next_keyed_account(keyed_accounts)?;
+            vote_state::withdraw(me, lamports, to, &signers)
         }
     }
 }
@@ -225,7 +209,7 @@ mod tests {
     fn test_vote_process_instruction_decode_bail() {
         assert_eq!(
             super::process_instruction(&Pubkey::default(), &mut [], &[],),
-            Err(InstructionError::InvalidInstructionData),
+            Err(InstructionError::NotEnoughAccountKeys),
         );
     }
 
