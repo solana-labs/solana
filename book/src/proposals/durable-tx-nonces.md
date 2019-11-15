@@ -21,6 +21,15 @@ Here we describe a contract-based solution to the problem, whereby a client can
 field. This approach is akin to the Compare and Swap atomic instruction,
 implemented by some CPU ISAs.
 
+When making use of a durable nonce, the client must first query its value from
+account data. A transaction is now constructed in the normal way, but with the
+following additional requirements:
+
+  1) The durable nonce value is used in the `recent_blockhash` field
+  2) A `Nonce` instruction is issued (first?)
+  3) The appropriate transaction flag (TBD) is set, signaling that the usual
+hash age check should be skipped and the previous requirements enforced
+
 ### Contract Mechanics
 
 TODO: svgbob this into a flowchart
@@ -55,15 +64,6 @@ will be in the `Uninitialized` state with no stored hash and thus unusable.
 To begin using the account an `Initialize` instruction is executed on it,
 advancing its state to `Initialized` and storing a durable nonce, chosen by the
 contract from the `recent_blockhashes` sysvar, in the data field.
-
-When making use of a durable nonce, the client must first query its value from
-account data. A transaction is now constructed in the normal way, but with the
-following additional requirements:
-
-  1) The durable nonce value is used in the `recent_blockhash` field
-  2) A `Nonce` instruction is issued (first?)
-  3) The appropriate transaction flag (TBD) is set, signaling that the usual
-hash age check should be skipped and the previous requirements enforced
 
 For the `Nonce` instruction to succeed:
   1) The nonce account MUST have been advanced to the `Initialized` state,
