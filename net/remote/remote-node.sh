@@ -26,8 +26,6 @@ genesisOptions="${17}"
 extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
 GEOLOCATION_API_KEY="${20}"
-maybeRestrictedEnvironment="${21}"
-
 set +x
 
 # Use a very large stake (relative to the default multinode-demo/ stake of 42)
@@ -54,12 +52,6 @@ airdropsEnabled=true
 if [[ -n $maybeDisableAirdrops ]]; then
   airdropsEnabled=false
 fi
-
-restrictedEnvironment=false
-if [[ -n $maybeRestrictedEnvironment ]]; then
-  restrictedEnvironment=true
-fi
-
 cat > deployConfig <<EOF
 deployMethod="$deployMethod"
 entrypointIp="$entrypointIp"
@@ -67,7 +59,6 @@ numNodes="$numNodes"
 failOnValidatorBootupFailure=$failOnValidatorBootupFailure
 genesisOptions="$genesisOptions"
 airdropsEnabled=$airdropsEnabled
-restrictedEnvironment=$restrictedEnvironment
 EOF
 
 source net/common.sh
@@ -227,9 +218,6 @@ EOF
       fi
       if [[ -f config/client-accounts.yml ]]; then
         genesisOptions+=" --primordial-accounts-file config/client-accounts.yml"
-      fi
-      if [[ $restrictedEnvironment = "false" ]] ; then
-        genesisOptions+="--dev"
       fi
 
       args=(

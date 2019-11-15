@@ -88,7 +88,9 @@ Operate a configured testnet
 
    --use-move                         - Build the move-loader-program and add it to the cluster
 
-   --restricted-environment           - Configure genesis block and cluster only to enable certain features for production launch
+   --operating-mode development|production
+                                      - Specify whether or not to launch the cluster in development mode with all features enabled at epoch 0,
+                                        or production mode with some features disabled at epoch 0 (default: development)
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -149,7 +151,6 @@ gpuMode=auto
 maybeUseMove=""
 netemPartition=""
 netemConfig=""
-maybeRestrictedEnvironment=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -168,6 +169,17 @@ while [[ -n $1 ]]; do
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --lamports ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    elif [[ $1 = --operating-mode ]]; then
+      case "$2" in
+        development|production)
+          ;;
+        *)
+          echo "Unexpected operating mode: \"$2\""
+          exit 1
+          ;;
+      esac
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --no-snapshot-fetch ]]; then
@@ -230,9 +242,6 @@ while [[ -n $1 ]]; do
           ;;
       esac
       shift 2
-    elif [[ $1 = --restricted-environment ]]; then
-      maybeRestrictedEnvironment="$1"
-      shift 1
     else
       usage "Unknown long option: $1"
     fi
@@ -495,7 +504,6 @@ startBootstrapLeader() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
-         \"$maybeRestrictedEnvironment\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -842,7 +850,6 @@ deploy() {
   echo "Network start logs in $netLogDir"
 }
 
-
 stopNode() {
   local ipAddress=$1
   local block=$2
@@ -913,7 +920,6 @@ stop() {
   $metricsWriteDatapoint "testnet-deploy net-stop-complete=1"
   echo "Stopping nodes took $SECONDS seconds"
 }
-
 
 checkPremptibleInstances() {
   # The validatorIpList nodes may be preemptible instances that can disappear at
