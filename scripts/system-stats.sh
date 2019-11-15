@@ -6,10 +6,10 @@ set -e
 
 [[ $(uname) == Linux ]] || exit 0
 
-cd "$(dirname "$0")"
-
-# shellcheck source=scripts/configure-metrics.sh
-source configure-metrics.sh
+# need to cd like this to avoid #SC1091
+cd "$(dirname "$0")/.."
+source scripts/configure-metrics.sh
+cd scripts
 
 cpu_usage=0
 ram_usage=0
