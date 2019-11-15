@@ -19,7 +19,7 @@ update_cpustat() {
 cpu_usage=$(top -bn1 | grep '%Cpu(s):' | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}')
 # collect the total ram usage by dividing used memory / total memory
 ram_total_and_usage=$(top -bn1 | grep 'MiB Mem'| sed "s/.*: *\([0-9.]*\)%* total.*, *\([0-9.]*\)%* used.*/\1 \2/")
-read total used <<< "$ram_total_and_usage"
+read -r total used <<< "$ram_total_and_usage"
 ram_usage=$(awk "BEGIN {print $used / $total * 100}")
 }
 
