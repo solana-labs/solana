@@ -44,16 +44,16 @@ Define the function `is_locked(a, b)` to be: `a + a.lockout <= b`
 
 Define the "safety" condition to be: 
 
-A validator can run some procedure to determine whether it can vote on `T` without violating the lockouts of any vote in `L`. The procedure for this is:
+Given a `BankForks`, a validator can run some procedure to determine whether it can vote on a frozen bank `T` (frozen banks must be present in `BankForks.banks`), without violating the lockouts of any vote in `L`. The procedure for this is:
 
 1) If `T` < last locktower vote, return false,
-2) Apply `T` to locktower state `L`. Pope off all votes `S_i` where `!is_locked(S_i, T)`. `T` must now be the top of the tower.
+2) Apply `T` to locktower state `L`. Pop off all votes `S_i` where `!is_locked(S_i, T)`. `T` must now be the top of the tower.
 3) If for any remaining vote `L_i` in `L` `!is_ancestor(L_i, T)`, return false.
 4) Otherwise, return true.
 
 # Achieving Safety
 
-Define the "Safety Criteria" to be: Given any descendant of `S`, `S_d`, and any slot `L_i` in locktower, the validator is able to determine `is_ancestor(L_i, S_d)`.
+Define the "Safety Criteria" to be: Given a `BankForks` any descendant of `S`, `S_d` that has a bank `B_d`  that is present in `BankForks.banks`, and any slot `L_i` in locktower, the validator is able to determine `is_ancestor(L_i, S_d)`.
 
 Assume the "Safety Criteria" is true, we show we can then achieve the "safety" condition:
 
