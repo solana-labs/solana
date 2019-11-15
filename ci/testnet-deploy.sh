@@ -28,7 +28,6 @@ maybeDisableAirdrops=
 maybeInternalNodesStakeLamports=
 maybeInternalNodesLamports=
 maybeExternalPrimordialAccountsFile=
-maybeLamports=
 maybeSlotsPerEpoch=
 maybeTargetLamportsPerSignature=
 maybeSlotsPerEpoch=
@@ -113,9 +112,6 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --slots-per-epoch ]]; then
       maybeSlotsPerEpoch="$1 $2"
-      shift 2
-    elif [[ $1 = --lamports ]]; then
-      maybeLamports="$1 $2"
       shift 2
     elif [[ $1 = --target-lamports-per-signature ]]; then
       maybeTargetLamportsPerSignature="$1 $2"
@@ -412,7 +408,6 @@ if ! $skipStart; then
       $maybeInternalNodesStakeLamports
       $maybeInternalNodesLamports
       $maybeExternalPrimordialAccountsFile
-      $maybeLamports
       $maybeSlotsPerEpoch
       $maybeTargetLamportsPerSignature
       $maybeNoSnapshot
