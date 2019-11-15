@@ -94,7 +94,7 @@ This case is equivalent to determining `is_ancestor(L_i, S)`. This is because `i
 Now we show the protocol  is sufficient to determine `is_ancestor(L_i, S)`. Because `L_i + N >= S` by the "Range Assumption", and `N_Ancestors` has length `N`, then if `L_i`,is an ancestor, it has to be a member of `N_Ancestors`, so the protocol is sufficient.
 
 
-Case 2: Calculating `is_ancestor(L_i, S_d)` when `L_i` > `S`:
+Case 2: Calculating `is_ancestor(L_i, S_d)` when `L_i` >= `S`:
 
 Protocol: 
 If `S_d < L_i`, return false, because an ancestor cannot have a greater slot number. Otherwise,
@@ -104,14 +104,14 @@ Proof of Correctness for Protocol:
 
 Lemma 1: Given any `BankForks` and its root `R`, the bank state `B_d` for some slot `S_d`, where `B_d` is present in `BankForks.banks`, `B_d.ancestors()` must include all ancestors of `B_d` that are `>= R`
 
-Proof: Let `R` be the latest root bank in `BankForks`. The lemma holds at boot time because    `R == S` and by step 3 of the "Boot Procedure", BankForks will only contain descendants of `S`,so each descendants' `ancestors` will only contain ancestors `>=R`. 
-Going  orward, by construction, ReplayStage only adds banks to `BankForks` if all of its ancestors are present and frozen. Thus because `B_d` is present in `BankForks.banks`, `B_d.ancestors()` must include all frozen ancestors `>= R`. Furthermore, `BankForks` prunes ancestors in its set of `banks` that are `< R'` after setting a new root `R'`, so this invariant is always true.
+Proof: Let `R` be the latest root bank in `BankForks`. The lemma holds at boot time because    `R == S` and by step 3 of the "Boot Procedure", BankForks will only contain descendants of `S`,so each descendants' `ancestors` will only contain ancestors `>= R`. 
+Going forward, by construction, ReplayStage only adds banks to `BankForks` if all of its ancestors are present and frozen. Thus because `B_d` is present in `BankForks.banks`, `B_d.ancestors()` must include all frozen ancestors `>= R`. Furthermore, `BankForks` prunes ancestors in its set of `banks` that are `< R'` after setting a new root `R'`, so this invariant is always true.
 
 Lemma 2: Given a root bank `R` of `BankForks` and some `L_i` in locktower, if `L_i >= S`, then `L_i >= R`.
 
 When we boot from a snapshot, we set `R == S`, and in this case because we are assuming `L_i > S`, then we know `L_i >= R` at bootup. Then when we set a new root in BankForks `R'` after booting, we guarantee this only happens if the locktower root is also set to `R'`. By the construction of locktower, all votes in the tower must be greater than the locktower root, so `L_i >= R'`. 
 
-In this `Case 2` we assumed `L_i` > `S`, so from Lemma 2 we know `L_i` >= `R`. Then from Lemma 1 we know its sufficient to check `B_d.ancestors().contains(L_i)`.
+In this `Case 2` we assumed `L_i` >= `S`, so from Lemma 2 we know `L_i` >= `R`. Then from Lemma 1 we know its sufficient to check `B_d.ancestors().contains(L_i)`.
 
 
 
