@@ -102,6 +102,8 @@ Operate a configured testnet
  netem-specific options:
    --config            - Netem configuration (as a double quoted string)
    --parition          - Percentage of network that should be configured with netem
+   --config-file       - Configuration file for partition and netem configuration
+   --netem-cmd         - Optional command argument to netem. Default is "add". Use "cleanup" to remove rules.
 
  update-specific options:
    --platform linux|osx|windows       - Deploy the tarball using 'solana-install deploy ...' for the
@@ -147,6 +149,8 @@ gpuMode=auto
 maybeUseMove=""
 netemPartition=""
 netemConfig=""
+netemConfigFile=""
+netemCommand="add"
 
 command=$1
 [[ -n $command ]] || usage
@@ -215,6 +219,12 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --config ]]; then
       netemConfig=$2
+      shift 2
+    elif [[ $1 == --config-file ]]; then
+      netemConfigFile=$2
+      shift 2
+    elif [[ $1 == --netem-cmd ]]; then
+      netemCommand=$2
       shift 2
     elif [[ $1 = --gpu-mode ]]; then
       gpuMode=$2
@@ -996,23 +1006,33 @@ logs)
   done
   ;;
 netem)
-  num_nodes=$((${#validatorIpList[@]}*netemPartition/100))
-  if [[ $((${#validatorIpList[@]}*netemPartition%100)) -gt 0 ]]; then
-    num_nodes=$((num_nodes+1))
-  fi
-  if [[ "$num_nodes" -gt "${#validatorIpList[@]}" ]]; then
-    num_nodes=${#validatorIpList[@]}
-  fi
+  if [[ -n $netemConfigFile ]]; then
+    for ipAddress in "${validatorIpList[@]}"; do
+      "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":~/solana
+    done
+    for i in "${!validatorIpList[@]}"; do
+      "$here"/ssh.sh solana@"${validatorIpList[$i]}" 'solana/scripts/net-shaper.sh' \
+      "$netemCommand" solana/"$netemConfigFile" "${#validatorIpList[@]}" "$i"
+    done
+  else
+    num_nodes=$((${#validatorIpList[@]}*netemPartition/100))
+    if [[ $((${#validatorIpList[@]}*netemPartition%100)) -gt 0 ]]; then
+      num_nodes=$((num_nodes+1))
+    fi
+    if [[ "$num_nodes" -gt "${#validatorIpList[@]}" ]]; then
+      num_nodes=${#validatorIpList[@]}
+    fi
 
-  # Stop netem on all nodes
-  for ipAddress in "${validatorIpList[@]}"; do
-    "$here"/ssh.sh solana@"$ipAddress" 'solana/scripts/netem.sh delete < solana/netem.cfg || true'
-  done
+    # Stop netem on all nodes
+    for ipAddress in "${validatorIpList[@]}"; do
+      "$here"/ssh.sh solana@"$ipAddress" 'solana/scripts/netem.sh delete < solana/netem.cfg || true'
+    done
 
-  # Start netem on required nodes
-  for ((i=0; i<num_nodes; i++ )); do :
-    "$here"/ssh.sh solana@"${validatorIpList[$i]}" "echo $netemConfig > solana/netem.cfg; solana/scripts/netem.sh add \"$netemConfig\""
-  done
+    # Start netem on required nodes
+    for ((i=0; i<num_nodes; i++ )); do :
+      "$here"/ssh.sh solana@"${validatorIpList[$i]}" "echo $netemConfig > solana/netem.cfg; solana/scripts/netem.sh add \"$netemConfig\""
+    done
+  fi
   ;;
 *)
   echo "Internal error: Unknown command: $command"

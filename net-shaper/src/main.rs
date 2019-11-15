@@ -50,6 +50,7 @@ fn run(
     status_err_msg: &str,
     ignore_err: bool,
 ) -> bool {
+    println!("Running {:?}", std::process::Command::new(cmd).args(args));
     let output = std::process::Command::new(cmd)
         .args(args)
         .output()
@@ -73,8 +74,8 @@ fn run(
     }
 }
 
-fn insert_iptables_rule(my_partition: usize) -> bool {
-    let my_tos = my_partition.to_string();
+fn insert_iptables_rule(tos: u8) -> bool {
+    let my_tos = tos.to_string();
 
     // iptables -t mangle -A PREROUTING -p udp -j TOS --set-tos <my_parition_index>
     run(
@@ -83,7 +84,7 @@ fn insert_iptables_rule(my_partition: usize) -> bool {
             "-t",
             "mangle",
             "-A",
-            "PREROUTING",
+            "OUTPUT",
             "-p",
             "udp",
             "-j",
@@ -198,7 +199,15 @@ fn identify_my_partition(partitions: &[u8], index: u64, size: u64) -> usize {
         }
     }
 
-    my_partition + 1
+    my_partition
+}
+
+fn partition_id_to_tos(partition: usize) -> u8 {
+    if partition < 4 {
+        2u8.pow(partition as u32 + 1)
+    } else {
+        0
+    }
 }
 
 fn shape_network(matches: &ArgMatches) {
@@ -217,12 +226,12 @@ fn shape_network(matches: &ArgMatches) {
 
     assert!(my_index < network_size);
 
-    let my_partition = identify_my_partition(&topology.partitions, my_index, network_size);
+    let my_partition = identify_my_partition(&topology.partitions, my_index + 1, network_size);
     println!("My partition is {}", my_partition);
 
     flush_iptables_rule();
 
-    if !insert_iptables_rule(my_partition) {
+    if !insert_iptables_rule(partition_id_to_tos(my_partition)) {
         return;
     }
 
@@ -234,26 +243,28 @@ fn shape_network(matches: &ArgMatches) {
 
     topology.interconnects.iter().for_each(|i| {
         if i.b as usize == my_partition {
-            let handle = (i.a + 1).to_string();
-            let tos_string = i.a.to_string();
-            let class = format!("1:{}", i.a);
+            let tos = partition_id_to_tos(i.a as usize);
+            if tos == 0 {
+                println!("Incorrect value of TOS/Partition in config {}", i.a);
+                return;
+            }
+            let tos_string = tos.to_string();
+            let class = format!("1:{}", i.a + 1);
             if !insert_tc_netem(
                 interface.as_str(),
                 class.as_str(),
-                handle.as_str(),
+                tos_string.as_str(),
                 i.config.as_str(),
             ) {
-                flush_iptables_rule();
                 delete_tc_root(interface.as_str());
                 return;
             }
 
             if !insert_tos_filter(interface.as_str(), class.as_str(), tos_string.as_str()) {
-                flush_iptables_rule();
                 delete_tc_netem(
                     interface.as_str(),
                     class.as_str(),
-                    handle.as_str(),
+                    tos_string.as_str(),
                     i.config.as_str(),
                 );
                 delete_tc_root(interface.as_str());
