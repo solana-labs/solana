@@ -146,7 +146,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Arg::with_name("faucet_pubkey_file")
                 .short("m")
                 .long("faucet-pubkey")
-                .value_name("MINT")
+                .value_name("PUBKEY")
                 .takes_value(true)
                 .requires("faucet_lamports")
                 .help("Path to file containing the faucet's pubkey"),
@@ -358,12 +358,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     ];
 
     if let Some(faucet_pubkey_file) = faucet_pubkey_file {
-        let faucet_pubkey = pubkey_from_file(faucet_pubkey_file)?;
-        accounts.append(&mut create_genesis_accounts(
-            &faucet_pubkey,
-            faucet_lamports.unwrap(),
-        ));
+        accounts.append(&mut vec![(
+            pubkey_from_file(faucet_pubkey_file)?,
+            Account::new(faucet_lamports.unwrap(), 0, &system_program::id()),
+        )]);
     }
+    accounts.append(&mut create_genesis_accounts());
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
     let slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);
