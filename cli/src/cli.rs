@@ -84,6 +84,7 @@ pub enum CliCommand {
         timeout: Duration,
         commitment_config: CommitmentConfig,
     },
+    ShowGossip,
     ShowValidators {
         use_lamports_unit: bool,
     },
@@ -264,6 +265,10 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             require_keypair: false,
         }),
         ("ping", Some(matches)) => parse_cluster_ping(matches),
+        ("show-gossip", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::ShowGossip,
+            require_keypair: false,
+        }),
         ("show-validators", Some(matches)) => parse_show_validators(matches),
         // Program Deployment
         ("deploy", Some(matches)) => Ok(CliCommandInfo {
@@ -871,6 +876,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             timeout,
             commitment_config,
         ),
+        CliCommand::ShowGossip => process_show_gossip(&rpc_client),
         CliCommand::ShowValidators { use_lamports_unit } => {
             process_show_validators(&rpc_client, *use_lamports_unit)
         }

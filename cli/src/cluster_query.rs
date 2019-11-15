@@ -20,6 +20,7 @@ use solana_sdk::{
 };
 use std::{
     collections::VecDeque,
+    net::SocketAddr,
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -100,6 +101,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                             "Wait until the transaction is confirmed at maximum-lockout commitment level",
                         ),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("show-gossip")
+                .about("Show the current gossip network nodes"),
         )
         .subcommand(
             SubCommand::with_name("show-validators")
@@ -398,6 +403,42 @@ pub fn process_ping(
     }
 
     Ok("".to_string())
+}
+
+pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
+    let cluster_nodes = rpc_client.get_cluster_nodes()?;
+
+    fn format_port(addr: Option<SocketAddr>) -> String {
+        addr.map(|addr| addr.port().to_string())
+            .unwrap_or_else(|| "none".to_string())
+    }
+
+    let s: Vec<_> = cluster_nodes
+        .iter()
+        .map(|node| {
+            format!(
+                "{:15} | {:44} | {:6} | {:5} | {:5}",
+                node.gossip
+                    .map(|addr| addr.ip().to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+                node.pubkey,
+                format_port(node.gossip),
+                format_port(node.tpu),
+                format_port(node.rpc),
+            )
+        })
+        .collect();
+
+    Ok(format!(
+        "IP Address      | Node identifier                              \
+         | Gossip | TPU   | RPC\n\
+         ----------------+----------------------------------------------+\
+         --------+-------+-------\n\
+         {}\n\
+         Nodes: {}",
+        s.join("\n"),
+        s.len(),
+    ))
 }
 
 pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) -> ProcessResult {
