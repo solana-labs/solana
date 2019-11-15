@@ -139,6 +139,8 @@ cat >> ~/solana/on-reboot <<EOF
   echo \$! > net-stats.pid
   scripts/iftop.sh  > iftop.log 2>&1 &
   echo \$! > iftop.pid
+  scripts/system-stats.sh  > system-stats.log 2>&1 &
+  echo \$! > system-stats.pid
 
   if ${GPU_CUDA_OK} && [[ -e /dev/nvidia0 ]]; then
     echo Selecting solana-validator-cuda
