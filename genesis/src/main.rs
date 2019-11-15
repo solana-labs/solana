@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &timing::duration_as_ms(&PohConfig::default().target_tick_duration).to_string();
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
     let default_slots_per_epoch = &EpochSchedule::default().slots_per_epoch.to_string();
-    let default_operating_mode = "production";
+    let default_operating_mode = "softlaunch";
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -298,12 +298,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .arg(
             Arg::with_name("operating_mode")
                 .long("operating-mode")
-                .value_name("\"development\"|\"production\"")
+                .possible_value("development")
+                .possible_value("softlaunch")
                 .takes_value(true)
                 .default_value(default_operating_mode)
                 .help(
-                    "Configure the cluster for DEVELOPMENT mode where all features are available at epoch 0, \
-                    or PRODUCTION mode where some features are disabled at epoch 0"
+                    "Configure the cluster for \"development\" mode where all features are available at epoch 0, \
+                    or \"softlaunch\" mode where some features are disabled at epoch 0"
                 ),
         )
         .get_matches();

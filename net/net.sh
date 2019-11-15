@@ -88,9 +88,9 @@ Operate a configured testnet
 
    --use-move                         - Build the move-loader-program and add it to the cluster
 
-   --operating-mode development|production
-                                      - Specify whether or not to launch the cluster in development mode with all features enabled at epoch 0,
-                                        or production mode with some features disabled at epoch 0 (default: development)
+   --operating-mode development|softlaunch
+                                      - Specify whether or not to launch the cluster in "development" mode with all features enabled at epoch 0,
+                                        or "softlaunch" mode with some features disabled at epoch 0 (default: development)
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -173,7 +173,7 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --operating-mode ]]; then
       case "$2" in
-        development|production)
+        development|softlaunch)
           ;;
         *)
           echo "Unexpected operating mode: \"$2\""
