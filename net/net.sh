@@ -1011,8 +1011,8 @@ netem)
       "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":~/solana
     done
     for i in "${!validatorIpList[@]}"; do
-      "$here"/ssh.sh solana@"${validatorIpList[$i]}" '~/solana/scripts/net-shaper.sh' \
-      "$netemCommand" ~solana/solana/"$netemConfigFile" "${#validatorIpList[@]}" "$i"
+      "$here"/ssh.sh solana@"${validatorIpList[$i]}" 'solana/scripts/net-shaper.sh' \
+      "$netemCommand" solana/"$netemConfigFile" "${#validatorIpList[@]}" "$i"
     done
   else
     num_nodes=$((${#validatorIpList[@]}*netemPartition/100))
