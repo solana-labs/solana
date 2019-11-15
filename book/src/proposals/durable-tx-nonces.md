@@ -49,6 +49,16 @@ NonceInstruction
     error EmptyRecentBlockhashes
   stored_hash = sysvar.recent_blockhashes[0]
   success
+WithdrawInstruction(to, lamports)
+  if state == Uninitialized
+    if !signers.contains(owner)
+      error MissingRequiredSignatures
+  elif state == Initialized
+    if lamports != account.balance && lamports + rent_exempt > account.balance
+      error InsufficientFunds
+  account.balance -= lamports
+  to.balance += lamports
+  success
 ```
 
 A client wishing to use this feature starts by creating a nonce account and
@@ -60,9 +70,9 @@ calling account. The first `Nonce` instruction run on a newly created account
 will drive the account's state to `Initialized`. As such, a `Nonce` instruction
 MUST be issued before the account can be used.
 
-To discard a nonce account, the client should include a `Nonce` instruction in
-a transaction which withdraws all lamports, leaving a zero balance and making
-it eligible for deletion.
+To discard a `NonceAccount`, the client should issue a `Withdraw` instruction
+which withdraws all lamports, leaving a zero balance and making the account
+eligible for deletion.
 
 ### Runtime Support
 
