@@ -1,13 +1,12 @@
 #![allow(clippy::implicit_hasher)]
 use crate::packet::{limited_deserialize, Packets};
-use crate::sigverify::{self, TxOffset};
+use crate::sigverify;
 use crate::sigverify_stage::SigVerifier;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::ShredType;
 use solana_ledger::sigverify_shreds::verify_shreds_gpu;
-use solana_perf::cuda_runtime::PinnedVec;
-use solana_perf::recycler::Recycler;
+use solana_perf::recycler_cache::RecyclerCache;
 use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
 use std::mem::size_of;
@@ -17,8 +16,7 @@ use std::sync::{Arc, RwLock};
 pub struct ShredSigVerifier {
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
-    recycler_offsets: Recycler<TxOffset>,
-    recycler_out: Recycler<PinnedVec<u8>>,
+    recycler_cache: RecyclerCache,
 }
 
 impl ShredSigVerifier {
@@ -30,8 +28,7 @@ impl ShredSigVerifier {
         Self {
             bank_forks,
             leader_schedule_cache,
-            recycler_offsets: Recycler::warmed(50, 4096),
-            recycler_out: Recycler::warmed(50, 4096),
+            recycler_cache: RecyclerCache::warmed(),
         }
     }
     fn read_slots(batches: &[Packets]) -> HashSet<u64> {
@@ -68,12 +65,7 @@ impl SigVerifier for ShredSigVerifier {
             .collect();
         leader_slots.insert(std::u64::MAX, [0u8; 32]);
 
-        let r = verify_shreds_gpu(
-            &batches,
-            &leader_slots,
-            &self.recycler_offsets,
-            &self.recycler_out,
-        );
+        let r = verify_shreds_gpu(&batches, &leader_slots, &self.recycler_cache);
         sigverify::mark_disabled(&mut batches, &r);
         batches
     }

@@ -13,7 +13,7 @@ use solana_perf::{
     cuda_runtime::PinnedVec,
     packet::{limited_deserialize, Packet, Packets},
     perf_libs,
-    recycler::Recycler,
+    recycler_cache::RecyclerCache,
     sigverify::{self, TxOffset},
 };
 use solana_rayon_threadlimit::get_thread_count;
@@ -86,8 +86,7 @@ fn slot_key_data_for_gpu<
     offset_start: usize,
     batches: &[Packets],
     slot_keys: &HashMap<u64, T>,
-    recycler_offsets: &Recycler<TxOffset>,
-    recycler_keys: &Recycler<PinnedVec<u8>>,
+    recycler_cache: &RecyclerCache,
 ) -> (PinnedVec<u8>, TxOffset, usize) {
     //TODO: mark Pubkey::default shreds as failed after the GPU returns
     assert_eq!(slot_keys.get(&std::u64::MAX), Some(&T::default()));
@@ -126,7 +125,7 @@ fn slot_key_data_for_gpu<
                 .push(*slot);
         }
     }
-    let mut keyvec = recycler_keys.allocate("shred_gpu_pubkeys");
+    let mut keyvec = recycler_cache.buffer().allocate("shred_gpu_pubkeys");
     keyvec.set_pinnable();
     let mut slot_to_key_ix = HashMap::new();
 
@@ -141,7 +140,7 @@ fn slot_key_data_for_gpu<
             slot_to_key_ix.insert(s, i);
         }
     }
-    let mut offsets = recycler_offsets.allocate("shred_offsets");
+    let mut offsets = recycler_cache.offsets().allocate("shred_offsets");
     offsets.set_pinnable();
     slots.iter().for_each(|packet_slots| {
         packet_slots.iter().for_each(|slot| {
@@ -163,13 +162,13 @@ fn slot_key_data_for_gpu<
 fn shred_gpu_offsets(
     mut pubkeys_end: usize,
     batches: &[Packets],
-    recycler_offsets: &Recycler<TxOffset>,
+    recycler_cache: &RecyclerCache,
 ) -> (TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>) {
-    let mut signature_offsets = recycler_offsets.allocate("shred_signatures");
+    let mut signature_offsets = recycler_cache.offsets().allocate("shred_signatures");
     signature_offsets.set_pinnable();
-    let mut msg_start_offsets = recycler_offsets.allocate("shred_msg_starts");
+    let mut msg_start_offsets = recycler_cache.offsets().allocate("shred_msg_starts");
     msg_start_offsets.set_pinnable();
-    let mut msg_sizes = recycler_offsets.allocate("shred_msg_sizes");
+    let mut msg_sizes = recycler_cache.offsets().allocate("shred_msg_sizes");
     msg_sizes.set_pinnable();
     let mut v_sig_lens = vec![];
     for batch in batches {
@@ -198,8 +197,7 @@ fn shred_gpu_offsets(
 pub fn verify_shreds_gpu(
     batches: &[Packets],
     slot_leaders: &HashMap<u64, [u8; 32]>,
-    recycler_offsets: &Recycler<TxOffset>,
-    recycler_out: &Recycler<PinnedVec<u8>>,
+    recycler_cache: &RecyclerCache,
 ) -> Vec<Vec<u8>> {
     let api = perf_libs::api();
     if api.is_none() {
@@ -211,15 +209,15 @@ pub fn verify_shreds_gpu(
     let mut rvs = Vec::new();
     let count = sigverify::batch_size(batches);
     let (pubkeys, pubkey_offsets, mut num_packets) =
-        slot_key_data_for_gpu(0, batches, slot_leaders, recycler_offsets, recycler_out);
+        slot_key_data_for_gpu(0, batches, slot_leaders, recycler_cache);
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
     let pubkeys_len = num_packets * size_of::<Packet>();
     trace!("num_packets: {}", num_packets);
     trace!("pubkeys_len: {}", pubkeys_len);
     let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
-        shred_gpu_offsets(pubkeys_len, batches, recycler_offsets);
-    let mut out = recycler_out.allocate("out_buffer");
+        shred_gpu_offsets(pubkeys_len, batches, recycler_cache);
+    let mut out = recycler_cache.buffer().allocate("out_buffer");
     out.set_pinnable();
     elems.push(
         perf_libs::Elems {
@@ -269,12 +267,12 @@ pub fn verify_shreds_gpu(
     sigverify::copy_return_values(&v_sig_lens, &out, &mut rvs);
 
     inc_new_counter_debug!("ed25519_shred_verify_gpu", count);
-    recycler_out.recycle(out);
-    recycler_out.recycle(pubkeys);
-    recycler_offsets.recycle(signature_offsets);
-    recycler_offsets.recycle(pubkey_offsets);
-    recycler_offsets.recycle(msg_sizes);
-    recycler_offsets.recycle(msg_start_offsets);
+    recycler_cache.buffer().recycle(out);
+    recycler_cache.buffer().recycle(pubkeys);
+    recycler_cache.offsets().recycle(signature_offsets);
+    recycler_cache.offsets().recycle(pubkey_offsets);
+    recycler_cache.offsets().recycle(msg_sizes);
+    recycler_cache.offsets().recycle(msg_start_offsets);
     rvs
 }
 
@@ -348,8 +346,7 @@ pub fn sign_shreds_gpu(
     batches: &mut [Packets],
     slot_leaders_pubkeys: &HashMap<u64, [u8; 32]>,
     slot_leaders_privkeys: &HashMap<u64, [u8; 32]>,
-    recycler_offsets: &Recycler<TxOffset>,
-    recycler_out: &Recycler<PinnedVec<u8>>,
+    recycler_cache: &RecyclerCache,
 ) {
     let sig_size = size_of::<Signature>();
     let api = perf_libs::api();
@@ -379,32 +376,22 @@ pub fn sign_shreds_gpu(
     let count = sigverify::batch_size(batches);
     let mut offset: usize = 0;
     let mut num_packets = 0;
-    let (pubkeys, pubkey_offsets, num_pubkey_packets) = slot_key_data_for_gpu(
-        offset,
-        batches,
-        slot_leaders_pubkeys,
-        recycler_offsets,
-        recycler_out,
-    );
+    let (pubkeys, pubkey_offsets, num_pubkey_packets) =
+        slot_key_data_for_gpu(offset, batches, slot_leaders_pubkeys, recycler_cache);
     offset += num_pubkey_packets * size_of::<Packet>();
     num_packets += num_pubkey_packets;
     trace!("offset: {}", offset);
-    let (secrets, secret_offsets, num_secret_packets) = slot_key_data_for_gpu(
-        offset,
-        batches,
-        &slot_leaders_secrets,
-        recycler_offsets,
-        recycler_out,
-    );
+    let (secrets, secret_offsets, num_secret_packets) =
+        slot_key_data_for_gpu(offset, batches, &slot_leaders_secrets, recycler_cache);
     offset += num_secret_packets * size_of::<Packet>();
     num_packets += num_secret_packets;
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
     trace!("offset: {}", offset);
     let (signature_offsets, msg_start_offsets, msg_sizes, _v_sig_lens) =
-        shred_gpu_offsets(offset, batches, recycler_offsets);
+        shred_gpu_offsets(offset, batches, recycler_cache);
     let total_sigs = signature_offsets.len();
-    let mut signatures_out = recycler_out.allocate("ed25519 signatures");
+    let mut signatures_out = recycler_cache.buffer().allocate("ed25519 signatures");
     signatures_out.set_pinnable();
     signatures_out.resize(total_sigs * sig_size, 0);
     elems.push(
@@ -480,12 +467,12 @@ pub fn sign_shreds_gpu(
         });
     });
     inc_new_counter_debug!("ed25519_shred_sign_gpu", count);
-    recycler_out.recycle(signatures_out);
-    recycler_out.recycle(pubkeys);
-    recycler_offsets.recycle(signature_offsets);
-    recycler_offsets.recycle(pubkey_offsets);
-    recycler_offsets.recycle(msg_sizes);
-    recycler_offsets.recycle(msg_start_offsets);
+    recycler_cache.buffer().recycle(signatures_out);
+    recycler_cache.buffer().recycle(pubkeys);
+    recycler_cache.offsets().recycle(signature_offsets);
+    recycler_cache.offsets().recycle(pubkey_offsets);
+    recycler_cache.offsets().recycle(msg_sizes);
+    recycler_cache.offsets().recycle(msg_start_offsets);
 }
 
 #[cfg(test)]
@@ -571,8 +558,7 @@ pub mod tests {
     #[test]
     fn test_sigverify_shreds_gpu() {
         solana_logger::setup();
-        let recycler_offsets = Recycler::default();
-        let recycler_out = Recycler::default();
+        let recycler_cache = RecyclerCache::default();
 
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
@@ -591,7 +577,7 @@ pub mod tests {
         .iter()
         .cloned()
         .collect();
-        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![1]]);
 
         let wrong_keypair = Keypair::new();
@@ -602,11 +588,11 @@ pub mod tests {
         .iter()
         .cloned()
         .collect();
-        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
 
         let leader_slots = [(std::u64::MAX, [0u8; 32])].iter().cloned().collect();
-        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
 
         batch[0].packets[0].meta.size = 0;
@@ -617,15 +603,14 @@ pub mod tests {
         .iter()
         .cloned()
         .collect();
-        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
     }
 
     #[test]
     fn test_sigverify_shreds_sign_gpu() {
         solana_logger::setup();
-        let recycler_offsets = Recycler::default();
-        let recycler_out = Recycler::default();
+        let recycler_cache = RecyclerCache::default();
 
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
@@ -649,20 +634,14 @@ pub mod tests {
         .cloned()
         .collect();
         //unsigned
-        let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
         //signed
-        sign_shreds_gpu(
-            &mut batch,
-            &pubkeys,
-            &privkeys,
-            &recycler_offsets,
-            &recycler_out,
-        );
+        sign_shreds_gpu(&mut batch, &pubkeys, &privkeys, &recycler_cache);
         let rv = verify_shreds_cpu(&batch, &pubkeys);
         assert_eq!(rv, vec![vec![1]]);
 
-        let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_offsets, &recycler_out);
+        let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_cache);
         assert_eq!(rv, vec![vec![1]]);
     }
 
