@@ -6,6 +6,7 @@ use crate::{
     confidence::ForkConfidenceCache,
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
+    partition_cfg::PartitionCfg,
     poh_recorder::PohRecorder,
     poh_service::PohService,
     rpc::JsonRpcConfig,
@@ -59,6 +60,7 @@ pub struct ValidatorConfig {
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
+    pub partition_cfg: Option<PartitionCfg>,
 }
 
 impl Default for ValidatorConfig {
@@ -75,6 +77,7 @@ impl Default for ValidatorConfig {
             rpc_config: JsonRpcConfig::default(),
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
+            partition_cfg: None,
         }
     }
 }
@@ -339,7 +342,13 @@ impl Validator {
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
+<<<<<<< HEAD
             fork_confidence_cache,
+=======
+            block_commitment_cache,
+            config.dev_sigverify_disabled,
+            config.partition_cfg.clone(),
+>>>>>>> 59413b312... Fix rules for fork selection (#6906)
         );
 
         if config.dev_sigverify_disabled {
