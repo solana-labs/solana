@@ -70,7 +70,7 @@ solana-genesis \
   --bootstrap-stake-pubkey "$dataDir"/leader-stake-account-keypair.json \
   --bootstrap-storage-pubkey "$dataDir"/leader-storage-account-keypair.json \
   --ledger "$ledgerDir" \
-  --dev
+  --operating-mode development
 
 abort() {
   set +e
