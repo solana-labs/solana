@@ -1178,7 +1178,7 @@ impl Bank {
             loaded_accounts,
             &self.rent_collector,
         );
-        self.collect_rent(txs, iteration_order, executed, loaded_accounts);
+        self.collect_rent(executed, loaded_accounts);
 
         self.update_cached_accounts(txs, iteration_order, executed, loaded_accounts);
 
@@ -1201,34 +1201,16 @@ impl Bank {
         }
     }
 
-    fn collect_rent(
-        &self,
-        txs: &[Transaction],
-        iteration_order: Option<&[usize]>,
-        res: &[Result<()>],
-        loaded_accounts: &[Result<TransactionLoadResult>],
-    ) {
+    fn collect_rent(&self, res: &[Result<()>], loaded_accounts: &[Result<TransactionLoadResult>]) {
         let mut collected_rent: u64 = 0;
-        for (i, (raccs, tx)) in loaded_accounts
-            .iter()
-            .zip(OrderedIterator::new(txs, iteration_order))
-            .enumerate()
-        {
+        for (i, raccs) in loaded_accounts.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
             }
 
-            let message = &tx.message();
             let acc = raccs.as_ref().unwrap();
 
-            for (_i, rent) in acc
-                .2
-                .iter()
-                .enumerate()
-                .filter(|(i, _rent)| message.is_writable(*i))
-            {
-                collected_rent += *rent;
-            }
+            collected_rent += acc.2;
         }
 
         self.collected_rent
