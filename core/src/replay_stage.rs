@@ -488,7 +488,11 @@ impl ReplayStage {
                 bank.slot(),
                 replay_result
             );
-            datapoint_warn!("replay-stage-mark_dead_slot", ("slot", bank.slot(), i64),);
+            datapoint_error!(
+                "replay-stage-mark_dead_slot",
+                ("error", format!("error: {:?}", replay_result), String),
+                ("slot", bank.slot(), i64)
+            );
             Self::mark_dead_slot(bank.slot(), blocktree, progress);
         }
 

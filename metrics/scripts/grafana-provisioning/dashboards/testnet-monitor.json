@@ -4109,7 +4109,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT host_id, slot FROM \"$testnet\".\"autogen\".\"replay-stage-mark_dead_slot\"  WHERE $timeFilter ORDER BY time DESC ",
+          "query": "SELECT host_id, error, slot FROM \"$testnet\".\"autogen\".\"replay-stage-mark_dead_slot\"  WHERE $timeFilter ORDER BY time DESC ",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
