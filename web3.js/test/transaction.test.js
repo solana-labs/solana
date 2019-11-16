@@ -101,6 +101,43 @@ test('parse wire format and serialize', () => {
   expect(wireTransaction).toEqual(expectedTransaction.serialize());
 });
 
+test('transaction from rpc result', () => {
+  const rawBlockhash = new PublicKey(0).toBuffer();
+  const rpcResult = {
+    message: {
+      account_keys: [
+        [5],
+        new PublicKey(1).toBuffer(),
+        new PublicKey(2).toBuffer(),
+        new PublicKey(3).toBuffer(),
+        new PublicKey(4).toBuffer(),
+        new PublicKey(5).toBuffer(),
+      ],
+      header: {
+        num_readonly_signed_accounts: 0,
+        num_readonly_unsigned_accounts: 3,
+        num_required_signatures: 2,
+      },
+      instructions: [
+        [1],
+        {
+          accounts: [[3], 1, 2, 3],
+          data: [[1], 0],
+          program_id_index: 4,
+        },
+      ],
+      recent_blockhash: rawBlockhash,
+    },
+    signatures: [[2], Array(64).fill(1), Array(64).fill(2)],
+  };
+
+  const recentBlockhash = new PublicKey(rawBlockhash).toBase58();
+  const transaction = Transaction.fromRpcResult(rpcResult);
+  expect(transaction.instructions.length).toEqual(1);
+  expect(transaction.signatures.length).toEqual(2);
+  expect(transaction.recentBlockhash).toEqual(recentBlockhash);
+});
+
 test('serialize unsigned transaction', () => {
   const keypair = nacl.sign.keyPair.fromSeed(
     Uint8Array.from(Array(32).fill(8)),
