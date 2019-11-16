@@ -1323,6 +1323,8 @@ impl Bank {
 
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
+        self.collected_rent
+            .fetch_add(self.rent_collector.update(&mut account), Ordering::Relaxed);
         account.lamports += lamports;
         self.store_account(pubkey, &account);
     }
