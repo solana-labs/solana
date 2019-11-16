@@ -26,6 +26,8 @@ genesisOptions="${17}"
 extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
 GEOLOCATION_API_KEY="${20}"
+maybeNoSigVerify="${21}"
+
 set +x
 
 # Use a very large stake (relative to the default multinode-demo/ stake of 42)
@@ -291,8 +293,10 @@ EOF
       args+=(
         --blockstream /tmp/solana-blockstream.sock
         --no-voting
-        --dev-no-sigverify
       )
+      if [[ -n $maybeNoSigVerify ]] ; then
+        args+=("$maybeNoSigVerify")
+      fi
     else
       args+=(--enable-rpc-exit)
       if [[ -n $internalNodesLamports ]]; then

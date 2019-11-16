@@ -155,6 +155,7 @@ netemPartition=""
 netemConfig=""
 netemConfigFile=""
 netemCommand="add"
+maybeNoSigVerify="--dev-no-sigverify"
 
 command=$1
 [[ -n $command ]] || usage
@@ -177,7 +178,11 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --operating-mode ]]; then
       case "$2" in
-        development|softlaunch)
+        development)
+          maybeNoSigVerify="--dev-no-sigverify"
+          ;;
+        softlaunch)
+          maybeNoSigVerify=""
           ;;
         *)
           echo "Unexpected operating mode: \"$2\""
@@ -514,6 +519,7 @@ startBootstrapLeader() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
+         \"$maybeNoSigVerify\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -583,6 +589,7 @@ startNode() {
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
+         \"$maybeNoSigVerify\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
