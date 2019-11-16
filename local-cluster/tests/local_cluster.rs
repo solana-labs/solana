@@ -188,10 +188,10 @@ fn test_leader_failure_4() {
     );
 }
 
-fn run_network_partition(partitions: &[usize]) {
+fn run_network_partition(partitions: &[(usize, bool)]) {
     solana_logger::setup();
     info!("PARTITION_TEST!");
-    let num_nodes = partitions.iter().sum();
+    let num_nodes = partitions.iter().map(|x| x.0).sum();
     let validator_config = ValidatorConfig::default();
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -203,7 +203,7 @@ fn run_network_partition(partitions: &[usize]) {
     let partition_start = now + 60_000;
     let partition_end = partition_start + 10_000;
     let mut total = 0;
-    for (j, pn) in partitions.iter().enumerate() {
+    for (j, (pn, _)) in partitions.iter().enumerate() {
         info!(
             "PARTITION_TEST configuring partition {} for nodes {} - {}",
             j,
@@ -224,35 +224,65 @@ fn run_network_partition(partitions: &[usize]) {
         "PARTITION_TEST starting cluster with {:?} partitions",
         partitions
     );
-    let cluster = LocalCluster::new(&config);
+    let mut cluster = LocalCluster::new(&config);
     let now = timestamp();
     let timeout = partition_start as i64 - now as i64;
     info!(
         "PARTITION_TEST sleeping until partition start timeout {}",
         timeout
     );
+    let mut dead_nodes = HashSet::new();
     if timeout > 0 {
         sleep(Duration::from_millis(timeout as u64));
     }
-    info!("PARTITION_TEST done sleeping until partition start timeout");
+    println!("PARTITION_TEST done sleeping until partition start timeout");
     let now = timestamp();
     let timeout = partition_end as i64 - now as i64;
-    info!(
+    println!(
         "PARTITION_TEST sleeping until partition end timeout {}",
         timeout
     );
+    let mut alive_node_contact_info = None;
     if timeout > 0 {
         sleep(Duration::from_millis(timeout as u64));
+        let all_pubkeys = cluster.get_node_pubkeys();
+        for (pubkey, (_, should_exit)) in all_pubkeys.iter().zip(partitions) {
+            if *should_exit {
+                info!("Killing validator with id: {}", pubkey);
+                cluster.exit_node(pubkey);
+                dead_nodes.insert(*pubkey);
+            } else {
+                alive_node_contact_info = Some(
+                    cluster
+                        .validator_infos
+                        .get(pubkey)
+                        .unwrap()
+                        .info
+                        .contact_info
+                        .clone(),
+                );
+            }
+        }
     }
+    let alive_node_contact_info =
+        alive_node_contact_info.expect("Not all the validiators can be dead");
+
     info!("PARTITION_TEST done sleeping until partition end timeout");
     info!("PARTITION_TEST discovering nodes");
-    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
+    let (cluster_nodes, _) = discover_cluster(
+        &alive_node_contact_info.gossip,
+        num_nodes - dead_nodes.len(),
+    )
+    .unwrap();
     info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
     info!("PARTITION_TEST looking for new roots on all nodes");
     let mut roots = vec![HashSet::new(); cluster_nodes.len()];
     let mut done = false;
     while !done {
         for (i, ingress_node) in cluster_nodes.iter().enumerate() {
+            if dead_nodes.contains(&ingress_node.id) {
+                continue;
+            }
             let client = create_client(
                 ingress_node.client_facing_addr(),
                 solana_core::cluster_info::VALIDATOR_PORT_RANGE,
@@ -273,7 +303,7 @@ fn run_network_partition(partitions: &[usize]) {
 #[test]
 #[serial]
 fn test_network_partition_1_2() {
-    run_network_partition(&[1, 2])
+    run_network_partition(&[(1, false), (2, false)])
 }
 
 #[allow(unused_attributes)]
@@ -281,13 +311,19 @@ fn test_network_partition_1_2() {
 #[test]
 #[serial]
 fn test_network_partition_1_1() {
-    run_network_partition(&[1, 1])
+    run_network_partition(&[(1, false), (1, false)])
 }
 
 #[test]
 #[serial]
 fn test_network_partition_1_1_1() {
-    run_network_partition(&[1, 1, 1])
+    run_network_partition(&[(1, false), (1, false), (1, false)])
+}
+
+#[test]
+#[serial]
+fn test_kill_partition() {
+    run_network_partition(&[(2, true), (1, false), (1, false), (1, false), (1, false)])
 }
 
 #[test]
