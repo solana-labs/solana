@@ -64,7 +64,7 @@ solana-keygen new -f -o "$dataDir"/leader-storage-account-keypair.json
 
 solana-genesis \
   --hashes-per-tick sleep \
-  --faucet-keypair "$dataDir"/faucet-keypair.json \
+  --faucet-pubkey "$dataDir"/faucet-keypair.json \
   --bootstrap-leader-pubkey "$dataDir"/leader-keypair.json \
   --bootstrap-vote-pubkey "$dataDir"/leader-vote-account-keypair.json \
   --bootstrap-stake-pubkey "$dataDir"/leader-stake-account-keypair.json \
