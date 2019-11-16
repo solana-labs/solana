@@ -281,16 +281,26 @@ impl Shred {
         self.common_header.index
     }
 
-    /// This is not a safe function. It only changes the meta information.
-    /// Use this only for test code which doesn't care about actual shred
     pub fn set_index(&mut self, index: u32) {
-        self.common_header.index = index
+        self.common_header.index = index;
+        Self::serialize_obj_into(
+            &mut 0,
+            SIZE_OF_COMMON_SHRED_HEADER,
+            &mut self.payload,
+            &self.common_header,
+        )
+        .unwrap();
     }
 
-    /// This is not a safe function. It only changes the meta information.
-    /// Use this only for test code which doesn't care about actual shred
     pub fn set_slot(&mut self, slot: Slot) {
-        self.common_header.slot = slot
+        self.common_header.slot = slot;
+        Self::serialize_obj_into(
+            &mut 0,
+            SIZE_OF_COMMON_SHRED_HEADER,
+            &mut self.payload,
+            &self.common_header,
+        )
+        .unwrap();
     }
 
     pub fn signature(&self) -> Signature {
