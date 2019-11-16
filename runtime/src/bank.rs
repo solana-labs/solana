@@ -1902,69 +1902,94 @@ mod tests {
     }
 
     fn store_accounts(bank: &Bank, keypairs: &mut Vec<Keypair>, mock_program_id: Pubkey) {
-        let mut stored_account: Vec<(Pubkey, Account)> = Vec::with_capacity(keypairs.len() - 1);
-        stored_account.push((
+        let mut account_pairs: Vec<(Pubkey, Account)> = Vec::with_capacity(keypairs.len() - 1);
+        account_pairs.push((
             keypairs[0].pubkey(),
             Account::new(50270, 1, &Pubkey::default()),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[1].pubkey(),
             Account::new(50270, 1, &Pubkey::default()),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[2].pubkey(),
             Account::new(50270, 1, &Pubkey::default()),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[3].pubkey(),
             Account::new(50270, 1, &Pubkey::default()),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[4].pubkey(),
             Account::new(10, 1, &Pubkey::default()),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[5].pubkey(),
             Account::new(10, 1, &Pubkey::default()),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[6].pubkey(),
             Account::new(100_560, 1, &Pubkey::default()),
         ));
 
-        stored_account.push((
+        account_pairs.push((
             keypairs[8].pubkey(),
             Account::new(50284, 1, &Pubkey::default()),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[9].pubkey(),
             Account::new(10, 1, &Pubkey::default()),
         ));
 
         // Feeding to MockProgram to test read only rent behaviour
-        stored_account.push((
+        account_pairs.push((
             keypairs[10].pubkey(),
             Account::new(50271, 1, &Pubkey::default()),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[11].pubkey(),
             Account::new(50271, 1, &mock_program_id),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[12].pubkey(),
             Account::new(50271, 1, &mock_program_id),
         ));
-        stored_account.push((
+        account_pairs.push((
             keypairs[13].pubkey(),
             Account::new(14, 23, &mock_program_id),
         ));
 
-        for i in 0..13 {
-            bank.store_account(&stored_account[i].0, &stored_account[i].1);
+        for account_pair in account_pairs.iter() {
+            bank.store_account(&account_pair.0, &account_pair.1);
         }
     }
 
+    fn create_mock_transaction(
+        payer: &Keypair,
+        keypair1: &Keypair,
+        keypair2: &Keypair,
+        read_only_keypair: &Keypair,
+        mock_program_id: Pubkey,
+        recent_blockhash: Hash,
+    ) -> Transaction {
+        let account_metas = vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new(keypair1.pubkey(), true),
+            AccountMeta::new(keypair2.pubkey(), true),
+            AccountMeta::new_readonly(read_only_keypair.pubkey(), false),
+        ];
+        let deduct_instruction =
+            Instruction::new(mock_program_id, &MockInstruction::Deduction, account_metas);
+        Transaction::new_signed_with_payer(
+            vec![deduct_instruction],
+            Some(&payer.pubkey()),
+            &[payer, keypair1, keypair2],
+            recent_blockhash,
+        )
+    }
+
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_credit_debit_rent() {
         let mock_program_id = Pubkey::new(&[2u8; 32]);
 
@@ -2035,18 +2060,12 @@ mod tests {
             genesis_block.hash(),
         );
 
-        let account_metas = vec![
-            AccountMeta::new(keypairs[10].pubkey(), true),
-            AccountMeta::new(keypairs[11].pubkey(), true),
-            AccountMeta::new(keypairs[12].pubkey(), true),
-            AccountMeta::new_readonly(keypairs[13].pubkey(), false),
-        ];
-        let deduct_instruction =
-            Instruction::new(mock_program_id, &MockInstruction::Deduction, account_metas);
-        let t6 = Transaction::new_signed_with_payer(
-            vec![deduct_instruction],
-            Some(&keypairs[10].pubkey()),
-            &[&keypairs[10], &keypairs[11], &keypairs[12]],
+        let t6 = create_mock_transaction(
+            &keypairs[10],
+            &keypairs[11],
+            &keypairs[12],
+            &keypairs[13],
+            mock_program_id,
             genesis_block.hash(),
         );
 
