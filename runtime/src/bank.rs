@@ -2019,6 +2019,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_rent() {
         let mock_program_id = Pubkey::new(&[2u8; 32]);
 
