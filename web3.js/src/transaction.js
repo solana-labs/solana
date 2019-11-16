@@ -32,6 +32,9 @@ const DEFAULT_SIGNATURE = Array(64).fill(0);
  */
 export const PACKET_DATA_SIZE = 1280 - 40 - 8;
 
+const PUBKEY_LENGTH = 32;
+const SIGNATURE_LENGTH = 64;
+
 /**
  * List of TransactionInstruction object fields that may be initialized at construction
  *
@@ -442,25 +445,6 @@ export class Transaction {
    * Parse a wire transaction into a Transaction object.
    */
   static from(buffer: Buffer): Transaction {
-    const PUBKEY_LENGTH = 32;
-    const SIGNATURE_LENGTH = 64;
-
-    function isWritable(
-      i: number,
-      numRequiredSignatures: number,
-      numReadonlySignedAccounts: number,
-      numReadonlyUnsignedAccounts: number,
-      numKeys: number,
-    ): boolean {
-      return (
-        i < numRequiredSignatures - numReadonlySignedAccounts ||
-        (i >= numRequiredSignatures &&
-          i < numKeys - numReadonlyUnsignedAccounts)
-      );
-    }
-
-    let transaction = new Transaction();
-
     // Slice up wire data
     let byteArray = [...buffer];
 
@@ -495,18 +479,85 @@ export class Transaction {
     for (let i = 0; i < instructionCount; i++) {
       let instruction = {};
       instruction.programIndex = byteArray.shift();
-      const accountIndexCount = shortvec.decodeLength(byteArray);
-      instruction.accountIndex = byteArray.slice(0, accountIndexCount);
-      byteArray = byteArray.slice(accountIndexCount);
+      const accountCount = shortvec.decodeLength(byteArray);
+      instruction.accounts = byteArray.slice(0, accountCount);
+      byteArray = byteArray.slice(accountCount);
       const dataLength = shortvec.decodeLength(byteArray);
       instruction.data = byteArray.slice(0, dataLength);
       byteArray = byteArray.slice(dataLength);
       instructions.push(instruction);
     }
 
-    // Populate Transaction object
+    return Transaction._populate(
+      signatures,
+      accounts,
+      instructions,
+      recentBlockhash,
+      numRequiredSignatures,
+      numReadonlySignedAccounts,
+      numReadonlyUnsignedAccounts,
+    );
+  }
+
+  /**
+   * Parse an RPC result into a Transaction object.
+   */
+  static fromRpcResult(rpcResult: any): Transaction {
+    const signatures = rpcResult.signatures.slice(1);
+    const accounts = rpcResult.message.account_keys.slice(1);
+    const instructions = rpcResult.message.instructions.slice(1).map(ix => {
+      ix.accounts.shift();
+      ix.data.shift();
+      return ix;
+    });
+    const recentBlockhash = rpcResult.message.recent_blockhash;
+    const numRequiredSignatures =
+      rpcResult.message.header.num_required_signatures;
+    const numReadonlySignedAccounts =
+      rpcResult.message.header.num_readonly_signed_accounts;
+    const numReadonlyUnsignedAccounts =
+      rpcResult.message.header.num_readonly_unsigned_accounts;
+    return Transaction._populate(
+      signatures,
+      accounts,
+      instructions,
+      recentBlockhash,
+      numRequiredSignatures,
+      numReadonlySignedAccounts,
+      numReadonlyUnsignedAccounts,
+    );
+  }
+
+  /**
+   * Populate Transaction object
+   * @private
+   */
+  static _populate(
+    signatures: Array<Array<number>>,
+    accounts: Array<Array<number>>,
+    instructions: Array<any>,
+    recentBlockhash: Array<number>,
+    numRequiredSignatures: number,
+    numReadonlySignedAccounts: number,
+    numReadonlyUnsignedAccounts: number,
+  ): Transaction {
+    function isWritable(
+      i: number,
+      numRequiredSignatures: number,
+      numReadonlySignedAccounts: number,
+      numReadonlyUnsignedAccounts: number,
+      numKeys: number,
+    ): boolean {
+      return (
+        i < numRequiredSignatures - numReadonlySignedAccounts ||
+        (i >= numRequiredSignatures &&
+          i < numKeys - numReadonlyUnsignedAccounts)
+      );
+    }
+
+    const transaction = new Transaction();
     transaction.recentBlockhash = new PublicKey(recentBlockhash).toBase58();
-    for (let i = 0; i < signatureCount; i++) {
+    for (let i = 0; i < signatures.length; i++) {
       const sigPubkeyPair = {
         signature:
           signatures[i].toString() == DEFAULT_SIGNATURE.toString()
@@ -516,14 +567,14 @@ export class Transaction {
       };
       transaction.signatures.push(sigPubkeyPair);
     }
-    for (let i = 0; i < instructionCount; i++) {
+    for (let i = 0; i < instructions.length; i++) {
       let instructionData = {
         keys: [],
         programId: new PublicKey(accounts[instructions[i].programIndex]),
         data: Buffer.from(instructions[i].data),
       };
-      for (let j = 0; j < instructions[i].accountIndex.length; j++) {
-        const pubkey = new PublicKey(accounts[instructions[i].accountIndex[j]]);
+      for (let j = 0; j < instructions[i].accounts.length; j++) {
+        const pubkey = new PublicKey(accounts[instructions[i].accounts[j]]);
 
         instructionData.keys.push({
           pubkey,

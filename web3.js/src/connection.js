@@ -409,17 +409,37 @@ const GetTotalSupplyRpcResult = jsonRpcResult('number');
 const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult('number');
 
 /**
- * Expected JSON RPC response for the "getBlocksSince" message
+ * Expected JSON RPC response for the "getConfirmedBlock" message
  */
-const GetBlocksSinceRpcResult = jsonRpcResult(struct.list(['number']));
-
-/**
- * Expected JSON RPC response for the "getBlock" message
- */
-const GetBlockRpcResult = jsonRpcResult(
+export const GetConfirmedBlockRpcResult = jsonRpcResult(
   struct.list([
     struct.tuple([
-      struct.list(['number']),
+      struct({
+        signatures: struct.list([struct.list(['number'])]),
+        message: struct({
+          account_keys: struct.list([struct.list(['number'])]),
+          header: struct({
+            num_required_signatures: 'number',
+            num_readonly_signed_accounts: 'number',
+            num_readonly_unsigned_accounts: 'number',
+          }),
+          instructions: struct.list([
+            struct.union([
+              struct.list(['number']),
+              struct({
+                accounts: struct.list([
+                  struct.union([struct.list(['number']), 'number']),
+                ]),
+                data: struct.list([
+                  struct.union([struct.list(['number']), 'number']),
+                ]),
+                program_id_index: 'number',
+              }),
+            ]),
+          ]),
+          recent_blockhash: struct.list(['number']),
+        }),
+      }),
       struct.union([struct({Ok: 'null'}), struct({Err: 'object'})]),
     ]),
   ]),
@@ -1019,19 +1039,6 @@ export class Connection {
   }
 
   /**
-   * Fetch a list of rooted blocks from the cluster
-   */
-  async getBlocksSince(slot: number): Promise<Array<number>> {
-    const unsafeRes = await this._rpcRequest('getBlocksSince', [slot]);
-    const res = GetBlocksSinceRpcResult(unsafeRes);
-    if (res.error) {
-      throw new Error(res.error.message);
-    }
-    assert(typeof res.result !== 'undefined');
-    return res.result;
-  }
-
-  /**
    * Fetch the node version
    */
   async getVersion(): Promise<Version> {
@@ -1046,20 +1053,21 @@ export class Connection {
 
   /**
    * Fetch a list of Transactions and transaction statuses from the cluster
+   * for a confirmed block
    */
-  async getBlock(
+  async getConfirmedBlock(
     slot: number,
   ): Promise<
     Array<[Transaction, SignatureSuccess] | [Transaction, TransactionError]>,
   > {
-    const unsafeRes = await this._rpcRequest('getBlock', [slot]);
-    const result = GetBlockRpcResult(unsafeRes);
+    const unsafeRes = await this._rpcRequest('getConfirmedBlock', [slot]);
+    const result = GetConfirmedBlockRpcResult(unsafeRes);
     if (result.error) {
       throw new Error(result.error.message);
     }
     assert(typeof result.result !== 'undefined');
     return result.result.map(result => {
-      return [Transaction.from(result[0]), result[1]];
+      return [Transaction.fromRpcResult(result[0]), result[1]];
     });
   }
 
