@@ -1901,7 +1901,35 @@ mod tests {
         }
     }
 
-    fn store_accounts(bank: &Bank, keypairs: &mut Vec<Keypair>, mock_program_id: Pubkey) {
+    fn create_mock_transaction(
+        payer: &Keypair,
+        keypair1: &Keypair,
+        keypair2: &Keypair,
+        read_only_keypair: &Keypair,
+        mock_program_id: Pubkey,
+        recent_blockhash: Hash,
+    ) -> Transaction {
+        let account_metas = vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new(keypair1.pubkey(), true),
+            AccountMeta::new(keypair2.pubkey(), true),
+            AccountMeta::new_readonly(read_only_keypair.pubkey(), false),
+        ];
+        let deduct_instruction =
+            Instruction::new(mock_program_id, &MockInstruction::Deduction, account_metas);
+        Transaction::new_signed_with_payer(
+            vec![deduct_instruction],
+            Some(&payer.pubkey()),
+            &[payer, keypair1, keypair2],
+            recent_blockhash,
+        )
+    }
+
+    fn store_accounts_for_rent_test(
+        bank: &Bank,
+        keypairs: &mut Vec<Keypair>,
+        mock_program_id: Pubkey,
+    ) {
         let mut account_pairs: Vec<(Pubkey, Account)> = Vec::with_capacity(keypairs.len() - 1);
         account_pairs.push((
             keypairs[0].pubkey(),
@@ -1964,33 +1992,34 @@ mod tests {
         }
     }
 
-    fn create_mock_transaction(
-        payer: &Keypair,
-        keypair1: &Keypair,
-        keypair2: &Keypair,
-        read_only_keypair: &Keypair,
+    fn create_child_bank_for_rent_test(
+        root_bank: &Arc<Bank>,
+        genesis_block: &GenesisConfig,
         mock_program_id: Pubkey,
-        recent_blockhash: Hash,
-    ) -> Transaction {
-        let account_metas = vec![
-            AccountMeta::new(payer.pubkey(), true),
-            AccountMeta::new(keypair1.pubkey(), true),
-            AccountMeta::new(keypair2.pubkey(), true),
-            AccountMeta::new_readonly(read_only_keypair.pubkey(), false),
-        ];
-        let deduct_instruction =
-            Instruction::new(mock_program_id, &MockInstruction::Deduction, account_metas);
-        Transaction::new_signed_with_payer(
-            vec![deduct_instruction],
-            Some(&payer.pubkey()),
-            &[payer, keypair1, keypair2],
-            recent_blockhash,
-        )
+    ) -> Bank {
+        let mut bank = Bank::new_from_parent(
+            root_bank,
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+        bank.rent_collector.slots_per_year = 421_812.0;
+        bank.add_instruction_processor(mock_program_id, mock_process_instruction);
+
+        let system_program_id = solana_system_program().1;
+        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
+        system_program_account.lamports =
+            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
+        bank.store_account(&system_program_id, &system_program_account);
+
+        bank
     }
 
     #[test]
-    #[allow(clippy::cognitive_complexity)]
-    fn test_credit_debit_rent() {
+    fn test_rent() {
         let mock_program_id = Pubkey::new(&[2u8; 32]);
 
         let (mut genesis_block, _mint_keypair) = create_genesis_config(10);
@@ -2006,28 +2035,11 @@ mod tests {
         };
 
         let root_bank = Arc::new(Bank::new(&genesis_block));
-        let mut bank = Bank::new_from_parent(
-            &root_bank,
-            &Pubkey::default(),
-            2 * (SECONDS_PER_YEAR
-                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
-                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
-                //  / ticks/slot
-                / genesis_block.ticks_per_slot as f64) as u64,
-        );
-        bank.rent_collector.slots_per_year = 421_812.0;
-        bank.add_instruction_processor(mock_program_id, mock_process_instruction);
+        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_block, mock_program_id);
 
         assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
-        store_accounts(&bank, &mut keypairs, mock_program_id);
-
-        // Make native instruction loader rent exempt
-        let system_program_id = solana_system_program().1;
-        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
-        system_program_account.lamports =
-            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
-        bank.store_account(&system_program_id, &system_program_account);
+        store_accounts_for_rent_test(&bank, &mut keypairs, mock_program_id);
 
         let t1 = system_transaction::transfer(
             &keypairs[0],
