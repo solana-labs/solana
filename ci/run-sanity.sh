@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
+set -e
 
 cd "$(dirname "$0")/.."
-
-set -ex
 
 rm -f config/run/init-completed
 
