@@ -1,4 +1,6 @@
-use clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
+use clap::{
+    crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
+};
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -108,12 +110,13 @@ fn flush_iptables_rule() {
     );
 }
 
-fn insert_tc_root(interface: &str) -> bool {
+fn insert_tc_root(interface: &str, num_bands: &str) -> bool {
     // tc qdisc add dev <if> root handle 1: prio
+    // tc qdisc add dev <if> root handle 1: prio bands <num_bands>
     run(
         "tc",
         &[
-            "qdisc", "add", "dev", interface, "root", "handle", "1:", "prio",
+            "qdisc", "add", "dev", interface, "root", "handle", "1:", "prio", "bands", num_bands,
         ],
         "Failed to add root qdisc",
         "tc add root qdisc",
@@ -161,11 +164,11 @@ fn delete_tc_netem(interface: &str, class: &str, handle: &str, filter: &str) {
 }
 
 fn insert_tos_filter(interface: &str, class: &str, tos: &str) -> bool {
-    // tc filter add dev <if> parent 1:0 protocol ip prio 10 u32 match ip tos <i.a> 0xff flowid 1:<i.a>
+    // tc filter add dev <if> protocol ip parent 1: prio 1 u32 match ip tos <i.a> 0xff flowid 1:<i.a>
     run(
         "tc",
         &[
-            "filter", "add", "dev", interface, "parent", "1:0", "protocol", "ip", "prio", "10",
+            "filter", "add", "dev", interface, "protocol", "ip", "parent", "1:", "prio", "1",
             "u32", "match", "ip", "tos", tos, "0xff", "flowid", class,
         ],
         "Failed to add tos filter",
@@ -175,15 +178,43 @@ fn insert_tos_filter(interface: &str, class: &str, tos: &str) -> bool {
 }
 
 fn delete_tos_filter(interface: &str, class: &str, tos: &str) {
-    // tc filter delete dev <if> parent 1:0 protocol ip prio 10 u32 match ip tos <i.a> 0xff flowid 1:<i.a>
+    // tc filter delete dev <if> protocol ip parent 1: prio 10 u32 match ip tos <i.a> 0xff flowid 1:<i.a>
     run(
         "tc",
         &[
-            "filter", "delete", "dev", interface, "parent", "1:0", "protocol", "ip", "prio", "10",
+            "filter", "delete", "dev", interface, "protocol", "ip", "parent", "1:", "prio", "1",
             "u32", "match", "ip", "tos", tos, "0xff", "flowid", class,
         ],
         "Failed to delete tos filter",
         "tc delete filter",
+        true,
+    );
+}
+
+fn insert_default_filter(interface: &str) -> bool {
+    // tc filter add dev <if> protocol ip parent 1: prio 2 u32 match ip src 0/0 flowid 1:4
+    run(
+        "tc",
+        &[
+            "filter", "add", "dev", interface, "protocol", "ip", "parent", "1:", "prio", "1",
+            "u32", "match", "ip", "tos", "0", "0xff", "flowid", "1:4",
+        ],
+        "Failed to add default filter",
+        "tc add default filter",
+        false,
+    )
+}
+
+fn delete_default_filter(interface: &str) {
+    // tc filter delete dev <if> protocol ip parent 1: prio 2 flowid 1:4
+    run(
+        "tc",
+        &[
+            "filter", "delete", "dev", interface, "protocol", "ip", "parent", "1:", "prio", "1",
+            "flowid", "1:1",
+        ],
+        "Failed to delete default filter",
+        "tc delete default filter",
         true,
     );
 }
@@ -236,9 +267,15 @@ fn shape_network(matches: &ArgMatches) {
     }
 
     delete_tc_root(interface.as_str());
-    if !topology.interconnects.is_empty() && !insert_tc_root(interface.as_str()) {
-        flush_iptables_rule();
-        return;
+    if !topology.interconnects.is_empty() {
+        let num_bands = (topology.partitions.len() + 2).to_string();
+        if !insert_tc_root(interface.as_str(), num_bands.as_str())
+            || !insert_default_filter(interface.as_str())
+        {
+            delete_tc_root(interface.as_str());
+            flush_iptables_rule();
+            return;
+        }
     }
 
     topology.interconnects.iter().for_each(|i| {
@@ -246,9 +283,12 @@ fn shape_network(matches: &ArgMatches) {
             let tos = partition_id_to_tos(i.a as usize);
             if tos == 0 {
                 println!("Incorrect value of TOS/Partition in config {}", i.a);
+                delete_default_filter(interface.as_str());
+                delete_tc_root(interface.as_str());
                 return;
             }
             let tos_string = tos.to_string();
+            // First valid class is 1:1, and it's reserved for the default filter
             let class = format!("1:{}", i.a + 1);
             if !insert_tc_netem(
                 interface.as_str(),
@@ -256,6 +296,7 @@ fn shape_network(matches: &ArgMatches) {
                 tos_string.as_str(),
                 i.config.as_str(),
             ) {
+                delete_default_filter(interface.as_str());
                 delete_tc_root(interface.as_str());
                 return;
             }
@@ -267,6 +308,7 @@ fn shape_network(matches: &ArgMatches) {
                     tos_string.as_str(),
                     i.config.as_str(),
                 );
+                delete_default_filter(interface.as_str());
                 delete_tc_root(interface.as_str());
                 return;
             }
@@ -296,8 +338,9 @@ fn cleanup_network(matches: &ArgMatches) {
     topology.interconnects.iter().for_each(|i| {
         if i.b as usize == my_partition {
             let handle = (i.a + 1).to_string();
+            // First valid class is 1:1, and it's reserved for the default filter
+            let class = format!("1:{}", i.a + 1);
             let tos_string = i.a.to_string();
-            let class = format!("1:{}", i.a);
             delete_tos_filter(interface.as_str(), class.as_str(), tos_string.as_str());
             delete_tc_netem(
                 interface.as_str(),
@@ -307,6 +350,7 @@ fn cleanup_network(matches: &ArgMatches) {
             );
         }
     });
+    delete_default_filter(interface.as_str());
     delete_tc_root(interface.as_str());
     flush_iptables_rule();
 }
@@ -323,7 +367,7 @@ fn main() {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_clap_utils::version!())
+        .version(crate_version!())
         .subcommand(
             SubCommand::with_name("shape")
                 .about("Shape the network using config file")
