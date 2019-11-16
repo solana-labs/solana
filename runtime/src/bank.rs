@@ -1663,13 +1663,14 @@ mod tests {
         status_cache::MAX_CACHE_ENTRIES,
     };
     use bincode::{deserialize_from, serialize_into, serialized_size};
+    use solana_sdk::instruction::AccountMeta;
     use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
         account::KeyedAccount,
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::create_genesis_config,
-        instruction::InstructionError,
+        instruction::{Instruction, InstructionError},
         message::{Message, MessageHeader},
         poh_config::PohConfig,
         rent::Rent,
@@ -1682,7 +1683,7 @@ mod tests {
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
-    use std::{io::Cursor, time::Duration};
+    use std::{io::Cursor, result, time::Duration};
     use tempfile::TempDir;
 
     #[test]
@@ -1877,27 +1878,38 @@ mod tests {
         assert_eq!(bank_with_success_txs_hash, bank_hash);
     }
 
+    #[derive(Serialize, Deserialize)]
+    enum MockInstruction {
+        Deduction,
+    }
+
+    fn mock_process_instruction(
+        _program_id: &Pubkey,
+        keyed_accounts: &mut [KeyedAccount],
+        data: &[u8],
+    ) -> result::Result<(), InstructionError> {
+        if let Ok(instruction) = bincode::deserialize(data) {
+            match instruction {
+                MockInstruction::Deduction => {
+                    keyed_accounts[1].account.lamports += 1;
+                    keyed_accounts[2].account.lamports -= 1;
+                    Ok(())
+                }
+            }
+        } else {
+            Err(InstructionError::InvalidInstructionData)
+        }
+    }
+
     #[test]
     fn test_credit_debit_rent() {
+        let mock_program_id = Pubkey::new(&[2u8; 32]);
+
         let (mut genesis_block, _mint_keypair) = create_genesis_config(10);
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
-        let keypair4 = Keypair::new();
-
-        // Transaction between these two keypairs will fail
-        // So, no rent will be charged
-        let keypair5 = Keypair::new();
-        let keypair6 = Keypair::new();
-
-        // This will create a new account using transfer instruction
-        let keypair7 = Keypair::new();
-        let keypair8 = Keypair::new();
-
-        // Insufficient lamports keypair10 have, so account gets overwritten and
-        // lamports are claimed
-        let keypair9 = Keypair::new();
-        let keypair10 = Keypair::new();
+        let mut keypairs: Vec<Keypair> = Vec::with_capacity(14);
+        for _i in 0..14 {
+            keypairs.push(Keypair::new());
+        }
 
         genesis_block.rent = Rent {
             lamports_per_byte_year: 1,
@@ -1916,31 +1928,71 @@ mod tests {
                 / genesis_block.ticks_per_slot as f64) as u64,
         );
         bank.rent_collector.slots_per_year = 421_812.0;
+        bank.add_instruction_processor(mock_program_id, mock_process_instruction);
 
         assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::with_capacity(13);
         // Initialize credit-debit and credit only accounts
-        let account1 = Account::new(50270, 1, &Pubkey::default());
-        let account2 = Account::new(50270, 1, &Pubkey::default());
-        let account3 = Account::new(50270, 1, &Pubkey::default());
-        let account4 = Account::new(50270, 1, &Pubkey::default());
-        let account5 = Account::new(10, 1, &Pubkey::default());
-        let account6 = Account::new(10, 1, &Pubkey::default());
-        let account7 = Account::new(100_560, 1, &Pubkey::default());
+        accounts.push((
+            keypairs[0].pubkey(),
+            Account::new(50270, 1, &Pubkey::default()),
+        ));
+        accounts.push((
+            keypairs[1].pubkey(),
+            Account::new(50270, 1, &Pubkey::default()),
+        ));
+        accounts.push((
+            keypairs[2].pubkey(),
+            Account::new(50270, 1, &Pubkey::default()),
+        ));
+        accounts.push((
+            keypairs[3].pubkey(),
+            Account::new(50270, 1, &Pubkey::default()),
+        ));
+        accounts.push((
+            keypairs[4].pubkey(),
+            Account::new(10, 1, &Pubkey::default()),
+        ));
+        accounts.push((
+            keypairs[5].pubkey(),
+            Account::new(10, 1, &Pubkey::default()),
+        ));
+        accounts.push((
+            keypairs[6].pubkey(),
+            Account::new(100_560, 1, &Pubkey::default()),
+        ));
 
-        let account9 = Account::new(50284, 1, &Pubkey::default());
-        let account10 = Account::new(10, 1, &Pubkey::default());
+        accounts.push((
+            keypairs[8].pubkey(),
+            Account::new(50284, 1, &Pubkey::default()),
+        ));
+        accounts.push((
+            keypairs[9].pubkey(),
+            Account::new(10, 1, &Pubkey::default()),
+        ));
 
-        bank.store_account(&keypair1.pubkey(), &account1);
-        bank.store_account(&keypair2.pubkey(), &account2);
-        bank.store_account(&keypair3.pubkey(), &account3);
-        bank.store_account(&keypair4.pubkey(), &account4);
-        bank.store_account(&keypair5.pubkey(), &account5);
-        bank.store_account(&keypair6.pubkey(), &account6);
-        bank.store_account(&keypair7.pubkey(), &account7);
+        // Feeding to MockProgram to test read only rent behaviour
+        accounts.push((
+            keypairs[10].pubkey(),
+            Account::new(50271, 1, &Pubkey::default()),
+        ));
+        accounts.push((
+            keypairs[11].pubkey(),
+            Account::new(50271, 1, &mock_program_id),
+        ));
+        accounts.push((
+            keypairs[12].pubkey(),
+            Account::new(50271, 1, &mock_program_id),
+        ));
+        accounts.push((
+            keypairs[13].pubkey(),
+            Account::new(14, 23, &mock_program_id),
+        ));
 
-        bank.store_account(&keypair9.pubkey(), &account9);
-        bank.store_account(&keypair10.pubkey(), &account10);
+        for i in 0..13 {
+            bank.store_account(&accounts[i].0, &accounts[i].1);
+        }
 
         // Make native instruction loader rent exempt
         let system_program_id = solana_system_program().1;
@@ -1949,22 +2001,54 @@ mod tests {
             bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
         bank.store_account(&system_program_id, &system_program_account);
 
-        let t1 =
-            system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, genesis_block.hash());
-        let t2 =
-            system_transaction::transfer(&keypair3, &keypair4.pubkey(), 1, genesis_block.hash());
-        let t3 =
-            system_transaction::transfer(&keypair5, &keypair6.pubkey(), 1, genesis_block.hash());
+        let t1 = system_transaction::transfer(
+            &keypairs[0],
+            &keypairs[1].pubkey(),
+            1,
+            genesis_block.hash(),
+        );
+        let t2 = system_transaction::transfer(
+            &keypairs[2],
+            &keypairs[3].pubkey(),
+            1,
+            genesis_block.hash(),
+        );
+        let t3 = system_transaction::transfer(
+            &keypairs[4],
+            &keypairs[5].pubkey(),
+            1,
+            genesis_block.hash(),
+        );
         let t4 = system_transaction::transfer(
-            &keypair7,
-            &keypair8.pubkey(),
+            &keypairs[6],
+            &keypairs[7].pubkey(),
             50269,
             genesis_block.hash(),
         );
-        let t5 =
-            system_transaction::transfer(&keypair9, &keypair10.pubkey(), 14, genesis_block.hash());
+        let t5 = system_transaction::transfer(
+            &keypairs[8],
+            &keypairs[9].pubkey(),
+            14,
+            genesis_block.hash(),
+        );
+
+        let account_metas = vec![
+            AccountMeta::new(keypairs[10].pubkey(), true),
+            AccountMeta::new(keypairs[11].pubkey(), true),
+            AccountMeta::new(keypairs[12].pubkey(), true),
+            AccountMeta::new_readonly(keypairs[13].pubkey(), false),
+        ];
+        let deduct_instruction =
+            Instruction::new(mock_program_id, &MockInstruction::Deduction, account_metas);
+        let t6 = Transaction::new_signed_with_payer(
+            vec![deduct_instruction],
+            Some(&keypairs[10].pubkey()),
+            &[&keypairs[10], &keypairs[11], &keypairs[12]],
+            genesis_block.hash(),
+        );
 
         let res = bank.process_transactions(&[
+            t6.clone(),
             t5.clone(),
             t1.clone(),
             t2.clone(),
@@ -1972,55 +2056,56 @@ mod tests {
             t4.clone(),
         ]);
 
-        assert_eq!(res.len(), 5);
+        assert_eq!(res.len(), 6);
         assert_eq!(res[0], Ok(()));
         assert_eq!(res[1], Ok(()));
         assert_eq!(res[2], Ok(()));
-        assert_eq!(res[3], Err(TransactionError::AccountNotFound));
-        assert_eq!(res[4], Ok(()));
+        assert_eq!(res[3], Ok(()));
+        assert_eq!(res[4], Err(TransactionError::AccountNotFound));
+        assert_eq!(res[5], Ok(()));
 
         bank.freeze();
 
         let mut rent_collected = 0;
 
         // 50270 - 50268(Rent) - 1(transfer)
-        assert_eq!(bank.get_balance(&keypair1.pubkey()), 1);
+        assert_eq!(bank.get_balance(&keypairs[0].pubkey()), 1);
         rent_collected += 50268;
 
         // 50270 - 50268(Rent) + 1(transfer)
-        assert_eq!(bank.get_balance(&keypair2.pubkey()), 3);
+        assert_eq!(bank.get_balance(&keypairs[1].pubkey()), 3);
         rent_collected += 50268;
 
         // 50270 - 50268(Rent) - 1(transfer)
-        assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
+        assert_eq!(bank.get_balance(&keypairs[2].pubkey()), 1);
         rent_collected += 50268;
 
         // 50270 - 50268(Rent) + 1(transfer)
-        assert_eq!(bank.get_balance(&keypair4.pubkey()), 3);
+        assert_eq!(bank.get_balance(&keypairs[3].pubkey()), 3);
         rent_collected += 50268;
 
         // No rent deducted
-        assert_eq!(bank.get_balance(&keypair5.pubkey()), 10);
-        assert_eq!(bank.get_balance(&keypair6.pubkey()), 10);
+        assert_eq!(bank.get_balance(&keypairs[4].pubkey()), 10);
+        assert_eq!(bank.get_balance(&keypairs[5].pubkey()), 10);
 
         // 100_560 - 50268(Rent) - 50269(transfer)
-        assert_eq!(bank.get_balance(&keypair7.pubkey()), 23);
+        assert_eq!(bank.get_balance(&keypairs[6].pubkey()), 23);
         rent_collected += 50268;
 
         // 0 + 50269(transfer) - 2(Rent)
-        assert_eq!(bank.get_balance(&keypair8.pubkey()), 50267);
+        assert_eq!(bank.get_balance(&keypairs[7].pubkey()), 50267);
         // Epoch should be updated
         // Rent deducted on store side
-        let account8 = bank.get_account(&keypair8.pubkey()).unwrap();
+        let account8 = bank.get_account(&keypairs[7].pubkey()).unwrap();
         // Epoch should be set correctly.
         assert_eq!(account8.rent_epoch, bank.epoch + 1);
         rent_collected += 2;
 
         // 50284 - 50268(Rent) - 14(Transfer)
-        assert_eq!(bank.get_balance(&keypair9.pubkey()), 2);
+        assert_eq!(bank.get_balance(&keypairs[8].pubkey()), 2);
         rent_collected += 50268;
 
-        let account10 = bank.get_account(&keypair10.pubkey()).unwrap();
+        let account10 = bank.get_account(&keypairs[9].pubkey()).unwrap();
         // Account was overwritten at load time, since it didn't have sufficient balance to pay rent
         // Then, at store time we deducted 2 rent for the current epoch, once it has balance
         assert_eq!(account10.rent_epoch, bank.epoch + 1);
@@ -2029,6 +2114,21 @@ mod tests {
         // 10 - 10(Rent) + 14(Transfer) - 2(Rent)
         assert_eq!(account10.lamports, 12);
         rent_collected += 12;
+
+        // 50271 - 50268(Rent)
+        assert_eq!(bank.get_balance(&keypairs[10].pubkey()), 3);
+        rent_collected += 50268;
+
+        // 50271 - 50268(Rent) + 1(Addition by program)
+        assert_eq!(bank.get_balance(&keypairs[11].pubkey()), 4);
+        rent_collected += 50268;
+
+        // 50271 - 50268(Rent) - 1(Deduction by program)
+        assert_eq!(bank.get_balance(&keypairs[12].pubkey()), 2);
+        rent_collected += 50268;
+
+        // No rent for read-only account
+        assert_eq!(bank.get_balance(&keypairs[13].pubkey()), 14);
 
         // Bank's collected rent should be sum of rent collected from all accounts
         assert_eq!(bank.collected_rent.load(Ordering::Relaxed), rent_collected);
