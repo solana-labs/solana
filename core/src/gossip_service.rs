@@ -68,26 +68,36 @@ impl GossipService {
 
 /// Discover Nodes and Archivers in a cluster
 pub fn discover_cluster(
-    entry_point: &SocketAddr,
+    entrypoint: &SocketAddr,
     num_nodes: usize,
 ) -> std::io::Result<(Vec<ContactInfo>, Vec<ContactInfo>)> {
-    discover(entry_point, Some(num_nodes), Some(30), None, None, None)
+    discover(
+        Some(entrypoint),
+        Some(num_nodes),
+        Some(30),
+        None,
+        None,
+        None,
+    )
 }
 
 pub fn discover(
-    entry_point: &SocketAddr,
+    entrypoint: Option<&SocketAddr>,
     num_nodes: Option<usize>,
     timeout: Option<u64>,
     find_node_by_pubkey: Option<Pubkey>,
-    find_node_by_gossip_addr: Option<SocketAddr>,
+    find_node_by_gossip_addr: Option<&SocketAddr>,
     my_gossip_addr: Option<&SocketAddr>,
 ) -> std::io::Result<(Vec<ContactInfo>, Vec<ContactInfo>)> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, ip_echo, spy_ref) = make_gossip_node(entry_point, &exit, my_gossip_addr);
+    let (gossip_service, ip_echo, spy_ref) = make_gossip_node(entrypoint, &exit, my_gossip_addr);
 
     let id = spy_ref.read().unwrap().keypair.pubkey();
-    info!("Gossip entry point: {:?}", entry_point);
-    info!("Spy node id: {:?}", id);
+    info!("Entrypoint: {:?}", entrypoint);
+    info!("Node Id: {:?}", id);
+    if let Some(my_gossip_addr) = my_gossip_addr {
+        info!("Gossip Address: {:?}", my_gossip_addr);
+    }
 
     let _ip_echo_server = ip_echo.map(solana_net_utils::ip_echo_server);
 
@@ -169,7 +179,7 @@ fn spy(
     num_nodes: Option<usize>,
     timeout: Option<u64>,
     find_node_by_pubkey: Option<Pubkey>,
-    find_node_by_gossip_addr: Option<SocketAddr>,
+    find_node_by_gossip_addr: Option<&SocketAddr>,
 ) -> (bool, u64, Vec<ContactInfo>, Vec<ContactInfo>) {
     let now = Instant::now();
     let mut met_criteria = false;
@@ -198,7 +208,7 @@ fn spy(
                     if tvu_peers
                         .iter()
                         .chain(archivers.iter())
-                        .any(|x| x.gossip == gossip_addr)
+                        .any(|x| x.gossip == *gossip_addr)
                     {
                         met_criteria = true;
                         break;
@@ -235,7 +245,7 @@ fn spy(
                 if tvu_peers
                     .iter()
                     .chain(archivers.iter())
-                    .any(|x| x.gossip == gossip_addr)
+                    .any(|x| x.gossip == *gossip_addr)
                 {
                     met_criteria = true;
                     break;
@@ -259,7 +269,7 @@ fn spy(
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
 /// Pass in a gossip addr to fully participate in gossip instead of relying on just pulls
 fn make_gossip_node(
-    entry_point: &SocketAddr,
+    entrypoint: Option<&SocketAddr>,
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
 ) -> (GossipService, Option<TcpListener>, Arc<RwLock<ClusterInfo>>) {
@@ -270,7 +280,9 @@ fn make_gossip_node(
         ClusterInfo::spy_node(&keypair.pubkey())
     };
     let mut cluster_info = ClusterInfo::new(node, keypair);
-    cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entry_point));
+    if let Some(entrypoint) = entrypoint {
+        cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
+    }
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let gossip_service =
         GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);
@@ -350,14 +362,15 @@ mod tests {
 
         // Find specific node by gossip address
         let (met_criteria, _, _, _) =
-            spy(spy_ref.clone(), None, None, None, Some(peer0_info.gossip));
+            spy(spy_ref.clone(), None, None, None, Some(&peer0_info.gossip));
         assert_eq!(met_criteria, true);
+
         let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             None,
             Some(0),
             None,
-            Some("1.1.1.1:1234".parse().unwrap()),
+            Some(&"1.1.1.1:1234".parse().unwrap()),
         );
         assert_eq!(met_criteria, false);
     }
