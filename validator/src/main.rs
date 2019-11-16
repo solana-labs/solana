@@ -172,11 +172,11 @@ fn create_rpc_client(
     entrypoint: &ContactInfo,
 ) -> Result<(std::net::SocketAddr, RpcClient), String> {
     let (nodes, _archivers) = discover(
-        &entrypoint.gossip,
+        Some(&entrypoint.gossip),
         Some(1),
         Some(60),
         None,
-        Some(entrypoint.gossip),
+        Some(&entrypoint.gossip),
         None,
     )
     .map_err(|err| err.to_string())?;
