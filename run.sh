@@ -9,7 +9,12 @@ set -e
 
 # Prefer possible `cargo build` binaries over PATH binaries
 cd "$(dirname "$0")/"
-PATH=$PWD/target/debug:$PATH
+
+profile=debug
+if [[ -n $NDEBUG ]]; then
+  profile=release
+fi
+PATH=$PWD/target/$profile:$PATH
 
 ok=true
 for program in solana-{drone,genesis,keygen,validator}; do
@@ -59,8 +64,18 @@ if [[ -e $leader_stake_account_keypair ]]; then
 else
   solana-keygen new -o "$leader_stake_account_keypair"
 fi
-solana-keygen new -f -o "$dataDir"/faucet-keypair.json
-solana-keygen new -f -o "$dataDir"/leader-storage-account-keypair.json
+faucet_keypair="$dataDir"/faucet-keypair.json
+if [[ -e $faucet_keypair ]]; then
+  echo "Use existing faucet keypair"
+else
+  solana-keygen new -f -o "$faucet_keypair"
+fi
+leader_storage_account_keypair="$dataDir"/leader-storage-account-keypair.json
+if [[ -e $leader_storage_account_keypair ]]; then
+  echo "Use existing leader storage account keypair"
+else
+  solana-keygen new -f -o "$leader_storage_account_keypair"
+fi
 
 solana-genesis \
   --hashes-per-tick sleep \
@@ -72,10 +87,12 @@ solana-genesis \
   --bootstrap-storage-pubkey "$dataDir"/leader-storage-account-keypair.json \
   --ledger "$ledgerDir" \
   --operating-mode development
+tar jcfS "$ledgerDir/genesis.tar.bz2" -C "$ledgerDir" genesis.bin rocksdb
 
 abort() {
   set +e
   kill "$drone" "$validator"
+  wait "$validator"
 }
 trap abort INT TERM EXIT
 
@@ -92,6 +109,8 @@ args=(
   --rpc-drone-address 127.0.0.1:9900
   --accounts "$dataDir"/accounts
   --log -
+  --enable-rpc-exit
+  --init-complete-file "$dataDir"/init-completed
 )
 if [[ -n $blockstreamSocket ]]; then
   args+=(--blockstream "$blockstreamSocket")
