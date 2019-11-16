@@ -1901,6 +1901,69 @@ mod tests {
         }
     }
 
+    fn store_accounts(bank: &Bank, keypairs: &mut Vec<Keypair>, mock_program_id: Pubkey) {
+        let mut stored_account: Vec<(Pubkey, Account)> = Vec::with_capacity(keypairs.len() - 1);
+        stored_account.push((
+            keypairs[0].pubkey(),
+            Account::new(50270, 1, &Pubkey::default()),
+        ));
+        stored_account.push((
+            keypairs[1].pubkey(),
+            Account::new(50270, 1, &Pubkey::default()),
+        ));
+        stored_account.push((
+            keypairs[2].pubkey(),
+            Account::new(50270, 1, &Pubkey::default()),
+        ));
+        stored_account.push((
+            keypairs[3].pubkey(),
+            Account::new(50270, 1, &Pubkey::default()),
+        ));
+        stored_account.push((
+            keypairs[4].pubkey(),
+            Account::new(10, 1, &Pubkey::default()),
+        ));
+        stored_account.push((
+            keypairs[5].pubkey(),
+            Account::new(10, 1, &Pubkey::default()),
+        ));
+        stored_account.push((
+            keypairs[6].pubkey(),
+            Account::new(100_560, 1, &Pubkey::default()),
+        ));
+
+        stored_account.push((
+            keypairs[8].pubkey(),
+            Account::new(50284, 1, &Pubkey::default()),
+        ));
+        stored_account.push((
+            keypairs[9].pubkey(),
+            Account::new(10, 1, &Pubkey::default()),
+        ));
+
+        // Feeding to MockProgram to test read only rent behaviour
+        stored_account.push((
+            keypairs[10].pubkey(),
+            Account::new(50271, 1, &Pubkey::default()),
+        ));
+        stored_account.push((
+            keypairs[11].pubkey(),
+            Account::new(50271, 1, &mock_program_id),
+        ));
+        stored_account.push((
+            keypairs[12].pubkey(),
+            Account::new(50271, 1, &mock_program_id),
+        ));
+        stored_account.push((
+            keypairs[13].pubkey(),
+            Account::new(14, 23, &mock_program_id),
+        ));
+
+        for i in 0..13 {
+            bank.store_account(&stored_account[i].0, &stored_account[i].1);
+        }
+    }
+
     #[test]
     fn test_credit_debit_rent() {
         let mock_program_id = Pubkey::new(&[2u8; 32]);
@@ -1932,67 +1995,7 @@ mod tests {
 
         assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
-        let mut accounts: Vec<(Pubkey, Account)> = Vec::with_capacity(13);
-        // Initialize credit-debit and credit only accounts
-        accounts.push((
-            keypairs[0].pubkey(),
-            Account::new(50270, 1, &Pubkey::default()),
-        ));
-        accounts.push((
-            keypairs[1].pubkey(),
-            Account::new(50270, 1, &Pubkey::default()),
-        ));
-        accounts.push((
-            keypairs[2].pubkey(),
-            Account::new(50270, 1, &Pubkey::default()),
-        ));
-        accounts.push((
-            keypairs[3].pubkey(),
-            Account::new(50270, 1, &Pubkey::default()),
-        ));
-        accounts.push((
-            keypairs[4].pubkey(),
-            Account::new(10, 1, &Pubkey::default()),
-        ));
-        accounts.push((
-            keypairs[5].pubkey(),
-            Account::new(10, 1, &Pubkey::default()),
-        ));
-        accounts.push((
-            keypairs[6].pubkey(),
-            Account::new(100_560, 1, &Pubkey::default()),
-        ));
-
-        accounts.push((
-            keypairs[8].pubkey(),
-            Account::new(50284, 1, &Pubkey::default()),
-        ));
-        accounts.push((
-            keypairs[9].pubkey(),
-            Account::new(10, 1, &Pubkey::default()),
-        ));
-
-        // Feeding to MockProgram to test read only rent behaviour
-        accounts.push((
-            keypairs[10].pubkey(),
-            Account::new(50271, 1, &Pubkey::default()),
-        ));
-        accounts.push((
-            keypairs[11].pubkey(),
-            Account::new(50271, 1, &mock_program_id),
-        ));
-        accounts.push((
-            keypairs[12].pubkey(),
-            Account::new(50271, 1, &mock_program_id),
-        ));
-        accounts.push((
-            keypairs[13].pubkey(),
-            Account::new(14, 23, &mock_program_id),
-        ));
-
-        for i in 0..13 {
-            bank.store_account(&accounts[i].0, &accounts[i].1);
-        }
+        store_accounts(&bank, &mut keypairs, mock_program_id);
 
         // Make native instruction loader rent exempt
         let system_program_id = solana_system_program().1;
