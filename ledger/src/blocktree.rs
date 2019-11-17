@@ -68,6 +68,7 @@ pub struct Blocktree {
     index_cf: LedgerColumn<cf::Index>,
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
+    transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
     last_root: Arc<RwLock<u64>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
@@ -171,6 +172,7 @@ impl Blocktree {
 
         let data_shred_cf = db.column();
         let code_shred_cf = db.column();
+        let transaction_status_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -192,6 +194,7 @@ impl Blocktree {
             index_cf,
             data_shred_cf,
             code_shred_cf,
+            transaction_status_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
@@ -281,6 +284,10 @@ impl Blocktree {
                 .unwrap_or(false)
             && self
                 .code_shred_cf
+                .delete_slot(&mut write_batch, from_slot, batch_end)
+                .unwrap_or(false)
+            && self
+                .transaction_status_cf
                 .delete_slot(&mut write_batch, from_slot, batch_end)
                 .unwrap_or(false)
             && self
@@ -1985,6 +1992,7 @@ pub mod tests {
     use rand::{seq::SliceRandom, thread_rng};
     use solana_sdk::{
         hash::Hash, instruction::CompiledInstruction, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
+        signature::Signature, transaction::TransactionError,
     };
     use std::{iter::FromIterator, time::Duration};
 
@@ -4070,5 +4078,60 @@ pub mod tests {
 
         drop(ledger);
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    pub fn test_persist_transaction_status() {
+        let blocktree_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let transaction_status_cf = blocktree.db.column::<cf::TransactionStatus>();
+
+            // result not found
+            assert!(transaction_status_cf
+                .get((0, Signature::default()))
+                .unwrap()
+                .is_none());
+
+            // insert value
+            assert!(transaction_status_cf
+                .put(
+                    (0, Signature::default()),
+                    &(
+                        solana_sdk::transaction::Result::<()>::Err(
+                            TransactionError::AccountNotFound
+                        ),
+                        5u64
+                    )
+                )
+                .is_ok());
+
+            // result found
+            let (status, fee) = transaction_status_cf
+                .get((0, Signature::default()))
+                .unwrap()
+                .unwrap();
+            assert_eq!(status, Err(TransactionError::AccountNotFound));
+            assert_eq!(fee, 5u64);
+
+            // insert value
+            assert!(transaction_status_cf
+                .put(
+                    (9, Signature::default()),
+                    &(solana_sdk::transaction::Result::<()>::Ok(()), 9u64)
+                )
+                .is_ok());
+
+            // result found
+            let (status, fee) = transaction_status_cf
+                .get((9, Signature::default()))
+                .unwrap()
+                .unwrap();
+
+            // deserialize
+            assert_eq!(status, Ok(()));
+            assert_eq!(fee, 9u64);
+        }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 }
