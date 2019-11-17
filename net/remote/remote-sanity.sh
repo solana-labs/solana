@@ -97,8 +97,8 @@ echo "+++ $sanityTargetIp: node count ($numSanityNodes expected)"
     nodeArg="num-nodes-exactly"
   fi
 
-  $solana_gossip --entrypoint "$sanityTargetIp:8001" \
-    spy --$nodeArg "$numSanityNodes" --timeout 60 \
+  $solana_gossip spy --entrypoint "$sanityTargetIp:8001" \
+    --$nodeArg "$numSanityNodes" --timeout 60 \
 )
 
 echo "--- $sanityTargetIp: RPC API: getTransactionCount"
