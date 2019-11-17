@@ -109,7 +109,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let default_target_tick_duration =
         &timing::duration_as_ms(&PohConfig::default().target_tick_duration).to_string();
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
-    let default_slots_per_epoch = &EpochSchedule::default().slots_per_epoch.to_string();
     let default_operating_mode = "softlaunch";
 
     let matches = App::new(crate_name!())
@@ -283,7 +282,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("slots-per-epoch")
                 .value_name("SLOTS")
                 .takes_value(true)
-                .default_value(default_slots_per_epoch)
                 .help("The number of slots in an epoch"),
         )
         .arg(
@@ -366,8 +364,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     accounts.append(&mut create_genesis_accounts());
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
-    let slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);
-    let epoch_schedule = EpochSchedule::new(slots_per_epoch);
 
     let fee_calculator = FeeCalculator::new(
         value_t_or_exit!(matches, "target_lamports_per_signature", u64),
@@ -378,13 +374,25 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     poh_config.target_tick_duration =
         Duration::from_millis(value_t_or_exit!(matches, "target_tick_duration", u64));
 
+    let operating_mode = if matches.value_of("operating_mode").unwrap() == "development" {
+        OperatingMode::Development
+    } else {
+        OperatingMode::SoftLaunch
+    };
+
     match matches.value_of("hashes_per_tick").unwrap() {
-        "auto" => {
-            let hashes_per_tick =
-                compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
-            println!("Hashes per tick: {}", hashes_per_tick);
-            poh_config.hashes_per_tick = Some(hashes_per_tick);
-        }
+        "auto" => match operating_mode {
+            OperatingMode::Development => {
+                let hashes_per_tick =
+                    compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
+                println!("Hashes per tick: {}", hashes_per_tick);
+                poh_config.hashes_per_tick = Some(hashes_per_tick);
+            }
+            OperatingMode::SoftLaunch => {
+                poh_config.hashes_per_tick =
+                    Some(clock::DEFAULT_HASHES_PER_SECOND / clock::DEFAULT_TICKS_PER_SECOND);
+            }
+        },
         "sleep" => {
             poh_config.hashes_per_tick = None;
         }
@@ -393,11 +401,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
-    let operating_mode = if matches.value_of("operating_mode").unwrap() == "development" {
-        OperatingMode::Development
+    let slots_per_epoch = if matches.value_of("slots_per_epoch").is_some() {
+        value_t_or_exit!(matches, "slots_per_epoch", u64)
     } else {
-        OperatingMode::SoftLaunch
+        match operating_mode {
+            OperatingMode::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
+            OperatingMode::SoftLaunch => clock::DEFAULT_SLOTS_PER_EPOCH,
+        }
     };
+    let epoch_schedule = EpochSchedule::new(slots_per_epoch);
+    println!(
+        "Genesis mode: {:?} hashes per tick: {:?} slots_per_epoch: {}",
+        operating_mode, poh_config.hashes_per_tick, slots_per_epoch
+    );
+
     let native_instruction_processors =
         solana_genesis_programs::get_programs(operating_mode, 0).unwrap();
     let inflation = solana_genesis_programs::get_inflation(operating_mode, 0).unwrap();
