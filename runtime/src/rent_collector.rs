@@ -1,5 +1,7 @@
 //! calculate and collect rent from Accounts
-use solana_sdk::{account::Account, clock::Epoch, epoch_schedule::EpochSchedule, rent::Rent};
+use solana_sdk::{
+    account::Account, clock::Epoch, epoch_schedule::EpochSchedule, rent::Rent, sysvar,
+};
 
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct RentCollector {
@@ -34,7 +36,7 @@ impl RentCollector {
     //  the account rent collected, if any
     //
     pub fn update(&self, account: &mut Account) -> u64 {
-        if account.rent_epoch > self.epoch {
+        if account.rent_epoch > self.epoch || sysvar::check_id(&account.owner) {
             0
         } else {
             let slots_elapsed: u64 = (account.rent_epoch..=self.epoch)
