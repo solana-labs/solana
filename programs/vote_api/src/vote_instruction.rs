@@ -11,7 +11,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
-    instruction::{AccountMeta, Instruction, InstructionError},
+    instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
     instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
@@ -89,37 +89,13 @@ pub fn create_account(
     vec![create_ix, init_ix]
 }
 
-// for instructions that whose authorized signer may differ from the account's pubkey
-fn metas_for_authorized_signer(
-    account_pubkey: &Pubkey,
-    authorized_signer: &Pubkey, // currently authorized
-    other_params: &[AccountMeta],
-) -> Vec<AccountMeta> {
-    let is_own_signer = authorized_signer == account_pubkey;
-
-    // vote account
-    let mut account_metas = vec![AccountMeta::new(*account_pubkey, is_own_signer)];
-
-    for meta in other_params {
-        account_metas.push(meta.clone());
-    }
-
-    // append signer at the end
-    if !is_own_signer {
-        account_metas.push(AccountMeta::new_readonly(*authorized_signer, true))
-        // signer
-    }
-
-    account_metas
-}
-
 pub fn authorize(
     vote_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey, // currently authorized
     new_authorized_pubkey: &Pubkey,
     vote_authorize: VoteAuthorize,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(vote_pubkey, authorized_pubkey, &[]);
+    let account_metas = vec![AccountMeta::new(*vote_pubkey, false)].with_signer(authorized_pubkey);
 
     Instruction::new(
         id(),
@@ -129,16 +105,12 @@ pub fn authorize(
 }
 
 pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) -> Instruction {
-    let account_metas = metas_for_authorized_signer(
-        vote_pubkey,
-        authorized_voter_pubkey,
-        &[
-            // request slot_hashes sysvar account after vote_pubkey
-            AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
-            // request clock sysvar account after that
-            AccountMeta::new_readonly(sysvar::clock::id(), false),
-        ],
-    );
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+    ]
+    .with_signer(authorized_voter_pubkey);
 
     Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
 }
@@ -149,11 +121,11 @@ pub fn withdraw(
     lamports: u64,
     to_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(
-        vote_pubkey,
-        withdrawer_pubkey,
-        &[AccountMeta::new(*to_pubkey, false)],
-    );
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new(*to_pubkey, false),
+    ]
+    .with_signer(withdrawer_pubkey);
 
     Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
 }
@@ -292,20 +264,6 @@ mod tests {
         assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.02)
     }
 
-    #[test]
-    fn test_metas_for_authorized_signer() {
-        let account_pubkey = Pubkey::new_rand();
-        let authorized_signer = Pubkey::new_rand();
-
-        assert_eq!(
-            metas_for_authorized_signer(&account_pubkey, &authorized_signer, &[]).len(),
-            2
-        );
-        assert_eq!(
-            metas_for_authorized_signer(&account_pubkey, &account_pubkey, &[]).len(),
-            1
-        );
-    }
     #[test]
     fn test_custom_error_decode() {
         use num_traits::FromPrimitive;

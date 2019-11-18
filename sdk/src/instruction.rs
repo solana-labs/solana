@@ -141,6 +141,28 @@ impl AccountMeta {
     }
 }
 
+/// Trait for adding a signer Pubkey to an existing data structure
+pub trait WithSigner {
+    /// Add a signer Pubkey
+    fn with_signer(self, signer: &Pubkey) -> Self;
+}
+
+impl WithSigner for Vec<AccountMeta> {
+    fn with_signer(mut self, signer: &Pubkey) -> Self {
+        for meta in self.iter_mut() {
+            // signer might already appear in parameters
+            if &meta.pubkey == signer {
+                meta.is_signer = true; // found it, we're done
+                return self;
+            }
+        }
+
+        // signer wasn't in metas, append it after normal parameters
+        self.push(AccountMeta::new_readonly(*signer, true));
+        self
+    }
+}
+
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct CompiledInstruction {
@@ -166,5 +188,40 @@ impl CompiledInstruction {
 
     pub fn program_id<'a>(&self, program_ids: &'a [Pubkey]) -> &'a Pubkey {
         &program_ids[self.program_id_index as usize]
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_account_meta_list_with_signer() {
+        let account_pubkey = Pubkey::new_rand();
+        let signer_pubkey = Pubkey::new_rand();
+
+        let account_meta = AccountMeta::new(account_pubkey, false);
+        let signer_account_meta = AccountMeta::new(signer_pubkey, false);
+
+        let metas = vec![].with_signer(&signer_pubkey);
+        assert_eq!(metas.len(), 1);
+        assert!(metas[0].is_signer);
+
+        let metas = vec![account_meta.clone()].with_signer(&signer_pubkey);
+        assert_eq!(metas.len(), 2);
+        assert!(!metas[0].is_signer);
+        assert!(metas[1].is_signer);
+        assert_eq!(metas[1].pubkey, signer_pubkey);
+
+        let metas = vec![signer_account_meta.clone()].with_signer(&signer_pubkey);
+        assert_eq!(metas.len(), 1);
+        assert!(metas[0].is_signer);
+        assert_eq!(metas[0].pubkey, signer_pubkey);
+
+        let metas = vec![account_meta, signer_account_meta].with_signer(&signer_pubkey);
+        assert_eq!(metas.len(), 2);
+        assert!(!metas[0].is_signer);
+        assert!(metas[1].is_signer);
+        assert_eq!(metas[1].pubkey, signer_pubkey);
     }
 }

@@ -7,7 +7,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
-    instruction::{AccountMeta, Instruction, InstructionError},
+    instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
     instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
@@ -175,17 +175,14 @@ pub fn split(
             std::mem::size_of::<StakeState>() as u64,
             &id(),
         ),
-        Instruction::new(
-            id(),
-            &StakeInstruction::Split(lamports),
-            metas_with_signer(
-                &[
-                    AccountMeta::new(*stake_pubkey, false),
-                    AccountMeta::new(*split_stake_pubkey, false),
-                ],
-                authorized_pubkey,
-            ),
-        ),
+        {
+            let account_metas = vec![
+                AccountMeta::new(*stake_pubkey, false),
+                AccountMeta::new(*split_stake_pubkey, false),
+            ]
+            .with_signer(authorized_pubkey);
+            Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas)
+        },
     ]
 }
 
@@ -220,34 +217,13 @@ pub fn create_stake_account_and_delegate_stake(
     instructions
 }
 
-// for instructions whose authorized signer may already be in account parameters
-fn metas_with_signer(
-    metas: &[AccountMeta], // parameter metas, in order
-    signer: &Pubkey,       // might already appear in parameters
-) -> Vec<AccountMeta> {
-    let mut metas = metas.to_vec();
-
-    for meta in metas.iter_mut() {
-        if &meta.pubkey == signer {
-            meta.is_signer = true; // found it, we're done
-            return metas;
-        }
-    }
-
-    // signer wasn't in metas, append it after normal parameters
-    metas.push(AccountMeta::new_readonly(*signer, true));
-
-    metas
-}
-
 pub fn authorize(
     stake_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     new_authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
 ) -> Instruction {
-    let account_metas =
-        metas_with_signer(&[AccountMeta::new(*stake_pubkey, false)], authorized_pubkey);
+    let account_metas = vec![AccountMeta::new(*stake_pubkey, false)].with_signer(authorized_pubkey);
 
     Instruction::new(
         id(),
@@ -272,15 +248,13 @@ pub fn delegate_stake(
     authorized_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas = metas_with_signer(
-        &[
-            AccountMeta::new(*stake_pubkey, false),
-            AccountMeta::new_readonly(*vote_pubkey, false),
-            AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(crate::config::id(), false),
-        ],
-        authorized_pubkey,
-    );
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(*vote_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(crate::config::id(), false),
+    ]
+    .with_signer(authorized_pubkey);
     Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
 }
 
@@ -290,26 +264,22 @@ pub fn withdraw(
     to_pubkey: &Pubkey,
     lamports: u64,
 ) -> Instruction {
-    let account_metas = metas_with_signer(
-        &[
-            AccountMeta::new(*stake_pubkey, false),
-            AccountMeta::new(*to_pubkey, false),
-            AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(sysvar::stake_history::id(), false),
-        ],
-        authorized_pubkey,
-    );
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new(*to_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(sysvar::stake_history::id(), false),
+    ]
+    .with_signer(authorized_pubkey);
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
 
 pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
-    let account_metas = metas_with_signer(
-        &[
-            AccountMeta::new(*stake_pubkey, false),
-            AccountMeta::new_readonly(sysvar::clock::id(), false),
-        ],
-        authorized_pubkey,
-    );
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+    ]
+    .with_signer(authorized_pubkey);
     Instruction::new(id(), &StakeInstruction::Deactivate, account_metas)
 }
 
