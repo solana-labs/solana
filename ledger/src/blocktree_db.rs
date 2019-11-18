@@ -11,11 +11,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_client::rpc_request::RpcTransactionStatus;
 use solana_sdk::{clock::Slot, signature::Signature};
-use std::collections::HashMap;
-use std::fs;
-use std::marker::PhantomData;
-use std::path::Path;
-use std::sync::Arc;
+use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 
 // A good value for this is the number of cores on the machine
 const TOTAL_THREADS: i32 = 8;
