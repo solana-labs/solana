@@ -37,6 +37,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-poh-verify ]]; then
       args+=("$1")
       shift
+    elif [[ $1 = --persist-transaction-status ]]; then
+      args+=("$1")
+      shift
     elif [[ $1 = --log ]]; then
       args+=("$1" "$2")
       shift 2

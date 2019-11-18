@@ -76,6 +76,9 @@ Operate a configured testnet
                                       - If set, validators will skip verifying
                                         the ledger they already have saved to disk at
                                         boot (results in a much faster boot)
+   --persist-transaction-status
+                                      - If set, validators will store persistent transaction statuses
+                                        in the blocktree database
    --no-deploy
                                       - Don't deploy new software, use the
                                         existing deployment
@@ -146,6 +149,7 @@ internalNodesLamports=
 maybeNoSnapshot=""
 maybeLimitLedgerSize=""
 maybeSkipLedgerVerify=""
+maybePersistTransactionStatus=""
 maybeDisableAirdrops=""
 debugBuild=false
 doBuild=true
@@ -204,6 +208,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-poh-verify ]]; then
       maybeSkipLedgerVerify="$1"
       shift 1
+    elif [[ $1 = --persist-transaction-status ]]; then
+      maybePersistTransactionStatus="$1"
+      shift
     elif [[ $1 = --skip-setup ]]; then
       skipSetup=true
       shift 1
@@ -511,7 +518,7 @@ startBootstrapLeader() {
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybePersistTransactionStatus $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
       "
@@ -580,7 +587,7 @@ startNode() {
          $numBenchTpsClients \"$benchTpsExtraArgs\" \
          $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybePersistTransactionStatus $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
          \"$GEOLOCATION_API_KEY\" \
       "
