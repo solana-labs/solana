@@ -47,6 +47,8 @@ NonceInstruction
     error BadState
   if sysvar.recent_blockhashes.is_empty()
     error EmptyRecentBlockhashes
+  if !sysvar.recent_blockhashes.contains(stored_nonce)
+    error NotReady
   stored_hash = sysvar.recent_blockhashes[0]
   success
 WithdrawInstruction(to, lamports)
@@ -54,6 +56,8 @@ WithdrawInstruction(to, lamports)
     if !signers.contains(owner)
       error MissingRequiredSignatures
   elif state == Initialized
+    if !sysvar.recent_blockhashes.contains(stored_nonce)
+      error NotReady
     if lamports != account.balance && lamports + rent_exempt > account.balance
       error InsufficientFunds
   account.balance -= lamports
@@ -73,6 +77,9 @@ MUST be issued before the account can be used.
 To discard a `NonceAccount`, the client should issue a `Withdraw` instruction
 which withdraws all lamports, leaving a zero balance and making the account
 eligible for deletion.
+
+`Nonce` and `Withdraw` instructions both will only succeed if the stored
+blockhash is no longer resident in sysvar.recent_blockhashes.
 
 ### Runtime Support
 
