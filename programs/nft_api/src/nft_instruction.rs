@@ -1,5 +1,3 @@
-use crate::nft_state::NftState;
-use bincode::serialized_size;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
@@ -33,19 +31,9 @@ impl std::fmt::Display for NftError {
 }
 impl std::error::Error for NftError {}
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum NftInstruction {
-    InitializeAccount(Pubkey),
-    SetOwner(Pubkey),
-}
-
 fn initialize_account(contract_pubkey: &Pubkey, owner_pubkey: &Pubkey) -> Instruction {
     let keys = vec![AccountMeta::new(*contract_pubkey, false)];
-    Instruction::new(
-        crate::id(),
-        &NftInstruction::InitializeAccount(*owner_pubkey),
-        keys,
-    )
+    Instruction::new(crate::id(), &owner_pubkey, keys)
 }
 
 pub fn create_account(
@@ -54,7 +42,7 @@ pub fn create_account(
     owner_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
-    let space = serialized_size(&NftState::default()).unwrap();
+    let space = std::mem::size_of::<Pubkey>() as u64;
     vec![
         system_instruction::create_account(
             &payer_pubkey,
@@ -76,5 +64,5 @@ pub fn set_owner(
         AccountMeta::new(*contract_pubkey, false),
         AccountMeta::new(*old_pubkey, true),
     ];
-    Instruction::new(crate::id(), &NftInstruction::SetOwner(*new_pubkey), keys)
+    Instruction::new(crate::id(), &new_pubkey, keys)
 }
