@@ -26,7 +26,13 @@ pub struct Response<T> {
 pub struct RpcConfirmedBlock {
     pub previous_blockhash: Hash,
     pub blockhash: Hash,
-    pub transactions: Vec<(Transaction, Result<()>)>,
+    pub transactions: Vec<(Transaction, Option<RpcTransactionStatus>)>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct RpcTransactionStatus {
+    pub status: Result<()>,
+    pub fee: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

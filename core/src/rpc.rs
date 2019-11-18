@@ -304,8 +304,8 @@ impl JsonRpcRequestProcessor {
     // The `get_confirmed_block` method is not fully implemented. It currenlty returns a partially
     // complete RpcConfirmedBlock. The `blockhash` and `previous_blockhash` fields are legitimate
     // data, while the `transactions` field contains transaction tuples (Transaction,
-    // transaction::Result), where the Transaction is a legitimate transaction, but the Result is
-    // always `Ok()`.
+    // transaction::Result), where the Transaction is a legitimate transaction, but the
+    // Option<RpcTransactionStatus> is always None.
     pub fn get_confirmed_block(&self, slot: Slot) -> Result<Option<RpcConfirmedBlock>> {
         Ok(self.blocktree.get_confirmed_block(slot).ok())
     }
