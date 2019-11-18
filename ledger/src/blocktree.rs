@@ -22,6 +22,7 @@ use rayon::{
     ThreadPool,
 };
 use rocksdb::DBRawIterator;
+use solana_client::rpc_request::RpcConfirmedBlock;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
@@ -31,7 +32,7 @@ use solana_sdk::{
     hash::Hash,
     signature::{Keypair, KeypairUtil},
     timing::timestamp,
-    transaction::Transaction,
+    transaction::{self, Transaction},
 };
 use std::{
     cell::RefCell,
@@ -1123,17 +1124,40 @@ impl Blocktree {
         }
     }
 
-    pub fn get_confirmed_block_transactions(&self, slot: Slot) -> Result<Vec<Transaction>> {
+    pub fn get_confirmed_block(&self, slot: Slot) -> Result<RpcConfirmedBlock> {
         if self.is_root(slot) {
-            Ok(self
-                .get_slot_entries(slot, 0, None)?
+            let slot_meta_cf = self.db.column::<cf::SlotMeta>();
+            let slot_meta = slot_meta_cf
+                .get(slot)?
+                .expect("Rooted slot must exist in SlotMeta");
+
+            let slot_entries = self.get_slot_entries(slot, 0, None)?;
+            let slot_transaction_iterator = slot_entries
                 .iter()
                 .cloned()
-                .flat_map(|entry| entry.transactions)
-                .collect())
+                .flat_map(|entry| entry.transactions);
+            let parent_slot_entries = self.get_slot_entries(slot_meta.parent_slot, 0, None)?;
+
+            let block = RpcConfirmedBlock {
+                previous_blockhash: get_last_hash(parent_slot_entries.iter())
+                    .expect("Rooted parent slot must have blockhash"),
+                blockhash: get_last_hash(slot_entries.iter())
+                    .expect("Rooted slot must have blockhash"),
+                transactions: self.map_transactions_to_statuses(slot_transaction_iterator),
+            };
+            Ok(block)
         } else {
             Err(BlocktreeError::SlotNotRooted)
         }
+    }
+
+    // The `map_transactions_to_statuses` method is not fully implemented (depends on persistent
+    // status store). It currently returns status Ok(()) for all transactions.
+    fn map_transactions_to_statuses<'a>(
+        &self,
+        iterator: impl Iterator<Item = Transaction> + 'a,
+    ) -> Vec<(Transaction, transaction::Result<()>)> {
+        iterator.map(|transaction| (transaction, Ok(()))).collect()
     }
 
     /// Returns the entry vector for the slot starting with `shred_start_index`
@@ -1483,6 +1507,10 @@ fn get_slot_meta_entry<'a>(
             )
         }
     })
+}
+
+fn get_last_hash<'a>(iterator: impl Iterator<Item = &'a Entry> + 'a) -> Option<Hash> {
+    iterator.last().map(|entry| entry.hash)
 }
 
 fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: Slot, last_root: u64) -> bool {
@@ -1984,15 +2012,19 @@ fn adjust_ulimit_nofile() {
 pub mod tests {
     use super::*;
     use crate::{
-        entry::next_entry_mut,
+        entry::{next_entry, next_entry_mut},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         shred::{max_ticks_per_n_shreds, DataShredHeader},
     };
     use itertools::Itertools;
     use rand::{seq::SliceRandom, thread_rng};
     use solana_sdk::{
-        hash::Hash, instruction::CompiledInstruction, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
-        signature::Signature, transaction::TransactionError,
+        hash::{self, Hash},
+        instruction::CompiledInstruction,
+        packet::PACKET_DATA_SIZE,
+        pubkey::Pubkey,
+        signature::Signature,
+        transaction::TransactionError,
     };
     use std::{iter::FromIterator, time::Duration};
 
@@ -4054,7 +4086,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_confirmed_block_transactions() {
+    fn test_get_confirmed_block() {
         let slot = 0;
         let (shreds, entries) = make_slot_entries_with_transactions(slot, 0, 100);
 
@@ -4063,17 +4095,24 @@ pub mod tests {
         ledger.insert_shreds(shreds, None, false).unwrap();
         ledger.set_roots(&[0]).unwrap();
 
-        let transactions = ledger.get_confirmed_block_transactions(0).unwrap();
-        assert_eq!(transactions.len(), 100);
-        let expected_transactions: Vec<Transaction> = entries
+        let confirmed_block = ledger.get_confirmed_block(0).unwrap();
+        assert_eq!(confirmed_block.transactions.len(), 100);
+
+        let expected_transactions: Vec<(Transaction, transaction::Result<()>)> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
             .flat_map(|entry| entry.transactions)
+            .map(|transaction| (transaction, Ok(())))
             .collect();
-        assert_eq!(transactions, expected_transactions);
 
-        let not_root = ledger.get_confirmed_block_transactions(1);
+        let mut expected_block = RpcConfirmedBlock::default();
+        expected_block.transactions = expected_transactions;
+        // The blockhash and previous_blockhash of `expected_block` are default only because
+        // `make_slot_entries_with_transactions` sets all entry hashes to default
+        assert_eq!(confirmed_block, expected_block);
+
+        let not_root = ledger.get_confirmed_block(1);
         assert!(not_root.is_err());
 
         drop(ledger);
@@ -4133,5 +4172,21 @@ pub mod tests {
             assert_eq!(fee, 9u64);
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_get_last_hash() {
+        let mut entries: Vec<Entry> = vec![];
+        let empty_entries_iterator = entries.iter();
+        assert!(get_last_hash(empty_entries_iterator).is_none());
+
+        let mut prev_hash = hash::hash(&[42u8]);
+        for _ in 0..10 {
+            let entry = next_entry(&prev_hash, 1, vec![]);
+            prev_hash = entry.hash;
+            entries.push(entry);
+        }
+        let entries_iterator = entries.iter();
+        assert_eq!(get_last_hash(entries_iterator).unwrap(), entries[9].hash);
     }
 }

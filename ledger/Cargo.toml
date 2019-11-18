@@ -28,6 +28,7 @@ rayon = "1.2.0"
 reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "4.0.1-3", features = ["simd-accel"] }
 serde = "1.0.102"
 serde_derive = "1.0.102"
+solana-client = { path = "../client", version = "0.21.0" }
 solana-genesis-programs = { path = "../genesis-programs", version = "0.21.0" }
 solana-logger = { path = "../logger", version = "0.21.0" }
 solana-measure = { path = "../measure", version = "0.21.0" }

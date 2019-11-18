@@ -275,7 +275,7 @@ impl Column for columns::TransactionStatus {
         key
     }
 
-    fn index<'a>(key: &[u8]) -> (Slot, Signature) {
+    fn index(key: &[u8]) -> (Slot, Signature) {
         let slot = BigEndian::read_u64(&key[..8]);
         let index = Signature::new(&key[8..72]);
         (slot, index)

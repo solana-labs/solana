@@ -3573,6 +3573,7 @@ dependencies = [
  "serde_derive 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-budget-api 0.21.0",
+ "solana-client 0.21.0",
  "solana-genesis-programs 0.21.0",
  "solana-logger 0.21.0",
  "solana-measure 0.21.0",

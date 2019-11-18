@@ -12,8 +12,8 @@ use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{
-    Response, RpcContactInfo, RpcEpochInfo, RpcResponseContext, RpcVersionInfo, RpcVoteAccountInfo,
-    RpcVoteAccountStatus,
+    Response, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcResponseContext, RpcVersionInfo,
+    RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_drone::drone::request_airdrop_transaction;
 use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
@@ -26,10 +26,9 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     inflation::Inflation,
-    instruction::InstructionError,
     pubkey::Pubkey,
     signature::Signature,
-    transaction::{self, Transaction, TransactionError},
+    transaction::{self, Transaction},
 };
 use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
@@ -302,37 +301,13 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    // The `get_confirmed_block` method is not fully implemented. It currenlty returns a batch of
-    // transaction tuples (Transaction, transaction::Result), where the Transaction is a legitimate
-    // transaction, but the Result is mocked to demonstrate Ok results and TransactionErrors.
-    pub fn get_confirmed_block(
-        &self,
-        slot: Slot,
-    ) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
-        let transactions = self
-            .blocktree
-            .get_confirmed_block_transactions(slot)
-            .unwrap_or_else(|_| vec![]);
-        Ok(transactions
-            .iter()
-            .enumerate()
-            .map(|(i, transaction)| {
-                let status = if i % 3 == 0 {
-                    Ok(())
-                } else if i % 3 == 1 {
-                    Err(TransactionError::InstructionError(
-                        0,
-                        InstructionError::InsufficientFunds,
-                    ))
-                } else {
-                    Err(TransactionError::InstructionError(
-                        0,
-                        InstructionError::CustomError(3),
-                    ))
-                };
-                (transaction.clone(), status)
-            })
-            .collect())
+    // The `get_confirmed_block` method is not fully implemented. It currenlty returns a partially
+    // complete RpcConfirmedBlock. The `blockhash` and `previous_blockhash` fields are legitimate
+    // data, while the `transactions` field contains transaction tuples (Transaction,
+    // transaction::Result), where the Transaction is a legitimate transaction, but the Result is
+    // always `Ok()`.
+    pub fn get_confirmed_block(&self, slot: Slot) -> Result<Option<RpcConfirmedBlock>> {
+        Ok(self.blocktree.get_confirmed_block(slot).ok())
     }
 }
 
@@ -537,12 +512,12 @@ pub trait RpcSol {
     #[rpc(meta, name = "setLogFilter")]
     fn set_log_filter(&self, _meta: Self::Metadata, filter: String) -> Result<()>;
 
-    #[rpc(meta, name = "getConfirmedBlock")]
+    #[rpc(meta, name = "getRpcConfirmedBlock")]
     fn get_confirmed_block(
         &self,
         meta: Self::Metadata,
         slot: Slot,
-    ) -> Result<Vec<(Transaction, transaction::Result<()>)>>;
+    ) -> Result<Option<RpcConfirmedBlock>>;
 }
 
 pub struct RpcSolImpl;
@@ -991,7 +966,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         slot: Slot,
-    ) -> Result<Vec<(Transaction, transaction::Result<()>)>> {
+    ) -> Result<Option<RpcConfirmedBlock>> {
         meta.request_processor
             .read()
             .unwrap()

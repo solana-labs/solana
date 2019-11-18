@@ -3,6 +3,8 @@ use serde_json::{json, Value};
 use solana_sdk::{
     clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
+    hash::Hash,
+    transaction::{Result, Transaction},
 };
 use std::{error, fmt, io, net::SocketAddr};
 
@@ -18,6 +20,13 @@ pub struct RpcResponseContext {
 pub struct Response<T> {
     pub context: RpcResponseContext,
     pub value: T,
+}
+
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct RpcConfirmedBlock {
+    pub previous_blockhash: Hash,
+    pub blockhash: Hash,
+    pub transactions: Vec<(Transaction, Result<()>)>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
