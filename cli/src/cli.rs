@@ -79,6 +79,7 @@ pub enum CliCommand {
     GetSlot,
     GetTransactionCount,
     Ping {
+        lamports: u64,
         interval: Duration,
         count: Option<u64>,
         timeout: Duration,
@@ -864,6 +865,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client),
         CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
         CliCommand::Ping {
+            lamports,
             interval,
             count,
             timeout,
@@ -871,6 +873,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_ping(
             &rpc_client,
             config,
+            *lamports,
             interval,
             count,
             timeout,
