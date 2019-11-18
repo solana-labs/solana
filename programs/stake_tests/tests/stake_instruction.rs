@@ -5,24 +5,32 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
 };
 use solana_sdk::{
-    account::Account,
     account_utils::State,
     client::SyncClient,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
-    sysvar::{self, rewards::Rewards, Sysvar},
+    sysvar::{self, rewards::Rewards, stake_history::StakeHistory, Sysvar},
 };
 use solana_stake_api::{
-    id,
-    stake_instruction::{self, process_instruction},
-    stake_state::{self, Stake, StakeState},
+    stake_instruction::{self},
+    stake_state::{self, StakeState},
 };
 use solana_vote_api::{
     vote_instruction,
     vote_state::{Vote, VoteInit, VoteState},
 };
 use std::sync::Arc;
+
+fn next_epoch(bank: &Arc<Bank>) -> Arc<Bank> {
+    bank.squash();
+
+    Arc::new(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        bank.get_slots_in_epoch(bank.epoch()) + bank.slot(),
+    ))
+}
 
 fn fill_epoch_with_votes(
     bank: &Arc<Bank>,
@@ -34,6 +42,7 @@ fn fill_epoch_with_votes(
     let old_epoch = bank.epoch();
     let mut bank = bank.clone();
     while bank.epoch() != old_epoch + 1 {
+        bank.squash();
         bank = Arc::new(Bank::new_from_parent(
             &bank,
             &Pubkey::default(),
@@ -58,10 +67,39 @@ fn fill_epoch_with_votes(
     bank
 }
 
+fn warmed_up(bank: &Bank, stake_pubkey: &Pubkey) -> bool {
+    let stake = StakeState::stake_from(&bank.get_account(stake_pubkey).unwrap()).unwrap();
+
+    stake.stake
+        == stake.stake(
+            bank.epoch(),
+            Some(
+                &StakeHistory::from_account(
+                    &bank.get_account(&sysvar::stake_history::id()).unwrap(),
+                )
+                .unwrap(),
+            ),
+        )
+}
+
+fn get_staked(bank: &Bank, stake_pubkey: &Pubkey) -> u64 {
+    StakeState::stake_from(&bank.get_account(stake_pubkey).unwrap())
+        .unwrap()
+        .stake(
+            bank.epoch(),
+            Some(
+                &StakeHistory::from_account(
+                    &bank.get_account(&sysvar::stake_history::id()).unwrap(),
+                )
+                .unwrap(),
+            ),
+        )
+}
+
 #[test]
-fn test_stake_account_delegate() {
-    let staker_keypair = Keypair::new();
-    let staker_pubkey = staker_keypair.pubkey();
+fn test_stake_account_lifetime() {
+    let stake_keypair = Keypair::new();
+    let stake_pubkey = stake_keypair.pubkey();
     let vote_keypair = Keypair::new();
     let vote_pubkey = vote_keypair.pubkey();
     let node_pubkey = Pubkey::new_rand();
@@ -95,21 +133,21 @@ fn test_stake_account_delegate() {
         .send_message(&[&mint_keypair, &vote_keypair], message)
         .expect("failed to create vote account");
 
-    let authorized = stake_state::Authorized::auto(&staker_pubkey);
+    let authorized = stake_state::Authorized::auto(&stake_pubkey);
     // Create stake account and delegate to vote account
     let message = Message::new(stake_instruction::create_stake_account_and_delegate_stake(
         &mint_pubkey,
-        &staker_pubkey,
+        &stake_pubkey,
         &vote_pubkey,
         &authorized,
         1_000_000,
     ));
     bank_client
-        .send_message(&[&mint_keypair, &staker_keypair], message)
+        .send_message(&[&mint_keypair, &stake_keypair], message)
         .expect("failed to create and delegate stake account");
 
     // Test that correct lamports are staked
-    let account = bank.get_account(&staker_pubkey).expect("account not found");
+    let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
     if let StakeState::Stake(_meta, stake) = stake_state {
         assert_eq!(stake.stake, 1_000_000);
@@ -117,22 +155,22 @@ fn test_stake_account_delegate() {
         assert!(false, "wrong account type found")
     }
 
-    // Test that we cannot withdraw staked lamports
+    // Test that we cannot withdraw anything until deactivation
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
-            &staker_pubkey,
-            &staker_pubkey,
+            &stake_pubkey,
+            &stake_pubkey,
             &Pubkey::new_rand(),
-            1_000_000,
+            1,
         )],
         Some(&mint_pubkey),
     );
     assert!(bank_client
-        .send_message(&[&mint_keypair, &staker_keypair], message)
+        .send_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
     // Test that lamports are still staked
-    let account = bank.get_account(&staker_pubkey).expect("account not found");
+    let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
     if let StakeState::Stake(_meta, stake) = stake_state {
         assert_eq!(stake.stake, 1_000_000);
@@ -142,7 +180,6 @@ fn test_stake_account_delegate() {
 
     // Reward redemption
     // Submit enough votes to generate rewards
-    let old_epoch = bank.epoch();
     bank = fill_epoch_with_votes(&bank, &vote_keypair, &mint_keypair);
 
     // Test that votes and credits are there
@@ -152,10 +189,15 @@ fn test_stake_account_delegate() {
     // 1 less vote, as the first vote should have cleared the lockout
     assert_eq!(vote_state.votes.len(), 31);
     assert_eq!(vote_state.credits(), 1);
-    assert_ne!(old_epoch, bank.epoch());
-
-    // Cycle thru banks until we reach next epoch
     bank = fill_epoch_with_votes(&bank, &vote_keypair, &mint_keypair);
+
+    loop {
+        if warmed_up(&bank, &stake_pubkey) {
+            break;
+        }
+        // Cycle thru banks until we're fully warmed up
+        bank = next_epoch(&bank);
+    }
 
     // Test that rewards are there
     let rewards_account = bank
@@ -163,116 +205,134 @@ fn test_stake_account_delegate() {
         .expect("account not found");
     assert_matches!(Rewards::from_account(&rewards_account), Some(_));
 
+    let pre_staked = get_staked(&bank, &stake_pubkey);
+
     // Redeem the credit
     let bank_client = BankClient::new_shared(&bank);
     let message = Message::new_with_payer(
         vec![stake_instruction::redeem_vote_credits(
-            &staker_pubkey,
+            &stake_pubkey,
             &vote_pubkey,
         )],
         Some(&mint_pubkey),
     );
     assert_matches!(bank_client.send_message(&[&mint_keypair], message), Ok(_));
 
-    fn get_stake(bank: &Bank, staker_pubkey: &Pubkey) -> (Stake, Account) {
-        let account = bank.get_account(staker_pubkey).unwrap();
-        (StakeState::stake_from(&account).unwrap(), account)
-    }
+    // Test that balance increased, and that the balance got staked
+    let staked = get_staked(&bank, &stake_pubkey);
+    let lamports = bank.get_balance(&stake_pubkey);
+    assert!(staked > pre_staked);
+    assert!(lamports > 1_000_000);
 
-    // Test that balance increased, and calculate the rewards
-    let (stake, account) = get_stake(&bank, &staker_pubkey);
-    assert!(account.lamports > 1_000_000);
-    assert!(stake.stake > 1_000_000);
-    let rewards = account.lamports - 1_000_000;
+    // split the stake
+    let split_stake_keypair = Keypair::new();
+    let split_stake_pubkey = split_stake_keypair.pubkey();
+    // Test split
+    let message = Message::new_with_payer(
+        stake_instruction::split(
+            &stake_pubkey,
+            &stake_pubkey,
+            lamports / 2,
+            &split_stake_pubkey,
+        ),
+        Some(&mint_pubkey),
+    );
+    assert!(bank_client
+        .send_message(
+            &[&mint_keypair, &stake_keypair, &split_stake_keypair],
+            message
+        )
+        .is_ok());
 
-    // Deactivate the stake
+    // Deactivate the split
     let message = Message::new_with_payer(
         vec![stake_instruction::deactivate_stake(
-            &staker_pubkey,
-            &staker_pubkey,
+            &split_stake_pubkey,
+            &stake_pubkey,
         )],
         Some(&mint_pubkey),
     );
     assert!(bank_client
-        .send_message(&[&mint_keypair, &staker_keypair], message)
+        .send_message(&[&mint_keypair, &stake_keypair], message)
         .is_ok());
 
-    // Test that we cannot withdraw staked lamports due to cooldown period
+    let split_staked = get_staked(&bank, &split_stake_pubkey);
+
+    // Test that we cannot withdraw above what's staked
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
-            &staker_pubkey,
-            &staker_pubkey,
+            &split_stake_pubkey,
+            &stake_pubkey,
             &Pubkey::new_rand(),
-            1_000_000,
+            lamports / 2 - split_staked + 1,
         )],
         Some(&mint_pubkey),
     );
     assert!(bank_client
-        .send_message(&[&mint_keypair, &staker_keypair], message)
+        .send_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
-    let old_epoch = bank.epoch();
-    let slots = bank.get_slots_in_epoch(old_epoch);
-
-    // Create a new bank at later epoch (within cooldown period)
-    let bank = Bank::new_from_parent(&bank, &Pubkey::default(), slots + bank.slot());
-    assert_ne!(old_epoch, bank.epoch());
-    let bank = Arc::new(bank);
+    let mut bank = next_epoch(&bank);
     let bank_client = BankClient::new_shared(&bank);
 
+    // assert we're still cooling down
+    let split_staked = get_staked(&bank, &split_stake_pubkey);
+    assert!(split_staked > 0);
+
+    // withdrawal in cooldown
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
-            &staker_pubkey,
-            &staker_pubkey,
+            &split_stake_pubkey,
+            &stake_pubkey,
             &Pubkey::new_rand(),
-            1_000_000,
+            lamports / 2,
         )],
         Some(&mint_pubkey),
     );
 
     assert!(bank_client
-        .send_message(&[&mint_keypair, &staker_keypair], message)
+        .send_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
+    // but we can withdraw unstaked
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
-            &staker_pubkey,
-            &staker_pubkey,
+            &split_stake_pubkey,
+            &stake_pubkey,
             &Pubkey::new_rand(),
-            250_000,
+            lamports / 2 - split_staked,
         )],
         Some(&mint_pubkey),
     );
-    // assert we can withdraw some smaller amount, more than rewards
+    // assert we can withdraw unstaked tokens
     assert!(bank_client
-        .send_message(&[&mint_keypair, &staker_keypair], message)
+        .send_message(&[&mint_keypair, &stake_keypair], message)
         .is_ok());
 
-    // Create a new bank at a much later epoch (to account for cooldown of stake)
-    let mut bank = Bank::new_from_parent(
-        &bank,
-        &Pubkey::default(),
-        genesis_config.epoch_schedule.slots_per_epoch * 10 + bank.slot(),
-    );
-    bank.add_instruction_processor(id(), process_instruction);
-    let bank = Arc::new(bank);
+    // finish cooldown
+    loop {
+        if get_staked(&bank, &split_stake_pubkey) == 0 {
+            break;
+        }
+        bank = next_epoch(&bank);
+    }
     let bank_client = BankClient::new_shared(&bank);
 
-    // Test that we can withdraw now
+    // Test that we can withdraw everything else out of the split
     let message = Message::new_with_payer(
         vec![stake_instruction::withdraw(
-            &staker_pubkey,
-            &staker_pubkey,
+            &split_stake_pubkey,
+            &stake_pubkey,
             &Pubkey::new_rand(),
-            750_000,
+            split_staked,
         )],
         Some(&mint_pubkey),
     );
     assert!(bank_client
-        .send_message(&[&mint_keypair, &staker_keypair], message)
+        .send_message(&[&mint_keypair, &stake_keypair], message)
         .is_ok());
 
-    // Test that balance and stake is updated correctly (we have withdrawn all lamports except rewards)
-    let (_stake, account) = get_stake(&bank, &staker_pubkey);
-    assert_eq!(account.lamports, rewards);
+    // verify all the math sums to zero
+    assert_eq!(bank.get_balance(&split_stake_pubkey), 0);
+    assert_eq!(bank.get_balance(&stake_pubkey), lamports - lamports / 2);
 }

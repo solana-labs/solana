@@ -94,17 +94,14 @@ pub enum StakeInstruction {
     RedeemVoteCredits,
 
     /// Split u64 tokens and stake off a stake account into another stake
-    ///   account. Requires Authorized::staker signature.
-    ///
-    /// The split-off stake account must be Initialized and carry the
-    ///   the same values for Lockup and Authorized as the source
-    ///   or this instruction will fail.
+    ///   account. Requires Authorized::staker signature and the
+    ///   signature of the split-off stake address.
     ///
     /// The source stake must be either Initialized or a Stake.
     ///
     /// Expects 2 Accounts:
     ///    0 - StakeAccount to be split
-    ///    1 - Initialized StakeAcount that will take the split-off amount
+    ///    1 - Uninitialized StakeAcount that will take the split-off amount
     ///
     Split(u64),
 
