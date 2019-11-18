@@ -1,7 +1,7 @@
 //! Non-fungible token program
 
 use crate::{
-    nft_instruction::{InitializeAccountParams, NftError, NftInstruction},
+    nft_instruction::{NftError, NftInstruction},
     nft_state::NftState,
 };
 use solana_sdk::{
@@ -13,24 +13,18 @@ use solana_sdk::{
 
 fn initialize_account(
     nft_state: &mut NftState,
-    params: InitializeAccountParams,
-    issuer_keyed_account: &KeyedAccount,
+    owner_pubkey: Pubkey,
 ) -> Result<(), InstructionError> {
-    if issuer_keyed_account.signer_key().is_none() {
-        return Err(InstructionError::MissingRequiredSignature);
-    }
     if nft_state.owner_pubkey != Pubkey::default() {
         return Err(InstructionError::AccountAlreadyInitialized);
     }
-    nft_state.owner_pubkey = params.owner_pubkey;
-    nft_state.issuer_pubkey = params.issuer_pubkey;
-    nft_state.id = params.id;
+    nft_state.owner_pubkey = owner_pubkey;
     Ok(())
 }
 
 fn set_owner(
     nft_state: &mut NftState,
-    new_pubkey: Pubkey,
+    new_owner_pubkey: Pubkey,
     owner_keyed_account: &KeyedAccount,
 ) -> Result<(), InstructionError> {
     match owner_keyed_account.signer_key() {
@@ -39,7 +33,7 @@ fn set_owner(
             if nft_state.owner_pubkey != *signer_key {
                 return Err(NftError::IncorrectOwner.into());
             }
-            nft_state.owner_pubkey = new_pubkey;
+            nft_state.owner_pubkey = new_owner_pubkey;
         }
     }
     Ok(())
@@ -56,13 +50,12 @@ pub fn process_instruction(
     let mut nft_state: NftState = limited_deserialize(&nft_keyed_account.account.data)?;
 
     match instruction {
-        NftInstruction::InitializeAccount(params) => {
-            let issuer_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
-            initialize_account(&mut nft_state, params, &issuer_keyed_account)?;
+        NftInstruction::InitializeAccount(pubkey) => {
+            initialize_account(&mut nft_state, pubkey)?;
         }
-        NftInstruction::SetOwner(new_pubkey) => {
+        NftInstruction::SetOwner(new_owner_pubkey) => {
             let owner_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
-            set_owner(&mut nft_state, new_pubkey, &owner_keyed_account)?;
+            set_owner(&mut nft_state, new_owner_pubkey, &owner_keyed_account)?;
         }
     }
     nft_state.serialize(&mut nft_keyed_account.account.data)
@@ -99,24 +92,17 @@ mod tests {
         bank_client: &BankClient,
         payer_keypair: &Keypair,
         contract_keypair: &Keypair,
-        issuer_keypair: &Keypair,
         owner_pubkey: &Pubkey,
-        id: Vec<u8>,
         lamports: u64,
     ) -> Result<Signature> {
         let instructions = nft_instruction::create_account(
             &payer_keypair.pubkey(),
             &contract_keypair.pubkey(),
-            &issuer_keypair.pubkey(),
             owner_pubkey,
-            id,
             lamports,
         );
         let message = Message::new(instructions);
-        bank_client.send_message(
-            &[&payer_keypair, &contract_keypair, &issuer_keypair],
-            message,
-        )
+        bank_client.send_message(&[&payer_keypair, &contract_keypair], message)
     }
 
     fn send_set_owner(
@@ -142,16 +128,12 @@ mod tests {
         let contract_pubkey = contract_keypair.pubkey();
         let owner_keypair = Keypair::new();
         let owner_pubkey = owner_keypair.pubkey();
-        let issuer_keypair = Keypair::new();
-        let id = vec![1, 2, 3];
 
         create_nft_account(
             &bank_client,
             &payer_keypair,
             &contract_keypair,
-            &issuer_keypair,
             &owner_pubkey,
-            id,
             1,
         )
         .unwrap();
@@ -177,37 +159,13 @@ mod tests {
 
     #[test]
     fn test_nft_already_initialized() {
-        let issuer_pubkey = Pubkey::new_rand();
-        let params = InitializeAccountParams {
-            issuer_pubkey,
-            owner_pubkey: Pubkey::new_rand(),
-            id: vec![],
-        };
         let mut nft_state = NftState {
             owner_pubkey: Pubkey::new_rand(), // Attack! Attempt to overwrite an existing NFT
             ..NftState::default()
         };
-        let mut account = Account::new(1, 0, &system_program::id());
-        let issuer_keyed_account = KeyedAccount::new(&issuer_pubkey, true, &mut account);
 
-        let err = initialize_account(&mut nft_state, params, &issuer_keyed_account).unwrap_err();
+        let err = initialize_account(&mut nft_state, Pubkey::new_rand()).unwrap_err();
         assert_eq!(err, InstructionError::AccountAlreadyInitialized);
-    }
-
-    #[test]
-    fn test_nft_missing_issuer_signature() {
-        let issuer_pubkey = Pubkey::new_rand();
-        let params = InitializeAccountParams {
-            issuer_pubkey,
-            owner_pubkey: Pubkey::new_rand(),
-            id: vec![],
-        };
-        let mut nft_state = NftState::default();
-        let mut account = Account::new(1, 0, &system_program::id());
-        let issuer_keyed_account = KeyedAccount::new(&issuer_pubkey, false, &mut account); // Attack! Attempt to create an NFT without the issuer's signature.
-
-        let err = initialize_account(&mut nft_state, params, &issuer_keyed_account).unwrap_err();
-        assert_eq!(err, InstructionError::MissingRequiredSignature);
     }
 
     #[test]
@@ -217,10 +175,10 @@ mod tests {
             owner_pubkey,
             ..NftState::default()
         };
-        let new_pubkey = Pubkey::new_rand();
+        let new_owner_pubkey = Pubkey::new_rand();
         let mut account = Account::new(1, 0, &system_program::id());
         let owner_keyed_account = KeyedAccount::new(&owner_pubkey, false, &mut account); // <-- Attack! Setting owner without the original owner's signature.
-        let err = set_owner(&mut nft_state, new_pubkey, &owner_keyed_account).unwrap_err();
+        let err = set_owner(&mut nft_state, new_owner_pubkey, &owner_keyed_account).unwrap_err();
         assert_eq!(err, InstructionError::MissingRequiredSignature);
     }
 
@@ -231,11 +189,11 @@ mod tests {
             owner_pubkey,
             ..NftState::default()
         };
-        let new_pubkey = Pubkey::new_rand();
+        let new_owner_pubkey = Pubkey::new_rand();
         let mut account = Account::new(1, 0, &system_program::id());
         let mallory_pubkey = Pubkey::new_rand(); // <-- Attack! Signing with wrong pubkey
         let owner_keyed_account = KeyedAccount::new(&mallory_pubkey, true, &mut account);
-        let err = set_owner(&mut nft_state, new_pubkey, &owner_keyed_account).unwrap_err();
+        let err = set_owner(&mut nft_state, new_owner_pubkey, &owner_keyed_account).unwrap_err();
         assert_eq!(err, NftError::IncorrectOwner.into());
     }
 }

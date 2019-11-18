@@ -6,7 +6,7 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     instruction_processor_utils::DecodeError,
     pubkey::Pubkey,
-    short_vec, system_instruction,
+    system_instruction,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
@@ -34,37 +34,16 @@ impl std::fmt::Display for NftError {
 impl std::error::Error for NftError {}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct InitializeAccountParams {
-    pub issuer_pubkey: Pubkey,
-    pub owner_pubkey: Pubkey,
-    #[serde(with = "short_vec")]
-    pub id: Vec<u8>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum NftInstruction {
-    InitializeAccount(InitializeAccountParams),
+    InitializeAccount(Pubkey),
     SetOwner(Pubkey),
 }
 
-fn initialize_account(
-    contract_pubkey: &Pubkey,
-    issuer_pubkey: &Pubkey,
-    owner_pubkey: &Pubkey,
-    id: Vec<u8>,
-) -> Instruction {
-    let params = InitializeAccountParams {
-        owner_pubkey: *owner_pubkey,
-        issuer_pubkey: *issuer_pubkey,
-        id,
-    };
-    let keys = vec![
-        AccountMeta::new(*contract_pubkey, false),
-        AccountMeta::new(*issuer_pubkey, true),
-    ];
+fn initialize_account(contract_pubkey: &Pubkey, owner_pubkey: &Pubkey) -> Instruction {
+    let keys = vec![AccountMeta::new(*contract_pubkey, false)];
     Instruction::new(
         crate::id(),
-        &NftInstruction::InitializeAccount(params),
+        &NftInstruction::InitializeAccount(*owner_pubkey),
         keys,
     )
 }
@@ -72,16 +51,10 @@ fn initialize_account(
 pub fn create_account(
     payer_pubkey: &Pubkey,
     contract_pubkey: &Pubkey,
-    issuer_pubkey: &Pubkey,
     owner_pubkey: &Pubkey,
-    id: Vec<u8>,
     lamports: u64,
 ) -> Vec<Instruction> {
-    let claim_state = NftState {
-        id: id.clone(),
-        ..NftState::default()
-    };
-    let space = serialized_size(&claim_state).unwrap();
+    let space = serialized_size(&NftState::default()).unwrap();
     vec![
         system_instruction::create_account(
             &payer_pubkey,
@@ -90,7 +63,7 @@ pub fn create_account(
             space,
             &crate::id(),
         ),
-        initialize_account(contract_pubkey, issuer_pubkey, owner_pubkey, id),
+        initialize_account(contract_pubkey, owner_pubkey),
     ]
 }
 
