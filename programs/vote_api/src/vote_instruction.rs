@@ -11,7 +11,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
-    instruction::{AccountMeta, AccountMetaList, Instruction, InstructionError},
+    instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
     instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,

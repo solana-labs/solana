@@ -141,13 +141,13 @@ impl AccountMeta {
     }
 }
 
-/// A list of AccountMetas used to build an Instruction
-pub trait AccountMetaList {
-    /// For instructions whose authorized signer may already be in account parameters
+/// Trait for adding a signer Pubkey to an existing data structure
+pub trait WithSigner {
+    /// Add a signer Pubkey
     fn with_signer(self, signer: &Pubkey) -> Self;
 }
 
-impl AccountMetaList for Vec<AccountMeta> {
+impl WithSigner for Vec<AccountMeta> {
     fn with_signer(mut self, signer: &Pubkey) -> Self {
         for meta in self.iter_mut() {
             // signer might already appear in parameters
