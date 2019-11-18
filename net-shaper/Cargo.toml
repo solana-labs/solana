@@ -18,6 +18,7 @@ serde_derive = "1.0.102"
 serde_json = "1.0.41"
 solana-clap-utils = { path = "../clap-utils", version = "0.21.0" }
 solana-logger = { path = "../logger", version = "0.21.0" }
+rand = "0.6.5"
 
 [[bin]]
 name = "solana-net-shaper"

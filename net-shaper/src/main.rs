@@ -1,10 +1,12 @@
 use clap::{
-    crate_description, crate_name, crate_version, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
+    crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg, ArgMatches,
+    SubCommand,
 };
 
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::PathBuf;
+use std::{fs, io};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct NetworkInterconnect {
@@ -42,6 +44,115 @@ impl NetworkTopology {
         }
 
         true
+    }
+
+    pub fn new_from_stdin() -> Self {
+        let mut input = String::new();
+        println!("Configure partition map (must add up to 100, e.g. [70, 20, 10]):");
+        let partitions_str = match io::stdin().read_line(&mut input) {
+            Ok(_) => input,
+            Err(error) => panic!("error: {}", error),
+        };
+
+        let partitions: Vec<u8> = serde_json::from_str(&partitions_str)
+            .expect("Failed to parse input. It must be a JSON string");
+
+        let mut interconnects: Vec<NetworkInterconnect> = vec![];
+
+        for i in 0..partitions.len() - 1 {
+            for j in i + 1..partitions.len() {
+                println!("Configure interconnect ({} <-> {}):", i, j);
+                let mut input = String::new();
+                let mut interconnect_config = match io::stdin().read_line(&mut input) {
+                    Ok(_) => input,
+                    Err(error) => panic!("error: {}", error),
+                };
+
+                if interconnect_config.ends_with('\n') {
+                    interconnect_config.pop();
+                    if interconnect_config.ends_with('\r') {
+                        interconnect_config.pop();
+                    }
+                }
+
+                if !interconnect_config.is_empty() {
+                    let interconnect = NetworkInterconnect {
+                        a: i as u8,
+                        b: j as u8,
+                        config: interconnect_config.clone(),
+                    };
+                    interconnects.push(interconnect);
+                    let interconnect = NetworkInterconnect {
+                        a: j as u8,
+                        b: i as u8,
+                        config: interconnect_config,
+                    };
+                    interconnects.push(interconnect);
+                }
+            }
+        }
+
+        Self {
+            partitions,
+            interconnects,
+        }
+    }
+
+    fn new_random(max_partitions: usize, max_packet_drop: u8, max_packet_delay: u32) -> Self {
+        let mut rng = thread_rng();
+        let num_partitions = rng.gen_range(0, max_partitions + 1);
+
+        if num_partitions == 0 {
+            return NetworkTopology::default();
+        }
+
+        let mut partitions = vec![];
+        let mut used_partition = 0;
+        for i in 0..num_partitions {
+            let partition = if i == num_partitions - 1 {
+                100 - used_partition
+            } else {
+                rng.gen_range(0, 100 - used_partition - num_partitions + i)
+            };
+            used_partition += partition;
+            partitions.push(partition as u8);
+        }
+
+        let mut interconnects: Vec<NetworkInterconnect> = vec![];
+        for i in 0..partitions.len() - 1 {
+            for j in i + 1..partitions.len() {
+                let drop_config = if max_packet_drop > 0 {
+                    let packet_drop = rng.gen_range(0, max_packet_drop + 1);
+                    format!("loss {}% 25% ", packet_drop)
+                } else {
+                    String::default()
+                };
+
+                let config = if max_packet_delay > 0 {
+                    let packet_delay = rng.gen_range(0, max_packet_delay + 1);
+                    format!("{}delay {}ms 10ms", drop_config, packet_delay)
+                } else {
+                    drop_config
+                };
+
+                let interconnect = NetworkInterconnect {
+                    a: i as u8,
+                    b: j as u8,
+                    config: config.clone(),
+                };
+                interconnects.push(interconnect);
+                let interconnect = NetworkInterconnect {
+                    a: j as u8,
+                    b: i as u8,
+                    config,
+                };
+                interconnects.push(interconnect);
+            }
+        }
+        Self {
+            partitions,
+            interconnects,
+        }
     }
 }
 
@@ -377,8 +488,20 @@ fn force_cleanup_network(matches: &ArgMatches) {
     flush_iptables_rule();
 }
 
-fn configure(_matches: &ArgMatches) {
-    let config = NetworkTopology::default();
+fn configure(matches: &ArgMatches) {
+    let config = if !matches.is_present("random") {
+        NetworkTopology::new_from_stdin()
+    } else {
+        let max_partitions = value_t!(matches, "max-partitions", usize).unwrap_or(4);
+        let max_drop = value_t!(matches, "max-drop", u8).unwrap_or(100);
+        let max_delay = value_t!(matches, "max-delay", u32).unwrap_or(50);
+        NetworkTopology::new_random(max_partitions, max_drop, max_delay)
+    };
+
+    if !config.verify() {
+        panic!("Failed to verify the configuration");
+    }
+
     let topology = serde_json::to_string(&config).expect("Failed to write as JSON");
 
     println!("{}", topology);
@@ -483,7 +606,44 @@ fn main() {
                         .help("Name of network interface"),
                 ),
         )
-        .subcommand(SubCommand::with_name("configure").about("Generate a config file"))
+        .subcommand(
+            SubCommand::with_name("configure")
+                .about("Generate a config file")
+                .arg(
+                    Arg::with_name("random")
+                        .short("r")
+                        .long("random")
+                        .required(false)
+                        .help("Generate a random config file"),
+                )
+                .arg(
+                    Arg::with_name("max-partitions")
+                        .short("p")
+                        .long("max-partitions")
+                        .value_name("count")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Maximum number of partitions. Used only with random configuration generation"),
+                )
+                .arg(
+                    Arg::with_name("max-drop")
+                        .short("d")
+                        .long("max-drop")
+                        .value_name("percentage")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Maximum amount of packet drop. Used only with random configuration generation"),
+                )
+                .arg(
+                    Arg::with_name("max-delay")
+                        .short("y")
+                        .long("max-delay")
+                        .value_name("ms")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Maximum amount of packet delay. Used only with random configuration generation"),
+                ),
+        )
         .get_matches();
 
     match matches.subcommand() {
