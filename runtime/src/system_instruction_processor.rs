@@ -72,6 +72,12 @@ fn assign_account_to_program(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
+    // guard against sysvars being assigned
+    if sysvar::check_id(&program_id) {
+        debug!("Assign: program id {} invalid", program_id);
+        return Err(SystemError::InvalidProgramId.into());
+    }
+
     account.account.owner = *program_id;
     Ok(())
 }
