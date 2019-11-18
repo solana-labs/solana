@@ -91,7 +91,7 @@ pub fn need_account_data_checked(program_id: &Pubkey, owner: &Pubkey, is_writabl
     // Read-only account data may not change.
     || !is_writable
 }
-pub fn verify_instruction(
+pub fn verify_account_changes(
     program_id: &Pubkey,
     pre: &PreInstructionAccount,
     post: &Account,
@@ -321,7 +321,7 @@ impl MessageProcessor {
 
         // Verify the instruction
         for (pre_account, post_account) in pre_accounts.iter().zip(program_accounts.iter()) {
-            verify_instruction(&program_id, pre_account, post_account)?;
+            verify_account_changes(&program_id, pre_account, post_account)?;
         }
         // The total sum of all the lamports in all the accounts cannot change.
         let post_total = Self::sum_account_lamports(program_accounts);
@@ -434,14 +434,14 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_instruction_change_owner() {
+    fn test_verify_account_changes_owner() {
         fn change_owner(
             ix: &Pubkey,
             pre: &Pubkey,
             post: &Pubkey,
             is_writable: bool,
         ) -> Result<(), InstructionError> {
-            verify_instruction(
+            verify_account_changes(
                 &ix,
                 &PreInstructionAccount::new(
                     &Account::new(0, 0, pre),
@@ -499,7 +499,7 @@ mod tests {
         );
 
         assert_eq!(
-            verify_instruction(
+            verify_account_changes(
                 &mallory_program_id,
                 &PreInstructionAccount::new(
                     &Account::new_data(0, &[42], &mallory_program_id).unwrap(),
@@ -512,7 +512,7 @@ mod tests {
             "mallory should be able to change the account owner, if she leaves clear data"
         );
         assert_eq!(
-            verify_instruction(
+            verify_account_changes(
                 &mallory_program_id,
                 &PreInstructionAccount::new(
                     &Account::new_data(0, &[42], &mallory_program_id).unwrap(),
@@ -527,7 +527,7 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_instruction_change_executable() {
+    fn test_verify_account_changes_executable() {
         let owner = Pubkey::new_rand();
         let change_executable = |program_id: &Pubkey,
                                  is_writable: bool,
@@ -549,7 +549,7 @@ mod tests {
                 executable: post_executable,
                 ..Account::default()
             };
-            verify_instruction(&program_id, &pre, &post)
+            verify_account_changes(&program_id, &pre, &post)
         };
 
         let mallory_program_id = Pubkey::new_rand();
@@ -583,9 +583,9 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_instruction_change_data_len() {
+    fn test_verify_account_changes_data_len() {
         assert_eq!(
-            verify_instruction(
+            verify_account_changes(
                 &system_program::id(),
                 &PreInstructionAccount::new(
                     &Account::new_data(0, &[0], &system_program::id()).unwrap(),
@@ -600,7 +600,7 @@ mod tests {
         let alice_program_id = Pubkey::new_rand();
 
         assert_eq!(
-            verify_instruction(
+            verify_account_changes(
                 &system_program::id(),
                 &PreInstructionAccount::new(
                     &Account::new_data(0, &[0], &alice_program_id).unwrap(),
@@ -615,7 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_instruction_change_data() {
+    fn test_verify_account_changes_data() {
         let alice_program_id = Pubkey::new_rand();
 
         let change_data =
@@ -626,7 +626,7 @@ mod tests {
                     need_account_data_checked(&alice_program_id, &program_id, is_writable),
                 );
                 let post = Account::new_data(0, &[42], &alice_program_id).unwrap();
-                verify_instruction(&program_id, &pre, &post)
+                verify_account_changes(&program_id, &pre, &post)
             };
 
         let mallory_program_id = Pubkey::new_rand();
@@ -650,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_instruction_rent_epoch() {
+    fn test_verify_account_changes_rent_epoch() {
         let alice_program_id = Pubkey::new_rand();
         let pre = PreInstructionAccount::new(
             &Account::new(0, 0, &alice_program_id),
@@ -660,21 +660,21 @@ mod tests {
         let mut post = Account::new(0, 0, &alice_program_id);
 
         assert_eq!(
-            verify_instruction(&system_program::id(), &pre, &post),
+            verify_account_changes(&system_program::id(), &pre, &post),
             Ok(()),
             "nothing changed!"
         );
 
         post.rent_epoch += 1;
         assert_eq!(
-            verify_instruction(&system_program::id(), &pre, &post),
+            verify_account_changes(&system_program::id(), &pre, &post),
             Err(InstructionError::RentEpochModified),
             "no one touches rent_epoch"
         );
     }
 
     #[test]
-    fn test_verify_instruction_deduct_lamports_and_reassign_account() {
+    fn test_verify_account_changes_deduct_lamports_and_reassign_account() {
         let alice_program_id = Pubkey::new_rand();
         let bob_program_id = Pubkey::new_rand();
         let pre = PreInstructionAccount::new(
@@ -686,14 +686,14 @@ mod tests {
 
         // positive test of this capability
         assert_eq!(
-            verify_instruction(&alice_program_id, &pre, &post),
+            verify_account_changes(&alice_program_id, &pre, &post),
             Ok(()),
             "alice should be able to deduct lamports and give the account to bob if the data is zeroed",
         );
     }
 
     #[test]
-    fn test_verify_instruction_change_lamports() {
+    fn test_verify_account_changes_lamports() {
         let alice_program_id = Pubkey::new_rand();
         let pre = PreInstructionAccount::new(
             &Account::new(42, 0, &alice_program_id),
@@ -703,7 +703,7 @@ mod tests {
         let post = Account::new(0, 0, &alice_program_id);
 
         assert_eq!(
-            verify_instruction(&system_program::id(), &pre, &post),
+            verify_account_changes(&system_program::id(), &pre, &post),
             Err(InstructionError::ExternalAccountLamportSpend),
             "debit should fail, even if system program"
         );
@@ -715,7 +715,7 @@ mod tests {
         );
 
         assert_eq!(
-            verify_instruction(&alice_program_id, &pre, &post,),
+            verify_account_changes(&alice_program_id, &pre, &post,),
             Err(InstructionError::ReadonlyLamportChange),
             "debit should fail, even if owning program"
         );
@@ -727,7 +727,7 @@ mod tests {
         );
         let post = Account::new(0, 0, &system_program::id());
         assert_eq!(
-            verify_instruction(&system_program::id(), &pre, &post),
+            verify_account_changes(&system_program::id(), &pre, &post),
             Err(InstructionError::ModifiedProgramId),
             "system program can't debit the account unless it was the pre.owner"
         );
@@ -739,14 +739,14 @@ mod tests {
         );
         let post = Account::new(0, 0, &alice_program_id);
         assert_eq!(
-            verify_instruction(&system_program::id(), &pre, &post),
+            verify_account_changes(&system_program::id(), &pre, &post),
             Ok(()),
             "system can spend (and change owner)"
         );
     }
 
     #[test]
-    fn test_verify_instruction_data_size_changed() {
+    fn test_verify_account_changes_data_size_changed() {
         let alice_program_id = Pubkey::new_rand();
         let pre = PreInstructionAccount::new(
             &Account::new_data(42, &[0], &alice_program_id).unwrap(),
@@ -755,7 +755,7 @@ mod tests {
         );
         let post = Account::new_data(42, &[0, 0], &alice_program_id).unwrap();
         assert_eq!(
-            verify_instruction(&system_program::id(), &pre, &post),
+            verify_account_changes(&system_program::id(), &pre, &post),
             Err(InstructionError::AccountDataSizeChanged),
             "system program should not be able to change another program's account data size"
         );
@@ -765,7 +765,7 @@ mod tests {
             need_account_data_checked(&alice_program_id, &alice_program_id, true),
         );
         assert_eq!(
-            verify_instruction(&alice_program_id, &pre, &post),
+            verify_account_changes(&alice_program_id, &pre, &post),
             Err(InstructionError::AccountDataSizeChanged),
             "non-system programs cannot change their data size"
         );
@@ -775,7 +775,7 @@ mod tests {
             need_account_data_checked(&system_program::id(), &system_program::id(), true),
         );
         assert_eq!(
-            verify_instruction(&system_program::id(), &pre, &post),
+            verify_account_changes(&system_program::id(), &pre, &post),
             Ok(()),
             "system program should be able to change acount data size"
         );
