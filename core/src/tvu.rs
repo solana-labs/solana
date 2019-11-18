@@ -75,6 +75,7 @@ impl Tvu {
         sigverify_disabled: bool,
         cfg: Option<PartitionCfg>,
         shred_version: u16,
+        persist_transaction_status: bool,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -165,6 +166,7 @@ impl Tvu {
             vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
             snapshot_package_sender,
             block_commitment_cache,
+            persist_transaction_status,
         );
 
         let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
@@ -297,6 +299,7 @@ pub mod tests {
             false,
             None,
             0,
+            false,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

@@ -62,6 +62,7 @@ pub struct ValidatorConfig {
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub partition_cfg: Option<PartitionCfg>,
+    pub persist_transaction_status: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -79,6 +80,7 @@ impl Default for ValidatorConfig {
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             partition_cfg: None,
+            persist_transaction_status: false,
         }
     }
 }
@@ -350,6 +352,7 @@ impl Validator {
             config.dev_sigverify_disabled,
             config.partition_cfg.clone(),
             shred_version,
+            config.persist_transaction_status,
         );
 
         if config.dev_sigverify_disabled {

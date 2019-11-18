@@ -1452,8 +1452,12 @@ mod test {
                 .or_insert_with(|| ForkProgress::new(0, last_blockhash));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
             blocktree.insert_shreds(shreds, None, false).unwrap();
-            let (res, _tx_count) =
-                ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut bank0_progress);
+            let (res, _tx_count) = ReplayStage::replay_blocktree_into_bank(
+                &bank0,
+                &blocktree,
+                &mut bank0_progress,
+                false,
+            );
 
             // Check that the erroring bank was marked as dead in the progress map
             assert!(progress
