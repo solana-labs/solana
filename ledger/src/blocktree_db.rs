@@ -9,6 +9,7 @@ use rocksdb::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use solana_client::rpc_request::RpcTransactionStatus;
 use solana_sdk::{clock::Slot, signature::Signature};
 use std::collections::HashMap;
 use std::fs;
@@ -261,7 +262,7 @@ pub trait TypedColumn: Column {
 }
 
 impl TypedColumn for columns::TransactionStatus {
-    type Type = (solana_sdk::transaction::Result<()>, u64);
+    type Type = RpcTransactionStatus;
 }
 
 impl Column for columns::TransactionStatus {
