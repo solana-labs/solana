@@ -941,6 +941,8 @@ impl Blocktree {
         self.code_shred_cf.get_bytes((slot, index))
     }
 
+    // Only used by tests
+    #[allow(clippy::too_many_arguments)]
     pub fn write_entries(
         &self,
         start_slot: Slot,

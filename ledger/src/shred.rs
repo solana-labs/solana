@@ -156,7 +156,6 @@ impl Shred {
         let mut data_header = DataShredHeader {
             parent_offset,
             flags: reference_tick.min(SHRED_TICK_REFERENCE_MASK),
-            ..DataShredHeader::default()
         };
 
         if is_last_data {
