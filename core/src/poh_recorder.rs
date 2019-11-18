@@ -17,7 +17,7 @@ use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::poh::Poh;
 use solana_runtime::bank::Bank;
 pub use solana_sdk::clock::Slot;
-use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
+use solana_sdk::clock::{DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS};
 use solana_sdk::hash::Hash;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
@@ -29,7 +29,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 const GRACE_TICKS_FACTOR: u64 = 2;
-const MAX_GRACE_TICKS: u64 = 12;
+const MAX_GRACE_TICKS: u64 = DEFAULT_TICKS_PER_SLOT * 3;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PohRecorderError {
