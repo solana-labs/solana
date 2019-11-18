@@ -11,6 +11,7 @@ use crate::{
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
+use solana_client::rpc_request::RpcTransactionStatus;
 use solana_ledger::{
     blocktree::Blocktree, entry::hash_transactions, leader_schedule_cache::LeaderScheduleCache,
 };
@@ -73,6 +74,7 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
+        maybe_blocktree: Option<Arc<Blocktree>>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -80,6 +82,7 @@ impl BankingStage {
             verified_receiver,
             verified_vote_receiver,
             Self::num_threads(),
+            maybe_blocktree,
         )
     }
 
@@ -89,6 +92,7 @@ impl BankingStage {
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
         num_threads: u32,
+        maybe_blocktree: Option<Arc<Blocktree>>,
     ) -> Self {
         let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
         // Single thread to generate entries from many banks.
@@ -108,6 +112,7 @@ impl BankingStage {
                 let poh_recorder = poh_recorder.clone();
                 let cluster_info = cluster_info.clone();
                 let mut recv_start = Instant::now();
+                let maybe_blocktree = maybe_blocktree.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -121,6 +126,7 @@ impl BankingStage {
                             enable_forwarding,
                             i,
                             batch_limit,
+                            maybe_blocktree.as_ref(),
                         );
                     })
                     .unwrap()
@@ -155,6 +161,7 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         buffered_packets: &mut Vec<PacketsAndOffsets>,
         batch_limit: usize,
+        maybe_blocktree: Option<&Arc<Blocktree>>,
     ) -> Result<UnprocessedPackets> {
         let mut unprocessed_packets = vec![];
         let mut rebuffered_packets = 0;
@@ -185,6 +192,7 @@ impl BankingStage {
                     &poh_recorder,
                     &msgs,
                     unprocessed_indexes.to_owned(),
+                    maybe_blocktree,
                 );
 
             new_tx_count += processed;
@@ -277,6 +285,7 @@ impl BankingStage {
         buffered_packets: &mut Vec<PacketsAndOffsets>,
         enable_forwarding: bool,
         batch_limit: usize,
+        maybe_blocktree: Option<&Arc<Blocktree>>,
     ) -> Result<()> {
         let (leader_at_slot_offset, poh_has_bank, would_be_leader) = {
             let poh = poh_recorder.lock().unwrap();
@@ -303,6 +312,7 @@ impl BankingStage {
                     poh_recorder,
                     buffered_packets,
                     batch_limit,
+                    maybe_blocktree,
                 )?;
                 buffered_packets.append(&mut unprocessed);
                 Ok(())
@@ -350,6 +360,7 @@ impl BankingStage {
         enable_forwarding: bool,
         id: u32,
         batch_limit: usize,
+        maybe_blocktree: Option<&Arc<Blocktree>>,
     ) {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = vec![];
@@ -363,6 +374,7 @@ impl BankingStage {
                     &mut buffered_packets,
                     enable_forwarding,
                     batch_limit,
+                    maybe_blocktree,
                 )
                 .unwrap_or_else(|_| buffered_packets.clear());
             }
@@ -385,6 +397,7 @@ impl BankingStage {
                 recv_timeout,
                 id,
                 batch_limit,
+                maybe_blocktree,
             ) {
                 Err(Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Err(Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
@@ -485,6 +498,7 @@ impl BankingStage {
         bank: &Bank,
         poh: &Arc<Mutex<PohRecorder>>,
         batch: &TransactionBatch,
+        maybe_blocktree: Option<&Arc<Blocktree>>,
     ) -> (Result<usize>, Vec<usize>) {
         let mut load_execute_time = Measure::start("load_execute_time");
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
@@ -512,7 +526,7 @@ impl BankingStage {
         let num_to_commit = num_to_commit.unwrap();
 
         if num_to_commit != 0 {
-            bank.commit_transactions(
+            let results = bank.commit_transactions(
                 txs,
                 None,
                 &mut loaded_accounts,
@@ -520,6 +534,23 @@ impl BankingStage {
                 tx_count,
                 signature_count,
             );
+            if let Some(blocktree) = maybe_blocktree {
+                for (result, transaction) in results.iter().zip(batch.transactions()) {
+                    let lamports_per_signature = bank
+                        .last_blockhash_with_fee_calculator()
+                        .1
+                        .lamports_per_signature;
+                    blocktree
+                        .write_transaction_status(
+                            (bank.slot(), transaction.signatures[0]),
+                            &RpcTransactionStatus {
+                                status: result.clone(),
+                                fee: lamports_per_signature * transaction.signatures.len() as u64,
+                            },
+                        )
+                        .expect("Expect database write to succeed");
+                }
+            }
         }
         commit_time.stop();
 
@@ -542,6 +573,7 @@ impl BankingStage {
         txs: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
         chunk_offset: usize,
+        maybe_blocktree: Option<&Arc<Blocktree>>,
     ) -> (Result<usize>, Vec<usize>) {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -550,7 +582,7 @@ impl BankingStage {
         lock_time.stop();
 
         let (result, mut retryable_txs) =
-            Self::process_and_record_transactions_locked(bank, poh, &batch);
+            Self::process_and_record_transactions_locked(bank, poh, &batch, maybe_blocktree);
         retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
         let mut unlock_time = Measure::start("unlock_time");
@@ -577,6 +609,7 @@ impl BankingStage {
         bank: &Bank,
         transactions: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
+        maybe_blocktree: Option<&Arc<Blocktree>>,
     ) -> (usize, Vec<usize>) {
         let mut chunk_start = 0;
         let mut unprocessed_txs = vec![];
@@ -591,6 +624,7 @@ impl BankingStage {
                 &transactions[chunk_start..chunk_end],
                 poh,
                 chunk_start,
+                maybe_blocktree,
             );
             trace!("process_transactions result: {:?}", result);
 
@@ -724,6 +758,7 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         msgs: &Packets,
         packet_indexes: Vec<usize>,
+        maybe_blocktree: Option<&Arc<Blocktree>>,
     ) -> (usize, usize, Vec<usize>) {
         let (transactions, transaction_to_packet_indexes) =
             Self::transactions_from_packets(msgs, &packet_indexes);
@@ -736,7 +771,7 @@ impl BankingStage {
         let tx_len = transactions.len();
 
         let (processed, unprocessed_tx_indexes) =
-            Self::process_transactions(bank, &transactions, poh);
+            Self::process_transactions(bank, &transactions, poh, maybe_blocktree);
 
         let unprocessed_tx_count = unprocessed_tx_indexes.len();
 
@@ -815,6 +850,7 @@ impl BankingStage {
         recv_timeout: Duration,
         id: u32,
         batch_limit: usize,
+        maybe_blocktree: Option<&Arc<Blocktree>>,
     ) -> Result<UnprocessedPackets> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
@@ -852,7 +888,7 @@ impl BankingStage {
             let bank = bank.unwrap();
 
             let (processed, verified_txs_len, unprocessed_indexes) =
-                Self::process_received_packets(&bank, &poh, &msgs, packet_indexes);
+                Self::process_received_packets(&bank, &poh, &msgs, packet_indexes, maybe_blocktree);
 
             new_tx_count += processed;
 
@@ -1004,6 +1040,7 @@ mod tests {
                 &poh_recorder,
                 verified_receiver,
                 vote_receiver,
+                None,
             );
             drop(verified_sender);
             drop(vote_sender);
@@ -1042,6 +1079,7 @@ mod tests {
                 &poh_recorder,
                 verified_receiver,
                 vote_receiver,
+                None,
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -1103,6 +1141,7 @@ mod tests {
                 &poh_recorder,
                 verified_receiver,
                 vote_receiver,
+                None,
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -1244,6 +1283,7 @@ mod tests {
                     verified_receiver,
                     vote_receiver,
                     2,
+                    None,
                 );
 
                 // wait for banking_stage to eat the packets
@@ -1644,9 +1684,15 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
-            BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder, 0)
-                .0
-                .unwrap();
+            BankingStage::process_and_record_transactions(
+                &bank,
+                &transactions,
+                &poh_recorder,
+                0,
+                None,
+            )
+            .0
+            .unwrap();
             poh_recorder.lock().unwrap().tick();
 
             let mut done = false;
@@ -1678,7 +1724,8 @@ mod tests {
                     &bank,
                     &transactions,
                     &poh_recorder,
-                    0
+                    0,
+                    None,
                 )
                 .0,
                 Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
@@ -1735,6 +1782,7 @@ mod tests {
                 &transactions,
                 &poh_recorder,
                 0,
+                None,
             );
 
             assert!(result.is_ok());
@@ -1819,7 +1867,7 @@ mod tests {
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             let (processed_transactions_count, mut retryable_txs) =
-                BankingStage::process_transactions(&bank, &transactions, &poh_recorder);
+                BankingStage::process_transactions(&bank, &transactions, &poh_recorder, None);
 
             assert_eq!(processed_transactions_count, 0,);
 

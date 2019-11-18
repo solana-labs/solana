@@ -151,6 +151,7 @@ fn main() {
             &poh_recorder,
             verified_receiver,
             vote_receiver,
+            None,
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

@@ -367,6 +367,7 @@ impl Validator {
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
             config.dev_sigverify_disabled,
+            config.persist_transaction_status,
             &blocktree,
             &config.broadcast_stage_type,
             &exit,

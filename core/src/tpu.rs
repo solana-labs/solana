@@ -35,6 +35,7 @@ impl Tpu {
         tpu_forwards_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
+        persist_transaction_status: bool,
         blocktree: &Arc<Blocktree>,
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
@@ -67,11 +68,17 @@ impl Tpu {
             &poh_recorder,
         );
 
+        let maybe_blocktree = if persist_transaction_status {
+            Some(blocktree.clone())
+        } else {
+            None
+        };
         let banking_stage = BankingStage::new(
             &cluster_info,
             poh_recorder,
             verified_receiver,
             verified_vote_receiver,
+            maybe_blocktree,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
