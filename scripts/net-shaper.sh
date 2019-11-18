@@ -19,6 +19,8 @@ iface="$(ifconfig | grep mtu | grep -iv loopback | grep -i running | awk 'BEGIN 
 
 if [[ "$1" = cleanup ]]; then
   $sudo ~solana/.cargo/bin/solana-net-shaper cleanup -f "$2" -s "$3" -p "$4" -i "$iface"
+elif [[ "$1" = force_cleanup ]]; then
+  $sudo ~solana/.cargo/bin/solana-net-shaper force_cleanup -i "$iface"
 else
   $sudo ~solana/.cargo/bin/solana-net-shaper shape -f "$2" -s "$3" -p "$4" -i "$iface"
 fi

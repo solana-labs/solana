@@ -877,6 +877,7 @@ stopNode() {
         solana/scripts/netem.sh delete < solana/netem.cfg
         rm -f solana/netem.cfg
       fi
+      solana/scripts/net-shaper.sh force_cleanup
       for pattern in node solana- remote-; do
         pkill -9 \$pattern
       done

@@ -191,13 +191,13 @@ fn delete_tos_filter(interface: &str, class: &str, tos: &str) {
     );
 }
 
-fn insert_default_filter(interface: &str) -> bool {
-    // tc filter add dev <if> protocol ip parent 1: prio 2 u32 match ip src 0/0 flowid 1:4
+fn insert_default_filter(interface: &str, class: &str) -> bool {
+    // tc filter add dev <if> protocol ip parent 1: prio 2 u32 match ip src 0/0 flowid 1:<class>
     run(
         "tc",
         &[
-            "filter", "add", "dev", interface, "protocol", "ip", "parent", "1:", "prio", "1",
-            "u32", "match", "ip", "tos", "0", "0xff", "flowid", "1:4",
+            "filter", "add", "dev", interface, "protocol", "ip", "parent", "1:", "prio", "2",
+            "u32", "match", "ip", "tos", "0", "0xff", "flowid", class,
         ],
         "Failed to add default filter",
         "tc add default filter",
@@ -205,16 +205,27 @@ fn insert_default_filter(interface: &str) -> bool {
     )
 }
 
-fn delete_default_filter(interface: &str) {
-    // tc filter delete dev <if> protocol ip parent 1: prio 2 flowid 1:4
+fn delete_default_filter(interface: &str, class: &str) {
+    // tc filter delete dev <if> protocol ip parent 1: prio 2 flowid 1:<class>
     run(
         "tc",
         &[
-            "filter", "delete", "dev", interface, "protocol", "ip", "parent", "1:", "prio", "1",
-            "flowid", "1:1",
+            "filter", "delete", "dev", interface, "protocol", "ip", "parent", "1:", "prio", "2",
+            "flowid", class,
         ],
         "Failed to delete default filter",
         "tc delete default filter",
+        true,
+    );
+}
+
+fn delete_all_filters(interface: &str) {
+    // tc filter delete dev <if>
+    run(
+        "tc",
+        &["filter", "delete", "dev", interface],
+        "Failed to delete all filters",
+        "tc delete all filters",
         true,
     );
 }
@@ -267,10 +278,12 @@ fn shape_network(matches: &ArgMatches) {
     }
 
     delete_tc_root(interface.as_str());
+    let num_bands = topology.partitions.len() + 1;
+    let default_filter_class = format!("1:{}", num_bands);
     if !topology.interconnects.is_empty() {
-        let num_bands = (topology.partitions.len() + 2).to_string();
-        if !insert_tc_root(interface.as_str(), num_bands.as_str())
-            || !insert_default_filter(interface.as_str())
+        let num_bands_str = num_bands.to_string();
+        if !insert_tc_root(interface.as_str(), num_bands_str.as_str())
+            || !insert_default_filter(interface.as_str(), default_filter_class.as_str())
         {
             delete_tc_root(interface.as_str());
             flush_iptables_rule();
@@ -283,12 +296,12 @@ fn shape_network(matches: &ArgMatches) {
             let tos = partition_id_to_tos(i.a as usize);
             if tos == 0 {
                 println!("Incorrect value of TOS/Partition in config {}", i.a);
-                delete_default_filter(interface.as_str());
+                delete_default_filter(interface.as_str(), default_filter_class.as_str());
                 delete_tc_root(interface.as_str());
                 return;
             }
             let tos_string = tos.to_string();
-            // First valid class is 1:1, and it's reserved for the default filter
+            // First valid class is 1:1
             let class = format!("1:{}", i.a + 1);
             if !insert_tc_netem(
                 interface.as_str(),
@@ -296,7 +309,7 @@ fn shape_network(matches: &ArgMatches) {
                 tos_string.as_str(),
                 i.config.as_str(),
             ) {
-                delete_default_filter(interface.as_str());
+                delete_default_filter(interface.as_str(), default_filter_class.as_str());
                 delete_tc_root(interface.as_str());
                 return;
             }
@@ -308,7 +321,7 @@ fn shape_network(matches: &ArgMatches) {
                     tos_string.as_str(),
                     i.config.as_str(),
                 );
-                delete_default_filter(interface.as_str());
+                delete_default_filter(interface.as_str(), default_filter_class.as_str());
                 delete_tc_root(interface.as_str());
                 return;
             }
@@ -338,7 +351,7 @@ fn cleanup_network(matches: &ArgMatches) {
     topology.interconnects.iter().for_each(|i| {
         if i.b as usize == my_partition {
             let handle = (i.a + 1).to_string();
-            // First valid class is 1:1, and it's reserved for the default filter
+            // First valid class is 1:1
             let class = format!("1:{}", i.a + 1);
             let tos_string = i.a.to_string();
             delete_tos_filter(interface.as_str(), class.as_str(), tos_string.as_str());
@@ -350,7 +363,16 @@ fn cleanup_network(matches: &ArgMatches) {
             );
         }
     });
-    delete_default_filter(interface.as_str());
+    let num_bands = topology.partitions.len() + 1;
+    let default_filter_class = format!("1:{}", num_bands);
+    delete_default_filter(interface.as_str(), default_filter_class.as_str());
+    delete_tc_root(interface.as_str());
+    flush_iptables_rule();
+}
+
+fn force_cleanup_network(matches: &ArgMatches) {
+    let interface = value_t_or_exit!(matches, "iface", String);
+    delete_all_filters(interface.as_str());
     delete_tc_root(interface.as_str());
     flush_iptables_rule();
 }
@@ -448,12 +470,26 @@ fn main() {
                         .help("Position of current node in the network"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("force_cleanup")
+                .about("Remove the network filters")
+                .arg(
+                    Arg::with_name("iface")
+                        .short("i")
+                        .long("iface")
+                        .value_name("network interface name")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Name of network interface"),
+                ),
+        )
         .subcommand(SubCommand::with_name("configure").about("Generate a config file"))
         .get_matches();
 
     match matches.subcommand() {
         ("shape", Some(args_matches)) => shape_network(args_matches),
         ("cleanup", Some(args_matches)) => cleanup_network(args_matches),
+        ("force_cleanup", Some(args_matches)) => force_cleanup_network(args_matches),
         ("configure", Some(args_matches)) => configure(args_matches),
         _ => {}
     };
