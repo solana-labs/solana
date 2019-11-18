@@ -61,7 +61,7 @@ Operate a configured testnet
                                       - Override the default --hashes-per-tick for the cluster
    --no-airdrop
                                       - If set, disables airdrops.  Nodes must be funded in genesis config when airdrops are disabled.
-   --faucet-lamports NUM_LAMPORTS_TO_MINT
+   --lamports NUM_LAMPORTS_TO_MINT
                                       - Override the default 500000000000000000 lamports minted in genesis
    --internal-nodes-stake-lamports NUM_LAMPORTS_PER_NODE
                                       - Amount to stake internal nodes.
@@ -87,10 +87,6 @@ Operate a configured testnet
                                         available (requires -t or -T)
 
    --use-move                         - Build the move-loader-program and add it to the cluster
-
-   --operating-mode development|softlaunch
-                                      - Specify whether or not to launch the cluster in "development" mode with all features enabled at epoch 0,
-                                        or "softlaunch" mode with some features disabled at epoch 0 (default: development)
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -172,18 +168,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --target-lamports-per-signature ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
-    elif [[ $1 = --faucet-lamports ]]; then
-      genesisOptions="$genesisOptions $1 $2"
-      shift 2
-    elif [[ $1 = --operating-mode ]]; then
-      case "$2" in
-        development|softlaunch)
-          ;;
-        *)
-          echo "Unexpected operating mode: \"$2\""
-          exit 1
-          ;;
-      esac
+    elif [[ $1 = --lamports ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
     elif [[ $1 = --no-snapshot-fetch ]]; then
@@ -860,6 +845,7 @@ deploy() {
   echo "Network start logs in $netLogDir"
 }
 
+
 stopNode() {
   local ipAddress=$1
   local block=$2
@@ -891,6 +877,7 @@ stopNode() {
         solana/scripts/netem.sh delete < solana/netem.cfg
         rm -f solana/netem.cfg
       fi
+      solana/scripts/net-shaper.sh force_cleanup
       for pattern in node solana- remote-; do
         pkill -9 \$pattern
       done
@@ -930,6 +917,7 @@ stop() {
   $metricsWriteDatapoint "testnet-deploy net-stop-complete=1"
   echo "Stopping nodes took $SECONDS seconds"
 }
+
 
 checkPremptibleInstances() {
   # The validatorIpList nodes may be preemptible instances that can disappear at
@@ -1020,12 +1008,14 @@ logs)
   ;;
 netem)
   if [[ -n $netemConfigFile ]]; then
-    for ipAddress in "${validatorIpList[@]}"; do
-      "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":~/solana
-    done
+    if [[ $netemCommand = "add" ]]; then
+      for ipAddress in "${validatorIpList[@]}"; do
+        "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":~/solana
+      done
+    fi
     for i in "${!validatorIpList[@]}"; do
       "$here"/ssh.sh solana@"${validatorIpList[$i]}" 'solana/scripts/net-shaper.sh' \
-      "$netemCommand" solana/"$netemConfigFile" "${#validatorIpList[@]}" "$i"
+      "$netemCommand" ~solana/solana/"$netemConfigFile" "${#validatorIpList[@]}" "$i"
     done
   else
     num_nodes=$((${#validatorIpList[@]}*netemPartition/100))
