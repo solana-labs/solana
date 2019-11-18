@@ -182,6 +182,7 @@ impl ReplayStage {
         slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
         snapshot_package_sender: Option<SnapshotPackageSender>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        persist_transaction_status: bool,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>)
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -245,6 +246,7 @@ impl ReplayStage {
                         &my_pubkey,
                         &mut progress,
                         &slot_full_senders,
+                        persist_transaction_status,
                     );
                     datapoint_debug!(
                         "replay_stage-memory",
@@ -493,6 +495,7 @@ impl ReplayStage {
         bank: &Arc<Bank>,
         blocktree: &Blocktree,
         bank_progress: &mut ForkProgress,
+        persist_transaction_status: bool,
     ) -> (Result<()>, usize) {
         let mut tx_count = 0;
         let now = Instant::now();
@@ -514,7 +517,19 @@ impl ReplayStage {
                 slot_full,
             );
             tx_count += entries.iter().map(|e| e.transactions.len()).sum::<usize>();
-            Self::replay_entries_into_bank(bank, bank_progress, entries, num_shreds, slot_full)
+            let maybe_blocktree = if persist_transaction_status {
+                Some(blocktree)
+            } else {
+                None
+            };
+            Self::replay_entries_into_bank(
+                bank,
+                bank_progress,
+                entries,
+                num_shreds,
+                slot_full,
+                maybe_blocktree,
+            )
         });
 
         if Self::is_replay_result_fatal(&replay_result) {
@@ -663,6 +678,7 @@ impl ReplayStage {
         my_pubkey: &Pubkey,
         progress: &mut HashMap<u64, ForkProgress>,
         slot_full_senders: &[Sender<(u64, Pubkey)>],
+        persist_transaction_status: bool,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -685,8 +701,12 @@ impl ReplayStage {
                 .entry(bank.slot())
                 .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
             if bank.collector_id() != my_pubkey {
-                let (replay_result, replay_tx_count) =
-                    Self::replay_blocktree_into_bank(&bank, &blocktree, bank_progress);
+                let (replay_result, replay_tx_count) = Self::replay_blocktree_into_bank(
+                    &bank,
+                    &blocktree,
+                    bank_progress,
+                    persist_transaction_status,
+                );
                 tx_count += replay_tx_count;
                 if Self::is_replay_result_fatal(&replay_result) {
                     trace!("replay_result_fatal slot {}", bank_slot);
@@ -950,6 +970,7 @@ impl ReplayStage {
         entries: Vec<Entry>,
         num_shreds: usize,
         slot_full: bool,
+        maybe_blocktree: Option<&Blocktree>,
     ) -> Result<()> {
         let result = Self::verify_and_process_entries(
             &bank,
@@ -957,6 +978,7 @@ impl ReplayStage {
             slot_full,
             bank_progress.num_shreds,
             bank_progress,
+            maybe_blocktree,
         );
         bank_progress.num_shreds += num_shreds;
         bank_progress.num_entries += entries.len();
@@ -1008,6 +1030,7 @@ impl ReplayStage {
         slot_full: bool,
         shred_index: usize,
         bank_progress: &mut ForkProgress,
+        maybe_blocktree: Option<&Blocktree>,
     ) -> Result<()> {
         let last_entry = &bank_progress.last_entry;
         let tick_hash_count = &mut bank_progress.tick_hash_count;
@@ -1042,7 +1065,7 @@ impl ReplayStage {
         let mut entry_state = entries.start_verify(last_entry);
 
         let mut replay_elapsed = Measure::start("replay_elapsed");
-        let res = blocktree_processor::process_entries(bank, entries, true);
+        let res = blocktree_processor::process_entries(bank, entries, true, maybe_blocktree);
         replay_elapsed.stop();
         bank_progress.stats.replay_elapsed += replay_elapsed.as_us();
 
