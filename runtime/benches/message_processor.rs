@@ -16,7 +16,7 @@ fn bench_has_duplicates(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn bench_verify_instruction_data(bencher: &mut Bencher) {
+fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     solana_logger::setup();
 
     let owner = Pubkey::new_rand();
@@ -27,11 +27,11 @@ fn bench_verify_instruction_data(bencher: &mut Bencher) {
         need_account_data_checked(&owner, &owner, true),
     );
     let post = Account::new(0, BUFSIZE, &owner);
-    assert_eq!(verify_instruction(&owner, &pre, &post), Ok(()));
+    assert_eq!(verify_account_changes(&owner, &pre, &post), Ok(()));
 
     // this one should be faster
     bencher.iter(|| {
-        verify_instruction(&owner, &pre, &post).unwrap();
+        verify_account_changes(&owner, &pre, &post).unwrap();
     });
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data no change by owner: {} ns/iter", summary.median);
@@ -48,7 +48,7 @@ fn bench_verify_instruction_data(bencher: &mut Bencher) {
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data compare {} ns/iter", summary.median);
     bencher.iter(|| {
-        verify_instruction(&non_owner, &pre, &post).unwrap();
+        verify_account_changes(&non_owner, &pre, &post).unwrap();
     });
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data no change by non owner: {} ns/iter", summary.median);
