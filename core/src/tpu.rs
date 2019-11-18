@@ -38,6 +38,7 @@ impl Tpu {
         blocktree: &Arc<Blocktree>,
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
+        shred_version: u16,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
@@ -79,6 +80,7 @@ impl Tpu {
             entry_receiver,
             &exit,
             blocktree,
+            shred_version,
         );
 
         Self {

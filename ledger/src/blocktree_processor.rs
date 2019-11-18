@@ -532,6 +532,7 @@ pub fn fill_blocktree_slot_with_ticks(
             true,
             &Arc::new(Keypair::new()),
             entries,
+            0,
         )
         .unwrap();
 
@@ -587,6 +588,7 @@ pub mod tests {
                 true,
                 &Arc::new(Keypair::new()),
                 entries,
+                0,
             )
             .expect("Expected to write shredded entries to blocktree");
 
@@ -627,6 +629,7 @@ pub mod tests {
                 true,
                 &Arc::new(Keypair::new()),
                 entries,
+                0,
             )
             .expect("Expected to write shredded entries to blocktree");
 
@@ -678,6 +681,7 @@ pub mod tests {
                 true,
                 &Arc::new(Keypair::new()),
                 entries,
+                0,
             )
             .expect("Expected to write shredded entries to blocktree");
 
@@ -740,6 +744,7 @@ pub mod tests {
                     false,
                     &Arc::new(Keypair::new()),
                     entries,
+                    0,
                 )
                 .expect("Expected to write shredded entries to blocktree");
         }
@@ -1151,6 +1156,7 @@ pub mod tests {
                 true,
                 &Arc::new(Keypair::new()),
                 entries,
+                0,
             )
             .unwrap();
         let opts = ProcessOptions {
@@ -1261,6 +1267,7 @@ pub mod tests {
                 true,
                 &Arc::new(Keypair::new()),
                 entries,
+                0,
             )
             .unwrap();
 

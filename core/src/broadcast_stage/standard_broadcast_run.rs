@@ -35,16 +35,18 @@ pub(super) struct StandardBroadcastRun {
     current_slot_and_parent: Option<(u64, u64)>,
     slot_broadcast_start: Option<Instant>,
     keypair: Arc<Keypair>,
+    shred_version: u16,
 }
 
 impl StandardBroadcastRun {
-    pub(super) fn new(keypair: Arc<Keypair>) -> Self {
+    pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
         Self {
             stats: BroadcastStats::default(),
             unfinished_slot: None,
             current_slot_and_parent: None,
             slot_broadcast_start: None,
             keypair,
+            shred_version,
         }
     }
 
@@ -63,6 +65,7 @@ impl StandardBroadcastRun {
                         true,
                         true,
                         max_ticks_in_slot & SHRED_TICK_REFERENCE_MASK,
+                        self.shred_version,
                     ))
                 } else {
                     None
@@ -93,6 +96,7 @@ impl StandardBroadcastRun {
             RECOMMENDED_FEC_RATE,
             self.keypair.clone(),
             reference_tick,
+            self.shred_version,
         )
         .expect("Expected to create a new shredder");
 
@@ -350,7 +354,7 @@ mod test {
     #[test]
     fn test_interrupted_slot_last_shred() {
         let keypair = Arc::new(Keypair::new());
-        let mut run = StandardBroadcastRun::new(keypair.clone());
+        let mut run = StandardBroadcastRun::new(keypair.clone(), 0);
 
         // Set up the slot to be interrupted
         let next_shred_index = 10;
@@ -396,7 +400,7 @@ mod test {
         };
 
         // Step 1: Make an incomplete transmission for slot 0
-        let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair.clone());
+        let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair.clone(), 0);
         standard_broadcast_run
             .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
             .unwrap();
@@ -472,7 +476,7 @@ mod test {
             last_tick_height: ticks.len() as u64,
         };
 
-        let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair);
+        let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair, 0);
         standard_broadcast_run
             .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
             .unwrap();

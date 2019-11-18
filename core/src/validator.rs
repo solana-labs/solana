@@ -37,6 +37,7 @@ use solana_sdk::{
     timing::timestamp,
 };
 
+use solana_ledger::shred::Shred;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
@@ -184,6 +185,8 @@ impl Validator {
         let bank = bank_forks[bank_info.bank_slot].clone();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        // The version used by shreds, derived from genesis
+        let shred_version = Shred::version_from_hash(&genesis_hash);
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
@@ -346,6 +349,7 @@ impl Validator {
             block_commitment_cache,
             config.dev_sigverify_disabled,
             config.partition_cfg.clone(),
+            shred_version,
         );
 
         if config.dev_sigverify_disabled {
@@ -363,6 +367,7 @@ impl Validator {
             &blocktree,
             &config.broadcast_stage_type,
             &exit,
+            shred_version,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));

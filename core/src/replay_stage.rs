@@ -1151,7 +1151,7 @@ mod test {
                     ), // should cause AccountNotFound error
                 ],
             );
-            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
+            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
         });
 
         assert_matches!(
@@ -1179,7 +1179,7 @@ mod test {
                     blockhash,
                 )],
             );
-            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
+            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
         });
 
         if let Err(Error::BlockError(block_error)) = res {
@@ -1203,6 +1203,7 @@ mod test {
                 slot,
                 slot.saturating_sub(1),
                 false,
+                0,
             )
         });
 
@@ -1225,6 +1226,7 @@ mod test {
                 slot,
                 slot.saturating_sub(1),
                 false,
+                0,
             )
         });
 
@@ -1244,6 +1246,7 @@ mod test {
                 slot,
                 slot.saturating_sub(1),
                 true,
+                0,
             )
         });
 
@@ -1265,6 +1268,7 @@ mod test {
                 slot,
                 slot.saturating_sub(1),
                 false,
+                0,
             )
         });
 
@@ -1289,7 +1293,7 @@ mod test {
                 system_transaction::transfer(&genesis_keypair, &keypair.pubkey(), 2, blockhash);
             let trailing_entry = entry::next_entry(&last_entry_hash, 1, vec![tx]);
             entries.push(trailing_entry);
-            entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true)
+            entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0)
         });
 
         if let Err(Error::BlockError(block_error)) = res {
