@@ -512,7 +512,7 @@ pub trait RpcSol {
     #[rpc(meta, name = "setLogFilter")]
     fn set_log_filter(&self, _meta: Self::Metadata, filter: String) -> Result<()>;
 
-    #[rpc(meta, name = "getRpcConfirmedBlock")]
+    #[rpc(meta, name = "getConfirmedBlock")]
     fn get_confirmed_block(
         &self,
         meta: Self::Metadata,
