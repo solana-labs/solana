@@ -1856,6 +1856,34 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
 
     blocktree.insert_shreds(shreds, None, false)?;
     blocktree.set_roots(&[0])?;
+    // Explicitly close the blocktree before we create the archived genesis file
+    drop(blocktree);
+
+    let archive_path = ledger_path.join("genesis.tar.bz2");
+    let mut args = vec!["jcfhS"];
+    args.push(archive_path.to_str().unwrap());
+    args.push("-C");
+    args.push(ledger_path.to_str().unwrap());
+    args.push("genesis.bin");
+    args.push("rocksdb");
+    let output = std::process::Command::new("tar")
+        .args(&args)
+        .output()
+        .unwrap();
+    if !output.status.success() {
+        use std::io::{Error as IOError, ErrorKind};
+        use std::str::from_utf8;
+        error!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
+        error!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
+
+        return Err(BlocktreeError::IO(IOError::new(
+            ErrorKind::Other,
+            format!(
+                "Error trying to generate snapshot archive: {}",
+                output.status
+            ),
+        )));
+    }
 
     Ok(last_hash)
 }
