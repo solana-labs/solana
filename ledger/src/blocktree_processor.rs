@@ -45,27 +45,33 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
 }
 
 fn execute_batch(batch: &TransactionBatch, maybe_blocktree: Option<&Blocktree>) -> Result<()> {
-    let results = batch
+    let (results, transaction_statuses) = batch
         .bank()
         .load_execute_and_commit_transactions(batch, MAX_RECENT_BLOCKHASHES);
 
     let mut first_err = None;
-    for (result, transaction) in results.iter().zip(batch.transactions()) {
+    for ((result, transaction_status), transaction) in results
+        .iter()
+        .zip(transaction_statuses)
+        .zip(batch.transactions())
+    {
         if let Some(blocktree) = maybe_blocktree {
-            let lamports_per_signature = batch
-                .bank()
-                .last_blockhash_with_fee_calculator()
-                .1
-                .lamports_per_signature;
-            blocktree
-                .write_transaction_status(
-                    (batch.bank().slot(), transaction.signatures[0]),
-                    &RpcTransactionStatus {
-                        status: result.clone(),
-                        fee: lamports_per_signature * transaction.signatures.len() as u64,
-                    },
-                )
-                .expect("Expect database write to succeed");
+            if Bank::can_commit(&result) && !transaction.signatures.is_empty() {
+                let lamports_per_signature = batch
+                    .bank()
+                    .last_blockhash_with_fee_calculator()
+                    .1
+                    .lamports_per_signature;
+                blocktree
+                    .write_transaction_status(
+                        (batch.bank().slot(), transaction.signatures[0]),
+                        &RpcTransactionStatus {
+                            status: transaction_status.clone(),
+                            fee: lamports_per_signature * transaction.signatures.len() as u64,
+                        },
+                    )
+                    .expect("Expect database write to succeed");
+            }
         }
 
         if let Err(ref err) = result {
@@ -566,9 +572,12 @@ pub fn fill_blocktree_slot_with_ticks(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::entry::{create_ticks, next_entry, next_entry_mut};
-    use crate::genesis_utils::{
-        create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+    use crate::{
+        blocktree::entries_to_test_shreds,
+        entry::{create_ticks, next_entry, next_entry_mut},
+        genesis_utils::{
+            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+        },
     };
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
@@ -2143,6 +2152,74 @@ pub mod tests {
 
         process_entries_with_callback(&bank0, &entries, true, None, None).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
+    }
+
+    #[test]
+    fn test_write_persist_transaction_status() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(1000);
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let blocktree =
+            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        bank0
+            .transfer(4, &mint_keypair, &keypair2.pubkey())
+            .unwrap();
+
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        let slot = bank1.slot();
+
+        // Generate transactions for processing
+        // Successful transaction
+        let success_tx =
+            system_transaction::transfer(&mint_keypair, &keypair1.pubkey(), 2, blockhash);
+        let success_signature = success_tx.signatures[0];
+        let entry_1 = next_entry(&blockhash, 1, vec![success_tx]);
+        // Failed transaction, InstructionError
+        let ix_error_tx =
+            system_transaction::transfer(&keypair2, &keypair3.pubkey(), 10, blockhash);
+        let ix_error_signature = ix_error_tx.signatures[0];
+        let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
+        // Failed transaction
+        let fail_tx =
+            system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 2, Hash::default());
+        let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx]);
+        let entries = vec![entry_1, entry_2, entry_3];
+
+        let shreds = entries_to_test_shreds(entries.clone(), slot, bank0.slot(), true, 0);
+        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blocktree.set_roots(&[slot]).unwrap();
+
+        // Check that process_entries successfully writes can_commit transactions statuses, and
+        // that they are matched properly by get_confirmed_block
+        let _result = process_entries(&bank1, &entries, true, Some(&blocktree));
+
+        let confirmed_block = blocktree.get_confirmed_block(slot).unwrap();
+        assert_eq!(confirmed_block.transactions.len(), 3);
+
+        for (transaction, result) in confirmed_block.transactions.into_iter() {
+            if transaction.signatures[0] == success_signature {
+                assert_eq!(result.unwrap().status, Ok(()));
+            } else if transaction.signatures[0] == ix_error_signature {
+                assert_eq!(
+                    result.unwrap().status,
+                    Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::CustomError(1)
+                    ))
+                );
+            } else {
+                assert_eq!(result, None);
+            }
+        }
     }
 
     fn get_epoch_schedule(

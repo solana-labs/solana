@@ -526,29 +526,34 @@ impl BankingStage {
         let num_to_commit = num_to_commit.unwrap();
 
         if num_to_commit != 0 {
-            let results = bank.commit_transactions(
-                txs,
-                None,
-                &mut loaded_accounts,
-                &results,
-                tx_count,
-                signature_count,
-            );
+            let transaction_statuses = bank
+                .commit_transactions(
+                    txs,
+                    None,
+                    &mut loaded_accounts,
+                    &results,
+                    tx_count,
+                    signature_count,
+                )
+                .1;
             if let Some(blocktree) = maybe_blocktree {
-                for (result, transaction) in results.iter().zip(batch.transactions()) {
-                    let lamports_per_signature = bank
-                        .last_blockhash_with_fee_calculator()
-                        .1
-                        .lamports_per_signature;
-                    blocktree
-                        .write_transaction_status(
-                            (bank.slot(), transaction.signatures[0]),
-                            &RpcTransactionStatus {
-                                status: result.clone(),
-                                fee: lamports_per_signature * transaction.signatures.len() as u64,
-                            },
-                        )
-                        .expect("Expect database write to succeed");
+                for (result, transaction) in transaction_statuses.iter().zip(batch.transactions()) {
+                    if Bank::can_commit(&result) && !transaction.signatures.is_empty() {
+                        let lamports_per_signature = bank
+                            .last_blockhash_with_fee_calculator()
+                            .1
+                            .lamports_per_signature;
+                        blocktree
+                            .write_transaction_status(
+                                (bank.slot(), transaction.signatures[0]),
+                                &RpcTransactionStatus {
+                                    status: result.clone(),
+                                    fee: lamports_per_signature
+                                        * transaction.signatures.len() as u64,
+                                },
+                            )
+                            .expect("Expect database write to succeed");
+                    }
                 }
             }
         }
@@ -1005,20 +1010,26 @@ pub fn create_test_recorder(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster_info::Node;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use crate::packet::to_packets;
-    use crate::poh_recorder::WorkingBank;
+    use crate::{
+        cluster_info::Node,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        packet::to_packets,
+        poh_recorder::WorkingBank,
+    };
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
-    use solana_ledger::entry::{Entry, EntrySlice};
-    use solana_ledger::get_tmp_ledger_path;
-    use solana_sdk::instruction::InstructionError;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
-    use solana_sdk::transaction::TransactionError;
-    use std::sync::atomic::Ordering;
-    use std::thread::sleep;
+    use solana_ledger::{
+        blocktree::entries_to_test_shreds,
+        entry::{next_entry, Entry, EntrySlice},
+        get_tmp_ledger_path,
+    };
+    use solana_sdk::{
+        instruction::InstructionError,
+        signature::{Keypair, KeypairUtil},
+        system_transaction,
+        transaction::TransactionError,
+    };
+    use std::{sync::atomic::Ordering, thread::sleep};
 
     #[test]
     fn test_banking_stage_shutdown1() {
@@ -1876,6 +1887,94 @@ mod tests {
             assert_eq!(retryable_txs, expected);
         }
 
+        Blocktree::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_write_persist_transaction_status() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let pubkey = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
+        let keypair1 = Keypair::new();
+
+        let success_tx =
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash());
+        let success_signature = success_tx.signatures[0];
+        let entry_1 = next_entry(&genesis_config.hash(), 1, vec![success_tx.clone()]);
+        let ix_error_tx =
+            system_transaction::transfer(&keypair1, &pubkey1, 10, genesis_config.hash());
+        let ix_error_signature = ix_error_tx.signatures[0];
+        let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx.clone()]);
+        let fail_tx =
+            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash());
+        let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx.clone()]);
+        let entries = vec![entry_1, entry_2, entry_3];
+
+        let transactions = vec![success_tx, ix_error_tx, fail_tx];
+        bank.transfer(4, &mint_keypair, &keypair1.pubkey()).unwrap();
+
+        let working_bank = WorkingBank {
+            bank: bank.clone(),
+            min_tick_height: bank.tick_height(),
+            max_tick_height: bank.tick_height() + 1,
+        };
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let blocktree = Arc::new(blocktree);
+            let (poh_recorder, _entry_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &blocktree,
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+
+            let shreds = entries_to_test_shreds(entries.clone(), bank.slot(), 0, true, 0);
+            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.set_roots(&[bank.slot()]).unwrap();
+
+            let _ = BankingStage::process_and_record_transactions(
+                &bank,
+                &transactions,
+                &poh_recorder,
+                0,
+                Some(&blocktree),
+            );
+
+            let confirmed_block = blocktree.get_confirmed_block(bank.slot()).unwrap();
+            assert_eq!(confirmed_block.transactions.len(), 3);
+
+            for (transaction, result) in confirmed_block.transactions.into_iter() {
+                if transaction.signatures[0] == success_signature {
+                    assert_eq!(result.unwrap().status, Ok(()));
+                } else if transaction.signatures[0] == ix_error_signature {
+                    assert_eq!(
+                        result.unwrap().status,
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::CustomError(1)
+                        ))
+                    );
+                } else {
+                    assert_eq!(result, None);
+                }
+            }
+        }
         Blocktree::destroy(&ledger_path).unwrap();
     }
 }
