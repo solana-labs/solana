@@ -24,6 +24,7 @@
     * [Blocktree](validator/tvu/blocktree.md)
   * [Gossip Service](validator/gossip.md)
   * [The Runtime](validator/runtime.md)
+* [Anatomy of the Ledger](ledger/README.md)
 * [Anatomy of a Transaction](transaction.md)
 * [Running a Validator](running-validator/README.md)
   * [Hardware Requirements](running-validator/validator-hardware.md)
