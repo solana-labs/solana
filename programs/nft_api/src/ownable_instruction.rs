@@ -8,28 +8,28 @@ use solana_sdk::{
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
-pub enum NftError {
+pub enum OwnableError {
     IncorrectOwner,
 }
 
-impl<T> DecodeError<T> for NftError {
+impl<T> DecodeError<T> for OwnableError {
     fn type_of() -> &'static str {
-        "NftError"
+        "OwnableError"
     }
 }
 
-impl std::fmt::Display for NftError {
+impl std::fmt::Display for OwnableError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                NftError::IncorrectOwner => "incorrect owner",
+                OwnableError::IncorrectOwner => "incorrect owner",
             }
         )
     }
 }
-impl std::error::Error for NftError {}
+impl std::error::Error for OwnableError {}
 
 fn initialize_account(contract_pubkey: &Pubkey, owner_pubkey: &Pubkey) -> Instruction {
     let keys = vec![AccountMeta::new(*contract_pubkey, false)];
