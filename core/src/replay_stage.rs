@@ -747,16 +747,16 @@ impl ReplayStage {
                 stats
             })
             .collect();
-        let mut votable: Vec<_> = frozen_banks
+        let mut candidates: Vec<_> = frozen_banks
             .iter()
             .zip(stats.iter())
-            .filter(|(_, stats)| stats.is_recent && !stats.has_voted && stats.vote_threshold)
+            .filter(|(_, stats)| stats.is_recent && !stats.has_voted)
             .collect();
 
         //highest weight, lowest slot first
-        votable.sort_by_key(|b| (b.1.weight, 0i64 - b.1.slot as i64));
+        candidates.sort_by_key(|b| (b.1.weight, 0i64 - b.1.slot as i64));
 
-        votable.iter().for_each(|(_, stats)| {
+        candidates.iter().for_each(|(_, stats)| {
             let mut parents: Vec<_> = if let Some(set) = ancestors.get(&stats.slot) {
                 set.iter().collect()
             } else {
@@ -765,10 +765,9 @@ impl ReplayStage {
             parents.sort();
             debug!("{}: {:?} {:?}", stats.slot, stats, parents,);
         });
-        trace!("votable_banks {}", votable.len());
-        let rv = Self::pick_best_fork(ancestors, &votable);
+        let rv = Self::pick_best_fork(ancestors, &candidates);
         let ms = timing::duration_as_ms(&tower_start.elapsed());
-        let weights: Vec<(u128, u64, u64)> = votable
+        let weights: Vec<(u128, u64, u64)> = candidates
             .iter()
             .map(|x| (x.1.weight, x.1.slot, x.1.block_height))
             .collect();
@@ -776,7 +775,7 @@ impl ReplayStage {
             "@{:?} tower duration: {:?} len: {}/{} weights: {:?} voting: {}",
             timing::timestamp(),
             ms,
-            votable.len(),
+            candidates.len(),
             stats.iter().filter(|s| !s.has_voted).count(),
             weights,
             rv.0.is_some()
@@ -792,7 +791,7 @@ impl ReplayStage {
         if best_banks.is_empty() {
             return (None, None);
         }
-        let mut rv = None;
+        let mut vote = None;
         let (best_bank, best_stats) = best_banks.last().unwrap();
         debug!("best bank: {:?}", best_stats);
         let mut by_slot: Vec<_> = best_banks.iter().collect();
@@ -800,7 +799,7 @@ impl ReplayStage {
         //look for the oldest ancestors of the best bank
         if let Some(best_ancestors) = ancestors.get(&best_stats.slot) {
             for (parent, parent_stats) in by_slot.iter() {
-                if parent_stats.is_locked_out {
+                if parent_stats.is_locked_out || !parent_stats.vote_threshold {
                     continue;
                 }
                 if !best_ancestors.contains(&parent_stats.slot) {
@@ -808,13 +807,13 @@ impl ReplayStage {
                 }
                 debug!("best bank found ancestor: {}", parent_stats.slot);
                 inc_new_counter_info!("replay_stage-pick_best_fork-ancestor", 1);
-                rv = Some(((*parent).clone(), parent_stats.total_staked));
+                vote = Some(((*parent).clone(), parent_stats.total_staked));
             }
         }
         //look for the oldest child of the best bank
-        if rv.is_none() {
+        if vote.is_none() {
             for (child, child_stats) in by_slot.iter().rev() {
-                if child_stats.is_locked_out {
+                if child_stats.is_locked_out || !child_stats.vote_threshold {
                     continue;
                 }
                 let has_best = best_stats.slot == child_stats.slot
@@ -827,13 +826,13 @@ impl ReplayStage {
                 }
                 inc_new_counter_info!("replay_stage-pick_best_fork-child", 1);
                 debug!("best bank found child: {}", child_stats.slot);
-                rv = Some(((*child).clone(), child_stats.total_staked));
+                vote = Some(((*child).clone(), child_stats.total_staked));
             }
         }
-        if rv.is_none() {
+        if vote.is_none() {
             inc_new_counter_info!("replay_stage-fork_selection-heavy_bank_lockout", 1);
         }
-        (rv, Some((*best_bank).clone()))
+        (vote, Some((*best_bank).clone()))
     }
 
     fn confirm_forks(
