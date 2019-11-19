@@ -493,17 +493,8 @@ impl ReplayStage {
         (replay_result, tx_count)
     }
 
-<<<<<<< HEAD
-    fn mark_dead_slot(slot: u64, blocktree: &Blocktree, progress: &mut HashMap<u64, ForkProgress>) {
-        // Remove from progress map so we no longer try to replay this bank
-        let mut progress_entry = progress
-            .get_mut(&slot)
-            .expect("Progress entry must exist after call to replay_entries_into_bank()");
-        progress_entry.is_dead = true;
-=======
     fn mark_dead_slot(slot: Slot, blocktree: &Blocktree, bank_progress: &mut ForkProgress) {
         bank_progress.is_dead = true;
->>>>>>> 11d2d2ecc... Fix progress map losing banks and recomputing stats (#7026)
         blocktree
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blocktree");
@@ -1184,15 +1175,10 @@ mod test {
             let bank0 = Arc::new(Bank::new(&genesis_block));
             let mut progress = HashMap::new();
             let last_blockhash = bank0.last_blockhash();
-<<<<<<< HEAD
-            progress.insert(bank0.slot(), ForkProgress::new(0, last_blockhash));
-            let shreds = shred_to_insert(&mint_keypair, &last_blockhash, bank0.slot());
-=======
             let mut bank0_progress = progress
                 .entry(bank0.slot())
                 .or_insert_with(|| ForkProgress::new(0, last_blockhash));
-            let shreds = shred_to_insert(&mint_keypair, bank0.clone());
->>>>>>> 11d2d2ecc... Fix progress map losing banks and recomputing stats (#7026)
+            let shreds = shred_to_insert(&mint_keypair, &last_blockhash, bank0.slot());
             blocktree.insert_shreds(shreds, None, false).unwrap();
             let (res, _tx_count) =
                 ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut bank0_progress);
