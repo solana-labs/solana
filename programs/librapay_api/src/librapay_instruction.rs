@@ -7,18 +7,21 @@ use solana_sdk::pubkey::Pubkey;
 use types::account_config;
 use types::transaction::TransactionArgument;
 
-pub fn genesis(genesis: &Pubkey, microlibras: u64) -> Instruction {
+pub fn genesis(genesis_pubkey: &Pubkey, microlibras: u64) -> Instruction {
     let data = bincode::serialize(&InvokeCommand::CreateGenesis(microlibras)).unwrap();
     let ix_data = LoaderInstruction::InvokeMain { data };
-
-    let accounts = vec![AccountMeta::new(*genesis, true)];
-
+    let accounts = vec![AccountMeta::new(*genesis_pubkey, true)];
     Instruction::new(solana_sdk::move_loader::id(), &ix_data, accounts)
 }
 
-pub fn mint(script: &Pubkey, genesis: &Pubkey, to: &Pubkey, microlibras: u64) -> Instruction {
+pub fn mint(
+    script_pubkey: &Pubkey,
+    genesis_pubkey: &Pubkey,
+    to_pubkey: &Pubkey,
+    microlibras: u64,
+) -> Instruction {
     let args = vec![
-        TransactionArgument::Address(pubkey_to_address(to)),
+        TransactionArgument::Address(pubkey_to_address(to_pubkey)),
         TransactionArgument::U64(microlibras),
     ];
 
@@ -31,28 +34,28 @@ pub fn mint(script: &Pubkey, genesis: &Pubkey, to: &Pubkey, microlibras: u64) ->
     let ix_data = LoaderInstruction::InvokeMain { data };
 
     let accounts = vec![
-        AccountMeta::new_readonly(*script, false),
-        AccountMeta::new(*genesis, true),
-        AccountMeta::new(*to, false),
+        AccountMeta::new_readonly(*script_pubkey, false),
+        AccountMeta::new(*genesis_pubkey, true),
+        AccountMeta::new(*to_pubkey, false),
     ];
 
     Instruction::new(solana_sdk::move_loader::id(), &ix_data, accounts)
 }
 
 pub fn transfer(
-    script: &Pubkey,
-    genesis: &Pubkey,
-    from: &Pubkey,
-    to: &Pubkey,
+    script_pubkey: &Pubkey,
+    genesis_pubkey: &Pubkey,
+    from_pubkey: &Pubkey,
+    to_pubkey: &Pubkey,
     microlibras: u64,
 ) -> Instruction {
     let args = vec![
-        TransactionArgument::Address(pubkey_to_address(to)),
+        TransactionArgument::Address(pubkey_to_address(to_pubkey)),
         TransactionArgument::U64(microlibras),
     ];
 
     let data = bincode::serialize(&InvokeCommand::RunScript {
-        sender_address: pubkey_to_address(from),
+        sender_address: pubkey_to_address(from_pubkey),
         function_name: "main".to_string(),
         args,
     })
@@ -60,10 +63,10 @@ pub fn transfer(
     let ix_data = LoaderInstruction::InvokeMain { data };
 
     let accounts = vec![
-        AccountMeta::new_readonly(*script, false),
-        AccountMeta::new_readonly(*genesis, false),
-        AccountMeta::new(*from, true),
-        AccountMeta::new(*to, false),
+        AccountMeta::new_readonly(*script_pubkey, false),
+        AccountMeta::new_readonly(*genesis_pubkey, false),
+        AccountMeta::new(*from_pubkey, true),
+        AccountMeta::new(*to_pubkey, false),
     ];
 
     Instruction::new(solana_sdk::move_loader::id(), &ix_data, accounts)
@@ -75,19 +78,19 @@ mod tests {
 
     #[test]
     fn test_pay() {
-        let from = Pubkey::new_rand();
-        let to = Pubkey::new_rand();
+        let from_pubkey = Pubkey::new_rand();
+        let to_pubkey = Pubkey::new_rand();
         let program_id = Pubkey::new_rand();
         let mint_id = Pubkey::new_rand();
-        transfer(&program_id, &mint_id, &from, &to, 1);
+        transfer(&program_id, &mint_id, &from_pubkey, &to_pubkey, 1);
     }
 
     #[test]
     fn test_mint() {
         let program_id = Pubkey::new_rand();
-        let from = Pubkey::new_rand();
-        let to = Pubkey::new_rand();
+        let from_pubkey = Pubkey::new_rand();
+        let to_pubkey = Pubkey::new_rand();
 
-        mint(&program_id, &from, &to, 1);
+        mint(&program_id, &from_pubkey, &to_pubkey, 1);
     }
 }
