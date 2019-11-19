@@ -38,6 +38,7 @@ members = [
     "programs/exchange_program",
     "programs/failure_program",
     "programs/noop_program",
+    "programs/ownable_api",
     "programs/stake_api",
     "programs/stake_program",
     "programs/stake_tests",
