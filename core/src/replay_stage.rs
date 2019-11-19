@@ -811,7 +811,7 @@ impl ReplayStage {
                 break;
             }
         }
-        //look for the oldest child of the best bank
+        //look for the heaviest child of the best bank
         if vote.is_none() {
             for (child, child_stats) in best_banks.iter().rev() {
                 let has_best = best_stats.slot == child_stats.slot
@@ -829,6 +829,7 @@ impl ReplayStage {
                 inc_new_counter_info!("replay_stage-pick_best_fork-child", 1);
                 debug!("best bank found child: {}", child_stats.slot);
                 vote = Some(((*child).clone(), child_stats.total_staked));
+                break;
             }
         }
         if vote.is_none() {
@@ -1593,7 +1594,7 @@ mod test {
         ];
 
         // Assume everything is locked out (or does not have threshold)
-        let mut best_banks: Vec<_> = banks
+        let best_banks: Vec<_> = banks
             .into_iter()
             .map(|(b, mut f)| {
                 f.slot = b.slot();
