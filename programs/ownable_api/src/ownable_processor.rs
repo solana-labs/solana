@@ -85,29 +85,29 @@ mod tests {
     fn create_ownable_account(
         bank_client: &BankClient,
         payer_keypair: &Keypair,
-        contract_keypair: &Keypair,
+        account_keypair: &Keypair,
         owner_pubkey: &Pubkey,
         lamports: u64,
     ) -> Result<Signature> {
         let instructions = ownable_instruction::create_account(
             &payer_keypair.pubkey(),
-            &contract_keypair.pubkey(),
+            &account_keypair.pubkey(),
             owner_pubkey,
             lamports,
         );
         let message = Message::new(instructions);
-        bank_client.send_message(&[&payer_keypair, &contract_keypair], message)
+        bank_client.send_message(&[&payer_keypair, &account_keypair], message)
     }
 
     fn send_set_owner(
         bank_client: &BankClient,
         payer_keypair: &Keypair,
-        contract_pubkey: &Pubkey,
+        account_pubkey: &Pubkey,
         old_owner_keypair: &Keypair,
         new_owner_pubkey: &Pubkey,
     ) -> Result<Signature> {
         let instruction = ownable_instruction::set_owner(
-            contract_pubkey,
+            account_pubkey,
             &old_owner_keypair.pubkey(),
             new_owner_pubkey,
         );
@@ -118,15 +118,15 @@ mod tests {
     #[test]
     fn test_ownable_set_owner() {
         let (bank_client, payer_keypair) = create_bank_client(2);
-        let contract_keypair = Keypair::new();
-        let contract_pubkey = contract_keypair.pubkey();
+        let account_keypair = Keypair::new();
+        let account_pubkey = account_keypair.pubkey();
         let owner_keypair = Keypair::new();
         let owner_pubkey = owner_keypair.pubkey();
 
         create_ownable_account(
             &bank_client,
             &payer_keypair,
-            &contract_keypair,
+            &account_keypair,
             &owner_pubkey,
             1,
         )
@@ -137,14 +137,14 @@ mod tests {
         send_set_owner(
             &bank_client,
             &payer_keypair,
-            &contract_pubkey,
+            &account_pubkey,
             &owner_keypair,
             &new_owner_pubkey,
         )
         .unwrap();
 
         let account_data = bank_client
-            .get_account_data(&contract_pubkey)
+            .get_account_data(&account_pubkey)
             .unwrap()
             .unwrap();
         let account_owner_pubkey: Pubkey = limited_deserialize(&account_data).unwrap();

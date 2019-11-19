@@ -31,14 +31,14 @@ impl std::fmt::Display for OwnableError {
 }
 impl std::error::Error for OwnableError {}
 
-fn initialize_account(contract_pubkey: &Pubkey, owner_pubkey: &Pubkey) -> Instruction {
-    let keys = vec![AccountMeta::new(*contract_pubkey, false)];
+fn initialize_account(account_pubkey: &Pubkey, owner_pubkey: &Pubkey) -> Instruction {
+    let keys = vec![AccountMeta::new(*account_pubkey, false)];
     Instruction::new(crate::id(), &owner_pubkey, keys)
 }
 
 pub fn create_account(
     payer_pubkey: &Pubkey,
-    contract_pubkey: &Pubkey,
+    account_pubkey: &Pubkey,
     owner_pubkey: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
@@ -46,22 +46,18 @@ pub fn create_account(
     vec![
         system_instruction::create_account(
             &payer_pubkey,
-            contract_pubkey,
+            account_pubkey,
             lamports,
             space,
             &crate::id(),
         ),
-        initialize_account(contract_pubkey, owner_pubkey),
+        initialize_account(account_pubkey, owner_pubkey),
     ]
 }
 
-pub fn set_owner(
-    contract_pubkey: &Pubkey,
-    old_pubkey: &Pubkey,
-    new_pubkey: &Pubkey,
-) -> Instruction {
+pub fn set_owner(account_pubkey: &Pubkey, old_pubkey: &Pubkey, new_pubkey: &Pubkey) -> Instruction {
     let keys = vec![
-        AccountMeta::new(*contract_pubkey, false),
+        AccountMeta::new(*account_pubkey, false),
         AccountMeta::new(*old_pubkey, true),
     ];
     Instruction::new(crate::id(), &new_pubkey, keys)
