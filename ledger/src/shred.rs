@@ -25,7 +25,7 @@ use std::{sync::Arc, time::Instant};
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
-pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 77;
+pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 79;
 pub const SIZE_OF_DATA_SHRED_HEADER: usize = 3;
 pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 pub const SIZE_OF_SIGNATURE: usize = 64;
@@ -83,6 +83,7 @@ pub struct ShredCommonHeader {
     pub shred_type: ShredType,
     pub slot: Slot,
     pub index: u32,
+    pub version: u16,
 }
 
 /// The data shred header has parent offset and flags
@@ -142,15 +143,20 @@ impl Shred {
         is_last_data: bool,
         is_last_in_slot: bool,
         reference_tick: u8,
+        version: u16,
     ) -> Self {
         let mut payload = vec![0; PACKET_DATA_SIZE];
-        let mut common_header = ShredCommonHeader::default();
-        common_header.slot = slot;
-        common_header.index = index;
+        let common_header = ShredCommonHeader {
+            slot,
+            index,
+            version,
+            ..ShredCommonHeader::default()
+        };
 
-        let mut data_header = DataShredHeader::default();
-        data_header.parent_offset = parent_offset;
-        data_header.flags = reference_tick.min(SHRED_TICK_REFERENCE_MASK);
+        let mut data_header = DataShredHeader {
+            parent_offset,
+            flags: reference_tick.min(SHRED_TICK_REFERENCE_MASK),
+        };
 
         if is_last_data {
             data_header.flags |= DATA_COMPLETE_SHRED
@@ -281,6 +287,10 @@ impl Shred {
         self.common_header.index
     }
 
+    pub fn version(&self) -> u16 {
+        self.common_header.version
+    }
+
     pub fn set_index(&mut self, index: u32) {
         self.common_header.index = index;
         Self::serialize_obj_into(
@@ -363,12 +373,26 @@ impl Shred {
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
     }
+
+    pub fn version_from_hash(hash: &Hash) -> u16 {
+        let hash = hash.as_ref();
+        let mut accum = [0u8; 2];
+        hash.chunks(2).for_each(|seed| {
+            accum
+                .iter_mut()
+                .zip(seed)
+                .for_each(|(accum, seed)| *accum ^= *seed)
+        });
+        // convert accum into a u16
+        ((accum[0] as u16) << 8) | accum[1] as u16
+    }
 }
 
 #[derive(Debug)]
 pub struct Shredder {
     slot: Slot,
     parent_slot: Slot,
+    version: u16,
     fec_rate: f32,
     keypair: Arc<Keypair>,
     pub signing_coding_time: u128,
@@ -382,6 +406,7 @@ impl Shredder {
         fec_rate: f32,
         keypair: Arc<Keypair>,
         reference_tick: u8,
+        version: u16,
     ) -> Result<Self> {
         if fec_rate > 1.0 || fec_rate < 0.0 {
             Err(ShredError::InvalidFecRate(fec_rate))
@@ -395,6 +420,7 @@ impl Shredder {
                 keypair,
                 signing_coding_time: 0,
                 reference_tick,
+                version,
             })
         }
     }
@@ -441,6 +467,7 @@ impl Shredder {
                             is_last_data,
                             is_last_in_slot,
                             self.reference_tick,
+                            self.version,
                         );
 
                         Shredder::sign_shred(&self.keypair, &mut shred);
@@ -458,7 +485,12 @@ impl Shredder {
                 data_shreds
                     .par_chunks(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
                     .flat_map(|shred_data_batch| {
-                        Shredder::generate_coding_shreds(self.slot, self.fec_rate, shred_data_batch)
+                        Shredder::generate_coding_shreds(
+                            self.slot,
+                            self.fec_rate,
+                            shred_data_batch,
+                            self.version,
+                        )
                     })
                     .collect()
             })
@@ -503,11 +535,15 @@ impl Shredder {
         num_data: usize,
         num_code: usize,
         position: usize,
+        version: u16,
     ) -> (ShredCommonHeader, CodingShredHeader) {
-        let mut header = ShredCommonHeader::default();
-        header.shred_type = ShredType(CODING_SHRED);
-        header.index = index;
-        header.slot = slot;
+        let header = ShredCommonHeader {
+            shred_type: ShredType(CODING_SHRED),
+            index,
+            slot,
+            version,
+            ..ShredCommonHeader::default()
+        };
         (
             header,
             CodingShredHeader {
@@ -523,6 +559,7 @@ impl Shredder {
         slot: Slot,
         fec_rate: f32,
         data_shred_batch: &[Shred],
+        version: u16,
     ) -> Vec<Shred> {
         assert!(!data_shred_batch.is_empty());
         if fec_rate != 0.0 {
@@ -549,6 +586,7 @@ impl Shredder {
                     num_data,
                     num_coding,
                     i,
+                    version,
                 );
                 let shred =
                     Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
@@ -578,6 +616,7 @@ impl Shredder {
                         num_data,
                         num_coding,
                         i,
+                        version,
                     );
                     Shred {
                         common_header,
@@ -781,6 +820,7 @@ pub mod tests {
     use super::*;
     use bincode::serialized_size;
     use matches::assert_matches;
+    use solana_sdk::hash::hash;
     use solana_sdk::system_transaction;
     use std::collections::HashSet;
     use std::convert::TryInto;
@@ -848,7 +888,7 @@ pub mod tests {
 
         // Test that parent cannot be > current slot
         assert_matches!(
-            Shredder::new(slot, slot + 1, 1.00, keypair.clone(), 0),
+            Shredder::new(slot, slot + 1, 1.00, keypair.clone(), 0, 0),
             Err(ShredError::SlotTooLow {
                 slot: _,
                 parent_slot: _,
@@ -856,7 +896,7 @@ pub mod tests {
         );
         // Test that slot - parent cannot be > u16 MAX
         assert_matches!(
-            Shredder::new(slot, slot - 1 - 0xffff, 1.00, keypair.clone(), 0),
+            Shredder::new(slot, slot - 1 - 0xffff, 1.00, keypair.clone(), 0, 0),
             Err(ShredError::SlotTooLow {
                 slot: _,
                 parent_slot: _,
@@ -865,7 +905,7 @@ pub mod tests {
 
         let fec_rate = 0.25;
         let parent_slot = slot - 5;
-        let shredder = Shredder::new(slot, parent_slot, fec_rate, keypair.clone(), 0)
+        let shredder = Shredder::new(slot, parent_slot, fec_rate, keypair.clone(), 0, 0)
             .expect("Failed in creating shredder");
 
         let entries: Vec<_> = (0..5)
@@ -940,7 +980,7 @@ pub mod tests {
         let slot = 1;
 
         let parent_slot = 0;
-        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), 0)
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), 0, 0)
             .expect("Failed in creating shredder");
 
         let entries: Vec<_> = (0..5)
@@ -966,7 +1006,7 @@ pub mod tests {
         let slot = 1;
 
         let parent_slot = 0;
-        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), 5)
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), 5, 0)
             .expect("Failed in creating shredder");
 
         let entries: Vec<_> = (0..5)
@@ -996,7 +1036,7 @@ pub mod tests {
         let slot = 1;
 
         let parent_slot = 0;
-        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), u8::max_value())
+        let shredder = Shredder::new(slot, parent_slot, 0.0, keypair.clone(), u8::max_value(), 0)
             .expect("Failed in creating shredder");
 
         let entries: Vec<_> = (0..5)
@@ -1033,11 +1073,11 @@ pub mod tests {
         let slot = 0x123456789abcdef0;
         // Test that FEC rate cannot be > 1.0
         assert_matches!(
-            Shredder::new(slot, slot - 5, 1.001, keypair.clone(), 0),
+            Shredder::new(slot, slot - 5, 1.001, keypair.clone(), 0, 0),
             Err(ShredError::InvalidFecRate(_))
         );
 
-        let shredder = Shredder::new(0x123456789abcdef0, slot - 5, 1.0, keypair.clone(), 0)
+        let shredder = Shredder::new(0x123456789abcdef0, slot - 5, 1.0, keypair.clone(), 0, 0)
             .expect("Failed in creating shredder");
 
         // Create enough entries to make > 1 shred
@@ -1079,7 +1119,7 @@ pub mod tests {
     fn test_recovery_and_reassembly() {
         let keypair = Arc::new(Keypair::new());
         let slot = 0x123456789abcdef0;
-        let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0)
+        let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
             .expect("Failed in creating shredder");
 
         let keypair0 = Keypair::new();
@@ -1325,7 +1365,7 @@ pub mod tests {
     fn test_multi_fec_block_coding() {
         let keypair = Arc::new(Keypair::new());
         let slot = 0x123456789abcdef0;
-        let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0)
+        let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
             .expect("Failed in creating shredder");
 
         let num_fec_sets = 100;
@@ -1407,5 +1447,55 @@ pub mod tests {
 
         let result = Shredder::deshred(&all_shreds[..]).unwrap();
         assert_eq!(serialized_entries[..], result[..serialized_entries.len()]);
+    }
+
+    #[test]
+    fn test_shred_version() {
+        let keypair = Arc::new(Keypair::new());
+        let hash = hash(Hash::default().as_ref());
+        let version = Shred::version_from_hash(&hash);
+        assert_ne!(version, 0);
+        let shredder =
+            Shredder::new(0, 0, 1.0, keypair, 0, version).expect("Failed in creating shredder");
+
+        let entries: Vec<_> = (0..5)
+            .map(|_| {
+                let keypair0 = Keypair::new();
+                let keypair1 = Keypair::new();
+                let tx0 =
+                    system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+                Entry::new(&Hash::default(), 1, vec![tx0])
+            })
+            .collect();
+
+        let (data_shreds, coding_shreds, _next_index) =
+            shredder.entries_to_shreds(&entries, true, 0);
+        assert!(!data_shreds
+            .iter()
+            .chain(coding_shreds.iter())
+            .any(|s| s.version() != version));
+    }
+
+    #[test]
+    fn test_version_from_hash() {
+        let hash = [
+            0xa5u8, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5,
+            0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a,
+            0xa5, 0xa5, 0x5a, 0x5a,
+        ];
+        let version = Shred::version_from_hash(&Hash::new(&hash));
+        assert_eq!(version, 0);
+        let hash = [
+            0xa5u8, 0xa5, 0x5a, 0x5a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let version = Shred::version_from_hash(&Hash::new(&hash));
+        assert_eq!(version, 0xffff);
+        let hash = [
+            0xa5u8, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let version = Shred::version_from_hash(&Hash::new(&hash));
+        assert_eq!(version, 0x5a5a);
     }
 }

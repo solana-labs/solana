@@ -74,6 +74,7 @@ impl Tvu {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         sigverify_disabled: bool,
         cfg: Option<PartitionCfg>,
+        shred_version: u16,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -132,6 +133,7 @@ impl Tvu {
             completed_slots_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
+            shred_version,
         );
 
         let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
@@ -294,6 +296,7 @@ pub mod tests {
             block_commitment_cache,
             false,
             None,
+            0,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

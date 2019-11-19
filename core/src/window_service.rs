@@ -42,6 +42,7 @@ pub fn should_retransmit_and_persist(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     my_pubkey: &Pubkey,
     root: u64,
+    shred_version: u16,
 ) -> bool {
     let slot_leader_pubkey = match bank {
         None => leader_schedule_cache.slot_leader_at(shred.slot(), None),
@@ -53,6 +54,9 @@ pub fn should_retransmit_and_persist(
             false
         } else if !verify_shred_slot(shred, root) {
             inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
+            false
+        } else if shred.version() != shred_version {
+            inc_new_counter_debug!("streamer-recv_window-incorrect_shred_version", 1);
             false
         } else {
             true
@@ -309,7 +313,7 @@ mod test {
         parent: Slot,
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
-        let shredder = Shredder::new(slot, parent, 0.0, keypair.clone(), 0)
+        let shredder = Shredder::new(slot, parent, 0.0, keypair.clone(), 0, 0)
             .expect("Failed to create entry shredder");
         shredder.entries_to_shreds(&entries, true, 0).0
     }
@@ -349,32 +353,37 @@ mod test {
 
         // with a Bank for slot 0, shred continues
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0,),
+            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0, 0),
             true
+        );
+        // with the wrong shred_version, shred gets thrown out
+        assert_eq!(
+            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0, 1),
+            false
         );
 
         // If it's a coding shred, test that slot >= root
-        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 6, 6, 0);
+        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 6, 6, 0, 0);
         let mut coding_shred =
             Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         Shredder::sign_shred(&leader_keypair, &mut coding_shred);
         assert_eq!(
-            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 0),
+            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 0, 0),
             true
         );
         assert_eq!(
-            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 5),
+            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 5, 0),
             true
         );
         assert_eq!(
-            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 6),
+            should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 6, 0),
             false
         );
 
         // with a Bank and no idea who leader is, shred gets thrown out
         shreds[0].set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0),
+            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, 0, 0),
             false
         );
 
@@ -382,7 +391,7 @@ mod test {
         let slot = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
         let shreds = local_entries_to_shred(&[Entry::default()], slot, slot - 1, &leader_keypair);
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot),
+            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot, 0),
             false
         );
 
@@ -391,13 +400,13 @@ mod test {
         let shreds =
             local_entries_to_shred(&[Entry::default()], slot + 1, slot - 1, &leader_keypair);
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot),
+            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot, 0),
             false
         );
 
         // if the shred came back from me, it doesn't continue, whether or not I have a bank
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], None, &cache, &me_id, 0),
+            should_retransmit_and_persist(&shreds[0], None, &cache, &me_id, 0, 0),
             false
         );
     }
