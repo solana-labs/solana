@@ -8,7 +8,7 @@ pub use crate::clock::{Epoch, Slot, DEFAULT_SLOTS_PER_EPOCH};
 ///  the beginning of epoch X - 1.
 pub const DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET: u64 = DEFAULT_SLOTS_PER_EPOCH;
 
-/// based on MAX_LOCKOUT_HISTORY from vote_api
+/// based on MAX_LOCKOUT_HISTORY from vote_program
 pub const MINIMUM_SLOTS_PER_EPOCH: u64 = 32;
 
 #[repr(C)]

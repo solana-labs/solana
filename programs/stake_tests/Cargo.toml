@@ -12,9 +12,8 @@ edition = "2018"
 log = "0.4.8"
 solana-logger = { path = "../../logger", version = "0.21.0" }
 solana-sdk = { path = "../../sdk", version = "0.21.0" }
-solana-stake-api = { path = "../stake_api", version = "0.21.0" }
-solana-stake-program = { path = "../stake_program", version = "0.21.0" }
-solana-vote-api = { path = "../vote_api", version = "0.21.0" }
+solana-stake-program = { path = "../stake", version = "0.21.0" }
+solana-vote-program = { path = "../vote", version = "0.21.0" }
 
 [dev-dependencies]
 solana-runtime = { path = "../../runtime", version = "0.21.0" }

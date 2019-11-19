@@ -7,8 +7,8 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil},
     system_program::{self, solana_system_program},
 };
-use solana_stake_api::stake_state;
-use solana_vote_api::vote_state;
+use solana_stake_program::stake_state;
+use solana_vote_program::vote_state;
 
 // The default stake placed with the bootstrap leader
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
@@ -85,7 +85,7 @@ pub fn create_genesis_config_with_leader(
         ..GenesisConfig::default()
     };
 
-    solana_stake_api::add_genesis_accounts(&mut genesis_config);
+    solana_stake_program::add_genesis_accounts(&mut genesis_config);
     solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_config);
 
     GenesisConfigInfo {

@@ -10,7 +10,7 @@ use solana_sdk::{
     account::Account, pubkey::Pubkey, signature::KeypairUtil, system_instruction::SystemError,
     transaction::Transaction,
 };
-use solana_vote_api::{
+use solana_vote_program::{
     vote_instruction::{self, VoteError},
     vote_state::{VoteAuthorize, VoteInit, VoteState},
 };
@@ -309,7 +309,7 @@ fn get_vote_account(
 ) -> Result<(Account, VoteState), Box<dyn std::error::Error>> {
     let vote_account = rpc_client.get_account(vote_account_pubkey)?;
 
-    if vote_account.owner != solana_vote_api::id() {
+    if vote_account.owner != solana_vote_program::id() {
         return Err(CliError::RpcRequestError(
             format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
         )

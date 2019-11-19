@@ -1,5 +1,5 @@
 use serde_derive::{Deserialize, Serialize};
-use solana_config_api::ConfigState;
+use solana_config_program::ConfigState;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Signable, Signature};
 use std::borrow::Cow;

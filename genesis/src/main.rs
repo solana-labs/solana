@@ -20,9 +20,9 @@ use solana_sdk::{
     signature::{read_keypair_file, Keypair, KeypairUtil},
     system_program, timing,
 };
-use solana_stake_api::stake_state;
+use solana_stake_program::stake_state;
 use solana_storage_api::storage_contract;
-use solana_vote_api::vote_state;
+use solana_vote_program::vote_state;
 use std::{collections::HashMap, error, fs::File, io, path::PathBuf, str::FromStr, time::Duration};
 
 pub enum AccountFileFormat {
@@ -446,7 +446,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     // add genesis stuff from storage and stake
     solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_config);
-    solana_stake_api::add_genesis_accounts(&mut genesis_config);
+    solana_stake_program::add_genesis_accounts(&mut genesis_config);
 
     create_new_ledger(&ledger_path, &genesis_config)?;
     Ok(())

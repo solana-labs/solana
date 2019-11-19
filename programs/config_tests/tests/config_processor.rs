@@ -2,7 +2,7 @@
 
 use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
-use solana_config_api::{
+use solana_config_program::{
     config_instruction, config_processor::process_instruction, get_config_data, id, ConfigKeys,
     ConfigState,
 };

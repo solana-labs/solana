@@ -1306,7 +1306,7 @@ pub mod tests {
         }
         for t in 0..num_vote {
             let pubkey = Pubkey::new_rand();
-            let account = Account::new((num + t + 1) as u64, space, &solana_vote_api::id());
+            let account = Account::new((num + t + 1) as u64, space, &solana_vote_program::id());
             pubkeys.push(pubkey.clone());
             let ancestors = vec![(slot, 0)].into_iter().collect();
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());

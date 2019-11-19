@@ -244,7 +244,7 @@ fn check_vote_account(
         .get_account(vote_pubkey)
         .map_err(|err| format!("Failed to get vote account: {}", err.to_string()))?;
 
-    if found_vote_account.owner != solana_vote_api::id() {
+    if found_vote_account.owner != solana_vote_program::id() {
         return Err(format!(
             "not a vote account (owned by {}): {}",
             found_vote_account.owner, vote_pubkey
@@ -255,7 +255,7 @@ fn check_vote_account(
         .get_account(node_pubkey)
         .map_err(|err| format!("Failed to get identity account: {}", err.to_string()))?;
 
-    let found_vote_account = solana_vote_api::vote_state::VoteState::from(&found_vote_account);
+    let found_vote_account = solana_vote_program::vote_state::VoteState::from(&found_vote_account);
     if let Some(found_vote_account) = found_vote_account {
         if found_vote_account.authorized_voter != *voting_pubkey {
             return Err(format!(

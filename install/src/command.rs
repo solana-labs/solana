@@ -6,7 +6,7 @@ use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
-use solana_config_api::{config_instruction, get_config_data};
+use solana_config_program::{config_instruction, get_config_data};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil, Signable};

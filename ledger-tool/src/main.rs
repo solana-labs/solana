@@ -12,7 +12,7 @@ use solana_sdk::{
     clock::Slot, genesis_config::GenesisConfig, instruction_processor_utils::limited_deserialize,
     native_token::lamports_to_sol, pubkey::Pubkey,
 };
-use solana_vote_api::vote_state::VoteState;
+use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ffi::OsStr,
@@ -76,10 +76,10 @@ fn output_slot(blocktree: &Blocktree, slot: Slot, method: &LedgerOutputMethod) {
                         }
 
                         let mut raw = true;
-                        if program_pubkey == solana_vote_api::id() {
+                        if program_pubkey == solana_vote_program::id() {
                             if let Ok(vote_instruction) =
                                 limited_deserialize::<
-                                    solana_vote_api::vote_instruction::VoteInstruction,
+                                    solana_vote_program::vote_instruction::VoteInstruction,
                                 >(&instruction.data)
                             {
                                 println!("        {:?}", vote_instruction);

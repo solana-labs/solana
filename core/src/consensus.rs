@@ -2,7 +2,7 @@ use solana_ledger::bank_forks::BankForks;
 use solana_metrics::datapoint_debug;
 use solana_runtime::bank::Bank;
 use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
-use solana_vote_api::vote_state::{Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY};
+use solana_vote_program::vote_state::{Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,

@@ -4,8 +4,8 @@ use solana_sdk::account::Account;
 use solana_sdk::clock::Epoch;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::stake_history::StakeHistory;
-use solana_stake_api::stake_state::{new_stake_history_entry, StakeState};
-use solana_vote_api::vote_state::VoteState;
+use solana_stake_program::stake_state::{new_stake_history_entry, StakeState};
+use solana_vote_program::vote_state::VoteState;
 use std::collections::HashMap;
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -96,13 +96,13 @@ impl Stakes {
     }
 
     pub fn is_stake(account: &Account) -> bool {
-        solana_vote_api::check_id(&account.owner)
-            || solana_stake_api::check_id(&account.owner)
+        solana_vote_program::check_id(&account.owner)
+            || solana_stake_program::check_id(&account.owner)
                 && account.data.len() >= std::mem::size_of::<StakeState>()
     }
 
     pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
-        if solana_vote_api::check_id(&account.owner) {
+        if solana_vote_program::check_id(&account.owner) {
             if account.lamports == 0 {
                 self.vote_accounts.remove(pubkey);
             } else {
@@ -124,7 +124,7 @@ impl Stakes {
 
                 self.vote_accounts.insert(*pubkey, (stake, account.clone()));
             }
-        } else if solana_stake_api::check_id(&account.owner) {
+        } else if solana_stake_program::check_id(&account.owner) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
             let old_stake = self.stake_accounts.get(pubkey).and_then(|old_account| {
                 StakeState::stake_from(old_account).map(|stake| {
@@ -210,8 +210,8 @@ impl Stakes {
 pub mod tests {
     use super::*;
     use solana_sdk::{pubkey::Pubkey, rent::Rent};
-    use solana_stake_api::stake_state;
-    use solana_vote_api::vote_state::{self, VoteState, MAX_LOCKOUT_HISTORY};
+    use solana_stake_program::stake_state;
+    use solana_vote_program::vote_state::{self, VoteState, MAX_LOCKOUT_HISTORY};
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
     pub fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {
@@ -508,7 +508,10 @@ pub mod tests {
         }
 
         // not a stake account, and whacks above entry
-        stakes.store(&stake_pubkey, &Account::new(1, 0, &solana_stake_api::id()));
+        stakes.store(
+            &stake_pubkey,
+            &Account::new(1, 0, &solana_stake_program::id()),
+        );
         {
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());

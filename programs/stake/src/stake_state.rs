@@ -17,7 +17,7 @@ use solana_sdk::{
         stake_history::{StakeHistory, StakeHistoryEntry},
     },
 };
-use solana_vote_api::vote_state::VoteState;
+use solana_vote_program::vote_state::VoteState;
 use std::collections::HashSet;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -804,7 +804,7 @@ mod tests {
     use super::*;
     use crate::id;
     use solana_sdk::{account::Account, pubkey::Pubkey, system_program};
-    use solana_vote_api::vote_state;
+    use solana_vote_program::vote_state;
 
     #[test]
     fn test_stake_state_stake_from_fail() {

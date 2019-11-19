@@ -2,7 +2,7 @@
 //!  carries variables that the stake program cares about
 use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
-use solana_config_api::{create_config_account, get_config_data, ConfigState};
+use solana_config_program::{create_config_account, get_config_data, ConfigState};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     instruction::InstructionError,
