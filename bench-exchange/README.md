@@ -360,7 +360,7 @@ The Matcher would initiate the following last swap:
 
   - Row 1, To:   Investor 1 trades 2 A token to 12 B tokens
   - Row 1, From: Investor 2 trades 2 A token from 12 B tokens
-  - Matcher takes 4 B tokens as profit
+  - Matcher takes 2 B tokens as profit
 
 Table becomes:
 
