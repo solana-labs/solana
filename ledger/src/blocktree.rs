@@ -1148,6 +1148,7 @@ impl Blocktree {
                     .expect("Rooted parent slot must have blockhash"),
                 blockhash: get_last_hash(slot_entries.iter())
                     .expect("Rooted slot must have blockhash"),
+                parent_slot: slot_meta.parent_slot,
                 transactions: self.map_transactions_to_statuses(slot, slot_transaction_iterator),
             };
             Ok(block)

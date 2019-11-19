@@ -26,6 +26,7 @@ pub struct Response<T> {
 pub struct RpcConfirmedBlock {
     pub previous_blockhash: Hash,
     pub blockhash: Hash,
+    pub parent_slot: Slot,
     pub transactions: Vec<(Transaction, Option<RpcTransactionStatus>)>,
 }
 
