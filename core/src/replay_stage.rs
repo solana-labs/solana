@@ -90,6 +90,7 @@ struct ForkStats {
     is_locked_out: bool,
     stake_lockouts: HashMap<u64, StakeLockout>,
     computed: bool,
+    confirmation_reported: bool,
 }
 
 impl ReplaySlotStats {
@@ -136,6 +137,7 @@ struct ForkProgress {
     num_shreds: usize,
     num_entries: usize,
     tick_hash_count: u64,
+    started_ms: u64,
     is_dead: bool,
     stats: ReplaySlotStats,
     fork_stats: ForkStats,
@@ -148,6 +150,7 @@ impl ForkProgress {
             num_shreds: 0,
             num_entries: 0,
             tick_hash_count: 0,
+            started_ms: timing::timestamp(),
             is_dead: false,
             stats: ReplaySlotStats::new(slot),
             fork_stats: ForkStats::default(),
@@ -452,12 +455,9 @@ impl ReplayStage {
     fn replay_blocktree_into_bank(
         bank: &Arc<Bank>,
         blocktree: &Blocktree,
-        progress: &mut HashMap<u64, ForkProgress>,
+        bank_progress: &mut ForkProgress,
     ) -> (Result<()>, usize) {
         let mut tx_count = 0;
-        let bank_progress = &mut progress
-            .entry(bank.slot())
-            .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
         let now = Instant::now();
         let load_result =
             Self::load_blocktree_entries_with_shred_info(bank, blocktree, bank_progress);
@@ -491,22 +491,14 @@ impl ReplayStage {
                 ("error", format!("error: {:?}", replay_result), String),
                 ("slot", bank.slot(), i64)
             );
-            Self::mark_dead_slot(bank.slot(), blocktree, progress);
+            Self::mark_dead_slot(bank.slot(), blocktree, bank_progress);
         }
 
         (replay_result, tx_count)
     }
 
-    fn mark_dead_slot(
-        slot: Slot,
-        blocktree: &Blocktree,
-        progress: &mut HashMap<u64, ForkProgress>,
-    ) {
-        // Remove from progress map so we no longer try to replay this bank
-        let mut progress_entry = progress
-            .get_mut(&slot)
-            .expect("Progress entry must exist after call to replay_entries_into_bank()");
-        progress_entry.is_dead = true;
+    fn mark_dead_slot(slot: Slot, blocktree: &Blocktree, bank_progress: &mut ForkProgress) {
+        bank_progress.is_dead = true;
         blocktree
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blocktree");
@@ -648,9 +640,16 @@ impl ReplayStage {
             }
 
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
+
+            // Insert a progress entry even for slots this node is the leader for, so that
+            // 1) confirm_forks can report confirmation, 2) we can cache computations about
+            // this bank in `select_fork()`
+            let bank_progress = &mut progress
+                .entry(bank.slot())
+                .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
             if bank.collector_id() != my_pubkey {
                 let (replay_result, replay_tx_count) =
-                    Self::replay_blocktree_into_bank(&bank, &blocktree, progress);
+                    Self::replay_blocktree_into_bank(&bank, &blocktree, bank_progress);
                 tx_count += replay_tx_count;
                 if Self::is_replay_result_fatal(&replay_result) {
                     trace!("replay_result_fatal slot {}", bank_slot);
@@ -704,11 +703,12 @@ impl ReplayStage {
                 // Only time progress map should be missing a bank slot
                 // is if this node was the leader for this slot as those banks
                 // are not replayed in replay_active_banks()
-                let progress_entry = progress
-                    .entry(bank.slot())
-                    .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
+                let mut stats = progress
+                    .get(&bank.slot())
+                    .expect("All frozen banks must exist in the Progress map")
+                    .fork_stats
+                    .clone();
 
-                let stats = &mut progress_entry.fork_stats;
                 if !stats.computed {
                     stats.slot = bank.slot();
                     let (stake_lockouts, total_staked) = tower.collect_vote_lockouts(
@@ -716,6 +716,7 @@ impl ReplayStage {
                         bank.vote_accounts().into_iter(),
                         &ancestors,
                     );
+                    Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
                     stats.weight = tower.calculate_weight(&stake_lockouts);
                     stats.stake_lockouts = stake_lockouts;
@@ -735,7 +736,11 @@ impl ReplayStage {
                 stats.is_locked_out = tower.is_locked_out(bank.slot(), &ancestors);
                 stats.has_voted = tower.has_voted(bank.slot());
                 stats.is_recent = tower.is_recent(bank.slot());
-                stats.clone()
+                progress
+                    .get_mut(&bank.slot())
+                    .expect("All frozen banks must exist in the Progress map")
+                    .fork_stats = stats.clone();
+                stats
             })
             .collect();
         let mut votable: Vec<_> = frozen_banks
@@ -825,6 +830,39 @@ impl ReplayStage {
             inc_new_counter_info!("replay_stage-fork_selection-heavy_bank_lockout", 1);
         }
         (rv, Some((*best_bank).clone()))
+    }
+
+    fn confirm_forks(
+        tower: &Tower,
+        stake_lockouts: &HashMap<u64, StakeLockout>,
+        total_staked: u64,
+        progress: &mut HashMap<u64, ForkProgress>,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) {
+        for (slot, prog) in progress.iter_mut() {
+            if !prog.fork_stats.confirmation_reported {
+                let duration = timing::timestamp() - prog.started_ms;
+                if tower.is_slot_confirmed(*slot, stake_lockouts, total_staked)
+                    && bank_forks
+                        .read()
+                        .unwrap()
+                        .get(*slot)
+                        .map(|s| s.is_frozen())
+                        .unwrap_or(true)
+                {
+                    info!("validator fork confirmed {} {}ms", *slot, duration);
+                    datapoint_warn!("validatorconfirmation", ("duration_ms", duration, i64));
+                    prog.fork_stats.confirmation_reported = true;
+                } else {
+                    debug!(
+                        "validator fork not confirmed {} {}ms {:?}",
+                        *slot,
+                        duration,
+                        stake_lockouts.get(slot)
+                    );
+                }
+            }
+        }
     }
 
     fn load_blocktree_entries_with_shred_info(
