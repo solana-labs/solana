@@ -37,12 +37,6 @@ fn create_system_account(
         return Err(SystemError::AccountAlreadyInUse.into());
     }
 
-    // guard against sysvars being made
-    if sysvar::check_id(&program_id) {
-        debug!("CreateAccount: program id {} invalid", program_id);
-        return Err(SystemError::InvalidProgramId.into());
-    }
-
     if sysvar::is_sysvar_id(&to.unsigned_key()) {
         debug!("CreateAccount: account id {} invalid", program_id);
         return Err(SystemError::InvalidAccountId.into());
@@ -55,9 +49,10 @@ fn create_system_account(
         );
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
+
+    assign_account_to_program(to, program_id)?;
     from.account.lamports -= lamports;
     to.account.lamports += lamports;
-    to.account.owner = *program_id;
     to.account.data = vec![0; space as usize];
     to.account.executable = false;
     Ok(())
@@ -70,6 +65,12 @@ fn assign_account_to_program(
     if account.signer_key().is_none() {
         debug!("Assign: account must sign");
         return Err(InstructionError::MissingRequiredSignature);
+    }
+
+    // guard against sysvars being assigned
+    if sysvar::check_id(&program_id) {
+        debug!("Assign: program id {} invalid", program_id);
+        return Err(SystemError::InvalidProgramId.into());
     }
 
     account.account.owner = *program_id;
@@ -406,6 +407,22 @@ mod tests {
                 &new_program_owner,
             ),
             Ok(())
+        );
+    }
+
+    #[test]
+    fn test_assign_account_to_sysvar() {
+        let new_program_owner = sysvar::id();
+
+        let from = Pubkey::new_rand();
+        let mut from_account = Account::new(100, 0, &system_program::id());
+
+        assert_eq!(
+            assign_account_to_program(
+                &mut KeyedAccount::new(&from, true, &mut from_account),
+                &new_program_owner,
+            ),
+            Err(SystemError::InvalidProgramId.into())
         );
     }
 
