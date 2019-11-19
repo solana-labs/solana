@@ -8,17 +8,6 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 
-fn initialize_account(
-    account_owner_pubkey: &mut Pubkey,
-    owner_pubkey: Pubkey,
-) -> Result<(), InstructionError> {
-    if *account_owner_pubkey != Pubkey::default() {
-        return Err(InstructionError::AccountAlreadyInitialized);
-    }
-    *account_owner_pubkey = owner_pubkey;
-    Ok(())
-}
-
 fn set_owner(
     account_owner_pubkey: &mut Pubkey,
     new_owner_pubkey: Pubkey,
@@ -48,7 +37,7 @@ pub fn process_instruction(
         limited_deserialize(&account_keyed_account.account.data)?;
 
     if account_owner_pubkey == Pubkey::default() {
-        initialize_account(&mut account_owner_pubkey, new_owner_pubkey)?;
+        *account_owner_pubkey = owner_pubkey;
     } else {
         let owner_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
         set_owner(
@@ -159,13 +148,6 @@ mod tests {
             .unwrap();
         let account_owner_pubkey: Pubkey = limited_deserialize(&account_data).unwrap();
         assert_eq!(account_owner_pubkey, new_owner_pubkey);
-    }
-
-    #[test]
-    fn test_ownable_already_initialized() {
-        let mut account_owner_pubkey = Pubkey::new_rand(); // Attack! Attempt to overwrite an existing NFT
-        let err = initialize_account(&mut account_owner_pubkey, Pubkey::new_rand()).unwrap_err();
-        assert_eq!(err, InstructionError::AccountAlreadyInitialized);
     }
 
     #[test]
