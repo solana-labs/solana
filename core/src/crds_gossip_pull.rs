@@ -263,13 +263,39 @@ impl CrdsGossipPull {
         }
         ret
     }
+    pub fn make_timeouts_def(
+        &self,
+        self_id: &Pubkey,
+        stakes: &HashMap<Pubkey, u64>,
+        epoch_ms: u64,
+        min_ts: u64,
+    ) -> HashMap<Pubkey, u64> {
+        let mut timeouts: HashMap<Pubkey, u64> = stakes.keys().map(|s| (*s, epoch_ms)).collect();
+        timeouts.insert(*self_id, std::u64::MAX);
+        timeouts.insert(Pubkey::default(), min_ts);
+        timeouts
+    }
+
+    pub fn make_timeouts(
+        &self,
+        self_id: &Pubkey,
+        stakes: &HashMap<Pubkey, u64>,
+        epoch_ms: u64,
+    ) -> HashMap<Pubkey, u64> {
+        self.make_timeouts_def(self_id, stakes, epoch_ms, self.crds_timeout)
+    }
+
     /// Purge values from the crds that are older then `active_timeout`
     /// The value_hash of an active item is put into self.purged_values queue
-    pub fn purge_active(&mut self, crds: &mut Crds, self_id: &Pubkey, min_ts: u64) {
-        let old = crds.find_old_labels(min_ts);
+    pub fn purge_active(
+        &mut self,
+        crds: &mut Crds,
+        now: u64,
+        timeouts: &HashMap<Pubkey, u64>,
+    ) -> usize {
+        let old = crds.find_old_labels(now, timeouts);
         let mut purged: VecDeque<_> = old
             .iter()
-            .filter(|label| label.pubkey() != *self_id)
             .filter_map(|label| {
                 let rv = crds
                     .lookup_versioned(label)
@@ -278,7 +304,9 @@ impl CrdsGossipPull {
                 rv
             })
             .collect();
+        let ret = purged.len();
         self.purged_values.append(&mut purged);
+        ret
     }
     /// Purge values from the `self.purged_values` queue that are older then purge_timeout
     pub fn purge_purged(&mut self, min_ts: u64) {
@@ -551,7 +579,8 @@ mod test {
         assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);
 
         // purge
-        node.purge_active(&mut node_crds, &node_pubkey, 1);
+        let timeouts = node.make_timeouts_def(&node_pubkey, &HashMap::new(), 0, 1);
+        node.purge_active(&mut node_crds, 2, &timeouts);
 
         //verify self is still valid after purge
         assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);

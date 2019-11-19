@@ -72,6 +72,8 @@ tokio-io = "0.1"
 untrusted = "0.7.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.21.0" }
 reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "4.0.1-3", features = ["simd-accel"] }
+jemallocator = "0.3.2"
+jemalloc-ctl = "0.3.2"
 
 [dev-dependencies]
 hex-literal = "0.2.1"

@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Default)]
 struct RecyclerStats {
     total: AtomicUsize,
+    freed: AtomicUsize,
     reuse: AtomicUsize,
     max_gc: AtomicUsize,
 }
@@ -85,9 +86,10 @@ impl<T: Default + Reset> Recycler<T> {
             return x;
         }
 
+        let total = self.stats.total.fetch_add(1, Ordering::Relaxed);
         trace!(
             "allocating new: total {} {:?} id: {} reuse: {} max_gc: {}",
-            self.stats.total.fetch_add(1, Ordering::Relaxed),
+            total,
             name,
             self.id,
             self.stats.reuse.load(Ordering::Relaxed),
@@ -111,6 +113,16 @@ impl<T: Default + Reset> Recycler<T> {
                 .max_gc
                 .compare_and_swap(max_gc, len, Ordering::Relaxed);
         }
+        let total = self.stats.total.load(Ordering::Relaxed);
+        let reuse = self.stats.reuse.load(Ordering::Relaxed);
+        let freed = self.stats.total.fetch_add(1, Ordering::Relaxed);
+        datapoint_debug!(
+            "recycler",
+            ("gc_len", len as i64, i64),
+            ("total", total as i64, i64),
+            ("freed", freed as i64, i64),
+            ("reuse", reuse as i64, i64),
+        );
     }
 }
 

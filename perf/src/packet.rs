@@ -70,6 +70,15 @@ impl Packets {
             recycler: Some(recycler),
         }
     }
+    pub fn new_with_recycler_data(
+        recycler: &PacketsRecycler,
+        name: &'static str,
+        mut packets: Vec<Packet>,
+    ) -> Self {
+        let mut vec = Self::new_with_recycler(recycler.clone(), packets.len(), name);
+        vec.packets.append(&mut packets);
+        vec
+    }
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
         for m in self.packets.iter_mut() {
@@ -99,8 +108,15 @@ pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<Packets> {
     to_packets_chunked(xs, NUM_PACKETS)
 }
 
-pub fn to_packets_with_destination<T: Serialize>(dests_and_data: &[(SocketAddr, T)]) -> Packets {
-    let mut out = Packets::default();
+pub fn to_packets_with_destination<T: Serialize>(
+    recycler: PacketsRecycler,
+    dests_and_data: &[(SocketAddr, T)],
+) -> Packets {
+    let mut out = Packets::new_with_recycler(
+        recycler,
+        dests_and_data.len(),
+        "to_packets_with_destination",
+    );
     out.packets.resize(dests_and_data.len(), Packet::default());
     for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
         if let Err(e) = Packet::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1) {
