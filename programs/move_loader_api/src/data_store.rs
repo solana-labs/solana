@@ -1,3 +1,4 @@
+use bytecode_verifier::verifier::VerifiedModule;
 use canonical_serialization::SimpleDeserializer;
 use failure::prelude::*;
 use indexmap::IndexMap;
@@ -7,10 +8,10 @@ use types::{
     access_path::AccessPath,
     account_address::AccountAddress,
     account_config::{self, AccountResource},
-    language_storage::ModuleId,
     write_set::{WriteOp, WriteSet, WriteSetMut},
 };
-use vm::{errors::VMResult, CompiledModule};
+use vm::access::ModuleAccess;
+use vm::errors::VMResult;
 use vm_runtime::{data_cache::RemoteCache, identifier::create_access_path};
 
 /// An in-memory implementation of [`StateView`] and [`RemoteCache`] for the VM.
@@ -84,16 +85,14 @@ impl DataStore {
         self.data.remove(access_path)
     }
 
-    /// Adds a [`CompiledModule`] to this data store.
-    ///
-    /// Does not do any sort of verification on the module.
-    pub fn add_module(&mut self, module_id: &ModuleId, module: &CompiledModule) {
-        let access_path = AccessPath::from(module_id);
-        let mut value = vec![];
-        module
-            .serialize(&mut value)
-            .expect("serializing this module should work");
-        self.set(access_path, value);
+    /// Adds a [`VerifiedModule`] to this data store.
+    pub fn add_module(&mut self, module: &VerifiedModule) -> Result<()> {
+        let access_path = AccessPath::from(&module.self_id());
+
+        let mut bytes = vec![];
+        module.serialize(&mut bytes)?;
+        self.set(access_path, bytes);
+        Ok(())
     }
 
     /// Dumps the data store to stdout

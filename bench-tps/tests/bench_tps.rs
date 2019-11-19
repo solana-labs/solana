@@ -57,8 +57,10 @@ fn test_bench_tps_local_cluster(config: Config) {
     )
     .unwrap();
 
-    let total = do_bench_tps(vec![client], config, keypairs, 0, move_keypairs);
-    assert!(total > 100);
+    let _total = do_bench_tps(vec![client], config, keypairs, 0, move_keypairs);
+
+    #[cfg(not(debug_assertions))]
+    assert!(_total > 100);
 }
 
 #[test]
@@ -71,12 +73,12 @@ fn test_bench_tps_local_cluster_solana() {
     test_bench_tps_local_cluster(config);
 }
 
-#[ignore]
 #[test]
+#[serial]
 fn test_bench_tps_local_cluster_move() {
     let mut config = Config::default();
     config.tx_count = 100;
-    config.duration = Duration::from_secs(25);
+    config.duration = Duration::from_secs(10);
     config.use_move = true;
 
     test_bench_tps_local_cluster(config);

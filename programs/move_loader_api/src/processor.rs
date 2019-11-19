@@ -1,4 +1,4 @@
-use crate::account_state::{pubkey_to_address, LibraAccountState, ModuleBytes};
+use crate::account_state::{pubkey_to_address, LibraAccountState};
 use crate::data_store::DataStore;
 use crate::error_mappers::*;
 use bytecode_verifier::verifier::{VerifiedModule, VerifiedScript};
@@ -17,7 +17,7 @@ use types::{
     account_address::AccountAddress,
     account_config,
     identifier::Identifier,
-    transaction::{Program, TransactionArgument, TransactionOutput},
+    transaction::{Module, Script, TransactionArgument, TransactionOutput},
 };
 use vm::{
     access::ModuleAccess,
@@ -59,13 +59,13 @@ pub fn process_instruction(
 pub enum InvokeCommand {
     /// Create a new genesis account
     CreateGenesis(u64),
-    /// Run a Move program
-    RunProgram {
-        /// Sender of the "transaction", the "sender" who is running this program
+    /// run a Move script
+    RunScript {
+        /// Sender of the "transaction", the "sender" who is running this script
         sender_address: AccountAddress,
-        /// Name of the program's function to call
+        /// Name of the script's function to call
         function_name: String,
-        /// Arguments to pass to the program being called
+        /// Arguments to pass to the script being called
         args: Vec<TransactionArgument>,
     },
 }
@@ -75,7 +75,7 @@ pub struct MoveProcessor {}
 impl MoveProcessor {
     #[allow(clippy::needless_pass_by_value)]
     fn missing_account() -> InstructionError {
-        debug!("Error: Missing account");
+        debug!("Error: Missing libra account");
         InstructionError::InvalidAccountData
     }
 
@@ -108,75 +108,15 @@ impl MoveProcessor {
         Ok(())
     }
 
-    fn verify_program(
-        script: &VerifiedScript,
-        modules: &[VerifiedModule],
-    ) -> Result<(LibraAccountState), InstructionError> {
-        let mut script_bytes = vec![];
-        script
-            .as_inner()
-            .serialize(&mut script_bytes)
-            .map_err(map_failure_error)?;
-        let mut modules_bytes = vec![];
-        for module in modules.iter() {
-            let mut buf = vec![];
-            module
-                .as_inner()
-                .serialize(&mut buf)
-                .map_err(map_failure_error)?;
-            modules_bytes.push(ModuleBytes { bytes: buf });
-        }
-        Ok(LibraAccountState::VerifiedProgram {
-            script_bytes,
-            modules_bytes,
-        })
-    }
-
-    fn deserialize_compiled_program(
-        data: &[u8],
-    ) -> Result<(CompiledScript, Vec<CompiledModule>), InstructionError> {
+    fn deserialize_verified_script(data: &[u8]) -> Result<VerifiedScript, InstructionError> {
         match limited_deserialize(data)? {
-            LibraAccountState::CompiledProgram(string) => {
-                let program: Program = serde_json::from_str(&string).map_err(map_json_error)?;
-
-                let script =
-                    CompiledScript::deserialize(&program.code()).map_err(map_err_vm_status)?;
-                let modules = program
-                    .modules()
-                    .iter()
-                    .map(|bytes| CompiledModule::deserialize(&bytes))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(map_err_vm_status)?;
-
-                Ok((script, modules))
-            }
-            _ => {
-                debug!("Error: Program account does not contain a program");
-                Err(InstructionError::InvalidArgument)
-            }
-        }
-    }
-
-    fn deserialize_verified_program(
-        data: &[u8],
-    ) -> Result<(VerifiedScript, Vec<VerifiedModule>), InstructionError> {
-        match limited_deserialize(data)? {
-            LibraAccountState::VerifiedProgram {
-                script_bytes,
-                modules_bytes,
-            } => {
+            LibraAccountState::VerifiedScript { script_bytes } => {
                 let script =
                     VerifiedScript::deserialize(&script_bytes).map_err(map_err_vm_status)?;
-                let modules = modules_bytes
-                    .iter()
-                    .map(|module_bytes| VerifiedModule::deserialize(&module_bytes.bytes))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(map_err_vm_status)?;
-
-                Ok((script, modules))
+                Ok(script)
             }
             _ => {
-                debug!("Error: Program account does not contain a program");
+                debug!("Error: Script account does not contain a script");
                 Err(InstructionError::InvalidArgument)
             }
         }
@@ -187,26 +127,16 @@ impl MoveProcessor {
         function_name: &str,
         args: Vec<TransactionArgument>,
         script: VerifiedScript,
-        modules: Vec<VerifiedModule>,
         data_store: &DataStore,
     ) -> Result<TransactionOutput, InstructionError> {
         let allocator = Arena::new();
         let code_cache = VMModuleCache::new(&allocator);
         let module_cache = BlockModuleCache::new(&code_cache, ModuleFetcherImpl::new(data_store));
-        let mut modules_to_publish = vec![];
+        let modules_to_publish = vec![];
 
         let main_module = script.into_module();
         let module_id = main_module.self_id();
         module_cache.cache_module(main_module);
-        for verified_module in modules {
-            let mut raw_bytes = vec![];
-            verified_module
-                .as_inner()
-                .serialize(&mut raw_bytes)
-                .map_err(map_failure_error)?;
-            modules_to_publish.push((verified_module.self_id(), raw_bytes));
-            module_cache.cache_module(verified_module);
-        }
 
         let mut txn_metadata = TransactionMetadata::default();
         txn_metadata.sender = sender_address;
@@ -245,14 +175,18 @@ impl MoveProcessor {
         }
 
         for keyed_account in keyed_accounts_iter {
-            if let LibraAccountState::User(owner, write_set) =
-                limited_deserialize(&keyed_account.account.data)?
-            {
-                if owner != *genesis.unsigned_key() {
-                    debug!("All user accounts must be owned by the genesis");
-                    return Err(InstructionError::InvalidArgument);
+            match limited_deserialize(&keyed_account.account.data)? {
+                LibraAccountState::User(owner, write_set) => {
+                    if owner != *genesis.unsigned_key() {
+                        debug!("User account must be owned by this genesis");
+                        return Err(InstructionError::InvalidArgument);
+                    }
+                    data_store.apply_write_set(&write_set)
                 }
-                data_store.apply_write_set(&write_set)
+                LibraAccountState::PublishedModule(write_set) => {
+                    data_store.apply_write_set(&write_set)
+                }
+                _ => (),
             }
         }
         Ok(data_store)
@@ -293,10 +227,13 @@ impl MoveProcessor {
             let write_set = write_sets
                 .remove(&pubkey_to_address(keyed_account.unsigned_key()))
                 .ok_or_else(Self::missing_account)?;
-            Self::serialize_and_enforce_length(
-                &LibraAccountState::User(genesis_key, write_set),
-                &mut keyed_account.account.data,
-            )?;
+            if !keyed_account.account.executable {
+                // Only write back non-executable accounts
+                Self::serialize_and_enforce_length(
+                    &LibraAccountState::User(genesis_key, write_set),
+                    &mut keyed_account.account.data,
+                )?;
+            }
         }
         if !write_sets.is_empty() {
             debug!("Error: Missing keyed accounts");
@@ -311,60 +248,104 @@ impl MoveProcessor {
         bytes: &[u8],
     ) -> Result<(), InstructionError> {
         let mut keyed_accounts_iter = keyed_accounts.iter_mut();
-        let program = next_keyed_account(&mut keyed_accounts_iter)?;
+        let keyed_account = next_keyed_account(&mut keyed_accounts_iter)?;
 
-        if program.signer_key().is_none() {
+        if keyed_account.signer_key().is_none() {
             debug!("Error: key[0] did not sign the transaction");
             return Err(InstructionError::MissingRequiredSignature);
         }
         let offset = offset as usize;
         let len = bytes.len();
         trace!("Write: offset={} length={}", offset, len);
-        if program.account.data.len() < offset + len {
+        if keyed_account.account.data.len() < offset + len {
             debug!(
                 "Error: Write overflow: {} < {}",
-                program.account.data.len(),
+                keyed_account.account.data.len(),
                 offset + len
             );
             return Err(InstructionError::AccountDataTooSmall);
         }
-        program.account.data[offset..offset + len].copy_from_slice(&bytes);
+        keyed_account.account.data[offset..offset + len].copy_from_slice(&bytes);
         Ok(())
     }
 
     pub fn do_finalize(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
         let mut keyed_accounts_iter = keyed_accounts.iter_mut();
-        let program = next_keyed_account(&mut keyed_accounts_iter)?;
+        let finalized = next_keyed_account(&mut keyed_accounts_iter)?;
         let rent = next_keyed_account(&mut keyed_accounts_iter)?;
 
-        if program.signer_key().is_none() {
-            debug!("Error: key[0] did not sign the transaction");
+        if finalized.signer_key().is_none() {
+            debug!("Error: account to finalize did not sign the transaction");
             return Err(InstructionError::MissingRequiredSignature);
         }
 
-        rent::verify_rent_exemption(&program, &rent)?;
+        rent::verify_rent_exemption(&finalized, &rent)?;
 
-        let (compiled_script, compiled_modules) =
-            Self::deserialize_compiled_program(&program.account.data)?;
+        match limited_deserialize(&finalized.account.data)? {
+            LibraAccountState::CompiledScript(string) => {
+                let script: Script = serde_json::from_str(&string).map_err(map_json_error)?;
+                let compiled_script =
+                    CompiledScript::deserialize(&script.code()).map_err(map_err_vm_status)?;
+                let verified_script = match VerifiedScript::new(compiled_script) {
+                    Ok(script) => script,
+                    Err((_, errors)) => {
+                        if errors.is_empty() {
+                            return Err(InstructionError::GenericError);
+                        } else {
+                            return Err(map_err_vm_status(errors[0].clone()));
+                        }
+                    }
+                };
+                let mut script_bytes = vec![];
+                verified_script
+                    .as_inner()
+                    .serialize(&mut script_bytes)
+                    .map_err(map_failure_error)?;
+                Self::serialize_and_enforce_length(
+                    &LibraAccountState::VerifiedScript { script_bytes },
+                    &mut finalized.account.data,
+                )?;
+                info!("Finalize script: {:?}", finalized.unsigned_key());
+            }
+            LibraAccountState::CompiledModule(string) => {
+                let module: Module = serde_json::from_str(&string).map_err(map_json_error)?;
+                let compiled_module =
+                    CompiledModule::deserialize(&module.code()).map_err(map_err_vm_status)?;
+                let verified_module =
+                    VerifiedModule::new(compiled_module).map_err(map_vm_verification_error)?;
 
-        let verified_script = VerifiedScript::new(compiled_script).unwrap();
-        let verified_modules = compiled_modules
-            .into_iter()
-            .map(VerifiedModule::new)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(map_vm_verification_error)?;
+                let mut data_store = DataStore::default();
+                data_store
+                    .add_module(&verified_module)
+                    .map_err(map_failure_error)?;
 
-        Self::serialize_and_enforce_length(
-            &Self::verify_program(&verified_script, &verified_modules)?,
-            &mut program.account.data,
-        )?;
+                let mut write_sets = data_store
+                    .into_write_sets()
+                    .map_err(|_| InstructionError::GenericError)?;
 
-        program.account.executable = true;
+                let write_set = write_sets
+                    .remove(&pubkey_to_address(finalized.unsigned_key()))
+                    .ok_or_else(Self::missing_account)?;
+                Self::serialize_and_enforce_length(
+                    &LibraAccountState::PublishedModule(write_set),
+                    &mut finalized.account.data,
+                )?;
 
-        info!(
-            "Finalize: {:?}",
-            program.signer_key().unwrap_or(&Pubkey::default())
-        );
+                if !write_sets.is_empty() {
+                    debug!("Error: Missing keyed accounts");
+                    return Err(InstructionError::GenericError);
+                }
+
+                info!("Finalize module: {:?}", finalized.unsigned_key());
+            }
+            _ => {
+                debug!("Error: Account to finalize does not contain compiled data");
+                return Err(InstructionError::InvalidArgument);
+            }
+        };
+
+        finalized.account.executable = true;
+
         Ok(())
     }
 
@@ -375,17 +356,17 @@ impl MoveProcessor {
         match limited_deserialize(&data)? {
             InvokeCommand::CreateGenesis(amount) => {
                 let mut keyed_accounts_iter = keyed_accounts.iter_mut();
-                let program = next_keyed_account(&mut keyed_accounts_iter)?;
+                let script = next_keyed_account(&mut keyed_accounts_iter)?;
 
-                if program.account.owner != id() {
-                    debug!("Error: Move program account not owned by Move loader");
+                if script.account.owner != id() {
+                    debug!("Error: Move script account not owned by Move loader");
                     return Err(InstructionError::InvalidArgument);
                 }
 
-                match limited_deserialize(&program.account.data)? {
+                match limited_deserialize(&script.account.data)? {
                     LibraAccountState::Unallocated => Self::serialize_and_enforce_length(
                         &LibraAccountState::create_genesis(amount)?,
-                        &mut program.account.data,
+                        &mut script.account.data,
                     ),
                     _ => {
                         debug!("Error: Must provide an unallocated account");
@@ -393,35 +374,39 @@ impl MoveProcessor {
                     }
                 }
             }
-            InvokeCommand::RunProgram {
+            InvokeCommand::RunScript {
                 sender_address,
                 function_name,
                 args,
             } => {
                 let mut keyed_accounts_iter = keyed_accounts.iter_mut();
-                let program = next_keyed_account(&mut keyed_accounts_iter)?;
+                let script = next_keyed_account(&mut keyed_accounts_iter)?;
 
-                if program.account.owner != id() {
-                    debug!("Error: Move program account not owned by Move loader");
+                trace!(
+                    "Run script {:?} with entrypoint {:?}",
+                    script.unsigned_key(),
+                    function_name
+                );
+
+                if script.account.owner != id() {
+                    debug!("Error: Move script account not owned by Move loader");
                     return Err(InstructionError::InvalidArgument);
                 }
-                if !program.account.executable {
-                    debug!("Error: Move program account not executable");
+                if !script.account.executable {
+                    debug!("Error: Move script account not executable");
                     return Err(InstructionError::AccountNotExecutable);
                 }
 
                 let data_accounts = keyed_accounts_iter.into_slice();
 
                 let mut data_store = Self::keyed_accounts_to_data_store(&data_accounts)?;
-                let (verified_script, verified_modules) =
-                    Self::deserialize_verified_program(&program.account.data)?;
+                let verified_script = Self::deserialize_verified_script(&script.account.data)?;
 
                 let output = Self::execute(
                     sender_address,
                     &function_name,
                     args,
                     verified_script,
-                    verified_modules,
                     &data_store,
                 )?;
                 for event in output.events() {
@@ -476,15 +461,15 @@ mod tests {
 
         let code = "main() { return; }";
         let sender_address = AccountAddress::default();
-        let mut program = LibraAccount::create_program(&sender_address, code, vec![]);
+        let mut script = LibraAccount::create_script(&sender_address, code, vec![]);
         let rent_id = rent::id();
         let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-        let (_, _) = MoveProcessor::deserialize_verified_program(&program.account.data).unwrap();
+        let _ = MoveProcessor::deserialize_verified_script(&script.account.data).unwrap();
     }
 
     #[test]
@@ -492,14 +477,13 @@ mod tests {
         solana_logger::setup();
 
         let amount = 10_000_000;
-        let mut unallocated = LibraAccount::create_unallocated();
+        let mut unallocated = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let mut keyed_accounts = vec![KeyedAccount::new(
             &unallocated.key,
             false,
             &mut unallocated.account,
         )];
-        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
             &bincode::serialize(&InvokeCommand::CreateGenesis(amount)).unwrap(),
@@ -516,31 +500,31 @@ mod tests {
     }
 
     #[test]
-    fn test_invoke_main() {
+    fn test_invoke_script() {
         solana_logger::setup();
 
         let code = "main() { return; }";
         let sender_address = AccountAddress::default();
-        let mut program = LibraAccount::create_program(&sender_address, code, vec![]);
+        let mut script = LibraAccount::create_script(&sender_address, code, vec![]);
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
         let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
         ];
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram {
+            &bincode::serialize(&InvokeCommand::RunScript {
                 sender_address,
                 function_name: "main".to_string(),
                 args: vec![],
@@ -548,6 +532,29 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn test_publish_module() {
+        solana_logger::setup();
+
+        let code = "
+            module M {
+                universal_truth(): u64 {
+                    return 42;
+                }
+            }
+        ";
+        let mut module = LibraAccount::create_module(code, vec![]);
+        let rent_id = rent::id();
+        let mut rent_account = rent::create_account(1, &Rent::default());
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&module.key, true, &mut module.account),
+            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        ];
+        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
+
+        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
     }
 
     #[test]
@@ -561,27 +568,27 @@ mod tests {
             }
         ";
         let sender_address = AccountAddress::default();
-        let mut program = LibraAccount::create_program(&sender_address, code, vec![]);
+        let mut script = LibraAccount::create_script(&sender_address, code, vec![]);
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
         let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
         ];
 
         assert_eq!(
             MoveProcessor::do_invoke_main(
                 &mut keyed_accounts,
-                &bincode::serialize(&InvokeCommand::RunProgram {
+                &bincode::serialize(&InvokeCommand::RunScript {
                     sender_address,
                     function_name: "main".to_string(),
                     args: vec![],
@@ -602,7 +609,7 @@ mod tests {
         let mut accounts = mint_coins(amount).unwrap();
         let mut accounts_iter = accounts.iter_mut();
 
-        let _program = next_libra_account(&mut accounts_iter).unwrap();
+        let _script = next_libra_account(&mut accounts_iter).unwrap();
         let genesis = next_libra_account(&mut accounts_iter).unwrap();
         let payee = next_libra_account(&mut accounts_iter).unwrap();
         match bincode::deserialize(&payee.account.data).unwrap() {
@@ -616,8 +623,6 @@ mod tests {
         }
 
         let payee_resource = data_store.read_account_resource(&payee.address).unwrap();
-        println!("{}:{}", line!(), file!());
-
         assert_eq!(amount, payee_resource.balance());
         assert_eq!(0, payee_resource.sequence_number());
     }
@@ -629,7 +634,7 @@ mod tests {
         let mut accounts = mint_coins(amount_to_mint).unwrap();
         let mut accounts_iter = accounts.iter_mut();
 
-        let _program = next_libra_account(&mut accounts_iter).unwrap();
+        let _script = next_libra_account(&mut accounts_iter).unwrap();
         let genesis = next_libra_account(&mut accounts_iter).unwrap();
         let sender = next_libra_account(&mut accounts_iter).unwrap();
 
@@ -641,32 +646,29 @@ mod tests {
                 return;
             }
         ";
-        let mut program = LibraAccount::create_program(&genesis.address, code, vec![]);
-        let mut payee = LibraAccount::create_unallocated();
+        let mut script = LibraAccount::create_script(&genesis.address, code, vec![]);
+        let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
         let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
-        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&sender.key, false, &mut sender.account),
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
-        keyed_accounts[2].account.data.resize(BIG_ENOUGH, 0);
-        keyed_accounts[3].account.data.resize(BIG_ENOUGH, 0);
 
         let amount = 2;
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram {
+            &bincode::serialize(&InvokeCommand::RunScript {
                 sender_address: sender.address.clone(),
                 function_name: "main".to_string(),
                 args: vec![
@@ -689,146 +691,100 @@ mod tests {
     }
 
     #[test]
-    fn test_invoke_local_module() {
-        solana_logger::setup();
-
-        let code = "
-            modules:
-
-            module M {
-                public universal_truth(): u64 {
-                    return 42;
-                }
-            }
-
-            script:
-
-            import Transaction.M;
-            main() {
-                let x: u64;
-                x = M.universal_truth();
-                return;
-            }
-        ";
-        let mut genesis = LibraAccount::create_genesis(1_000_000_000);
-        let mut payee = LibraAccount::create_unallocated();
-        let mut program = LibraAccount::create_program(&payee.address, code, vec![]);
-
-        let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::default());
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
-            KeyedAccount::new(&rent_id, false, &mut rent_account),
-        ];
-        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
-
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
-            KeyedAccount::new(&genesis.key, false, &mut genesis.account),
-            KeyedAccount::new(&payee.key, false, &mut payee.account),
-        ];
-        keyed_accounts[2].account.data.resize(BIG_ENOUGH, 0);
-
-        MoveProcessor::do_invoke_main(
-            &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram {
-                sender_address: payee.address,
-                function_name: "main".to_string(),
-                args: vec![],
-            })
-            .unwrap(),
-        )
-        .unwrap();
-    }
-
-    #[test]
     fn test_invoke_published_module() {
         solana_logger::setup();
 
+        let universal_truth = 42;
+
         // First publish the module
 
-        let code = "
-            module M {
-                public universal_truth(): u64 {
-                    return 42;
-                }
-            }
-        ";
-        let mut module = LibraAccount::create_unallocated();
-        let mut program = LibraAccount::create_program(&module.address, code, vec![]);
-        let mut genesis = LibraAccount::create_genesis(1_000_000_000);
+        let code = format!(
+            "
+            module M {{
+                public universal_truth(): u64 {{
+                    return {};
+                }}
+            }}
+        ",
+            universal_truth
+        );
+        let mut module = LibraAccount::create_module(&code, vec![]);
 
         let rent_id = rent::id();
         let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&module.key, true, &mut module.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
         keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
-            KeyedAccount::new(&genesis.key, false, &mut genesis.account),
-            KeyedAccount::new(&module.key, false, &mut module.account),
-        ];
-        keyed_accounts[2].account.data.resize(BIG_ENOUGH, 0);
-
-        MoveProcessor::do_invoke_main(
-            &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram {
-                sender_address: module.address,
-                function_name: "main".to_string(),
-                args: vec![],
-            })
-            .unwrap(),
-        )
-        .unwrap();
-
         // Next invoke the published module
+
+        let amount_to_mint = 84;
+        let mut accounts = mint_coins(amount_to_mint).unwrap();
+        let mut accounts_iter = accounts.iter_mut();
+
+        let _script = next_libra_account(&mut accounts_iter).unwrap();
+        let genesis = next_libra_account(&mut accounts_iter).unwrap();
+        let sender = next_libra_account(&mut accounts_iter).unwrap();
 
         let code = format!(
             "
-            import 0x{}.M;
-            main() {{
-                let x: u64;
-                x = M.universal_truth();
-                return;
-            }}
+                import 0x0.LibraAccount;
+                import 0x0.LibraCoin;
+                import 0x{}.M;
+                
+                main(payee: address) {{
+                    let amount: u64;
+                    amount = M.universal_truth();
+                    LibraAccount.pay_from_sender(move(payee), move(amount));
+                    return;
+                }}
             ",
             module.address
         );
-        let mut program =
-            LibraAccount::create_program(&module.address, &code, vec![&module.account.data]);
+        let mut script =
+            LibraAccount::create_script(&genesis.address, &code, vec![&module.account.data]);
+        let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
         let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
+            KeyedAccount::new(&sender.key, false, &mut sender.account),
             KeyedAccount::new(&module.key, false, &mut module.account),
+            KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram {
-                sender_address: program.address,
+            &bincode::serialize(&InvokeCommand::RunScript {
+                sender_address: sender.address.clone(),
                 function_name: "main".to_string(),
-                args: vec![],
+                args: vec![TransactionArgument::Address(payee.address.clone())],
             })
             .unwrap(),
         )
         .unwrap();
+
+        let data_store = MoveProcessor::keyed_accounts_to_data_store(&keyed_accounts[1..]).unwrap();
+        let sender_resource = data_store.read_account_resource(&sender.address).unwrap();
+        let payee_resource = data_store.read_account_resource(&payee.address).unwrap();
+
+        assert_eq!(amount_to_mint - universal_truth, sender_resource.balance());
+        assert_eq!(0, sender_resource.sequence_number());
+        assert_eq!(universal_truth, payee_resource.balance());
+        assert_eq!(0, payee_resource.sequence_number());
     }
 
     // Helpers
@@ -843,30 +799,28 @@ mod tests {
             }
         ";
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
-        let mut program = LibraAccount::create_program(&genesis.address, code, vec![]);
-        let mut payee = LibraAccount::create_unallocated();
+        let mut script = LibraAccount::create_script(&genesis.address.clone(), code, vec![]);
+        let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
         let mut rent_account = rent::create_account(1, &Rent::default());
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
-        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
         let mut keyed_accounts = vec![
-            KeyedAccount::new(&program.key, true, &mut program.account),
+            KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&genesis.key, false, &mut genesis.account),
             KeyedAccount::new(&payee.key, false, &mut payee.account),
         ];
-        keyed_accounts[2].account.data.resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunProgram {
-                sender_address: genesis.address.clone(),
+            &bincode::serialize(&InvokeCommand::RunScript {
+                sender_address: account_config::association_address(),
                 function_name: "main".to_string(),
                 args: vec![
                     TransactionArgument::Address(pubkey_to_address(&payee.key)),
@@ -878,7 +832,7 @@ mod tests {
         .unwrap();
 
         Ok(vec![
-            LibraAccount::new(program.key, program.account),
+            LibraAccount::new(script.key, script.account),
             LibraAccount::new(genesis.key, genesis.account),
             LibraAccount::new(payee.key, payee.account),
         ])
@@ -905,14 +859,18 @@ mod tests {
             }
         }
 
-        pub fn create_unallocated() -> Self {
+        pub fn create_unallocated(size: usize) -> Self {
             let key = Pubkey::new_rand();
-            let account = Account {
+            let mut account = Account {
                 lamports: 1,
                 data: bincode::serialize(&LibraAccountState::create_unallocated()).unwrap(),
                 owner: id(),
                 ..Account::default()
             };
+            if account.data.len() < size {
+                account.data.resize(size, 0);
+            }
+
             Self::new(key, account)
         }
 
@@ -922,30 +880,39 @@ mod tests {
                 owner: id(),
                 ..Account::default()
             };
-            let mut genesis = Self::new(
-                Pubkey::new(&account_config::association_address().to_vec()),
-                account,
-            );
+            let mut genesis = Self::new(Pubkey::new_rand(), account);
             let pre_data = LibraAccountState::create_genesis(amount).unwrap();
             let _hi = "hello";
             genesis.account.data = bincode::serialize(&pre_data).unwrap();
             genesis
         }
 
-        pub fn create_program(
+        pub fn create_script(
             sender_address: &AccountAddress,
             code: &str,
             deps: Vec<&Vec<u8>>,
         ) -> Self {
-            let mut program = Self::create_unallocated();
-            program.account.data = bincode::serialize(&LibraAccountState::create_program(
+            let mut script = Self::create_unallocated(0);
+            script.account.data = bincode::serialize(&LibraAccountState::create_script(
                 sender_address,
                 code,
                 deps,
             ))
             .unwrap();
-            program.account.executable = true;
-            program
+
+            script
+        }
+
+        pub fn create_module(code: &str, deps: Vec<&Vec<u8>>) -> Self {
+            let mut module = Self::create_unallocated(0);
+            module.account.data = bincode::serialize(&LibraAccountState::create_module(
+                &module.address,
+                code,
+                deps,
+            ))
+            .unwrap();
+
+            module
         }
     }
 }

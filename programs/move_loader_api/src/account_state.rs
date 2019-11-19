@@ -10,7 +10,7 @@ use types::{
     account_address::AccountAddress,
     account_config,
     identifier::Identifier,
-    transaction::Program,
+    transaction::{Module, Script},
     write_set::{WriteOp, WriteSet},
 };
 use vm::{
@@ -46,14 +46,17 @@ pub struct ModuleBytes {
 pub enum LibraAccountState {
     /// No data for this account yet
     Unallocated,
-    /// Json string representation of types::transaction::Program
-    CompiledProgram(String),
-    /// Serialized verified program bytes
-    VerifiedProgram {
+    /// Json string representation of types::transaction::Module
+    CompiledScript(String),
+    /// Json string representation of types::transaction::Script
+    CompiledModule(String),
+    /// Serialized verified script bytes
+    VerifiedScript {
         #[serde(with = "serde_bytes")]
         script_bytes: Vec<u8>,
-        modules_bytes: Vec<ModuleBytes>,
     },
+    // Write set containing the published module
+    PublishedModule(WriteSet),
     /// Associated genesis account and the write set containing the Libra account data
     User(Pubkey, WriteSet),
     /// Write sets containing the mint and stdlib modules
@@ -64,53 +67,56 @@ impl LibraAccountState {
         Self::Unallocated
     }
 
-    pub fn create_program(
-        sender_address: &AccountAddress,
-        code: &str,
-        deps: Vec<&Vec<u8>>,
-    ) -> Self {
+    fn create_compiler(sender_address: &AccountAddress, deps: Vec<&Vec<u8>>) -> Compiler {
         // Compiler needs all the dependencies and the dependency module's account's
         // data into `VerifiedModules`
         let mut extra_deps: Vec<VerifiedModule> = vec![];
         for dep in deps {
             let state: Self = bincode::deserialize(&dep).unwrap();
-            if let Self::User(_, write_set) = state {
+            if let Self::PublishedModule(write_set) = state {
                 for (_, write_op) in write_set.iter() {
                     if let WriteOp::Value(raw_bytes) = write_op {
-                        extra_deps.push(
+                        let v =
                             VerifiedModule::new(CompiledModule::deserialize(&raw_bytes).unwrap())
-                                .unwrap(),
-                        );
+                                .unwrap();
+                        extra_deps.push(v);
                     }
                 }
             }
         }
 
-        let compiler = Compiler {
+        Compiler {
             address: *sender_address,
             extra_deps,
             ..Compiler::default()
-        };
-        let compiled_program = compiler
-            .into_compiled_program(code)
-            .expect("Failed to compile");
+        }
+    }
+
+    pub fn create_script(sender_address: &AccountAddress, code: &str, deps: Vec<&Vec<u8>>) -> Self {
+        let compiler = Self::create_compiler(sender_address, deps);
+        let compiled_script = compiler.into_script(code).expect("Failed to compile");
 
         let mut script_bytes = vec![];
-        compiled_program
-            .script
+        compiled_script
             .serialize(&mut script_bytes)
             .expect("Unable to serialize script");
-        let mut modules_bytes = vec![];
-        for module in &compiled_program.modules {
-            let mut buf = vec![];
-            module
-                .serialize(&mut buf)
-                .expect("Unable to serialize module");
-            modules_bytes.push(buf);
-        }
-        Self::CompiledProgram(
-            serde_json::to_string(&Program::new(script_bytes, modules_bytes, vec![])).unwrap(),
-        )
+
+        // TODO args?
+        Self::CompiledScript(serde_json::to_string(&Script::new(script_bytes, vec![])).unwrap())
+    }
+
+    pub fn create_module(sender_address: &AccountAddress, code: &str, deps: Vec<&Vec<u8>>) -> Self {
+        let compiler = Self::create_compiler(sender_address, deps);
+        let compiled_module = compiler
+            .into_compiled_module(code)
+            .expect("Failed to compile");
+
+        let mut module_bytes = vec![];
+        compiled_module
+            .serialize(&mut module_bytes)
+            .expect("Unable to serialize script");
+
+        Self::CompiledModule(serde_json::to_string(&Module::new(module_bytes)).unwrap())
     }
 
     pub fn create_user(owner: &Pubkey, write_set: WriteSet) -> Self {

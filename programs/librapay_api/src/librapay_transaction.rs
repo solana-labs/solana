@@ -3,6 +3,7 @@ use log::*;
 use solana_move_loader_api::account_state::{pubkey_to_address, LibraAccountState};
 use solana_move_loader_api::data_store::DataStore;
 use solana_sdk::client::Client;
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -12,67 +13,74 @@ use std::boxed::Box;
 use std::error;
 use std::fmt;
 
-pub fn create_genesis(
-    genesis_keypair: &Keypair,
-    microlibras: u64,
-    recent_blockhash: Hash,
-) -> Transaction {
-    let ix = librapay_instruction::genesis(&genesis_keypair.pubkey(), microlibras);
+pub fn create_genesis(keypair: &Keypair, microlibras: u64, recent_blockhash: Hash) -> Transaction {
+    let ix = librapay_instruction::genesis(&keypair.pubkey(), microlibras);
     Transaction::new_signed_with_payer(
         vec![ix],
-        Some(&genesis_keypair.pubkey()),
-        &[genesis_keypair],
+        Some(&keypair.pubkey()),
+        &[keypair],
         recent_blockhash,
     )
 }
 
 pub fn mint_tokens(
-    program_id: &Pubkey,
-    payer: &Keypair,
-    mint: &Keypair,
-    to: &Pubkey,
+    script_pubkey: &Pubkey,
+    payer_keypair: &Keypair,
+    genesis_keypair: &Keypair,
+    to_pubkey: &Pubkey,
     microlibras: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    let ix = librapay_instruction::mint(program_id, &mint.pubkey(), to, microlibras);
+    let ix = librapay_instruction::mint(
+        script_pubkey,
+        &genesis_keypair.pubkey(),
+        to_pubkey,
+        microlibras,
+    );
     Transaction::new_signed_with_payer(
         vec![ix],
-        Some(&payer.pubkey()),
-        &[payer, mint],
+        Some(&payer_keypair.pubkey()),
+        &[payer_keypair, genesis_keypair],
         recent_blockhash,
     )
 }
 
 pub fn transfer(
-    program_id: &Pubkey,
-    mint: &Pubkey,
-    payer: &Keypair,
-    from: &Keypair,
-    to: &Pubkey,
+    script_pubkey: &Pubkey,
+    genesis_pubkey: &Pubkey,
+    payer_keypair: &Keypair,
+    from_keypair: &Keypair,
+    to_pubkey: &Pubkey,
     microlibras: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    let ix = librapay_instruction::transfer(program_id, mint, &from.pubkey(), to, microlibras);
+    let ix = librapay_instruction::transfer(
+        script_pubkey,
+        genesis_pubkey,
+        &from_keypair.pubkey(),
+        to_pubkey,
+        microlibras,
+    );
     Transaction::new_signed_with_payer(
         vec![ix],
-        Some(&payer.pubkey()),
-        &[payer, from],
+        Some(&payer_keypair.pubkey()),
+        &[payer_keypair, from_keypair],
         recent_blockhash,
     )
 }
 
 pub fn create_accounts(
-    from: &Keypair,
-    to: &[&Keypair],
+    from_keypair: &Keypair,
+    to_keypair: &[&Keypair],
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    let instructions = to
+    let instructions = to_keypair
         .iter()
-        .map(|to| {
+        .map(|keypair| {
             system_instruction::create_account(
-                &from.pubkey(),
-                &to.pubkey(),
+                &from_keypair.pubkey(),
+                &keypair.pubkey(),
                 lamports,
                 400,
                 &solana_sdk::move_loader::id(),
@@ -80,18 +88,18 @@ pub fn create_accounts(
         })
         .collect();
 
-    let mut from_signers = vec![from];
-    from_signers.extend_from_slice(to);
+    let mut from_signers = vec![from_keypair];
+    from_signers.extend_from_slice(to_keypair);
     Transaction::new_signed_instructions(&from_signers, instructions, recent_blockhash)
 }
 
 pub fn create_account(
-    from: &Keypair,
-    to: &Keypair,
+    from_keypair: &Keypair,
+    to_keypair: &Keypair,
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    create_accounts(from, &[to], lamports, recent_blockhash)
+    create_accounts(from_keypair, &[to_keypair], lamports, recent_blockhash)
 }
 
 #[derive(Debug)]
@@ -109,12 +117,13 @@ impl error::Error for LibrapayError {}
 
 pub fn get_libra_balance<T: Client>(
     client: &T,
-    account_address: &Pubkey,
+    pubkey: &Pubkey,
 ) -> Result<u64, Box<dyn error::Error>> {
-    let account = client.get_account_data(&account_address)?;
-    if let Some(account) = account {
+    if let Some(account) =
+        client.get_account_with_commitment(&pubkey, CommitmentConfig::recent())?
+    {
         let mut data_store = DataStore::default();
-        match bincode::deserialize(&account)? {
+        match bincode::deserialize(&account.data)? {
             LibraAccountState::User(_, write_set) => {
                 data_store.apply_write_set(&write_set);
             }
@@ -127,9 +136,8 @@ pub fn get_libra_balance<T: Client>(
             }
         }
         let resource = data_store
-            .read_account_resource(&pubkey_to_address(account_address))
+            .read_account_resource(&pubkey_to_address(pubkey))
             .unwrap();
-
         let res = resource.balance();
         Ok(res)
     } else {
@@ -140,7 +148,7 @@ pub fn get_libra_balance<T: Client>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{create_genesis, upload_mint_program, upload_payment_program};
+    use crate::{create_genesis, upload_mint_script, upload_payment_script};
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_config::create_genesis_config;
@@ -148,7 +156,7 @@ mod tests {
     use std::sync::Arc;
 
     fn create_bank(lamports: u64) -> (Arc<Bank>, Keypair, Keypair, Pubkey, Pubkey) {
-        let (genesis_config, mint_keypair) = create_genesis_config(lamports);
+        let (genesis_config, mint) = create_genesis_config(lamports);
         let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(
             solana_sdk::move_loader::id(),
@@ -156,59 +164,73 @@ mod tests {
         );
         let shared_bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&shared_bank);
-        let genesis_keypair = create_genesis(&mint_keypair, &bank_client, 1_000_000);
-        let mint_program_pubkey = upload_mint_program(&mint_keypair, &bank_client);
-        let program_pubkey = upload_payment_program(&mint_keypair, &bank_client);
+        let genesis_pubkey = create_genesis(&mint, &bank_client, 1_000_000);
+        let mint_script_pubkey = upload_mint_script(&mint, &bank_client);
+        let script_pubkey = upload_payment_script(&mint, &bank_client);
         (
             shared_bank,
-            mint_keypair,
-            genesis_keypair,
-            mint_program_pubkey,
-            program_pubkey,
+            mint,
+            genesis_pubkey,
+            mint_script_pubkey,
+            script_pubkey,
         )
     }
 
     #[test]
     fn test_transfer() {
-        let (bank, mint_keypair, libra_genesis_keypair, mint_program_id, program_id) =
-            create_bank(10_000);
-        let from = Keypair::new();
-        let to = Keypair::new();
+        solana_logger::setup();
 
-        let tx = create_accounts(&mint_keypair, &[&from, &to], 1, bank.last_blockhash());
+        let (bank, mint, genesis_keypair, mint_script_pubkey, payment_script_pubkey) =
+            create_bank(10_000);
+        let from_keypair = Keypair::new();
+        let to_keypair = Keypair::new();
+
+        let tx = create_accounts(
+            &mint,
+            &[&from_keypair, &to_keypair],
+            1,
+            bank.last_blockhash(),
+        );
         bank.process_transaction(&tx).unwrap();
 
         info!(
-            "created accounts: mint: {} libra_mint: {}",
-            mint_keypair.pubkey(),
-            libra_genesis_keypair.pubkey()
+            "created accounts: mint: {} genesis_pubkey: {}",
+            mint.pubkey(),
+            genesis_keypair.pubkey()
         );
-        info!("    from: {} to: {}", from.pubkey(), to.pubkey());
+        info!(
+            "    from: {} to: {}",
+            from_keypair.pubkey(),
+            to_keypair.pubkey()
+        );
 
         let tx = mint_tokens(
-            &mint_program_id,
-            &mint_keypair,
-            &libra_genesis_keypair,
-            &from.pubkey(),
+            &mint_script_pubkey,
+            &mint,
+            &genesis_keypair,
+            &from_keypair.pubkey(),
             1,
             bank.last_blockhash(),
         );
         bank.process_transaction(&tx).unwrap();
         let client = BankClient::new_shared(&bank);
-        assert_eq!(1, get_libra_balance(&client, &from.pubkey()).unwrap());
+        assert_eq!(
+            1,
+            get_libra_balance(&client, &from_keypair.pubkey()).unwrap()
+        );
 
         info!("passed mint... doing another transfer..");
 
         let tx = transfer(
-            &program_id,
-            &libra_genesis_keypair.pubkey(),
-            &mint_keypair,
-            &from,
-            &to.pubkey(),
+            &payment_script_pubkey,
+            &genesis_keypair.pubkey(),
+            &mint,
+            &from_keypair,
+            &to_keypair.pubkey(),
             1,
             bank.last_blockhash(),
         );
         bank.process_transaction(&tx).unwrap();
-        assert_eq!(1, get_libra_balance(&client, &to.pubkey()).unwrap());
+        assert_eq!(1, get_libra_balance(&client, &to_keypair.pubkey()).unwrap());
     }
 }

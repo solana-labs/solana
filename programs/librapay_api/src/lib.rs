@@ -25,12 +25,12 @@ use solana_sdk::system_instruction;
 
 use types::account_config;
 
-pub fn create_genesis<T: Client>(from_key: &Keypair, client: &T, amount: u64) -> Keypair {
-    let libra_genesis_key = Keypair::new();
+pub fn create_genesis<T: Client>(from: &Keypair, client: &T, amount: u64) -> Keypair {
+    let genesis = Keypair::new();
 
     let instruction = system_instruction::create_account(
-        &from_key.pubkey(),
-        &libra_genesis_key.pubkey(),
+        &from.pubkey(),
+        &genesis.pubkey(),
         1,
         bincode::serialized_size(&LibraAccountState::create_genesis(amount).unwrap()).unwrap()
             as u64,
@@ -38,35 +38,33 @@ pub fn create_genesis<T: Client>(from_key: &Keypair, client: &T, amount: u64) ->
     );
 
     client
-        .send_message(
-            &[&from_key, &libra_genesis_key],
-            Message::new(vec![instruction]),
-        )
+        .send_message(&[&from, &genesis], Message::new(vec![instruction]))
         .unwrap();
 
-    let instruction = librapay_instruction::genesis(&libra_genesis_key.pubkey(), amount);
-    let message = Message::new_with_payer(vec![instruction], Some(&from_key.pubkey()));
-    client
-        .send_message(&[from_key, &libra_genesis_key], message)
-        .unwrap();
+    let instruction = librapay_instruction::genesis(&genesis.pubkey(), amount);
+    let message = Message::new_with_payer(vec![instruction], Some(&from.pubkey()));
+    client.send_message(&[from, &genesis], message).unwrap();
 
-    libra_genesis_key
+    genesis
 }
 
-pub fn upload_move_program<T: Client>(from: &Keypair, client: &T, code: &str) -> Pubkey {
+pub fn publish_module<T: Client>(from: &Keypair, client: &T, code: &str) -> Pubkey {
     let address = account_config::association_address();
-    let account_state = LibraAccountState::create_program(&address, code, vec![]);
-    let program_bytes = bincode::serialize(&account_state).unwrap();
+    let account_state = LibraAccountState::create_module(&address, code, vec![]);
+    let bytes = bincode::serialize(&account_state).unwrap();
 
-    load_program(
-        client,
-        &from,
-        &solana_sdk::move_loader::id(),
-        program_bytes,
-    )
+    load_program(client, &from, &solana_sdk::move_loader::id(), bytes)
 }
 
-pub fn upload_mint_program<T: Client>(from: &Keypair, client: &T) -> Pubkey {
+pub fn upload_script<T: Client>(from: &Keypair, client: &T, code: &str) -> Pubkey {
+    let address = account_config::association_address();
+    let account_state = LibraAccountState::create_script(&address, code, vec![]);
+    let bytes = bincode::serialize(&account_state).unwrap();
+
+    load_program(client, &from, &solana_sdk::move_loader::id(), bytes)
+}
+
+pub fn upload_mint_script<T: Client>(from: &Keypair, client: &T) -> Pubkey {
     let code = "
             import 0x0.LibraAccount;
             import 0x0.LibraCoin;
@@ -74,10 +72,9 @@ pub fn upload_mint_program<T: Client>(from: &Keypair, client: &T) -> Pubkey {
                 LibraAccount.mint_to_address(move(payee), move(amount));
                 return;
             }";
-    upload_move_program(from, client, code)
+    upload_script(from, client, code)
 }
-
-pub fn upload_payment_program<T: Client>(from: &Keypair, client: &T) -> Pubkey {
+pub fn upload_payment_script<T: Client>(from: &Keypair, client: &T) -> Pubkey {
     let code = "
         import 0x0.LibraAccount;
         import 0x0.LibraCoin;
@@ -87,7 +84,7 @@ pub fn upload_payment_program<T: Client>(from: &Keypair, client: &T) -> Pubkey {
         }
     ";
 
-    upload_move_program(from, client, code)
+    upload_script(from, client, code)
 }
 
 pub fn process_instruction(
