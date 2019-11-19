@@ -204,6 +204,10 @@ impl ReplayStage {
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
                 let mut progress = HashMap::new();
+                // Initialize progress map with any root banks
+                for bank in bank_forks.read().unwrap().frozen_banks().values() {
+                    progress.insert(bank.slot(), ForkProgress::new(bank.slot(), bank.last_blockhash()));
+                }
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
                 let mut partition = false;
