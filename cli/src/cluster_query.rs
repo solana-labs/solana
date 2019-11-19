@@ -89,7 +89,8 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("lamports")
                         .value_name("NUMBER")
                         .takes_value(true)
-                        .help("Number of lamports to transfer for each transaction [default: 1]"),
+                        .default_value("1")
+                        .help("Number of lamports to transfer for each transaction"),
                 )
                 .arg(
                     Arg::with_name("timeout")
@@ -135,11 +136,7 @@ pub fn parse_catchup(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliErro
 }
 
 pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let lamports = if matches.is_present("lamports") {
-        value_t_or_exit!(matches, "lamports", u64)
-    } else {
-        1
-    };
+    let lamports = value_t_or_exit!(matches, "lamports", u64);
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let count = if matches.is_present("count") {
         Some(value_t_or_exit!(matches, "count", u64))
