@@ -37,9 +37,3 @@ default_arg --faucet-lamports 500000000000000000
 default_arg --hashes-per-tick auto
 default_arg --operating-mode development
 $solana_genesis "${args[@]}"
-
-(
-  cd "$SOLANA_CONFIG_DIR"/bootstrap-leader
-  set -x
-  tar jcvfS genesis.tar.bz2 genesis.bin rocksdb
-)
