@@ -3408,10 +3408,10 @@ mod tests {
         let (genesis_config, _) = create_genesis_config(500);
         let bank0 = Arc::new(Bank::new(&genesis_config));
         bank0.freeze();
-        let bank0_hash = bank0.hash_internal_state();
+        let bank0_hash = bank0.hash();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank1.freeze();
-        let bank1_hash = bank1.hash_internal_state();
+        let bank1_hash = bank1.hash();
         assert_ne!(bank0_hash, bank1_hash);
     }
 }
