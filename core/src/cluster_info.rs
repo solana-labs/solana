@@ -2034,6 +2034,7 @@ mod tests {
     /// test window requests respond with the right shred, and do not overrun
     #[test]
     fn run_window_request() {
+        let recycler = PacketsRecycler::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -2052,6 +2053,7 @@ mod tests {
                 0,
             );
             let rv = ClusterInfo::run_window_request(
+                &recycler,
                 &me,
                 &socketaddr_any!(),
                 Some(&blocktree),
@@ -2059,7 +2061,7 @@ mod tests {
                 0,
                 0,
             );
-            assert!(rv.is_empty());
+            assert!(rv.is_none());
             let mut common_header = ShredCommonHeader::default();
             common_header.slot = 2;
             common_header.index = 1;
@@ -2076,6 +2078,7 @@ mod tests {
                 .expect("Expect successful ledger write");
 
             let rv = ClusterInfo::run_window_request(
+                &recycler,
                 &me,
                 &socketaddr_any!(),
                 Some(&blocktree),
@@ -2083,8 +2086,9 @@ mod tests {
                 2,
                 1,
             );
-            assert!(!rv.is_empty());
+            assert!(!rv.is_none());
             let rv: Vec<Shred> = rv
+                .expect("packets")
                 .packets
                 .into_iter()
                 .filter_map(|b| Shred::new_from_serialized_shred(b.data.to_vec()).ok())
@@ -2099,13 +2103,19 @@ mod tests {
     /// test run_window_requestwindow requests respond with the right shred, and do not overrun
     #[test]
     fn run_highest_window_request() {
+        let recycler = PacketsRecycler::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
-            let rv =
-                ClusterInfo::run_highest_window_request(&socketaddr_any!(), Some(&blocktree), 0, 0);
-            assert!(rv.is_empty());
+            let rv = ClusterInfo::run_highest_window_request(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blocktree),
+                0,
+                0,
+            );
+            assert!(rv.is_none());
 
             let _ = fill_blocktree_slot_with_ticks(
                 &blocktree,
@@ -2115,9 +2125,15 @@ mod tests {
                 Hash::default(),
             );
 
-            let rv =
-                ClusterInfo::run_highest_window_request(&socketaddr_any!(), Some(&blocktree), 2, 1);
+            let rv = ClusterInfo::run_highest_window_request(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blocktree),
+                2,
+                1,
+            );
             let rv: Vec<Shred> = rv
+                .expect("packets")
                 .packets
                 .into_iter()
                 .filter_map(|b| Shred::new_from_serialized_shred(b.data.to_vec()).ok())
@@ -2128,12 +2144,13 @@ mod tests {
             assert_eq!(rv[0].slot(), 2);
 
             let rv = ClusterInfo::run_highest_window_request(
+                &recycler,
                 &socketaddr_any!(),
                 Some(&blocktree),
                 2,
                 index + 1,
             );
-            assert!(rv.is_empty());
+            assert!(rv.is_none());
         }
 
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
@@ -2142,11 +2159,12 @@ mod tests {
     #[test]
     fn run_orphan() {
         solana_logger::setup();
+        let recycler = PacketsRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
-            let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 2, 0);
-            assert!(rv.is_empty());
+            let rv = ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blocktree), 2, 0);
+            assert!(rv.is_none());
 
             // Create slots 1, 2, 3 with 5 shreds apiece
             let (shreds, _) = make_many_slot_entries(1, 3, 5);
@@ -2156,16 +2174,18 @@ mod tests {
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset
-            let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 4, 5);
-            assert!(rv.is_empty());
+            let rv = ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blocktree), 4, 5);
+            assert!(rv.is_none());
 
             // For slot 3, we should return the highest shreds from slots 3, 2, 1 respectively
             // for this request
-            let rv: Vec<_> = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 3, 5)
-                .packets
-                .iter()
-                .map(|b| b.clone())
-                .collect();
+            let rv: Vec<_> =
+                ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blocktree), 3, 5)
+                    .expect("run_orphan packets")
+                    .packets
+                    .iter()
+                    .map(|b| b.clone())
+                    .collect();
             let expected: Vec<_> = (1..=3)
                 .rev()
                 .map(|slot| {

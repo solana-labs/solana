@@ -353,7 +353,7 @@ impl ReplayStage {
                         "replay_stage-memory",
                         ("start_leader", (allocated.get() - start) as i64, i64),
                         );
-                    datapoint_info!("replay_stage", ("duration", duration_as_ms(&now.elapsed()) as i64, i64));
+                    datapoint_debug!("replay_stage", ("duration", duration_as_ms(&now.elapsed()) as i64, i64));
                     if did_complete_bank {
                         //just processed a bank, skip the signal; maybe there's more slots available
                         continue;
