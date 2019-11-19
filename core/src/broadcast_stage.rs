@@ -73,11 +73,7 @@ impl BroadcastStageType {
                 receiver,
                 exit_sender,
                 blocktree,
-<<<<<<< HEAD
-                BroadcastFakeBlobsRun::new(0),
-=======
-                BroadcastFakeShredsRun::new(0, shred_version),
->>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
+                BroadcastFakeBlobsRun::new(0, shred_version),
             ),
         }
     }

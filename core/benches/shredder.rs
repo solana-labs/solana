@@ -62,13 +62,8 @@ fn bench_deshredder(bencher: &mut Bencher) {
     // ~10Mb
     let num_shreds = ((10000 * 1000) + (shred_size - 1)) / shred_size;
     let num_ticks = max_ticks_per_n_shreds(1) * num_shreds as u64;
-<<<<<<< HEAD
-    let entries = create_ticks(num_ticks, Hash::default());
-    let shredder = Shredder::new(1, 0, RECOMMENDED_FEC_RATE, kp, 0).unwrap();
-=======
     let entries = create_ticks(num_ticks, 0, Hash::default());
     let shredder = Shredder::new(1, 0, RECOMMENDED_FEC_RATE, kp, 0, 0).unwrap();
->>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
     let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
     bencher.iter(|| {
         let raw = &mut Shredder::deshred(&data_shreds).unwrap();

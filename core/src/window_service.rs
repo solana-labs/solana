@@ -54,13 +54,11 @@ pub fn should_retransmit_and_persist(
         } else if !verify_shred_slot(shred, root) {
             inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
             false
-<<<<<<< HEAD
         } else if !shred.verify(&leader_id) {
             inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
-=======
+            false
         } else if shred.version() != shred_version {
             inc_new_counter_debug!("streamer-recv_window-incorrect_shred_version", 1);
->>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
             false
         } else {
             true

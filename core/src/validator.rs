@@ -184,13 +184,9 @@ impl Validator {
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
-<<<<<<< HEAD
         let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
-=======
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         // The version used by shreds, derived from genesis
         let shred_version = Shred::version_from_hash(&genesis_hash);
->>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();

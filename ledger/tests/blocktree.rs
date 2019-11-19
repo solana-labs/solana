@@ -19,13 +19,8 @@ fn test_multiple_threads_insert_shred() {
         // with parent = slot 0
         let threads: Vec<_> = (0..num_threads)
             .map(|i| {
-<<<<<<< HEAD
                 let entries = entry::create_ticks(1, Hash::default());
-                let shreds = blocktree::entries_to_test_shreds(entries, i + 1, 0, false);
-=======
-                let entries = entry::create_ticks(1, 0, Hash::default());
                 let shreds = blocktree::entries_to_test_shreds(entries, i + 1, 0, false, 0);
->>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
                 let blocktree_ = blocktree.clone();
                 Builder::new()
                     .name("blocktree-writer".to_string())

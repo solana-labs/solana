@@ -281,15 +281,12 @@ impl Shred {
         self.common_header.index
     }
 
-<<<<<<< HEAD
-    /// This is not a safe function. It only changes the meta information.
-    /// Use this only for test code which doesn't care about actual shred
-=======
     pub fn version(&self) -> u16 {
         self.common_header.version
     }
 
->>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
+    /// This is not a safe function. It only changes the meta information.
+    /// Use this only for test code which doesn't care about actual shred
     pub fn set_index(&mut self, index: u32) {
         self.common_header.index = index
     }
@@ -377,14 +374,9 @@ impl Shred {
 
 #[derive(Debug)]
 pub struct Shredder {
-<<<<<<< HEAD
     slot: u64,
     parent_slot: u64,
-=======
-    slot: Slot,
-    parent_slot: Slot,
     version: u16,
->>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
     fec_rate: f32,
     keypair: Arc<Keypair>,
     pub signing_coding_time: u128,

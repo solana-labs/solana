@@ -165,13 +165,8 @@ mod tests {
         let mut hasher = Hasher::default();
         hasher.hash(&buf[..size]);
 
-<<<<<<< HEAD
-        //  golden needs to be updated if blob stuff changes....
-        let golden: Hash = "HLzH7Nrh4q2K5WTh3e9vPNFZ1QVYhVDRMN9u5v51GqpJ"
-=======
-        //  golden needs to be updated if shred structure changes....
+        //  golden needs to be updated if blob structure changes....
         let golden: Hash = "9K6NR4cazo7Jzk2CpyXmNaZMGqvfXG83JzyJipkoHare"
->>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
             .parse()
             .unwrap();
 
