@@ -85,6 +85,14 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Stop after submitting count transactions"),
                 )
                 .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .default_value("1")
+                        .help("Number of lamports to transfer for each transaction"),
+                )
+                .arg(
                     Arg::with_name("timeout")
                         .short("t")
                         .long("timeout")
@@ -128,6 +136,7 @@ pub fn parse_catchup(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliErro
 }
 
 pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let lamports = value_t_or_exit!(matches, "lamports", u64);
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let count = if matches.is_present("count") {
         Some(value_t_or_exit!(matches, "count", u64))
@@ -142,6 +151,7 @@ pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Cl
     };
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
+            lamports,
             interval,
             count,
             timeout,
@@ -288,6 +298,7 @@ pub fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
 pub fn process_ping(
     rpc_client: &RpcClient,
     config: &CliConfig,
+    lamports: u64,
     interval: &Duration,
     count: &Option<u64>,
     timeout: &Duration,
@@ -314,7 +325,8 @@ pub fn process_ping(
         let (recent_blockhash, fee_calculator) = rpc_client.get_new_blockhash(&last_blockhash)?;
         last_blockhash = recent_blockhash;
 
-        let transaction = system_transaction::transfer(&config.keypair, &to, 1, recent_blockhash);
+        let transaction =
+            system_transaction::transfer(&config.keypair, &to, lamports, recent_blockhash);
         check_account_for_fee(rpc_client, config, &fee_calculator, &transaction.message)?;
 
         match rpc_client.send_transaction(&transaction) {
@@ -332,8 +344,8 @@ pub fn process_ping(
                                 let elapsed_time_millis = elapsed_time.as_millis() as u64;
                                 confirmation_time.push_back(elapsed_time_millis);
                                 println!(
-                                    "{}1 lamport transferred: seq={:<3} time={:>4}ms signature={}",
-                                    CHECK_MARK, seq, elapsed_time_millis, signature
+                                    "{}{} lamport(s) transferred: seq={:<3} time={:>4}ms signature={}",
+                                    CHECK_MARK, lamports, seq, elapsed_time_millis, signature
                                 );
                                 confirmed_count += 1;
                             }
@@ -631,6 +643,7 @@ mod tests {
             parse_command(&test_ping).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Ping {
+                    lamports: 1,
                     interval: Duration::from_secs(1),
                     count: Some(2),
                     timeout: Duration::from_secs(3),
