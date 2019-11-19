@@ -753,8 +753,8 @@ impl ReplayStage {
             .filter(|(_, stats)| stats.is_recent && !stats.has_voted)
             .collect();
 
-        //highest weight, lowest slot first
-        candidates.sort_by_key(|b| (b.1.weight, 0i64 - b.1.slot as i64));
+        //lowest weight, lowest slot first
+        candidates.sort_by_key(|b| (b.1.weight, b.1.slot));
 
         candidates.iter().for_each(|(_, stats)| {
             let mut parents: Vec<_> = if let Some(set) = ancestors.get(&stats.slot) {
