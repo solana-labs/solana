@@ -18,7 +18,7 @@ use solana_ledger::{
     snapshot_package::SnapshotPackageSender,
 };
 use solana_measure::measure::Measure;
-use solana_metrics::{datapoint_warn, inc_new_counter_info};
+use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::Slot,
@@ -136,7 +136,6 @@ struct ForkProgress {
     num_shreds: usize,
     num_entries: usize,
     tick_hash_count: u64,
-    started_ms: u64,
     is_dead: bool,
     stats: ReplaySlotStats,
     fork_stats: ForkStats,
@@ -149,7 +148,6 @@ impl ForkProgress {
             num_shreds: 0,
             num_entries: 0,
             tick_hash_count: 0,
-            started_ms: timing::timestamp(),
             is_dead: false,
             stats: ReplaySlotStats::new(slot),
             fork_stats: ForkStats::default(),
@@ -703,10 +701,14 @@ impl ReplayStage {
         let stats: Vec<ForkStats> = frozen_banks
             .iter()
             .map(|bank| {
-                let mut stats = progress
-                    .get(&bank.slot())
-                    .map(|s| s.fork_stats.clone())
-                    .unwrap_or_default();
+                // Only time progress map should be missing a bank slot
+                // is if this node was the leader for this slot as those banks
+                // are not replayed in replay_active_banks()
+                let progress_entry = progress
+                    .entry(bank.slot())
+                    .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
+
+                let stats = &mut progress_entry.fork_stats;
                 if !stats.computed {
                     stats.slot = bank.slot();
                     let (stake_lockouts, total_staked) = tower.collect_vote_lockouts(
@@ -714,7 +716,6 @@ impl ReplayStage {
                         bank.vote_accounts().into_iter(),
                         &ancestors,
                     );
-                    Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
                     stats.weight = tower.calculate_weight(&stake_lockouts);
                     stats.stake_lockouts = stake_lockouts;
@@ -734,10 +735,7 @@ impl ReplayStage {
                 stats.is_locked_out = tower.is_locked_out(bank.slot(), &ancestors);
                 stats.has_voted = tower.has_voted(bank.slot());
                 stats.is_recent = tower.is_recent(bank.slot());
-                if let Some(fp) = progress.get_mut(&bank.slot()) {
-                    fp.fork_stats = stats.clone();
-                }
-                stats
+                stats.clone()
             })
             .collect();
         let mut votable: Vec<_> = frozen_banks
@@ -827,38 +825,6 @@ impl ReplayStage {
             inc_new_counter_info!("replay_stage-fork_selection-heavy_bank_lockout", 1);
         }
         (rv, Some((*best_bank).clone()))
-    }
-
-    fn confirm_forks(
-        tower: &Tower,
-        stake_lockouts: &HashMap<u64, StakeLockout>,
-        total_staked: u64,
-        progress: &mut HashMap<u64, ForkProgress>,
-        bank_forks: &Arc<RwLock<BankForks>>,
-    ) {
-        progress.retain(|slot, prog| {
-            let duration = timing::timestamp() - prog.started_ms;
-            if tower.is_slot_confirmed(*slot, stake_lockouts, total_staked)
-                && bank_forks
-                    .read()
-                    .unwrap()
-                    .get(*slot)
-                    .map(|s| s.is_frozen())
-                    .unwrap_or(true)
-            {
-                info!("validator fork confirmed {} {}ms", *slot, duration);
-                datapoint_warn!("validator-confirmation", ("duration_ms", duration, i64));
-                false
-            } else {
-                debug!(
-                    "validator fork not confirmed {} {}ms {:?}",
-                    *slot,
-                    duration,
-                    stake_lockouts.get(slot)
-                );
-                true
-            }
-        });
     }
 
     fn load_blocktree_entries_with_shred_info(
