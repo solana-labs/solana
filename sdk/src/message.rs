@@ -124,6 +124,7 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct MessageHeader {
     /// The number of signatures required for this message to be considered valid. The
     /// signatures must match the first `num_required_signatures` of `account_keys`.
@@ -141,6 +142,7 @@ pub struct MessageHeader {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`
     /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
