@@ -186,6 +186,22 @@ const Version = struct({
   'solana-core': 'string',
 });
 
+/**
+ * A ConfirmedBlock on the ledger
+ *
+ * @typedef {Object} ConfirmedBlock
+ * @property {Blockhash} blockhash Blockhash of this block
+ * @property {Blockhash} previousBlockhash Blockhash of this block's parent
+ * @property {number} parentSlot Slot index of this block's parent
+ * @property {Array<Array<object>>} transactions Vector of transactions paired with statuses
+ */
+type ConfirmedBlock = {
+  blockhash: Blockhash,
+  previousBlockhash: Blockhash,
+  parentSlot: number,
+  transactions: Array<[Transaction, GetSignatureStatusRpcResult]>,
+};
+
 function createRpcRequest(url): RpcRequest {
   const server = jayson(async (request, callback) => {
     const options = {
@@ -412,37 +428,48 @@ const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult('number');
  * Expected JSON RPC response for the "getConfirmedBlock" message
  */
 export const GetConfirmedBlockRpcResult = jsonRpcResult(
-  struct.list([
-    struct.tuple([
-      struct({
-        signatures: struct.list([struct.list(['number'])]),
-        message: struct({
-          account_keys: struct.list([struct.list(['number'])]),
-          header: struct({
-            num_required_signatures: 'number',
-            num_readonly_signed_accounts: 'number',
-            num_readonly_unsigned_accounts: 'number',
-          }),
-          instructions: struct.list([
-            struct.union([
-              struct.list(['number']),
-              struct({
-                accounts: struct.list([
-                  struct.union([struct.list(['number']), 'number']),
-                ]),
-                data: struct.list([
-                  struct.union([struct.list(['number']), 'number']),
-                ]),
-                program_id_index: 'number',
-              }),
+  struct({
+    blockhash: struct.list(['number']),
+    previousBlockhash: struct.list(['number']),
+    parentSlot: 'number',
+    transactions: struct.list([
+      struct.tuple([
+        struct({
+          signatures: struct.list([struct.list(['number'])]),
+          message: struct({
+            accountKeys: struct.list([struct.list(['number'])]),
+            header: struct({
+              numRequiredSignatures: 'number',
+              numReadonlySignedAccounts: 'number',
+              numReadonlyUnsignedAccounts: 'number',
+            }),
+            instructions: struct.list([
+              struct.union([
+                struct.list(['number']),
+                struct({
+                  accounts: struct.list([
+                    struct.union([struct.list(['number']), 'number']),
+                  ]),
+                  data: struct.list([
+                    struct.union([struct.list(['number']), 'number']),
+                  ]),
+                  programIdIndex: 'number',
+                }),
+              ]),
             ]),
-          ]),
-          recent_blockhash: struct.list(['number']),
+            recentBlockhash: struct.list(['number']),
+          }),
         }),
-      }),
-      struct.union([struct({Ok: 'null'}), struct({Err: 'object'})]),
+        struct.union([
+          'null',
+          struct({
+            status: GetSignatureStatusRpcResult,
+            fee: 'number',
+          }),
+        ]),
+      ]),
     ]),
-  ]),
+  }),
 );
 
 /**
@@ -1055,20 +1082,23 @@ export class Connection {
    * Fetch a list of Transactions and transaction statuses from the cluster
    * for a confirmed block
    */
-  async getConfirmedBlock(
-    slot: number,
-  ): Promise<
-    Array<[Transaction, SignatureSuccess] | [Transaction, TransactionError]>,
-  > {
+  async getConfirmedBlock(slot: number): Promise<ConfirmedBlock> {
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', [slot]);
     const result = GetConfirmedBlockRpcResult(unsafeRes);
     if (result.error) {
       throw new Error(result.error.message);
     }
     assert(typeof result.result !== 'undefined');
-    return result.result.map(result => {
-      return [Transaction.fromRpcResult(result[0]), result[1]];
-    });
+    return {
+      blockhash: new PublicKey(result.result.blockhash).toString(),
+      previousBlockhash: new PublicKey(
+        result.result.previousBlockhash,
+      ).toString(),
+      parentSlot: result.result.parentSlot,
+      transactions: result.result.transactions.map(result => {
+        return [Transaction.fromRpcResult(result[0]), result[1]];
+      }),
+    };
   }
 
   /**

@@ -105,7 +105,7 @@ test('transaction from rpc result', () => {
   const rawBlockhash = new PublicKey(0).toBuffer();
   const rpcResult = {
     message: {
-      account_keys: [
+      accountKeys: [
         [5],
         new PublicKey(1).toBuffer(),
         new PublicKey(2).toBuffer(),
@@ -114,19 +114,19 @@ test('transaction from rpc result', () => {
         new PublicKey(5).toBuffer(),
       ],
       header: {
-        num_readonly_signed_accounts: 0,
-        num_readonly_unsigned_accounts: 3,
-        num_required_signatures: 2,
+        num_ReadonlySignedAccounts: 0,
+        numReadonlyUnsignedAccounts: 3,
+        numRequiredSignatures: 2,
       },
       instructions: [
         [1],
         {
           accounts: [[3], 1, 2, 3],
           data: [[1], 0],
-          program_id_index: 4,
+          programIdIndex: 4,
         },
       ],
-      recent_blockhash: rawBlockhash,
+      recentBlockhash: rawBlockhash,
     },
     signatures: [[2], Array(64).fill(1), Array(64).fill(2)],
   };

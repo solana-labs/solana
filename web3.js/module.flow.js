@@ -71,6 +71,13 @@ declare module '@solana/web3.js' {
     rpc: string | null,
   };
 
+  declare export type ConfirmedBlock = {
+    blockhash: Blockhash,
+    previousBlockhash: Blockhash,
+    parentSlot: number,
+    transactions: Array<[Transaction, SignatureSuccess | TransactionError | null]>,
+  };
+
   declare export type KeyedAccountInfo = {
     accountId: PublicKey,
     accountInfo: AccountInfo,
@@ -136,6 +143,7 @@ declare module '@solana/web3.js' {
     ): Promise<RpcResponseAndContext<number>>;
     getBalance(publicKey: PublicKey, commitment: ?Commitment): Promise<number>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
+    getConfirmedBlock(): Promise<ConfirmedBlock>;
     getVoteAccounts(commitment: ?Commitment): Promise<VoteAccountStatus>;
     confirmTransactionAndContext(
       signature: TransactionSignature,
