@@ -6,13 +6,15 @@ use solana_sdk::hash::Hash;
 pub(super) struct BroadcastFakeBlobsRun {
     last_blockhash: Hash,
     partition: usize,
+    shred_version: u16,
 }
 
 impl BroadcastFakeBlobsRun {
-    pub(super) fn new(partition: usize) -> Self {
+    pub(super) fn new(partition: usize, shred_version: u16) -> Self {
         Self {
             last_blockhash: Hash::default(),
             partition,
+            shred_version,
         }
     }
 }
@@ -45,6 +47,7 @@ impl BroadcastRun for BroadcastFakeBlobsRun {
             RECOMMENDED_FEC_RATE,
             keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
+            self.shred_version,
         )
         .expect("Expected to create a new shredder");
 

@@ -81,6 +81,7 @@ impl Tvu {
         completed_slots_receiver: CompletedSlotsReceiver,
         fork_confidence_cache: Arc<RwLock<ForkConfidenceCache>>,
         cfg: Option<PartitionCfg>,
+        shred_version: u16,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -127,6 +128,7 @@ impl Tvu {
             completed_slots_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
+            shred_version,
         );
 
         let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
@@ -290,6 +292,7 @@ pub mod tests {
             completed_slots_receiver,
             fork_confidence_cache,
             None,
+            0,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

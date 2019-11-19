@@ -149,6 +149,7 @@ mod tests {
                 true,
                 &Arc::new(keypair),
                 entries,
+                0,
             )
             .unwrap();
 
@@ -164,8 +165,8 @@ mod tests {
         let mut hasher = Hasher::default();
         hasher.hash(&buf[..size]);
 
-        //  golden needs to be updated if blob stuff changes....
-        let golden: Hash = "HLzH7Nrh4q2K5WTh3e9vPNFZ1QVYhVDRMN9u5v51GqpJ"
+        //  golden needs to be updated if blob structure changes....
+        let golden: Hash = "9K6NR4cazo7Jzk2CpyXmNaZMGqvfXG83JzyJipkoHare"
             .parse()
             .unwrap();
 

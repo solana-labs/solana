@@ -2,11 +2,13 @@ use super::*;
 use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 
-pub(super) struct FailEntryVerificationBroadcastRun {}
+pub(super) struct FailEntryVerificationBroadcastRun {
+    shred_version: u16,
+}
 
 impl FailEntryVerificationBroadcastRun {
-    pub(super) fn new() -> Self {
-        Self {}
+    pub(super) fn new(shred_version: u16) -> Self {
+        Self { shred_version }
     }
 }
 
@@ -43,6 +45,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             RECOMMENDED_FEC_RATE,
             keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
+            self.shred_version,
         )
         .expect("Expected to create a new shredder");
 

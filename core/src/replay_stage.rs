@@ -1087,7 +1087,7 @@ mod test {
                     ), // should cause AccountNotFound error
                 ],
             );
-            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
+            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
         });
 
         assert_matches!(
@@ -1112,7 +1112,7 @@ mod test {
                     *blockhash,
                 )],
             );
-            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false)
+            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
         });
 
         assert_matches!(res, Err(Error::BlobError(BlobError::VerificationFailed)));
