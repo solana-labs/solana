@@ -27,6 +27,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{
     datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
+use solana_sdk::hash::hash;
 use solana_sdk::{
     account::Account,
     clock::{get_segment_from_slot, Epoch, Slot, MAX_RECENT_BLOCKHASHES},
@@ -1370,7 +1371,7 @@ impl Bank {
                 &signature_count_buf,
             ])
         } else {
-            self.parent_hash
+            hash(self.parent_hash.as_ref())
         }
     }
 
@@ -3400,5 +3401,17 @@ mod tests {
             Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
         let last_ts = bank1.last_vote_sync.load(Ordering::Relaxed);
         assert_eq!(last_ts, 1);
+    }
+
+    #[test]
+    fn test_hash_internal_state_unchanged() {
+        let (genesis_config, _) = create_genesis_config(500);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        bank0.freeze();
+        let bank0_hash = bank0.hash_internal_state();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank1.freeze();
+        let bank1_hash = bank1.hash_internal_state();
+        assert_ne!(bank0_hash, bank1_hash);
     }
 }
