@@ -891,50 +891,58 @@ info)
   fi
 
   nodeType=bootstrap-leader
-  for i in $(seq 0 $(( ${#validatorIpList[@]} - 1)) ); do
-    ipAddress=${validatorIpList[$i]}
-    ipAddressPrivate=${validatorIpListPrivate[$i]}
-    zone=${validatorIpListZone[$i]}
-    if $evalInfo; then
-      echo "NET_VALIDATOR${i}_IP=$ipAddress"
-    else
-      printNode $nodeType "$ipAddress" "$ipAddressPrivate" "$zone"
-    fi
-    nodeType=validator
-  done
+  if [[ ${#validatorIpList[@]} -gt 0 ]]; then
+    for i in $(seq 0 $(( ${#validatorIpList[@]} - 1)) ); do
+      ipAddress=${validatorIpList[$i]}
+      ipAddressPrivate=${validatorIpListPrivate[$i]}
+      zone=${validatorIpListZone[$i]}
+      if $evalInfo; then
+        echo "NET_VALIDATOR${i}_IP=$ipAddress"
+      else
+        printNode $nodeType "$ipAddress" "$ipAddressPrivate" "$zone"
+      fi
+      nodeType=validator
+    done
+  fi
 
-  for i in $(seq 0 $(( ${#clientIpList[@]} - 1)) ); do
-    ipAddress=${clientIpList[$i]}
-    ipAddressPrivate=${clientIpListPrivate[$i]}
-    zone=${clientIpListZone[$i]}
-    if $evalInfo; then
-      echo "NET_CLIENT${i}_IP=$ipAddress"
-    else
-      printNode client "$ipAddress" "$ipAddressPrivate" "$zone"
-    fi
-  done
+  if [[ ${#clientIpList[@]} -gt 0 ]]; then
+    for i in $(seq 0 $(( ${#clientIpList[@]} - 1)) ); do
+      ipAddress=${clientIpList[$i]}
+      ipAddressPrivate=${clientIpListPrivate[$i]}
+      zone=${clientIpListZone[$i]}
+      if $evalInfo; then
+        echo "NET_CLIENT${i}_IP=$ipAddress"
+      else
+        printNode client "$ipAddress" "$ipAddressPrivate" "$zone"
+      fi
+    done
+  fi
 
-  for i in $(seq 0 $(( ${#blockstreamerIpList[@]} - 1)) ); do
-    ipAddress=${blockstreamerIpList[$i]}
-    ipAddressPrivate=${blockstreamerIpListPrivate[$i]}
-    zone=${blockstreamerIpListZone[$i]}
-    if $evalInfo; then
-      echo "NET_BLOCKSTREAMER${i}_IP=$ipAddress"
-    else
-      printNode blockstreamer "$ipAddress" "$ipAddressPrivate" "$zone"
-    fi
-  done
+  if [[ ${#blockstreamerIpList[@]} -gt 0 ]]; then
+    for i in $(seq 0 $(( ${#blockstreamerIpList[@]} - 1)) ); do
+      ipAddress=${blockstreamerIpList[$i]}
+      ipAddressPrivate=${blockstreamerIpListPrivate[$i]}
+      zone=${blockstreamerIpListZone[$i]}
+      if $evalInfo; then
+        echo "NET_BLOCKSTREAMER${i}_IP=$ipAddress"
+      else
+        printNode blockstreamer "$ipAddress" "$ipAddressPrivate" "$zone"
+      fi
+    done
+  fi
 
-  for i in $(seq 0 $(( ${#archiverIpList[@]} - 1)) ); do
-    ipAddress=${archiverIpList[$i]}
-    ipAddressPrivate=${archiverIpListPrivate[$i]}
-    zone=${archiverIpListZone[$i]}
-    if $evalInfo; then
-      echo "NET_ARCHIVER${i}_IP=$ipAddress"
-    else
-      printNode archiver "$ipAddress" "$ipAddressPrivate" "$zone"
-    fi
-  done
+  if [[ ${#archiverIpList[@]} -gt 0 ]]; then
+    for i in $(seq 0 $(( ${#archiverIpList[@]} - 1)) ); do
+      ipAddress=${archiverIpList[$i]}
+      ipAddressPrivate=${archiverIpListPrivate[$i]}
+      zone=${archiverIpListZone[$i]}
+      if $evalInfo; then
+        echo "NET_ARCHIVER${i}_IP=$ipAddress"
+      else
+        printNode archiver "$ipAddress" "$ipAddressPrivate" "$zone"
+      fi
+    done
+  fi
   ;;
 status)
   cloud_StatusAll
