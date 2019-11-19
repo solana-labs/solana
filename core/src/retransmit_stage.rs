@@ -214,6 +214,7 @@ impl RetransmitStage {
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
         cfg: Option<PartitionCfg>,
+        shred_version: u16,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -252,6 +253,7 @@ impl RetransmitStage {
                     &leader_schedule_cache,
                     id,
                     last_root,
+                    shred_version,
                 );
                 rv && is_connected
             },

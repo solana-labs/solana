@@ -43,6 +43,7 @@ impl BroadcastStageType {
         receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
+        shred_version: u16,
     ) -> BroadcastStage {
         match self {
             BroadcastStageType::Standard => {
@@ -53,7 +54,7 @@ impl BroadcastStageType {
                     receiver,
                     exit_sender,
                     blocktree,
-                    StandardBroadcastRun::new(keypair),
+                    StandardBroadcastRun::new(keypair, shred_version),
                 )
             }
 
@@ -63,7 +64,7 @@ impl BroadcastStageType {
                 receiver,
                 exit_sender,
                 blocktree,
-                FailEntryVerificationBroadcastRun::new(),
+                FailEntryVerificationBroadcastRun::new(shred_version),
             ),
 
             BroadcastStageType::BroadcastFakeBlobs => BroadcastStage::new(
@@ -72,7 +73,11 @@ impl BroadcastStageType {
                 receiver,
                 exit_sender,
                 blocktree,
+<<<<<<< HEAD
                 BroadcastFakeBlobsRun::new(0),
+=======
+                BroadcastFakeShredsRun::new(0, shred_version),
+>>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
             ),
         }
     }
@@ -246,7 +251,7 @@ mod test {
             entry_receiver,
             &exit_sender,
             &blocktree,
-            StandardBroadcastRun::new(leader_keypair),
+            StandardBroadcastRun::new(leader_keypair, 0),
         );
 
         MockBroadcastStage {

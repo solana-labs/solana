@@ -158,6 +158,7 @@ mod test {
                 true,
                 &Arc::new(Keypair::new()),
                 entries,
+                0,
             )
             .unwrap();
 

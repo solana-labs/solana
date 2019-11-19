@@ -494,6 +494,7 @@ pub fn fill_blocktree_slot_with_ticks(
             true,
             &Arc::new(Keypair::new()),
             entries,
+            0,
         )
         .unwrap();
 
@@ -522,6 +523,146 @@ pub mod tests {
     use std::sync::RwLock;
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn test_process_blocktree_with_missing_hashes() {
+        solana_logger::setup();
+
+        let hashes_per_tick = 2;
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(10_000);
+        genesis_config.poh_config.hashes_per_tick = Some(hashes_per_tick);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
+
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let blocktree =
+            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+
+        let parent_slot = 0;
+        let slot = 1;
+        let entries = create_ticks(ticks_per_slot, hashes_per_tick - 1, blockhash);
+        blocktree
+            .write_entries(
+                slot,
+                0,
+                0,
+                ticks_per_slot,
+                Some(parent_slot),
+                true,
+                &Arc::new(Keypair::new()),
+                entries,
+                0,
+            )
+            .expect("Expected to write shredded entries to blocktree");
+
+        let opts = ProcessOptions {
+            poh_verify: true,
+            ..ProcessOptions::default()
+        };
+        assert_eq!(
+            process_blocktree(&genesis_config, &blocktree, None, opts).err(),
+            Some(BlocktreeProcessorError::InvalidBlock(
+                BlockError::InvalidTickHashCount
+            )),
+        );
+    }
+
+    #[test]
+    fn test_process_blocktree_with_invalid_slot_tick_count() {
+        solana_logger::setup();
+
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
+
+        // Create a new ledger with slot 0 full of ticks
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+
+        // Write slot 1 with one tick missing
+        let parent_slot = 0;
+        let slot = 1;
+        let entries = create_ticks(ticks_per_slot - 1, 0, blockhash);
+        blocktree
+            .write_entries(
+                slot,
+                0,
+                0,
+                ticks_per_slot,
+                Some(parent_slot),
+                true,
+                &Arc::new(Keypair::new()),
+                entries,
+                0,
+            )
+            .expect("Expected to write shredded entries to blocktree");
+
+        let opts = ProcessOptions {
+            poh_verify: true,
+            ..ProcessOptions::default()
+        };
+        assert_eq!(
+            process_blocktree(&genesis_config, &blocktree, None, opts).err(),
+            Some(BlocktreeProcessorError::InvalidBlock(
+                BlockError::InvalidTickCount
+            )),
+        );
+    }
+
+    #[test]
+    fn test_process_blocktree_with_slot_with_trailing_entry() {
+        solana_logger::setup();
+
+        let GenesisConfigInfo {
+            mint_keypair,
+            genesis_config,
+            ..
+        } = create_genesis_config(10_000);
+        let ticks_per_slot = genesis_config.ticks_per_slot;
+
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+
+        let mut entries = create_ticks(ticks_per_slot, 0, blockhash);
+        let trailing_entry = {
+            let keypair = Keypair::new();
+            let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 1, blockhash);
+            next_entry(&blockhash, 1, vec![tx])
+        };
+        entries.push(trailing_entry);
+
+        // Tricks blocktree into writing the trailing entry by lying that there is one more tick
+        // per slot.
+        let parent_slot = 0;
+        let slot = 1;
+        blocktree
+            .write_entries(
+                slot,
+                0,
+                0,
+                ticks_per_slot + 1,
+                Some(parent_slot),
+                true,
+                &Arc::new(Keypair::new()),
+                entries,
+                0,
+            )
+            .expect("Expected to write shredded entries to blocktree");
+
+        let opts = ProcessOptions {
+            poh_verify: true,
+            ..ProcessOptions::default()
+        };
+        assert_eq!(
+            process_blocktree(&genesis_config, &blocktree, None, opts).err(),
+            Some(BlocktreeProcessorError::InvalidBlock(
+                BlockError::TrailingEntry
+            )),
+        );
+    }
+
+    #[test]
+>>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
     fn test_process_blocktree_with_incomplete_slot() {
         solana_logger::setup();
 
@@ -568,6 +709,7 @@ pub mod tests {
                     false,
                     &Arc::new(Keypair::new()),
                     entries,
+                    0,
                 )
                 .expect("Expected to write shredded entries to blocktree");
         }
@@ -927,6 +1069,7 @@ pub mod tests {
                 true,
                 &Arc::new(Keypair::new()),
                 entries,
+                0,
             )
             .unwrap();
         let opts = ProcessOptions {
@@ -1033,6 +1176,7 @@ pub mod tests {
                 true,
                 &Arc::new(Keypair::new()),
                 entries,
+                0,
             )
             .unwrap();
 

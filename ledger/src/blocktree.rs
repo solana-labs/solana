@@ -894,6 +894,8 @@ impl Blocktree {
         self.code_shred_cf.get_bytes((slot, index))
     }
 
+    // Only used by tests
+    #[allow(clippy::too_many_arguments)]
     pub fn write_entries(
         &self,
         start_slot: u64,
@@ -904,11 +906,13 @@ impl Blocktree {
         is_full_slot: bool,
         keypair: &Arc<Keypair>,
         entries: Vec<Entry>,
+        version: u16,
     ) -> Result<usize> {
         assert!(num_ticks_in_start_slot < ticks_per_slot);
         let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
 
         let mut current_slot = start_slot;
+<<<<<<< HEAD
         let mut parent_slot = parent.map_or(
             if current_slot == 0 {
                 current_slot
@@ -919,6 +923,11 @@ impl Blocktree {
         );
         let mut shredder = Shredder::new(current_slot, parent_slot, 0.0, keypair.clone(), 0)
             .expect("Failed to create entry shredder");
+=======
+        let mut shredder =
+            Shredder::new(current_slot, parent_slot, 0.0, keypair.clone(), 0, version)
+                .expect("Failed to create entry shredder");
+>>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
         let mut all_shreds = vec![];
         let mut slot_entries = vec![];
         // Find all the entries for start_slot
@@ -946,6 +955,7 @@ impl Blocktree {
                     0.0,
                     keypair.clone(),
                     (ticks_per_slot - remaining_ticks_in_slot) as u8,
+                    version,
                 )
                 .expect("Failed to create entry shredder");
             }
@@ -1740,8 +1750,9 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_block: &GenesisBlock) -> Re
 
     let entries = create_ticks(ticks_per_slot, genesis_block.hash());
     let last_hash = entries.last().unwrap().hash;
+    let version = Shred::version_from_hash(&last_hash);
 
-    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0)
+    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0, version)
         .expect("Failed to create entry shredder");
     let shreds = shredder.entries_to_shreds(&entries, true, 0).0;
     assert!(shreds.last().unwrap().last_in_slot());
@@ -1825,8 +1836,9 @@ pub fn entries_to_test_shreds(
     slot: u64,
     parent_slot: u64,
     is_full_slot: bool,
+    version: u16,
 ) -> Vec<Shred> {
-    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()), 0)
+    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()), 0, version)
         .expect("Failed to create entry shredder");
 
     shredder.entries_to_shreds(&entries, is_full_slot, 0).0
@@ -1837,8 +1849,13 @@ pub fn make_slot_entries(
     parent_slot: u64,
     num_entries: u64,
 ) -> (Vec<Shred>, Vec<Entry>) {
+<<<<<<< HEAD
     let entries = create_ticks(num_entries, Hash::default());
     let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true);
+=======
+    let entries = create_ticks(num_entries, 0, Hash::default());
+    let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true, 0);
+>>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
     (shreds, entries)
 }
 
@@ -1927,12 +1944,48 @@ pub mod tests {
     use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::shred::{max_ticks_per_n_shreds, DataShredHeader};
     use itertools::Itertools;
+<<<<<<< HEAD
     use rand::seq::SliceRandom;
     use rand::thread_rng;
     use solana_sdk::hash::Hash;
     use solana_sdk::packet::PACKET_DATA_SIZE;
     use std::iter::FromIterator;
     use std::time::Duration;
+=======
+    use rand::{seq::SliceRandom, thread_rng};
+    use solana_sdk::{
+        hash::{self, Hash},
+        instruction::CompiledInstruction,
+        packet::PACKET_DATA_SIZE,
+        pubkey::Pubkey,
+        signature::Signature,
+        transaction::TransactionError,
+    };
+    use std::{iter::FromIterator, time::Duration};
+
+    // used for tests only
+    fn make_slot_entries_with_transactions(
+        slot: Slot,
+        parent_slot: Slot,
+        num_entries: u64,
+    ) -> (Vec<Shred>, Vec<Entry>) {
+        let mut entries: Vec<Entry> = Vec::new();
+        for _ in 0..num_entries {
+            let transaction = Transaction::new_with_compiled_instructions(
+                &[&Keypair::new()],
+                &[Pubkey::new_rand()],
+                Hash::default(),
+                vec![Pubkey::new_rand()],
+                vec![CompiledInstruction::new(1, &(), vec![0])],
+            );
+            entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
+            let mut tick = create_ticks(1, 0, Hash::default());
+            entries.append(&mut tick);
+        }
+        let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true, 0);
+        (shreds, entries)
+    }
+>>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
 
     #[test]
     fn test_create_new_ledger() {
@@ -2006,6 +2059,7 @@ pub mod tests {
                         true,
                         &Arc::new(Keypair::new()),
                         new_ticks.clone(),
+                        0,
                     )
                     .unwrap() as u64;
                 shreds_per_slot.push(num_shreds);
@@ -2325,13 +2379,18 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path("test_get_slot_entries1");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
+<<<<<<< HEAD
             let entries = create_ticks(8, Hash::default());
             let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false);
+=======
+            let entries = create_ticks(8, 0, Hash::default());
+            let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false, 0);
+>>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
             blocktree
                 .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
 
-            let mut shreds1 = entries_to_test_shreds(entries[4..].to_vec(), 1, 0, false);
+            let mut shreds1 = entries_to_test_shreds(entries[4..].to_vec(), 1, 0, false, 0);
             for (i, b) in shreds1.iter_mut().enumerate() {
                 b.set_index(8 + i as u32);
             }
@@ -2363,7 +2422,7 @@ pub mod tests {
                 let entries = create_ticks(slot + 1, Hash::default());
                 let last_entry = entries.last().unwrap().clone();
                 let mut shreds =
-                    entries_to_test_shreds(entries, slot, slot.saturating_sub(1), false);
+                    entries_to_test_shreds(entries, slot, slot.saturating_sub(1), false, 0);
                 for b in shreds.iter_mut() {
                     b.set_index(index);
                     b.set_slot(slot as u64);
@@ -2400,7 +2459,7 @@ pub mod tests {
             for slot in 0..num_slots {
                 let entries = create_ticks(entries_per_slot, Hash::default());
                 let shreds =
-                    entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false);
+                    entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false, 0);
                 assert!(shreds.len() as u64 >= shreds_per_slot);
                 blocktree
                     .insert_shreds(shreds, None, false)
@@ -2495,7 +2554,7 @@ pub mod tests {
 
             assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), vec![]);
 
-            let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true);
+            let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true, 0);
             let num_shreds = duplicate_shreds.len() as u64;
             blocktree
                 .insert_shreds(duplicate_shreds, None, false)
@@ -3201,8 +3260,13 @@ pub mod tests {
         assert!(gap > 3);
         // Create enough entries to ensure there are at least two shreds created
         let num_entries = max_ticks_per_n_shreds(1) + 1;
+<<<<<<< HEAD
         let entries = create_ticks(num_entries, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
+=======
+        let entries = create_ticks(num_entries, 0, Hash::default());
+        let mut shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
+>>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
         let num_shreds = shreds.len();
         assert!(num_shreds > 1);
         for (i, s) in shreds.iter_mut().enumerate() {
@@ -3289,7 +3353,9 @@ pub mod tests {
         // Write entries
         let gap: u64 = 10;
         let shreds: Vec<_> = (0..64)
-            .map(|i| Shred::new_from_data(slot, (i * gap) as u32, 0, None, false, false, i as u8))
+            .map(|i| {
+                Shred::new_from_data(slot, (i * gap) as u32, 0, None, false, false, i as u8, 0)
+            })
             .collect();
         blocktree.insert_shreds(shreds, None, false).unwrap();
 
@@ -3322,8 +3388,13 @@ pub mod tests {
         assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 4, 3, 1), empty);
         assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 1, 2, 0), empty);
 
+<<<<<<< HEAD
         let entries = create_ticks(100, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true);
+=======
+        let entries = create_ticks(100, 0, Hash::default());
+        let mut shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
+>>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
         assert!(shreds.len() > 2);
         shreds.drain(2..);
 
@@ -3364,8 +3435,13 @@ pub mod tests {
 
         // Write entries
         let num_entries = 10;
+<<<<<<< HEAD
         let entries = create_ticks(num_entries, Hash::default());
         let shreds = entries_to_test_shreds(entries, slot, 0, true);
+=======
+        let entries = create_ticks(num_entries, 0, Hash::default());
+        let shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
+>>>>>>> 6bfe0fca1... Add a version field to shreds (#7023)
         let num_shreds = shreds.len();
 
         blocktree.insert_shreds(shreds, None, false).unwrap();
@@ -3479,7 +3555,7 @@ pub mod tests {
             let last_root = RwLock::new(0);
 
             let slot = 1;
-            let (mut shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 10);
+            let (mut shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 10, 0);
             let coding_shred = Shred::new_empty_from_header(
                 shred.clone(),
                 DataShredHeader::default(),
@@ -3883,7 +3959,7 @@ pub mod tests {
             let num_ticks = 8;
             let entries = create_ticks(num_ticks, Hash::default());
             let slot = 1;
-            let shreds = entries_to_test_shreds(entries, slot, 0, false);
+            let shreds = entries_to_test_shreds(entries, slot, 0, false, 0);
             let next_shred_index = shreds.len();
             blocktree
                 .insert_shreds(shreds, None, false)
@@ -3901,6 +3977,7 @@ pub mod tests {
                 Some(&[1, 1, 1]),
                 true,
                 true,
+                0,
                 0,
             )];
 
