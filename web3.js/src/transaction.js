@@ -504,19 +504,19 @@ export class Transaction {
    */
   static fromRpcResult(rpcResult: any): Transaction {
     const signatures = rpcResult.signatures.slice(1);
-    const accounts = rpcResult.message.account_keys.slice(1);
+    const accounts = rpcResult.message.accountKeys.slice(1);
     const instructions = rpcResult.message.instructions.slice(1).map(ix => {
       ix.accounts.shift();
       ix.data.shift();
       return ix;
     });
-    const recentBlockhash = rpcResult.message.recent_blockhash;
+    const recentBlockhash = rpcResult.message.recentBlockhash;
     const numRequiredSignatures =
-      rpcResult.message.header.num_required_signatures;
+      rpcResult.message.header.numRequiredSignatures;
     const numReadonlySignedAccounts =
-      rpcResult.message.header.num_readonly_signed_accounts;
+      rpcResult.message.header.numReadonlySignedAccounts;
     const numReadonlyUnsignedAccounts =
-      rpcResult.message.header.num_readonly_unsigned_accounts;
+      rpcResult.message.header.numReadonlyUnsignedAccounts;
     return Transaction._populate(
       signatures,
       accounts,

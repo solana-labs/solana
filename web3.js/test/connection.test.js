@@ -426,12 +426,26 @@ test('get confirmed block', async () => {
   }
   const connection = new Connection(url);
 
-  // These test cases need to be updated when upstream solana RPC api is fleshed out
-  const zeroTransactions = await connection.getConfirmedBlock(0);
-  expect(zeroTransactions.length).toBe(0);
+  // Block 0 never has any transactions in automation localnet
+  const block0 = await connection.getConfirmedBlock(0);
+  const blockhash0 = block0.blockhash;
+  expect(block0.transactions.length).toBe(0);
+  expect(blockhash0).not.toBeNull();
+  expect(block0.previousBlockhash).not.toBeNull();
+  expect(block0.parentSlot).toBe(0);
 
-  const oneTransaction = await connection.getConfirmedBlock(1);
-  expect(oneTransaction.length).toBe(1);
+  // Find a block that has a transaction, usually Block 1
+  let x = 1;
+  while (x < 10) {
+    const block1 = await connection.getConfirmedBlock(x);
+    if (block1.transactions.length >= 1) {
+      expect(block1.previousBlockhash).toBe(blockhash0);
+      expect(block1.blockhash).not.toBeNull();
+      expect(block1.parentSlot).toBe(0);
+      break;
+    }
+    x++;
+  }
 });
 
 test('get recent blockhash', async () => {
