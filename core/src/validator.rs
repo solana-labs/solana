@@ -186,7 +186,7 @@ impl Validator {
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let fork_confidence_cache = Arc::new(RwLock::new(ForkConfidenceCache::default()));
         // The version used by shreds, derived from genesis
-        let shred_version = Shred::version_from_hash(&genesis_hash);
+        let shred_version = Shred::version_from_hash(&genesis_blockhash);
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
