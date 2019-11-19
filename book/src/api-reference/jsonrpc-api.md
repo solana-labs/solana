@@ -19,6 +19,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getBalance](jsonrpc-api.md#getbalance)
 * [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
+* [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
 * [getGenesisHash](jsonrpc-api.md#getgenesishash)
@@ -233,6 +234,39 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 // Result
 {"jsonrpc":"2.0","result":[{"gossip":"10.239.6.48:8001","pubkey":"9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ","rpc":"10.239.6.48:8899","tpu":"10.239.6.48:8856"}],"id":1}
+```
+
+### getConfirmedBlock
+
+Returns identity and transaction information about a confirmed block in the ledger
+
+#### Parameters:
+
+* `integer` - slot, as u64 integer
+
+#### Results:
+
+The result field will be an object with the following fields:
+
+* `blockhash` - the blockhash of this block
+* `previousBlockhash` - the blockhash of this block's parent
+* `parentSlot` - the slot index of this block's parent
+* `transactions` - an array of tuples containing:
+  * [Transaction](transaction-api.md) object, in JSON format
+  * Transaction status object, containing:
+     * `status` - Transaction status:
+       * `"Ok": null` - Transaction was successful
+       * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+     * `fee` - fee this transaction was charged, as u64 integer
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430]}' localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"blockhash":[165,245,120,183,32,205,89,222,249,114,229,49,250,231,149,122,156,232,181,83,238,194,157,153,7,213,180,54,177,6,25,101],"parentSlot":429,"previousBlockhash":[21,108,181,90,139,241,212,203,45,78,232,29,161,31,159,188,110,82,81,11,250,74,47,140,188,28,23,96,251,164,208,166],"transactions":[[{"message":{"accountKeys":[[5],[219,181,202,40,52,148,34,136,186,59,137,160,250,225,234,17,244,160,88,116,24,176,30,227,68,11,199,38,141,68,131,228],[233,48,179,56,91,40,254,206,53,48,196,176,119,248,158,109,121,77,11,69,108,160,128,27,228,122,146,249,53,184,68,87],[6,167,213,23,25,47,10,175,198,242,101,227,251,119,204,122,218,130,197,41,208,190,59,19,110,45,0,85,32,0,0,0],[6,167,213,23,24,199,116,201,40,86,99,152,105,29,94,182,139,94,184,163,155,75,109,92,115,85,91,33,0,0,0,0],[7,97,72,29,53,116,116,187,124,77,118,36,235,211,189,179,216,53,94,115,209,16,67,252,13,163,83,128,0,0,0,0]],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":2},"instructions":[[1],{"accounts":[[3],1,2,3],"data":[[52],2,0,0,0,1,0,0,0,0,0,0,0,173,1,0,0,0,0,0,0,86,55,9,248,142,238,135,114,103,83,247,124,67,68,163,233,55,41,59,129,64,50,110,221,234,234,27,213,205,193,219,50],"program_id_index":4}],"recentBlockhash":[21,108,181,90,139,241,212,203,45,78,232,29,161,31,159,188,110,82,81,11,250,74,47,140,188,28,23,96,251,164,208,166]},"signatures":[[2],[119,9,95,108,35,95,7,1,69,101,65,45,5,204,61,114,172,88,123,238,32,201,135,229,57,50,13,21,106,216,129,183,238,43,37,101,148,81,56,232,88,136,80,65,46,189,39,106,94,13,238,54,186,48,118,186,0,62,121,122,172,171,66,5],[78,40,77,250,10,93,6,157,48,173,100,40,251,9,7,218,7,184,43,169,76,240,254,34,235,48,41,175,119,126,75,107,106,248,45,161,119,48,174,213,57,69,111,225,245,60,148,73,124,82,53,6,203,126,120,180,111,169,89,64,29,23,237,13]]},{"fee":100000,"status":{"Ok":null}}]]},"id":1}
 ```
 
 ### getEpochInfo
