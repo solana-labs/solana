@@ -854,7 +854,7 @@ impl ReplayStage {
                         .unwrap_or(true)
                 {
                     info!("validator fork confirmed {} {}ms", *slot, duration);
-                    datapoint_warn!("validatorconfirmation", ("duration_ms", duration, i64));
+                    datapoint_warn!("validator-confirmation", ("duration_ms", duration, i64));
                     prog.fork_stats.confirmation_reported = true;
                 } else {
                     debug!(
