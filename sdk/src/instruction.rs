@@ -165,6 +165,7 @@ impl WithSigner for Vec<AccountMeta> {
 
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct CompiledInstruction {
     /// Index into the transaction keys array indicating the program account that executes this instruction
     pub program_id_index: u8,
