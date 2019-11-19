@@ -917,19 +917,21 @@ impl ClusterInfo {
         let mut messages = vec![];
         let mut payload = vec![];
         let base_size = serialized_size(&payload).expect("Couldn't check size");
-        let mut size = base_size;
+        let max_payload_size = MAX_PROTOCOL_PAYLOAD_SIZE - base_size;
+        let mut payload_size = 0;
         for msg in msgs {
             let msg_size = msg.size();
             // If the message is too big to fit in this batch
-            if size + msg_size > MAX_PROTOCOL_PAYLOAD_SIZE as u64 {
+            if payload_size + msg_size > max_payload_size as u64 {
                 // See if it can fit in the next batch
-                if base_size + msg_size <= MAX_PROTOCOL_PAYLOAD_SIZE as u64 {
+                if msg_size <= max_payload_size as u64 {
                     if !payload.is_empty() {
-                        // flush the  current payload
+                        // Flush the  current payload
                         messages.push(payload);
+                        // Init the next payload
+                        payload = vec![msg];
+                        payload_size = msg_size;
                     }
-                    size = base_size + msg_size;
-                    payload = vec![msg];
                 } else {
                     debug!(
                         "dropping message larger than the maximum payload size {:?}",
@@ -938,7 +940,7 @@ impl ClusterInfo {
                 }
                 continue;
             }
-            size += msg_size;
+            payload_size += msg_size;
             payload.push(msg);
         }
         if !payload.is_empty() {
