@@ -32,12 +32,12 @@ pub enum AccountFileFormat {
 }
 
 fn required_pubkey(matches: &ArgMatches<'_>, name: &str) -> Result<Pubkey, Box<dyn error::Error>> {
-    pubkey_of(matches, name).map(Ok).unwrap_or_else(|| {
-        Err(format!(
+    pubkey_of(matches, name).ok_or_else(|| {
+        format!(
             "Invalid pubkey or file: {}",
-            matches.value_of(name).unwrap_or("<no arg>")
+            matches.value_of(name).unwrap()
         )
-        .into())
+        .into()
     })
 }
 
