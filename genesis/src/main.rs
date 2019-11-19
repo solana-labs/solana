@@ -173,7 +173,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("bootstrap-storage-pubkey")
                 .value_name("BOOTSTRAP STORAGE PUBKEY")
                 .takes_value(true)
-                .required(true)
                 .help("Path to file containing the bootstrap leader's storage pubkey"),
         )
         .arg(
@@ -309,7 +308,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_pubkey_file = matches.value_of("bootstrap_leader_pubkey_file").unwrap();
     let bootstrap_vote_pubkey_file = matches.value_of("bootstrap_vote_pubkey_file").unwrap();
     let bootstrap_stake_pubkey_file = matches.value_of("bootstrap_stake_pubkey_file").unwrap();
-    let bootstrap_storage_pubkey_file = matches.value_of("bootstrap_storage_pubkey_file").unwrap();
+    let bootstrap_storage_pubkey_file = matches.value_of("bootstrap_storage_pubkey_file");
     let faucet_pubkey_file = matches.value_of("faucet_pubkey_file");
     let faucet_lamports = value_t!(matches, "faucet_lamports", u64);
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
@@ -320,7 +319,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_pubkey = pubkey_from_file(bootstrap_leader_pubkey_file)?;
     let bootstrap_vote_pubkey = pubkey_from_file(bootstrap_vote_pubkey_file)?;
     let bootstrap_stake_pubkey = pubkey_from_file(bootstrap_stake_pubkey_file)?;
-    let bootstrap_storage_pubkey = pubkey_from_file(bootstrap_storage_pubkey_file)?;
+    let bootstrap_storage_pubkey =
+        if let Some(bootstrap_storage_pubkey_file) = bootstrap_storage_pubkey_file {
+            Some(pubkey_from_file(bootstrap_storage_pubkey_file)?)
+        } else {
+            None
+        };
 
     let bootstrap_leader_vote_account =
         vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
@@ -349,17 +353,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         (bootstrap_vote_pubkey, bootstrap_leader_vote_account),
         // bootstrap leader stake
         (bootstrap_stake_pubkey, bootstrap_leader_stake_account),
-        (
-            bootstrap_storage_pubkey,
-            storage_contract::create_validator_storage_account(bootstrap_leader_pubkey, 1),
-        ),
     ];
 
+    if let Some(bootstrap_storage_pubkey) = bootstrap_storage_pubkey {
+        accounts.push((
+            bootstrap_storage_pubkey,
+            storage_contract::create_validator_storage_account(bootstrap_leader_pubkey, 1),
+        ));
+    }
+
     if let Some(faucet_pubkey_file) = faucet_pubkey_file {
-        accounts.append(&mut vec![(
+        accounts.push((
             pubkey_from_file(faucet_pubkey_file)?,
             Account::new(faucet_lamports.unwrap(), 0, &system_program::id()),
-        )]);
+        ));
     }
     accounts.append(&mut create_genesis_accounts());
 
