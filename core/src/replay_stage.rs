@@ -1350,11 +1350,13 @@ mod test {
             let bank0 = Arc::new(Bank::new(&genesis_config));
             let mut progress = HashMap::new();
             let last_blockhash = bank0.last_blockhash();
-            progress.insert(bank0.slot(), ForkProgress::new(0, last_blockhash));
+            let mut bank0_progress = progress
+                .entry(bank0.slot())
+                .or_insert_with(|| ForkProgress::new(0, last_blockhash));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
             blocktree.insert_shreds(shreds, None, false).unwrap();
             let (res, _tx_count) =
-                ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut progress);
+                ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut bank0_progress);
 
             // Check that the erroring bank was marked as dead in the progress map
             assert!(progress
