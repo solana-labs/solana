@@ -27,7 +27,6 @@ use solana_measure::measure::Measure;
 use solana_metrics::{
     datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
-use solana_sdk::hash::hash;
 use solana_sdk::{
     account::Account,
     clock::{get_segment_from_slot, Epoch, Slot, MAX_RECENT_BLOCKHASHES},
@@ -1359,19 +1358,19 @@ impl Bank {
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
-        // If there are no accounts, return the same hash as we did before
-        // checkpointing.
+        // If there are no accounts, return the hash of the previous state and the latest blockhash
         if let Some(accounts_delta_hash) = self.rc.accounts.hash_internal_state(self.slot()) {
             let mut signature_count_buf = [0u8; 8];
             LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
 
             hashv(&[
-                &self.parent_hash.as_ref(),
-                &accounts_delta_hash.as_ref(),
+                self.parent_hash.as_ref(),
+                self.last_blockhash().as_ref(),
+                accounts_delta_hash.as_ref(),
                 &signature_count_buf,
             ])
         } else {
-            hash(self.parent_hash.as_ref())
+            hashv(&[self.parent_hash.as_ref(), self.last_blockhash().as_ref()])
         }
     }
 
