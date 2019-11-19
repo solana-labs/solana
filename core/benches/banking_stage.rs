@@ -80,6 +80,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &poh_recorder,
                 &mut packets,
                 10_000,
+                None,
             );
         });
 
@@ -287,7 +288,7 @@ fn simulate_process_entries(
         hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
         transactions: tx_vector,
     };
-    process_entries(&bank, &vec![entry], randomize_txs).unwrap();
+    process_entries(&bank, &vec![entry], randomize_txs, None).unwrap();
 }
 
 fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
