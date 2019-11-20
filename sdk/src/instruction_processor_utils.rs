@@ -38,10 +38,24 @@ macro_rules! solana_entrypoint(
 /// # Examples
 ///
 /// ```
+/// use solana_sdk::account::KeyedAccount;
+/// use solana_sdk::instruction::InstructionError;
+/// use solana_sdk::pubkey::Pubkey;
+/// use solana_sdk::declare_program;
+///
 /// const MY_PROGRAM_ID: [u8; 32] = [
 ///     6, 161, 216, 23, 145, 55, 84, 42, 152, 52, 55, 189, 254, 42, 122, 178, 85, 127, 83, 92, 138,
 ///     120, 114, 43, 104, 164, 157, 192, 0, 0, 0, 0,
 /// ];
+///
+/// fn my_process_instruction(
+///     program_id: &Pubkey,
+///     keyed_accounts: &mut [KeyedAccount],
+///     data: &[u8],
+/// ) -> Result<(), InstructionError> {
+///   // Process an instruction
+///   Ok(())
+/// }
 ///
 /// solana_sdk::declare_program!(
 ///     MY_PROGRAM_ID,
