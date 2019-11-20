@@ -18,12 +18,12 @@ use solana_sdk::{
     },
     transaction::Transaction,
 };
-use solana_stake_api::stake_state::Meta;
-use solana_stake_api::{
+use solana_stake_program::stake_state::Meta;
+use solana_stake_program::{
     stake_instruction::{self, StakeError},
     stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
 };
-use solana_vote_api::vote_state::VoteState;
+use solana_vote_program::vote_state::VoteState;
 use std::ops::Deref;
 
 pub trait StakeSubCommands {
@@ -536,7 +536,7 @@ pub fn process_show_stake_account(
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_pubkey)?;
-    if stake_account.owner != solana_stake_api::id() {
+    if stake_account.owner != solana_stake_program::id() {
         return Err(CliError::RpcRequestError(
             format!("{:?} is not a stake account", stake_account_pubkey).to_string(),
         )

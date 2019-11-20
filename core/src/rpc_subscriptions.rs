@@ -9,7 +9,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account, clock::Slot, pubkey::Pubkey, signature::Signature, transaction,
 };
-use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
+use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 

@@ -29,9 +29,9 @@ use solana_sdk::{
     system_transaction,
     transaction::{Transaction, TransactionError},
 };
-use solana_stake_api::stake_state::{Lockup, StakeAuthorize};
+use solana_stake_program::stake_state::{Lockup, StakeAuthorize};
 use solana_storage_api::storage_instruction::StorageAccountType;
-use solana_vote_api::vote_state::VoteAuthorize;
+use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
     fs::File,
     io::{Read, Write},

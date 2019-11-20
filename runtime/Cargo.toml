@@ -30,11 +30,9 @@ solana-metrics = { path = "../metrics", version = "0.21.0" }
 solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.21.0" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.21.0" }
 solana-sdk = { path = "../sdk", version = "0.21.0" }
-solana-stake-api = { path = "../programs/stake_api", version = "0.21.0" }
-solana-stake-program = { path = "../programs/stake_program", version = "0.21.0" }
+solana-stake-program = { path = "../programs/stake", version = "0.21.0" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.21.0" }
-solana-vote-api = { path = "../programs/vote_api", version = "0.21.0" }
-solana-vote-program = { path = "../programs/vote_program", version = "0.21.0" }
+solana-vote-program = { path = "../programs/vote", version = "0.21.0" }
 sys-info = "0.5.8"
 tempfile = "3.1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.21.0" }

@@ -1,7 +1,7 @@
 use crate::result::{Error, Result};
 use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
-use solana_vote_api::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
+use solana_vote_program::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicBool, Ordering},
@@ -238,8 +238,8 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::pubkey::Pubkey;
-    use solana_stake_api::stake_state;
-    use solana_vote_api::vote_state;
+    use solana_stake_program::stake_state;
+    use solana_vote_program::vote_state;
 
     #[test]
     fn test_block_commitment() {

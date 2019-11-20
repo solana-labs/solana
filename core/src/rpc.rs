@@ -30,7 +30,7 @@ use solana_sdk::{
     signature::Signature,
     transaction::{self, Transaction},
 };
-use solana_vote_api::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
+use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
     net::{SocketAddr, UdpSocket},
     sync::{Arc, RwLock},

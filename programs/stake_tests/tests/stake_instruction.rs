@@ -12,11 +12,11 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil},
     sysvar::{self, rewards::Rewards, stake_history::StakeHistory, Sysvar},
 };
-use solana_stake_api::{
+use solana_stake_program::{
     stake_instruction::{self},
     stake_state::{self, StakeState},
 };
-use solana_vote_api::{
+use solana_vote_program::{
     vote_instruction,
     vote_state::{Vote, VoteInit, VoteState},
 };

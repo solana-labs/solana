@@ -29,7 +29,7 @@ pub fn process_instruction(
         .collect();
 
     if current_signer_keys.is_empty() {
-        // Config account keypair must be a signer on account initilization,
+        // Config account keypair must be a signer on account initialization,
         // or when no signers specified in Config data
         if config_keyed_account.signer_key().is_none() {
             error!("account[0].signer_key().is_none()");

@@ -1637,8 +1637,8 @@ mod tests {
         system_instruction,
         sysvar::{fees::Fees, rewards::Rewards},
     };
-    use solana_stake_api::stake_state::Stake;
-    use solana_vote_api::{
+    use solana_stake_program::stake_state::Stake;
+    use solana_vote_program::{
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
@@ -3281,9 +3281,9 @@ mod tests {
             Err(InstructionError::CustomError(42))
         }
 
-        assert!(bank.get_account(&solana_vote_api::id()).is_none());
-        bank.add_instruction_processor(solana_vote_api::id(), mock_vote_processor);
-        assert!(bank.get_account(&solana_vote_api::id()).is_some());
+        assert!(bank.get_account(&solana_vote_program::id()).is_none());
+        bank.add_instruction_processor(solana_vote_program::id(), mock_vote_processor);
+        assert!(bank.get_account(&solana_vote_program::id()).is_some());
 
         let mock_account = Keypair::new();
         let instructions = vote_instruction::create_account(
@@ -3340,9 +3340,9 @@ mod tests {
             bank.last_blockhash(),
         );
 
-        let vote_loader_account = bank.get_account(&solana_vote_api::id()).unwrap();
-        bank.add_instruction_processor(solana_vote_api::id(), mock_vote_processor);
-        let new_vote_loader_account = bank.get_account(&solana_vote_api::id()).unwrap();
+        let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
+        bank.add_instruction_processor(solana_vote_program::id(), mock_vote_processor);
+        let new_vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
         // Vote loader account should not be updated since it was included in the genesis config.
         assert_eq!(vote_loader_account.data, new_vote_loader_account.data);
         assert_eq!(

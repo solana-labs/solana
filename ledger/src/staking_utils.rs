@@ -4,7 +4,7 @@ use solana_sdk::{
     clock::{Epoch, Slot},
     pubkey::Pubkey,
 };
-use solana_vote_api::vote_state::VoteState;
+use solana_vote_program::vote_state::VoteState;
 use std::{borrow::Borrow, collections::HashMap};
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
@@ -113,11 +113,11 @@ pub(crate) mod tests {
         },
         transaction::Transaction,
     };
-    use solana_stake_api::{
+    use solana_stake_program::{
         stake_instruction,
         stake_state::{Authorized, Stake},
     };
-    use solana_vote_api::{vote_instruction, vote_state::VoteInit};
+    use solana_vote_program::{vote_instruction, vote_state::VoteInit};
     use std::sync::Arc;
 
     fn new_from_parent(parent: &Arc<Bank>, slot: Slot) -> Bank {
@@ -180,6 +180,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_epoch_stakes_and_lockouts() {
+        solana_logger::setup();
         let stake = BOOTSTRAP_LEADER_LAMPORTS * 100;
         let leader_stake = Stake {
             stake: BOOTSTRAP_LEADER_LAMPORTS,

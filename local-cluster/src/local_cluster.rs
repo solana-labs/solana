@@ -23,7 +23,7 @@ use solana_sdk::{
     system_transaction,
     transaction::Transaction,
 };
-use solana_stake_api::{
+use solana_stake_program::{
     config as stake_config, stake_instruction,
     stake_state::{Authorized as StakeAuthorized, StakeState},
 };
@@ -31,7 +31,7 @@ use solana_storage_api::{
     storage_contract,
     storage_instruction::{self, StorageAccountType},
 };
-use solana_vote_api::{
+use solana_vote_program::{
     vote_instruction,
     vote_state::{VoteInit, VoteState},
 };

@@ -86,8 +86,8 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
-    use solana_vote_api::vote_instruction;
-    use solana_vote_api::vote_state::Vote;
+    use solana_vote_program::vote_instruction;
+    use solana_vote_program::vote_state::Vote;
 
     #[test]
     fn test_max_vote_tx_fits() {

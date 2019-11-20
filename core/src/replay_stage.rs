@@ -28,7 +28,7 @@ use solana_sdk::{
     timing::{self, duration_as_ms},
     transaction::Transaction,
 };
-use solana_vote_api::vote_instruction;
+use solana_vote_program::vote_instruction;
 use std::{
     collections::HashMap,
     collections::HashSet,
@@ -1081,7 +1081,7 @@ mod test {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::TransactionError;
-    use solana_vote_api::vote_state::VoteState;
+    use solana_vote_program::vote_state::VoteState;
     use std::fs::remove_dir_all;
     use std::iter::FromIterator;
     use std::sync::{Arc, RwLock};

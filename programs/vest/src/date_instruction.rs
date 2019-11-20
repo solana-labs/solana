@@ -7,7 +7,7 @@ use chrono::{
     serde::ts_seconds,
 };
 use serde_derive::{Deserialize, Serialize};
-use solana_config_api::{config_instruction, ConfigState};
+use solana_config_program::{config_instruction, ConfigState};
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

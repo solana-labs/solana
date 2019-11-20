@@ -15,8 +15,7 @@ serde = "1.0.102"
 serde_derive = "1.0.102"
 solana-logger = { path = "../../logger", version = "0.21.0" }
 solana-sdk = { path = "../../sdk", version = "0.21.0" }
-solana-config-api = { path = "../config_api", version = "0.21.0" }
-solana-config-program = { path = "../config_program", version = "0.21.0" }
+solana-config-program = { path = "../config", version = "0.21.0" }
 
 
 [dev-dependencies]
