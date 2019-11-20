@@ -106,16 +106,13 @@ Thus to achieve safety, we want to design the snapshotting system such that the
 
 ## Implementing "Safety Criteria"
 
-"Range Assumption": In our implementation, we assume that at the time the
-validator starts from the snapshot, `L_i + N >= S` for some large `N`. 
-
-Snapshot Design:
+**Snapshot Design:**
 
 The snapshot is augmented to store the last `N` ancestors of `S`. These
 ancestors are incorporated into the bank hash so they can be verified when a
 validator unpacks a snapshot. Call this set `N_Ancestors`.
 
-Boot Procedure: 
+**Boot Procedure:**
 
 1) We reject any snapshots `S` where `S` is less than the root of `L` and `S`
 is not in the list of roots in blocktree because this means `S` is for a
@@ -141,31 +138,54 @@ We now implement the "Safety Criteria" in cases:
 
 ### Case 1: Calculating `is_ancestor(L_i, S_d)` when `L_i` < `S`:
 
-#### Protocol:
+There are two variants depending on whether the list of `N_Ancestors` goes back
+far enough to include `L_i`. This can be established by comparing `L_i` to the
+oldest slot in `N_Ancestors`, `N_Oldest`.
+
+#### Variant 1: `L_i` >= `N_Oldest`:
+
+##### Protocol:
 
 Search the list of `N_Ancestors` ancestors of `S` to check if `L_i` is an
 ancestor of `S`.
 
-#### Proof of Correctness for Protocol: This case is equivalent to determining
-`is_ancestor(L_i, S)`. This is because `is_ancestor(L_i, S_d) <=> (
-is_ancestor(L_i, S) && is_ancestor(S, S_d))`, and `is_ancestor(S, S_d)` is true
-by the definition of `S_d`.
+##### Proof of Correctness for Protocol:
+
+This case is equivalent to determining `is_ancestor(L_i, S)`. This is because
+`is_ancestor(L_i, S_d) <=> (is_ancestor(L_i, S) && is_ancestor(S, S_d))`, and
+`is_ancestor(S, S_d)` is true by the definition of `S_d`.
 
 Now we show the protocol is sufficient to determine `is_ancestor(L_i, S)`.
-Because `L_i + N >= S` by the "Range Assumption", and `N_Ancestors` has length
-`N`, then if `L_i`,is an ancestor, it has to be a member of `N_Ancestors`, so
-the protocol is sufficient.
+Because `L_i + N >= S` in this variant, and `N_Ancestors` has length `N`, then
+if `L_i`, is an ancestor, it has to be a member of `N_Ancestors`, so the
+protocol is sufficient.
 
+#### Variant 2: `L_i` < `N_Oldest`:
+
+##### Protocol:
+
+Search the vote state of the validator in `S_d` for `L_i`. If `L_i` is not
+found, assume it is not an ancestor.
+
+##### Proof of Correctness for Protocol:
+
+A vote for a slot will only be placed into the validator's vote state in a bank
+descended from the slot the vote is for. Therefore, a vote will only be found
+in a vote state if the vote is for an ancestor of the slot the vote state is
+found in. This protocol may falsely determine that `L_i` is not an ancestor of
+`S_d` if the vote was never accepted by a leader, but the result will be that
+the validator will take the more cautious approach of waiting for the lockout
+of the vote to expire, so it will not be slashed due to this failure.
 
 ### Case 2: Calculating `is_ancestor(L_i, S_d)` when `L_i` >= `S`:
 
-#### Protocol: 
+##### Protocol:
 
 If `S_d < L_i`, return false, because an ancestor cannot have a greater slot
 number. Otherwise, Let the bank state for slot `S_d` be called `B_d`. Check
 `B_d.ancestors().contains(L_i)`.
 
-#### Proof of Correctness for Protocol:
+##### Proof of Correctness for Protocol:
 
 **Lemma 1:** Given any `BankForks` and its root `R`, the bank state `B_d` for
 some slot `S_d`, where `B_d` is present in `BankForks.banks`, `B_d.ancestors()`
@@ -174,8 +194,8 @@ must include all ancestors of `B_d` that are `>= R`
 **Proof:** Let `R` be the latest root bank in `BankForks`. The lemma holds at
 boot time because `R == S` and by step 3 of the "Boot Procedure", BankForks
 will only contain descendants of `S`,so each descendants' `ancestors` will only
-contain ancestors `>= R`. Going forward, by construction, ReplayStage only
-adds banks to `BankForks` if all of its ancestors are present and frozen. Thus
+contain ancestors `>= R`. Going forward, by construction, ReplayStage only adds
+banks to `BankForks` if all of its ancestors are present and frozen. Thus
 because `B_d` is present in `BankForks.banks`, `B_d.ancestors()` must include
 all frozen ancestors `>= R`. Furthermore, `BankForks` prunes ancestors in its
 set of `banks` that are `< R'` after setting a new root `R'`, so this invariant
