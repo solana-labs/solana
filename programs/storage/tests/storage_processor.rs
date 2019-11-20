@@ -23,7 +23,7 @@ use solana_sdk::{
         Sysvar,
     },
 };
-use solana_storage_api::{
+use solana_storage_program::{
     id,
     storage_contract::StorageAccount,
     storage_contract::{ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE},

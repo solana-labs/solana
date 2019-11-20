@@ -10,18 +10,14 @@ edition = "2018"
 
 [dependencies]
 log = { version = "0.4.8" }
-solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.21.0" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.21.0" }
-solana-budget-api = { path = "../programs/budget_api", version = "0.21.0" }
-solana-budget-program = { path = "../programs/budget_program", version = "0.21.0" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "0.21.0" }
+solana-budget-program = { path = "../programs/budget", version = "0.21.0" }
 solana-config-program = { path = "../programs/config", version = "0.21.0" }
-solana-exchange-api = { path = "../programs/exchange_api", version = "0.21.0" }
-solana-exchange-program = { path = "../programs/exchange_program", version = "0.21.0" }
+solana-exchange-program = { path = "../programs/exchange", version = "0.21.0" }
 solana-runtime = { path = "../runtime", version = "0.21.0" }
 solana-sdk = { path = "../sdk", version = "0.21.0" }
 solana-stake-program = { path = "../programs/stake", version = "0.21.0" }
-solana-storage-api = { path = "../programs/storage_api", version = "0.21.0" }
-solana-storage-program = { path = "../programs/storage_program", version = "0.21.0" }
+solana-storage-program = { path = "../programs/storage", version = "0.21.0" }
 solana-vest-program = { path = "../programs/vest", version = "0.21.0" }
 solana-vote-program = { path = "../programs/vote", version = "0.21.0" }
 

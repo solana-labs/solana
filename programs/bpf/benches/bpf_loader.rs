@@ -60,7 +60,7 @@ fn bench_program_verify(bencher: &mut Bencher) {
     vm.set_elf(&elf).unwrap();
 
     bencher.iter(|| {
-        vm.set_verifier(solana_bpf_loader_api::bpf_verifier::check)
+        vm.set_verifier(solana_bpf_loader_program::bpf_verifier::check)
             .unwrap();
     });
 }
@@ -76,7 +76,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
 
     let elf = load_elf().unwrap();
-    let (mut vm, _) = solana_bpf_loader_api::create_vm(&elf).unwrap();
+    let (mut vm, _) = solana_bpf_loader_program::create_vm(&elf).unwrap();
 
     println!("Interpreted:");
     assert_eq!(

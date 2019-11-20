@@ -2,7 +2,7 @@ use crate::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::account_utils::State;
 use solana_sdk::pubkey::Pubkey;
-use solana_storage_api::storage_contract::StorageContract;
+use solana_storage_program::storage_contract::StorageContract;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -19,7 +19,7 @@ pub struct StorageAccounts {
 }
 
 pub fn is_storage(account: &Account) -> bool {
-    solana_storage_api::check_id(&account.owner)
+    solana_storage_program::check_id(&account.owner)
 }
 
 impl StorageAccounts {
@@ -86,7 +86,7 @@ pub(crate) mod tests {
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_storage_api::{
+    use solana_storage_program::{
         storage_contract::{StorageAccount, STORAGE_ACCOUNT_SPACE},
         storage_instruction::{self, StorageAccountType},
         storage_processor,
@@ -103,7 +103,7 @@ pub(crate) mod tests {
         let validator_pubkey = validator_keypair.pubkey();
         let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(
-            solana_storage_api::id(),
+            solana_storage_program::id(),
             storage_processor::process_instruction,
         );
 
@@ -191,8 +191,11 @@ pub(crate) mod tests {
         let validator_pubkey = Pubkey::new_rand();
         let archiver_pubkey = Pubkey::new_rand();
 
-        let mut validator_account =
-            Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
+        let mut validator_account = Account::new(
+            1,
+            STORAGE_ACCOUNT_SPACE as usize,
+            &solana_storage_program::id(),
+        );
         let mut validator = StorageAccount::new(validator_pubkey, &mut validator_account);
         validator
             .initialize_storage(validator_pubkey, StorageAccountType::Validator)
@@ -207,8 +210,11 @@ pub(crate) mod tests {
         }
         validator_account.set_state(storage_contract).unwrap();
 
-        let mut archiver_account =
-            Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id());
+        let mut archiver_account = Account::new(
+            1,
+            STORAGE_ACCOUNT_SPACE as usize,
+            &solana_storage_program::id(),
+        );
         let mut archiver = StorageAccount::new(archiver_pubkey, &mut archiver_account);
         archiver
             .initialize_storage(archiver_pubkey, StorageAccountType::Archiver)

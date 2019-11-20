@@ -1,7 +1,7 @@
 use crate::librapay_instruction;
 use log::*;
-use solana_move_loader_api::account_state::{pubkey_to_address, LibraAccountState};
-use solana_move_loader_api::data_store::DataStore;
+use solana_move_loader_program::account_state::{pubkey_to_address, LibraAccountState};
+use solana_move_loader_program::data_store::DataStore;
 use solana_sdk::client::Client;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::hash::Hash;
@@ -160,7 +160,7 @@ mod tests {
         let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(
             solana_sdk::move_loader::id(),
-            solana_move_loader_api::processor::process_instruction,
+            solana_move_loader_program::processor::process_instruction,
         );
         let shared_bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&shared_bank);

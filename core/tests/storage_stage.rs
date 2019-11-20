@@ -17,8 +17,8 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
-    use solana_storage_api::storage_instruction;
-    use solana_storage_api::storage_instruction::StorageAccountType;
+    use solana_storage_program::storage_instruction;
+    use solana_storage_program::storage_instruction::StorageAccountType;
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;

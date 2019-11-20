@@ -2,16 +2,14 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
-// TODO
 pub const FAILURE_PROGRAM_ID: [u8; 32] = [
-    3, 147, 111, 103, 210, 47, 14, 213, 108, 116, 49, 115, 232, 171, 14, 111, 167, 140, 221, 234,
-    33, 70, 185, 192, 42, 31, 141, 152, 0, 0, 0, 0,
+    3, 188, 64, 34, 171, 255, 206, 240, 89, 4, 11, 161, 30, 250, 18, 135, 195, 82, 6, 72, 220, 142,
+    53, 26, 45, 144, 70, 112, 0, 0, 0, 0,
 ];
 
-// TODO
 solana_sdk::declare_program!(
     FAILURE_PROGRAM_ID,
-    "Exchange11111111111111111111111111111111111",
+    "FaiLure111111111111111111111111111111111111",
     solana_failure_program,
     process_instruction
 );

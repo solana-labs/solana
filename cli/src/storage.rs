@@ -10,7 +10,7 @@ use solana_sdk::{
     account_utils::State, message::Message, pubkey::Pubkey, signature::KeypairUtil,
     system_instruction::SystemError, transaction::Transaction,
 };
-use solana_storage_api::storage_instruction::{self, StorageAccountType};
+use solana_storage_program::storage_instruction::{self, StorageAccountType};
 
 pub trait StorageSubCommands {
     fn storage_subcommands(self) -> Self;
@@ -208,14 +208,14 @@ pub fn process_show_storage_account(
 ) -> ProcessResult {
     let account = rpc_client.get_account(storage_account_pubkey)?;
 
-    if account.owner != solana_storage_api::id() {
+    if account.owner != solana_storage_program::id() {
         return Err(CliError::RpcRequestError(
             format!("{:?} is not a storage account", storage_account_pubkey).to_string(),
         )
         .into());
     }
 
-    use solana_storage_api::storage_contract::StorageContract;
+    use solana_storage_program::storage_contract::StorageContract;
     let storage_contract: StorageContract = account.state().map_err(|err| {
         CliError::RpcRequestError(
             format!("Unable to deserialize storage account: {:?}", err).to_string(),

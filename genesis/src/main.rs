@@ -21,7 +21,7 @@ use solana_sdk::{
     system_program, timing,
 };
 use solana_stake_program::stake_state;
-use solana_storage_api::storage_contract;
+use solana_storage_program::storage_contract;
 use solana_vote_program::vote_state;
 use std::{collections::HashMap, error, fs::File, io, path::PathBuf, str::FromStr, time::Duration};
 
@@ -445,7 +445,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     // add genesis stuff from storage and stake
-    solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_config);
+    solana_storage_program::rewards_pools::add_genesis_accounts(&mut genesis_config);
     solana_stake_program::add_genesis_accounts(&mut genesis_config);
 
     create_new_ledger(&ledger_path, &genesis_config)?;
@@ -682,7 +682,7 @@ mod tests {
         )
         .expect("genesis");
 
-        solana_storage_api::rewards_pools::add_genesis_accounts(&mut genesis_config);
+        solana_storage_program::rewards_pools::add_genesis_accounts(&mut genesis_config);
 
         remove_file(path).unwrap();
 

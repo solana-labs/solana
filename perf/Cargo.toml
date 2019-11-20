@@ -20,7 +20,7 @@ lazy_static = "1.4.0"
 log = "0.4.8"
 solana-sdk = { path = "../sdk", version = "0.21.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.21.0" }
-solana-budget-api = { path = "../programs/budget_api", version = "0.21.0" }
+solana-budget-program = { path = "../programs/budget", version = "0.21.0" }
 solana-logger = { path = "../logger", version = "0.21.0" }
 solana-metrics = { path = "../metrics", version = "0.21.0" }
 

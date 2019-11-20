@@ -23,7 +23,7 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil, Signature},
     transaction::Transaction,
 };
-use solana_storage_api::{
+use solana_storage_program::{
     storage_contract::{Proof, ProofStatus, StorageContract},
     storage_instruction,
     storage_instruction::proof_validation,

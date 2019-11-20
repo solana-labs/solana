@@ -54,7 +54,7 @@ features = ["lz4"]
 
 [dev-dependencies]
 matches = "0.1.6"
-solana-budget-api = { path = "../programs/budget_api", version = "0.21.0" }
+solana-budget-program = { path = "../programs/budget", version = "0.21.0" }
 
 [lib]
 crate-type = ["lib"]

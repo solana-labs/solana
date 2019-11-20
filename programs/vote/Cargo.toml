@@ -1,7 +1,7 @@
 [package]
 name = "solana-vote-program"
 version = "0.21.0"
-description = "Solana Vote program API"
+description = "Solana Vote program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"

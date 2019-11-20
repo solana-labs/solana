@@ -37,7 +37,7 @@ use solana_sdk::{
     transaction::Transaction,
     transport::TransportError,
 };
-use solana_storage_api::{
+use solana_storage_program::{
     storage_contract::StorageContract,
     storage_instruction::{self, StorageAccountType},
 };

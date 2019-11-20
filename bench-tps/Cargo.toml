@@ -28,8 +28,7 @@ solana-measure = { path = "../measure", version = "0.21.0" }
 solana-net-utils = { path = "../net-utils", version = "0.21.0" }
 solana-runtime = { path = "../runtime", version = "0.21.0" }
 solana-sdk = { path = "../sdk", version = "0.21.0" }
-solana-move-loader-program = { path = "../programs/move_loader_program", version = "0.21.0", optional = true }
-solana-move-loader-api = { path = "../programs/move_loader_api", version = "0.21.0", optional = true }
+solana-move-loader-program = { path = "../programs/move_loader", version = "0.21.0", optional = true }
 
 [dev-dependencies]
 serial_test = "0.2.0"
@@ -37,4 +36,4 @@ serial_test_derive = "0.2.0"
 solana-local-cluster = { path = "../local-cluster", version = "0.21.0" }
 
 [features]
-move = ["solana-librapay-api", "solana-move-loader-program", "solana-move-loader-api"]
+move = ["solana-librapay-api", "solana-move-loader-program"]

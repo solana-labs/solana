@@ -7,6 +7,7 @@ use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use log::*;
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::bpf_loader::PROGRAM_ID;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils::{limited_deserialize, next_keyed_account};
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -17,12 +18,12 @@ use std::io::prelude::*;
 use std::io::Error;
 use std::mem;
 
-    solana_sdk::declare_program!(
-        solana_sdk::bpf_loader::ID,
-        "BPFLoader1111111111111111111111111111111111",
-        solana_bpf_loader_program,
-        process_instruction
-    );
+solana_sdk::declare_program!(
+    PROGRAM_ID,
+    "BPFLoader1111111111111111111111111111111111",
+    solana_bpf_loader_program,
+    process_instruction
+);
 
 pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm, MemoryRegion), Error> {
     let mut vm = EbpfVm::new(None)?;
