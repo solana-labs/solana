@@ -2567,7 +2567,7 @@ mod tests {
         // Checkpointing should result in a new state
         let bank2 = new_from_parent(&bank0);
         assert_ne!(bank0_state, bank2.hash_internal_state());
-        // Checkpointing should never modify the checkpoints' state
+        // Checkpointing should never modify the checkpoint's state
         assert_eq!(bank0_state, bank0.hash_internal_state());
 
         let pubkey2 = Pubkey::new_rand();
