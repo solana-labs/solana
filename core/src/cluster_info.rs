@@ -768,7 +768,14 @@ impl ClusterInfo {
             }
         }
 
-        datapoint_debug!("cluster_info-num_nodes", ("count", broadcast_len + 1, i64));
+        let mut num_live_peers = 1i64;
+        len = peers.iter().for_each(|p| {
+            // A peer is considered live if they generated their contact info recently
+            if timestamp() - p.wallclock <= CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
+                num_live_peers += 1;
+            }
+        });
+        datapoint_debug!("cluster_info-num_nodes", ("count", num_live_peers, i64));
         Ok(())
     }
 
