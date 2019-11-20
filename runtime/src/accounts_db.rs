@@ -1197,16 +1197,16 @@ pub mod tests {
         {
             let stores = db.storage.read().unwrap();
             let slot_a_stores = &stores.0.get(&slot_a).unwrap();
-            assert_eq!(slot_a_stores.values().map(|v| v.count_and_status.read().unwrap().0).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![2]);
         }
         debug!("{:?}", db.store(slot_b, &[(&key0, &account0), (&key2, &account2)]));
 
         {
             let stores = db.storage.read().unwrap();
             let slot_a_stores = &stores.0.get(&slot_a).unwrap();
-            assert_eq!(slot_a_stores.values().map(|v| v.count_and_status.read().unwrap().0).collect::<Vec<usize>>(), vec![1]);
+            assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![1]);
             let slot_b_stores = &stores.0.get(&slot_b).unwrap();
-            assert_eq!(slot_b_stores.values().map(|v| v.count_and_status.read().unwrap().0).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(slot_b_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![2]);
         }
     }
 
