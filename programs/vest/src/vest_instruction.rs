@@ -52,6 +52,11 @@ pub enum VestInstruction {
     /// Tell the contract that the `InitializeAccount` with `Signature` has been
     /// signed by the containing transaction's `Pubkey`.
     Terminate,
+
+    /// Reduce total_lamports by the given number of lamports. Tokens that have
+    /// already vested are unaffected. Use this instead of `Terminate` to minimize
+    /// the number of token transfers.
+    Renege(u64),
 }
 
 fn initialize_account(
@@ -137,4 +142,15 @@ pub fn terminate(contract: &Pubkey, from: &Pubkey, to: &Pubkey) -> Instruction {
         account_metas.push(AccountMeta::new(*to, false));
     }
     Instruction::new(id(), &VestInstruction::Terminate, account_metas)
+}
+
+pub fn renege(contract: &Pubkey, from: &Pubkey, to: &Pubkey, lamports: u64) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*contract, false),
+        AccountMeta::new(*from, true),
+    ];
+    if from != to {
+        account_metas.push(AccountMeta::new(*to, false));
+    }
+    Instruction::new(id(), &VestInstruction::Renege(lamports), account_metas)
 }
