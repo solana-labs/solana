@@ -45,7 +45,7 @@ use solana_sdk::{
     transaction::{Result, Transaction, TransactionError},
 };
 use std::{
-    collections::HashMap,
+    collections::{VecDeque, HashMap},
     io::{BufReader, Cursor, Error as IOError, Read},
     path::Path,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -219,6 +219,9 @@ pub struct Bank {
     /// Bank block_height
     block_height: u64,
 
+    /// Last 2*Epoch  slots
+    slots_history: VecDeque<Slot>,
+
     /// The pubkey to send transactions fees to.
     collector_id: Pubkey,
 
@@ -266,6 +269,7 @@ pub struct Bank {
     /// Last time when the cluster info vote listener has synced with this bank
     #[serde(skip)]
     pub last_vote_sync: AtomicU64,
+
 }
 
 impl Default for BlockhashQueue {
@@ -297,6 +301,7 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
+        bank.slot_history.push_front(bank.slot());
         bank
     }
 
@@ -336,6 +341,14 @@ impl Bank {
             rent_collector: parent.rent_collector.clone_with_epoch(epoch),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
+            slot_history: {
+                let mut slots = parent.slot_history.clone();
+                slots.push_front(slot);
+                if slots.len() > epoch_schedule.slots_per_epoch() * 2 {
+                    slots.pop_back();
+                }
+                slots
+            },
             fee_calculator: FeeCalculator::new_derived(
                 &parent.fee_calculator,
                 parent.signature_count() as usize,
@@ -1443,6 +1456,11 @@ impl Bank {
     /// Return the block_height of this bank
     pub fn block_height(&self) -> u64 {
         self.block_height
+    }
+
+    /// Return the block_height of this bank
+    pub fn slot_history(&self) -> &VecDeque<Slot> {
+        self.slot_history
     }
 
     /// Return the number of slots per epoch for the given epoch
