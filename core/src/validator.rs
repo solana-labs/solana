@@ -16,6 +16,7 @@ use crate::{
     sigverify,
     storage_stage::StorageState,
     tpu::Tpu,
+    transaction_status_service::TransactionStatusService,
     tvu::{Sockets, Tvu},
 };
 use solana_ledger::{
@@ -43,7 +44,7 @@ use std::{
     path::{Path, PathBuf},
     process,
     sync::atomic::{AtomicBool, Ordering},
-    sync::mpsc::Receiver,
+    sync::mpsc::{channel, Receiver},
     sync::{Arc, Mutex, RwLock},
     thread::Result,
 };
@@ -54,6 +55,7 @@ pub struct ValidatorConfig {
     pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
     pub voting_disabled: bool,
+    pub transaction_status_service_disabled: bool,
     pub blockstream_unix_socket: Option<PathBuf>,
     pub storage_slots_per_turn: u64,
     pub account_paths: Option<String>,
@@ -71,6 +73,7 @@ impl Default for ValidatorConfig {
             dev_halt_at_slot: None,
             expected_genesis_hash: None,
             voting_disabled: false,
+            transaction_status_service_disabled: false,
             blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
             max_ledger_slots: None,
@@ -105,6 +108,7 @@ pub struct Validator {
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
+    transaction_status_service: Option<TransactionStatusService>,
     gossip_service: GossipService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
     poh_service: PohService,
@@ -238,6 +242,21 @@ impl Validator {
             ))
         };
 
+        let (transaction_status_sender, transaction_status_service) =
+            if rpc_service.is_some() && !config.transaction_status_service_disabled {
+                let (transaction_status_sender, transaction_status_receiver) = channel();
+                (
+                    Some(transaction_status_sender),
+                    Some(TransactionStatusService::new(
+                        transaction_status_receiver,
+                        blocktree.clone(),
+                        &exit,
+                    )),
+                )
+            } else {
+                (None, None)
+            };
+
         info!(
             "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",
             bank.epoch(),
@@ -350,6 +369,7 @@ impl Validator {
             config.dev_sigverify_disabled,
             config.partition_cfg.clone(),
             shred_version,
+            transaction_status_sender.clone(),
         );
 
         if config.dev_sigverify_disabled {
@@ -364,6 +384,7 @@ impl Validator {
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
             config.dev_sigverify_disabled,
+            transaction_status_sender,
             &blocktree,
             &config.broadcast_stage_type,
             &exit,
@@ -376,6 +397,7 @@ impl Validator {
             gossip_service,
             rpc_service,
             rpc_pubsub_service,
+            transaction_status_service,
             tpu,
             tvu,
             poh_service,
@@ -425,6 +447,9 @@ impl Validator {
         }
         if let Some(rpc_pubsub_service) = self.rpc_pubsub_service {
             rpc_pubsub_service.join()?;
+        }
+        if let Some(transaction_status_service) = self.transaction_status_service {
+            transaction_status_service.join()?;
         }
 
         self.gossip_service.join()?;
@@ -529,6 +554,8 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 
     let leader_voting_keypair = Arc::new(voting_keypair);
     let storage_keypair = Arc::new(Keypair::new());
+    let mut config = ValidatorConfig::default();
+    config.transaction_status_service_disabled = true;
     let node = Validator::new(
         node,
         &node_keypair,
@@ -538,7 +565,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
         &storage_keypair,
         None,
         true,
-        &ValidatorConfig::default(),
+        &config,
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
     (node, contact_info, mint_keypair, ledger_path)
@@ -565,6 +592,8 @@ mod tests {
 
         let voting_keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
+        let mut config = ValidatorConfig::default();
+        config.transaction_status_service_disabled = true;
         let validator = Validator::new(
             validator_node,
             &Arc::new(validator_keypair),
@@ -574,7 +603,7 @@ mod tests {
             &storage_keypair,
             Some(&leader_node.info),
             true,
-            &ValidatorConfig::default(),
+            &config,
         );
         validator.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -597,6 +626,8 @@ mod tests {
                 ledger_paths.push(validator_ledger_path.clone());
                 let voting_keypair = Arc::new(Keypair::new());
                 let storage_keypair = Arc::new(Keypair::new());
+                let mut config = ValidatorConfig::default();
+                config.transaction_status_service_disabled = true;
                 Validator::new(
                     validator_node,
                     &Arc::new(validator_keypair),
@@ -606,7 +637,7 @@ mod tests {
                     &storage_keypair,
                     Some(&leader_node.info),
                     true,
-                    &ValidatorConfig::default(),
+                    &config,
                 )
             })
             .collect();

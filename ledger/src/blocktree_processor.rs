@@ -12,19 +12,22 @@ use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::{bank::Bank, transaction_batch::TransactionBatch};
+use solana_runtime::{
+    bank::{Bank, TransactionResults},
+    transaction_batch::TransactionBatch,
+};
 use solana_sdk::{
     clock::{Slot, MAX_RECENT_BLOCKHASHES},
     genesis_config::GenesisConfig,
     hash::Hash,
     signature::{Keypair, KeypairUtil},
     timing::duration_as_ms,
-    transaction::Result,
+    transaction::{Result, Transaction},
 };
 use std::{
     cell::RefCell,
     result,
-    sync::Arc,
+    sync::{mpsc::Sender, Arc},
     time::{Duration, Instant},
 };
 
@@ -43,13 +46,29 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-fn execute_batch(batch: &TransactionBatch) -> Result<()> {
-    let results = batch
+fn execute_batch(
+    batch: &TransactionBatch,
+    bank: &Arc<Bank>,
+    transaction_status_sender: Option<TransactionStatusSender>,
+) -> Result<()> {
+    let TransactionResults {
+        fee_collection_results,
+        processing_results,
+    } = batch
         .bank()
         .load_execute_and_commit_transactions(batch, MAX_RECENT_BLOCKHASHES);
 
+    if let Some(sender) = transaction_status_sender {
+        send_transaction_status_batch(
+            bank.clone(),
+            batch.transactions(),
+            processing_results,
+            sender,
+        );
+    }
+
     let mut first_err = None;
-    for (result, transaction) in results.iter().zip(batch.transactions()) {
+    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions()) {
         if let Err(ref err) = result {
             if first_err.is_none() {
                 first_err = Some(result.clone());
@@ -75,14 +94,15 @@ fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatch],
     entry_callback: Option<&ProcessCallback>,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches
                 .into_par_iter()
-                .map(|batch| {
-                    let result = execute_batch(batch);
+                .map_with(transaction_status_sender, |sender, batch| {
+                    let result = execute_batch(batch, bank, sender.clone());
                     if let Some(entry_callback) = entry_callback {
                         entry_callback(bank);
                     }
@@ -100,8 +120,13 @@ fn execute_batches(
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
-pub fn process_entries(bank: &Arc<Bank>, entries: &[Entry], randomize: bool) -> Result<()> {
-    process_entries_with_callback(bank, entries, randomize, None)
+pub fn process_entries(
+    bank: &Arc<Bank>,
+    entries: &[Entry],
+    randomize: bool,
+    transaction_status_sender: Option<TransactionStatusSender>,
+) -> Result<()> {
+    process_entries_with_callback(bank, entries, randomize, None, transaction_status_sender)
 }
 
 fn process_entries_with_callback(
@@ -109,6 +134,7 @@ fn process_entries_with_callback(
     entries: &[Entry],
     randomize: bool,
     entry_callback: Option<&ProcessCallback>,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -120,7 +146,12 @@ fn process_entries_with_callback(
             if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
                 // If it's a tick that will cause a new blockhash to be created,
                 // execute the group and register the tick
-                execute_batches(bank, &batches, entry_callback)?;
+                execute_batches(
+                    bank,
+                    &batches,
+                    entry_callback,
+                    transaction_status_sender.clone(),
+                )?;
                 batches.clear();
                 for hash in &tick_hashes {
                     bank.register_tick(hash);
@@ -170,12 +201,17 @@ fn process_entries_with_callback(
             } else {
                 // else we have an entry that conflicts with a prior entry
                 // execute the current queue and try to process this entry again
-                execute_batches(bank, &batches, entry_callback)?;
+                execute_batches(
+                    bank,
+                    &batches,
+                    entry_callback,
+                    transaction_status_sender.clone(),
+                )?;
                 batches.clear();
             }
         }
     }
-    execute_batches(bank, &batches, entry_callback)?;
+    execute_batches(bank, &batches, entry_callback, transaction_status_sender)?;
     for hash in tick_hashes {
         bank.register_tick(&hash);
     }
@@ -343,16 +379,15 @@ fn verify_and_process_slot_entries(
         }
     }
 
-    process_entries_with_callback(bank, &entries, true, opts.entry_callback.as_ref()).map_err(
-        |err| {
+    process_entries_with_callback(bank, &entries, true, opts.entry_callback.as_ref(), None)
+        .map_err(|err| {
             warn!(
                 "Failed to process entries for slot {}: {:?}",
                 bank.slot(),
                 err
             );
             BlocktreeProcessorError::InvalidTransaction
-        },
-    )?;
+        })?;
 
     Ok(entries.last().unwrap().hash)
 }
@@ -508,6 +543,33 @@ fn process_pending_slots(
     Ok(fork_info)
 }
 
+pub struct TransactionStatusBatch {
+    pub bank: Arc<Bank>,
+    pub transactions: Vec<Transaction>,
+    pub statuses: Vec<Result<()>>,
+}
+pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
+
+pub fn send_transaction_status_batch(
+    bank: Arc<Bank>,
+    transactions: &[Transaction],
+    statuses: Vec<Result<()>>,
+    transaction_status_sender: TransactionStatusSender,
+) {
+    let slot = bank.slot();
+    if let Err(e) = transaction_status_sender.send(TransactionStatusBatch {
+        bank,
+        transactions: transactions.to_vec(),
+        statuses,
+    }) {
+        trace!(
+            "Slot {} transaction_status send batch failed: {:?}",
+            slot,
+            e
+        );
+    }
+}
+
 // used for tests only
 pub fn fill_blocktree_slot_with_ticks(
     blocktree: &Blocktree,
@@ -542,9 +604,11 @@ pub fn fill_blocktree_slot_with_ticks(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::entry::{create_ticks, next_entry, next_entry_mut};
-    use crate::genesis_utils::{
-        create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+    use crate::{
+        entry::{create_ticks, next_entry, next_entry_mut},
+        genesis_utils::{
+            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+        },
     };
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
@@ -1094,7 +1158,7 @@ pub mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        process_entries(&bank, &slot_entries, true).unwrap();
+        process_entries(&bank, &slot_entries, true, None).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -1300,7 +1364,7 @@ pub mod tests {
         // ensure bank can process a tick
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_config.hash(), 1, vec![]);
-        assert_eq!(process_entries(&bank, &[tick.clone()], true), Ok(()));
+        assert_eq!(process_entries(&bank, &[tick.clone()], true, None), Ok(()));
         assert_eq!(bank.tick_height(), 1);
     }
 
@@ -1332,7 +1396,10 @@ pub mod tests {
             bank.last_blockhash(),
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-        assert_eq!(process_entries(&bank, &[entry_1, entry_2], true), Ok(()));
+        assert_eq!(
+            process_entries(&bank, &[entry_1, entry_2], true, None),
+            Ok(())
+        );
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
         assert_eq!(bank.last_blockhash(), blockhash);
@@ -1386,7 +1453,12 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1], false),
+            process_entries(
+                &bank,
+                &[entry_1_to_mint, entry_2_to_3_mint_to_1],
+                false,
+                None
+            ),
             Ok(())
         );
 
@@ -1456,6 +1528,7 @@ pub mod tests {
             &bank,
             &[entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
             false,
+            None,
         )
         .is_err());
 
@@ -1566,6 +1639,7 @@ pub mod tests {
                 entry_conflict_itself.clone()
             ],
             false,
+            None,
         )
         .is_err());
 
@@ -1612,7 +1686,10 @@ pub mod tests {
         let tx =
             system_transaction::transfer(&keypair2, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-        assert_eq!(process_entries(&bank, &[entry_1, entry_2], true), Ok(()));
+        assert_eq!(
+            process_entries(&bank, &[entry_1, entry_2], true, None),
+            Ok(())
+        );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_blockhash(), blockhash);
@@ -1670,7 +1747,7 @@ pub mod tests {
                 next_entry_mut(&mut hash, 0, transactions)
             })
             .collect();
-        assert_eq!(process_entries(&bank, &entries, true), Ok(()));
+        assert_eq!(process_entries(&bank, &entries, true, None), Ok(()));
     }
 
     #[test]
@@ -1730,7 +1807,7 @@ pub mod tests {
 
         // Transfer lamports to each other
         let entry = next_entry(&bank.last_blockhash(), 1, tx_vector);
-        assert_eq!(process_entries(&bank, &vec![entry], true), Ok(()));
+        assert_eq!(process_entries(&bank, &vec![entry], true, None), Ok(()));
         bank.squash();
 
         // Even number keypair should have balance of 2 * initial_lamports and
@@ -1794,7 +1871,8 @@ pub mod tests {
             process_entries(
                 &bank,
                 &[entry_1.clone(), tick.clone(), entry_2.clone()],
-                true
+                true,
+                None
             ),
             Ok(())
         );
@@ -1806,7 +1884,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, bank.last_blockhash());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, &[entry_3], true),
+            process_entries(&bank, &[entry_3], true, None),
             Err(TransactionError::AccountNotFound)
         );
     }
@@ -1886,7 +1964,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries(&bank, &[entry_1_to_mint], false),
+            process_entries(&bank, &[entry_1_to_mint], false, None),
             Err(TransactionError::AccountInUse)
         );
 
@@ -2030,7 +2108,7 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries(&bank, &entries, true).expect("paying failed");
+            process_entries(&bank, &entries, true, None).expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .step_by(NUM_TRANSFERS_PER_ENTRY)
@@ -2053,7 +2131,7 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries(&bank, &entries, true).expect("refunding failed");
+            process_entries(&bank, &entries, true, None).expect("refunding failed");
 
             // advance to next block
             process_entries(
@@ -2062,6 +2140,7 @@ pub mod tests {
                     .map(|_| next_entry_mut(&mut hash, 1, vec![]))
                     .collect::<Vec<_>>(),
                 true,
+                None,
             )
             .expect("process ticks failed");
 
@@ -2102,7 +2181,7 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries_with_callback(&bank0, &entries, true, None).unwrap();
+        process_entries_with_callback(&bank0, &entries, true, None, None).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 

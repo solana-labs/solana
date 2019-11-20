@@ -117,6 +117,7 @@ mod tests {
                 bank.last_blockhash(),
             ),
             true,
+            None,
         )
         .unwrap();
         let message = Message::new_with_payer(vec![mining_proof_ix], Some(&mint_keypair.pubkey()));
@@ -206,6 +207,7 @@ mod tests {
                     &bank,
                     &entry::create_ticks(64, 0, bank.last_blockhash()),
                     true,
+                    None,
                 )
                 .expect("failed process entries");
                 last_bank = bank;

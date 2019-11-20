@@ -30,7 +30,7 @@ use solana_sdk::{
     clock::{Slot, DEFAULT_TICKS_PER_SECOND},
     genesis_config::GenesisConfig,
     hash::Hash,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, KeypairUtil, Signature},
     timing::timestamp,
     transaction::Transaction,
 };
@@ -1173,6 +1173,14 @@ impl Blocktree {
                 )
             })
             .collect()
+    }
+
+    pub fn write_transaction_status(
+        &self,
+        index: (Slot, Signature),
+        status: &RpcTransactionStatus,
+    ) -> Result<()> {
+        self.transaction_status_cf.put(index, status)
     }
 
     /// Returns the entry vector for the slot starting with `shred_start_index`

@@ -196,6 +196,8 @@ impl LocalCluster {
         let leader_contact_info = leader_node.info.clone();
         let leader_storage_keypair = Arc::new(storage_keypair);
         let leader_voting_keypair = Arc::new(voting_keypair);
+        let mut leader_config = config.validator_configs[0].clone();
+        leader_config.transaction_status_service_disabled = true;
         let leader_server = Validator::new(
             leader_node,
             &leader_keypair,
@@ -205,7 +207,7 @@ impl LocalCluster {
             &leader_storage_keypair,
             None,
             true,
-            &config.validator_configs[0],
+            &leader_config,
         );
 
         let mut validators = HashMap::new();
@@ -327,6 +329,8 @@ impl LocalCluster {
                 .unwrap();
         }
 
+        let mut config = validator_config.clone();
+        config.transaction_status_service_disabled = true;
         let voting_keypair = Arc::new(voting_keypair);
         let validator_server = Validator::new(
             validator_node,
@@ -337,7 +341,7 @@ impl LocalCluster {
             &storage_keypair,
             Some(&self.entry_point_info),
             true,
-            &validator_config,
+            &config,
         );
 
         self.validators
@@ -637,6 +641,9 @@ impl Cluster for LocalCluster {
         // Update the stored ContactInfo for this node
         let node = Node::new_localhost_with_pubkey(&pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();
+        cluster_validator_info
+            .config
+            .transaction_status_service_disabled = true;
 
         let entry_point_info = {
             if *pubkey == self.entry_point_info.id {

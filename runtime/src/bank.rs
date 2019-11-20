@@ -153,6 +153,11 @@ impl StatusCacheRc {
 
 pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) -> () + Sync + Send>;
 
+pub struct TransactionResults {
+    pub fee_collection_results: Vec<Result<()>>,
+    pub processing_results: Vec<Result<()>>,
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default, Deserialize, Serialize)]
 pub struct Bank {
@@ -745,6 +750,11 @@ impl Bank {
         )
     }
 
+    pub fn get_fee_calculator(&self, hash: &Hash) -> Option<FeeCalculator> {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        blockhash_queue.get_fee_calculator(hash).cloned()
+    }
+
     pub fn confirmed_last_blockhash(&self) -> (Hash, FeeCalculator) {
         const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
 
@@ -1153,7 +1163,7 @@ impl Bank {
         executed: &[Result<()>],
         tx_count: u64,
         signature_count: u64,
-    ) -> Vec<Result<()>> {
+    ) -> TransactionResults {
         assert!(
             !self.is_frozen(),
             "commit_transactions() working on a frozen bank!"
@@ -1186,7 +1196,12 @@ impl Bank {
         write_time.stop();
         debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
         self.update_transaction_statuses(txs, iteration_order, &executed);
-        self.filter_program_errors_and_collect_fee(txs, iteration_order, executed)
+        let fee_collection_results =
+            self.filter_program_errors_and_collect_fee(txs, iteration_order, executed);
+        TransactionResults {
+            fee_collection_results,
+            processing_results: executed.to_vec(),
+        }
     }
 
     fn distribute_rent(&self) {
@@ -1223,7 +1238,7 @@ impl Bank {
         &self,
         batch: &TransactionBatch,
         max_age: usize,
-    ) -> Vec<Result<()>> {
+    ) -> TransactionResults {
         let (mut loaded_accounts, executed, _, tx_count, signature_count) =
             self.load_and_execute_transactions(batch, max_age);
 
@@ -1241,6 +1256,7 @@ impl Bank {
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let batch = self.prepare_batch(txs, None);
         self.load_execute_and_commit_transactions(&batch, MAX_RECENT_BLOCKHASHES)
+            .fee_collection_results
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -2786,8 +2802,9 @@ mod tests {
         let pay_alice = vec![tx1];
 
         let lock_result = bank.prepare_batch(&pay_alice, None);
-        let results_alice =
-            bank.load_execute_and_commit_transactions(&lock_result, MAX_RECENT_BLOCKHASHES);
+        let results_alice = bank
+            .load_execute_and_commit_transactions(&lock_result, MAX_RECENT_BLOCKHASHES)
+            .fee_collection_results;
         assert_eq!(results_alice[0], Ok(()));
 
         // try executing an interleaved transfer twice

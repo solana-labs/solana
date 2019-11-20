@@ -1,20 +1,20 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
-use crate::cluster_info::ClusterInfo;
-use crate::commitment::{
-    AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData,
+use crate::{
+    cluster_info::ClusterInfo,
+    commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
+    consensus::{StakeLockout, Tower},
+    poh_recorder::PohRecorder,
+    result::{Error, Result},
+    rpc_subscriptions::RpcSubscriptions,
+    thread_mem_usage,
 };
-use crate::consensus::{StakeLockout, Tower};
-use crate::poh_recorder::PohRecorder;
-use crate::result::{Error, Result};
-use crate::rpc_subscriptions::RpcSubscriptions;
-use crate::thread_mem_usage;
 use jemalloc_ctl::thread::allocatedp;
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
     blocktree::{Blocktree, BlocktreeError},
-    blocktree_processor,
+    blocktree_processor::{self, TransactionStatusSender},
     entry::{Entry, EntrySlice},
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::SnapshotPackageSender,
@@ -182,6 +182,7 @@ impl ReplayStage {
         slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
         snapshot_package_sender: Option<SnapshotPackageSender>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        transaction_status_sender: Option<TransactionStatusSender>,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>)
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -245,6 +246,7 @@ impl ReplayStage {
                         &my_pubkey,
                         &mut progress,
                         &slot_full_senders,
+                        transaction_status_sender.clone(),
                     );
                     datapoint_debug!(
                         "replay_stage-memory",
@@ -493,6 +495,7 @@ impl ReplayStage {
         bank: &Arc<Bank>,
         blocktree: &Blocktree,
         bank_progress: &mut ForkProgress,
+        transaction_status_sender: Option<TransactionStatusSender>,
     ) -> (Result<()>, usize) {
         let mut tx_count = 0;
         let now = Instant::now();
@@ -514,7 +517,14 @@ impl ReplayStage {
                 slot_full,
             );
             tx_count += entries.iter().map(|e| e.transactions.len()).sum::<usize>();
-            Self::replay_entries_into_bank(bank, bank_progress, entries, num_shreds, slot_full)
+            Self::replay_entries_into_bank(
+                bank,
+                bank_progress,
+                entries,
+                num_shreds,
+                slot_full,
+                transaction_status_sender,
+            )
         });
 
         if Self::is_replay_result_fatal(&replay_result) {
@@ -663,6 +673,7 @@ impl ReplayStage {
         my_pubkey: &Pubkey,
         progress: &mut HashMap<u64, ForkProgress>,
         slot_full_senders: &[Sender<(u64, Pubkey)>],
+        transaction_status_sender: Option<TransactionStatusSender>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -685,8 +696,12 @@ impl ReplayStage {
                 .entry(bank.slot())
                 .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
             if bank.collector_id() != my_pubkey {
-                let (replay_result, replay_tx_count) =
-                    Self::replay_blocktree_into_bank(&bank, &blocktree, bank_progress);
+                let (replay_result, replay_tx_count) = Self::replay_blocktree_into_bank(
+                    &bank,
+                    &blocktree,
+                    bank_progress,
+                    transaction_status_sender.clone(),
+                );
                 tx_count += replay_tx_count;
                 if Self::is_replay_result_fatal(&replay_result) {
                     trace!("replay_result_fatal slot {}", bank_slot);
@@ -950,6 +965,7 @@ impl ReplayStage {
         entries: Vec<Entry>,
         num_shreds: usize,
         slot_full: bool,
+        transaction_status_sender: Option<TransactionStatusSender>,
     ) -> Result<()> {
         let result = Self::verify_and_process_entries(
             &bank,
@@ -957,6 +973,7 @@ impl ReplayStage {
             slot_full,
             bank_progress.num_shreds,
             bank_progress,
+            transaction_status_sender,
         );
         bank_progress.num_shreds += num_shreds;
         bank_progress.num_entries += entries.len();
@@ -1008,6 +1025,7 @@ impl ReplayStage {
         slot_full: bool,
         shred_index: usize,
         bank_progress: &mut ForkProgress,
+        transaction_status_sender: Option<TransactionStatusSender>,
     ) -> Result<()> {
         let last_entry = &bank_progress.last_entry;
         let tick_hash_count = &mut bank_progress.tick_hash_count;
@@ -1042,7 +1060,8 @@ impl ReplayStage {
         let mut entry_state = entries.start_verify(last_entry);
 
         let mut replay_elapsed = Measure::start("replay_elapsed");
-        let res = blocktree_processor::process_entries(bank, entries, true);
+        let res =
+            blocktree_processor::process_entries(bank, entries, true, transaction_status_sender);
         replay_elapsed.stop();
         bank_progress.stats.replay_elapsed += replay_elapsed.as_us();
 
@@ -1125,29 +1144,38 @@ impl ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::commitment::BlockCommitment;
-    use crate::genesis_utils::{create_genesis_config, create_genesis_config_with_leader};
-    use crate::replay_stage::ReplayStage;
-    use solana_ledger::blocktree::make_slot_entries;
-    use solana_ledger::entry;
-    use solana_ledger::shred::{
-        CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
-        SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
+    use crate::{
+        commitment::BlockCommitment,
+        genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
+        replay_stage::ReplayStage,
+        transaction_status_service::TransactionStatusService,
     };
     use solana_ledger::{
+        blocktree::make_slot_entries,
         blocktree::{entries_to_test_shreds, BlocktreeError},
+        create_new_tmp_ledger,
+        entry::{self, next_entry},
         get_tmp_ledger_path,
+        shred::{
+            CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
+            SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
+        },
     };
     use solana_runtime::genesis_utils::GenesisConfigInfo;
-    use solana_sdk::hash::{hash, Hash};
-    use solana_sdk::packet::PACKET_DATA_SIZE;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
-    use solana_sdk::transaction::TransactionError;
+    use solana_sdk::{
+        hash::{hash, Hash},
+        instruction::InstructionError,
+        packet::PACKET_DATA_SIZE,
+        signature::{Keypair, KeypairUtil},
+        system_transaction,
+        transaction::TransactionError,
+    };
     use solana_vote_program::vote_state::VoteState;
-    use std::fs::remove_dir_all;
-    use std::iter::FromIterator;
-    use std::sync::{Arc, RwLock};
+    use std::{
+        fs::remove_dir_all,
+        iter::FromIterator,
+        sync::{Arc, RwLock},
+    };
 
     #[test]
     fn test_child_slots_of_same_parent() {
@@ -1429,8 +1457,12 @@ mod test {
                 .or_insert_with(|| ForkProgress::new(0, last_blockhash));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
             blocktree.insert_shreds(shreds, None, false).unwrap();
-            let (res, _tx_count) =
-                ReplayStage::replay_blocktree_into_bank(&bank0, &blocktree, &mut bank0_progress);
+            let (res, _tx_count) = ReplayStage::replay_blocktree_into_bank(
+                &bank0,
+                &blocktree,
+                &mut bank0_progress,
+                None,
+            );
 
             // Check that the erroring bank was marked as dead in the progress map
             assert!(progress
@@ -1674,5 +1706,91 @@ mod test {
         assert!(res.0.is_none());
         assert!(res.1.is_some());
         assert_eq!(res.1.unwrap().slot(), 11);
+    }
+
+    #[test]
+    fn test_write_persist_transaction_status() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(1000);
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        {
+            let blocktree = Blocktree::open(&ledger_path)
+                .expect("Expected to successfully open database ledger");
+            let blocktree = Arc::new(blocktree);
+
+            let keypair1 = Keypair::new();
+            let keypair2 = Keypair::new();
+            let keypair3 = Keypair::new();
+
+            let bank0 = Arc::new(Bank::new(&genesis_config));
+            bank0
+                .transfer(4, &mint_keypair, &keypair2.pubkey())
+                .unwrap();
+
+            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+            let slot = bank1.slot();
+
+            // Generate transactions for processing
+            // Successful transaction
+            let success_tx =
+                system_transaction::transfer(&mint_keypair, &keypair1.pubkey(), 2, blockhash);
+            let success_signature = success_tx.signatures[0];
+            let entry_1 = next_entry(&blockhash, 1, vec![success_tx]);
+            // Failed transaction, InstructionError
+            let ix_error_tx =
+                system_transaction::transfer(&keypair2, &keypair3.pubkey(), 10, blockhash);
+            let ix_error_signature = ix_error_tx.signatures[0];
+            let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
+            // Failed transaction
+            let fail_tx =
+                system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 2, Hash::default());
+            let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx]);
+            let entries = vec![entry_1, entry_2, entry_3];
+
+            let shreds = entries_to_test_shreds(entries.clone(), slot, bank0.slot(), true, 0);
+            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.set_roots(&[slot]).unwrap();
+
+            let (transaction_status_sender, transaction_status_receiver) = channel();
+            let transaction_status_service = TransactionStatusService::new(
+                transaction_status_receiver,
+                blocktree.clone(),
+                &Arc::new(AtomicBool::new(false)),
+            );
+
+            // Check that process_entries successfully writes can_commit transactions statuses, and
+            // that they are matched properly by get_confirmed_block
+            let _result = blocktree_processor::process_entries(
+                &bank1,
+                &entries,
+                true,
+                Some(transaction_status_sender),
+            );
+
+            transaction_status_service.join().unwrap();
+
+            let confirmed_block = blocktree.get_confirmed_block(slot).unwrap();
+            assert_eq!(confirmed_block.transactions.len(), 3);
+
+            for (transaction, result) in confirmed_block.transactions.into_iter() {
+                if transaction.signatures[0] == success_signature {
+                    assert_eq!(result.unwrap().status, Ok(()));
+                } else if transaction.signatures[0] == ix_error_signature {
+                    assert_eq!(
+                        result.unwrap().status,
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::CustomError(1)
+                        ))
+                    );
+                } else {
+                    assert_eq!(result, None);
+                }
+            }
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 }
