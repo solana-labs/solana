@@ -45,7 +45,7 @@ use solana_sdk::{
     transaction::{Result, Transaction, TransactionError},
 };
 use std::{
-    collections::{VecDeque, HashMap},
+    collections::{HashMap, VecDeque},
     io::{BufReader, Cursor, Error as IOError, Read},
     path::Path,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -269,7 +269,6 @@ pub struct Bank {
     /// Last time when the cluster info vote listener has synced with this bank
     #[serde(skip)]
     pub last_vote_sync: AtomicU64,
-
 }
 
 impl Default for BlockhashQueue {

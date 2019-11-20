@@ -265,11 +265,10 @@ fn run_network_partition(partitions: &[usize]) {
         }
         sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
     }
-    info!("PARTITION_TEST done spending on all node");
+    info!("PARTITION_TEST done!");
 }
 
 #[allow(unused_attributes)]
-#[ignore]
 #[test]
 #[serial]
 fn test_network_partition_1_2() {
@@ -277,7 +276,6 @@ fn test_network_partition_1_2() {
 }
 
 #[allow(unused_attributes)]
-#[ignore]
 #[test]
 #[serial]
 fn test_network_partition_1_1() {

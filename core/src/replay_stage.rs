@@ -869,11 +869,11 @@ impl ReplayStage {
                     continue;
                 }
                 if parent_stats.is_locked_out || !parent_stats.vote_threshold {
-                    info!(
+                    debug!(
                         "{} {} locked_out: {}",
                         my_pubkey, parent_stats.slot, parent_stats.is_locked_out
                     );
-                    info!(
+                    debug!(
                         "{} {} threshold: {}",
                         my_pubkey, parent_stats.slot, parent_stats.vote_threshold
                     );
@@ -899,11 +899,11 @@ impl ReplayStage {
                 }
                 best_bank = child;
                 if child_stats.is_locked_out || !child_stats.vote_threshold {
-                    info!(
+                    debug!(
                         "{} {} locked_out: {}",
                         my_pubkey, child_stats.slot, child_stats.is_locked_out
                     );
-                    info!(
+                    debug!(
                         "{} {} threshold: {}",
                         my_pubkey, child_stats.slot, child_stats.vote_threshold
                     );
