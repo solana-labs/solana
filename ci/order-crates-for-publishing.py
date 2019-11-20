@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 #
 # This script figures the order in which workspace crates must be published to
 # crates.io.  Along the way it also ensures there are no circular dependencies
