@@ -1,5 +1,5 @@
 [package]
-name = "solana-budget-program"
+name = "solana-budget-"
 version = "0.21.0"
 description = "Solana Budget program API"
 authors = ["Solana Maintainers <maintainers@solana.com>"]

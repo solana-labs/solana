@@ -1,5 +1,5 @@
 [package]
-name = "solana-exchange-api"
+name = "solana-exchange-program"
 version = "0.21.0"
 description = "Solana Exchange program API"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
@@ -21,5 +21,5 @@ solana-sdk = { path = "../../sdk", version = "0.21.0" }
 solana-runtime = { path = "../../runtime", version = "0.21.0" }
 
 [lib]
-crate-type = ["lib"]
-name = "solana_exchange_api"
+crate-type = ["lib", "cdylib"]
+name = "solana_exchange_program"
