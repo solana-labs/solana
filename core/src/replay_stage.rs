@@ -756,12 +756,17 @@ impl ReplayStage {
 
                 if !stats.computed {
                     stats.slot = bank.slot();
-                    let (stake_lockouts, total_staked) =
-                        tower.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter());
+                    let (stake_lockouts, total_staked) = tower.bank_lockouts(bank);
                     Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
                     stats.weight = tower.calculate_weight(&stake_lockouts);
-                    warn!("{} slot_weight: {} {} {}", my_pubkey, stats.slot, stats.weight, bank.parent().map(|b| b.slot()).unwrap_or(0));
+                    warn!(
+                        "{} slot_weight: {} {} {}",
+                        my_pubkey,
+                        stats.slot,
+                        stats.weight,
+                        bank.parent().map(|b| b.slot()).unwrap_or(0)
+                    );
                     stats.stake_lockouts = stake_lockouts;
                     stats.block_height = bank.block_height();
                     stats.vote_threshold = tower.check_vote_stake_threshold(
@@ -864,8 +869,14 @@ impl ReplayStage {
                     continue;
                 }
                 if parent_stats.is_locked_out || !parent_stats.vote_threshold {
-                    info!("{} {} locked_out: {}", my_pubkey, parent_stats.slot, parent_stats.is_locked_out);
-                    info!("{} {} threshold: {}", my_pubkey, parent_stats.slot, parent_stats.vote_threshold);
+                    info!(
+                        "{} {} locked_out: {}",
+                        my_pubkey, parent_stats.slot, parent_stats.is_locked_out
+                    );
+                    info!(
+                        "{} {} threshold: {}",
+                        my_pubkey, parent_stats.slot, parent_stats.vote_threshold
+                    );
                     continue;
                 }
 
@@ -888,8 +899,14 @@ impl ReplayStage {
                 }
                 best_bank = child;
                 if child_stats.is_locked_out || !child_stats.vote_threshold {
-                    info!("{} {} locked_out: {}", my_pubkey, child_stats.slot, child_stats.is_locked_out);
-                    info!("{} {} threshold: {}", my_pubkey, child_stats.slot, child_stats.vote_threshold);
+                    info!(
+                        "{} {} locked_out: {}",
+                        my_pubkey, child_stats.slot, child_stats.is_locked_out
+                    );
+                    info!(
+                        "{} {} threshold: {}",
+                        my_pubkey, child_stats.slot, child_stats.vote_threshold
+                    );
                     continue;
                 }
                 inc_new_counter_info!("replay_stage-pick_best_fork-child", 1);

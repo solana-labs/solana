@@ -220,7 +220,7 @@ pub struct Bank {
     block_height: u64,
 
     /// Last 2*Epoch  slots
-    slots_history: VecDeque<Slot>,
+    slot_history: VecDeque<Slot>,
 
     /// The pubkey to send transactions fees to.
     collector_id: Pubkey,
@@ -301,7 +301,6 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
-        bank.slot_history.push_front(bank.slot());
         bank
     }
 
@@ -343,8 +342,8 @@ impl Bank {
             block_height: parent.block_height + 1,
             slot_history: {
                 let mut slots = parent.slot_history.clone();
-                slots.push_front(slot);
-                if slots.len() > epoch_schedule.slots_per_epoch() * 2 {
+                slots.push_front(parent.slot());
+                if slots.len() > (epoch_schedule.slots_per_epoch * 2) as usize {
                     slots.pop_back();
                 }
                 slots
@@ -1460,7 +1459,7 @@ impl Bank {
 
     /// Return the block_height of this bank
     pub fn slot_history(&self) -> &VecDeque<Slot> {
-        self.slot_history
+        &self.slot_history
     }
 
     /// Return the number of slots per epoch for the given epoch
