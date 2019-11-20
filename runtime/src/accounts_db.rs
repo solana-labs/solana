@@ -250,6 +250,7 @@ impl AccountStorageEntry {
     }
 
     fn add_account(&self) {
+        error!("adding account");
         let mut count_and_status = self.count_and_status.write().unwrap();
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
     }
@@ -267,6 +268,7 @@ impl AccountStorageEntry {
     }
 
     fn remove_account(&self) -> usize {
+        error!("removing account");
         let mut count_and_status = self.count_and_status.write().unwrap();
         let (count, mut status) = *count_and_status;
 
@@ -1170,18 +1172,42 @@ pub mod tests {
         assert_eq!(db.load_slow(&ancestors, &key), Some((account0, 0)));
     }
 
+    #[test]
     fn test_accountsdb_generate_index() {
         solana_logger::setup();
-        let ancestors = vec![(1, 1)].into_iter().collect();
+        //let ancestors = vec![(1, 1)].into_iter().collect();
         let db = AccountsDB::new(None);
-        db.scan_accounts(ancestors: &HashMap<Slot, usize>, scan_func: F)
-        db.generate_index()
-        let key = Pubkey::default();
-        let account0 = Account::new(1, 0, &key);
+        //db.scan_accounts(ancestors: &HashMap<Slot, usize>, scan_func: F)
+        //db.generate_index()
+        let key0 = Pubkey::new_rand();
+        let account0 = Account::new(1, 0, &Account::default().owner);
+        let key1 = Pubkey::new_rand();
+        let account1 = Account::new(2, 0, &Account::default().owner);
+        let key2 = Pubkey::new_rand();
+        let account2 = Account::new(3, 0, &Account::default().owner);
+        let slot_a = 12;
+        db.add_root(slot_a);
 
-        db.store(0, &[(&key, &account0)]);
-        db.add_root(0);
-        assert_eq!(db.load_slow(&ancestors, &key), Some((account0, 0)));
+        let slot_b = slot_a + 1;
+        db.add_root(slot_b);
+
+        debug!("{:?}", db.store(slot_a, &[(&key0, &account0)]));
+        debug!("{:?}", db.store(slot_a, &[(&key1, &account1)]));
+
+        {
+            let stores = db.storage.read().unwrap();
+            let slot_a_stores = &stores.0.get(&slot_a).unwrap();
+            assert_eq!(slot_a_stores.values().map(|v| v.count_and_status.read().unwrap().0).collect::<Vec<usize>>(), vec![2]);
+        }
+        debug!("{:?}", db.store(slot_b, &[(&key0, &account0), (&key2, &account2)]));
+
+        {
+            let stores = db.storage.read().unwrap();
+            let slot_a_stores = &stores.0.get(&slot_a).unwrap();
+            assert_eq!(slot_a_stores.values().map(|v| v.count_and_status.read().unwrap().0).collect::<Vec<usize>>(), vec![1]);
+            let slot_b_stores = &stores.0.get(&slot_b).unwrap();
+            assert_eq!(slot_b_stores.values().map(|v| v.count_and_status.read().unwrap().0).collect::<Vec<usize>>(), vec![2]);
+        }
     }
 
     #[test]
