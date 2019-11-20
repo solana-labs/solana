@@ -8,6 +8,8 @@ use crate::consensus::{StakeLockout, Tower};
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
+use crate::thread_mem_usage;
+use jemalloc_ctl::thread::allocatedp;
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
@@ -86,6 +88,7 @@ struct ForkStats {
     block_height: u64,
     has_voted: bool,
     is_recent: bool,
+    is_empty: bool,
     vote_threshold: bool,
     is_locked_out: bool,
     stake_lockouts: HashMap<u64, StakeLockout>,
@@ -212,20 +215,30 @@ impl ReplayStage {
                 let mut last_reset = Hash::default();
                 let mut partition = false;
                 loop {
+                    let allocated = allocatedp::mib().unwrap();
+                    let allocated = allocated.read().unwrap();
+
+                    thread_mem_usage::datapoint("solana-replay-stage");
                     let now = Instant::now();
                     // Stop getting entries if we get exit signal
                     if exit_.load(Ordering::Relaxed) {
                         break;
                     }
 
+                    let start = allocated.get();
                     Self::generate_new_bank_forks(
                         &blocktree,
                         &mut bank_forks.write().unwrap(),
                         &leader_schedule_cache,
                     );
+                    datapoint_debug!(
+                        "replay_stage-memory",
+                        ("generate_new_bank_forks", (allocated.get() - start) as i64, i64),
+                    );
 
                     let mut tpu_has_bank = poh_recorder.lock().unwrap().has_bank();
 
+                    let start = allocated.get();
                     let did_complete_bank = Self::replay_active_banks(
                         &blocktree,
                         &bank_forks,
@@ -233,14 +246,23 @@ impl ReplayStage {
                         &mut progress,
                         &slot_full_senders,
                     );
+                    datapoint_debug!(
+                        "replay_stage-memory",
+                        ("replay_active_banks", (allocated.get() - start) as i64, i64),
+                    );
 
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
                     loop {
-                        let (vote_bank, heaviest) =
-                            Self::select_fork(&ancestors, &bank_forks, &tower, &mut progress);
+                        let start = allocated.get();
+                        let (vote_bank, heaviest) = Self::select_fork(&ancestors, &bank_forks, &tower, &mut progress);
+                        datapoint_debug!(
+                            "replay_stage-memory",
+                            ("select_fork", (allocated.get() - start) as i64, i64),
+                        );
                         let done = vote_bank.is_none();
                         let mut vote_bank_slot = 0;
                         let reset_bank = vote_bank.as_ref().map(|b| b.0.clone()).or(heaviest);
+                        let start = allocated.get();
                         if let Some((bank, total_staked)) = vote_bank {
                             info!("voting: {}", bank.slot());
                             subscriptions.notify_subscribers(bank.slot(), &bank_forks);
@@ -271,6 +293,11 @@ impl ReplayStage {
                                 &snapshot_package_sender,
                             )?;
                         }
+                        datapoint_debug!(
+                            "replay_stage-memory",
+                            ("votable_bank", (allocated.get() - start) as i64, i64),
+                        );
+                        let start = allocated.get();
                         if let Some(bank) = reset_bank {
                             if last_reset != bank.last_blockhash() {
                                 Self::reset_poh_recorder(
@@ -286,6 +313,7 @@ impl ReplayStage {
                                 if !partition && vote_bank_slot != bank.slot() {
                                     warn!("PARTITION DETECTED waiting to join fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
                                     inc_new_counter_info!("replay_stage-partition_detected", 1);
+                                    datapoint_info!("replay_stage-partition", ("slot", bank.slot() as i64, i64));
                                     partition = true;
                                 } else if partition && vote_bank_slot == bank.slot() {
                                     warn!("PARTITION resolved fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
@@ -294,11 +322,16 @@ impl ReplayStage {
                                 }
                             }
                         }
+                        datapoint_debug!(
+                            "replay_stage-memory",
+                            ("reset_bank", (allocated.get() - start) as i64, i64),
+                        );
                         if done {
                             break;
                         }
                     }
 
+                    let start = allocated.get();
                     if !tpu_has_bank {
                         Self::maybe_start_leader(
                             &my_pubkey,
@@ -316,11 +349,11 @@ impl ReplayStage {
                             );
                         }
                     }
-
-                    inc_new_counter_info!(
-                        "replay_stage-duration",
-                        duration_as_ms(&now.elapsed()) as usize
-                    );
+                    datapoint_debug!(
+                        "replay_stage-memory",
+                        ("start_leader", (allocated.get() - start) as i64, i64),
+                        );
+                    datapoint_debug!("replay_stage", ("duration", duration_as_ms(&now.elapsed()) as i64, i64));
                     if did_complete_bank {
                         //just processed a bank, skip the signal; maybe there's more slots available
                         continue;
@@ -691,6 +724,7 @@ impl ReplayStage {
         progress: &mut HashMap<u64, ForkProgress>,
     ) -> VoteAndPoHBank {
         let tower_start = Instant::now();
+
         let mut frozen_banks: Vec<_> = bank_forks
             .read()
             .unwrap()
@@ -699,8 +733,14 @@ impl ReplayStage {
             .cloned()
             .collect();
         frozen_banks.sort_by_key(|bank| bank.slot());
+        let num_frozen_banks = frozen_banks.len();
 
         trace!("frozen_banks {}", frozen_banks.len());
+        let num_old_banks = frozen_banks
+            .iter()
+            .filter(|b| b.slot() < tower.root().unwrap_or(0))
+            .count();
+
         let stats: Vec<ForkStats> = frozen_banks
             .iter()
             .map(|bank| {
@@ -733,7 +773,7 @@ impl ReplayStage {
                 );
                 if !stats.computed {
                     if !stats.vote_threshold {
-                        info!("vote threshold check failed: {}", bank.slot());
+                        debug!("vote threshold check failed: {}", bank.slot());
                     }
                     stats.computed = true;
                 }
@@ -747,6 +787,15 @@ impl ReplayStage {
                 stats
             })
             .collect();
+        let num_not_recent = stats.iter().filter(|s| !s.is_recent).count();
+        let num_has_voted = stats.iter().filter(|s| s.has_voted).count();
+        let num_empty = stats.iter().filter(|s| s.is_empty).count();
+        let num_threshold_failure = stats.iter().filter(|s| !s.vote_threshold).count();
+        let num_votable_threshold_failure = stats
+            .iter()
+            .filter(|s| s.is_recent && !s.has_voted && !s.vote_threshold)
+            .count();
+
         let mut candidates: Vec<_> = frozen_banks
             .iter()
             .zip(stats.iter())
@@ -780,7 +829,21 @@ impl ReplayStage {
             weights,
             rv.0.is_some()
         );
-        inc_new_counter_info!("replay_stage-tower_duration", ms as usize);
+        datapoint_debug!(
+            "replay_stage-select_fork",
+            ("frozen_banks", num_frozen_banks as i64, i64),
+            ("not_recent", num_not_recent as i64, i64),
+            ("has_voted", num_has_voted as i64, i64),
+            ("old_banks", num_old_banks as i64, i64),
+            ("empty_banks", num_empty as i64, i64),
+            ("threshold_failure", num_threshold_failure as i64, i64),
+            (
+                "votable_threshold_failure",
+                num_votable_threshold_failure as i64,
+                i64
+            ),
+            ("tower_duration", ms as i64, i64),
+        );
         rv
     }
 

@@ -24,11 +24,13 @@ use crate::{
     repair_service::RepairType,
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
+    thread_mem_usage,
     weighted_shuffle::{weighted_best, weighted_shuffle},
 };
 use bincode::{serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
+use jemalloc_ctl::thread::allocatedp;
 use rand::{thread_rng, Rng};
 use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree, staking_utils};
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
@@ -36,9 +38,9 @@ use solana_net_utils::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
     multi_bind_in_range, PortRange,
 };
-use solana_perf::packet::{to_packets_with_destination, Packets};
+use solana_perf::packet::{to_packets_with_destination, Packets, PacketsRecycler};
 use solana_sdk::{
-    clock::Slot,
+    clock::{Slot, DEFAULT_MS_PER_SLOT},
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signable, Signature},
     timing::{duration_as_ms, timestamp},
@@ -362,6 +364,7 @@ impl ClusterInfo {
             .collect();
         let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
         let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
+        inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
         (txs, max_ts)
     }
 
@@ -401,10 +404,6 @@ impl ClusterInfo {
             .table
             .get(&CrdsValueLabel::ContactInfo(*pubkey))
             .map(|x| x.value.contact_info().unwrap())
-    }
-
-    pub fn purge(&mut self, now: u64) {
-        self.gossip.purge(now);
     }
 
     pub fn rpc_peers(&self) -> Vec<ContactInfo> {
@@ -1010,12 +1009,15 @@ impl ClusterInfo {
     /// At random pick a node and try to get updated changes from them
     fn run_gossip(
         obj: &Arc<RwLock<Self>>,
+        recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
         sender: &PacketSender,
     ) -> Result<()> {
         let reqs = obj.write().unwrap().gossip_request(&stakes);
-        let packets = to_packets_with_destination(&reqs);
-        sender.send(packets)?;
+        if !reqs.is_empty() {
+            let packets = to_packets_with_destination(recycler.clone(), &reqs);
+            sender.send(packets)?;
+        }
         Ok(())
     }
 
@@ -1032,8 +1034,10 @@ impl ClusterInfo {
             .spawn(move || {
                 let mut last_push = timestamp();
                 let mut last_contact_info_trace = timestamp();
+                let recycler = PacketsRecycler::default();
                 loop {
                     let start = timestamp();
+                    thread_mem_usage::datapoint("solana-gossip");
                     if start - last_contact_info_trace > 10000 {
                         // Log contact info every 10 seconds
                         info!("\n{}", obj.read().unwrap().contact_info_trace());
@@ -1046,11 +1050,30 @@ impl ClusterInfo {
                         }
                         None => HashMap::new(),
                     };
-                    let _ = Self::run_gossip(&obj, &stakes, &sender);
+                    let _ = Self::run_gossip(&obj, &recycler, &stakes, &sender);
                     if exit.load(Ordering::Relaxed) {
                         return;
                     }
-                    obj.write().unwrap().purge(timestamp());
+                    let timeout = {
+                        if let Some(ref bank_forks) = bank_forks {
+                            let bank = bank_forks.read().unwrap().working_bank();
+                            let epoch = bank.epoch();
+                            let epoch_schedule = bank.epoch_schedule();
+                            epoch_schedule.get_slots_in_epoch(epoch) * DEFAULT_MS_PER_SLOT
+                        } else {
+                            inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);
+                            CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS
+                        }
+                    };
+                    let timeouts = obj.read().unwrap().gossip.make_timeouts(&stakes, timeout);
+                    let num_purged = obj.write().unwrap().gossip.purge(timestamp(), &timeouts);
+                    inc_new_counter_info!("cluster_info-purge-count", num_purged);
+                    let table_size = obj.read().unwrap().gossip.crds.table.len();
+                    datapoint_debug!(
+                        "cluster_info-purge",
+                        ("tabel_size", table_size as i64, i64),
+                        ("purge_stake_timeout", timeout as i64, i64)
+                    );
                     //TODO: possibly tune this parameter
                     //we saw a deadlock passing an obj.read().unwrap().timeout into sleep
                     if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
@@ -1084,20 +1107,25 @@ impl ClusterInfo {
     }
 
     fn run_window_request(
+        recycler: &PacketsRecycler,
         from: &ContactInfo,
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
         me: &ContactInfo,
         slot: Slot,
         shred_index: u64,
-    ) -> Packets {
+    ) -> Option<Packets> {
         if let Some(blocktree) = blocktree {
             // Try to find the requested index in one of the slots
             let packet = Self::get_data_shred_as_packet(blocktree, slot, shred_index, from_addr);
 
             if let Ok(Some(packet)) = packet {
                 inc_new_counter_debug!("cluster_info-window-request-ledger", 1);
-                return Packets::new(vec![packet]);
+                return Some(Packets::new_with_recycler_data(
+                    recycler,
+                    "run_window_request",
+                    vec![packet],
+                ));
             }
         }
 
@@ -1110,46 +1138,41 @@ impl ClusterInfo {
             shred_index,
         );
 
-        Packets::default()
+        None
     }
 
     fn run_highest_window_request(
+        recycler: &PacketsRecycler,
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
         slot: Slot,
         highest_index: u64,
-    ) -> Packets {
-        if let Some(blocktree) = blocktree {
-            // Try to find the requested index in one of the slots
-            let meta = blocktree.meta(slot);
-
-            if let Ok(Some(meta)) = meta {
-                if meta.received > highest_index {
-                    // meta.received must be at least 1 by this point
-                    let packet = Self::get_data_shred_as_packet(
-                        blocktree,
-                        slot,
-                        meta.received - 1,
-                        from_addr,
-                    );
-
-                    if let Ok(Some(packet)) = packet {
-                        return Packets::new(vec![packet]);
-                    }
-                }
-            }
+    ) -> Option<Packets> {
+        let blocktree = blocktree?;
+        // Try to find the requested index in one of the slots
+        let meta = blocktree.meta(slot).ok()??;
+        if meta.received > highest_index {
+            // meta.received must be at least 1 by this point
+            let packet =
+                Self::get_data_shred_as_packet(blocktree, slot, meta.received - 1, from_addr)
+                    .ok()??;
+            return Some(Packets::new_with_recycler_data(
+                recycler,
+                "run_highest_window_request",
+                vec![packet],
+            ));
         }
-
-        Packets::default()
+        None
     }
 
     fn run_orphan(
+        recycler: &PacketsRecycler,
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
         mut slot: Slot,
         max_responses: usize,
-    ) -> Packets {
-        let mut res = Packets::default();
+    ) -> Option<Packets> {
+        let mut res = Packets::new_with_recycler(recycler.clone(), 64, "run_orphan");
         if let Some(blocktree) = blocktree {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blocktree.meta(slot) {
@@ -1168,18 +1191,23 @@ impl ClusterInfo {
                 }
             }
         }
-
-        res
+        if res.is_empty() {
+            return None;
+        }
+        Some(res)
     }
 
     fn handle_packets(
         me: &Arc<RwLock<Self>>,
+        recycler: &PacketsRecycler,
         blocktree: Option<&Arc<Blocktree>>,
         stakes: &HashMap<Pubkey, u64>,
         packets: Packets,
         response_sender: &PacketSender,
     ) {
         // iter over the packets, collect pulls separately and process everything else
+        let allocated = allocatedp::mib().unwrap();
+        let allocated = allocated.read().unwrap();
         let mut gossip_pull_data: Vec<PullData> = vec![];
         packets.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();
@@ -1187,6 +1215,7 @@ impl ClusterInfo {
                 .into_iter()
                 .for_each(|request| match request {
                     Protocol::PullRequest(filter, caller) => {
+                        let start = allocated.get();
                         if !caller.verify() {
                             inc_new_counter_error!(
                                 "cluster_info-gossip_pull_request_verify_fail",
@@ -1204,8 +1233,13 @@ impl ClusterInfo {
                                 });
                             }
                         }
+                        datapoint_debug!(
+                            "solana-gossip-listen-memory",
+                            ("pull_request", (allocated.get() - start) as i64, i64),
+                        );
                     }
                     Protocol::PullResponse(from, mut data) => {
+                        let start = allocated.get();
                         data.retain(|v| {
                             let ret = v.verify();
                             if !ret {
@@ -1217,8 +1251,13 @@ impl ClusterInfo {
                             ret
                         });
                         Self::handle_pull_response(me, &from, data);
+                        datapoint_debug!(
+                            "solana-gossip-listen-memory",
+                            ("pull_response", (allocated.get() - start) as i64, i64),
+                        );
                     }
                     Protocol::PushMessage(from, mut data) => {
+                        let start = allocated.get();
                         data.retain(|v| {
                             let ret = v.verify();
                             if !ret {
@@ -1229,10 +1268,17 @@ impl ClusterInfo {
                             }
                             ret
                         });
-                        let _ignore_disconnect = response_sender
-                            .send(Self::handle_push_message(me, &from, data, stakes));
+                        let rsp = Self::handle_push_message(me, recycler, &from, data, stakes);
+                        if let Some(rsp) = rsp {
+                            let _ignore_disconnect = response_sender.send(rsp);
+                        }
+                        datapoint_debug!(
+                            "solana-gossip-listen-memory",
+                            ("push_message", (allocated.get() - start) as i64, i64),
+                        );
                     }
                     Protocol::PruneMessage(from, data) => {
+                        let start = allocated.get();
                         if data.verify() {
                             inc_new_counter_debug!("cluster_info-prune_message", 1);
                             inc_new_counter_debug!(
@@ -1257,19 +1303,31 @@ impl ClusterInfo {
                         } else {
                             inc_new_counter_debug!("cluster_info-gossip_prune_msg_verify_fail", 1);
                         }
+                        datapoint_debug!(
+                            "solana-gossip-listen-memory",
+                            ("prune_message", (allocated.get() - start) as i64, i64),
+                        );
                     }
                     _ => {
-                        let _ignore_disconnect = response_sender
-                            .send(Self::handle_repair(me, &from_addr, blocktree, request));
+                        let rsp = Self::handle_repair(me, recycler, &from_addr, blocktree, request);
+                        if let Some(rsp) = rsp {
+                            let _ignore_disconnect = response_sender.send(rsp);
+                        }
                     }
                 })
         });
         // process the collected pulls together
-        let _ignore_disconnect =
-            response_sender.send(Self::handle_pull_requests(me, gossip_pull_data));
+        let rsp = Self::handle_pull_requests(me, recycler, gossip_pull_data);
+        if let Some(rsp) = rsp {
+            let _ignore_disconnect = response_sender.send(rsp);
+        }
     }
 
-    fn handle_pull_requests(me: &Arc<RwLock<Self>>, requests: Vec<PullData>) -> Packets {
+    fn handle_pull_requests(
+        me: &Arc<RwLock<Self>>,
+        recycler: &PacketsRecycler,
+        requests: Vec<PullData>,
+    ) -> Option<Packets> {
         // split the requests into addrs and filters
         let mut caller_and_filters = vec![];
         let mut addrs = vec![];
@@ -1284,7 +1342,7 @@ impl ClusterInfo {
             .unwrap()
             .gossip
             .process_pull_requests(caller_and_filters, now);
-        let mut packets = Packets::default();
+        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         pull_responses
             .into_iter()
             .zip(addrs.into_iter())
@@ -1304,7 +1362,10 @@ impl ClusterInfo {
                             .push(Packet::from_data(&from_addr, protocol))
                     })
             });
-        packets
+        if packets.is_empty() {
+            return None;
+        }
+        Some(packets)
     }
 
     fn handle_pull_response(me: &Arc<RwLock<Self>>, from: &Pubkey, data: Vec<CrdsValue>) {
@@ -1324,10 +1385,11 @@ impl ClusterInfo {
 
     fn handle_push_message(
         me: &Arc<RwLock<Self>>,
+        recycler: &PacketsRecycler,
         from: &Pubkey,
         data: Vec<CrdsValue>,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> Packets {
+    ) -> Option<Packets> {
         let self_id = me.read().unwrap().gossip.id;
         inc_new_counter_debug!("cluster_info-push_message", 1);
 
@@ -1362,8 +1424,10 @@ impl ClusterInfo {
                 })
             })
             .collect();
-        let mut packets = to_packets_with_destination(&rsp);
-
+        if rsp.is_empty() {
+            return None;
+        }
+        let mut packets = to_packets_with_destination(recycler.clone(), &rsp);
         if !packets.is_empty() {
             let pushes: Vec<_> = me.write().unwrap().new_push_requests();
             inc_new_counter_debug!("cluster_info-push_message-pushes", pushes.len());
@@ -1371,9 +1435,9 @@ impl ClusterInfo {
                 let p = Packet::from_data(&remote_gossip_addr, &req);
                 packets.packets.push(p);
             });
-            packets
+            Some(packets)
         } else {
-            Packets::default()
+            None
         }
     }
 
@@ -1388,10 +1452,11 @@ impl ClusterInfo {
 
     fn handle_repair(
         me: &Arc<RwLock<Self>>,
+        recycler: &PacketsRecycler,
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
         request: Protocol,
-    ) -> Packets {
+    ) -> Option<Packets> {
         let now = Instant::now();
 
         //TODO this doesn't depend on cluster_info module, could be moved
@@ -1406,7 +1471,7 @@ impl ClusterInfo {
                 self_id, from.id,
             );
             inc_new_counter_debug!("cluster_info-handle-repair--eq", 1);
-            return Packets::default();
+            return None;
         }
 
         me.write()
@@ -1422,6 +1487,7 @@ impl ClusterInfo {
                     inc_new_counter_debug!("cluster_info-request-window-index", 1);
                     (
                         Self::run_window_request(
+                            recycler,
                             from,
                             &from_addr,
                             blocktree,
@@ -1437,6 +1503,7 @@ impl ClusterInfo {
                     inc_new_counter_debug!("cluster_info-request-highest-window-index", 1);
                     (
                         Self::run_highest_window_request(
+                            recycler,
                             &from_addr,
                             blocktree,
                             *slot,
@@ -1448,7 +1515,13 @@ impl ClusterInfo {
                 Protocol::RequestOrphan(_, slot) => {
                     inc_new_counter_debug!("cluster_info-request-orphan", 1);
                     (
-                        Self::run_orphan(&from_addr, blocktree, *slot, MAX_ORPHAN_REPAIR_RESPONSES),
+                        Self::run_orphan(
+                            recycler,
+                            &from_addr,
+                            blocktree,
+                            *slot,
+                            MAX_ORPHAN_REPAIR_RESPONSES,
+                        ),
                         "RequestOrphan",
                     )
                 }
@@ -1464,6 +1537,7 @@ impl ClusterInfo {
     /// Process messages from the network
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
+        recycler: &PacketsRecycler,
         blocktree: Option<&Arc<Blocktree>>,
         bank_forks: Option<&Arc<RwLock<BankForks>>>,
         requests_receiver: &PacketReceiver,
@@ -1472,7 +1546,6 @@ impl ClusterInfo {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
         let reqs = requests_receiver.recv_timeout(timeout)?;
-
         let stakes: HashMap<_, _> = match bank_forks {
             Some(ref bank_forks) => {
                 staking_utils::staked_nodes(&bank_forks.read().unwrap().working_bank())
@@ -1480,7 +1553,7 @@ impl ClusterInfo {
             None => HashMap::new(),
         };
 
-        Self::handle_packets(obj, blocktree, &stakes, reqs, response_sender);
+        Self::handle_packets(obj, &recycler, blocktree, &stakes, reqs, response_sender);
         Ok(())
     }
     pub fn listen(
@@ -1492,11 +1565,13 @@ impl ClusterInfo {
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
+        let recycler = PacketsRecycler::default();
         Builder::new()
             .name("solana-listen".to_string())
             .spawn(move || loop {
                 let e = Self::run_listen(
                     &me,
+                    &recycler,
                     blocktree.as_ref(),
                     bank_forks.as_ref(),
                     &requests_receiver,
@@ -1513,6 +1588,7 @@ impl ClusterInfo {
                         me.gossip.crds.table.len()
                     );
                 }
+                thread_mem_usage::datapoint("solana-listen");
             })
             .unwrap()
     }
@@ -1961,6 +2037,7 @@ mod tests {
     /// test window requests respond with the right shred, and do not overrun
     #[test]
     fn run_window_request() {
+        let recycler = PacketsRecycler::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -1979,6 +2056,7 @@ mod tests {
                 0,
             );
             let rv = ClusterInfo::run_window_request(
+                &recycler,
                 &me,
                 &socketaddr_any!(),
                 Some(&blocktree),
@@ -1986,7 +2064,7 @@ mod tests {
                 0,
                 0,
             );
-            assert!(rv.is_empty());
+            assert!(rv.is_none());
             let mut common_header = ShredCommonHeader::default();
             common_header.slot = 2;
             common_header.index = 1;
@@ -2003,6 +2081,7 @@ mod tests {
                 .expect("Expect successful ledger write");
 
             let rv = ClusterInfo::run_window_request(
+                &recycler,
                 &me,
                 &socketaddr_any!(),
                 Some(&blocktree),
@@ -2010,8 +2089,9 @@ mod tests {
                 2,
                 1,
             );
-            assert!(!rv.is_empty());
+            assert!(!rv.is_none());
             let rv: Vec<Shred> = rv
+                .expect("packets")
                 .packets
                 .into_iter()
                 .filter_map(|b| Shred::new_from_serialized_shred(b.data.to_vec()).ok())
@@ -2026,13 +2106,19 @@ mod tests {
     /// test run_window_requestwindow requests respond with the right shred, and do not overrun
     #[test]
     fn run_highest_window_request() {
+        let recycler = PacketsRecycler::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
-            let rv =
-                ClusterInfo::run_highest_window_request(&socketaddr_any!(), Some(&blocktree), 0, 0);
-            assert!(rv.is_empty());
+            let rv = ClusterInfo::run_highest_window_request(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blocktree),
+                0,
+                0,
+            );
+            assert!(rv.is_none());
 
             let _ = fill_blocktree_slot_with_ticks(
                 &blocktree,
@@ -2042,9 +2128,15 @@ mod tests {
                 Hash::default(),
             );
 
-            let rv =
-                ClusterInfo::run_highest_window_request(&socketaddr_any!(), Some(&blocktree), 2, 1);
+            let rv = ClusterInfo::run_highest_window_request(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blocktree),
+                2,
+                1,
+            );
             let rv: Vec<Shred> = rv
+                .expect("packets")
                 .packets
                 .into_iter()
                 .filter_map(|b| Shred::new_from_serialized_shred(b.data.to_vec()).ok())
@@ -2055,12 +2147,13 @@ mod tests {
             assert_eq!(rv[0].slot(), 2);
 
             let rv = ClusterInfo::run_highest_window_request(
+                &recycler,
                 &socketaddr_any!(),
                 Some(&blocktree),
                 2,
                 index + 1,
             );
-            assert!(rv.is_empty());
+            assert!(rv.is_none());
         }
 
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
@@ -2069,11 +2162,12 @@ mod tests {
     #[test]
     fn run_orphan() {
         solana_logger::setup();
+        let recycler = PacketsRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
-            let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 2, 0);
-            assert!(rv.is_empty());
+            let rv = ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blocktree), 2, 0);
+            assert!(rv.is_none());
 
             // Create slots 1, 2, 3 with 5 shreds apiece
             let (shreds, _) = make_many_slot_entries(1, 3, 5);
@@ -2083,16 +2177,18 @@ mod tests {
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset
-            let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 4, 5);
-            assert!(rv.is_empty());
+            let rv = ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blocktree), 4, 5);
+            assert!(rv.is_none());
 
             // For slot 3, we should return the highest shreds from slots 3, 2, 1 respectively
             // for this request
-            let rv: Vec<_> = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 3, 5)
-                .packets
-                .iter()
-                .map(|b| b.clone())
-                .collect();
+            let rv: Vec<_> =
+                ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blocktree), 3, 5)
+                    .expect("run_orphan packets")
+                    .packets
+                    .iter()
+                    .map(|b| b.clone())
+                    .collect();
             let expected: Vec<_> = (1..=3)
                 .rev()
                 .map(|slot| {

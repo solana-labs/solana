@@ -283,7 +283,8 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
         let requests: Vec<_> = network_values
             .par_iter()
             .map(|node| {
-                node.lock().unwrap().purge(now);
+                let timeouts = node.lock().unwrap().make_timeouts_test();
+                node.lock().unwrap().purge(now, &timeouts);
                 node.lock().unwrap().new_push_messages(now)
             })
             .collect();
