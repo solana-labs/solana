@@ -590,6 +590,9 @@ impl AccountsDB {
         drop(accounts_index);
         let mut dead_slots = self.remove_dead_accounts(reclaims);
         self.cleanup_dead_slots(&mut dead_slots, last_root);
+        for slot in dead_slots {
+            self.purge_slot(slot);
+        }
     }
 
     pub fn scan_accounts<F, A>(&self, ancestors: &HashMap<Slot, usize>, scan_func: F) -> A
@@ -1261,11 +1264,17 @@ pub mod tests {
 
         let ancestors = vec![(slot_a, 1), (slot_b, 1)].into_iter().collect();
         //assert!(db.verify_hash_internal_state(slot_b, &ancestors));
+
+        let key3 = Pubkey::new_rand();
+        let lamportZ = 0;
+        let account3 = Account::new(lamportZ, 0, &Account::default().owner);
         assert!(db.verify_account_balance(&ancestors));
+        debug!("{:?}", db.store(slot_b, &[(&key3, &account3)]));
 
         let mut db2 = AccountsDB::new(None);
         db2.storage = RwLock::new(db.storage.read().unwrap().clone());
         db2.generate_index();
+        db2.purge_zero_lamport_accounts(&ancestors);
         assert!(db2.verify_account_balance(&ancestors));
         //assert_eq!(*db2.accounts_index.read().unwrap().account_maps.map(|m| m.read().unwrap()), *db.accounts_index.read().unwrap());
 
@@ -1285,7 +1294,7 @@ pub mod tests {
             assert_eq!(slot_a_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
             let slot_b_stores = &stores.0.get(&slot_b).unwrap();
             assert_eq!(slot_b_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![2]);
-            assert_eq!(slot_b_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(slot_b_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2+1]);
         }
     }
 
