@@ -55,6 +55,7 @@ pub struct ValidatorConfig {
     pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
     pub voting_disabled: bool,
+    pub transaction_status_service_disabled: bool,
     pub blockstream_unix_socket: Option<PathBuf>,
     pub storage_slots_per_turn: u64,
     pub account_paths: Option<String>,
@@ -72,6 +73,7 @@ impl Default for ValidatorConfig {
             dev_halt_at_slot: None,
             expected_genesis_hash: None,
             voting_disabled: false,
+            transaction_status_service_disabled: false,
             blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
             max_ledger_slots: None,
@@ -116,7 +118,6 @@ pub struct Validator {
 }
 
 impl Validator {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
@@ -127,7 +128,6 @@ impl Validator {
         entrypoint_info_option: Option<&ContactInfo>,
         poh_verify: bool,
         config: &ValidatorConfig,
-        disable_transaction_status_service: bool,
     ) -> Self {
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -243,7 +243,7 @@ impl Validator {
         };
 
         let (transaction_status_sender, transaction_status_service) =
-            if rpc_service.is_some() && !disable_transaction_status_service {
+            if rpc_service.is_some() && !config.transaction_status_service_disabled {
                 let (transaction_status_sender, transaction_status_receiver) = channel();
                 (
                     Some(transaction_status_sender),
@@ -554,6 +554,8 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 
     let leader_voting_keypair = Arc::new(voting_keypair);
     let storage_keypair = Arc::new(Keypair::new());
+    let mut config = ValidatorConfig::default();
+    config.transaction_status_service_disabled = true;
     let node = Validator::new(
         node,
         &node_keypair,
@@ -563,8 +565,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
         &storage_keypair,
         None,
         true,
-        &ValidatorConfig::default(),
-        true,
+        &config,
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
     (node, contact_info, mint_keypair, ledger_path)
@@ -591,6 +592,8 @@ mod tests {
 
         let voting_keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
+        let mut config = ValidatorConfig::default();
+        config.transaction_status_service_disabled = true;
         let validator = Validator::new(
             validator_node,
             &Arc::new(validator_keypair),
@@ -600,8 +603,7 @@ mod tests {
             &storage_keypair,
             Some(&leader_node.info),
             true,
-            &ValidatorConfig::default(),
-            true,
+            &config,
         );
         validator.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -624,6 +626,8 @@ mod tests {
                 ledger_paths.push(validator_ledger_path.clone());
                 let voting_keypair = Arc::new(Keypair::new());
                 let storage_keypair = Arc::new(Keypair::new());
+                let mut config = ValidatorConfig::default();
+                config.transaction_status_service_disabled = true;
                 Validator::new(
                     validator_node,
                     &Arc::new(validator_keypair),
@@ -633,8 +637,7 @@ mod tests {
                     &storage_keypair,
                     Some(&leader_node.info),
                     true,
-                    &ValidatorConfig::default(),
-                    true,
+                    &config,
                 )
             })
             .collect();

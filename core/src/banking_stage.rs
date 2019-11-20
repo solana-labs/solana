@@ -536,7 +536,7 @@ impl BankingStage {
                     tx_count,
                     signature_count,
                 )
-                .1;
+                .processing_results;
             if let Some(sender) = transaction_status_sender {
                 send_transaction_status_batch(
                     bank.clone(),

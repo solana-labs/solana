@@ -804,7 +804,6 @@ pub fn main() {
         cluster_entrypoint.as_ref(),
         !skip_poh_verify,
         &validator_config,
-        false,
     );
 
     if let Some(filename) = init_complete_file {

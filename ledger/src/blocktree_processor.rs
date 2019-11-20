@@ -12,7 +12,10 @@ use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::{bank::Bank, transaction_batch::TransactionBatch};
+use solana_runtime::{
+    bank::{Bank, TransactionResults},
+    transaction_batch::TransactionBatch,
+};
 use solana_sdk::{
     clock::{Slot, MAX_RECENT_BLOCKHASHES},
     genesis_config::GenesisConfig,
@@ -48,7 +51,10 @@ fn execute_batch(
     bank: &Arc<Bank>,
     transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<()> {
-    let (results, transaction_statuses) = batch
+    let TransactionResults {
+        fee_collection_results,
+        processing_results,
+    } = batch
         .bank()
         .load_execute_and_commit_transactions(batch, MAX_RECENT_BLOCKHASHES);
 
@@ -56,13 +62,13 @@ fn execute_batch(
         send_transaction_status_batch(
             bank.clone(),
             batch.transactions(),
-            transaction_statuses,
+            processing_results,
             sender,
         );
     }
 
     let mut first_err = None;
-    for (result, transaction) in results.iter().zip(batch.transactions()) {
+    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions()) {
         if let Err(ref err) = result {
             if first_err.is_none() {
                 first_err = Some(result.clone());
@@ -537,7 +543,11 @@ fn process_pending_slots(
     Ok(fork_info)
 }
 
-pub type TransactionStatusBatch = (Arc<Bank>, Vec<Transaction>, Vec<Result<()>>);
+pub struct TransactionStatusBatch {
+    pub bank: Arc<Bank>,
+    pub transactions: Vec<Transaction>,
+    pub statuses: Vec<Result<()>>,
+}
 pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
 
 pub fn send_transaction_status_batch(
@@ -547,7 +557,11 @@ pub fn send_transaction_status_batch(
     transaction_status_sender: TransactionStatusSender,
 ) {
     let slot = bank.slot();
-    if let Err(e) = transaction_status_sender.send((bank, transactions.to_vec(), statuses)) {
+    if let Err(e) = transaction_status_sender.send(TransactionStatusBatch {
+        bank,
+        transactions: transactions.to_vec(),
+        statuses,
+    }) {
         trace!(
             "Slot {} transaction_status send batch failed: {:?}",
             slot,

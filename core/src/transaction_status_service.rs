@@ -13,7 +13,7 @@ use std::{
 };
 
 pub struct TransactionStatusService {
-    t_transaction_status: JoinHandle<()>,
+    thread_hdl: JoinHandle<()>,
 }
 
 impl TransactionStatusService {
@@ -24,7 +24,7 @@ impl TransactionStatusService {
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let exit = exit.clone();
-        let t_transaction_status = Builder::new()
+        let thread_hdl = Builder::new()
             .name("solana-transaction-status-writer".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
@@ -42,17 +42,18 @@ impl TransactionStatusService {
                 }
             })
             .unwrap();
-        Self {
-            t_transaction_status,
-        }
+        Self { thread_hdl }
     }
 
     fn write_transaction_status_batch(
         write_transaction_status_receiver: &Receiver<TransactionStatusBatch>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
-        let (bank, transactions, statuses) =
-            write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
+        let TransactionStatusBatch {
+            bank,
+            transactions,
+            statuses,
+        } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
 
         let slot = bank.slot();
         for (transaction, status) in transactions.iter().zip(statuses) {
@@ -73,6 +74,6 @@ impl TransactionStatusService {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.t_transaction_status.join()
+        self.thread_hdl.join()
     }
 }
