@@ -1179,7 +1179,6 @@ pub mod tests {
     #[test]
     fn test_accountsdb_generate_index() {
         solana_logger::setup();
-        //let ancestors = vec![(1, 1)].into_iter().collect();
         let db = AccountsDB::new(None);
         //db.scan_accounts(ancestors: &HashMap<Slot, usize>, scan_func: F)
         //db.generate_index()
@@ -1208,6 +1207,26 @@ pub mod tests {
 
         {
             let stores = db.storage.read().unwrap();
+            let slot_a_stores = &stores.0.get(&slot_a).unwrap();
+            assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![1]);
+            assert_eq!(slot_a_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
+            let slot_b_stores = &stores.0.get(&slot_b).unwrap();
+            assert_eq!(slot_b_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(slot_b_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
+        }
+
+        let mut db2 = AccountsDB::new(None);
+        db2.storage = RwLock::new(db.storage.read().unwrap().clone());
+        db2.generate_index();
+        //assert_eq!(*db2.accounts_index.read().unwrap().account_maps.map(|m| m.read().unwrap()), *db.accounts_index.read().unwrap());
+
+        let ancestors = vec![(slot_a, 1), (slot_b, 1)].into_iter().collect();
+        let index = db.accounts_index.read().unwrap();
+        let (list, index) = index.get(&key0, &ancestors).unwrap();
+        assert_eq!((&*list).first().map(|item| item.0), Some(slot_b));
+
+        {
+            let stores = db2.storage.read().unwrap();
             let slot_a_stores = &stores.0.get(&slot_a).unwrap();
             assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![1]);
             assert_eq!(slot_a_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
