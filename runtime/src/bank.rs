@@ -1358,20 +1358,20 @@ impl Bank {
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
-        // If there are no accounts, return the same hash as we did before
-        // checkpointing.
-        if let Some(accounts_delta_hash) = self.rc.accounts.hash_internal_state(self.slot()) {
-            let mut signature_count_buf = [0u8; 8];
-            LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
-
-            hashv(&[
-                &self.parent_hash.as_ref(),
-                &accounts_delta_hash.as_ref(),
-                &signature_count_buf,
-            ])
-        } else {
-            self.parent_hash
-        }
+        // If there are no accounts, return the hash of the previous state and the latest blockhash
+        let accounts_delta_hash = self
+            .rc
+            .accounts
+            .hash_internal_state(self.slot())
+            .expect("No accounts delta was found for this bank, that should not be possible");
+        let mut signature_count_buf = [0u8; 8];
+        LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
+        hashv(&[
+            self.parent_hash.as_ref(),
+            accounts_delta_hash.as_ref(),
+            &signature_count_buf,
+            self.last_blockhash().as_ref(),
+        ])
     }
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
@@ -2542,9 +2542,9 @@ mod tests {
         bank1.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 
-        // Checkpointing should not change its state
+        // Checkpointing should always result in a new state
         let bank2 = new_from_parent(&Arc::new(bank1));
-        assert_eq!(bank0.hash_internal_state(), bank2.hash_internal_state());
+        assert_ne!(bank0.hash_internal_state(), bank2.hash_internal_state());
 
         let pubkey2 = Pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
@@ -2563,9 +2563,12 @@ mod tests {
         bank0.transfer(1_000, &mint_keypair, &pubkey).unwrap();
 
         let bank0_state = bank0.hash_internal_state();
-        // Checkpointing should not change its state
-        let bank2 = new_from_parent(&Arc::new(bank0));
-        assert_eq!(bank0_state, bank2.hash_internal_state());
+        let bank0 = Arc::new(bank0);
+        // Checkpointing should result in a new state
+        let bank2 = new_from_parent(&bank0);
+        assert_ne!(bank0_state, bank2.hash_internal_state());
+        // Checkpointing should never modify the checkpoint's state
+        assert_eq!(bank0_state, bank0.hash_internal_state());
 
         let pubkey2 = Pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
@@ -2581,7 +2584,7 @@ mod tests {
         let bank0 = Arc::new(Bank::new(&genesis_config));
         let initial_state = bank0.hash_internal_state();
         let bank1 = Bank::new_from_parent(&bank0.clone(), &Pubkey::default(), 1);
-        assert_eq!(bank1.hash_internal_state(), initial_state);
+        assert_ne!(bank1.hash_internal_state(), initial_state);
 
         info!("transfer bank1");
         let pubkey = Pubkey::new_rand();
@@ -2651,16 +2654,12 @@ mod tests {
 
         let bank1 = Bank::new_from_parent(&bank0, &collector_id, 1);
 
-        // no delta in bank1, hashes match
-        assert_eq!(hash0, bank1.hash_internal_state());
+        // no delta in bank1, hashes should always update
+        assert_ne!(hash0, bank1.hash_internal_state());
 
         // remove parent
         bank1.squash();
         assert!(bank1.parents().is_empty());
-
-        // hash should still match,
-        //  can't use hash_internal_state() after a freeze()...
-        assert_eq!(hash0, bank1.hash());
     }
 
     /// Verifies that last ids and accounts are correctly referenced from parent
@@ -2972,11 +2971,11 @@ mod tests {
 
         let bank1 = new_from_parent(&bank);
         assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
-        assert_eq!(bank1.hash_internal_state(), bank.hash());
+        assert_ne!(bank1.hash_internal_state(), bank.hash());
         // ticks don't make a bank into a delta
         bank1.register_tick(&Hash::default());
         assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
-        assert_eq!(bank1.hash_internal_state(), bank.hash());
+        assert_ne!(bank1.hash_internal_state(), bank.hash());
     }
 
     #[test]
@@ -3400,5 +3399,17 @@ mod tests {
             Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
         let last_ts = bank1.last_vote_sync.load(Ordering::Relaxed);
         assert_eq!(last_ts, 1);
+    }
+
+    #[test]
+    fn test_hash_internal_state_unchanged() {
+        let (genesis_config, _) = create_genesis_config(500);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        bank0.freeze();
+        let bank0_hash = bank0.hash();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank1.freeze();
+        let bank1_hash = bank1.hash();
+        assert_ne!(bank0_hash, bank1_hash);
     }
 }

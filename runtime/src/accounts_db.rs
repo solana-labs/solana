@@ -387,7 +387,7 @@ pub struct AccountsDB {
     min_num_stores: usize,
 
     /// slot to BankHash and a status flag to indicate if the hash has been initialized or not
-    pub slot_hashes: RwLock<HashMap<Slot, (bool, BankHash)>>,
+    pub slot_hashes: RwLock<HashMap<Slot, BankHash>>,
 }
 
 impl Default for AccountsDB {
@@ -512,7 +512,7 @@ impl AccountsDB {
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
 
-        let slot_hash: (Slot, (bool, BankHash)) = deserialize_from(&mut stream)
+        let slot_hash: (Slot, BankHash) = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("slot hashes deserialize error"))?;
         self.slot_hashes
             .write()
@@ -647,7 +647,7 @@ impl AccountsDB {
         let hash = *slot_hashes
             .get(&parent_slot)
             .expect("accounts_db::set_hash::no parent slot");
-        slot_hashes.insert(slot, (false, hash.1));
+        slot_hashes.insert(slot, hash);
     }
 
     pub fn load(
@@ -859,7 +859,7 @@ impl AccountsDB {
             hash_state.xor(hash);
         }
         let slot_hashes = self.slot_hashes.read().unwrap();
-        if let Some((_, state)) = slot_hashes.get(&slot) {
+        if let Some(state) = slot_hashes.get(&slot) {
             hash_state == *state
         } else {
             false
@@ -868,11 +868,8 @@ impl AccountsDB {
 
     pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash) {
         let mut slot_hashes = self.slot_hashes.write().unwrap();
-        let slot_hash_state = slot_hashes
-            .entry(slot_id)
-            .or_insert((false, BankHash::default()));
-        slot_hash_state.1.xor(hash);
-        slot_hash_state.0 = true;
+        let slot_hash_state = slot_hashes.entry(slot_id).or_insert_with(BankHash::default);
+        slot_hash_state.xor(hash);
     }
 
     fn update_index(
