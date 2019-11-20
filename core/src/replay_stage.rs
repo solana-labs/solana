@@ -792,7 +792,7 @@ impl ReplayStage {
             return (None, None);
         }
         let mut vote = None;
-        let (best_bank, best_stats) = best_banks.last().unwrap();
+        let (mut best_bank, best_stats) = best_banks.last().unwrap();
         debug!("best bank: {:?}", best_stats);
         let mut by_slot: Vec<_> = best_banks.iter().collect();
         by_slot.sort_by_key(|x| x.1.slot);
@@ -808,14 +808,12 @@ impl ReplayStage {
                 debug!("best bank found ancestor: {}", parent_stats.slot);
                 inc_new_counter_info!("replay_stage-pick_best_fork-ancestor", 1);
                 vote = Some(((*parent).clone(), parent_stats.total_staked));
+                break;
             }
         }
-        //look for the oldest child of the best bank
+        //look for the heaviest child of the best bank
         if vote.is_none() {
-            for (child, child_stats) in by_slot.iter().rev() {
-                if child_stats.is_locked_out || !child_stats.vote_threshold {
-                    continue;
-                }
+            for (child, child_stats) in best_banks.iter().rev() {
                 let has_best = best_stats.slot == child_stats.slot
                     || ancestors
                         .get(&child.slot())
@@ -824,9 +822,14 @@ impl ReplayStage {
                 if !has_best {
                     continue;
                 }
+                best_bank = child;
+                if child_stats.is_locked_out || !child_stats.vote_threshold {
+                    continue;
+                }
                 inc_new_counter_info!("replay_stage-pick_best_fork-child", 1);
                 debug!("best bank found child: {}", child_stats.slot);
                 vote = Some(((*child).clone(), child_stats.total_staked));
+                break;
             }
         }
         if vote.is_none() {
@@ -1080,6 +1083,7 @@ mod test {
     use solana_sdk::transaction::TransactionError;
     use solana_vote_api::vote_state::VoteState;
     use std::fs::remove_dir_all;
+    use std::iter::FromIterator;
     use std::sync::{Arc, RwLock};
 
     #[test]
@@ -1478,5 +1482,134 @@ mod test {
                 .unwrap(),
             &expected2
         );
+    }
+
+    #[test]
+    fn test_pick_best_fork() {
+        let leader_pubkey = Pubkey::new_rand();
+        let leader_lamports = 3;
+        let genesis_config_info =
+            create_genesis_config_with_leader(50, &leader_pubkey, leader_lamports);
+        let mut genesis_config = genesis_config_info.genesis_config;
+        genesis_config.epoch_schedule.warmup = false;
+        genesis_config.ticks_per_slot = 4;
+        let bank_default = Arc::new(Bank::new(&genesis_config));
+
+        // Create bank forks such that
+        //       /- 9 - 11
+        //  7 - 8
+        //       \- 10 - 12
+        //
+        let mut ancestors: HashMap<u64, HashSet<u64>> = HashMap::new();
+        ancestors.insert(8, HashSet::from_iter(vec![7u64]));
+        ancestors.insert(9, HashSet::from_iter(vec![8, 7]));
+        ancestors.insert(11, HashSet::from_iter(vec![9, 8, 7]));
+        ancestors.insert(10, HashSet::from_iter(vec![8, 7]));
+        ancestors.insert(12, HashSet::from_iter(vec![10, 8, 7]));
+
+        let bank7 = Arc::new(Bank::new_from_parent(&bank_default, &Pubkey::new_rand(), 7));
+        let bank8 = Arc::new(Bank::new_from_parent(&bank7, &Pubkey::new_rand(), 8));
+        let bank9 = Arc::new(Bank::new_from_parent(&bank8, &Pubkey::new_rand(), 9));
+        let bank11 = Arc::new(Bank::new_from_parent(&bank9, &Pubkey::new_rand(), 11));
+        let bank10 = Arc::new(Bank::new_from_parent(&bank8, &Pubkey::new_rand(), 10));
+        let bank12 = Arc::new(Bank::new_from_parent(&bank10, &Pubkey::new_rand(), 12));
+        let banks = vec![
+            (bank7, ForkStats::default()),
+            (bank8, ForkStats::default()),
+            (bank9, ForkStats::default()),
+            (bank10, ForkStats::default()),
+            (bank11, ForkStats::default()),
+            (bank12, ForkStats::default()),
+        ];
+
+        // Fork stats are: no lockouts, and vote_threshold is met for all banks
+        let mut best_banks: Vec<_> = banks
+            .into_iter()
+            .map(|(b, mut f)| {
+                f.slot = b.slot();
+                f.is_locked_out = false;
+                f.vote_threshold = true;
+                (b, f)
+            })
+            .collect();
+
+        let best_banks_ref: Vec<_> = best_banks.iter().map(|(b, f)| (b, f)).collect();
+
+        let res = ReplayStage::pick_best_fork(&ancestors, &best_banks_ref[..]);
+        assert!(res.0.is_some());
+        assert_eq!(res.0.unwrap().0.slot(), 7);
+
+        // Set bank7 as locked out. Should return bank8 as best fork
+        best_banks[0].1.is_locked_out = true;
+
+        let best_banks_ref: Vec<_> = best_banks.iter().map(|(b, f)| (b, f)).collect();
+
+        let res = ReplayStage::pick_best_fork(&ancestors, &best_banks_ref[..]);
+        assert!(res.0.is_some());
+        assert_eq!(res.0.unwrap().0.slot(), 8);
+
+        // Set bank8 as missing vote threshold. Should return bank10 as best fork (as 9 on a different fork)
+        best_banks[1].1.vote_threshold = false;
+
+        let best_banks_ref: Vec<_> = best_banks.iter().map(|(b, f)| (b, f)).collect();
+
+        let res = ReplayStage::pick_best_fork(&ancestors, &best_banks_ref[..]);
+        assert!(res.0.is_some());
+        assert_eq!(res.0.unwrap().0.slot(), 10);
+
+        // Set bank10 also as missing vote threshold. It should return 12 (oldest child of best bank)
+        best_banks[3].1.vote_threshold = false;
+
+        let best_banks_ref: Vec<_> = best_banks.iter().map(|(b, f)| (b, f)).collect();
+
+        let res = ReplayStage::pick_best_fork(&ancestors, &best_banks_ref[..]);
+        assert!(res.0.is_some());
+        assert_eq!(res.0.unwrap().0.slot(), 12);
+
+        // Set bank12 also as missing vote threshold.
+        best_banks[5].1.vote_threshold = false;
+
+        let best_banks_ref: Vec<_> = best_banks.iter().map(|(b, f)| (b, f)).collect();
+
+        let res = ReplayStage::pick_best_fork(&ancestors, &best_banks_ref[..]);
+        assert!(res.0.is_none());
+        assert!(res.1.is_some());
+        assert_eq!(res.1.unwrap().slot(), 12);
+
+        // Test if heaviest bank has a leaf which is not the heaviest leaf
+        // e.g. heaviest bank is 9, but it's leaf (11) is lighter than 12
+        let bank7 = Arc::new(Bank::new_from_parent(&bank_default, &Pubkey::new_rand(), 7));
+        let bank8 = Arc::new(Bank::new_from_parent(&bank7, &Pubkey::new_rand(), 8));
+        let bank9 = Arc::new(Bank::new_from_parent(&bank8, &Pubkey::new_rand(), 9));
+        let bank11 = Arc::new(Bank::new_from_parent(&bank9, &Pubkey::new_rand(), 11));
+        let bank10 = Arc::new(Bank::new_from_parent(&bank8, &Pubkey::new_rand(), 10));
+        let bank12 = Arc::new(Bank::new_from_parent(&bank10, &Pubkey::new_rand(), 12));
+        let banks = vec![
+            (bank7, ForkStats::default()),
+            (bank8, ForkStats::default()),
+            (bank10, ForkStats::default()),
+            (bank11, ForkStats::default()),
+            (bank12, ForkStats::default()),
+            (bank9, ForkStats::default()),
+        ];
+
+        // Assume everything is locked out (or does not have threshold)
+        let best_banks: Vec<_> = banks
+            .into_iter()
+            .map(|(b, mut f)| {
+                f.slot = b.slot();
+                f.is_locked_out = true;
+                f.vote_threshold = true;
+                (b, f)
+            })
+            .collect();
+
+        let best_banks_ref: Vec<_> = best_banks.iter().map(|(b, f)| (b, f)).collect();
+
+        // It should return 11, as it's child of heaviest bank
+        let res = ReplayStage::pick_best_fork(&ancestors, &best_banks_ref[..]);
+        assert!(res.0.is_none());
+        assert!(res.1.is_some());
+        assert_eq!(res.1.unwrap().slot(), 11);
     }
 }
