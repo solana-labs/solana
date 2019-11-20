@@ -63,7 +63,6 @@ pub struct ValidatorConfig {
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub partition_cfg: Option<PartitionCfg>,
-    pub persist_transaction_status: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -81,7 +80,6 @@ impl Default for ValidatorConfig {
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             partition_cfg: None,
-            persist_transaction_status: false,
         }
     }
 }
@@ -242,20 +240,19 @@ impl Validator {
             ))
         };
 
-        let (transaction_status_sender, transaction_status_service) =
-            if config.persist_transaction_status {
-                let (transaction_status_sender, transaction_status_receiver) = channel();
-                (
-                    Some(transaction_status_sender),
-                    Some(TransactionStatusService::new(
-                        transaction_status_receiver,
-                        blocktree.clone(),
-                        &exit,
-                    )),
-                )
-            } else {
-                (None, None)
-            };
+        let (transaction_status_sender, transaction_status_service) = if rpc_service.is_some() {
+            let (transaction_status_sender, transaction_status_receiver) = channel();
+            (
+                Some(transaction_status_sender),
+                Some(TransactionStatusService::new(
+                    transaction_status_receiver,
+                    blocktree.clone(),
+                    &exit,
+                )),
+            )
+        } else {
+            (None, None)
+        };
 
         info!(
             "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",

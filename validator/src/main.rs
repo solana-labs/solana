@@ -510,12 +510,6 @@ pub fn main() {
                 .takes_value(true)
                 .help("Redirect logging to the specified file, '-' for standard error"),
         )
-        .arg(
-            Arg::with_name("persist_transaction_status")
-                .long("persist-transaction-status")
-                .takes_value(false)
-                .help("Persist transaction status in database"),
-        )
         .get_matches();
 
     let identity_keypair = if let Some(identity) = matches.value_of("identity") {
@@ -559,7 +553,6 @@ pub fn main() {
     let mut validator_config = ValidatorConfig::default();
     validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
     validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
-    validator_config.persist_transaction_status = matches.is_present("persist_transaction_status");
 
     validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
 
