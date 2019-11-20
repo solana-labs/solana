@@ -2542,7 +2542,7 @@ mod tests {
         bank1.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 
-        // Checkpointing should always change state
+        // Checkpointing should always result in a new state
         let bank2 = new_from_parent(&Arc::new(bank1));
         assert_ne!(bank0.hash_internal_state(), bank2.hash_internal_state());
 
@@ -2563,9 +2563,12 @@ mod tests {
         bank0.transfer(1_000, &mint_keypair, &pubkey).unwrap();
 
         let bank0_state = bank0.hash_internal_state();
-        // Checkpointing should change its state
-        let bank2 = new_from_parent(&Arc::new(bank0));
+        let bank0 = Arc::new(bank0);
+        // Checkpointing should result in a new state
+        let bank2 = new_from_parent(&bank0);
         assert_ne!(bank0_state, bank2.hash_internal_state());
+        // Checkpointing should never modify the checkpoints' state
+        assert_eq!(bank0_state, bank0.hash_internal_state());
 
         let pubkey2 = Pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
