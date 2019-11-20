@@ -1061,8 +1061,7 @@ impl ClusterInfo {
                             let epoch_schedule = bank.epoch_schedule();
                             epoch_schedule.get_slots_in_epoch(epoch) * DEFAULT_MS_PER_SLOT
                         } else {
-                            inc_new_counter_warn!("cluster_info-purge-no_working_bank", 1);
-                            warn!("Gossip has no working bank!");
+                            inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);
                             CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS
                         }
                     };
