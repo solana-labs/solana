@@ -249,6 +249,10 @@ impl AccountStorageEntry {
         self.accounts.flush()
     }
 
+    pub fn all_existing_accounts(&self) -> Vec<StoredAccount> {
+        self.accounts.accounts(0)
+    }
+
     fn add_account(&self) {
         error!("adding account");
         let mut count_and_status = self.count_and_status.write().unwrap();
@@ -1198,6 +1202,7 @@ pub mod tests {
             let stores = db.storage.read().unwrap();
             let slot_a_stores = &stores.0.get(&slot_a).unwrap();
             assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(slot_a_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
         }
         debug!("{:?}", db.store(slot_b, &[(&key0, &account0), (&key2, &account2)]));
 
@@ -1205,8 +1210,10 @@ pub mod tests {
             let stores = db.storage.read().unwrap();
             let slot_a_stores = &stores.0.get(&slot_a).unwrap();
             assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![1]);
+            assert_eq!(slot_a_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
             let slot_b_stores = &stores.0.get(&slot_b).unwrap();
             assert_eq!(slot_b_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(slot_b_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
         }
     }
 
