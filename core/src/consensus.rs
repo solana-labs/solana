@@ -254,7 +254,7 @@ impl Tower {
 
     pub fn calculate_weight(&self, stake_lockouts: &HashMap<Slot, StakeLockout>) -> u128 {
         let mut sum = 0u128;
-        for (slot, stake_lockout) in stake_lockouts {
+        for (_, stake_lockout) in stake_lockouts {
             sum += u128::from(stake_lockout.lockout) * u128::from(stake_lockout.stake)
         }
         sum

@@ -761,18 +761,16 @@ impl ReplayStage {
                     Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
                     stats.weight = tower.calculate_weight(&stake_lockouts);
-                    warn!("{} slot_weight: {} {}", my_pubkey, stats.slot, stats.weight);
+                    warn!("{} slot_weight: {} {} {}", my_pubkey, stats.slot, stats.weight, bank.parent().map(|b| b.slot()).unwrap_or(0));
                     stats.stake_lockouts = stake_lockouts;
                     stats.block_height = bank.block_height();
-                }
-                stats.vote_threshold = tower.check_vote_stake_threshold(
-                    bank.slot(),
-                    &stats.stake_lockouts,
-                    stats.total_staked,
-                );
-                if !stats.computed {
+                    stats.vote_threshold = tower.check_vote_stake_threshold(
+                        bank.slot(),
+                        &stats.stake_lockouts,
+                        stats.total_staked,
+                    );
                     if !stats.vote_threshold {
-                        debug!("vote threshold check failed: {}", bank.slot());
+                        info!("vote threshold check failed: {}", bank.slot());
                     }
                     stats.computed = true;
                 }
@@ -813,7 +811,7 @@ impl ReplayStage {
             parents.sort();
             debug!("{}: {:?} {:?}", stats.slot, stats, parents,);
         });
-        let rv = Self::pick_best_fork(ancestors, &candidates);
+        let rv = Self::pick_best_fork(&my_pubkey, ancestors, &candidates);
         let ms = timing::duration_as_ms(&tower_start.elapsed());
         let weights: Vec<(u128, u64, u64)> = candidates
             .iter()
@@ -847,6 +845,7 @@ impl ReplayStage {
     }
 
     fn pick_best_fork(
+        my_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
         best_banks: &[(&Arc<Bank>, &ForkStats)],
     ) -> VoteAndPoHBank {
@@ -861,12 +860,15 @@ impl ReplayStage {
         //look for the oldest ancestors of the best bank
         if let Some(best_ancestors) = ancestors.get(&best_stats.slot) {
             for (parent, parent_stats) in by_slot.iter() {
-                if parent_stats.is_locked_out || !parent_stats.vote_threshold {
-                    continue;
-                }
                 if !best_ancestors.contains(&parent_stats.slot) {
                     continue;
                 }
+                if parent_stats.is_locked_out || !parent_stats.vote_threshold {
+                    info!("{} {} locked_out: {}", my_pubkey, parent_stats.slot, parent_stats.is_locked_out);
+                    info!("{} {} threshold: {}", my_pubkey, parent_stats.slot, parent_stats.vote_threshold);
+                    continue;
+                }
+
                 debug!("best bank found ancestor: {}", parent_stats.slot);
                 inc_new_counter_info!("replay_stage-pick_best_fork-ancestor", 1);
                 vote = Some(((*parent).clone(), parent_stats.total_staked));
@@ -886,6 +888,8 @@ impl ReplayStage {
                 }
                 best_bank = child;
                 if child_stats.is_locked_out || !child_stats.vote_threshold {
+                    info!("{} {} locked_out: {}", my_pubkey, child_stats.slot, child_stats.is_locked_out);
+                    info!("{} {} threshold: {}", my_pubkey, child_stats.slot, child_stats.vote_threshold);
                     continue;
                 }
                 inc_new_counter_info!("replay_stage-pick_best_fork-child", 1);
