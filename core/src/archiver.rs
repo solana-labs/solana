@@ -450,7 +450,7 @@ impl Archiver {
         repair_socket: Arc<UdpSocket>,
         shred_fetch_receiver: PacketReceiver,
         slot_sender: Sender<u64>,
-    ) -> Result<(WindowService)> {
+    ) -> Result<WindowService> {
         let slots_per_segment =
             match Self::get_segment_config(&cluster_info, meta.client_commitment.clone()) {
                 Ok(slots_per_segment) => slots_per_segment,
@@ -598,7 +598,7 @@ impl Archiver {
     fn sample_file_to_create_mining_hash(
         enc_file_path: &Path,
         sampling_offsets: &[u64],
-    ) -> Result<(Hash)> {
+    ) -> Result<Hash> {
         let sha_state = sample_file(enc_file_path, sampling_offsets)?;
         info!("sampled sha_state: {}", sha_state);
         Ok(sha_state)
@@ -809,7 +809,7 @@ impl Archiver {
                         Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
                     })?;
                 let (storage_blockhash, turn_slot) =
-                    serde_json::from_value::<((String, u64))>(response).map_err(|err| {
+                    serde_json::from_value::<(String, u64)>(response).map_err(|err| {
                         io::Error::new(
                             io::ErrorKind::Other,
                             format!("Couldn't parse response: {:?}", err),
@@ -851,7 +851,7 @@ impl Archiver {
         archiver_info: &ContactInfo,
         blocktree: &Arc<Blocktree>,
         slots_per_segment: u64,
-    ) -> Result<(u64)> {
+    ) -> Result<u64> {
         // Create a client which downloads from the archiver and see that it
         // can respond with shreds.
         let start_slot = Self::get_archiver_segment_slot(archiver_info.storage_addr);

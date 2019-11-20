@@ -637,7 +637,7 @@ impl ClusterInfo {
         fanout: usize,
         select_index: usize,
         curr_index: usize,
-    ) -> Option<(Locality)> {
+    ) -> Option<Locality> {
         let end = layer_indices.len() - 1;
         let next = min(end, curr_index + 1);
         let layer_start = layer_indices[curr_index];

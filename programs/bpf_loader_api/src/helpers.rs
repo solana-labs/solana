@@ -26,7 +26,7 @@ use crate::allocator_bump::BPFAllocator;
 /// are expected to enforce this
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
-pub fn register_helpers(vm: &mut EbpfVm) -> Result<(MemoryRegion), Error> {
+pub fn register_helpers(vm: &mut EbpfVm) -> Result<MemoryRegion, Error> {
     vm.register_helper_ex("abort", helper_abort, None)?;
     vm.register_helper_ex("sol_panic", helper_sol_panic, None)?;
     vm.register_helper_ex("sol_panic_", helper_sol_panic, None)?;
@@ -55,7 +55,7 @@ pub fn helper_abort(
     _context: &mut HelperContext,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<(u64), Error> {
+) -> Result<u64, Error> {
     Err(Error::new(
         ErrorKind::Other,
         "Error: BPF program called abort()!",
@@ -74,7 +74,7 @@ pub fn helper_sol_panic(
     _context: &mut HelperContext,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<(u64), Error> {
+) -> Result<u64, Error> {
     if let Ok(host_addr) = translate_addr(file, len as usize, "Load", 0, ro_regions) {
         let c_buf: *const c_char = host_addr as *const c_char;
         let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
@@ -100,7 +100,7 @@ pub fn helper_sol_log(
     _context: &mut HelperContext,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<(u64), Error> {
+) -> Result<u64, Error> {
     if log_enabled!(log::Level::Info) {
         let host_addr = translate_addr(addr, len as usize, "Load", 0, ro_regions)?;
         let c_buf: *const c_char = host_addr as *const c_char;
@@ -133,7 +133,7 @@ pub fn helper_sol_log_u64(
     _context: &mut HelperContext,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<(u64), Error> {
+) -> Result<u64, Error> {
     if log_enabled!(log::Level::Info) {
         info!(
             "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
@@ -158,7 +158,7 @@ pub fn helper_sol_alloc_free(
     context: &mut HelperContext,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<(u64), Error> {
+) -> Result<u64, Error> {
     if let Some(context) = context {
         if let Some(allocator) = context.downcast_mut::<BPFAllocator>() {
             return {

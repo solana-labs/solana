@@ -1759,7 +1759,7 @@ fn handle_chaining_for_slot(
 fn traverse_children_mut<F>(
     db: &Database,
     slot: Slot,
-    slot_meta: &Rc<RefCell<(SlotMeta)>>,
+    slot_meta: &Rc<RefCell<SlotMeta>>,
     working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot_function: F,
@@ -1767,7 +1767,7 @@ fn traverse_children_mut<F>(
 where
     F: Fn(&mut SlotMeta) -> bool,
 {
-    let mut next_slots: Vec<(u64, Rc<RefCell<(SlotMeta)>>)> = vec![(slot, slot_meta.clone())];
+    let mut next_slots: Vec<(u64, Rc<RefCell<SlotMeta>>)> = vec![(slot, slot_meta.clone())];
     while !next_slots.is_empty() {
         let (_, current_slot) = next_slots.pop().unwrap();
         // Check whether we should explore the children of this slot

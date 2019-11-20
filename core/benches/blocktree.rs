@@ -1,10 +1,8 @@
 #![feature(test)]
 use rand;
 
-extern crate test;
-
-#[macro_use]
 extern crate solana_ledger;
+extern crate test;
 
 use rand::Rng;
 use solana_ledger::{

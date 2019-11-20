@@ -186,7 +186,7 @@ impl RepairService {
         blocktree: &Blocktree,
         max_repairs: usize,
         repair_range: &RepairSlotRange,
-    ) -> Result<(Vec<RepairType>)> {
+    ) -> Result<Vec<RepairType>> {
         // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<RepairType> = vec![];
         for slot in repair_range.start..=repair_range.end {
@@ -218,7 +218,7 @@ impl RepairService {
         blocktree: &Blocktree,
         root: u64,
         max_repairs: usize,
-    ) -> Result<(Vec<RepairType>)> {
+    ) -> Result<Vec<RepairType>> {
         // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<RepairType> = vec![];
         Self::generate_repairs_for_fork(blocktree, &mut repairs, max_repairs, root);
