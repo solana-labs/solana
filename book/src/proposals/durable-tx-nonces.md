@@ -27,8 +27,9 @@ following additional requirements:
 
   1) The durable nonce value is used in the `recent_blockhash` field
   2) A `Nonce` instruction is issued (first?)
-  3) The appropriate transaction flag (TBD) is set, signaling that the usual
-hash age check should be skipped and the previous requirements enforced
+  3) The appropriate transaction flag is set, signaling that the usual
+hash age check should be skipped and the previous requirements enforced. This
+may be unnecessary, see [Runtime Support](#runtime-support) below
 
 ### Contract Mechanics
 
@@ -88,7 +89,8 @@ an extant `recent_blockhash` on the transaction and prevent fee theft via
 failed transaction replay, runtime modifications are necessary.
 
 Any transaction failing the usual `check_hash_age` validation will be tested
-for a Durable Transaction Nonce. This test is TBD, some options:
+for a Durable Transaction Nonce. This specifics of this test are undecided, some
+options:
 
   1) Require that the `Nonce` instruction be the first in the transaction
     * + No ABI changes
