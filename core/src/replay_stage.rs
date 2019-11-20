@@ -769,15 +769,15 @@ impl ReplayStage {
                     );
                     stats.stake_lockouts = stake_lockouts;
                     stats.block_height = bank.block_height();
-                    stats.vote_threshold = tower.check_vote_stake_threshold(
-                        bank.slot(),
-                        &stats.stake_lockouts,
-                        stats.total_staked,
-                    );
-                    if !stats.vote_threshold {
-                        info!("vote threshold check failed: {}", bank.slot());
-                    }
                     stats.computed = true;
+                }
+                stats.vote_threshold = tower.check_vote_stake_threshold(
+                    bank.slot(),
+                    &stats.stake_lockouts,
+                    stats.total_staked,
+                );
+                if !stats.vote_threshold {
+                    debug!("vote threshold check failed: {}", bank.slot());
                 }
                 stats.is_locked_out = tower.is_locked_out(bank.slot(), &ancestors);
                 stats.has_voted = tower.has_voted(bank.slot());
