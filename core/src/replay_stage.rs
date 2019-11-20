@@ -756,10 +756,8 @@ impl ReplayStage {
 
                 if !stats.computed {
                     stats.slot = bank.slot();
-                    let (stake_lockouts, total_staked) = tower.collect_vote_lockouts(
-                        bank.slot(),
-                        bank.vote_accounts().into_iter(),
-                    );
+                    let (stake_lockouts, total_staked) =
+                        tower.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter());
                     Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
                     stats.weight = tower.calculate_weight(&stake_lockouts);

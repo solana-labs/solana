@@ -111,7 +111,7 @@ impl Tower {
             let start_root = vote_state.root_slot;
 
             vote_state.process_slot_vote_unchecked(bank_slot);
-            let mut votes:Vec<Lockout> = vec![];
+            let mut votes: Vec<Lockout> = vec![];
             if start_root != vote_state.root_slot {
                 if let Some(root) = start_root {
                     let vote = Lockout {
@@ -254,11 +254,7 @@ impl Tower {
 
     pub fn calculate_weight(&self, stake_lockouts: &HashMap<Slot, StakeLockout>) -> u128 {
         let mut sum = 0u128;
-        let root_slot = self.lockouts.root_slot.unwrap_or(0);
         for (slot, stake_lockout) in stake_lockouts {
-            if self.lockouts.root_slot.is_some() && *slot <= root_slot {
-                continue;
-            }
             sum += u128::from(stake_lockout.lockout) * u128::from(stake_lockout.stake)
         }
         sum
@@ -380,13 +376,7 @@ impl Tower {
         let mut bank_weights: Vec<_> = bank_forks
             .frozen_banks()
             .values()
-            .map(|b| {
-                (
-                    self.bank_weight(b),
-                    b.parents().len(),
-                    b.clone(),
-                )
-            })
+            .map(|b| (self.bank_weight(b), b.parents().len(), b.clone()))
             .collect();
         bank_weights.sort_by_key(|b| (b.0, b.1));
         bank_weights.pop().map(|b| b.2)
