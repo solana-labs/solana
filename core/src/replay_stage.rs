@@ -755,14 +755,20 @@ impl ReplayStage {
 
                 if !stats.computed {
                     stats.slot = bank.slot();
-                    let (stake_lockouts, total_staked) = tower.collect_vote_lockouts(
+                    let (stake_lockouts, total_staked, bank_weight) = tower.collect_vote_lockouts(
                         bank.slot(),
                         bank.vote_accounts().into_iter(),
                         &ancestors,
                     );
                     Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
-                    stats.weight = tower.calculate_weight(&stake_lockouts);
+                    stats.weight = bank_weight;
+                    datapoint_warn!(
+                        "bank_weight",
+                        ("slot", bank.slot(), i64),
+                        // u128 too large for influx, convert to hex
+                        ("weight", format!("{:X}", stats.weight), String),
+                    );
                     stats.stake_lockouts = stake_lockouts;
                     stats.block_height = bank.block_height();
                 }
