@@ -168,6 +168,12 @@ mod tests {
                 let tx =
                     system_transaction::transfer(&mint_keypair, &key1, 1, bank.last_blockhash());
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
+
+                let key2 = Keypair::new().pubkey();
+                let tx =
+                    system_transaction::transfer(&mint_keypair, &key2, 0, bank.last_blockhash());
+                assert_eq!(bank.process_transaction(&tx), Ok(()));
+
                 bank.freeze();
             },
             1,
