@@ -911,6 +911,19 @@ impl AccountsDB {
         }
     }
 
+    fn verify_account_balance(&self, ancestors: &HashMap<Slot, usize>) -> bool {
+        !self.scan_accounts(
+            &ancestors,
+            |collector: &mut bool, option| {
+                if let Some((_, account, _)) = option {
+                    if account.lamports == 0 {
+                        *collector = true;
+                    }
+                }
+            },
+        )
+    }
+
     pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash) {
         let mut slot_hashes = self.slot_hashes.write().unwrap();
         let slot_hash_state = slot_hashes.entry(slot_id).or_insert_with(BankHash::default);
@@ -1152,7 +1165,7 @@ impl AccountsDB {
                                 "AccountDB::accounts_index corrupted. Storage should only point to one slot"
                             );
                             store.remove_account();
-                            // no remove dead slots?
+                            // no remove dead slots? purge root?
                         }
                     }
                 }
@@ -1246,12 +1259,16 @@ pub mod tests {
             assert_eq!(slot_b_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
         }
 
+        let ancestors = vec![(slot_a, 1), (slot_b, 1)].into_iter().collect();
+        //assert!(db.verify_hash_internal_state(slot_b, &ancestors));
+        assert!(db.verify_account_balance(&ancestors));
+
         let mut db2 = AccountsDB::new(None);
         db2.storage = RwLock::new(db.storage.read().unwrap().clone());
         db2.generate_index();
+        assert!(db2.verify_account_balance(&ancestors));
         //assert_eq!(*db2.accounts_index.read().unwrap().account_maps.map(|m| m.read().unwrap()), *db.accounts_index.read().unwrap());
 
-        let ancestors = vec![(slot_a, 1), (slot_b, 1)].into_iter().collect();
         let index = db2.accounts_index.read().unwrap();
 
         {
