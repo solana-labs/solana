@@ -176,6 +176,10 @@ pub fn parse_host(host: &str) -> Result<IpAddr, String> {
     }
 }
 
+pub fn is_host(string: String) -> Result<(), String> {
+    parse_host(&string).map(|_| ())
+}
+
 pub fn parse_host_port(host_port: &str) -> Result<SocketAddr, String> {
     let addrs: Vec<_> = host_port
         .to_socket_addrs()
@@ -189,8 +193,7 @@ pub fn parse_host_port(host_port: &str) -> Result<SocketAddr, String> {
 }
 
 pub fn is_host_port(string: String) -> Result<(), String> {
-    parse_host_port(&string)?;
-    Ok(())
+    parse_host_port(&string).map(|_| ())
 }
 
 #[cfg(windows)]

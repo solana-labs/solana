@@ -1,11 +1,12 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
 use clap::{
-    crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
+    crate_description, crate_name, value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
+    SubCommand,
 };
-use solana_clap_utils::input_validators::is_pubkey;
+use solana_clap_utils::input_validators::{is_port, is_pubkey};
 use solana_client::rpc_client::RpcClient;
-use solana_core::{contact_info::ContactInfo, gossip_service::discover, socketaddr};
+use solana_core::{contact_info::ContactInfo, gossip_service::discover};
 use solana_sdk::pubkey::Pubkey;
 use std::error;
 use std::net::SocketAddr;
@@ -57,16 +58,25 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("entrypoint")
                         .value_name("HOST:PORT")
                         .takes_value(true)
-                        .required_unless("gossip_port")
                         .validator(solana_net_utils::is_host_port)
-                        .help("Rendezvous with the cluster at this entry point"),
+                        .help("Rendezvous with the cluster at this entrypoint"),
                 )
                 .arg(
                     clap::Arg::with_name("gossip_port")
                         .long("gossip-port")
-                        .value_name("HOST:PORT")
+                        .value_name("PORT")
                         .takes_value(true)
+                        .validator(is_port)
                         .help("Gossip port number for the node"),
+                )
+                .arg(
+                    clap::Arg::with_name("gossip_host")
+                        .long("gossip-host")
+                        .value_name("HOST")
+                        .takes_value(true)
+                        .conflicts_with("entrypoint")
+                        .validator(solana_net_utils::is_host)
+                        .help("Gossip DNS name or IP address for the node when --entrypoint is not provided [default: 127.0.0.1]"),
                 )
                 .arg(
                     Arg::with_name("num_nodes")
@@ -152,27 +162,31 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_of("node_pubkey")
                 .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
 
-            let mut gossip_addr = solana_net_utils::parse_port_or_addr(
-                matches.value_of("gossip_port"),
-                socketaddr!(
-                    [127, 0, 0, 1],
+            let entrypoint_addr = parse_entrypoint(&matches);
+
+            let gossip_host = if let Some(entrypoint_addr) = entrypoint_addr {
+                solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                    eprintln!(
+                        "Failed to contact cluster entrypoint {}: {}",
+                        entrypoint_addr, err
+                    );
+                    exit(1);
+                })
+            } else {
+                solana_net_utils::parse_host(matches.value_of("gossip_host").unwrap_or("127.0.0.1"))
+                    .unwrap_or_else(|err| {
+                        eprintln!("Error: {}", err);
+                        exit(1);
+                    })
+            };
+
+            let gossip_addr = SocketAddr::new(
+                gossip_host,
+                value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
                     solana_net_utils::find_available_port_in_range((0, 1))
                         .expect("unable to find an available gossip port")
-                ),
+                }),
             );
-
-            let entrypoint_addr = parse_entrypoint(&matches);
-            if let Some(entrypoint_addr) = entrypoint_addr {
-                gossip_addr.set_ip(
-                    solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-                        eprintln!(
-                            "Failed to contact cluster entrypoint {}: {}",
-                            entrypoint_addr, err
-                        );
-                        exit(1);
-                    }),
-                );
-            }
 
             let (nodes, _archivers) = discover(
                 entrypoint_addr.as_ref(),
