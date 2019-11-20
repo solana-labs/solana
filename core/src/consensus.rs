@@ -377,13 +377,15 @@ impl Tower {
 
     pub fn bank_lockouts(&self, bank: &Bank) -> (HashMap<Slot, StakeLockout>, u64) {
         let mut ancestors = HashMap::new();
-        let history: HashSet<_> = bank
-            .slot_history()
+        let mut history = vec![bank.slot()];
+        bank.slot_history()
             .iter()
             .take(MAX_ROOT_DEPTH)
-            .cloned()
-            .collect();
-        ancestors.insert(bank.slot(), history);
+            .for_each(|s| history.push(*s));
+        for (i, s) in history.iter().enumerate() {
+            let set: HashSet<Slot> = history[i + 1..].iter().cloned().collect();
+            ancestors.insert(*s, set);
+        }
         self.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter(), &ancestors)
     }
 
