@@ -454,12 +454,7 @@ impl Accounts {
 
     pub fn hash_internal_state(&self, slot_id: Slot) -> Option<BankHash> {
         let slot_hashes = self.accounts_db.slot_hashes.read().unwrap();
-        let slot_hash = slot_hashes.get(&slot_id)?;
-        if slot_hash.0 {
-            Some(slot_hash.1)
-        } else {
-            None
-        }
+        slot_hashes.get(&slot_id).cloned()
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the

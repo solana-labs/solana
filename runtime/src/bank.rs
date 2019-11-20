@@ -1359,19 +1359,19 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        if let Some(accounts_delta_hash) = self.rc.accounts.hash_internal_state(self.slot()) {
-            let mut signature_count_buf = [0u8; 8];
-            LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
-
-            hashv(&[
-                self.parent_hash.as_ref(),
-                self.last_blockhash().as_ref(),
-                accounts_delta_hash.as_ref(),
-                &signature_count_buf,
-            ])
-        } else {
-            hashv(&[self.parent_hash.as_ref(), self.last_blockhash().as_ref()])
-        }
+        let accounts_delta_hash = self
+            .rc
+            .accounts
+            .hash_internal_state(self.slot())
+            .expect("No accounts delta was found for this bank, that should not be possible");
+        let mut signature_count_buf = [0u8; 8];
+        LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
+        hashv(&[
+            self.parent_hash.as_ref(),
+            accounts_delta_hash.as_ref(),
+            &signature_count_buf,
+            self.last_blockhash().as_ref(),
+        ])
     }
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
