@@ -46,10 +46,10 @@ pub struct Accounts {
 
 // for the load instructions
 pub type TransactionAccounts = Vec<Account>;
-pub type TransactionRents = Vec<u64>;
+pub type TransactionRent = u64;
 pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
-pub type TransactionLoadResult = (TransactionAccounts, TransactionLoaders, TransactionRents);
+pub type TransactionLoadResult = (TransactionAccounts, TransactionLoaders, TransactionRent);
 
 impl Accounts {
     pub fn new(paths: Option<String>) -> Self {
@@ -92,7 +92,7 @@ impl Accounts {
         fee: u64,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
-    ) -> Result<(TransactionAccounts, TransactionRents)> {
+    ) -> Result<(TransactionAccounts, TransactionRent)> {
         // Copy all the accounts
         let message = tx.message();
         if tx.signatures.is_empty() && fee != 0 {
@@ -107,21 +107,27 @@ impl Accounts {
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut accounts: TransactionAccounts = Vec::with_capacity(message.account_keys.len());
-            let mut rents: TransactionRents = Vec::with_capacity(message.account_keys.len());
-            for key in message
+            let mut tx_rent: TransactionRent = 0;
+            for (i, key) in message
                 .account_keys
                 .iter()
-                .filter(|key| !message.program_ids().contains(key))
+                .enumerate()
+                .filter(|(_, key)| !message.program_ids().contains(key))
             {
                 let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
                     .and_then(|(mut account, _)| {
-                        let rent_due = rent_collector.update(&mut account);
-                        Some((account, rent_due))
+                        let rent_due: u64;
+                        if message.is_writable(i) {
+                            rent_due = rent_collector.update(&mut account);
+                            Some((account, rent_due))
+                        } else {
+                            Some((account, 0))
+                        }
                     })
                     .unwrap_or_default();
 
                 accounts.push(account);
-                rents.push(rent);
+                tx_rent += rent;
             }
 
             if accounts.is_empty() || accounts[0].lamports == 0 {
@@ -135,7 +141,7 @@ impl Accounts {
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
                 accounts[0].lamports -= fee;
-                Ok((accounts, rents))
+                Ok((accounts, tx_rent))
             }
         }
     }
@@ -514,9 +520,10 @@ impl Accounts {
         txs_iteration_order: Option<&[usize]>,
         res: &[Result<()>],
         loaded: &mut [Result<TransactionLoadResult>],
+        rent_collector: &RentCollector,
     ) {
         let accounts_to_store =
-            self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded);
+            self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded, rent_collector);
         self.accounts_db.store(slot, &accounts_to_store);
     }
 
@@ -536,6 +543,7 @@ impl Accounts {
         txs_iteration_order: Option<&'a [usize]>,
         res: &'a [Result<()>],
         loaded: &'a mut [Result<TransactionLoadResult>],
+        rent_collector: &RentCollector,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, (raccs, tx)) in loaded
@@ -549,9 +557,18 @@ impl Accounts {
 
             let message = &tx.message();
             let acc = raccs.as_mut().unwrap();
-            for ((i, key), account) in message.account_keys.iter().enumerate().zip(acc.0.iter()) {
+            for ((i, key), account) in message
+                .account_keys
+                .iter()
+                .enumerate()
+                .zip(acc.0.iter_mut())
+            {
                 if message.is_writable(i) {
-                    accounts.push((key, account));
+                    if account.rent_epoch == 0 {
+                        account.rent_epoch = rent_collector.epoch;
+                        acc.2 += rent_collector.update(account);
+                    }
+                    accounts.push((key, &*account));
                 }
             }
         }
@@ -1327,6 +1344,8 @@ mod tests {
         let keypair1 = Keypair::new();
         let pubkey = Pubkey::new_rand();
 
+        let rent_collector = RentCollector::default();
+
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -1358,20 +1377,20 @@ mod tests {
 
         let transaction_accounts0 = vec![account0, account2.clone()];
         let transaction_loaders0 = vec![];
-        let transaction_rents0 = vec![0, 0];
+        let transaction_rent0 = 0;
         let loaded0 = Ok((
             transaction_accounts0,
             transaction_loaders0,
-            transaction_rents0,
+            transaction_rent0,
         ));
 
         let transaction_accounts1 = vec![account1, account2.clone()];
         let transaction_loaders1 = vec![];
-        let transaction_rents1 = vec![0, 0];
+        let transaction_rent1 = 0;
         let loaded1 = Ok((
             transaction_accounts1,
             transaction_loaders1,
-            transaction_rents1,
+            transaction_rent1,
         ));
 
         let mut loaded = vec![loaded0, loaded1];
@@ -1388,7 +1407,7 @@ mod tests {
             );
         }
         let collected_accounts =
-            accounts.collect_accounts_to_store(&txs, None, &loaders, &mut loaded);
+            accounts.collect_accounts_to_store(&txs, None, &loaders, &mut loaded, &rent_collector);
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()

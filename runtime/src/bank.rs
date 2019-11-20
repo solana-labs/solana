@@ -230,6 +230,11 @@ pub struct Bank {
     /// Latest transaction fees for transactions processed by this bank
     fee_calculator: FeeCalculator,
 
+    /// Rent that have been collected
+    #[serde(serialize_with = "serialize_atomicu64")]
+    #[serde(deserialize_with = "deserialize_atomicu64")]
+    collected_rent: AtomicU64,
+
     /// latest rent collector, knows the epoch
     rent_collector: RentCollector,
 
@@ -333,6 +338,7 @@ impl Bank {
             slots_per_segment: parent.slots_per_segment,
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
+            collected_rent: AtomicU64::new(0),
             rent_collector: parent.rent_collector.clone_with_epoch(epoch),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
@@ -596,6 +602,7 @@ impl Bank {
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
             self.collect_fees();
+            self.distribute_rent();
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
@@ -1169,7 +1176,9 @@ impl Bank {
             iteration_order,
             executed,
             loaded_accounts,
+            &self.rent_collector,
         );
+        self.collect_rent(executed, loaded_accounts);
 
         self.update_cached_accounts(txs, iteration_order, executed, loaded_accounts);
 
@@ -1178,6 +1187,34 @@ impl Bank {
         debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
         self.update_transaction_statuses(txs, iteration_order, &executed);
         self.filter_program_errors_and_collect_fee(txs, iteration_order, executed)
+    }
+
+    fn distribute_rent(&self) {
+        let total_rent_collected = self.collected_rent.load(Ordering::Relaxed);
+
+        if total_rent_collected != 0 {
+            let burned_portion =
+                (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
+            let _rent_to_be_distributed = total_rent_collected - burned_portion;
+            // TODO: distribute remaining rent amount to validators
+            // self.capitalization.fetch_sub(burned_portion, Ordering::Relaxed);
+        }
+    }
+
+    fn collect_rent(&self, res: &[Result<()>], loaded_accounts: &[Result<TransactionLoadResult>]) {
+        let mut collected_rent: u64 = 0;
+        for (i, raccs) in loaded_accounts.iter().enumerate() {
+            if res[i].is_err() || raccs.is_err() {
+                continue;
+            }
+
+            let acc = raccs.as_ref().unwrap();
+
+            collected_rent += acc.2;
+        }
+
+        self.collected_rent
+            .fetch_add(collected_rent, Ordering::Relaxed);
     }
 
     /// Process a batch of transactions.
@@ -1268,6 +1305,8 @@ impl Bank {
 
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
+        self.collected_rent
+            .fetch_add(self.rent_collector.update(&mut account), Ordering::Relaxed);
         account.lamports += lamports;
         self.store_account(pubkey, &account);
     }
@@ -1625,12 +1664,14 @@ mod tests {
         status_cache::MAX_CACHE_ENTRIES,
     };
     use bincode::{deserialize_from, serialize_into, serialized_size};
+    use solana_sdk::instruction::AccountMeta;
+    use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
         account::KeyedAccount,
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::create_genesis_config,
-        instruction::InstructionError,
+        instruction::{Instruction, InstructionError},
         message::{Message, MessageHeader},
         poh_config::PohConfig,
         rent::Rent,
@@ -1643,7 +1684,7 @@ mod tests {
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
-    use std::{io::Cursor, time::Duration};
+    use std::{io::Cursor, result, time::Duration};
     use tempfile::TempDir;
 
     #[test]
@@ -1732,6 +1773,401 @@ mod tests {
         }));
         let bank2 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH * 2 + 1);
         assert_eq!(bank.capitalization(), bank2.capitalization());
+    }
+
+    #[test]
+    fn test_credit_debit_rent_no_side_effect_on_hash() {
+        let (mut genesis_block, _mint_keypair) = create_genesis_config(10);
+        let keypair1: Keypair = Keypair::new();
+        let keypair2: Keypair = Keypair::new();
+        let keypair3: Keypair = Keypair::new();
+        let keypair4: Keypair = Keypair::new();
+
+        // Transaction between these two keypairs will fail
+        let keypair5: Keypair = Keypair::new();
+        let keypair6: Keypair = Keypair::new();
+
+        genesis_block.rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 21.0,
+            burn_percent: 10,
+        };
+
+        let root_bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Bank::new_from_parent(
+            &root_bank,
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+
+        let root_bank_2 = Arc::new(Bank::new(&genesis_block));
+        let bank_with_success_txs = Bank::new_from_parent(
+            &root_bank_2,
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+        assert_eq!(bank.last_blockhash(), genesis_block.hash());
+
+        // Initialize credit-debit and credit only accounts
+        let account1 = Account::new(264, 1, &Pubkey::default());
+        let account2 = Account::new(264, 1, &Pubkey::default());
+        let account3 = Account::new(264, 1, &Pubkey::default());
+        let account4 = Account::new(264, 1, &Pubkey::default());
+        let account5 = Account::new(10, 1, &Pubkey::default());
+        let account6 = Account::new(10, 1, &Pubkey::default());
+
+        bank.store_account(&keypair1.pubkey(), &account1);
+        bank.store_account(&keypair2.pubkey(), &account2);
+        bank.store_account(&keypair3.pubkey(), &account3);
+        bank.store_account(&keypair4.pubkey(), &account4);
+        bank.store_account(&keypair5.pubkey(), &account5);
+        bank.store_account(&keypair6.pubkey(), &account6);
+
+        bank_with_success_txs.store_account(&keypair1.pubkey(), &account1);
+        bank_with_success_txs.store_account(&keypair2.pubkey(), &account2);
+        bank_with_success_txs.store_account(&keypair3.pubkey(), &account3);
+        bank_with_success_txs.store_account(&keypair4.pubkey(), &account4);
+        bank_with_success_txs.store_account(&keypair5.pubkey(), &account5);
+        bank_with_success_txs.store_account(&keypair6.pubkey(), &account6);
+
+        // Make native instruction loader rent exempt
+        let system_program_id = solana_system_program().1;
+        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
+        system_program_account.lamports =
+            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
+        bank.store_account(&system_program_id, &system_program_account);
+        bank_with_success_txs.store_account(&system_program_id, &system_program_account);
+
+        let t1 =
+            system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, genesis_block.hash());
+        let t2 =
+            system_transaction::transfer(&keypair3, &keypair4.pubkey(), 1, genesis_block.hash());
+        let t3 =
+            system_transaction::transfer(&keypair5, &keypair6.pubkey(), 1, genesis_block.hash());
+
+        let res = bank.process_transactions(&vec![t1.clone(), t2.clone(), t3.clone()]);
+
+        assert_eq!(res.len(), 3);
+        assert_eq!(res[0], Ok(()));
+        assert_eq!(res[1], Ok(()));
+        assert_eq!(res[2], Err(TransactionError::AccountNotFound));
+
+        bank.freeze();
+
+        let rwlockguard_bank_hash = bank.hash.read().unwrap();
+        let bank_hash = rwlockguard_bank_hash.as_ref();
+
+        let res = bank_with_success_txs.process_transactions(&vec![t2.clone(), t1.clone()]);
+
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0], Ok(()));
+        assert_eq!(res[1], Ok(()));
+
+        bank_with_success_txs.freeze();
+
+        let rwlockguard_bank_with_success_txs_hash = bank_with_success_txs.hash.read().unwrap();
+        let bank_with_success_txs_hash = rwlockguard_bank_with_success_txs_hash.as_ref();
+
+        assert_eq!(bank_with_success_txs_hash, bank_hash);
+    }
+
+    #[derive(Serialize, Deserialize)]
+    enum MockInstruction {
+        Deduction,
+    }
+
+    fn mock_process_instruction(
+        _program_id: &Pubkey,
+        keyed_accounts: &mut [KeyedAccount],
+        data: &[u8],
+    ) -> result::Result<(), InstructionError> {
+        if let Ok(instruction) = bincode::deserialize(data) {
+            match instruction {
+                MockInstruction::Deduction => {
+                    keyed_accounts[1].account.lamports += 1;
+                    keyed_accounts[2].account.lamports -= 1;
+                    Ok(())
+                }
+            }
+        } else {
+            Err(InstructionError::InvalidInstructionData)
+        }
+    }
+
+    fn create_mock_transaction(
+        payer: &Keypair,
+        keypair1: &Keypair,
+        keypair2: &Keypair,
+        read_only_keypair: &Keypair,
+        mock_program_id: Pubkey,
+        recent_blockhash: Hash,
+    ) -> Transaction {
+        let account_metas = vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new(keypair1.pubkey(), true),
+            AccountMeta::new(keypair2.pubkey(), true),
+            AccountMeta::new_readonly(read_only_keypair.pubkey(), false),
+        ];
+        let deduct_instruction =
+            Instruction::new(mock_program_id, &MockInstruction::Deduction, account_metas);
+        Transaction::new_signed_with_payer(
+            vec![deduct_instruction],
+            Some(&payer.pubkey()),
+            &[payer, keypair1, keypair2],
+            recent_blockhash,
+        )
+    }
+
+    fn store_accounts_for_rent_test(
+        bank: &Bank,
+        keypairs: &mut Vec<Keypair>,
+        mock_program_id: Pubkey,
+    ) {
+        let mut account_pairs: Vec<(Pubkey, Account)> = Vec::with_capacity(keypairs.len() - 1);
+        account_pairs.push((
+            keypairs[0].pubkey(),
+            Account::new(51224, 1, &Pubkey::default()),
+        ));
+        account_pairs.push((
+            keypairs[1].pubkey(),
+            Account::new(51224, 1, &Pubkey::default()),
+        ));
+        account_pairs.push((
+            keypairs[2].pubkey(),
+            Account::new(51224, 1, &Pubkey::default()),
+        ));
+        account_pairs.push((
+            keypairs[3].pubkey(),
+            Account::new(51224, 1, &Pubkey::default()),
+        ));
+        account_pairs.push((
+            keypairs[4].pubkey(),
+            Account::new(10, 1, &Pubkey::default()),
+        ));
+        account_pairs.push((
+            keypairs[5].pubkey(),
+            Account::new(10, 1, &Pubkey::default()),
+        ));
+        account_pairs.push((
+            keypairs[6].pubkey(),
+            Account::new(102_468, 1, &Pubkey::default()),
+        ));
+
+        account_pairs.push((
+            keypairs[8].pubkey(),
+            Account::new(52153, 1, &Pubkey::default()),
+        ));
+        account_pairs.push((
+            keypairs[9].pubkey(),
+            Account::new(10, 1, &Pubkey::default()),
+        ));
+
+        // Feeding to MockProgram to test read only rent behaviour
+        account_pairs.push((
+            keypairs[10].pubkey(),
+            Account::new(51225, 1, &Pubkey::default()),
+        ));
+        account_pairs.push((
+            keypairs[11].pubkey(),
+            Account::new(51225, 1, &mock_program_id),
+        ));
+        account_pairs.push((
+            keypairs[12].pubkey(),
+            Account::new(51225, 1, &mock_program_id),
+        ));
+        account_pairs.push((
+            keypairs[13].pubkey(),
+            Account::new(14, 23, &mock_program_id),
+        ));
+
+        for account_pair in account_pairs.iter() {
+            bank.store_account(&account_pair.0, &account_pair.1);
+        }
+    }
+
+    fn create_child_bank_for_rent_test(
+        root_bank: &Arc<Bank>,
+        genesis_block: &GenesisConfig,
+        mock_program_id: Pubkey,
+    ) -> Bank {
+        let mut bank = Bank::new_from_parent(
+            root_bank,
+            &Pubkey::default(),
+            2 * (SECONDS_PER_YEAR
+                //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+                *(1_000_000_000.0 / duration_as_ns(&genesis_block.poh_config.target_tick_duration) as f64)
+                //  / ticks/slot
+                / genesis_block.ticks_per_slot as f64) as u64,
+        );
+        bank.rent_collector.slots_per_year = 421_812.0;
+        bank.add_instruction_processor(mock_program_id, mock_process_instruction);
+
+        let system_program_id = solana_system_program().1;
+        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
+        system_program_account.lamports =
+            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
+        bank.store_account(&system_program_id, &system_program_account);
+
+        bank
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn test_rent() {
+        let mock_program_id = Pubkey::new(&[2u8; 32]);
+
+        let (mut genesis_block, _mint_keypair) = create_genesis_config(10);
+        let mut keypairs: Vec<Keypair> = Vec::with_capacity(14);
+        for _i in 0..14 {
+            keypairs.push(Keypair::new());
+        }
+
+        genesis_block.rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1000.0,
+            burn_percent: 10,
+        };
+
+        let root_bank = Arc::new(Bank::new(&genesis_block));
+        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_block, mock_program_id);
+
+        assert_eq!(bank.last_blockhash(), genesis_block.hash());
+
+        store_accounts_for_rent_test(&bank, &mut keypairs, mock_program_id);
+
+        let t1 = system_transaction::transfer(
+            &keypairs[0],
+            &keypairs[1].pubkey(),
+            1,
+            genesis_block.hash(),
+        );
+        let t2 = system_transaction::transfer(
+            &keypairs[2],
+            &keypairs[3].pubkey(),
+            1,
+            genesis_block.hash(),
+        );
+        let t3 = system_transaction::transfer(
+            &keypairs[4],
+            &keypairs[5].pubkey(),
+            1,
+            genesis_block.hash(),
+        );
+        let t4 = system_transaction::transfer(
+            &keypairs[6],
+            &keypairs[7].pubkey(),
+            51223,
+            genesis_block.hash(),
+        );
+        let t5 = system_transaction::transfer(
+            &keypairs[8],
+            &keypairs[9].pubkey(),
+            929,
+            genesis_block.hash(),
+        );
+
+        let t6 = create_mock_transaction(
+            &keypairs[10],
+            &keypairs[11],
+            &keypairs[12],
+            &keypairs[13],
+            mock_program_id,
+            genesis_block.hash(),
+        );
+
+        let res = bank.process_transactions(&[
+            t6.clone(),
+            t5.clone(),
+            t1.clone(),
+            t2.clone(),
+            t3.clone(),
+            t4.clone(),
+        ]);
+
+        assert_eq!(res.len(), 6);
+        assert_eq!(res[0], Ok(()));
+        assert_eq!(res[1], Ok(()));
+        assert_eq!(res[2], Ok(()));
+        assert_eq!(res[3], Ok(()));
+        assert_eq!(res[4], Err(TransactionError::AccountNotFound));
+        assert_eq!(res[5], Ok(()));
+
+        bank.freeze();
+
+        let mut rent_collected = 0;
+
+        // 51224 - 51222(Rent) - 1(transfer)
+        assert_eq!(bank.get_balance(&keypairs[0].pubkey()), 1);
+        rent_collected += 51222;
+
+        // 51224 - 51222(Rent) - 1(transfer)
+        assert_eq!(bank.get_balance(&keypairs[1].pubkey()), 3);
+        rent_collected += 51222;
+
+        // 51224 - 51222(Rent) - 1(transfer)
+        assert_eq!(bank.get_balance(&keypairs[2].pubkey()), 1);
+        rent_collected += 51222;
+
+        // 51224 - 51222(Rent) - 1(transfer)
+        assert_eq!(bank.get_balance(&keypairs[3].pubkey()), 3);
+        rent_collected += 51222;
+
+        // No rent deducted
+        assert_eq!(bank.get_balance(&keypairs[4].pubkey()), 10);
+        assert_eq!(bank.get_balance(&keypairs[5].pubkey()), 10);
+
+        // 102_468 - 51222(Rent) - 51223(transfer)
+        assert_eq!(bank.get_balance(&keypairs[6].pubkey()), 23);
+        rent_collected += 51222;
+
+        // 0 + 51223(transfer) - 917(Rent)
+        assert_eq!(bank.get_balance(&keypairs[7].pubkey()), 50306);
+        // Epoch should be updated
+        // Rent deducted on store side
+        let account8 = bank.get_account(&keypairs[7].pubkey()).unwrap();
+        // Epoch should be set correctly.
+        assert_eq!(account8.rent_epoch, bank.epoch + 1);
+        rent_collected += 917;
+
+        // 52153 - 51222(Rent) - 929(Transfer)
+        assert_eq!(bank.get_balance(&keypairs[8].pubkey()), 2);
+        rent_collected += 51222;
+
+        let account10 = bank.get_account(&keypairs[9].pubkey()).unwrap();
+        // Account was overwritten at load time, since it didn't have sufficient balance to pay rent
+        // Then, at store time we deducted 917 rent for the current epoch, once it has balance
+        assert_eq!(account10.rent_epoch, bank.epoch + 1);
+        // account data is blank now
+        assert_eq!(account10.data.len(), 0);
+        // 10 - 10(Rent) + 929(Transfer) - 917(Rent)
+        assert_eq!(account10.lamports, 12);
+        rent_collected += 927;
+
+        // 51225 - 51222(Rent)
+        assert_eq!(bank.get_balance(&keypairs[10].pubkey()), 3);
+        rent_collected += 51222;
+
+        // 51225 - 51222(Rent) + 1(Addition by program)
+        assert_eq!(bank.get_balance(&keypairs[11].pubkey()), 4);
+        rent_collected += 51222;
+
+        // 51225 - 51222(Rent) - 1(Deduction by program)
+        assert_eq!(bank.get_balance(&keypairs[12].pubkey()), 2);
+        rent_collected += 51222;
+
+        // No rent for read-only account
+        assert_eq!(bank.get_balance(&keypairs[13].pubkey()), 14);
+
+        // Bank's collected rent should be sum of rent collected from all accounts
+        assert_eq!(bank.collected_rent.load(Ordering::Relaxed), rent_collected);
     }
 
     #[test]
