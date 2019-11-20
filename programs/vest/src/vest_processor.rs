@@ -111,20 +111,12 @@ pub fn process_instruction(
             )?;
             vest_state.redeem_tokens(contract_account, current_date, payee_account);
         }
-        VestInstruction::Terminate => {
-            let terminator_account = verify_signed_account(
-                next_keyed_account(keyed_accounts_iter)?,
-                &vest_state.terminator_pubkey,
-            )?;
-            let payee_keyed_account = keyed_accounts_iter.next();
-            let payee_account = if let Some(payee_keyed_account) = payee_keyed_account {
-                &mut payee_keyed_account.account
+        VestInstruction::Terminate | VestInstruction::Renege(_) => {
+            let lamports = if let VestInstruction::Renege(lamports) = instruction {
+                lamports
             } else {
-                terminator_account
+                contract_account.lamports
             };
-            vest_state.renege(contract_account, payee_account, contract_account.lamports);
-        }
-        VestInstruction::Renege(lamports) => {
             let terminator_account = verify_signed_account(
                 next_keyed_account(keyed_accounts_iter)?,
                 &vest_state.terminator_pubkey,
