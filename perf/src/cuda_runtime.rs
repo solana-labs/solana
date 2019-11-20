@@ -160,7 +160,7 @@ impl<T: Clone> PinnedVec<T> {
     pub fn reserve_and_pin(&mut self, size: usize) {
         if self.x.capacity() < size {
             if self.pinned {
-                unpin(&mut self.x);
+                unpin(self.x.as_mut_ptr());
                 self.pinned = false;
             }
             self.x.reserve(size);
