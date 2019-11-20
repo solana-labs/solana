@@ -1,21 +1,27 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
-use crate::banking_stage::BankingStage;
-use crate::broadcast_stage::{BroadcastStage, BroadcastStageType};
-use crate::cluster_info::ClusterInfo;
-use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
-use crate::fetch_stage::FetchStage;
-use crate::poh_recorder::{PohRecorder, WorkingBankEntry};
-use crate::sigverify::TransactionSigVerifier;
-use crate::sigverify_stage::{DisabledSigVerifier, SigVerifyStage};
+use crate::{
+    banking_stage::BankingStage,
+    broadcast_stage::{BroadcastStage, BroadcastStageType},
+    cluster_info::ClusterInfo,
+    cluster_info_vote_listener::ClusterInfoVoteListener,
+    fetch_stage::FetchStage,
+    poh_recorder::{PohRecorder, WorkingBankEntry},
+    sigverify::TransactionSigVerifier,
+    sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
+};
 use crossbeam_channel::unbounded;
-use solana_ledger::blocktree::Blocktree;
-use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::{channel, Receiver};
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread;
+use solana_ledger::{blocktree::Blocktree, blocktree_processor::TransactionStatusSender};
+use std::{
+    net::UdpSocket,
+    sync::{
+        atomic::AtomicBool,
+        mpsc::{channel, Receiver},
+        Arc, Mutex, RwLock,
+    },
+    thread,
+};
 
 pub struct Tpu {
     fetch_stage: FetchStage,
@@ -35,7 +41,7 @@ impl Tpu {
         tpu_forwards_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
-        persist_transaction_status: bool,
+        transaction_status_sender: Option<TransactionStatusSender>,
         blocktree: &Arc<Blocktree>,
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
@@ -68,17 +74,12 @@ impl Tpu {
             &poh_recorder,
         );
 
-        let maybe_blocktree = if persist_transaction_status {
-            Some(blocktree.clone())
-        } else {
-            None
-        };
         let banking_stage = BankingStage::new(
             &cluster_info,
             poh_recorder,
             verified_receiver,
             verified_vote_receiver,
-            maybe_blocktree,
+            transaction_status_sender,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(

@@ -55,6 +55,7 @@ pub mod snapshot_packager_service;
 pub mod storage_stage;
 pub mod streamer;
 pub mod tpu;
+pub mod transaction_status_service;
 pub mod tvu;
 pub mod validator;
 pub mod weighted_shuffle;

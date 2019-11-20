@@ -10,7 +10,6 @@ use itertools::Itertools;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
-use solana_client::rpc_request::RpcTransactionStatus;
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{bank::Bank, transaction_batch::TransactionBatch};
@@ -20,12 +19,12 @@ use solana_sdk::{
     hash::Hash,
     signature::{Keypair, KeypairUtil},
     timing::duration_as_ms,
-    transaction::Result,
+    transaction::{Result, Transaction},
 };
 use std::{
     cell::RefCell,
     result,
-    sync::Arc,
+    sync::{mpsc::Sender, Arc},
     time::{Duration, Instant},
 };
 
@@ -44,36 +43,26 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-fn execute_batch(batch: &TransactionBatch, maybe_blocktree: Option<&Blocktree>) -> Result<()> {
+fn execute_batch(
+    batch: &TransactionBatch,
+    bank: &Arc<Bank>,
+    transaction_status_sender: Option<TransactionStatusSender>,
+) -> Result<()> {
     let (results, transaction_statuses) = batch
         .bank()
         .load_execute_and_commit_transactions(batch, MAX_RECENT_BLOCKHASHES);
 
-    let mut first_err = None;
-    for ((result, transaction_status), transaction) in results
-        .iter()
-        .zip(transaction_statuses)
-        .zip(batch.transactions())
-    {
-        if let Some(blocktree) = maybe_blocktree {
-            if Bank::can_commit(&result) && !transaction.signatures.is_empty() {
-                let lamports_per_signature = batch
-                    .bank()
-                    .last_blockhash_with_fee_calculator()
-                    .1
-                    .lamports_per_signature;
-                blocktree
-                    .write_transaction_status(
-                        (batch.bank().slot(), transaction.signatures[0]),
-                        &RpcTransactionStatus {
-                            status: transaction_status.clone(),
-                            fee: lamports_per_signature * transaction.signatures.len() as u64,
-                        },
-                    )
-                    .expect("Expect database write to succeed");
-            }
-        }
+    if let Some(sender) = transaction_status_sender {
+        send_transaction_status_batch(
+            bank.clone(),
+            batch.transactions(),
+            transaction_statuses,
+            sender,
+        );
+    }
 
+    let mut first_err = None;
+    for (result, transaction) in results.iter().zip(batch.transactions()) {
         if let Err(ref err) = result {
             if first_err.is_none() {
                 first_err = Some(result.clone());
@@ -99,15 +88,15 @@ fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatch],
     entry_callback: Option<&ProcessCallback>,
-    maybe_blocktree: Option<&Blocktree>,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches
                 .into_par_iter()
-                .map(|batch| {
-                    let result = execute_batch(batch, maybe_blocktree);
+                .map_with(transaction_status_sender, |sender, batch| {
+                    let result = execute_batch(batch, bank, sender.clone());
                     if let Some(entry_callback) = entry_callback {
                         entry_callback(bank);
                     }
@@ -129,9 +118,9 @@ pub fn process_entries(
     bank: &Arc<Bank>,
     entries: &[Entry],
     randomize: bool,
-    maybe_blocktree: Option<&Blocktree>,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<()> {
-    process_entries_with_callback(bank, entries, randomize, None, maybe_blocktree)
+    process_entries_with_callback(bank, entries, randomize, None, transaction_status_sender)
 }
 
 fn process_entries_with_callback(
@@ -139,7 +128,7 @@ fn process_entries_with_callback(
     entries: &[Entry],
     randomize: bool,
     entry_callback: Option<&ProcessCallback>,
-    maybe_blocktree: Option<&Blocktree>,
+    transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -151,7 +140,12 @@ fn process_entries_with_callback(
             if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
                 // If it's a tick that will cause a new blockhash to be created,
                 // execute the group and register the tick
-                execute_batches(bank, &batches, entry_callback, maybe_blocktree)?;
+                execute_batches(
+                    bank,
+                    &batches,
+                    entry_callback,
+                    transaction_status_sender.clone(),
+                )?;
                 batches.clear();
                 for hash in &tick_hashes {
                     bank.register_tick(hash);
@@ -201,12 +195,17 @@ fn process_entries_with_callback(
             } else {
                 // else we have an entry that conflicts with a prior entry
                 // execute the current queue and try to process this entry again
-                execute_batches(bank, &batches, entry_callback, maybe_blocktree)?;
+                execute_batches(
+                    bank,
+                    &batches,
+                    entry_callback,
+                    transaction_status_sender.clone(),
+                )?;
                 batches.clear();
             }
         }
     }
-    execute_batches(bank, &batches, entry_callback, maybe_blocktree)?;
+    execute_batches(bank, &batches, entry_callback, transaction_status_sender)?;
     for hash in tick_hashes {
         bank.register_tick(&hash);
     }
@@ -538,6 +537,25 @@ fn process_pending_slots(
     Ok(fork_info)
 }
 
+pub type TransactionStatusBatch = (Arc<Bank>, Vec<Transaction>, Vec<Result<()>>);
+pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
+
+pub fn send_transaction_status_batch(
+    bank: Arc<Bank>,
+    transactions: &[Transaction],
+    statuses: Vec<Result<()>>,
+    transaction_status_sender: TransactionStatusSender,
+) {
+    let slot = bank.slot();
+    if let Err(e) = transaction_status_sender.send((bank, transactions.to_vec(), statuses)) {
+        trace!(
+            "Slot {} transaction_status send batch failed: {:?}",
+            slot,
+            e
+        );
+    }
+}
+
 // used for tests only
 pub fn fill_blocktree_slot_with_ticks(
     blocktree: &Blocktree,
@@ -573,7 +591,6 @@ pub fn fill_blocktree_slot_with_ticks(
 pub mod tests {
     use super::*;
     use crate::{
-        blocktree::entries_to_test_shreds,
         entry::{create_ticks, next_entry, next_entry_mut},
         genesis_utils::{
             create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
@@ -2152,74 +2169,6 @@ pub mod tests {
 
         process_entries_with_callback(&bank0, &entries, true, None, None).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
-    }
-
-    #[test]
-    fn test_write_persist_transaction_status() {
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config(1000);
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blocktree =
-            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
-
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
-
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-        bank0
-            .transfer(4, &mint_keypair, &keypair2.pubkey())
-            .unwrap();
-
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-        let slot = bank1.slot();
-
-        // Generate transactions for processing
-        // Successful transaction
-        let success_tx =
-            system_transaction::transfer(&mint_keypair, &keypair1.pubkey(), 2, blockhash);
-        let success_signature = success_tx.signatures[0];
-        let entry_1 = next_entry(&blockhash, 1, vec![success_tx]);
-        // Failed transaction, InstructionError
-        let ix_error_tx =
-            system_transaction::transfer(&keypair2, &keypair3.pubkey(), 10, blockhash);
-        let ix_error_signature = ix_error_tx.signatures[0];
-        let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
-        // Failed transaction
-        let fail_tx =
-            system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 2, Hash::default());
-        let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx]);
-        let entries = vec![entry_1, entry_2, entry_3];
-
-        let shreds = entries_to_test_shreds(entries.clone(), slot, bank0.slot(), true, 0);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
-        blocktree.set_roots(&[slot]).unwrap();
-
-        // Check that process_entries successfully writes can_commit transactions statuses, and
-        // that they are matched properly by get_confirmed_block
-        let _result = process_entries(&bank1, &entries, true, Some(&blocktree));
-
-        let confirmed_block = blocktree.get_confirmed_block(slot).unwrap();
-        assert_eq!(confirmed_block.transactions.len(), 3);
-
-        for (transaction, result) in confirmed_block.transactions.into_iter() {
-            if transaction.signatures[0] == success_signature {
-                assert_eq!(result.unwrap().status, Ok(()));
-            } else if transaction.signatures[0] == ix_error_signature {
-                assert_eq!(
-                    result.unwrap().status,
-                    Err(TransactionError::InstructionError(
-                        0,
-                        InstructionError::CustomError(1)
-                    ))
-                );
-            } else {
-                assert_eq!(result, None);
-            }
-        }
     }
 
     fn get_epoch_schedule(

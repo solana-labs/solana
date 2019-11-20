@@ -16,6 +16,7 @@ use crate::{
     sigverify,
     storage_stage::StorageState,
     tpu::Tpu,
+    transaction_status_service::TransactionStatusService,
     tvu::{Sockets, Tvu},
 };
 use solana_ledger::{
@@ -43,7 +44,7 @@ use std::{
     path::{Path, PathBuf},
     process,
     sync::atomic::{AtomicBool, Ordering},
-    sync::mpsc::Receiver,
+    sync::mpsc::{channel, Receiver},
     sync::{Arc, Mutex, RwLock},
     thread::Result,
 };
@@ -107,6 +108,7 @@ pub struct Validator {
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
+    transaction_status_service: Option<TransactionStatusService>,
     gossip_service: GossipService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
     poh_service: PohService,
@@ -240,6 +242,21 @@ impl Validator {
             ))
         };
 
+        let (transaction_status_sender, transaction_status_service) =
+            if config.persist_transaction_status {
+                let (transaction_status_sender, transaction_status_receiver) = channel();
+                (
+                    Some(transaction_status_sender),
+                    Some(TransactionStatusService::new(
+                        transaction_status_receiver,
+                        blocktree.clone(),
+                        &exit,
+                    )),
+                )
+            } else {
+                (None, None)
+            };
+
         info!(
             "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",
             bank.epoch(),
@@ -352,7 +369,7 @@ impl Validator {
             config.dev_sigverify_disabled,
             config.partition_cfg.clone(),
             shred_version,
-            config.persist_transaction_status,
+            transaction_status_sender.clone(),
         );
 
         if config.dev_sigverify_disabled {
@@ -367,7 +384,7 @@ impl Validator {
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
             config.dev_sigverify_disabled,
-            config.persist_transaction_status,
+            transaction_status_sender,
             &blocktree,
             &config.broadcast_stage_type,
             &exit,
@@ -380,6 +397,7 @@ impl Validator {
             gossip_service,
             rpc_service,
             rpc_pubsub_service,
+            transaction_status_service,
             tpu,
             tvu,
             poh_service,
@@ -429,6 +447,9 @@ impl Validator {
         }
         if let Some(rpc_pubsub_service) = self.rpc_pubsub_service {
             rpc_pubsub_service.join()?;
+        }
+        if let Some(transaction_status_service) = self.transaction_status_service {
+            transaction_status_service.join()?;
         }
 
         self.gossip_service.join()?;

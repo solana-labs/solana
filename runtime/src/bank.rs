@@ -745,6 +745,11 @@ impl Bank {
         )
     }
 
+    pub fn get_fee_calculator(&self, hash: &Hash) -> Option<FeeCalculator> {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        blockhash_queue.get_fee_calculator(hash).cloned()
+    }
+
     pub fn confirmed_last_blockhash(&self) -> (Hash, FeeCalculator) {
         const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
 
