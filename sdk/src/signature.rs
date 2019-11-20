@@ -168,7 +168,7 @@ pub fn write_keypair_file(
         }
     }
     .write(true)
-    .create_new(true)
+    .create(true)
     .open(outfile)?;
 
     write_keypair(keypair, &mut f)
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_write_keypair_file() {
-        let outfile = tmp_file_path("test_gen_keypair_file.json");
+        let outfile = tmp_file_path("test_write_keypair_file.json");
         let serialized_keypair = write_keypair_file(&Keypair::new(), &outfile).unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
         assert!(Path::new(&outfile).exists());
@@ -230,6 +230,13 @@ mod tests {
         );
         fs::remove_file(&outfile).unwrap();
         assert!(!Path::new(&outfile).exists());
+    }
+
+    #[test]
+    fn test_write_keypair_file_overwrite_ok() {
+        let outfile = tmp_file_path("test_write_keypair_file_overwrite_ok.json");
+        write_keypair_file(&Keypair::new(), &outfile).unwrap();
+        write_keypair_file(&Keypair::new(), &outfile).unwrap();
     }
 
     #[test]
