@@ -1221,7 +1221,7 @@ pub mod tests {
         //assert_eq!(*db2.accounts_index.read().unwrap().account_maps.map(|m| m.read().unwrap()), *db.accounts_index.read().unwrap());
 
         let ancestors = vec![(slot_a, 1), (slot_b, 1)].into_iter().collect();
-        let index = db.accounts_index.read().unwrap();
+        let index = db2.accounts_index.read().unwrap();
 
         {
             let (list, _index) = index.get(&key0, &ancestors).unwrap();
