@@ -12,7 +12,7 @@ offline network participants.
 ## Requirements
 
 1) The transaction's signature needs to cover the nonce value
-2) The nonce must not be reusable, even in the face of signing key disclosure
+2) The nonce must not be reusable, even in the case of signing key disclosure
 
 ## A Contract-based Solution
 
@@ -78,7 +78,7 @@ To discard a `NonceAccount`, the client should issue a `Withdraw` instruction
 which withdraws all lamports, leaving a zero balance and making the account
 eligible for deletion.
 
-`Nonce` and `Withdraw` instructions both will only succeed if the stored
+`Nonce` and `Withdraw` instructions each will only succeed if the stored
 blockhash is no longer resident in sysvar.recent_blockhashes.
 
 ### Runtime Support
@@ -88,16 +88,17 @@ an extant `recent_blockhash` on the transaction and prevent fee theft via
 failed transaction replay, runtime modifications are necessary.
 
 Any transaction failing the usual `check_hash_age` validation will be tested
-for using a Durable Transaction Nonce. This test is TBD, some options:
+for a Durable Transaction Nonce. This test is TBD, some options:
 
-  1) Require that the `Nonce` instruction be the first in the TX
+  1) Require that the `Nonce` instruction be the first in the transaction
     * + No ABI changes
     * + Fast and simple
     * - Sets a precedent that may lead to incompatible instruction combinations
-  2) Blind search for a `Nonce` instruction over all instructions in the TX
+  2) Blind search for a `Nonce` instruction over all instructions in the
+transaction
     * + No ABI changes
     * - Potentially slow
-  3) [2], but guarded by a TX flag
+  3) [2], but guarded by a transaction flag
     * - ABI changes
     * - Wire size increase
     * + We'll probably end up with some sort of flags eventually anyway
