@@ -31,6 +31,8 @@ pub const DEFAULT_SLOTS_PER_TURN: u64 = 32 * 4;
 // leader schedule is governed by this
 pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
+pub const DEFAULT_MS_PER_SLOT: u64 = 1_000 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
+
 /// The time window of recent block hash values that the bank will track the signatures
 /// of over. Once the bank discards a block hash, it will reject any transactions that use
 /// that `recent_blockhash` in a transaction. Lowering this value reduces memory consumption,

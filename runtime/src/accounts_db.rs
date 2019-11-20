@@ -561,6 +561,7 @@ impl AccountsDB {
     }
 
     pub fn purge_zero_lamport_accounts(&self, ancestors: &HashMap<u64, usize>) {
+        self.report_store_stats();
         let accounts_index = self.accounts_index.read().unwrap();
         let mut purges = Vec::new();
         accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
@@ -839,6 +840,39 @@ impl AccountsDB {
             storage.set_status(AccountStorageStatus::Available);
         }
         infos
+    }
+
+    fn report_store_stats(&self) {
+        let mut total_count = 0;
+        let mut min = std::usize::MAX;
+        let mut min_slot = 0;
+        let mut max = 0;
+        let mut max_slot = 0;
+        let mut newest_slot = 0;
+        let mut oldest_slot = std::u64::MAX;
+        let stores = self.storage.read().unwrap();
+        for (slot, slot_stores) in &stores.0 {
+            total_count += slot_stores.len();
+            if slot_stores.len() < min {
+                min = slot_stores.len();
+                min_slot = *slot;
+            }
+
+            if slot_stores.len() > max {
+                max = slot_stores.len();
+                max_slot = *slot;
+            }
+            if *slot > newest_slot {
+                newest_slot = *slot;
+            }
+
+            if *slot < oldest_slot {
+                oldest_slot = *slot;
+            }
+        }
+        info!("accounts_db: total_stores: {} newest_slot: {} oldest_slot: {} max_slot: {} (num={}) min_slot: {} (num={})",
+              total_count, newest_slot, oldest_slot, max_slot, max, min_slot, min);
+        datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
     }
 
     pub fn verify_hash_internal_state(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {

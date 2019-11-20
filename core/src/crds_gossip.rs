@@ -162,7 +162,21 @@ impl CrdsGossip {
         self.pull
             .process_pull_response(&mut self.crds, from, response, now)
     }
-    pub fn purge(&mut self, now: u64) {
+
+    pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {
+        self.make_timeouts(&HashMap::new(), self.pull.crds_timeout)
+    }
+
+    pub fn make_timeouts(
+        &self,
+        stakes: &HashMap<Pubkey, u64>,
+        epoch_ms: u64,
+    ) -> HashMap<Pubkey, u64> {
+        self.pull.make_timeouts(&self.id, stakes, epoch_ms)
+    }
+
+    pub fn purge(&mut self, now: u64, timeouts: &HashMap<Pubkey, u64>) -> usize {
+        let mut rv = 0;
         if now > self.push.msg_timeout {
             let min = now - self.push.msg_timeout;
             self.push.purge_old_pending_push_messages(&self.crds, min);
@@ -172,13 +186,17 @@ impl CrdsGossip {
             self.push.purge_old_received_cache(min);
         }
         if now > self.pull.crds_timeout {
-            let min = now - self.pull.crds_timeout;
-            self.pull.purge_active(&mut self.crds, &self.id, min);
+            //sanity check
+            let min = self.pull.crds_timeout;
+            assert_eq!(timeouts[&self.id], std::u64::MAX);
+            assert_eq!(timeouts[&Pubkey::default()], min);
+            rv = self.pull.purge_active(&mut self.crds, now, &timeouts);
         }
         if now > 5 * self.pull.crds_timeout {
             let min = now - 5 * self.pull.crds_timeout;
             self.pull.purge_purged(min);
         }
+        rv
     }
 }
 

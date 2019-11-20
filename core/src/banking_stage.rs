@@ -7,6 +7,7 @@ use crate::{
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
     result::{Error, Result},
+    thread_mem_usage,
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
@@ -110,6 +111,7 @@ impl BankingStage {
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
+                        thread_mem_usage::datapoint("solana-banking-stage-tx");
                         Self::process_loop(
                             my_pubkey,
                             &verified_receiver,

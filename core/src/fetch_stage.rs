@@ -5,6 +5,7 @@ use crate::packet::PacketsRecycler;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::streamer::{self, PacketReceiver, PacketSender};
+use crate::thread_mem_usage;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::recycler::Recycler;
 use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
@@ -121,6 +122,7 @@ impl FetchStage {
         let fwd_thread_hdl = Builder::new()
             .name("solana-fetch-stage-fwd-rcvr".to_string())
             .spawn(move || loop {
+                thread_mem_usage::datapoint("solana-fetch-stage-fwd-rcvr");
                 if let Err(e) =
                     Self::handle_forwarded_packets(&forward_receiver, &sender, &poh_recorder)
                 {

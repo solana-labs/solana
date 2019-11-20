@@ -245,14 +245,27 @@ fn run_network_partition(partitions: &[usize]) {
         sleep(Duration::from_millis(timeout as u64));
     }
     info!("PARTITION_TEST done sleeping until partition end timeout");
-    info!("PARTITION_TEST spending on all ndoes");
-    cluster_tests::spend_and_verify_all_nodes(
-        &cluster.entry_point_info,
-        &cluster.funding_keypair,
-        num_nodes,
-        HashSet::new(),
-    );
-    info!("PARTITION_TEST done spending on all ndoes");
+    info!("PARTITION_TEST discovering nodes");
+    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
+    info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
+    info!("PARTITION_TEST looking for new roots on all nodes");
+    let mut roots = vec![HashSet::new(); cluster_nodes.len()];
+    let mut done = false;
+    while !done {
+        for (i, ingress_node) in cluster_nodes.iter().enumerate() {
+            let client = create_client(
+                ingress_node.client_facing_addr(),
+                solana_core::cluster_info::VALIDATOR_PORT_RANGE,
+            );
+            let slot = client.get_slot().unwrap_or(0);
+            roots[i].insert(slot);
+            let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
+            info!("PARTITION_TEST min observed roots {}/16", min_node);
+            done = min_node >= 16;
+        }
+        sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
+    }
+    info!("PARTITION_TEST done spending on all node");
 }
 
 #[allow(unused_attributes)]
