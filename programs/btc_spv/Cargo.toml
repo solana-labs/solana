@@ -1,7 +1,7 @@
 [package]
-name = "solana-bitcoin-spv-program"
+name = "solana-btc-spv-program"
 version = "0.21.0"
-description = "Solana Bitcoin spv parsing program"
+description = "Solana Bitcoin spv parsing program api"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -17,8 +17,7 @@ num-traits = "0.2"
 serde = "1.0.102"
 serde_derive = "1.0.102"
 solana-sdk = { path = "../../sdk", version = "0.21.0"}
-solana-btc-spv-api = { path = "../btc_spv_api", version = "0.21.0"}
-
+hex = "0.3.2"
 
 [lib]
 crate-type = ["lib", "cdylib"]

@@ -1,5 +1,5 @@
 [package]
-name = "solana-move-loader-api"
+name = "solana-move-loader-program"
 version = "0.21.0"
 description = "Solana Move Loader"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
@@ -35,5 +35,5 @@ vm_runtime = { version = "0.0.1-sol4", package = "solana_libra_vm_runtime" }
 vm_runtime_types = { version = "0.0.1-sol4", package = "solana_libra_vm_runtime_types" }
 
 [lib]
-crate-type = ["lib"]
-name = "solana_move_loader_api"
+crate-type = ["lib", "cdylib"]
+name = "solana_move_loader_program"

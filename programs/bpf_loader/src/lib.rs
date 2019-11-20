@@ -3,16 +3,6 @@ pub mod allocator_bump;
 pub mod bpf_verifier;
 pub mod helpers;
 
-#[macro_export]
-macro_rules! solana_bpf_loader {
-    () => {
-        (
-            "solana_bpf_loader".to_string(),
-            solana_sdk::bpf_loader::id(),
-        )
-    };
-}
-
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use log::*;
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
@@ -26,6 +16,13 @@ use std::convert::TryFrom;
 use std::io::prelude::*;
 use std::io::Error;
 use std::mem;
+
+    solana_sdk::declare_program!(
+        solana_sdk::bpf_loader::ID,
+        "BPFLoader1111111111111111111111111111111111",
+        solana_bpf_loader_program,
+        process_instruction
+    );
 
 pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm, MemoryRegion), Error> {
     let mut vm = EbpfVm::new(None)?;

@@ -16,6 +16,6 @@ solana-sdk = { path = "../../sdk", version = "0.21.0" }
 solana-runtime = { path = "../../runtime", version = "0.21.0" }
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["lib", "cdylib"]
 name = "solana_failure_program"
 
