@@ -1222,10 +1222,15 @@ pub mod tests {
 
         let ancestors = vec![(slot_a, 1), (slot_b, 1)].into_iter().collect();
         let index = db.accounts_index.read().unwrap();
-        let (list, index) = index.get(&key0, &ancestors).unwrap();
-        assert_eq!((&*list).first().map(|item| item.0), Some(slot_b));
 
         {
+            let (list, _index) = index.get(&key0, &ancestors).unwrap();
+            assert_eq!((&*list).first().map(|item| item.0), Some(slot_b));
+            let (list, _index) = index.get(&key1, &ancestors).unwrap();
+            assert_eq!((&*list).first().map(|item| item.0), Some(slot_a));
+            let (list, _index) = index.get(&key2, &ancestors).unwrap();
+            assert_eq!((&*list).first().map(|item| item.0), Some(slot_b));
+
             let stores = db2.storage.read().unwrap();
             let slot_a_stores = &stores.0.get(&slot_a).unwrap();
             assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![1]);
