@@ -9,7 +9,7 @@ use serde_json;
 use std::{
     borrow::{Borrow, Cow},
     error, fmt,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{Read, Write},
     mem,
     path::Path,
@@ -155,7 +155,22 @@ pub fn write_keypair_file(
     if let Some(outdir) = Path::new(outfile).parent() {
         fs::create_dir_all(outdir)?;
     }
-    let mut f = File::create(outfile)?;
+
+    let mut f = {
+        #[cfg(not(unix))]
+        {
+            OpenOptions::new()
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            OpenOptions::new().mode(0o600)
+        }
+    }
+    .write(true)
+    .create_new(true)
+    .open(outfile)?;
+
     write_keypair(keypair, &mut f)
 }
 
@@ -168,10 +183,6 @@ pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> 
     let public = ed25519_dalek::PublicKey::from(&secret);
     let keypair = Keypair { secret, public };
     Ok(keypair)
-}
-
-pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<dyn error::Error>> {
-    write_keypair_file(&Keypair::new(), outfile)
 }
 
 #[cfg(test)]
@@ -188,15 +199,31 @@ mod tests {
     }
 
     #[test]
-    fn test_gen_keypair_file() {
+    fn test_write_keypair_file() {
         let outfile = tmp_file_path("test_gen_keypair_file.json");
-        let serialized_keypair = gen_keypair_file(&outfile).unwrap();
+        let serialized_keypair = write_keypair_file(&Keypair::new(), &outfile).unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
         assert!(Path::new(&outfile).exists());
         assert_eq!(
             keypair_vec,
             read_keypair_file(&outfile).unwrap().to_bytes().to_vec()
         );
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                File::open(&outfile)
+                    .expect("open")
+                    .metadata()
+                    .expect("metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+
         assert_eq!(
             read_keypair_file(&outfile).unwrap().pubkey().as_ref().len(),
             mem::size_of::<Pubkey>()
