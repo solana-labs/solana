@@ -254,7 +254,7 @@ impl ReplayStage {
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
                     loop {
                         let start = allocated.get();
-                        let (vote_bank, heaviest) = Self::select_fork(&ancestors, &bank_forks, &tower, &mut progress);
+                        let (vote_bank, heaviest) = Self::select_fork(&my_pubkey, &ancestors, &bank_forks, &tower, &mut progress);
                         datapoint_debug!(
                             "replay_stage-memory",
                             ("select_fork", (allocated.get() - start) as i64, i64),
@@ -718,6 +718,7 @@ impl ReplayStage {
     }
 
     fn select_fork(
+        my_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         tower: &Tower,
@@ -762,6 +763,7 @@ impl ReplayStage {
                     Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
                     stats.weight = tower.calculate_weight(&stake_lockouts);
+                    warn!("{} slot_weight: {} {}", my_pubkey, stats.slot, stats.weight);
                     stats.stake_lockouts = stake_lockouts;
                     stats.block_height = bank.block_height();
                 }
