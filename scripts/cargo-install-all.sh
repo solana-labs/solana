@@ -109,24 +109,8 @@ if [[ -d target/perf-libs ]]; then
   cp -a target/perf-libs "$installDir"/bin/perf-libs
 fi
 
-for dir in programs/*; do
-  for program in echo target/$buildVariant/deps/libsolana_"$(basename "$dir")".{so,dylib,dll}; do
-    if [[ -f $program ]]; then
-      mkdir -p "$installDir/bin/deps"
-      rm -f "$installDir/bin/deps/$(basename "$program")"
-      cp -v "$program" "$installDir"/bin/deps
-    fi
-  done
-done
-
-for dir in programs/*; do
-  for program in echo programs/"$(basename "$dir")"/target/$buildVariant/deps/libsolana_"$(basename "$dir")".{so,dylib,dll}; do
-    if [[ -f $program ]]; then
-      mkdir -p "$installDir/bin/deps"
-      rm -f "$installDir/bin/deps/$(basename "$program")"
-      cp -v "$program" "$installDir"/bin/deps
-    fi
-  done
-done
+set -x
+mkdir -p "$installDir/bin/deps"
+cp -fv "target/release/deps/libsolana*program.*" "$installDir/bin/deps"
 
 echo "Done after $SECONDS seconds"

@@ -16,15 +16,6 @@ programDir="$2"
   cargo build --release
 )
 
-for dir in "$programDir"/*; do
-  for program in $programDir/target/release/deps/lib"$(basename "$dir")".{so,dylib,dll}; do
-    if [[ -f $program ]]; then
-      (
-        set -x
-        mkdir -p "$installDir/bin/deps"
-        rm -f "$installDir/bin/deps/$(basename "$program")"
-        cp -v "$program" "$installDir"/bin/deps
-      )
-    fi
-  done
-done
+set -x
+mkdir -p "$installDir/bin/deps"
+cp -fv "$programDir/target/release/deps/libsolana*program.*" "$installDir/bin/deps"
