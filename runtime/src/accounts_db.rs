@@ -868,9 +868,7 @@ impl AccountsDB {
 
     pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash) {
         let mut slot_hashes = self.slot_hashes.write().unwrap();
-        let slot_hash_state = slot_hashes
-            .entry(slot_id)
-            .or_insert_with(|| BankHash::default());
+        let slot_hash_state = slot_hashes.entry(slot_id).or_insert_with(BankHash::default);
         slot_hash_state.xor(hash);
     }
 
