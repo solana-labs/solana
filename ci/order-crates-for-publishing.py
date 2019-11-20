@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 #
 # This script figures the order in which workspace crates must be published to
 # crates.io.  Along the way it also ensures there are no circular dependencies
@@ -47,7 +47,7 @@ def get_packages():
     while dependency_graph:
         if max_iterations == 0:
             # One day be more helpful and find the actual cycle for the user...
-            sys.exit('Error: Circular dependency suspected between these packages: {}\n'.format(' '.join(dependency_graph.keys())))
+            sys.exit('Error: Circular dependency suspected between these packages: {}\n'.format('\n '.join(dependency_graph.keys())))
 
         max_iterations -= 1
         for package, dependencies in dependency_graph.items():
