@@ -33,25 +33,29 @@ snapshot. With that set, the validator can
 1) Get a snapshot to boot from. This can come from any source, as it will be
 verified before being vote upon. Call the bank this snapshot is of, `S`.
 
-2) Periodically send canary transactions with its local recent blockhash.
-
-3) While waiting to see one of the canary transactions, set a new root every
-time some threshold percent of the trusted validator stake roots a bank. This
-allows the validator to prune its state and also calculate leader schedules as
-it moves across epochs.
-
-4) Wait to observe a canary transaction in a bank that some threshold of
-trusted validator stake has voted on. Call this trusted bank `T`.
-
-5) Figure out what banks the validator is not locked out from based on it's
-locktower. Every validator persists its locktower state and must consult this
+2) Calculate the first slot `S_n` from which the validator is not locked out
+for voting. Every validator persists its locktower state and must consult this
 state in order to boot safely and resume from a snapshot without being slashed.
 From this locktower state and the ancestry information embedded in the
 snapshot, a validiator can derive which banks, are "safe" (See the `Determining
 Vote Safety From a Snapshot and Locktower` section for more detals) to vote
 for.
 
-6) Start voting for any descendant of a trusted bank `T` that is also "safe"
+3) Periodically send canary transactions with its local recent blockhash.
+
+4) While waiting to see one of the canary transactions, set a new root every
+time some threshold percent of the trusted validator stake roots a bank. This
+allows the validator to prune its state and also calculate leader schedules as
+it moves across epochs.
+
+5) Wait for both: 
+
+   1) To observe a canary transaction in a bank that some threshold of trusted
+   validator stake has voted on. Call this trusted bank `T`.
+   
+   2) For the current working bank to have slot number `S_current` > `S_n`
+
+6) Start voting for any slot that satisfies `S_current` > `S_n`
 
 
 For the sections below:
