@@ -67,12 +67,13 @@ impl Tower {
         bank_slot: u64,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<u64>>,
-    ) -> (HashMap<Slot, StakeLockout>, u64)
+    ) -> (HashMap<Slot, StakeLockout>, u64, u128)
     where
         F: Iterator<Item = (Pubkey, (u64, Account))>,
     {
         let mut stake_lockouts = HashMap::new();
         let mut total_stake = 0;
+        let mut total_weight = 0;
         for (key, (lamports, account)) in vote_accounts {
             if lamports == 0 {
                 continue;
@@ -114,8 +115,10 @@ impl Tower {
             vote_state.process_slot_vote_unchecked(bank_slot);
 
             for vote in &vote_state.votes {
+                total_weight += vote.lockout() as u128 * lamports as u128;
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
+
             if start_root != vote_state.root_slot {
                 if let Some(root) = start_root {
                     let vote = Lockout {
@@ -123,6 +126,7 @@ impl Tower {
                         slot: root,
                     };
                     trace!("ROOT: {}", vote.slot);
+                    total_weight += vote.lockout() as u128 * lamports as u128;
                     Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
                 }
             }
@@ -131,6 +135,7 @@ impl Tower {
                     confirmation_count: MAX_LOCKOUT_HISTORY as u32,
                     slot: root,
                 };
+                total_weight += vote.lockout() as u128 * lamports as u128;
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
 
@@ -153,7 +158,7 @@ impl Tower {
             }
             total_stake += lamports;
         }
-        (stake_lockouts, total_stake)
+        (stake_lockouts, total_stake, total_weight)
     }
 
     pub fn is_slot_confirmed(
@@ -243,18 +248,6 @@ impl Tower {
 
     pub fn root(&self) -> Option<Slot> {
         self.lockouts.root_slot
-    }
-
-    pub fn calculate_weight(&self, stake_lockouts: &HashMap<Slot, StakeLockout>) -> u128 {
-        let mut sum = 0u128;
-        let root_slot = self.lockouts.root_slot.unwrap_or(0);
-        for (slot, stake_lockout) in stake_lockouts {
-            if self.lockouts.root_slot.is_some() && *slot <= root_slot {
-                continue;
-            }
-            sum += u128::from(stake_lockout.lockout) * u128::from(stake_lockout.stake)
-        }
-        sum
     }
 
     // a slot is not recent if it's older than the newest vote we have
@@ -378,9 +371,9 @@ impl Tower {
     }
 
     fn bank_weight(&self, bank: &Bank, ancestors: &HashMap<Slot, HashSet<Slot>>) -> u128 {
-        let (stake_lockouts, _) =
+        let (_, _, bank_weight) =
             self.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter(), ancestors);
-        self.calculate_weight(&stake_lockouts)
+        bank_weight
     }
 
     fn find_heaviest_bank(&self, bank_forks: &BankForks) -> Option<Arc<Bank>> {
