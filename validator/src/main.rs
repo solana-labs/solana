@@ -13,7 +13,6 @@ use solana_core::{
     contact_info::ContactInfo,
     gossip_service::GossipService,
     ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS,
-    socketaddr,
     validator::{Validator, ValidatorConfig},
 };
 use solana_ledger::bank_forks::SnapshotConfig;
@@ -455,9 +454,18 @@ pub fn main() {
         .arg(
             clap::Arg::with_name("gossip_port")
                 .long("gossip-port")
-                .value_name("HOST:PORT")
+                .value_name("PORT")
                 .takes_value(true)
                 .help("Gossip port number for the node"),
+        )
+        .arg(
+            clap::Arg::with_name("gossip_host")
+                .long("gossip-host")
+                .value_name("HOST")
+                .takes_value(true)
+                .conflicts_with("entrypoint")
+                .validator(solana_net_utils::is_host)
+                .help("Gossip DNS name or IP address for the node when --entrypoint is not provided [default: 127.0.0.1]"),
         )
         .arg(
             clap::Arg::with_name("dynamic_port_range")
@@ -672,30 +680,40 @@ pub fn main() {
         enable_recycler_warming();
     }
 
-    let mut gossip_addr = solana_net_utils::parse_port_or_addr(
-        matches.value_of("gossip_port"),
-        socketaddr!(
-            [127, 0, 0, 1],
-            solana_net_utils::find_available_port_in_range(dynamic_port_range)
+    let entrypoint_addr = matches.value_of("entrypoint").map(|entrypoint| {
+        solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
+            eprintln!("failed to parse entrypoint address: {}", e);
+            exit(1);
+        })
+    });
+
+    let gossip_host = if let Some(entrypoint_addr) = entrypoint_addr {
+        solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+            eprintln!(
+                "Failed to contact cluster entrypoint {}: {}",
+                entrypoint_addr, err
+            );
+            exit(1);
+        })
+    } else {
+        solana_net_utils::parse_host(matches.value_of("gossip_host").unwrap_or("127.0.0.1"))
+            .unwrap_or_else(|err| {
+                eprintln!("Error: {}", err);
+                exit(1);
+            })
+    };
+
+    let gossip_addr = SocketAddr::new(
+        gossip_host,
+        value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
+            solana_net_utils::find_available_port_in_range((0, 1))
                 .expect("unable to find an available gossip port")
-        ),
+        }),
     );
 
-    let cluster_entrypoint = entrypoint.map(|entrypoint| {
-        let entrypoint_addr = solana_net_utils::parse_host_port(entrypoint)
-            .expect("failed to parse entrypoint address");
-        let ip_addr =
-            solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-                error!(
-                    "Failed to contact cluster entrypoint {} ({}): {}",
-                    entrypoint, entrypoint_addr, err
-                );
-                exit(1);
-            });
-        gossip_addr.set_ip(ip_addr);
-
-        ContactInfo::new_gossip_entry_point(&entrypoint_addr)
-    });
+    let cluster_entrypoint = entrypoint_addr
+        .as_ref()
+        .map(ContactInfo::new_gossip_entry_point);
 
     let mut tcp_ports = vec![];
     let mut node =

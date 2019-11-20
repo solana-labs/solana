@@ -48,3 +48,9 @@ pub fn is_release_channel(channel: &str) -> Result<(), String> {
         _ => Err(format!("Invalid release channel {}", channel)),
     }
 }
+
+pub fn is_port(port: String) -> Result<(), String> {
+    port.parse::<u16>()
+        .map(|_| ())
+        .map_err(|e| format!("{:?}", e))
+}

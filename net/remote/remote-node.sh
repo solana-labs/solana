@@ -238,7 +238,8 @@ EOF
       multinode-demo/setup.sh "${args[@]}"
     fi
     args=(
-      --gossip-port "$entrypointIp":8001
+      --gossip-host "$entrypointIp"
+      --gossip-port 8001
       --init-complete-file "$initCompleteFile"
     )
 
