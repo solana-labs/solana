@@ -452,6 +452,21 @@ pub mod tests {
     }
 
     #[test]
+    fn test_append_vec_accounts() {
+        let path = get_append_vec_path("test_append");
+
+        let av = AppendVec::new(&path.path, true, 1024 * 1024);
+        assert_eq!(av.accounts(0).len(), 0);
+
+        let account = create_test_account(0);
+        av.append_account_test(&account).unwrap();
+        assert_eq!(av.accounts(0).len(), 1);
+
+        av.reset();
+        assert_eq!(av.accounts(0).len(), 0);
+    }
+
+    #[test]
     fn test_append_vec_one() {
         let path = get_append_vec_path("test_append");
         let av = AppendVec::new(&path.path, true, 1024 * 1024);

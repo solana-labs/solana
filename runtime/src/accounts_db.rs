@@ -1170,6 +1170,20 @@ pub mod tests {
         assert_eq!(db.load_slow(&ancestors, &key), Some((account0, 0)));
     }
 
+    fn test_accountsdb_generate_index() {
+        solana_logger::setup();
+        let ancestors = vec![(1, 1)].into_iter().collect();
+        let db = AccountsDB::new(None);
+        db.scan_accounts(ancestors: &HashMap<Slot, usize>, scan_func: F)
+        db.generate_index()
+        let key = Pubkey::default();
+        let account0 = Account::new(1, 0, &key);
+
+        db.store(0, &[(&key, &account0)]);
+        db.add_root(0);
+        assert_eq!(db.load_slow(&ancestors, &key), Some((account0, 0)));
+    }
+
     #[test]
     fn test_accountsdb_latest_ancestor() {
         solana_logger::setup();
