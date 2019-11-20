@@ -35,7 +35,6 @@ Operate a configured testnet
    -r / --skip-setup                  - Reuse existing node/ledger configuration from a
                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
    -d / --debug                       - Build/deploy the testnet with debug binaries
-   -D /path/to/programs               - Deploy custom programs from this location
    -c clientType=numClients=extraArgs - Number of clientTypes to start.  This options can be specified
                                         more than once.  Defaults to bench-tps for all clients if not
                                         specified.
@@ -128,7 +127,6 @@ deployMethod=local
 deployIfNewer=
 sanityExtraArgs=
 skipSetup=false
-customPrograms=
 updatePlatforms=
 nodeAddress=
 numIdleClients=0
@@ -261,7 +259,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rD:c:Fn:i:d" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -287,9 +285,6 @@ while getopts "h?T:t:o:f:rD:c:Fn:i:d" opt "${shortArgs[@]}"; do
     ;;
   r)
     skipSetup=true
-    ;;
-  D)
-    customPrograms=$OPTARG
     ;;
   o)
     case $OPTARG in
@@ -429,9 +424,6 @@ build() {
     $MAYBE_DOCKER bash -c "
       set -ex
       scripts/cargo-install-all.sh farf \"$buildVariant\" \"$maybeUseMove\"
-      if [[ -n \"$customPrograms\" ]]; then
-        scripts/cargo-install-custom-programs.sh farf $customPrograms
-      fi
     "
   )
   echo "Build took $SECONDS seconds"
