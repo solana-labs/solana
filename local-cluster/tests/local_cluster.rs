@@ -429,10 +429,10 @@ fn test_softlaunch_operating_mode() {
 
     // Programs that are not available at soft launch
     for program_id in [
-        &solana_config_program::id(),
+        &solana_config_api::id(),
         &solana_sdk::bpf_loader::id(),
         &solana_sdk::system_program::id(),
-        &solana_vest_program::id(),
+        &solana_vest_api::id(),
     ]
     .iter()
     {

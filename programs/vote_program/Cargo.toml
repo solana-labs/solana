@@ -1,7 +1,7 @@
 [package]
-name = "solana-stake-tests"
+name = "solana-vote-program"
 version = "0.21.0"
-description = "Solana stake api tests"
+description = "Solana Vote program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -12,10 +12,8 @@ edition = "2018"
 log = "0.4.8"
 solana-logger = { path = "../../logger", version = "0.21.0" }
 solana-sdk = { path = "../../sdk", version = "0.21.0" }
-solana-stake-api = { path = "../stake_api", version = "0.21.0" }
-solana-stake-program = { path = "../stake_program", version = "0.21.0" }
 solana-vote-api = { path = "../vote_api", version = "0.21.0" }
 
-[dev-dependencies]
-solana-runtime = { path = "../../runtime", version = "0.21.0" }
-assert_matches = "1.3.0"
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "solana_vote_program"

@@ -1,6 +1,5 @@
 use crate::config::create_genesis_account;
 use crate::rewards_pools::create_rewards_accounts;
-use crate::stake_instruction::process_instruction;
 use solana_sdk::genesis_config::GenesisConfig;
 
 pub mod config;
@@ -13,11 +12,9 @@ const STAKE_PROGRAM_ID: [u8; 32] = [
     120, 114, 43, 104, 164, 157, 192, 0, 0, 0, 0,
 ];
 
-solana_sdk::declare_program!(
+solana_sdk::solana_name_id!(
     STAKE_PROGRAM_ID,
-    "Stake11111111111111111111111111111111111111",
-    solana_stake_program,
-    process_instruction
+    "Stake11111111111111111111111111111111111111"
 );
 
 pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) {
