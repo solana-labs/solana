@@ -1,8 +1,8 @@
 #![feature(test)]
 use rand;
 
-extern crate test;
 extern crate solana_ledger;
+extern crate test;
 
 use rand::Rng;
 use solana_ledger::{
