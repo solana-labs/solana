@@ -2,8 +2,6 @@
 use rand;
 
 extern crate test;
-
-#[macro_use]
 extern crate solana_ledger;
 
 use rand::Rng;
