@@ -51,9 +51,8 @@ impl TransactionStatusService {
         write_transaction_status_receiver: &Receiver<TransactionStatusBatch>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
-        let timeout = Duration::from_millis(500);
         let (bank, transactions, statuses) =
-            write_transaction_status_receiver.recv_timeout(timeout)?;
+            write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
 
         let slot = bank.slot();
         for (transaction, status) in transactions.iter().zip(statuses) {

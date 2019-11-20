@@ -1716,77 +1716,81 @@ mod test {
             ..
         } = create_genesis_config(1000);
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blocktree =
-            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
-        let blocktree = Arc::new(blocktree);
+        {
+            let blocktree = Blocktree::open(&ledger_path)
+                .expect("Expected to successfully open database ledger");
+            let blocktree = Arc::new(blocktree);
 
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
+            let keypair1 = Keypair::new();
+            let keypair2 = Keypair::new();
+            let keypair3 = Keypair::new();
 
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-        bank0
-            .transfer(4, &mint_keypair, &keypair2.pubkey())
-            .unwrap();
+            let bank0 = Arc::new(Bank::new(&genesis_config));
+            bank0
+                .transfer(4, &mint_keypair, &keypair2.pubkey())
+                .unwrap();
 
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-        let slot = bank1.slot();
+            let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+            let slot = bank1.slot();
 
-        // Generate transactions for processing
-        // Successful transaction
-        let success_tx =
-            system_transaction::transfer(&mint_keypair, &keypair1.pubkey(), 2, blockhash);
-        let success_signature = success_tx.signatures[0];
-        let entry_1 = next_entry(&blockhash, 1, vec![success_tx]);
-        // Failed transaction, InstructionError
-        let ix_error_tx =
-            system_transaction::transfer(&keypair2, &keypair3.pubkey(), 10, blockhash);
-        let ix_error_signature = ix_error_tx.signatures[0];
-        let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
-        // Failed transaction
-        let fail_tx =
-            system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 2, Hash::default());
-        let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx]);
-        let entries = vec![entry_1, entry_2, entry_3];
+            // Generate transactions for processing
+            // Successful transaction
+            let success_tx =
+                system_transaction::transfer(&mint_keypair, &keypair1.pubkey(), 2, blockhash);
+            let success_signature = success_tx.signatures[0];
+            let entry_1 = next_entry(&blockhash, 1, vec![success_tx]);
+            // Failed transaction, InstructionError
+            let ix_error_tx =
+                system_transaction::transfer(&keypair2, &keypair3.pubkey(), 10, blockhash);
+            let ix_error_signature = ix_error_tx.signatures[0];
+            let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
+            // Failed transaction
+            let fail_tx =
+                system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 2, Hash::default());
+            let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx]);
+            let entries = vec![entry_1, entry_2, entry_3];
 
-        let shreds = entries_to_test_shreds(entries.clone(), slot, bank0.slot(), true, 0);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
-        blocktree.set_roots(&[slot]).unwrap();
+            let shreds = entries_to_test_shreds(entries.clone(), slot, bank0.slot(), true, 0);
+            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blocktree.set_roots(&[slot]).unwrap();
 
-        let (transaction_status_sender, transaction_status_receiver) = channel();
-        let transaction_status_service = TransactionStatusService::new(
-            transaction_status_receiver,
-            blocktree.clone(),
-            &Arc::new(AtomicBool::new(false)),
-        );
+            let (transaction_status_sender, transaction_status_receiver) = channel();
+            let transaction_status_service = TransactionStatusService::new(
+                transaction_status_receiver,
+                blocktree.clone(),
+                &Arc::new(AtomicBool::new(false)),
+            );
 
-        // Check that process_entries successfully writes can_commit transactions statuses, and
-        // that they are matched properly by get_confirmed_block
-        let _result = blocktree_processor::process_entries(
-            &bank1,
-            &entries,
-            true,
-            Some(transaction_status_sender),
-        );
+            // Check that process_entries successfully writes can_commit transactions statuses, and
+            // that they are matched properly by get_confirmed_block
+            let _result = blocktree_processor::process_entries(
+                &bank1,
+                &entries,
+                true,
+                Some(transaction_status_sender),
+            );
 
-        let confirmed_block = blocktree.get_confirmed_block(slot).unwrap();
-        assert_eq!(confirmed_block.transactions.len(), 3);
+            transaction_status_service.join().unwrap();
 
-        for (transaction, result) in confirmed_block.transactions.into_iter() {
-            if transaction.signatures[0] == success_signature {
-                assert_eq!(result.unwrap().status, Ok(()));
-            } else if transaction.signatures[0] == ix_error_signature {
-                assert_eq!(
-                    result.unwrap().status,
-                    Err(TransactionError::InstructionError(
-                        0,
-                        InstructionError::CustomError(1)
-                    ))
-                );
-            } else {
-                assert_eq!(result, None);
+            let confirmed_block = blocktree.get_confirmed_block(slot).unwrap();
+            assert_eq!(confirmed_block.transactions.len(), 3);
+
+            for (transaction, result) in confirmed_block.transactions.into_iter() {
+                if transaction.signatures[0] == success_signature {
+                    assert_eq!(result.unwrap().status, Ok(()));
+                } else if transaction.signatures[0] == ix_error_signature {
+                    assert_eq!(
+                        result.unwrap().status,
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::CustomError(1)
+                        ))
+                    );
+                } else {
+                    assert_eq!(result, None);
+                }
             }
         }
-        transaction_status_service.join().unwrap();
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 }

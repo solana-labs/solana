@@ -206,6 +206,7 @@ impl LocalCluster {
             None,
             true,
             &config.validator_configs[0],
+            true,
         );
 
         let mut validators = HashMap::new();
@@ -338,6 +339,7 @@ impl LocalCluster {
             Some(&self.entry_point_info),
             true,
             &validator_config,
+            true,
         );
 
         self.validators
@@ -660,6 +662,7 @@ impl Cluster for LocalCluster {
             entry_point_info,
             true,
             &cluster_validator_info.config,
+            true,
         );
 
         self.validators.insert(*pubkey, restarted_node);

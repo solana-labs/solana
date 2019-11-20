@@ -1965,6 +1965,8 @@ mod tests {
                 Some(transaction_status_sender),
             );
 
+            transaction_status_service.join().unwrap();
+
             let confirmed_block = blocktree.get_confirmed_block(bank.slot()).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
@@ -1983,7 +1985,6 @@ mod tests {
                     assert_eq!(result, None);
                 }
             }
-            transaction_status_service.join().unwrap();
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }

@@ -116,6 +116,7 @@ pub struct Validator {
 }
 
 impl Validator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
@@ -126,6 +127,7 @@ impl Validator {
         entrypoint_info_option: Option<&ContactInfo>,
         poh_verify: bool,
         config: &ValidatorConfig,
+        disable_transaction_status_service: bool,
     ) -> Self {
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -240,19 +242,20 @@ impl Validator {
             ))
         };
 
-        let (transaction_status_sender, transaction_status_service) = if rpc_service.is_some() {
-            let (transaction_status_sender, transaction_status_receiver) = channel();
-            (
-                Some(transaction_status_sender),
-                Some(TransactionStatusService::new(
-                    transaction_status_receiver,
-                    blocktree.clone(),
-                    &exit,
-                )),
-            )
-        } else {
-            (None, None)
-        };
+        let (transaction_status_sender, transaction_status_service) =
+            if rpc_service.is_some() && !disable_transaction_status_service {
+                let (transaction_status_sender, transaction_status_receiver) = channel();
+                (
+                    Some(transaction_status_sender),
+                    Some(TransactionStatusService::new(
+                        transaction_status_receiver,
+                        blocktree.clone(),
+                        &exit,
+                    )),
+                )
+            } else {
+                (None, None)
+            };
 
         info!(
             "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",
@@ -561,6 +564,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
         None,
         true,
         &ValidatorConfig::default(),
+        true,
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
     (node, contact_info, mint_keypair, ledger_path)
@@ -597,6 +601,7 @@ mod tests {
             Some(&leader_node.info),
             true,
             &ValidatorConfig::default(),
+            true,
         );
         validator.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -629,6 +634,7 @@ mod tests {
                     Some(&leader_node.info),
                     true,
                     &ValidatorConfig::default(),
+                    true,
                 )
             })
             .collect();
