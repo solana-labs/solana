@@ -111,6 +111,6 @@ fi
 
 set -x
 mkdir -p "$installDir/bin/deps"
-cp -fv "target/release/deps/libsolana*program.*" "$installDir/bin/deps"
+cp -fv target/$buildVariant/deps/libsolana*program.* "$installDir/bin/deps"
 
 echo "Done after $SECONDS seconds"

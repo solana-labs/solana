@@ -18,4 +18,4 @@ programDir="$2"
 
 set -x
 mkdir -p "$installDir/bin/deps"
-cp -fv "$programDir/target/release/deps/libsolana*program.*" "$installDir/bin/deps"
+cp -fv "$programDir"/target/release/deps/libsolana*program.* "$installDir/bin/deps"
