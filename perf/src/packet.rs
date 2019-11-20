@@ -153,4 +153,12 @@ mod tests {
         assert_eq!(rv[0].packets.len(), NUM_PACKETS);
         assert_eq!(rv[1].packets.len(), 1);
     }
+
+    #[test]
+    fn test_to_packets_pinning() {
+        let recycler = PacketsRecycler::default();
+        for i in 0..2 {
+            let _first_packets = Packets::new_with_recycler(recycler.clone(), i + 1, "first one");
+        }
+    }
 }
