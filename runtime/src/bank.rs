@@ -1816,10 +1816,10 @@ mod tests {
         assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
         // Initialize credit-debit and credit only accounts
-        let account1 = Account::new(260, 1, &Pubkey::default());
-        let account2 = Account::new(260, 1, &Pubkey::default());
-        let account3 = Account::new(260, 1, &Pubkey::default());
-        let account4 = Account::new(260, 1, &Pubkey::default());
+        let account1 = Account::new(264, 1, &Pubkey::default());
+        let account2 = Account::new(264, 1, &Pubkey::default());
+        let account3 = Account::new(264, 1, &Pubkey::default());
+        let account4 = Account::new(264, 1, &Pubkey::default());
         let account5 = Account::new(10, 1, &Pubkey::default());
         let account6 = Account::new(10, 1, &Pubkey::default());
 
@@ -1933,19 +1933,19 @@ mod tests {
         let mut account_pairs: Vec<(Pubkey, Account)> = Vec::with_capacity(keypairs.len() - 1);
         account_pairs.push((
             keypairs[0].pubkey(),
-            Account::new(50270, 1, &Pubkey::default()),
+            Account::new(51224, 1, &Pubkey::default()),
         ));
         account_pairs.push((
             keypairs[1].pubkey(),
-            Account::new(50270, 1, &Pubkey::default()),
+            Account::new(51224, 1, &Pubkey::default()),
         ));
         account_pairs.push((
             keypairs[2].pubkey(),
-            Account::new(50270, 1, &Pubkey::default()),
+            Account::new(51224, 1, &Pubkey::default()),
         ));
         account_pairs.push((
             keypairs[3].pubkey(),
-            Account::new(50270, 1, &Pubkey::default()),
+            Account::new(51224, 1, &Pubkey::default()),
         ));
         account_pairs.push((
             keypairs[4].pubkey(),
@@ -1957,12 +1957,12 @@ mod tests {
         ));
         account_pairs.push((
             keypairs[6].pubkey(),
-            Account::new(100_560, 1, &Pubkey::default()),
+            Account::new(102_468, 1, &Pubkey::default()),
         ));
 
         account_pairs.push((
             keypairs[8].pubkey(),
-            Account::new(50284, 1, &Pubkey::default()),
+            Account::new(52153, 1, &Pubkey::default()),
         ));
         account_pairs.push((
             keypairs[9].pubkey(),
@@ -1972,15 +1972,15 @@ mod tests {
         // Feeding to MockProgram to test read only rent behaviour
         account_pairs.push((
             keypairs[10].pubkey(),
-            Account::new(50271, 1, &Pubkey::default()),
+            Account::new(51225, 1, &Pubkey::default()),
         ));
         account_pairs.push((
             keypairs[11].pubkey(),
-            Account::new(50271, 1, &mock_program_id),
+            Account::new(51225, 1, &mock_program_id),
         ));
         account_pairs.push((
             keypairs[12].pubkey(),
-            Account::new(50271, 1, &mock_program_id),
+            Account::new(51225, 1, &mock_program_id),
         ));
         account_pairs.push((
             keypairs[13].pubkey(),
@@ -2063,13 +2063,13 @@ mod tests {
         let t4 = system_transaction::transfer(
             &keypairs[6],
             &keypairs[7].pubkey(),
-            50269,
+            51223,
             genesis_block.hash(),
         );
         let t5 = system_transaction::transfer(
             &keypairs[8],
             &keypairs[9].pubkey(),
-            14,
+            929,
             genesis_block.hash(),
         );
 
@@ -2103,64 +2103,64 @@ mod tests {
 
         let mut rent_collected = 0;
 
-        // 50270 - 50268(Rent) - 1(transfer)
+        // 51224 - 51222(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[0].pubkey()), 1);
-        rent_collected += 50268;
+        rent_collected += 51222;
 
-        // 50270 - 50268(Rent) + 1(transfer)
+        // 51224 - 51222(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[1].pubkey()), 3);
-        rent_collected += 50268;
+        rent_collected += 51222;
 
-        // 50270 - 50268(Rent) - 1(transfer)
+        // 51224 - 51222(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[2].pubkey()), 1);
-        rent_collected += 50268;
+        rent_collected += 51222;
 
-        // 50270 - 50268(Rent) + 1(transfer)
+        // 51224 - 51222(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[3].pubkey()), 3);
-        rent_collected += 50268;
+        rent_collected += 51222;
 
         // No rent deducted
         assert_eq!(bank.get_balance(&keypairs[4].pubkey()), 10);
         assert_eq!(bank.get_balance(&keypairs[5].pubkey()), 10);
 
-        // 100_560 - 50268(Rent) - 50269(transfer)
+        // 102_468 - 51222(Rent) - 51223(transfer)
         assert_eq!(bank.get_balance(&keypairs[6].pubkey()), 23);
-        rent_collected += 50268;
+        rent_collected += 51222;
 
-        // 0 + 50269(transfer) - 2(Rent)
-        assert_eq!(bank.get_balance(&keypairs[7].pubkey()), 50267);
+        // 0 + 51223(transfer) - 917(Rent)
+        assert_eq!(bank.get_balance(&keypairs[7].pubkey()), 50306);
         // Epoch should be updated
         // Rent deducted on store side
         let account8 = bank.get_account(&keypairs[7].pubkey()).unwrap();
         // Epoch should be set correctly.
         assert_eq!(account8.rent_epoch, bank.epoch + 1);
-        rent_collected += 2;
+        rent_collected += 917;
 
-        // 50284 - 50268(Rent) - 14(Transfer)
+        // 52153 - 51222(Rent) - 929(Transfer)
         assert_eq!(bank.get_balance(&keypairs[8].pubkey()), 2);
-        rent_collected += 50268;
+        rent_collected += 51222;
 
         let account10 = bank.get_account(&keypairs[9].pubkey()).unwrap();
         // Account was overwritten at load time, since it didn't have sufficient balance to pay rent
-        // Then, at store time we deducted 2 rent for the current epoch, once it has balance
+        // Then, at store time we deducted 917 rent for the current epoch, once it has balance
         assert_eq!(account10.rent_epoch, bank.epoch + 1);
         // account data is blank now
         assert_eq!(account10.data.len(), 0);
-        // 10 - 10(Rent) + 14(Transfer) - 2(Rent)
+        // 10 - 10(Rent) + 929(Transfer) - 917(Rent)
         assert_eq!(account10.lamports, 12);
-        rent_collected += 12;
+        rent_collected += 927;
 
-        // 50271 - 50268(Rent)
+        // 51225 - 51222(Rent)
         assert_eq!(bank.get_balance(&keypairs[10].pubkey()), 3);
-        rent_collected += 50268;
+        rent_collected += 51222;
 
-        // 50271 - 50268(Rent) + 1(Addition by program)
+        // 51225 - 51222(Rent) + 1(Addition by program)
         assert_eq!(bank.get_balance(&keypairs[11].pubkey()), 4);
-        rent_collected += 50268;
+        rent_collected += 51222;
 
-        // 50271 - 50268(Rent) - 1(Deduction by program)
+        // 51225 - 51222(Rent) - 1(Deduction by program)
         assert_eq!(bank.get_balance(&keypairs[12].pubkey()), 2);
-        rent_collected += 50268;
+        rent_collected += 51222;
 
         // No rent for read-only account
         assert_eq!(bank.get_balance(&keypairs[13].pubkey()), 14);
