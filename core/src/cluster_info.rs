@@ -1014,8 +1014,10 @@ impl ClusterInfo {
         sender: &PacketSender,
     ) -> Result<()> {
         let reqs = obj.write().unwrap().gossip_request(&stakes);
-        let packets = to_packets_with_destination(recycler.clone(), &reqs);
-        sender.send(packets)?;
+        if !reqs.is_empty() {
+            let packets = to_packets_with_destination(recycler.clone(), &reqs);
+            sender.send(packets)?;
+        }
         Ok(())
     }
 
@@ -1423,8 +1425,10 @@ impl ClusterInfo {
                 })
             })
             .collect();
+        if rsp.is_empty() {
+            return None;
+        }
         let mut packets = to_packets_with_destination(recycler.clone(), &rsp);
-
         if !packets.is_empty() {
             let pushes: Vec<_> = me.write().unwrap().new_push_requests();
             inc_new_counter_debug!("cluster_info-push_message-pushes", pushes.len());
