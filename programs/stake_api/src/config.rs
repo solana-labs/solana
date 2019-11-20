@@ -17,7 +17,8 @@ const ID: [u8; 32] = [
 
 solana_sdk::solana_name_id!(ID, "StakeConfig11111111111111111111111111111111");
 
-// means that no more tha
+// means that no more than RATE of current effective stake may be added or subtracted per
+//  epoch
 pub const DEFAULT_WARMUP_RATE: f64 = 0.25;
 pub const DEFAULT_COOLDOWN_RATE: f64 = 0.25;
 pub const DEFAULT_SLASH_PENALTY: u8 = ((5 * std::u8::MAX as usize) / 100) as u8;
