@@ -67,12 +67,13 @@ impl Tower {
         bank_slot: u64,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<u64>>,
-    ) -> (HashMap<Slot, StakeLockout>, u64)
+    ) -> (HashMap<Slot, StakeLockout>, u64, u128)
     where
         F: Iterator<Item = (Pubkey, (u64, Account))>,
     {
         let mut stake_lockouts = HashMap::new();
         let mut total_stake = 0;
+        let mut total_weight = 0;
         for (key, (lamports, account)) in vote_accounts {
             if lamports == 0 {
                 continue;
@@ -114,8 +115,10 @@ impl Tower {
             vote_state.process_slot_vote_unchecked(bank_slot);
 
             for vote in &vote_state.votes {
+                total_weight += vote.lockout() as u128 * lamports as u128;
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
+
             if start_root != vote_state.root_slot {
                 if let Some(root) = start_root {
                     let vote = Lockout {
@@ -123,6 +126,7 @@ impl Tower {
                         slot: root,
                     };
                     trace!("ROOT: {}", vote.slot);
+                    total_weight += vote.lockout() as u128 * lamports as u128;
                     Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
                 }
             }
@@ -131,6 +135,7 @@ impl Tower {
                     confirmation_count: MAX_LOCKOUT_HISTORY as u32,
                     slot: root,
                 };
+                total_weight += vote.lockout() as u128 * lamports as u128;
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
 
@@ -153,7 +158,7 @@ impl Tower {
             }
             total_stake += lamports;
         }
-        (stake_lockouts, total_stake)
+        (stake_lockouts, total_stake, total_weight)
     }
 
     pub fn is_slot_confirmed(
@@ -245,18 +250,6 @@ impl Tower {
         self.lockouts.root_slot
     }
 
-    pub fn calculate_weight(&self, stake_lockouts: &HashMap<Slot, StakeLockout>) -> u128 {
-        let mut sum = 0u128;
-        let root_slot = self.lockouts.root_slot.unwrap_or(0);
-        for (slot, stake_lockout) in stake_lockouts {
-            if self.lockouts.root_slot.is_some() && *slot <= root_slot {
-                continue;
-            }
-            sum += u128::from(stake_lockout.lockout) * u128::from(stake_lockout.stake)
-        }
-        sum
-    }
-
     // a slot is not recent if it's older than the newest vote we have
     pub fn is_recent(&self, slot: u64) -> bool {
         if let Some(last_vote) = self.lockouts.votes.back() {
@@ -304,7 +297,6 @@ impl Tower {
 
         false
     }
-
     pub fn check_vote_stake_threshold(
         &self,
         slot: u64,
@@ -378,9 +370,9 @@ impl Tower {
     }
 
     fn bank_weight(&self, bank: &Bank, ancestors: &HashMap<Slot, HashSet<Slot>>) -> u128 {
-        let (stake_lockouts, _) =
+        let (_, _, bank_weight) =
             self.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter(), ancestors);
-        self.calculate_weight(&stake_lockouts)
+        bank_weight
     }
 
     fn find_heaviest_bank(&self, bank_forks: &BankForks) -> Option<Arc<Bank>> {
@@ -458,17 +450,22 @@ mod test {
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
-        let (staked_lockouts, total_staked) =
+        let (staked_lockouts, total_staked, bank_weight) =
             tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
         assert_eq!(staked_lockouts[&0].stake, 2);
         assert_eq!(staked_lockouts[&0].lockout, 2 + 2 + 4 + 4);
         assert_eq!(total_staked, 2);
+
+        // Each acccount has 1 vote in it. After simulating a vote in collect_vote_lockouts,
+        // the account will have 2 votes, with lockout 2 + 4 = 6. So expected weight for
+        // two acccounts is 2 * 6 = 12
+        assert_eq!(bank_weight, 12)
     }
 
     #[test]
     fn test_collect_vote_lockouts_root() {
         let votes: Vec<u64> = (0..MAX_LOCKOUT_HISTORY as u64).into_iter().collect();
-        //two accounts voting for slot 0 with 1 token staked
+        //two accounts voting for slots 0..MAX_LOCKOUT_HISTORY with 1 token staked
         let accounts = gen_stakes(&[(1, &votes), (1, &votes)]);
         let mut tower = Tower::new_for_tests(0, 0.67);
         let mut ancestors = HashMap::new();
@@ -476,8 +473,21 @@ mod test {
             tower.record_vote(i as u64, Hash::default());
             ancestors.insert(i as u64, (0..i as u64).into_iter().collect());
         }
+        let root = Lockout {
+            confirmation_count: MAX_LOCKOUT_HISTORY as u32,
+            slot: 0,
+        };
+        let root_weight = root.lockout() as u128;
+        let vote_account_expected_weight = tower
+            .lockouts
+            .votes
+            .iter()
+            .map(|v| v.lockout() as u128)
+            .sum::<u128>()
+            + root_weight;
+        let expected_bank_weight = 2 * vote_account_expected_weight;
         assert_eq!(tower.lockouts.root_slot, Some(0));
-        let (staked_lockouts, _total_staked) = tower.collect_vote_lockouts(
+        let (staked_lockouts, _total_staked, bank_weight) = tower.collect_vote_lockouts(
             MAX_LOCKOUT_HISTORY as u64,
             accounts.into_iter(),
             &ancestors,
@@ -487,46 +497,7 @@ mod test {
         }
         // should be the sum of all the weights for root
         assert!(staked_lockouts[&0].lockout > (2 * (1 << MAX_LOCKOUT_HISTORY)));
-    }
-
-    #[test]
-    fn test_calculate_weight_skips_root() {
-        let mut tower = Tower::new_for_tests(0, 0.67);
-        tower.lockouts.root_slot = Some(1);
-        let stakes = vec![
-            (
-                0,
-                StakeLockout {
-                    stake: 1,
-                    lockout: 8,
-                },
-            ),
-            (
-                1,
-                StakeLockout {
-                    stake: 1,
-                    lockout: 8,
-                },
-            ),
-        ]
-        .into_iter()
-        .collect();
-        assert_eq!(tower.calculate_weight(&stakes), 0u128);
-    }
-
-    #[test]
-    fn test_calculate_weight() {
-        let tower = Tower::new_for_tests(0, 0.67);
-        let stakes = vec![(
-            0,
-            StakeLockout {
-                stake: 1,
-                lockout: 8,
-            },
-        )]
-        .into_iter()
-        .collect();
-        assert_eq!(tower.calculate_weight(&stakes), 8u128);
+        assert_eq!(bank_weight, expected_bank_weight);
     }
 
     #[test]
@@ -876,7 +847,7 @@ mod test {
         for vote in &tower_votes {
             tower.record_vote(*vote, Hash::default());
         }
-        let (staked_lockouts, total_staked) =
+        let (staked_lockouts, total_staked, _) =
             tower.collect_vote_lockouts(vote_to_evaluate, accounts.clone().into_iter(), &ancestors);
         assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &staked_lockouts, total_staked));
 
@@ -884,7 +855,7 @@ mod test {
         // will expire the vote in one of the vote accounts, so we should have insufficient
         // stake to pass the threshold
         let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64 + 1;
-        let (staked_lockouts, total_staked) =
+        let (staked_lockouts, total_staked, _) =
             tower.collect_vote_lockouts(vote_to_evaluate, accounts.into_iter(), &ancestors);
         assert!(!tower.check_vote_stake_threshold(
             vote_to_evaluate,
