@@ -11,7 +11,11 @@ The validator may be fed a snapshot and gossip info for a different (though not
 necessarily malicious) cluster. If that cluster is at slot 100,000 while the
 cluster the validator intended to join is at 10,000, if the validator votes
 once on the wrong cluster, it is locked out of the correct cluster for 90,000
-slots.
+slots. This is because slashing is based on slot numbers, so when the validator
+votes on the wrong cluster's slot 100,000, it can't make any vote on the
+correct cluster that locks it out of the correct cluster's slot 100,000. Due to
+this, it can't achieve `MAX_LOCKOUT` on the correct cluster until that goes
+past slot 100,000.
 
 ### Voting Before Catching Up
 
