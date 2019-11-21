@@ -141,10 +141,49 @@ macro_rules! solana_name_id(
     )
 );
 
+// #[macro_export]
+// macro_rules! 
+// declare_id(
+//     ($bs58:ident) => (
+
+//         pub fn check_id(id: &$crate::pubkey::Pubkey) -> bool {
+//             id.as_string() == $bs58
+//         }
+
+//         pub fn id() -> $crate::pubkey::Pubkey {
+//             $crate::pubkey::Pubkey::from_str($bs58)
+//         }
+
+//         #[cfg(test)]
+//         #[test]
+//         fn test_id() {
+//             assert!(check_id(&id()));
+//         }
+//     )
+// );
+
+// const ID: [u8; 32] = [
+//     3, 6, 74, 163, 0, 47, 116, 220, 200, 110, 67, 49, 15, 12, 5, 42, 248, 197, 218, 39, 246, 16,
+//     64, 25, 163, 35, 239, 160, 0, 0, 0, 0,
+// ];
+
+// declare_id!("Config1111111111111111111111111111111111111");
+
+
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs::remove_file;
+
+    // #[test]
+    // fn pubkey_test_declare_id() {
+
+    //     println!("id: {:?}", id());
+
+    // }
 
     #[test]
     fn pubkey_fromstr() {
