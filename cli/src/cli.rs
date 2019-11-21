@@ -6,7 +6,7 @@ use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
-use solana_budget_api::budget_instruction::{self, BudgetError};
+use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
@@ -30,7 +30,7 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_stake_program::stake_state::{Lockup, StakeAuthorize};
-use solana_storage_api::storage_instruction::StorageAccountType;
+use solana_storage_program::storage_instruction::StorageAccountType;
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
     fs::File,

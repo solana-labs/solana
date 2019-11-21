@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
-use solana_exchange_api::{exchange_instruction, exchange_state::*, id};
+use solana_exchange_program::{exchange_instruction, exchange_state::*, id};
 use solana_genesis::Base64Account;
 use solana_metrics::datapoint_info;
 use solana_sdk::{

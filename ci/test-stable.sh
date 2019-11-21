@@ -95,8 +95,7 @@ test-move)
     ^ci/rust-version.sh \
     ^ci/test-stable.sh \
     ^ci/test-move.sh \
-    ^programs/move_loader_api \
-    ^programs/move_loader_program \
+    ^programs/move_loader \
     ^programs/librapay_api \
     ^logger/ \
     ^runtime/ \
@@ -106,8 +105,7 @@ test-move)
       "Skipped $testName as no relevant files were modified"
     exit 0
   }
-  _ cargo +"$rust_stable" test --manifest-path programs/move_loader_api/Cargo.toml ${V:+--verbose} -- --nocapture
-  _ cargo +"$rust_stable" test --manifest-path programs/move_loader_program/Cargo.toml ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --manifest-path programs/move_loader/Cargo.toml ${V:+--verbose} -- --nocapture
   _ cargo +"$rust_stable" test --manifest-path programs/librapay_api/Cargo.toml ${V:+--verbose} -- --nocapture
   exit 0
   ;;

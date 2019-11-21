@@ -27,11 +27,10 @@ serde_json = "1.0.41"
 solana-logger = { path = "../logger", version = "0.21.0" }
 solana-measure = { path = "../measure", version = "0.21.0" }
 solana-metrics = { path = "../metrics", version = "0.21.0" }
-solana-bpf-loader-api = { path = "../programs/bpf_loader_api", version = "0.21.0" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader_program", version = "0.21.0" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "0.21.0" }
 solana-sdk = { path = "../sdk", version = "0.21.0" }
 solana-stake-program = { path = "../programs/stake", version = "0.21.0" }
-solana-storage-api = { path = "../programs/storage_api", version = "0.21.0" }
+solana-storage-program = { path = "../programs/storage", version = "0.21.0" }
 solana-vote-program = { path = "../programs/vote", version = "0.21.0" }
 sys-info = "0.5.8"
 tempfile = "3.1.0"
@@ -43,4 +42,4 @@ crate-type = ["lib"]
 name = "solana_runtime"
 
 [dev-dependencies]
-solana-noop-program = { path = "../programs/noop_program", version = "0.21.0" }
+solana-noop-program = { path = "../programs/noop", version = "0.21.0" }

@@ -391,7 +391,7 @@ mod tests {
     use super::*;
     use crate::entry::Entry;
     use chrono::prelude::Utc;
-    use solana_budget_api::budget_instruction;
+    use solana_budget_program::budget_instruction;
     use solana_sdk::{
         hash::{hash, Hash},
         message::Message,

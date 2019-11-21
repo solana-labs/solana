@@ -1,6 +1,6 @@
 use bincode;
-use solana_move_loader_api::account_state::pubkey_to_address;
-use solana_move_loader_api::processor::InvokeCommand;
+use solana_move_loader_program::account_state::pubkey_to_address;
+use solana_move_loader_program::processor::InvokeCommand;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;

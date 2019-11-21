@@ -1,7 +1,7 @@
 [package]
 name = "solana-stake-tests"
 version = "0.21.0"
-description = "Solana stake api tests"
+description = "Solana stake tests"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"

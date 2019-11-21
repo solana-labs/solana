@@ -11,9 +11,9 @@ solana_sdk::solana_name_id!(
 pub mod librapay_instruction;
 pub mod librapay_transaction;
 
-extern crate solana_move_loader_api;
+extern crate solana_move_loader_program;
 
-use solana_move_loader_api::account_state::LibraAccountState;
+use solana_move_loader_program::account_state::LibraAccountState;
 use solana_runtime::loader_utils::load_program;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::Client;
@@ -92,5 +92,5 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    solana_move_loader_api::processor::process_instruction(program_id, keyed_accounts, data)
+    solana_move_loader_program::processor::process_instruction(program_id, keyed_accounts, data)
 }

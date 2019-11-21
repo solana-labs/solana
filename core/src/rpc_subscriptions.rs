@@ -298,7 +298,7 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use jsonrpc_pubsub::typed::Subscriber;
-    use solana_budget_api;
+    use solana_budget_program;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use tokio::prelude::{Async, Stream};
@@ -320,7 +320,7 @@ mod tests {
             blockhash,
             1,
             16,
-            &solana_budget_api::id(),
+            &solana_budget_program::id(),
         );
         bank_forks
             .write()
@@ -375,7 +375,7 @@ mod tests {
             blockhash,
             1,
             16,
-            &solana_budget_api::id(),
+            &solana_budget_program::id(),
         );
         bank_forks
             .write()
@@ -390,15 +390,15 @@ mod tests {
         let sub_id = SubscriptionId::Number(0 as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let subscriptions = RpcSubscriptions::default();
-        subscriptions.add_program_subscription(&solana_budget_api::id(), None, &sub_id, &sink);
+        subscriptions.add_program_subscription(&solana_budget_program::id(), None, &sub_id, &sink);
 
         assert!(subscriptions
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_budget_api::id()));
+            .contains_key(&solana_budget_program::id()));
 
-        subscriptions.check_program(&solana_budget_api::id(), 0, &bank_forks);
+        subscriptions.check_program(&solana_budget_program::id(), 0, &bank_forks);
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected = format!(r#"{{"jsonrpc":"2.0","method":"programNotification","params":{{"result":["{:?}",{{"data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"executable":false,"lamports":1,"owner":[2,203,81,223,225,24,34,35,203,214,138,130,144,208,35,77,63,16,87,51,47,198,115,123,98,188,19,160,0,0,0,0],"rent_epoch":1}}],"subscription":0}}}}"#, alice.pubkey());
@@ -410,7 +410,7 @@ mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_budget_api::id()));
+            .contains_key(&solana_budget_program::id()));
     }
     #[test]
     fn test_check_signature_subscribe() {

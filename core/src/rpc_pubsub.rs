@@ -245,8 +245,8 @@ mod tests {
     use jsonrpc_core::futures::sync::mpsc;
     use jsonrpc_core::Response;
     use jsonrpc_pubsub::{PubSubHandler, Session};
-    use solana_budget_api;
-    use solana_budget_api::budget_instruction;
+    use solana_budget_program;
+    use solana_budget_program::budget_instruction;
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::bank::Bank;
     use solana_sdk::pubkey::Pubkey;
@@ -378,7 +378,7 @@ mod tests {
         let witness = Keypair::new();
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
-        let budget_program_id = solana_budget_api::id();
+        let budget_program_id = solana_budget_program::id();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));

@@ -27,7 +27,7 @@ use solana_stake_program::{
     config as stake_config, stake_instruction,
     stake_state::{Authorized as StakeAuthorized, StakeState},
 };
-use solana_storage_api::{
+use solana_storage_program::{
     storage_contract,
     storage_instruction::{self, StorageAccountType},
 };
