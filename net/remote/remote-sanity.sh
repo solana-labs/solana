@@ -114,7 +114,7 @@ if [[ "$airdropsEnabled" = true ]]; then
   echo "--- $sanityTargetIp: wallet sanity"
   (
     set -x
-    #scripts/wallet-sanity.sh --url http://"$sanityTargetIp":8899
+    scripts/wallet-sanity.sh --url http://"$sanityTargetIp":8899
   )
 else
   echo "^^^ +++"
