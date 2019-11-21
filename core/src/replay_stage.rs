@@ -44,7 +44,7 @@ use std::{
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 
-type VoteAndPoHBank = (Option<(Arc<Bank>, u64)>, Option<Arc<Bank>>);
+type VoteAndPoHBank = Option<(Arc<Bank>, ForkStats)>;
 
 // Implement a destructor for the ReplayStage thread to signal it exited
 // even on panics
@@ -83,6 +83,7 @@ struct ReplaySlotStats {
 #[derive(Debug, Clone, Default)]
 struct ForkStats {
     weight: u128,
+    fork_weight: u128,
     total_staked: u64,
     slot: Slot,
     block_height: u64,
@@ -254,17 +255,20 @@ impl ReplayStage {
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
                     loop {
                         let start = allocated.get();
-                        let (vote_bank, heaviest) = Self::select_fork(&ancestors, &bank_forks, &tower, &mut progress);
+                        let vote_bank = Self::select_fork(&my_pubkey, &ancestors, &bank_forks, &tower, &mut progress);
                         datapoint_debug!(
                             "replay_stage-memory",
                             ("select_fork", (allocated.get() - start) as i64, i64),
                         );
-                        let done = vote_bank.is_none();
-                        let mut vote_bank_slot = 0;
-                        let reset_bank = vote_bank.as_ref().map(|b| b.0.clone()).or(heaviest);
+                        if vote_bank.is_none() {
+                            break;
+                        }
+                        let (bank, stats) = vote_bank.unwrap();
+                        let mut done = false;
+                        let mut vote_bank_slot = None;
                         let start = allocated.get();
-                        if let Some((bank, total_staked)) = vote_bank {
-                            info!("voting: {}", bank.slot());
+                        if !stats.is_locked_out && stats.vote_threshold {
+                            info!("voting: {} {}", bank.slot(), stats.fork_weight);
                             subscriptions.notify_subscribers(bank.slot(), &bank_forks);
                             if let Some(votable_leader) =
                                 leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
@@ -276,7 +280,7 @@ impl ReplayStage {
                                     &votable_leader,
                                 );
                             }
-                            vote_bank_slot = bank.slot();
+                            vote_bank_slot = Some(bank.slot());
                             Self::handle_votable_bank(
                                 &bank,
                                 &bank_forks,
@@ -288,7 +292,7 @@ impl ReplayStage {
                                 &blocktree,
                                 &leader_schedule_cache,
                                 &root_bank_sender,
-                                total_staked,
+                                stats.total_staked,
                                 &lockouts_sender,
                                 &snapshot_package_sender,
                             )?;
@@ -298,29 +302,29 @@ impl ReplayStage {
                             ("votable_bank", (allocated.get() - start) as i64, i64),
                         );
                         let start = allocated.get();
-                        if let Some(bank) = reset_bank {
-                            if last_reset != bank.last_blockhash() {
-                                Self::reset_poh_recorder(
-                                    &my_pubkey,
-                                    &blocktree,
-                                    &bank,
-                                    &poh_recorder,
-                                    &leader_schedule_cache,
-                                );
-                                last_reset = bank.last_blockhash();
-                                tpu_has_bank = false;
-                                info!("vote bank: {} reset bank: {}", vote_bank_slot, bank.slot());
-                                if !partition && vote_bank_slot != bank.slot() {
-                                    warn!("PARTITION DETECTED waiting to join fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
-                                    inc_new_counter_info!("replay_stage-partition_detected", 1);
-                                    datapoint_info!("replay_stage-partition", ("slot", bank.slot() as i64, i64));
-                                    partition = true;
-                                } else if partition && vote_bank_slot == bank.slot() {
-                                    warn!("PARTITION resolved fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
-                                    partition = false;
-                                    inc_new_counter_info!("replay_stage-partition_resolved", 1);
-                                }
+                        if last_reset != bank.last_blockhash() {
+                            Self::reset_poh_recorder(
+                                &my_pubkey,
+                                &blocktree,
+                                &bank,
+                                &poh_recorder,
+                                &leader_schedule_cache,
+                            );
+                            last_reset = bank.last_blockhash();
+                            tpu_has_bank = false;
+                            info!("vote bank: {:?} reset bank: {}", vote_bank_slot, bank.slot());
+                            if !partition && vote_bank_slot != Some(bank.slot()) {
+                                warn!("PARTITION DETECTED waiting to join fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
+                                inc_new_counter_info!("replay_stage-partition_detected", 1);
+                                datapoint_info!("replay_stage-partition", ("slot", bank.slot() as i64, i64));
+                                partition = true;
+                            } else if partition && vote_bank_slot == Some(bank.slot()) {
+                                warn!("PARTITION resolved fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
+                                partition = false;
+                                inc_new_counter_info!("replay_stage-partition_resolved", 1);
                             }
+                        } else {
+                             done = true;
                         }
                         datapoint_debug!(
                             "replay_stage-memory",
@@ -718,6 +722,7 @@ impl ReplayStage {
     }
 
     fn select_fork(
+        my_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         tower: &Tower,
@@ -763,26 +768,31 @@ impl ReplayStage {
                     Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
                     stats.weight = bank_weight;
+                    stats.fork_weight = stats.weight + bank.parent().and_then(|b| progress.get(&b.slot())).map(|x| x.fork_stats.fork_weight).unwrap_or(0);
+
                     datapoint_warn!(
                         "bank_weight",
                         ("slot", bank.slot(), i64),
                         // u128 too large for influx, convert to hex
                         ("weight", format!("{:X}", stats.weight), String),
                     );
+                    warn!(
+                        "{} slot_weight: {} {} {} {}",
+                        my_pubkey,
+                        stats.slot,
+                        stats.weight,
+                        stats.fork_weight,
+                        bank.parent().map(|b| b.slot()).unwrap_or(0)
+                    );
                     stats.stake_lockouts = stake_lockouts;
                     stats.block_height = bank.block_height();
+                    stats.computed = true;
                 }
                 stats.vote_threshold = tower.check_vote_stake_threshold(
                     bank.slot(),
                     &stats.stake_lockouts,
                     stats.total_staked,
                 );
-                if !stats.computed {
-                    if !stats.vote_threshold {
-                        debug!("vote threshold check failed: {}", bank.slot());
-                    }
-                    stats.computed = true;
-                }
                 stats.is_locked_out = tower.is_locked_out(bank.slot(), &ancestors);
                 stats.has_voted = tower.has_voted(bank.slot());
                 stats.is_recent = tower.is_recent(bank.slot());
@@ -805,22 +815,11 @@ impl ReplayStage {
         let mut candidates: Vec<_> = frozen_banks
             .iter()
             .zip(stats.iter())
-            .filter(|(_, stats)| stats.is_recent && !stats.has_voted)
             .collect();
 
         //highest weight, lowest slot first
-        candidates.sort_by_key(|b| (b.1.weight, 0i64 - b.1.slot as i64));
-
-        candidates.iter().for_each(|(_, stats)| {
-            let mut parents: Vec<_> = if let Some(set) = ancestors.get(&stats.slot) {
-                set.iter().collect()
-            } else {
-                vec![]
-            };
-            parents.sort();
-            debug!("{}: {:?} {:?}", stats.slot, stats, parents,);
-        });
-        let rv = Self::pick_best_fork(ancestors, &candidates);
+        candidates.sort_by_key(|b| (b.1.fork_weight, 0i64 - b.1.slot as i64));
+        let rv = candidates.last();
         let ms = timing::duration_as_ms(&tower_start.elapsed());
         let weights: Vec<(u128, u64, u64)> = candidates
             .iter()
@@ -833,7 +832,7 @@ impl ReplayStage {
             candidates.len(),
             stats.iter().filter(|s| !s.has_voted).count(),
             weights,
-            rv.0.is_some()
+            rv.is_some()
         );
         datapoint_debug!(
             "replay_stage-select_fork",
@@ -850,61 +849,7 @@ impl ReplayStage {
             ),
             ("tower_duration", ms as i64, i64),
         );
-        rv
-    }
-
-    fn pick_best_fork(
-        ancestors: &HashMap<u64, HashSet<u64>>,
-        best_banks: &[(&Arc<Bank>, &ForkStats)],
-    ) -> VoteAndPoHBank {
-        if best_banks.is_empty() {
-            return (None, None);
-        }
-        let mut vote = None;
-        let (mut best_bank, best_stats) = best_banks.last().unwrap();
-        debug!("best bank: {:?}", best_stats);
-        let mut by_slot: Vec<_> = best_banks.iter().collect();
-        by_slot.sort_by_key(|x| x.1.slot);
-        //look for the oldest ancestors of the best bank
-        if let Some(best_ancestors) = ancestors.get(&best_stats.slot) {
-            for (parent, parent_stats) in by_slot.iter() {
-                if parent_stats.is_locked_out || !parent_stats.vote_threshold {
-                    continue;
-                }
-                if !best_ancestors.contains(&parent_stats.slot) {
-                    continue;
-                }
-                debug!("best bank found ancestor: {}", parent_stats.slot);
-                inc_new_counter_info!("replay_stage-pick_best_fork-ancestor", 1);
-                vote = Some(((*parent).clone(), parent_stats.total_staked));
-                break;
-            }
-        }
-        //look for the heaviest child of the best bank
-        if vote.is_none() {
-            for (child, child_stats) in best_banks.iter().rev() {
-                let has_best = best_stats.slot == child_stats.slot
-                    || ancestors
-                        .get(&child.slot())
-                        .map(|set| set.contains(&best_stats.slot))
-                        .unwrap_or(false);
-                if !has_best {
-                    continue;
-                }
-                best_bank = child;
-                if child_stats.is_locked_out || !child_stats.vote_threshold {
-                    continue;
-                }
-                inc_new_counter_info!("replay_stage-pick_best_fork-child", 1);
-                debug!("best bank found child: {}", child_stats.slot);
-                vote = Some(((*child).clone(), child_stats.total_staked));
-                break;
-            }
-        }
-        if vote.is_none() {
-            inc_new_counter_info!("replay_stage-fork_selection-heavy_bank_lockout", 1);
-        }
-        (vote, Some((*best_bank).clone()))
+        rv.cloned().map(|x| (x.0.clone(), x.1.clone()))
     }
 
     fn confirm_forks(

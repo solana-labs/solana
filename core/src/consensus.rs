@@ -297,7 +297,6 @@ impl Tower {
 
         false
     }
-
     pub fn check_vote_stake_threshold(
         &self,
         slot: u64,
