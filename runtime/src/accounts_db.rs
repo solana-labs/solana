@@ -255,8 +255,9 @@ impl AccountStorageEntry {
 
     pub fn restore_account_count(&self) {
         let mut count_and_status = self.count_and_status.write().unwrap();
-        error!("ryoqun: restored storage: {:?} {:?}", self, *count_and_status);
-        *count_and_status = (self.all_existing_accounts().len(), count_and_status.1);
+        let new_count = self.all_existing_accounts().len();
+        error!("ryoqun: restored storage: from {:?} {:?} to {}", self, *count_and_status, new_count);
+        *count_and_status = (new_count, count_and_status.1);
     }
 
     fn add_account(&self) {
@@ -1118,8 +1119,8 @@ impl AccountsDB {
         let mut slots: Vec<Slot> = storage.0.keys().cloned().collect();
         slots.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
+        let mut dead_slots = HashSet::new();
         for slot_id in slots.iter() {
-            /*
             let storage_maps: Vec<Arc<AccountStorageEntry>> = self
                 .storage
                 .read()
@@ -1132,7 +1133,7 @@ impl AccountsDB {
                 .collect();
             for storage in storage_maps.into_iter() {
                 storage.restore_account_count();
-            }*/
+            }
 
             let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
                 .scan_account_storage(
@@ -1145,6 +1146,7 @@ impl AccountsDB {
                             offset: stored_account.offset,
                             lamports: stored_account.account_meta.lamports,
                         };
+                        error!("count");
                         accum.insert(
                             stored_account.meta.pubkey,
                             (stored_account.meta.write_version, account_info),
@@ -1158,24 +1160,26 @@ impl AccountsDB {
             }
             if !account_maps.is_empty() {
                 accounts_index.roots.insert(*slot_id);
+                error!("account_maps: {:?}", account_maps.len());
                 let mut reclaims: Vec<(u64, AccountInfo)> = vec![];
                 for (pubkey, (_, account_info)) in account_maps.iter() {
+                    error!("slot: {}, account_info: {:?}", *slot_id, account_info);
                     accounts_index.insert(*slot_id, pubkey, account_info.clone(), &mut reclaims);
                 }
+
+                error!("reclaims: {:?}", reclaims);
                 for (slot_id, account_info) in reclaims {
                     if let Some(slot_storage) = storage.0.get(&slot_id) {
                         if let Some(store) = slot_storage.get(&account_info.id) {
-                            let mut dead_slots = self.remove_dead_accounts(reclaims);
-                            trace!("dead_slots: {}", dead_slots.len());
-
-                            let mut cleanup_dead_slots = Measure::start("store::cleanup_dead_slots");
-                            self.cleanup_dead_slots(&mut dead_slots, last_root);
-                            trace!("purge_slots: {}", dead_slots.len());
-
-                            for slot in dead_slots {
-                                self.purge_slot(slot);
+                            assert_eq!(
+                                slot_id, store.slot_id,
+                                "AccountDB::accounts_index corrupted. Storage should only point to one slot"
+                            );
+                            let count = store.remove_account();
+                            error!("count, {}", count);
+                            if count == 0 {
+                                dead_slots.insert(slot_id);
                             }
-            self.storage.write().unwrap().0.remove(&slot);
                         }
                     }
                 }
