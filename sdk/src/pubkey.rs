@@ -28,10 +28,9 @@ impl FromStr for Pubkey {
     type Err = ParsePubkeyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let pubkey_vec = bs58::decode(s).into_vec().map_err(|e| {
-            println!("Error: {:?}", e);
-            ParsePubkeyError::Invalid
-        })?;
+        let pubkey_vec = bs58::decode(s)
+            .into_vec()
+            .map_err(|_| ParsePubkeyError::Invalid)?;
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
             Err(ParsePubkeyError::WrongSize)
         } else {
