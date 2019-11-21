@@ -3431,10 +3431,6 @@ mod tests {
         bank1.register_tick(&Hash::default());
         assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
         assert_eq!(bank1.hash_internal_state(), hash1);
-        for _ in 0..genesis_config.ticks_per_slot {
-            bank1.register_tick(&Hash::default());
-        }
-        assert_ne!(bank1.hash_internal_state(), hash1);
     }
 
     #[test]
