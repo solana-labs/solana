@@ -268,16 +268,12 @@ fn run_network_partition(partitions: &[usize]) {
     info!("PARTITION_TEST done spending on all node");
 }
 
-#[allow(unused_attributes)]
-#[ignore]
 #[test]
 #[serial]
 fn test_network_partition_1_2() {
     run_network_partition(&[1, 2])
 }
 
-#[allow(unused_attributes)]
-#[ignore]
 #[test]
 #[serial]
 fn test_network_partition_1_1() {
