@@ -122,7 +122,6 @@ declare_id(
 
         $crate::lazy_static::lazy_static! {
             static ref _PUBKEY: $crate::pubkey::Pubkey = {
-                println!("{:?} length: {:?}", $bs58_string, $bs58_string.len());
                 match $crate::pubkey::Pubkey::from_str(&$bs58_string) {
                     Ok(pubkey) => pubkey,
                     Err(_) => {

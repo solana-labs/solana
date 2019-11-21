@@ -3,8 +3,8 @@ pub mod data_store;
 pub mod error_mappers;
 pub mod processor;
 
-use solana_sdk::move_loader;
 use crate::processor::process_instruction;
+use solana_sdk::move_loader;
 
 solana_sdk::declare_program!(
     move_loader::BS58_STRING,
