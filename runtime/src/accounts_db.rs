@@ -576,6 +576,7 @@ impl AccountsDB {
         let mut purges = Vec::new();
         accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
             if account_info.lamports == 0 && accounts_index.is_root(slot) {
+                error!("ryoqun purging....{} {} {:?} {}", pubkey, slot, account_info,  accounts_index.is_root(slot));
                 purges.push(*pubkey);
             }
         });
@@ -585,10 +586,13 @@ impl AccountsDB {
         for purge in &purges {
             reclaims.extend(accounts_index.purge(purge));
         }
+        error!("ryoqun: zla reclaims {:?}", reclaims);
         let last_root = accounts_index.last_root;
         drop(accounts_index);
         let mut dead_slots = self.remove_dead_accounts(reclaims);
+        error!("ryoqun: zla dead slots 2 {:?}", dead_slots);
         self.cleanup_dead_slots(&mut dead_slots, last_root);
+        error!("ryoqun: zla dead slots 2 {:?}", dead_slots);
         for slot in dead_slots {
             self.purge_slot(slot);
         }
@@ -874,7 +878,7 @@ impl AccountsDB {
                 oldest_slot = *slot;
             }
         }
-        info!("accounts_db: total_stores: {} newest_slot: {} oldest_slot: {} max_slot: {} (num={}) min_slot: {} (num={})",
+        error!("ryoqun accounts_db: total_stores: {} newest_slot: {} oldest_slot: {} max_slot: {} (num={}) min_slot: {} (num={})",
               total_count, newest_slot, oldest_slot, max_slot, max, min_slot, min);
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
     }

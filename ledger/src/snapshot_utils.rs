@@ -151,6 +151,7 @@ where
 }
 
 pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
+    error!("ryoqun saving snapshot");
     bank.purge_zero_lamport_accounts();
     let slot = bank.slot();
     // snapshot_path/slot
@@ -211,6 +212,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     snapshot_path: &PathBuf,
     snapshot_tar: P,
 ) -> Result<Bank> {
+    error!("ryoqun loading snapshot");
     // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
     let unpack_dir = tempfile::tempdir_in(snapshot_path)?;
     untar_snapshot_in(&snapshot_tar, &unpack_dir)?;
