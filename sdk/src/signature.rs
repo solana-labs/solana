@@ -168,6 +168,7 @@ pub fn write_keypair_file(
         }
     }
     .write(true)
+    .truncate(true)
     .create(true)
     .open(outfile)?;
 
@@ -235,8 +236,26 @@ mod tests {
     #[test]
     fn test_write_keypair_file_overwrite_ok() {
         let outfile = tmp_file_path("test_write_keypair_file_overwrite_ok.json");
+
         write_keypair_file(&Keypair::new(), &outfile).unwrap();
         write_keypair_file(&Keypair::new(), &outfile).unwrap();
+    }
+
+    #[test]
+    fn test_write_keypair_file_truncate() {
+        let outfile = tmp_file_path("test_write_keypair_file_truncate.json");
+
+        write_keypair_file(&Keypair::new(), &outfile).unwrap();
+        read_keypair_file(&outfile).unwrap();
+
+        // Ensure outfile is truncated
+        {
+            let mut f = File::create(&outfile).unwrap();
+            f.write_all(String::from_utf8([b'a'; 2048].to_vec()).unwrap().as_bytes())
+                .unwrap();
+        }
+        write_keypair_file(&Keypair::new(), &outfile).unwrap();
+        read_keypair_file(&outfile).unwrap();
     }
 
     #[test]
