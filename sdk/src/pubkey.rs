@@ -28,9 +28,10 @@ impl FromStr for Pubkey {
     type Err = ParsePubkeyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let pubkey_vec = bs58::decode(s)
-            .into_vec()
-            .map_err(|_| ParsePubkeyError::Invalid)?;
+        let pubkey_vec = bs58::decode(s).into_vec().map_err(|e| {
+            println!("Error: {:?}", e);
+            ParsePubkeyError::Invalid
+        })?;
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
             Err(ParsePubkeyError::WrongSize)
         } else {
@@ -120,7 +121,29 @@ declare_id(
         use std::str::FromStr;
 
         $crate::lazy_static::lazy_static! {
-            static ref _PUBKEY: $crate::pubkey::Pubkey = { $crate::pubkey::Pubkey::from_str(&$bs58_string).unwrap() };
+            static ref _PUBKEY: $crate::pubkey::Pubkey = {
+                println!("{:?} length: {:?}", $bs58_string, $bs58_string.len());
+                match $crate::pubkey::Pubkey::from_str(&$bs58_string) {
+                    Ok(pubkey) => pubkey,
+                    Err(_) => {
+                        let pubkey_vec = $crate::bs58::decode(&$bs58_string)
+                            .into_vec()
+                            .map_err(|e| panic!("Error: {}, {}", $bs58_string, e))
+                            .unwrap();
+                        let expected_len = std::mem::size_of::<$crate::pubkey::Pubkey>();
+                        let len = pubkey_vec.len();
+                        if len != expected_len {
+                            panic!(
+                                "Error: {}, decoded length {}, expected {}",
+                                $bs58_string, len, expected_len);
+                        } else {
+                            panic!(
+                                "Error: {}, not a valid string, cannot determine reason",
+                                $bs58_string);
+                        }
+                    }
+                }
+            };
         }
 
         pub fn check_id(id: &$crate::pubkey::Pubkey) -> bool {
@@ -128,7 +151,7 @@ declare_id(
         }
 
         pub fn id() -> $crate::pubkey::Pubkey {
-            (*_PUBKEY).clone()
+            *_PUBKEY
         }
 
         #[cfg(test)]
