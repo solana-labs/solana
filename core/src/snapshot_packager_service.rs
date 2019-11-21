@@ -92,12 +92,14 @@ impl SnapshotPackagerService {
 
         // Tar the staging directory into the archive at `archive_path`
         let archive_path = tar_dir.join("new_state.tar.bz2");
-        let mut args = vec!["jcfhS"];
-        args.push(archive_path.to_str().unwrap());
-        args.push("-C");
-        args.push(staging_dir.path().to_str().unwrap());
-        args.push(TAR_ACCOUNTS_DIR);
-        args.push(TAR_SNAPSHOTS_DIR);
+        let args = vec![
+            "jcfhS",
+            archive_path.to_str().unwrap(),
+            "-C",
+            staging_dir.path().to_str().unwrap(),
+            TAR_ACCOUNTS_DIR,
+            TAR_SNAPSHOTS_DIR,
+        ];
 
         let output = std::process::Command::new("tar").args(&args).output()?;
         if !output.status.success() {

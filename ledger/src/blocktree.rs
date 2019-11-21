@@ -1860,12 +1860,14 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
     drop(blocktree);
 
     let archive_path = ledger_path.join("genesis.tar.bz2");
-    let mut args = vec!["jcfhS"];
-    args.push(archive_path.to_str().unwrap());
-    args.push("-C");
-    args.push(ledger_path.to_str().unwrap());
-    args.push("genesis.bin");
-    args.push("rocksdb");
+    let args = vec![
+        "jcfhS",
+        archive_path.to_str().unwrap(),
+        "-C",
+        ledger_path.to_str().unwrap(),
+        "genesis.bin",
+        "rocksdb",
+    ];
     let output = std::process::Command::new("tar")
         .args(&args)
         .output()
