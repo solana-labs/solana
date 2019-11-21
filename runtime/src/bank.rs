@@ -3876,9 +3876,8 @@ mod tests {
         let bank1 = new_from_parent(&bank);
         let hash1 = bank1.hash_internal_state();
         // ticks don't change its state unless a block boundary is crossed
-        bank1.register_tick(&Hash::default());
-        assert_eq!(bank1.hash_internal_state(), hash1);
         for _ in 0..genesis_config.ticks_per_slot {
+            assert_eq!(bank1.hash_internal_state(), hash1);
             bank1.register_tick(&Hash::default());
         }
         assert_ne!(bank1.hash_internal_state(), hash1);
