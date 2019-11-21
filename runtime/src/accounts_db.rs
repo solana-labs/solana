@@ -298,7 +298,7 @@ impl AccountStorageEntry {
         if count > 0 {
             *count_and_status = (count - 1, status);
         } else {
-            // XXX promoted this to critical because unconsistent ref count directly translates into a corrupted ledger
+            // promoted this to critical because unconsistent ref count directly translates into a corrupted ledger
             panic!(
                 "ryoqun count value 0 for slot {}, {:?}",
                 self.slot_id, status
