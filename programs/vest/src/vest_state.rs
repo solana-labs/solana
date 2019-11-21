@@ -33,6 +33,9 @@ pub struct VestState {
 
     /// The number of lamports the terminator repurchased
     pub reneged_lamports: u64,
+
+    /// True if the terminator has declared this contract fully vested.
+    pub is_fully_vested: bool,
 }
 
 impl Default for VestState {
@@ -45,6 +48,7 @@ impl Default for VestState {
             total_lamports: 0,
             redeemed_lamports: 0,
             reneged_lamports: 0,
+            is_fully_vested: false,
         }
     }
 }
@@ -59,6 +63,11 @@ impl VestState {
     }
 
     fn calc_vested_lamports(&self, current_date: Date<Utc>) -> u64 {
+        let total_lamports_after_reneged = self.total_lamports - self.reneged_lamports;
+        if self.is_fully_vested {
+            return total_lamports_after_reneged;
+        }
+
         let schedule = create_vesting_schedule(self.start_date_time.date(), self.total_lamports);
 
         let vested_lamports = schedule
@@ -67,7 +76,7 @@ impl VestState {
             .map(|(_, lamports)| lamports)
             .sum::<u64>();
 
-        min(vested_lamports, self.total_lamports - self.reneged_lamports)
+        min(vested_lamports, total_lamports_after_reneged)
     }
 
     /// Redeem vested tokens.
@@ -98,6 +107,11 @@ impl VestState {
         contract_account.lamports -= reneged_lamports;
 
         self.reneged_lamports += reneged_lamports;
+    }
+
+    /// Mark this contract as fully vested, regardless of the date.
+    pub fn vest_all(&mut self) {
+        self.is_fully_vested = true;
     }
 }
 
@@ -148,5 +162,26 @@ mod test {
 
         // Verify reneged tokens aren't redeemable.
         assert_eq!(vest_state.calc_vested_lamports(Utc.ymd(2022, 1, 1)), 2);
+
+        // Verify reneged tokens aren't redeemable after fully vesting.
+        vest_state.vest_all();
+        assert_eq!(vest_state.calc_vested_lamports(Utc.ymd(2022, 1, 1)), 2);
+    }
+
+    #[test]
+    fn test_vest_all() {
+        let total_lamports = 3;
+        let mut contract_account = Account::new(total_lamports, 512, &id());
+        let mut vest_state = VestState {
+            total_lamports,
+            start_date_time: Utc.ymd(2019, 1, 1).and_hms(0, 0, 0),
+            ..VestState::default()
+        };
+        vest_state.serialize(&mut contract_account.data).unwrap();
+        let current_date = Utc.ymd(2020, 1, 1);
+        assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
+
+        vest_state.vest_all();
+        assert_eq!(vest_state.calc_vested_lamports(current_date), 3);
     }
 }

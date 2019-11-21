@@ -57,6 +57,9 @@ pub enum VestInstruction {
     /// already vested are unaffected. Use this instead of `Terminate` to minimize
     /// the number of token transfers.
     Renege(u64),
+
+    /// Mark all available tokens as redeemable, regardless of the date.
+    VestAll,
 }
 
 fn initialize_account(
@@ -153,4 +156,12 @@ pub fn renege(contract: &Pubkey, from: &Pubkey, to: &Pubkey, lamports: u64) -> I
         account_metas.push(AccountMeta::new(*to, false));
     }
     Instruction::new(id(), &VestInstruction::Renege(lamports), account_metas)
+}
+
+pub fn vest_all(contract: &Pubkey, from: &Pubkey) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*contract, false),
+        AccountMeta::new(*from, true),
+    ];
+    Instruction::new(id(), &VestInstruction::VestAll, account_metas)
 }

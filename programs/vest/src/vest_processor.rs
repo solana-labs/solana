@@ -77,8 +77,7 @@ pub fn process_instruction(
             start_date_time,
             date_pubkey,
             total_lamports,
-            redeemed_lamports: 0,
-            reneged_lamports: 0,
+            ..VestState::default()
         }
     } else {
         VestState::deserialize(&contract_account.data)?
@@ -128,6 +127,13 @@ pub fn process_instruction(
                 terminator_account
             };
             vest_state.renege(contract_account, payee_account, lamports);
+        }
+        VestInstruction::VestAll => {
+            verify_signed_account(
+                next_keyed_account(keyed_accounts_iter)?,
+                &vest_state.terminator_pubkey,
+            )?;
+            vest_state.vest_all();
         }
     }
 
