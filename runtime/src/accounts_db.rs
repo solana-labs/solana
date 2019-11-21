@@ -299,7 +299,10 @@ impl AccountStorageEntry {
             *count_and_status = (count - 1, status);
         } else {
             // XXX promoted this to critical because unconsistent ref count directly translates into a corrupted ledger
-            panic!("ryoqun count value 0 for slot {}, {:?}", self.slot_id, status);
+            panic!(
+                "ryoqun count value 0 for slot {}, {:?}",
+                self.slot_id, status
+            );
         }
         count_and_status.0
     }
@@ -576,7 +579,13 @@ impl AccountsDB {
         let mut purges = Vec::new();
         accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
             if account_info.lamports == 0 && accounts_index.is_root(slot) {
-                error!("ryoqun purging....{} {} {:?} {}", pubkey, slot, account_info,  accounts_index.is_root(slot));
+                error!(
+                    "ryoqun purging....{} {} {:?} {}",
+                    pubkey,
+                    slot,
+                    account_info,
+                    accounts_index.is_root(slot)
+                );
                 purges.push(*pubkey);
             }
         });
@@ -909,16 +918,13 @@ impl AccountsDB {
     }
 
     pub fn verify_account_balances(&self, ancestors: &HashMap<Slot, usize>) -> bool {
-        !self.scan_accounts(
-            &ancestors,
-            |collector: &mut bool, option| {
-                if let Some((_, account, _)) = option {
-                    if account.lamports == 0 {
-                        *collector = true;
-                    }
+        !self.scan_accounts(&ancestors, |collector: &mut bool, option| {
+            if let Some((_, account, _)) = option {
+                if account.lamports == 0 {
+                    *collector = true;
                 }
-            },
-        )
+            }
+        })
     }
 
     pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash) {
@@ -1241,19 +1247,58 @@ pub mod tests {
         {
             let stores = db.storage.read().unwrap();
             let slot_a_stores = &stores.0.get(&slot_a).unwrap();
-            assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![2]);
-            assert_eq!(slot_a_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(
+                slot_a_stores
+                    .values()
+                    .map(|v| v.count())
+                    .collect::<Vec<usize>>(),
+                vec![2]
+            );
+            assert_eq!(
+                slot_a_stores
+                    .values()
+                    .map(|v| v.all_existing_accounts().len())
+                    .collect::<Vec<usize>>(),
+                vec![2]
+            );
         }
-        debug!("{:?}", db.store(slot_b, &[(&key0, &account0), (&key2, &account2)]));
+        debug!(
+            "{:?}",
+            db.store(slot_b, &[(&key0, &account0), (&key2, &account2)])
+        );
 
         {
             let stores = db.storage.read().unwrap();
             let slot_a_stores = &stores.0.get(&slot_a).unwrap();
-            assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![1]);
-            assert_eq!(slot_a_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(
+                slot_a_stores
+                    .values()
+                    .map(|v| v.count())
+                    .collect::<Vec<usize>>(),
+                vec![1]
+            );
+            assert_eq!(
+                slot_a_stores
+                    .values()
+                    .map(|v| v.all_existing_accounts().len())
+                    .collect::<Vec<usize>>(),
+                vec![2]
+            );
             let slot_b_stores = &stores.0.get(&slot_b).unwrap();
-            assert_eq!(slot_b_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![2]);
-            assert_eq!(slot_b_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(
+                slot_b_stores
+                    .values()
+                    .map(|v| v.count())
+                    .collect::<Vec<usize>>(),
+                vec![2]
+            );
+            assert_eq!(
+                slot_b_stores
+                    .values()
+                    .map(|v| v.all_existing_accounts().len())
+                    .collect::<Vec<usize>>(),
+                vec![2]
+            );
         }
 
         let ancestors = vec![(slot_a, 1), (slot_b, 1)].into_iter().collect();
@@ -1284,11 +1329,35 @@ pub mod tests {
 
             let stores = db2.storage.read().unwrap();
             let slot_a_stores = &stores.0.get(&slot_a).unwrap();
-            assert_eq!(slot_a_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![1]);
-            assert_eq!(slot_a_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2]);
+            assert_eq!(
+                slot_a_stores
+                    .values()
+                    .map(|v| v.count())
+                    .collect::<Vec<usize>>(),
+                vec![1]
+            );
+            assert_eq!(
+                slot_a_stores
+                    .values()
+                    .map(|v| v.all_existing_accounts().len())
+                    .collect::<Vec<usize>>(),
+                vec![2]
+            );
             let slot_b_stores = &stores.0.get(&slot_b).unwrap();
-            assert_eq!(slot_b_stores.values().map(|v| v.count()).collect::<Vec<usize>>(), vec![2]);
-            assert_eq!(slot_b_stores.values().map(|v| v.all_existing_accounts().len()).collect::<Vec<usize>>(), vec![2+1]);
+            assert_eq!(
+                slot_b_stores
+                    .values()
+                    .map(|v| v.count())
+                    .collect::<Vec<usize>>(),
+                vec![2]
+            );
+            assert_eq!(
+                slot_b_stores
+                    .values()
+                    .map(|v| v.all_existing_accounts().len())
+                    .collect::<Vec<usize>>(),
+                vec![2 + 1]
+            );
         }
     }
 

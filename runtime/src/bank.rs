@@ -1442,8 +1442,10 @@ impl Bank {
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
-        self.rc.accounts.verify_hash_internal_state(self.slot(), &self.ancestors)
-          && self.rc.accounts.verify_account_balances(&self.ancestors)
+        self.rc
+            .accounts
+            .verify_hash_internal_state(self.slot(), &self.ancestors)
+            && self.rc.accounts.verify_account_balances(&self.ancestors)
     }
 
     /// Return the number of hashes per tick
