@@ -255,6 +255,7 @@ impl AccountStorageEntry {
 
     pub fn restore_account_count(&self) {
         let mut count_and_status = self.count_and_status.write().unwrap();
+        error!("ryoqun: restored storage: {:?} {:?}", self, *count_and_status);
         *count_and_status = (self.all_existing_accounts().len(), count_and_status.1);
     }
 
@@ -1118,6 +1119,7 @@ impl AccountsDB {
         slots.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
         for slot_id in slots.iter() {
+            /*
             let storage_maps: Vec<Arc<AccountStorageEntry>> = self
                 .storage
                 .read()
@@ -1130,7 +1132,7 @@ impl AccountsDB {
                 .collect();
             for storage in storage_maps.into_iter() {
                 storage.restore_account_count();
-            }
+            }*/
 
             let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
                 .scan_account_storage(
@@ -1163,12 +1165,17 @@ impl AccountsDB {
                 for (slot_id, account_info) in reclaims {
                     if let Some(slot_storage) = storage.0.get(&slot_id) {
                         if let Some(store) = slot_storage.get(&account_info.id) {
-                            assert_eq!(
-                                slot_id, store.slot_id,
-                                "AccountDB::accounts_index corrupted. Storage should only point to one slot"
-                            );
-                            store.remove_account();
-                            // no remove dead slots? purge root?
+                            let mut dead_slots = self.remove_dead_accounts(reclaims);
+                            trace!("dead_slots: {}", dead_slots.len());
+
+                            let mut cleanup_dead_slots = Measure::start("store::cleanup_dead_slots");
+                            self.cleanup_dead_slots(&mut dead_slots, last_root);
+                            trace!("purge_slots: {}", dead_slots.len());
+
+                            for slot in dead_slots {
+                                self.purge_slot(slot);
+                            }
+            self.storage.write().unwrap().0.remove(&slot);
                         }
                     }
                 }
@@ -1587,6 +1594,7 @@ pub mod tests {
         let slot_storage = storage.0.get(&slot).unwrap();
         let mut total_count: usize = 0;
         for store in slot_storage.values() {
+            error!("ryoqum check_storage: {:?}", store);
             assert_eq!(store.status(), AccountStorageStatus::Available);
             total_count += store.count();
         }
