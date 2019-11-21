@@ -225,6 +225,15 @@ impl Transaction {
         }
     }
 
+    // Verify the transactioon
+    pub fn verify(&self) -> bool {
+        self.signatures
+            .iter()
+            .zip(&self.message.account_keys)
+            .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), &self.message_data()))
+            .all(|verify_result| verify_result)
+    }
+
     /// Get the positions of the pubkeys in `account_keys` associated with signing keypairs
     pub fn get_signing_keypair_positions<T: KeypairUtil>(
         &self,
@@ -244,6 +253,26 @@ impl Transaction {
                     .position(|pubkey| pubkey == &keypair.pubkey())
             })
             .collect())
+    }
+
+    /// Replace all the signatures and pubkeys
+    pub fn replace_signatures(&mut self, signers: &[(Pubkey, Signature)]) -> Result<()> {
+        let num_required_signatures = self.message.header.num_required_signatures as usize;
+        if signers.len() != num_required_signatures
+            || self.signatures.len() != num_required_signatures
+            || self.message.account_keys.len() < num_required_signatures
+        {
+            return Err(TransactionError::InvalidAccountIndex);
+        }
+
+        signers
+            .iter()
+            .enumerate()
+            .for_each(|(i, (pubkey, signature))| {
+                self.signatures[i] = *signature;
+                self.message.account_keys[i] = *pubkey;
+            });
+        Ok(())
     }
 
     pub fn is_signed(&self) -> bool {

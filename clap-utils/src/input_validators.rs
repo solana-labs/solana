@@ -1,10 +1,20 @@
 use crate::keypair::ASK_KEYWORD;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::read_keypair_file;
+use solana_sdk::signature::{read_keypair_file, Signature};
+use std::str::FromStr;
 
 // Return an error if a pubkey cannot be parsed.
 pub fn is_pubkey(string: String) -> Result<(), String> {
     match string.parse::<Pubkey>() {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{:?}", err)),
+    }
+}
+
+// Return an error if a hash cannot be parsed.
+pub fn is_hash(string: String) -> Result<(), String> {
+    match string.parse::<Hash>() {
         Ok(_) => Ok(()),
         Err(err) => Err(format!("{:?}", err)),
     }
@@ -30,6 +40,28 @@ pub fn is_keypair_or_ask_keyword(string: String) -> Result<(), String> {
 // Return an error if string cannot be parsed as pubkey string or keypair file location
 pub fn is_pubkey_or_keypair(string: String) -> Result<(), String> {
     is_pubkey(string.clone()).or_else(|_| is_keypair(string))
+}
+
+// Return an error if string cannot be parsed as pubkey=signature string
+pub fn is_pubkey_sig(string: String) -> Result<(), String> {
+    let mut signer = string.split('=');
+    match Pubkey::from_str(
+        signer
+            .next()
+            .ok_or_else(|| "Malformed signer string".to_string())?,
+    ) {
+        Ok(_) => {
+            match Signature::from_str(
+                signer
+                    .next()
+                    .ok_or_else(|| "Malformed signer string".to_string())?,
+            ) {
+                Ok(_) => Ok(()),
+                Err(err) => Err(format!("{:?}", err)),
+            }
+        }
+        Err(err) => Err(format!("{:?}", err)),
+    }
 }
 
 // Return an error if a url cannot be parsed.
