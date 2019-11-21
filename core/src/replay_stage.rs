@@ -262,7 +262,7 @@ impl ReplayStage {
                             ("select_fork", (allocated.get() - start) as i64, i64),
                         );
                         let done = vote_bank.is_none();
-                        let mut vote_bank_slot = 0;
+                        let mut vote_bank_slot = None;
                         let reset_bank = vote_bank.as_ref().map(|b| b.0.clone()).or(heaviest);
                         let start = allocated.get();
                         if let Some((bank, total_staked)) = vote_bank {
@@ -278,7 +278,7 @@ impl ReplayStage {
                                     &votable_leader,
                                 );
                             }
-                            vote_bank_slot = bank.slot();
+                            vote_bank_slot = Some(bank.slot());
                             Self::handle_votable_bank(
                                 &bank,
                                 &bank_forks,
@@ -300,25 +300,25 @@ impl ReplayStage {
                             ("votable_bank", (allocated.get() - start) as i64, i64),
                         );
                         let start = allocated.get();
-                        if let Some(bank) = reset_bank {
-                            if last_reset != bank.last_blockhash() {
+                        if let Some(reset_bank) = reset_bank {
+                            if last_reset != reset_bank.last_blockhash() {
                                 Self::reset_poh_recorder(
                                     &my_pubkey,
                                     &blocktree,
-                                    &bank,
+                                    &reset_bank,
                                     &poh_recorder,
                                     &leader_schedule_cache,
                                 );
-                                last_reset = bank.last_blockhash();
+                                last_reset = reset_bank.last_blockhash();
                                 tpu_has_bank = false;
-                                info!("vote bank: {} reset bank: {}", vote_bank_slot, bank.slot());
-                                if !partition && vote_bank_slot != bank.slot() {
-                                    warn!("PARTITION DETECTED waiting to join fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
+                                info!("vote bank: {:?} reset bank: {}", vote_bank_slot, reset_bank.slot());
+                                if !partition && vote_bank_slot != Some(reset_bank.slot()) {
+                                    warn!("PARTITION DETECTED waiting to join fork: {} last vote: {:?}", reset_bank.slot(), tower.last_vote());
                                     inc_new_counter_info!("replay_stage-partition_detected", 1);
-                                    datapoint_info!("replay_stage-partition", ("slot", bank.slot() as i64, i64));
+                                    datapoint_info!("replay_stage-partition", ("slot", reset_bank.slot() as i64, i64));
                                     partition = true;
-                                } else if partition && vote_bank_slot == bank.slot() {
-                                    warn!("PARTITION resolved fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
+                                } else if partition && vote_bank_slot == Some(reset_bank.slot()) {
+                                    warn!("PARTITION resolved fork: {} last vote: {:?}", reset_bank.slot(), tower.last_vote());
                                     partition = false;
                                     inc_new_counter_info!("replay_stage-partition_resolved", 1);
                                 }
@@ -794,7 +794,7 @@ impl ReplayStage {
                 );
                 if !stats.computed {
                     if !stats.vote_threshold {
-                        debug!("vote threshold check failed: {}", bank.slot());
+                        info!("vote threshold check failed: {}", bank.slot());
                     }
                     stats.computed = true;
                 }
