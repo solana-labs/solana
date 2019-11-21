@@ -1,4 +1,4 @@
-use crate::accounts_db::{AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters};
+use crate::accounts_db::{AccountInfo, AccountStorage, AccountStorageEntry, AccountsDB, AppendVecId, ErrorCounters};
 use crate::accounts_index::AccountsIndex;
 use crate::append_vec::StoredAccount;
 use crate::blockhash_queue::BlockhashQueue;
@@ -295,7 +295,8 @@ impl Accounts {
             slot,
             |stored_account: &StoredAccount,
              _id: AppendVecId,
-             accum: &mut Vec<(Pubkey, u64, B)>| {
+             accum: &mut Vec<(Pubkey, u64, B)>,
+             _: &AccountStorageEntry| {
                 if let Some(val) = func(stored_account) {
                     accum.push((
                         stored_account.meta.pubkey,
