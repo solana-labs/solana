@@ -8,6 +8,7 @@ use chrono::{
 };
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{account::Account, instruction::InstructionError, pubkey::Pubkey};
+use std::cmp::min;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct VestState {
@@ -29,6 +30,12 @@ pub struct VestState {
 
     /// The number of lamports the payee has already redeemed
     pub redeemed_lamports: u64,
+
+    /// The number of lamports the terminator repurchased
+    pub reneged_lamports: u64,
+
+    /// True if the terminator has declared this contract fully vested.
+    pub is_fully_vested: bool,
 }
 
 impl Default for VestState {
@@ -40,6 +47,8 @@ impl Default for VestState {
             date_pubkey: Pubkey::default(),
             total_lamports: 0,
             redeemed_lamports: 0,
+            reneged_lamports: 0,
+            is_fully_vested: false,
         }
     }
 }
@@ -53,13 +62,12 @@ impl VestState {
         deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
     }
 
-    /// Redeem vested tokens.
-    pub fn redeem_tokens(
-        &mut self,
-        contract_account: &mut Account,
-        current_date: Date<Utc>,
-        payee_account: &mut Account,
-    ) {
+    fn calc_vested_lamports(&self, current_date: Date<Utc>) -> u64 {
+        let total_lamports_after_reneged = self.total_lamports - self.reneged_lamports;
+        if self.is_fully_vested {
+            return total_lamports_after_reneged;
+        }
+
         let schedule = create_vesting_schedule(self.start_date_time.date(), self.total_lamports);
 
         let vested_lamports = schedule
@@ -68,6 +76,17 @@ impl VestState {
             .map(|(_, lamports)| lamports)
             .sum::<u64>();
 
+        min(vested_lamports, total_lamports_after_reneged)
+    }
+
+    /// Redeem vested tokens.
+    pub fn redeem_tokens(
+        &mut self,
+        contract_account: &mut Account,
+        current_date: Date<Utc>,
+        payee_account: &mut Account,
+    ) {
+        let vested_lamports = self.calc_vested_lamports(current_date);
         let redeemable_lamports = vested_lamports.saturating_sub(self.redeemed_lamports);
 
         contract_account.lamports -= redeemable_lamports;
@@ -76,10 +95,23 @@ impl VestState {
         self.redeemed_lamports += redeemable_lamports;
     }
 
-    /// Terminate the contract and return all tokens to the given pubkey.
-    pub fn terminate(&mut self, contract_account: &mut Account, payee_account: &mut Account) {
-        payee_account.lamports += contract_account.lamports;
-        contract_account.lamports = 0;
+    /// Renege on the given number of tokens and send them to the given payee.
+    pub fn renege(
+        &mut self,
+        contract_account: &mut Account,
+        payee_account: &mut Account,
+        lamports: u64,
+    ) {
+        let reneged_lamports = min(contract_account.lamports, lamports);
+        payee_account.lamports += reneged_lamports;
+        contract_account.lamports -= reneged_lamports;
+
+        self.reneged_lamports += reneged_lamports;
+    }
+
+    /// Mark this contract as fully vested, regardless of the date.
+    pub fn vest_all(&mut self) {
+        self.is_fully_vested = true;
     }
 }
 
@@ -88,6 +120,7 @@ mod test {
     use super::*;
     use crate::id;
     use solana_sdk::account::Account;
+    use solana_sdk::system_program;
 
     #[test]
     fn test_serializer() {
@@ -106,5 +139,49 @@ mod test {
             b.serialize(&mut a.data),
             Err(InstructionError::AccountDataTooSmall)
         );
+    }
+
+    #[test]
+    fn test_schedule_after_renege() {
+        let total_lamports = 3;
+        let mut contract_account = Account::new(total_lamports, 512, &id());
+        let mut payee_account = Account::new(0, 0, &system_program::id());
+        let mut vest_state = VestState {
+            total_lamports,
+            start_date_time: Utc.ymd(2019, 1, 1).and_hms(0, 0, 0),
+            ..VestState::default()
+        };
+        vest_state.serialize(&mut contract_account.data).unwrap();
+        let current_date = Utc.ymd(2020, 1, 1);
+        assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
+
+        // Verify vesting schedule is calculated with original amount.
+        vest_state.renege(&mut contract_account, &mut payee_account, 1);
+        assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
+        assert_eq!(vest_state.reneged_lamports, 1);
+
+        // Verify reneged tokens aren't redeemable.
+        assert_eq!(vest_state.calc_vested_lamports(Utc.ymd(2022, 1, 1)), 2);
+
+        // Verify reneged tokens aren't redeemable after fully vesting.
+        vest_state.vest_all();
+        assert_eq!(vest_state.calc_vested_lamports(Utc.ymd(2022, 1, 1)), 2);
+    }
+
+    #[test]
+    fn test_vest_all() {
+        let total_lamports = 3;
+        let mut contract_account = Account::new(total_lamports, 512, &id());
+        let mut vest_state = VestState {
+            total_lamports,
+            start_date_time: Utc.ymd(2019, 1, 1).and_hms(0, 0, 0),
+            ..VestState::default()
+        };
+        vest_state.serialize(&mut contract_account.data).unwrap();
+        let current_date = Utc.ymd(2020, 1, 1);
+        assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
+
+        vest_state.vest_all();
+        assert_eq!(vest_state.calc_vested_lamports(current_date), 3);
     }
 }

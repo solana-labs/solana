@@ -77,7 +77,7 @@ pub fn process_instruction(
             start_date_time,
             date_pubkey,
             total_lamports,
-            redeemed_lamports: 0,
+            ..VestState::default()
         }
     } else {
         VestState::deserialize(&contract_account.data)?
@@ -110,7 +110,12 @@ pub fn process_instruction(
             )?;
             vest_state.redeem_tokens(contract_account, current_date, payee_account);
         }
-        VestInstruction::Terminate => {
+        VestInstruction::Terminate | VestInstruction::Renege(_) => {
+            let lamports = if let VestInstruction::Renege(lamports) = instruction {
+                lamports
+            } else {
+                contract_account.lamports
+            };
             let terminator_account = verify_signed_account(
                 next_keyed_account(keyed_accounts_iter)?,
                 &vest_state.terminator_pubkey,
@@ -121,7 +126,14 @@ pub fn process_instruction(
             } else {
                 terminator_account
             };
-            vest_state.terminate(contract_account, payee_account);
+            vest_state.renege(contract_account, payee_account, lamports);
+        }
+        VestInstruction::VestAll => {
+            verify_signed_account(
+                next_keyed_account(keyed_accounts_iter)?,
+                &vest_state.terminator_pubkey,
+            )?;
+            vest_state.vest_all();
         }
     }
 
@@ -620,6 +632,51 @@ mod tests {
         let carol_pubkey = Pubkey::new_rand();
         let instruction =
             vest_instruction::terminate(&contract_pubkey, &alice_pubkey, &carol_pubkey);
+        bank_client
+            .send_instruction(&alice_keypair, instruction)
+            .unwrap();
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&carol_pubkey).unwrap(), 1);
+        assert_eq!(
+            bank_client.get_account_data(&contract_pubkey).unwrap(),
+            None
+        );
+        assert_eq!(bank_client.get_account_data(&bob_pubkey).unwrap(), None);
+    }
+
+    #[test]
+    fn test_renege_and_send_funds() {
+        let (bank_client, alice_keypair) = create_bank_client(3);
+        let alice_pubkey = alice_keypair.pubkey();
+        let contract_keypair = Keypair::new();
+        let contract_pubkey = contract_keypair.pubkey();
+        let bob_pubkey = Pubkey::new_rand();
+        let start_date = Utc::now().date();
+
+        let date_keypair = Keypair::new();
+        let date_pubkey = date_keypair.pubkey();
+
+        let current_date = Utc.ymd(2019, 1, 1);
+        create_date_account(&bank_client, &date_keypair, &alice_keypair, current_date).unwrap();
+
+        create_vest_account(
+            &bank_client,
+            &contract_keypair,
+            &alice_keypair,
+            &alice_pubkey,
+            &bob_pubkey,
+            start_date,
+            &date_pubkey,
+            1,
+        )
+        .unwrap();
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 1);
+
+        // Now, renege on a token. carol gets it.
+        let carol_pubkey = Pubkey::new_rand();
+        let instruction =
+            vest_instruction::renege(&contract_pubkey, &alice_pubkey, &carol_pubkey, 1);
         bank_client
             .send_instruction(&alice_keypair, instruction)
             .unwrap();
