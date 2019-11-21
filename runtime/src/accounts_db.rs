@@ -1135,30 +1135,25 @@ impl AccountsDB {
                 storage.restore_account_count();
             }
 
-            let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
+            let mut accumulator: Vec<Vec<(u64, AccountInfo)>> = self
                 .scan_account_storage(
                     *slot_id,
                     |stored_account: &StoredAccount,
                      id: AppendVecId,
-                     accum: &mut HashMap<Pubkey, (u64, AccountInfo)>| {
+                     accum: &mut Vec<(u64, AccountInfo)>| {
                         let account_info = AccountInfo {
                             id,
                             offset: stored_account.offset,
                             lamports: stored_account.account_meta.lamports,
                         };
                         error!("count");
-                        accum.insert(
-                            stored_account.meta.pubkey,
-                            (stored_account.meta.write_version, account_info),
+                        accum.push(
+                            (stored_account.meta.write_version, account_info)
                         );
                     },
                 );
 
-            let mut account_maps = accumulator.pop().unwrap();
-            while let Some(maps) = accumulator.pop() {
-                AccountsDB::merge(&mut account_maps, &maps);
-            }
-            if !account_maps.is_empty() {
+            for accum in accumulator {
                 accounts_index.roots.insert(*slot_id);
                 error!("account_maps: {:?}", account_maps.len());
                 let mut reclaims: Vec<(u64, AccountInfo)> = vec![];
