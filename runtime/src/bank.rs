@@ -3424,12 +3424,13 @@ mod tests {
         assert_eq!(bank.is_delta.load(Ordering::Relaxed), true);
 
         let bank1 = new_from_parent(&bank);
+        let hash1 = bank1.hash_internal_state();
         assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
-        assert_ne!(bank1.hash_internal_state(), bank.hash());
-        // ticks don't make a bank into a delta
+        assert_ne!(hash1, bank.hash());
+        // ticks don't make a bank into a delta or change its state unless a block boundary is crossed
         bank1.register_tick(&Hash::default());
         assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
-        assert_ne!(bank1.hash_internal_state(), bank.hash());
+        assert_eq!(bank1.hash_internal_state(), hash1);
     }
 
     #[test]
@@ -3864,6 +3865,21 @@ mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank1.freeze();
         let bank1_hash = bank1.hash();
+        // Checkpointing should always result in a new state
         assert_ne!(bank0_hash, bank1_hash);
+    }
+
+    #[test]
+    fn test_ticks_change_state() {
+        let (genesis_config, _) = create_genesis_config(500);
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank1 = new_from_parent(&bank);
+        let hash1 = bank1.hash_internal_state();
+        // ticks don't change its state unless a block boundary is crossed
+        for _ in 0..genesis_config.ticks_per_slot {
+            assert_eq!(bank1.hash_internal_state(), hash1);
+            bank1.register_tick(&Hash::default());
+        }
+        assert_ne!(bank1.hash_internal_state(), hash1);
     }
 }
