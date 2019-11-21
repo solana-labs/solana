@@ -4,6 +4,7 @@ use crate::pubkey::Pubkey;
 use bs58;
 use ed25519_dalek;
 use generic_array::{typenum::U64, GenericArray};
+use hmac::Hmac;
 use rand::rngs::OsRng;
 use serde_json;
 use std::{
@@ -184,6 +185,25 @@ pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> 
     let public = ed25519_dalek::PublicKey::from(&secret);
     let keypair = Keypair { secret, public };
     Ok(keypair)
+}
+
+pub fn keypair_from_mnemonic_and_passphrase(
+    mnemonic: &str,
+    passphrase: &str,
+) -> Result<Keypair, Box<dyn error::Error>> {
+    const PBKDF2_ROUNDS: usize = 2048;
+    const PBKDF2_BYTES: usize = 64;
+
+    let salt = format!("mnemonic{}", passphrase);
+
+    let mut seed = vec![0u8; PBKDF2_BYTES];
+    pbkdf2::pbkdf2::<Hmac<sha2::Sha512>>(
+        mnemonic.as_bytes(),
+        salt.as_bytes(),
+        PBKDF2_ROUNDS,
+        &mut seed,
+    );
+    keypair_from_seed(&seed[..])
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ use log::*;
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_keypair, is_pubkey_or_keypair},
+    keypair::keypair_input,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::{
@@ -21,7 +22,7 @@ use solana_sdk::{
     clock::Slot,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{read_keypair_file, Keypair, KeypairUtil},
+    signature::{Keypair, KeypairUtil},
 };
 use std::{
     fs::{self, File},
@@ -308,8 +309,20 @@ fn download_ledger(
     Ok(())
 }
 
+const IDENTITY_KEYPAIR_NAME: &str = "identity";
+const STORAGE_KEYPAIR_NAME: &str = "storage-keypair";
+const VOTING_KEYPAIR_NAME: &str = "voting-keypair";
+
 #[allow(clippy::cognitive_complexity)]
 pub fn main() {
+    solana_logger::setup_with_filter(
+        &[
+            "solana=info", /* info logging for all solana modules */
+            "rpc=trace",   /* json_rpc request/response logging */
+        ]
+        .join(","),
+    );
+
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
 
@@ -321,6 +334,15 @@ pub fn main() {
                 .takes_value(true)
                 .value_name("UNIX DOMAIN SOCKET")
                 .help("Stream entries to this unix domain socket path")
+        )
+        .arg(
+            Arg::with_name("mnemonic_stdin")
+                .long("mnemonic-stdin")
+                .value_name("KEYPAIR NAME")
+                .multiple(true)
+                .takes_value(true)
+                .possible_values(&[IDENTITY_KEYPAIR_NAME, STORAGE_KEYPAIR_NAME, VOTING_KEYPAIR_NAME])
+                .help("Securely input a mnemonic code and optional passphrase for a keypair"),
         )
         .arg(
             Arg::with_name("identity")
@@ -520,34 +542,25 @@ pub fn main() {
         )
         .get_matches();
 
-    let identity_keypair = if let Some(identity) = matches.value_of("identity") {
-        read_keypair_file(identity).unwrap_or_else(|err| {
-            error!("{}: Unable to open keypair file: {}", err, identity);
+    let identity_keypair = Arc::new(
+        keypair_input(&matches, "identity")
+            .unwrap_or_else(|err| {
+                error!("Identity keypair input failed: {}", err);
+                exit(1);
+            })
+            .0,
+    );
+    let (voting_keypair, ephemeral_voting_keypair) = keypair_input(&matches, "voting-keypair")
+        .unwrap_or_else(|err| {
+            error!("Voting keypair input failed: {}", err);
+            exit(1);
+        });
+    let storage_keypair = keypair_input(&matches, "storage-keypair")
+        .unwrap_or_else(|err| {
+            error!("Storage keypair input failed: {}", err);
             exit(1);
         })
-    } else {
-        Keypair::new()
-    };
-    let identity_keypair = Arc::new(identity_keypair);
-
-    let mut ephemeral_voting_keypair = false;
-    let voting_keypair = if let Some(identity) = matches.value_of("voting_keypair") {
-        read_keypair_file(identity).unwrap_or_else(|err| {
-            error!("{}: Unable to open keypair file: {}", err, identity);
-            exit(1);
-        })
-    } else {
-        ephemeral_voting_keypair = true;
-        Keypair::new()
-    };
-    let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
-        read_keypair_file(storage_keypair).unwrap_or_else(|err| {
-            error!("{}: Unable to open keypair file: {}", err, storage_keypair);
-            exit(1);
-        })
-    } else {
-        Keypair::new()
-    };
+        .0;
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let entrypoint = matches.value_of("entrypoint");
@@ -649,14 +662,6 @@ pub fn main() {
             ()
         }
     };
-
-    solana_logger::setup_with_filter(
-        &[
-            "solana=info", /* info logging for all solana modules */
-            "rpc=trace",   /* json_rpc request/response logging */
-        ]
-        .join(","),
-    );
 
     if matches.is_present("no_voting") {
         validator_config.voting_disabled = true;
