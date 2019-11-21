@@ -211,7 +211,10 @@ impl ReplayStage {
                 let mut progress = HashMap::new();
                 // Initialize progress map with any root banks
                 for bank in bank_forks.read().unwrap().frozen_banks().values() {
-                    progress.insert(bank.slot(), ForkProgress::new(bank.slot(), bank.last_blockhash()));
+                    progress.insert(
+                        bank.slot(),
+                        ForkProgress::new(bank.slot(), bank.last_blockhash()),
+                    );
                 }
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
@@ -235,7 +238,11 @@ impl ReplayStage {
                     );
                     datapoint_debug!(
                         "replay_stage-memory",
-                        ("generate_new_bank_forks", (allocated.get() - start) as i64, i64),
+                        (
+                            "generate_new_bank_forks",
+                            (allocated.get() - start) as i64,
+                            i64
+                        ),
                     );
 
                     let mut tpu_has_bank = poh_recorder.lock().unwrap().has_bank();
@@ -257,7 +264,13 @@ impl ReplayStage {
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
                     loop {
                         let start = allocated.get();
-                        let vote_bank = Self::select_fork(&my_pubkey, &ancestors, &bank_forks, &tower, &mut progress);
+                        let vote_bank = Self::select_fork(
+                            &my_pubkey,
+                            &ancestors,
+                            &bank_forks,
+                            &tower,
+                            &mut progress,
+                        );
                         datapoint_debug!(
                             "replay_stage-memory",
                             ("select_fork", (allocated.get() - start) as i64, i64),
@@ -314,19 +327,34 @@ impl ReplayStage {
                             );
                             last_reset = bank.last_blockhash();
                             tpu_has_bank = false;
-                            info!("vote bank: {:?} reset bank: {}", vote_bank_slot, bank.slot());
+                            info!(
+                                "vote bank: {:?} reset bank: {}",
+                                vote_bank_slot,
+                                bank.slot()
+                            );
                             if !partition && vote_bank_slot != Some(bank.slot()) {
-                                warn!("PARTITION DETECTED waiting to join fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
+                                warn!(
+                                    "PARTITION DETECTED waiting to join fork: {} last vote: {:?}",
+                                    bank.slot(),
+                                    tower.last_vote()
+                                );
                                 inc_new_counter_info!("replay_stage-partition_detected", 1);
-                                datapoint_info!("replay_stage-partition", ("slot", bank.slot() as i64, i64));
+                                datapoint_info!(
+                                    "replay_stage-partition",
+                                    ("slot", bank.slot() as i64, i64)
+                                );
                                 partition = true;
                             } else if partition && vote_bank_slot == Some(bank.slot()) {
-                                warn!("PARTITION resolved fork: {} last vote: {:?}", bank.slot(), tower.last_vote());
+                                warn!(
+                                    "PARTITION resolved fork: {} last vote: {:?}",
+                                    bank.slot(),
+                                    tower.last_vote()
+                                );
                                 partition = false;
                                 inc_new_counter_info!("replay_stage-partition_resolved", 1);
                             }
                         } else {
-                             done = true;
+                            done = true;
                         }
                         datapoint_debug!(
                             "replay_stage-memory",
@@ -358,8 +386,11 @@ impl ReplayStage {
                     datapoint_debug!(
                         "replay_stage-memory",
                         ("start_leader", (allocated.get() - start) as i64, i64),
-                        );
-                    datapoint_debug!("replay_stage", ("duration", duration_as_ms(&now.elapsed()) as i64, i64));
+                    );
+                    datapoint_debug!(
+                        "replay_stage",
+                        ("duration", duration_as_ms(&now.elapsed()) as i64, i64)
+                    );
                     if did_complete_bank {
                         //just processed a bank, skip the signal; maybe there's more slots available
                         continue;
@@ -783,7 +814,12 @@ impl ReplayStage {
                     Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
                     stats.weight = bank_weight;
-                    stats.fork_weight = stats.weight + bank.parent().and_then(|b| progress.get(&b.slot())).map(|x| x.fork_stats.fork_weight).unwrap_or(0);
+                    stats.fork_weight = stats.weight
+                        + bank
+                            .parent()
+                            .and_then(|b| progress.get(&b.slot()))
+                            .map(|x| x.fork_stats.fork_weight)
+                            .unwrap_or(0);
 
                     datapoint_warn!(
                         "bank_weight",
@@ -827,10 +863,7 @@ impl ReplayStage {
             .filter(|s| s.is_recent && !s.has_voted && !s.vote_threshold)
             .count();
 
-        let mut candidates: Vec<_> = frozen_banks
-            .iter()
-            .zip(stats.iter())
-            .collect();
+        let mut candidates: Vec<_> = frozen_banks.iter().zip(stats.iter()).collect();
 
         //highest weight, lowest slot first
         candidates.sort_by_key(|b| (b.1.fork_weight, 0i64 - b.1.slot as i64));
