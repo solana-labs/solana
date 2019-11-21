@@ -904,6 +904,11 @@ impl ReplayStage {
                 if child_stats.is_locked_out || !child_stats.vote_threshold {
                     continue;
                 }
+                datapoint_info!(
+                    "replay_stage-pick_best_fork",
+                    ("slot", best_bank.slot(), i64),
+                    ("weight", child_stats.weight, f64),
+                );
                 inc_new_counter_info!("replay_stage-pick_best_fork-child", 1);
                 debug!("best bank found child: {}", child_stats.slot);
                 vote = Some(((*child).clone(), child_stats.total_staked));
