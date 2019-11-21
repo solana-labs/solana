@@ -876,7 +876,7 @@ impl ReplayStage {
             return (None, None);
         }
         let mut vote = None;
-        let (mut best_bank, best_stats) = best_banks.last().unwrap();
+        let (best_bank, best_stats) = best_banks.last().unwrap();
         debug!("best bank: {:?}", best_stats);
         let mut by_slot: Vec<_> = best_banks.iter().collect();
         by_slot.sort_by_key(|x| x.1.slot);
@@ -895,18 +895,19 @@ impl ReplayStage {
                 break;
             }
         }
-        //look for the heaviest child of the best bank
+        //Recursively look for the heaviest child of the best bank
+        let mut next_heaviest_child = best_bank;
         if vote.is_none() {
             for (child, child_stats) in best_banks.iter().rev() {
                 let has_best = best_stats.slot == child_stats.slot
                     || ancestors
                         .get(&child.slot())
-                        .map(|set| set.contains(&best_stats.slot))
+                        .map(|set| set.contains(&next_heaviest_child.slot()))
                         .unwrap_or(false);
                 if !has_best {
                     continue;
                 }
-                best_bank = child;
+                next_heaviest_child = child;
                 if child_stats.is_locked_out || !child_stats.vote_threshold {
                     continue;
                 }
@@ -919,7 +920,7 @@ impl ReplayStage {
         if vote.is_none() {
             inc_new_counter_info!("replay_stage-fork_selection-heavy_bank_lockout", 1);
         }
-        (vote, Some((*best_bank).clone()))
+        (vote, Some((*next_heaviest_child).clone()))
     }
 
     fn confirm_forks(
