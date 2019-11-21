@@ -224,6 +224,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         unpacked_accounts_dir,
     )?;
 
+    bank.purge_zero_lamport_accounts();
     if !bank.verify_snapshot_bank() {
         panic!("Snapshot bank failed to verify");
     }

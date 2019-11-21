@@ -259,7 +259,6 @@ impl AccountStorageEntry {
     }
 
     fn add_account(&self) {
-        error!("adding account");
         let mut count_and_status = self.count_and_status.write().unwrap();
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
     }
@@ -277,7 +276,6 @@ impl AccountStorageEntry {
     }
 
     fn remove_account(&self) -> usize {
-        error!("removing account");
         let mut count_and_status = self.count_and_status.write().unwrap();
         let (count, mut status) = *count_and_status;
 
