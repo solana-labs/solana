@@ -1305,16 +1305,16 @@ pub mod tests {
         //assert!(db.verify_hash_internal_state(slot_b, &ancestors));
 
         let key3 = Pubkey::new_rand();
-        let lamportZ = 0;
-        let account3 = Account::new(lamportZ, 0, &Account::default().owner);
-        assert!(db.verify_account_balance(&ancestors));
+        let lamport_0 = 0;
+        let account3 = Account::new(lamport_0, 0, &Account::default().owner);
+        assert!(db.verify_account_balances(&ancestors));
         debug!("{:?}", db.store(slot_b, &[(&key3, &account3)]));
 
         let mut db2 = AccountsDB::new(None);
         db2.storage = RwLock::new(db.storage.read().unwrap().clone());
         db2.generate_index();
         db2.purge_zero_lamport_accounts(&ancestors);
-        assert!(db2.verify_account_balance(&ancestors));
+        assert!(db2.verify_account_balances(&ancestors));
         //assert_eq!(*db2.accounts_index.read().unwrap().account_maps.map(|m| m.read().unwrap()), *db.accounts_index.read().unwrap());
 
         let index = db2.accounts_index.read().unwrap();
