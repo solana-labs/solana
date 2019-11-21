@@ -19,6 +19,7 @@ use crate::{
     transaction_status_service::TransactionStatusService,
     tvu::{Sockets, Tvu},
 };
+use crossbeam_channel::unbounded;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
@@ -44,7 +45,7 @@ use std::{
     path::{Path, PathBuf},
     process,
     sync::atomic::{AtomicBool, Ordering},
-    sync::mpsc::{channel, Receiver},
+    sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
     thread::Result,
 };
@@ -244,7 +245,7 @@ impl Validator {
 
         let (transaction_status_sender, transaction_status_service) =
             if rpc_service.is_some() && !config.transaction_status_service_disabled {
-                let (transaction_status_sender, transaction_status_receiver) = channel();
+                let (transaction_status_sender, transaction_status_receiver) = unbounded();
                 (
                     Some(transaction_status_sender),
                     Some(TransactionStatusService::new(

@@ -1155,6 +1155,7 @@ mod test {
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
     };
+    use crossbeam_channel::unbounded;
     use solana_ledger::{
         blocktree::make_slot_entries,
         blocktree::{entries_to_test_shreds, BlocktreeError},
@@ -1759,7 +1760,7 @@ mod test {
             blocktree.insert_shreds(shreds, None, false).unwrap();
             blocktree.set_roots(&[slot]).unwrap();
 
-            let (transaction_status_sender, transaction_status_receiver) = channel();
+            let (transaction_status_sender, transaction_status_receiver) = unbounded();
             let transaction_status_service = TransactionStatusService::new(
                 transaction_status_receiver,
                 blocktree.clone(),

@@ -1,11 +1,11 @@
 use crate::result::{Error, Result};
+use crossbeam_channel::{Receiver, RecvTimeoutError};
 use solana_client::rpc_request::RpcTransactionStatus;
 use solana_ledger::{blocktree::Blocktree, blocktree_processor::TransactionStatusBatch};
 use solana_runtime::bank::Bank;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, RecvTimeoutError},
         Arc,
     },
     thread::{self, Builder, JoinHandle},
@@ -35,9 +35,9 @@ impl TransactionStatusService {
                     &blocktree,
                 ) {
                     match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => info!("Error from write_transaction_statuses: {:?}", e),
+                        Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        _ => info!("Error from write_transaction_status_batch: {:?}", e),
                     }
                 }
             })
