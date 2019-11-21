@@ -767,15 +767,6 @@ impl AccountsDB {
         }
     }
 
-    pub fn hash_stored_account(slot: Slot, account: &StoredAccount) -> Hash {
-        Self::hash_account_data(
-            slot,
-            account.account_meta.lamports,
-            account.data,
-            &account.meta.pubkey,
-        )
-    }
-
     pub fn hash_account(slot: Slot, account: &Account, pubkey: &Pubkey) -> Hash {
         Self::hash_account_data(slot, account.lamports, &account.data, pubkey)
     }
