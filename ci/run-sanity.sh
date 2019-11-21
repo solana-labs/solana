@@ -8,7 +8,7 @@ rm -f config/run/init-completed
 timeout 15 ./run.sh &
 pid=$!
 
-attempts=10
+attempts=20
 while [[ ! -f config/run/init-completed ]]; do
   sleep 1
   if ((--attempts == 0)); then
