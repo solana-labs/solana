@@ -6,6 +6,7 @@ use crate::{
     entry::{create_ticks, Entry, EntrySlice},
     leader_schedule_cache::LeaderScheduleCache,
 };
+use crossbeam_channel::Sender;
 use itertools::Itertools;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng};
@@ -27,7 +28,7 @@ use solana_sdk::{
 use std::{
     cell::RefCell,
     result,
-    sync::{mpsc::Sender, Arc},
+    sync::Arc,
     time::{Duration, Instant},
 };
 

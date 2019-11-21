@@ -1028,10 +1028,7 @@ mod tests {
         system_transaction,
         transaction::TransactionError,
     };
-    use std::{
-        sync::{atomic::Ordering, mpsc::channel},
-        thread::sleep,
-    };
+    use std::{sync::atomic::Ordering, thread::sleep};
 
     #[test]
     fn test_banking_stage_shutdown1() {
@@ -1950,7 +1947,7 @@ mod tests {
             blocktree.insert_shreds(shreds, None, false).unwrap();
             blocktree.set_roots(&[bank.slot()]).unwrap();
 
-            let (transaction_status_sender, transaction_status_receiver) = channel();
+            let (transaction_status_sender, transaction_status_receiver) = unbounded();
             let transaction_status_service = TransactionStatusService::new(
                 transaction_status_receiver,
                 blocktree.clone(),
