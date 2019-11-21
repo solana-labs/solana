@@ -65,7 +65,7 @@ SECONDS=0
 
   if $useMove; then
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path programs/move_loader_program/Cargo.toml
+    $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path programs/move_loader/Cargo.toml
   fi
 )
 
