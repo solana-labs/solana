@@ -91,7 +91,7 @@ impl<T: Clone> AccountsIndex<T> {
         let _slot_vec = self
             .account_maps
             .entry(*pubkey)
-            .or_insert_with(|| RwLock::new(Vec::with_capacity(32))); // XXX magic number; use the lockout consant?
+            .or_insert_with(|| RwLock::new(Vec::with_capacity(32))); // magic number; use the lockout consant?
         self.update(slot, pubkey, account_info, reclaims);
     }
 
