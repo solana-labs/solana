@@ -778,7 +778,7 @@ impl ReplayStage {
                     Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
                     stats.total_staked = total_staked;
                     stats.weight = bank_weight;
-                    datapoint_warn!(
+                    datapoint_error!(
                         "bank_weight",
                         ("slot", bank.slot(), i64),
                         // u128 too large for influx, convert to hex
@@ -817,11 +817,7 @@ impl ReplayStage {
             .filter(|s| s.is_recent && !s.has_voted && !s.vote_threshold)
             .count();
 
-        let mut candidates: Vec<_> = frozen_banks
-            .iter()
-            .zip(stats.iter())
-            .filter(|(_, stats)| stats.is_recent && !stats.has_voted)
-            .collect();
+        let mut candidates: Vec<_> = frozen_banks.iter().zip(stats.iter()).collect();
 
         //highest weight, lowest slot first
         candidates.sort_by_key(|b| (b.1.weight, 0i64 - b.1.slot as i64));
