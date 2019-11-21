@@ -24,6 +24,7 @@ However, if the validator votes before catching up, the votes will not go onto
 the ledger, so if the validator reboots, it will have to assume that the votes
 lock it out from voting again.
 
+
 ## Snapshot Verification Overview
 
 A booting validator needs to have some set of trusted validators whose votes it
@@ -43,23 +44,70 @@ will return true if `a` is an ancestor of `b`.
 
 Define the function `is_locked(a, b)` to be: `a + a.lockout <= b`
 
-## Determining Vote Safety From a Snapshot and Locktower
 
-Define the "safety" condition to be: 
+## Boot Procedure:
 
-Given a `BankForks`, a validator can run some procedure to determine whether it
-can vote on a frozen bank `T` (frozen banks must be present in
-`BankForks.banks`), without violating the lockouts of any vote in `L`. The
-procedure for this is:
+1) The validator gets a snapshot to boot from. This can come from any source,
+as it will be verified before being vote upon. Call the root of this snapshot
+`S`.
 
-1) If `T` < last locktower vote, return false,
+2) We reject any snapshots `S` where `S` is less than the root of `L` and `S`
+is not in the list of roots in blocktree because this means `S` is for a
+different fork than the one this validiator last rooted. Thus it's critical for
+consistency in `replay_stage` that the order of events when setting a new root
+is:
 
-2) Apply `T` to locktower state `L`. Pop off all votes `S_i` where
-`!is_locked(S_i, T)`. `T` must now be the top of the tower.
+    1) Write the root to locktower 2) Write the root to blocktree 3) Generate
+    snapshot for that root
 
-3) If for any remaining vote `L_i` in `L` `!is_ancestor(L_i, T)`, return false.
+3) On startup, the validator checks that the current root in locktower exists
+in blocktree. If not (there was a crash between 2-1 and 2-2), then rewrite the
+root to blocktree.
 
-4) Otherwise, return true.
+4) On startup, the validator boots from the snapshot `S`, then replays all
+descendant blocks of `S` that exist in this validator's ledger, building banks
+which are then stored in an output `BankForks`. This is done in
+`blocktree_processor.rs`. The root of this `BankForks` is set to `S`.
+
+5) On startup, the validator calculates the first slot `S_n` from which it is
+not locked out for voting. Every validator persists its locktower state and
+must consult this state in order to boot safely and resume from a snapshot
+without being slashed. From this locktower state and the ancestry information
+embedded in the snapshot, a validiator can derive which banks, are "safe" (See
+the `Determining Vote Safety From a Snapshot and Locktower` section for more
+detals) to vote for.
+
+6) Periodically send canary transactions to the cluster using the validator's
+local recent blockhash.
+
+7) Wait for the following criteria. While waiting, set a new root every time
+2/3 of the cluster's stake roots a bank. This allows the validator to prune its
+state and also calculate leader schedules as it moves across epochs.
+
+   1) Observe a canary transaction in a bank that some threshold of trusted
+   validator stake has voted on. Call this trusted bank `T`.
+
+   2) The current working bank has slot number `S_current` > `S_n`
+
+8) Start the normal voting process, voting for any slot that satisfies
+`S_current` > `S_n`
+
+
+## Determining `S_n` From a Snapshot and Locktower
+
+Define the "safety" condition to be:
+
+Given a `BankForks`, a validator can run some procedure to determine the first
+slot `S_n` that it can vote on without violating the lockouts of any vote in
+`L`. The procedure for this is:
+
+1) Find the earliest vote `V` in the tower for which `is_ancestor(V, S)` is not
+true.
+
+2) `V` and every vote after it needs to expire before the validator can vote on
+any descendant of `S`, so `S_n = V + lockout(V)`. If no `V` exists, then `S_n =
+S`.
+
 
 ## Achieving Safety
 
@@ -79,6 +127,7 @@ definition.
 
 Thus to achieve safety, we want to design the snapshotting system such that the
 "Safety Criteria" is met.
+
 
 ## Implementing "Safety Criteria"
 
@@ -166,53 +215,5 @@ locktower, all votes in the tower must be greater than the locktower root, so
 For `Case 2` we assumed `L_i` >= `S`, so from Lemma 2 we know `L_i` >= `R`.
 Then from Lemma 1 we know its sufficient to check
 `B_d.ancestors().contains(L_i)`.
-
-
-## Boot Procedure:
-
-1) The validator gets a snapshot to boot from. This can come from any source,
-as it will be verified before being vote upon. Call the root of this snapshot
-`S`.
-
-2) We reject any snapshots `S` where `S` is less than the root of `L` and `S`
-is not in the list of roots in blocktree because this means `S` is for a
-different fork than the one this validiator last rooted. Thus it's critical for
-consistency in `replay_stage` that the order of events when setting a new root
-is:
-
-    1) Write the root to locktower 2) Write the root to blocktree 3) Generate
-    snapshot for that root
-
-3) On startup, the validator checks that the current root in locktower exists
-in blocktree. If not (there was a crash between 2-1 and 2-2), then rewrite the
-root to blocktree.
-
-4) On startup, the validator boots from the snapshot `S`, then replays all
-descendant blocks of `S` that exist in this validator's ledger, building banks
-which are then stored in an output `BankForks`. This is done in
-`blocktree_processor.rs`. The root of this `BankForks` is set to `S`.
-
-5) On startup, the validator calculates the first slot `S_n` from which it is
-not locked out for voting. Every validator persists its locktower state and
-must consult this state in order to boot safely and resume from a snapshot
-without being slashed. From this locktower state and the ancestry information
-embedded in the snapshot, a validiator can derive which banks, are "safe" (See
-the `Determining Vote Safety From a Snapshot and Locktower` section for more
-detals) to vote for.
-
-6) Periodically send canary transactions to the cluster using the validator's
-local recent blockhash.
-
-7) Wait for the following criteria. While waiting, set a new root every time
-2/3 of the cluster's stake roots a bank. This allows the validator to prune its
-state and also calculate leader schedules as it moves across epochs.
-
-   1) Observe a canary transaction in a bank that some threshold of trusted
-   validator stake has voted on. Call this trusted bank `T`.
-   
-   2) The current working bank has slot number `S_current` > `S_n`
-
-8) Start the normal voting process, voting for any slot that satisfies
-`S_current` > `S_n`
 
 
