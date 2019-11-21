@@ -85,7 +85,9 @@ extern crate solana_metrics;
 #[macro_use]
 extern crate matches;
 
+#[cfg(unix)]
 extern crate jemallocator;
 
+#[cfg(unix)]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
