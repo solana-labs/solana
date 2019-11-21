@@ -1,10 +1,4 @@
-const LIBRAPAY_PROGRAM_ID: [u8; 32] = [
-    5, 13, 18, 222, 165, 11, 80, 225, 56, 103, 125, 38, 15, 252, 181, 16, 125, 99, 110, 106, 186,
-    28, 136, 119, 235, 245, 20, 80, 0, 0, 0, 0,
-];
-
-solana_sdk::solana_name_id!(
-    LIBRAPAY_PROGRAM_ID,
+solana_sdk::declare_id!(
     "LibraPay11111111111111111111111111111111111"
 );
 

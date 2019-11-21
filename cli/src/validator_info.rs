@@ -29,16 +29,7 @@ pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
 pub const MAX_LONG_FIELD_LENGTH: usize = 300;
 pub const MAX_VALIDATOR_INFO: u64 = 576;
 
-// Config account key: Va1idator1nfo111111111111111111111111111111
-pub const REGISTER_CONFIG_KEY: [u8; 32] = [
-    7, 81, 151, 1, 116, 72, 242, 172, 93, 194, 60, 158, 188, 122, 199, 140, 10, 39, 37, 122, 198,
-    20, 69, 141, 224, 164, 241, 111, 128, 0, 0, 0,
-];
-
-solana_sdk::solana_name_id!(
-    REGISTER_CONFIG_KEY,
-    "Va1idator1nfo111111111111111111111111111111"
-);
+solana_sdk::declare_id!("Va1idator1nfo111111111111111111111111111111");
 
 #[derive(Debug, Deserialize, PartialEq, Serialize, Default)]
 pub struct ValidatorInfo {

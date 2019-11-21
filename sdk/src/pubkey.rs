@@ -104,16 +104,31 @@ pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
     Ok(Pubkey::from_str(&printable)?)
 }
 
+/// Convenience macro to declare a static Pubkey and functions to interact with it
+///
+/// bs58_string: bs58 string representation the program's id
+///
+/// # Examples
+///
+/// ```
+/// solana_sdk::declare_id!("My!!!11111111111111111111111111111111111111");
+/// ```
 #[macro_export]
-macro_rules! solana_id(
-    ($id:ident) => (
+macro_rules!
+declare_id(
+    ($bs58_string:expr) => (
+        use std::str::FromStr;
+
+        $crate::lazy_static::lazy_static! {
+            static ref _PUBKEY: $crate::pubkey::Pubkey = { $crate::pubkey::Pubkey::from_str(&$bs58_string).unwrap() };
+        }
 
         pub fn check_id(id: &$crate::pubkey::Pubkey) -> bool {
-            id.as_ref() == $id
+            *id == *_PUBKEY
         }
 
         pub fn id() -> $crate::pubkey::Pubkey {
-            $crate::pubkey::Pubkey::new(&$id)
+            (*_PUBKEY).clone()
         }
 
         #[cfg(test)]
@@ -121,69 +136,13 @@ macro_rules! solana_id(
         fn test_id() {
             assert!(check_id(&id()));
         }
-
     )
 );
-
-#[macro_export]
-macro_rules! solana_name_id(
-    ($id:ident, $name:expr) => (
-
-        $crate::solana_id!($id);
-
-        #[cfg(test)]
-        #[test]
-        fn test_name_id() {
-            if id().to_string() != $name {
-                panic!("id for `{}` should be `{:?}`", $name, $crate::pubkey::bs58::decode($name).into_vec().unwrap());
-            }
-        }
-    )
-);
-
-// #[macro_export]
-// macro_rules! 
-// declare_id(
-//     ($bs58:ident) => (
-
-//         pub fn check_id(id: &$crate::pubkey::Pubkey) -> bool {
-//             id.as_string() == $bs58
-//         }
-
-//         pub fn id() -> $crate::pubkey::Pubkey {
-//             $crate::pubkey::Pubkey::from_str($bs58)
-//         }
-
-//         #[cfg(test)]
-//         #[test]
-//         fn test_id() {
-//             assert!(check_id(&id()));
-//         }
-//     )
-// );
-
-// const ID: [u8; 32] = [
-//     3, 6, 74, 163, 0, 47, 116, 220, 200, 110, 67, 49, 15, 12, 5, 42, 248, 197, 218, 39, 246, 16,
-//     64, 25, 163, 35, 239, 160, 0, 0, 0, 0,
-// ];
-
-// declare_id!("Config1111111111111111111111111111111111111");
-
-
-
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs::remove_file;
-
-    // #[test]
-    // fn pubkey_test_declare_id() {
-
-    //     println!("id: {:?}", id());
-
-    // }
 
     #[test]
     fn pubkey_fromstr() {

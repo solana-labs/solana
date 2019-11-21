@@ -11,18 +11,13 @@ use solana_sdk::{
 };
 
 // base rewards pool ID
-const ID: [u8; 32] = [
-    6, 161, 216, 23, 186, 139, 91, 88, 83, 34, 32, 112, 237, 188, 184, 153, 69, 67, 238, 112, 93,
-    54, 133, 142, 145, 182, 214, 15, 0, 0, 0, 0,
-];
-
-solana_sdk::solana_name_id!(ID, "StakeRewards1111111111111111111111111111111");
+solana_sdk::declare_id!("StakeRewards1111111111111111111111111111111");
 
 // to cut down on collisions for redemptions, we make multiple accounts
 pub const NUM_REWARDS_POOLS: usize = 256;
 
 pub fn random_id() -> Pubkey {
-    let mut id = Hash::new(&ID);
+    let mut id = Hash::new(id().as_ref());
 
     for _i in 0..thread_rng().gen_range(0, NUM_REWARDS_POOLS) {
         id = hash(id.as_ref());

@@ -8,13 +8,7 @@ use crate::{
     sysvar::Sysvar,
 };
 
-///  rent account pubkey
-const ID: [u8; 32] = [
-    6, 167, 213, 23, 25, 44, 92, 81, 33, 140, 201, 76, 61, 74, 241, 127, 88, 218, 238, 8, 155, 161,
-    253, 68, 227, 219, 217, 138, 0, 0, 0, 0,
-];
-
-crate::solana_sysvar_id!(ID, "SysvarRent111111111111111111111111111111111", Rent);
+crate::declare_sysvar_id!("SysvarRent111111111111111111111111111111111", Rent);
 
 impl Sysvar for Rent {}
 
