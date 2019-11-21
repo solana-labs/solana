@@ -20,13 +20,14 @@ solana_sdk::solana_name_id!(ID, "StorageMiningPoo111111111111111111111111111");
 // to cut down on collisions for redemptions, we make multiple accounts
 pub const NUM_REWARDS_POOLS: usize = 32;
 
-pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) {
+pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
     let mut pubkey = id();
 
     for _i in 0..NUM_REWARDS_POOLS {
         genesis_config.add_rewards_pool(pubkey, create_rewards_pool());
         pubkey = Pubkey::new(hash(pubkey.as_ref()).as_ref());
     }
+    0 // didn't consume any lamports
 }
 
 pub fn random_id() -> Pubkey {

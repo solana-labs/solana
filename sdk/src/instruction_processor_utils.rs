@@ -66,7 +66,7 @@ macro_rules! solana_entrypoint(
 /// ```
 #[macro_export]
 macro_rules! declare_program(
-    ($id:ident, $bs58:expr, $name:ident, $entrypoint:ident) => (
+    ($id:ident, $bs58:expr, $name:ident, $entrypoint:expr) => (
         $crate::solana_name_id!($id, $bs58);
 
         #[macro_export]
