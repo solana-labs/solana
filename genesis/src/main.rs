@@ -320,6 +320,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_vote_pubkey = required_pubkey(&matches, "bootstrap_vote_pubkey_file")?;
     let bootstrap_stake_pubkey = required_pubkey(&matches, "bootstrap_stake_pubkey_file")?;
     let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
+    let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
     let bootstrap_leader_vote_account =
         vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
@@ -357,9 +358,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ));
     }
 
-    if let Some(pubkey) = pubkey_of(&matches, "faucet_pubkey_file") {
+    if let Some(faucet_pubkey) = faucet_pubkey {
         accounts.push((
-            pubkey,
+            faucet_pubkey,
             Account::new(faucet_lamports.unwrap(), 0, &system_program::id()),
         ));
     }
