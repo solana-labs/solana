@@ -912,7 +912,7 @@ impl AccountsDB {
         }
     }
 
-    fn verify_account_balance(&self, ancestors: &HashMap<Slot, usize>) -> bool {
+    pub fn verify_account_balances(&self, ancestors: &HashMap<Slot, usize>) -> bool {
         !self.scan_accounts(
             &ancestors,
             |collector: &mut bool, option| {

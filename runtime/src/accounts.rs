@@ -331,6 +331,10 @@ impl Accounts {
         self.accounts_db.verify_hash_internal_state(slot, ancestors)
     }
 
+    pub fn verify_account_balances(&self, ancestors: &HashMap<Slot, usize>) -> bool {
+        self.accounts_db.verify_account_balances(ancestors)
+    }
+
     pub fn load_by_program(
         &self,
         ancestors: &HashMap<Slot, usize>,
