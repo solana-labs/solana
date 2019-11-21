@@ -200,7 +200,7 @@ fn run_network_partition(partitions: &[usize]) {
         ..ClusterConfig::default()
     };
     let now = timestamp();
-    let partition_start = now + 30_000;
+    let partition_start = now + 60_000;
     let partition_end = partition_start + 10_000;
     let mut total = 0;
     for (j, pn) in partitions.iter().enumerate() {
