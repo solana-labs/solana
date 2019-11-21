@@ -256,7 +256,10 @@ impl AccountStorageEntry {
     pub fn restore_account_count(&self) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         let new_count = self.all_existing_accounts().len();
-        error!("ryoqun: restored storage: from {:?} {:?} to {}", self, *count_and_status, new_count);
+        error!(
+            "ryoqun: restored storage: from {:?} {:?} to {}",
+            self, *count_and_status, new_count
+        );
         *count_and_status = (new_count, count_and_status.1);
     }
 
