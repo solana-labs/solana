@@ -256,7 +256,7 @@ impl AccountStorageEntry {
     pub fn restore_account_count(&self) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         let new_count = self.all_existing_accounts().len();
-        error!(
+        trace!(
             "ryoqun: restored storage: from {:?} {:?} to {}",
             self, *count_and_status, new_count
         );
@@ -584,7 +584,7 @@ impl AccountsDB {
         let mut purges = Vec::new();
         accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
             if account_info.lamports == 0 && accounts_index.is_root(slot) {
-                error!(
+                trace!(
                     "ryoqun purging....{} {} {:?} {}",
                     pubkey,
                     slot,
@@ -600,13 +600,13 @@ impl AccountsDB {
         for purge in &purges {
             reclaims.extend(accounts_index.purge(purge));
         }
-        error!("ryoqun: zla reclaims {:?}", reclaims);
+        trace!("ryoqun: zla reclaims {:?}", reclaims);
         let last_root = accounts_index.last_root;
         drop(accounts_index);
         let mut dead_slots = self.remove_dead_accounts(reclaims);
-        error!("ryoqun: zla dead slots 2 {:?}", dead_slots);
+        trace!("ryoqun: zla dead slots 2 {:?}", dead_slots);
         self.cleanup_dead_slots(&mut dead_slots, last_root);
-        error!("ryoqun: zla dead slots 2 {:?}", dead_slots);
+        trace!("ryoqun: zla dead slots 2 {:?}", dead_slots);
         for slot in dead_slots {
             self.purge_slot(slot);
         }
@@ -892,7 +892,7 @@ impl AccountsDB {
                 oldest_slot = *slot;
             }
         }
-        error!("ryoqun accounts_db: total_stores: {} newest_slot: {} oldest_slot: {} max_slot: {} (num={}) min_slot: {} (num={})",
+        trace!("ryoqun accounts_db: total_stores: {} newest_slot: {} oldest_slot: {} max_slot: {} (num={}) min_slot: {} (num={})",
               total_count, newest_slot, oldest_slot, max_slot, max, min_slot, min);
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
     }
@@ -1168,14 +1168,14 @@ impl AccountsDB {
             }
             if !account_maps.is_empty() {
                 accounts_index.roots.insert(*slot_id);
-                error!("account_maps: {:?}", account_maps.len());
+                trace!("ryoqun account_maps: {:?}", account_maps.len());
                 let mut reclaims: Vec<(u64, AccountInfo)> = vec![];
                 for (pubkey, (_, account_info)) in account_maps.iter() {
-                    error!("slot: {}, account_info: {:?}", *slot_id, account_info);
+                    trace!("ryoqun slot: {}, account_info: {:?}", *slot_id, account_info);
                     accounts_index.insert(*slot_id, pubkey, account_info.clone(), &mut reclaims);
                 }
 
-                error!("reclaims: {:?}", reclaims);
+                trace!("ryoqun reclaims: {:?}", reclaims);
                 for (slot_id, account_info) in reclaims {
                     if let Some(slot_storage) = storage.0.get(&slot_id) {
                         if let Some(store) = slot_storage.get(&account_info.id) {
@@ -1184,7 +1184,7 @@ impl AccountsDB {
                                 "AccountDB::accounts_index corrupted. Storage should only point to one slot"
                             );
                             let count = store.remove_account();
-                            error!("count, {}", count);
+                            trace!("ryoqun count, {}", count);
                             if count == 0 {
                                 dead_slots.insert(slot_id);
                             }
@@ -1606,7 +1606,7 @@ pub mod tests {
         let slot_storage = storage.0.get(&slot).unwrap();
         let mut total_count: usize = 0;
         for store in slot_storage.values() {
-            error!("ryoqum check_storage: {:?}", store);
+            trace!("ryoqum check_storage: {:?}", store);
             assert_eq!(store.status(), AccountStorageStatus::Available);
             total_count += store.count();
         }
