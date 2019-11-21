@@ -1157,7 +1157,6 @@ mod test {
     use solana_vote_program::vote_state::VoteState;
     use std::{
         fs::remove_dir_all,
-        iter::FromIterator,
         sync::{Arc, RwLock},
     };
 
