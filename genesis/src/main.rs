@@ -3,7 +3,8 @@
 mod genesis_accounts;
 
 use crate::genesis_accounts::create_genesis_accounts;
-use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
+use solana_clap_utils::input_parsers::pubkey_of;
 use solana_genesis::Base64Account;
 use solana_ledger::blocktree::create_new_ledger;
 use solana_ledger::poh::compute_hashes_per_tick;
@@ -15,9 +16,9 @@ use solana_sdk::{
     genesis_config::{GenesisConfig, OperatingMode},
     native_token::sol_to_lamports,
     poh_config::PohConfig,
-    pubkey::{read_pubkey_file, Pubkey},
+    pubkey::Pubkey,
     rent::Rent,
-    signature::{read_keypair_file, Keypair, KeypairUtil},
+    signature::{Keypair, KeypairUtil},
     system_program, timing,
 };
 use solana_stake_program::stake_state;
@@ -30,10 +31,14 @@ pub enum AccountFileFormat {
     Keypair,
 }
 
-fn pubkey_from_file(key_file: &str) -> Result<Pubkey, Box<dyn error::Error>> {
-    read_pubkey_file(key_file)
-        .or_else(|_| read_keypair_file(key_file).map(|keypair| keypair.pubkey()))
-        .map_err(|err| format!("Failed to read {}: {}", key_file, err).into())
+fn required_pubkey(matches: &ArgMatches<'_>, name: &str) -> Result<Pubkey, Box<dyn error::Error>> {
+    pubkey_of(matches, name).ok_or_else(|| {
+        format!(
+            "Invalid pubkey or file: {}",
+            matches.value_of(name).unwrap()
+        )
+        .into()
+    })
 }
 
 fn pubkey_from_str(key_str: &str) -> Result<Pubkey, Box<dyn error::Error>> {
@@ -305,26 +310,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .get_matches();
 
-    let bootstrap_leader_pubkey_file = matches.value_of("bootstrap_leader_pubkey_file").unwrap();
-    let bootstrap_vote_pubkey_file = matches.value_of("bootstrap_vote_pubkey_file").unwrap();
-    let bootstrap_stake_pubkey_file = matches.value_of("bootstrap_stake_pubkey_file").unwrap();
-    let bootstrap_storage_pubkey_file = matches.value_of("bootstrap_storage_pubkey_file");
-    let faucet_pubkey_file = matches.value_of("faucet_pubkey_file");
     let faucet_lamports = value_t!(matches, "faucet_lamports", u64);
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
     let bootstrap_leader_stake_lamports =
         value_t_or_exit!(matches, "bootstrap_leader_stake_lamports", u64);
 
-    let bootstrap_leader_pubkey = pubkey_from_file(bootstrap_leader_pubkey_file)?;
-    let bootstrap_vote_pubkey = pubkey_from_file(bootstrap_vote_pubkey_file)?;
-    let bootstrap_stake_pubkey = pubkey_from_file(bootstrap_stake_pubkey_file)?;
-    let bootstrap_storage_pubkey =
-        if let Some(bootstrap_storage_pubkey_file) = bootstrap_storage_pubkey_file {
-            Some(pubkey_from_file(bootstrap_storage_pubkey_file)?)
-        } else {
-            None
-        };
+    let bootstrap_leader_pubkey = required_pubkey(&matches, "bootstrap_leader_pubkey_file")?;
+    let bootstrap_vote_pubkey = required_pubkey(&matches, "bootstrap_vote_pubkey_file")?;
+    let bootstrap_stake_pubkey = required_pubkey(&matches, "bootstrap_stake_pubkey_file")?;
+    let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
+    let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
     let bootstrap_leader_vote_account =
         vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
@@ -362,9 +358,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ));
     }
 
-    if let Some(faucet_pubkey_file) = faucet_pubkey_file {
+    if let Some(faucet_pubkey) = faucet_pubkey {
         accounts.push((
-            pubkey_from_file(faucet_pubkey_file)?,
+            faucet_pubkey,
             Account::new(faucet_lamports.unwrap(), 0, &system_program::id()),
         ));
     }
