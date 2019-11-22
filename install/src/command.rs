@@ -1,22 +1,27 @@
-use crate::config::{Config, ExplicitRelease};
-use crate::stop_process::stop_process;
-use crate::update_manifest::{SignedUpdateManifest, UpdateManifest};
+use crate::{
+    config::{Config, ExplicitRelease},
+    stop_process::stop_process,
+    update_manifest::{SignedUpdateManifest, UpdateManifest},
+};
 use chrono::{Local, TimeZone};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
-use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
 use solana_config_program::{config_instruction, get_config_data};
-use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil, Signable};
-use solana_sdk::transaction::Transaction;
-use std::fs::{self, File};
-use std::io::{self, BufReader, Read};
-use std::path::{Path, PathBuf};
-use std::sync::mpsc;
-use std::time::SystemTime;
-use std::time::{Duration, Instant};
+use solana_sdk::{
+    hash::{Hash, Hasher},
+    message::Message,
+    pubkey::Pubkey,
+    signature::{read_keypair_file, Keypair, KeypairUtil, Signable},
+    transaction::Transaction,
+};
+use std::{
+    fs::{self, File},
+    io::{self, BufReader, Read},
+    path::{Path, PathBuf},
+    sync::mpsc,
+    time::{Duration, Instant, SystemTime},
+};
 use tempdir::TempDir;
 use url::Url;
 
@@ -51,12 +56,12 @@ fn println_name_value(name: &str, value: &str) {
 ///
 fn download_to_temp_archive(
     url: &str,
-    expected_sha256: Option<&str>,
-) -> Result<(TempDir, PathBuf, String), Box<dyn std::error::Error>> {
-    fn sha256_file_digest<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn std::error::Error>> {
+    expected_sha256: Option<&Hash>,
+) -> Result<(TempDir, PathBuf, Hash), Box<dyn std::error::Error>> {
+    fn sha256_file_digest<P: AsRef<Path>>(path: P) -> Result<Hash, Box<dyn std::error::Error>> {
         let input = File::open(path)?;
         let mut reader = BufReader::new(input);
-        let mut hasher = Sha256::new();
+        let mut hasher = Hasher::default();
 
         let mut buffer = [0; 1024];
         loop {
@@ -64,9 +69,9 @@ fn download_to_temp_archive(
             if count == 0 {
                 break;
             }
-            hasher.input(&buffer[..count]);
+            hasher.hash(&buffer[..count]);
         }
-        Ok(bs58::encode(hasher.result()).into_string())
+        Ok(hasher.result())
     }
 
     let url = Url::parse(url).map_err(|err| format!("Unable to parse {}: {}", url, err))?;
@@ -788,7 +793,7 @@ pub fn update(config_file: &str) -> Result<bool, String> {
                 return Err("Unable to update to an older version".to_string());
             }
         }
-        let release_dir = config.release_dir(&update_manifest.download_sha256);
+        let release_dir = config.release_dir(&update_manifest.download_sha256.to_string());
         let (_temp_dir, temp_archive, _temp_archive_sha256) = download_to_temp_archive(
             &update_manifest.download_url,
             Some(&update_manifest.download_sha256),
