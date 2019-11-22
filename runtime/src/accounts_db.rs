@@ -698,7 +698,7 @@ impl AccountsDB {
                 accounts.iter().for_each(|stored_account| {
                     scan_func(stored_account, storage.id, &mut retval, storage.clone())
                 });
-                3236
+                retval
             })
             .collect()
     }
