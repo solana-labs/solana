@@ -75,6 +75,7 @@ source multinode-demo/common.sh
 nodes=(
   "multinode-demo/drone.sh"
   "multinode-demo/bootstrap-leader.sh \
+    --no-restart \
     --init-complete-file init-complete-node1.log \
     --dynamic-port-range 8000-8050"
   "multinode-demo/validator.sh \

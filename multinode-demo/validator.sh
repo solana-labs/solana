@@ -278,14 +278,15 @@ setup_validator_accounts() {
   return 0
 }
 
+rpc_url=$($solana_gossip get-rpc-url --entrypoint "$gossip_entrypoint")
+
+[[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
+[[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
+[[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
+
+setup_validator_accounts "$node_lamports"
+
 while true; do
-  rpc_url=$($solana_gossip get-rpc-url --entrypoint "$gossip_entrypoint")
-
-  [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
-  [[ -r "$voting_keypair_path" ]] || $solana_keygen new -o "$voting_keypair_path"
-  [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
-
-  setup_validator_accounts "$node_lamports"
   echo "$PS4$program ${args[*]}"
 
   $program "${args[@]}" &
@@ -306,9 +307,4 @@ while true; do
   done
 
   kill_node
-  # give the cluster time to come back up
-  (
-    set -x
-    sleep 60
-  )
 done
