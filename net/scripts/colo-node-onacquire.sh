@@ -9,13 +9,13 @@ SSH_PUBLIC_KEY_TEXT="${SSH_PUBLIC_KEY_TEXT:?}"
 NETWORK_INFO="${NETWORK_INFO:-"Network info unavailable"}"
 CREATION_INFO="${CREATION_INFO:-"Creation info unavailable"}"
 
-if [ ! -f "${SOLANA_LOCK_FILE}" ]; then
+if [[ ! -f "${SOLANA_LOCK_FILE}" ]]; then
   exec 9>>"${SOLANA_LOCK_FILE}"
   flock -x -n 9 || ( echo "Failed to acquire lock!" 1>&2 && exit 1 )
-  ( [ -n "${SOLANA_USER}" ] && {
+  ( [[ -n "${SOLANA_USER}" ]] && {
     echo "export SOLANA_LOCK_USER=${SOLANA_USER}"
     echo "export SOLANA_LOCK_INSTANCENAME=${INSTANCE_NAME}"
-    echo "[ -v SSH_TTY -a -f \"${HOME}/.solana-motd\" ] && cat \"${HOME}/.solana-motd\" 1>&2"
+    echo "[[ -v SSH_TTY -a -f \"${HOME}/.solana-motd\" ]] && cat \"${HOME}/.solana-motd\" 1>&2"
   } >&9 ) || ( rm "${SOLANA_LOCK_FILE}" && echo "SOLANA_USER undefined" 1>&2 && false )
   exec 9>&-
   cat > /solana-scratch/id_ecdsa <<EOF

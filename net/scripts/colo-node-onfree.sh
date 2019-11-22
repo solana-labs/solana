@@ -6,12 +6,12 @@ SECONDARY_DISK_MOUNT_POINT="${SECONDARY_DISK_MOUNT_POINT:?}"
 SSH_AUTHORIZED_KEYS="${SSH_AUTHORIZED_KEYS:?}"
 
 RC=false
-if [ -f "${SOLANA_LOCK_FILE}" ]; then
+if [[ -f "${SOLANA_LOCK_FILE}" ]]; then
   exec 9<>"${SOLANA_LOCK_FILE}"
   flock -x -n 9 || ( echo "Failed to acquire lock!" 1>&2 && exit 1 )
   # shellcheck disable=SC1090
   . "${SOLANA_LOCK_FILE}"
-  if [ "${SOLANA_LOCK_USER}" = "${SOLANA_USER}" ]; then
+  if [[ "${SOLANA_LOCK_USER}" = "${SOLANA_USER}" ]]; then
     # Begin running process cleanup
     CLEANUP_PID=$$
     CLEANUP_PIDS=()
