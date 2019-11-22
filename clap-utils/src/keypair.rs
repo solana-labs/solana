@@ -38,10 +38,7 @@ pub struct KeypairWithGenerated {
 
 impl KeypairWithGenerated {
     fn new(keypair: Keypair, generated: bool) -> Self {
-        Self {
-            keypair,
-            generated,
-        }
+        Self { keypair, generated }
     }
 }
 
