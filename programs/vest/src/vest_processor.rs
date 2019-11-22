@@ -1,10 +1,10 @@
 //! vest program
-use crate::date_instruction::DateConfig;
 use crate::{
     vest_instruction::{VestError, VestInstruction},
     vest_state::VestState,
 };
 use chrono::prelude::*;
+use solana_config_program::date_instruction::DateConfig;
 use solana_config_program::get_config_data;
 use solana_sdk::{
     account::{Account, KeyedAccount},
@@ -143,9 +143,9 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::date_instruction;
     use crate::id;
     use crate::vest_instruction;
+    use solana_config_program::date_instruction;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
