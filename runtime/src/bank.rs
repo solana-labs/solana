@@ -1785,11 +1785,13 @@ mod tests {
             assert_eq!(bank.epoch_stakes.len() as Epoch, epoch + 1);
         }
 
+        assert_eq!(bank.epoch_stake_key_info(), (0, 31, 32));
+
         bank.update_epoch_stakes(MAX_LEADER_SCHEDULE_STAKES);
-        assert_eq!(bank.epoch_stake_key_info(), (1, 200, 200));
+        assert_eq!(bank.epoch_stake_key_info(), (1, 32, 32));
 
         bank.update_epoch_stakes(MAX_LEADER_SCHEDULE_STAKES + 1);
-        assert_eq!(bank.epoch_stake_key_info(), (2, 201, 200));
+        assert_eq!(bank.epoch_stake_key_info(), (2, 33, 32));
     }
 
     #[test]
