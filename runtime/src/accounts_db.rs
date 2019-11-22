@@ -676,7 +676,6 @@ impl AccountsDB {
         })
     }
 
-    // PERF: Sequentially read each storage entry in parallel
     pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
         let mut slot_hashes = self.slot_hashes.write().unwrap();
         let hash = *slot_hashes
