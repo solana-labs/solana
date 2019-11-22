@@ -1788,7 +1788,7 @@ mod tests {
 
     #[test]
     fn test_credit_debit_rent_no_side_effect_on_hash() {
-        let (mut genesis_block, _mint_keypair) = create_genesis_config(10);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
         let keypair1: Keypair = Keypair::new();
         let keypair2: Keypair = Keypair::new();
         let keypair3: Keypair = Keypair::new();
@@ -1798,35 +1798,35 @@ mod tests {
         let keypair5: Keypair = Keypair::new();
         let keypair6: Keypair = Keypair::new();
 
-        genesis_block.rent = Rent {
+        genesis_config.rent = Rent {
             lamports_per_byte_year: 1,
             exemption_threshold: 21.0,
             burn_percent: 10,
         };
 
-        let root_bank = Arc::new(Bank::new(&genesis_block));
+        let root_bank = Arc::new(Bank::new(&genesis_config));
         let bank = Bank::new_from_parent(
             &root_bank,
             &Pubkey::default(),
             years_as_slots(
                 2.0,
-                &genesis_block.poh_config.target_tick_duration,
-                genesis_block.ticks_per_slot,
+                &genesis_config.poh_config.target_tick_duration,
+                genesis_config.ticks_per_slot,
             ) as u64,
         );
 
-        let root_bank_2 = Arc::new(Bank::new(&genesis_block));
+        let root_bank_2 = Arc::new(Bank::new(&genesis_config));
         let bank_with_success_txs = Bank::new_from_parent(
             &root_bank_2,
             &Pubkey::default(),
             years_as_slots(
                 2.0,
-                &genesis_block.poh_config.target_tick_duration,
-                genesis_block.ticks_per_slot,
+                &genesis_config.poh_config.target_tick_duration,
+                genesis_config.ticks_per_slot,
             ) as u64,
         );
 
-        assert_eq!(bank.last_blockhash(), genesis_block.hash());
+        assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
         // Initialize credit-debit and credit only accounts
         let account1 = Account::new(264, 1, &Pubkey::default());
@@ -1859,11 +1859,11 @@ mod tests {
         bank_with_success_txs.store_account(&system_program_id, &system_program_account);
 
         let t1 =
-            system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, genesis_block.hash());
+            system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, genesis_config.hash());
         let t2 =
-            system_transaction::transfer(&keypair3, &keypair4.pubkey(), 1, genesis_block.hash());
+            system_transaction::transfer(&keypair3, &keypair4.pubkey(), 1, genesis_config.hash());
         let t3 =
-            system_transaction::transfer(&keypair5, &keypair6.pubkey(), 1, genesis_block.hash());
+            system_transaction::transfer(&keypair5, &keypair6.pubkey(), 1, genesis_config.hash());
 
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone(), t3.clone()]);
 
@@ -2007,7 +2007,7 @@ mod tests {
 
     fn create_child_bank_for_rent_test(
         root_bank: &Arc<Bank>,
-        genesis_block: &GenesisConfig,
+        genesis_config: &GenesisConfig,
         mock_program_id: Pubkey,
     ) -> Bank {
         let mut bank = Bank::new_from_parent(
@@ -2015,8 +2015,8 @@ mod tests {
             &Pubkey::default(),
             years_as_slots(
                 2.0,
-                &genesis_block.poh_config.target_tick_duration,
-                genesis_block.ticks_per_slot,
+                &genesis_config.poh_config.target_tick_duration,
+                genesis_config.ticks_per_slot,
             ) as u64,
         );
         bank.rent_collector.slots_per_year = 421_812.0;
@@ -2036,22 +2036,22 @@ mod tests {
     fn test_rent() {
         let mock_program_id = Pubkey::new(&[2u8; 32]);
 
-        let (mut genesis_block, _mint_keypair) = create_genesis_config(10);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
         let mut keypairs: Vec<Keypair> = Vec::with_capacity(14);
         for _i in 0..14 {
             keypairs.push(Keypair::new());
         }
 
-        genesis_block.rent = Rent {
+        genesis_config.rent = Rent {
             lamports_per_byte_year: 1,
             exemption_threshold: 1000.0,
             burn_percent: 10,
         };
 
-        let root_bank = Arc::new(Bank::new(&genesis_block));
-        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_block, mock_program_id);
+        let root_bank = Arc::new(Bank::new(&genesis_config));
+        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config, mock_program_id);
 
-        assert_eq!(bank.last_blockhash(), genesis_block.hash());
+        assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
         store_accounts_for_rent_test(&bank, &mut keypairs, mock_program_id);
 
@@ -2059,31 +2059,31 @@ mod tests {
             &keypairs[0],
             &keypairs[1].pubkey(),
             1,
-            genesis_block.hash(),
+            genesis_config.hash(),
         );
         let t2 = system_transaction::transfer(
             &keypairs[2],
             &keypairs[3].pubkey(),
             1,
-            genesis_block.hash(),
+            genesis_config.hash(),
         );
         let t3 = system_transaction::transfer(
             &keypairs[4],
             &keypairs[5].pubkey(),
             1,
-            genesis_block.hash(),
+            genesis_config.hash(),
         );
         let t4 = system_transaction::transfer(
             &keypairs[6],
             &keypairs[7].pubkey(),
             51223,
-            genesis_block.hash(),
+            genesis_config.hash(),
         );
         let t5 = system_transaction::transfer(
             &keypairs[8],
             &keypairs[9].pubkey(),
             929,
-            genesis_block.hash(),
+            genesis_config.hash(),
         );
 
         let t6 = create_mock_transaction(
@@ -2092,7 +2092,7 @@ mod tests {
             &keypairs[12],
             &keypairs[13],
             mock_program_id,
-            genesis_block.hash(),
+            genesis_config.hash(),
         );
 
         let res = bank.process_transactions(&[
