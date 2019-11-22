@@ -99,7 +99,7 @@ solana-drone --keypair "$dataDir"/faucet-keypair.json &
 drone=$!
 
 args=(
-  --identity "$dataDir"/leader-keypair.json
+  --identity-keypair "$dataDir"/leader-keypair.json
   --storage-keypair "$dataDir"/leader-storage-account-keypair.json
   --voting-keypair "$dataDir"/leader-vote-account-keypair.json
   --ledger "$ledgerDir"

@@ -304,7 +304,7 @@ EOF
     if [[ ! -f config/validator-identity.json ]]; then
       solana-keygen new -o config/validator-identity.json
     fi
-    args+=(--identity config/validator-identity.json)
+    args+=(--identity-keypair config/validator-identity.json)
 
     if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
