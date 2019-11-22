@@ -201,7 +201,7 @@ SSH_PRIVATE_KEY_TEXT="$(<"${SSH_PRIVATE_KEY}")"
 SSH_PUBLIC_KEY_TEXT="$(<"${SSH_PRIVATE_KEY}.pub")"
 NETWORK_INFO="$(printNetworkInfo 2>/dev/null)"
 CREATION_INFO="$(creationInfo 2>/dev/null)"
-$(<"$__colo_here"/colo-node-onacquire-sh)
+$(<"$__colo_here"/colo-node-onacquire.sh)
 EOF
   )"
   # shellcheck disable=SC2181
@@ -242,7 +242,7 @@ colo_node_free() {
 SOLANA_LOCK_FILE="${SOLANA_LOCK_FILE}"
 SECONDARY_DISK_MOUNT_POINT="${SECONDARY_DISK_MOUNT_POINT}"
 SSH_AUTHORIZED_KEYS='$("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)'
-$(<"$__colo_here"/colo-node-onfree-sh)
+$(<"$__colo_here"/colo-node-onfree.sh)
 EOF
   )"
 }
