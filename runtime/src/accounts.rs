@@ -297,8 +297,7 @@ impl Accounts {
             slot,
             |stored_account: &StoredAccount,
              _id: AppendVecId,
-             accum: &mut Vec<(Pubkey, u64, B)>,
-             _: &AccountStorageEntry| {
+             accum: &mut Vec<(Pubkey, u64, B)>| {
                 if let Some(val) = func(stored_account) {
                     accum.push((
                         stored_account.meta.pubkey,
