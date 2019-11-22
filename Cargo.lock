@@ -3878,6 +3878,7 @@ dependencies = [
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-crate-features 0.21.0",
  "solana-logger 0.21.0",
+ "tiny-bip39 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

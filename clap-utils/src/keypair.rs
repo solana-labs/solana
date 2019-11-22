@@ -75,3 +75,16 @@ pub fn keypair_input(
         Ok(KeypairWithGenerated::new(Keypair::new(), true))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::ArgMatches;
+
+    #[test]
+    fn test_keypair_input() {
+        let arg_matches = ArgMatches::default();
+        let KeypairWithGenerated { generated, .. } = keypair_input(&arg_matches, "").unwrap();
+        assert!(generated);
+    }
+}

@@ -209,6 +209,7 @@ pub fn keypair_from_mnemonic_and_passphrase(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bip39::{Language, Mnemonic, MnemonicType, Seed};
     use std::mem;
 
     fn tmp_file_path(name: &str) -> String {
@@ -319,5 +320,15 @@ mod tests {
             signature_base58_str.parse::<Signature>(),
             Err(ParseSignatureError::Invalid)
         );
+    }
+
+    #[test]
+    fn test_keypair_from_mnemonic_and_passphrase() {
+        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+        let passphrase = "42";
+        let seed = Seed::new(&mnemonic, passphrase);
+        let expected_keypair = keypair_from_seed(seed.as_bytes()).unwrap();
+        let keypair = keypair_from_mnemonic_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
+        assert_eq!(keypair.pubkey(), expected_keypair.pubkey());
     }
 }
