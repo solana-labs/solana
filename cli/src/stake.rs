@@ -571,7 +571,11 @@ pub fn process_show_stake_account(
             }
             println!(
                 "stake activates starting from epoch: {}",
-                stake.activation_epoch
+                (if stake.activation_epoch < std::u64::MAX {
+                    format!("{}", stake.activation_epoch)
+                } else {
+                    "0 (Genesis)".to_string()
+                })
             );
             if stake.deactivation_epoch < std::u64::MAX {
                 println!(
