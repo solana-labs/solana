@@ -1,7 +1,7 @@
 use crate::{budget_expr::BudgetExpr, budget_state::BudgetState, id};
 use bincode::serialized_size;
 use chrono::prelude::{DateTime, Utc};
-use num_derive::FromPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     hash::Hash,
@@ -11,7 +11,7 @@ use solana_sdk::{
     system_instruction,
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum BudgetError {
     DestinationMissing,
 }
