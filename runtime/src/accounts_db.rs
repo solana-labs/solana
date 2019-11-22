@@ -1147,11 +1147,12 @@ impl AccountsDB {
     }
 
     fn generate_index(&self) {
+        let mut dead_slots = HashSet::new();
+
         let storage = self.storage.read().unwrap();
         let mut slots: Vec<Slot> = storage.0.keys().cloned().collect();
         slots.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
-        let mut dead_slots = HashSet::new();
         for slot_id in slots.iter() {
             let storage_maps: Vec<Arc<AccountStorageEntry>> = self
                 .storage
@@ -1179,11 +1180,6 @@ impl AccountsDB {
                             offset: stored_account.offset,
                             lamports: stored_account.account_meta.lamports,
                         };
-                        //error!("count: {}", count);
-                        if let Some((_, _, old_entry)) = accum.get(&stored_account.meta.pubkey) {
-                            old_entry.remove_account();
-                            //ZZZ remove slots?
-                        }
                         accum.insert(
                             stored_account.meta.pubkey,
                             (stored_account.meta.write_version, account_info, entry),
@@ -1196,6 +1192,30 @@ impl AccountsDB {
                 AccountsDB::merge(&mut account_maps, &maps);
             }
             if !account_maps.is_empty() {
+                let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                    .storage
+                    .read()
+                    .unwrap()
+                    .0
+                    .get(&slot_id)
+                    .unwrap_or(&HashMap::new())
+                    .values()
+                    .cloned()
+                    .collect();
+                for (pubkey, (version, _account_info, storage_entry)) in account_maps.iter() {
+                    storage_maps
+                        .iter()
+                        .for_each(|storage| {
+                            storage.all_existing_accounts().iter().for_each(|a| {
+                                if a.meta.pubkey == *pubkey && *version != a.meta.write_version {
+                                    trace!("ryoqun: hi: slot: {:?} {:?} {:?}", (*slot_id, storage.slot_id, storage_entry.slot_id), *pubkey, a);
+                                    storage.remove_account();
+                                    //ZZZ remove slots?
+                                    trace!("ryoqun: hi end");
+                                }
+                            })
+                        });
+                }
                 accounts_index.roots.insert(*slot_id);
                 trace!("ryoqun account_maps: {:?}", account_maps.len());
                 let mut reclaims: Vec<(u64, AccountInfo)> = vec![];
