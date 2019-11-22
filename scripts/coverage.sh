@@ -35,13 +35,10 @@ if [[ -d target/cov ]]; then
 fi
 rm -rf target/cov/$reportName
 
-if [ -z $SOLANA_RUST_VERSION ]; then
-  source ci/rust-version.sh nightly
-  SOLANA_RUST_VERSION="+$rust_nightly"
-fi
+source ci/rust-version.sh nightly
 
-RUST_LOG=solana=trace _ cargo "$SOLANA_RUST_VERSION" test --target-dir target/cov --no-run "${packages[@]}"
-RUST_LOG=solana=trace _ cargo "$SOLANA_RUST_VERSION" test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log
+RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --no-run "${packages[@]}"
+RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log
 
 echo "--- grcov"
 
