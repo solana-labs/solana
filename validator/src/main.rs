@@ -6,7 +6,9 @@ use log::*;
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_keypair, is_pubkey_or_keypair},
-    keypair::{keypair_input, ASK_MNEMONIC_ARG, SKIP_MNEMONIC_VALIDATION_ARG},
+    keypair::{
+        keypair_input, KeypairWithGenerated, ASK_MNEMONIC_ARG, SKIP_MNEMONIC_VALIDATION_ARG,
+    },
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::{
@@ -542,19 +544,21 @@ pub fn main() {
                 eprintln!("Identity keypair input failed: {}", err);
                 exit(1);
             })
-            .0,
+            .keypair,
     );
-    let (voting_keypair, ephemeral_voting_keypair) = keypair_input(&matches, "voting-keypair")
-        .unwrap_or_else(|err| {
-            eprintln!("Voting keypair input failed: {}", err);
-            exit(1);
-        });
+    let KeypairWithGenerated {
+        keypair: voting_keypair,
+        generated: ephemeral_voting_keypair,
+    } = keypair_input(&matches, "voting-keypair").unwrap_or_else(|err| {
+        eprintln!("Voting keypair input failed: {}", err);
+        exit(1);
+    });
     let storage_keypair = keypair_input(&matches, "storage-keypair")
         .unwrap_or_else(|err| {
             eprintln!("Storage keypair input failed: {}", err);
             exit(1);
         })
-        .0;
+        .keypair;
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let entrypoint = matches.value_of("entrypoint");

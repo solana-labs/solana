@@ -31,16 +31,28 @@ pub fn keypair_from_mnemonic(
     }
 }
 
+pub struct KeypairWithGenerated {
+    pub keypair: Keypair,
+    pub generated: bool,
+}
+
+impl KeypairWithGenerated {
+    fn new(keypair: Keypair, generated: bool) -> Self {
+        Self {
+            keypair,
+            generated,
+        }
+    }
+}
+
 /// Checks CLI arguments to determine whether a keypair should be:
 ///   - inputted securely via stdin,
 ///   - read in from a file,
 ///   - or newly generated
-///
-/// Returns the keypair result and whether it was generated.
 pub fn keypair_input(
     matches: &clap::ArgMatches,
     keypair_name: &str,
-) -> Result<(Keypair, bool), Box<dyn error::Error>> {
+) -> Result<KeypairWithGenerated, Box<dyn error::Error>> {
     let mnemonic_matches =
         values_t!(matches.values_of(ASK_MNEMONIC_ARG), String).unwrap_or_default();
     let keypair_match_name = keypair_name.replace('-', "_");
@@ -58,10 +70,11 @@ pub fn keypair_input(
         }
 
         let skip_validation = matches.is_present(SKIP_MNEMONIC_VALIDATION_ARG);
-        keypair_from_mnemonic(keypair_name, skip_validation).map(|keypair| (keypair, false))
+        keypair_from_mnemonic(keypair_name, skip_validation)
+            .map(|keypair| KeypairWithGenerated::new(keypair, false))
     } else if let Some(keypair_file) = matches.value_of(keypair_match_name) {
-        read_keypair_file(keypair_file).map(|keypair| (keypair, false))
+        read_keypair_file(keypair_file).map(|keypair| KeypairWithGenerated::new(keypair, false))
     } else {
-        Ok((Keypair::new(), true))
+        Ok(KeypairWithGenerated::new(Keypair::new(), true))
     }
 }
