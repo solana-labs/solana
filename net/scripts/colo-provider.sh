@@ -38,26 +38,26 @@ cloud_RestartPreemptedInstances() {
 #
 __cloud_FindInstances() {
   declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME INSTANCES_TEXT
-  declare filter=$1
+  declare filter=${1}
   instances=()
 
-  if ! $COLO_PARALLELIZE; then
+  if ! ${COLO_PARALLELIZE}; then
     colo_load_resources
     colo_load_availability false
   fi
   INSTANCES_TEXT="$(
     for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
-      IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$AVAIL"
-      if [[ $INSTNAME =~ $filter ]]; then
-        printf "%-40s | publicIp=%-16s privateIp=%s zone=%s\n" "$INSTNAME" "$IP" "$PRIV_IP" "$ZONE" 1>&2
-        echo -e "${INSTNAME}:${IP}:${PRIV_IP}:$ZONE"
+      IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"${AVAIL}"
+      if [[ ${INSTNAME} =~ ${filter} ]]; then
+        printf "%-40s | publicIp=%-16s privateIp=%s zone=%s\n" "${INSTNAME}" "${IP}" "${PRIV_IP}" "${ZONE}" 1>&2
+        echo -e "${INSTNAME}:${IP}:${PRIV_IP}:${ZONE}"
       fi
     done | sort -t $'\v' -k1
   )"
-  if [[ -n "$INSTANCES_TEXT" ]]; then
+  if [[ -n "${INSTANCES_TEXT}" ]]; then
     while read -r LINE; do
-      instances+=( "$LINE" )
-    done <<<"$INSTANCES_TEXT"
+      instances+=( "${LINE}" )
+    done <<<"${INSTANCES_TEXT}"
   fi
 }
 
@@ -77,7 +77,7 @@ __cloud_FindInstances() {
 #
 cloud_FindInstances() {
   declare filter="^${1}.*"
-  __cloud_FindInstances "$filter"
+  __cloud_FindInstances "${filter}"
 }
 
 #
@@ -96,7 +96,7 @@ cloud_FindInstances() {
 #
 cloud_FindInstance() {
   declare name="^${1}$"
-  __cloud_FindInstances "$name"
+  __cloud_FindInstances "${name}"
 }
 
 #
@@ -108,10 +108,10 @@ cloud_FindInstance() {
 #
 # This function will be called before |cloud_CreateInstances|
 cloud_Initialize() {
-  # networkName=$1 # unused
-  # zone=$2 #unused
+  # networkName=${1} # unused
+  # zone=${2} #unused
   colo_load_resources
-  if $COLO_PARALLELIZE; then
+  if ${COLO_PARALLELIZE}; then
     colo_load_availability
   fi
 }
@@ -136,7 +136,7 @@ cloud_Initialize() {
 # startupScript - Optional startup script to execute when the instance boots
 # address       - Optional name of the GCE static IP address to attach to the
 #                 instance.  Requires that |numNodes| = 1 and that addressName
-#                 has been provisioned in the GCE region that is hosting `$zone`
+#                 has been provisioned in the GCE region that is hosting `${zone}`
 # bootDiskType  - Optional specify SSD or HDD boot disk
 # additionalDiskSize - Optional specify size of additional storage volume
 # preemptible - Optionally request a preemptible instance ("true")
@@ -144,76 +144,76 @@ cloud_Initialize() {
 # Tip: use cloud_FindInstances to locate the instances once this function
 #      returns
 cloud_CreateInstances() {
-  #declare networkName="$1" # unused
-  declare namePrefix="$2"
-  declare numNodes="$3"
-  #declare enableGpu="$4" # unused
-  declare machineType="$5"
-  # declare zone="$6" # unused
-  #declare optionalBootDiskSize="$7" # unused
-  #declare optionalStartupScript="$8" # unused
-  #declare optionalAddress="$9" # unused
+  #declare networkName="${1}" # unused
+  declare namePrefix="${2}"
+  declare numNodes="${3}"
+  #declare enableGpu="${4}" # unused
+  declare machineType="${5}"
+  # declare zone="${6}" # unused
+  #declare optionalBootDiskSize="${7}" # unused
+  #declare optionalStartupScript="${8}" # unused
+  #declare optionalAddress="${9}" # unused
   #declare optionalBootDiskType="${10}" # unused
   #declare optionalAdditionalDiskSize="${11}" # unused
   #declare optionalPreemptible="${12}" # unused
   declare sshPrivateKey="${13}"
 
   declare -a nodes
-  if [[ $numNodes = 1 ]]; then
-    nodes=("$namePrefix")
+  if [[ ${numNodes} = 1 ]]; then
+    nodes=("${namePrefix}")
   else
-    for node in $(seq -f "${namePrefix}%0${#numNodes}g" 1 "$numNodes"); do
-      nodes+=("$node")
+    for node in $(seq -f "${namePrefix}%0${#numNodes}g" 1 "${numNodes}"); do
+      nodes+=("${node}")
     done
   fi
 
-  if $COLO_PARALLELIZE; then
+  if ${COLO_PARALLELIZE}; then
     declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME INDEX RES LINE
     declare -a AVAILABLE
     declare AVAILABLE_TEXT
     AVAILABLE_TEXT="$(
       for RES in "${COLO_RES_AVAILABILITY[@]}"; do
-        IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$RES"
-        if [[ "FREE" = "$STATUS" ]]; then
-          INDEX=$(colo_res_index_from_ip "$IP")
-          RES_MACH="${COLO_RES_MACHINE[$INDEX]}"
-          if colo_machine_types_compatible "$RES_MACH" "$machineType"; then
-            if ! colo_node_is_requisitioned "$INDEX" "${COLO_RES_REQUISITIONED[*]}"; then
-              echo -e "$RES_MACH\v$IP"
+        IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"${RES}"
+        if [[ "FREE" = "${STATUS}" ]]; then
+          INDEX=$(colo_res_index_from_ip "${IP}")
+          RES_MACH="${COLO_RES_MACHINE[${INDEX}]}"
+          if colo_machine_types_compatible "${RES_MACH}" "${machineType}"; then
+            if ! colo_node_is_requisitioned "${INDEX}" "${COLO_RES_REQUISITIONED[*]}"; then
+              echo -e "${RES_MACH}\v${IP}"
             fi
           fi
         fi
       done | sort -nt $'\v' -k1,1
     )"
 
-    if [[ -n "$AVAILABLE_TEXT" ]]; then
+    if [[ -n "${AVAILABLE_TEXT}" ]]; then
       while read -r LINE; do
-        AVAILABLE+=("$LINE")
-      done <<<"$AVAILABLE_TEXT"
+        AVAILABLE+=("${LINE}")
+      done <<<"${AVAILABLE_TEXT}"
     fi
 
-    if [[ ${#AVAILABLE[@]} -lt $numNodes ]]; then
-      echo "Insufficient resources available to allocate $numNodes $namePrefix" 1>&2
+    if [[ ${#AVAILABLE[@]} -lt ${numNodes} ]]; then
+      echo "Insufficient resources available to allocate ${numNodes} ${namePrefix}" 1>&2
       exit 1
     fi
 
     declare node
     declare AI=0
     for node in "${nodes[@]}"; do
-      IFS=$'\v' read -r _ IP <<<"${AVAILABLE[$AI]}"
-      colo_node_requisition "$IP" "$node" >/dev/null
+      IFS=$'\v' read -r _ IP <<<"${AVAILABLE[${AI}]}"
+      colo_node_requisition "${IP}" "${node}" >/dev/null
       AI=$((AI+1))
     done
   else
     declare RES_MACH node
     declare RI=0
     declare NI=0
-    while [[ $NI -lt $numNodes && $RI -lt $COLO_RES_N ]]; do
-      node="${nodes[$NI]}"
-      RES_MACH="${COLO_RES_MACHINE[$RI]}"
-      IP="${COLO_RES_IP[$RI]}"
-      if colo_machine_types_compatible "$RES_MACH" "$machineType"; then
-        if colo_node_requisition "$IP" "$node" "$sshPrivateKey" >/dev/null; then
+    while [[ ${NI} -lt ${numNodes} && ${RI} -lt ${COLO_RES_N} ]]; do
+      node="${nodes[${NI}]}"
+      RES_MACH="${COLO_RES_MACHINE[${RI}]}"
+      IP="${COLO_RES_IP[${RI}]}"
+      if colo_machine_types_compatible "${RES_MACH}" "${machineType}"; then
+        if colo_node_requisition "${IP}" "${node}" "${sshPrivateKey}" >/dev/null; then
           NI=$((NI+1))
         fi
       fi
@@ -230,8 +230,8 @@ cloud_CreateInstances() {
 cloud_DeleteInstances() {
   declare _ IP _ _
   for instance in "${instances[@]}"; do
-    IFS=':' read -r _ IP _ _ <<< "$instance"
-    colo_node_free "$IP" >/dev/null
+    IFS=':' read -r _ IP _ _ <<< "${instance}"
+    colo_node_free "${IP}" >/dev/null
   done
 }
 
@@ -241,9 +241,9 @@ cloud_DeleteInstances() {
 # Return once the newly created VM instance is responding.  This function is cloud-provider specific.
 #
 cloud_WaitForInstanceReady() {
-  #declare instanceName="$1" # unused
-  #declare instanceIp="$2" # unused
-  #declare timeout="$4" # unused
+  #declare instanceName="${1}" # unused
+  #declare instanceIp="${2}" # unused
+  #declare timeout="${4}" # unused
 
   true
 }
@@ -255,28 +255,28 @@ cloud_WaitForInstanceReady() {
 # mechanism to fetch the file
 #
 cloud_FetchFile() {
-  #declare instanceName="$1" # unused
-  declare publicIp="$2"
-  declare remoteFile="$3"
-  declare localFile="$4"
-  #declare zone="$5" # unused
+  #declare instanceName="${1}" # unused
+  declare publicIp="${2}"
+  declare remoteFile="${3}"
+  declare localFile="${4}"
+  #declare zone="${5}" # unused
   scp \
     -o "StrictHostKeyChecking=no" \
     -o "UserKnownHostsFile=/dev/null" \
     -o "User=solana" \
     -o "LogLevel=ERROR" \
     -F /dev/null \
-    "solana@$publicIp:$remoteFile" "$localFile"
+    "solana@${publicIp}:${remoteFile}" "${localFile}"
 }
 
 cloud_StatusAll() {
   declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME
-  if ! $COLO_PARALLELIZE; then
+  if ! ${COLO_PARALLELIZE}; then
     colo_load_resources
     colo_load_availability false
   fi
   for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
-    IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"$AVAIL"
-    printf "%-30s | publicIp=%-16s privateIp=%s status=%s who=%s zone=%s inst=%s\n" "$HOST_NAME" "$IP" "$PRIV_IP" "$STATUS" "$LOCK_USER" "$ZONE" "$INSTNAME"
+    IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"${AVAIL}"
+    printf "%-30s | publicIp=%-16s privateIp=%s status=%s who=%s zone=%s inst=%s\n" "${HOST_NAME}" "${IP}" "${PRIV_IP}" "${STATUS}" "${LOCK_USER}" "${ZONE}" "${INSTNAME}"
   done
 }

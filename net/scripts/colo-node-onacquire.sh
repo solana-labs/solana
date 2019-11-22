@@ -9,14 +9,14 @@ SSH_PUBLIC_KEY_TEXT="${SSH_PUBLIC_KEY_TEXT:?}"
 NETWORK_INFO="${NETWORK_INFO:-"Network info unavailable"}"
 CREATION_INFO="${CREATION_INFO:-"Creation info unavailable"}"
 
-if [ ! -f "$SOLANA_LOCK_FILE" ]; then
-  exec 9>>"$SOLANA_LOCK_FILE"
+if [ ! -f "${SOLANA_LOCK_FILE}" ]; then
+  exec 9>>"${SOLANA_LOCK_FILE}"
   flock -x -n 9 || ( echo "Failed to acquire lock!" 1>&2 && exit 1 )
-  ( [ -n "$SOLANA_USER" ] && {
-    echo "export SOLANA_LOCK_USER=$SOLANA_USER"
-    echo "export SOLANA_LOCK_INSTANCENAME=$INSTANCE_NAME"
+  ( [ -n "${SOLANA_USER}" ] && {
+    echo "export SOLANA_LOCK_USER=${SOLANA_USER}"
+    echo "export SOLANA_LOCK_INSTANCENAME=${INSTANCE_NAME}"
     echo "[ -v SSH_TTY -a -f \"${HOME}/.solana-motd\" ] && cat \"${HOME}/.solana-motd\" 1>&2"
-  } >&9 ) || ( rm "$SOLANA_LOCK_FILE" && echo "SOLANA_USER undefined" 1>&2 && false )
+  } >&9 ) || ( rm "${SOLANA_LOCK_FILE}" && echo "SOLANA_USER undefined" 1>&2 && false )
   exec 9>&-
   cat > /solana-scratch/id_ecdsa <<EOK
 ${SSH_PRIVATE_KEY_TEXT}
@@ -43,7 +43,7 @@ EOM
   touch /solana-scratch/.instance-startup-complete
 else
   # shellcheck disable=SC1090
-  exec 9<"$SOLANA_LOCK_FILE" && flock -s 9 && . "$SOLANA_LOCK_FILE" && exec 9>&-
+  exec 9<"${SOLANA_LOCK_FILE}" && flock -s 9 && . "${SOLANA_LOCK_FILE}" && exec 9>&-
   echo "${INSTANCE_NAME} candidate is already ${SOLANA_LOCK_INSTANCENAME}" 1>&2
   false
 fi
