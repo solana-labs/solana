@@ -4,6 +4,7 @@ use crate::pubkey::Pubkey;
 use bs58;
 use ed25519_dalek;
 use generic_array::{typenum::U64, GenericArray};
+use hmac::Hmac;
 use rand::rngs::OsRng;
 use serde_json;
 use std::{
@@ -186,9 +187,29 @@ pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> 
     Ok(keypair)
 }
 
+pub fn keypair_from_seed_phrase_and_passphrase(
+    seed_phrase: &str,
+    passphrase: &str,
+) -> Result<Keypair, Box<dyn error::Error>> {
+    const PBKDF2_ROUNDS: usize = 2048;
+    const PBKDF2_BYTES: usize = 64;
+
+    let salt = format!("mnemonic{}", passphrase);
+
+    let mut seed = vec![0u8; PBKDF2_BYTES];
+    pbkdf2::pbkdf2::<Hmac<sha2::Sha512>>(
+        seed_phrase.as_bytes(),
+        salt.as_bytes(),
+        PBKDF2_ROUNDS,
+        &mut seed,
+    );
+    keypair_from_seed(&seed[..])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bip39::{Language, Mnemonic, MnemonicType, Seed};
     use std::mem;
 
     fn tmp_file_path(name: &str) -> String {
@@ -299,5 +320,16 @@ mod tests {
             signature_base58_str.parse::<Signature>(),
             Err(ParseSignatureError::Invalid)
         );
+    }
+
+    #[test]
+    fn test_keypair_from_seed_phrase_and_passphrase() {
+        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+        let passphrase = "42";
+        let seed = Seed::new(&mnemonic, passphrase);
+        let expected_keypair = keypair_from_seed(seed.as_bytes()).unwrap();
+        let keypair =
+            keypair_from_seed_phrase_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
+        assert_eq!(keypair.pubkey(), expected_keypair.pubkey());
     }
 }

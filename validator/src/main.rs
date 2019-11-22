@@ -6,6 +6,9 @@ use log::*;
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_keypair, is_pubkey_or_keypair},
+    keypair::{
+        keypair_input, KeypairWithGenerated, ASK_SEED_PHRASE_ARG, SKIP_SEED_PHRASE_VALIDATION_ARG,
+    },
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::{
@@ -21,7 +24,7 @@ use solana_sdk::{
     clock::Slot,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{read_keypair_file, Keypair, KeypairUtil},
+    signature::{Keypair, KeypairUtil},
 };
 use std::{
     fs::{self, File},
@@ -323,9 +326,24 @@ pub fn main() {
                 .help("Stream entries to this unix domain socket path")
         )
         .arg(
-            Arg::with_name("identity")
+            Arg::with_name(ASK_SEED_PHRASE_ARG)
+                .long("ask-seed-phrase")
+                .value_name("KEYPAIR NAME")
+                .multiple(true)
+                .takes_value(true)
+                .possible_values(&["identity-keypair", "storage-keypair", "voting-keypair"])
+                .help("Securely recover a keypair using a seed phrase and optional passphrase"),
+        )
+        .arg(
+            Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG)
+                .long("skip-seed-phrase-validation")
+                .requires(ASK_SEED_PHRASE_ARG)
+                .help("Skip validation of seed phrases. Use this if your phrase does not use the BIP39 official English word list"),
+        )
+        .arg(
+            Arg::with_name("identity_keypair")
                 .short("i")
-                .long("identity")
+                .long("identity-keypair")
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair)
@@ -520,34 +538,27 @@ pub fn main() {
         )
         .get_matches();
 
-    let identity_keypair = if let Some(identity) = matches.value_of("identity") {
-        read_keypair_file(identity).unwrap_or_else(|err| {
-            error!("{}: Unable to open keypair file: {}", err, identity);
+    let identity_keypair = Arc::new(
+        keypair_input(&matches, "identity-keypair")
+            .unwrap_or_else(|err| {
+                eprintln!("Identity keypair input failed: {}", err);
+                exit(1);
+            })
+            .keypair,
+    );
+    let KeypairWithGenerated {
+        keypair: voting_keypair,
+        generated: ephemeral_voting_keypair,
+    } = keypair_input(&matches, "voting-keypair").unwrap_or_else(|err| {
+        eprintln!("Voting keypair input failed: {}", err);
+        exit(1);
+    });
+    let storage_keypair = keypair_input(&matches, "storage-keypair")
+        .unwrap_or_else(|err| {
+            eprintln!("Storage keypair input failed: {}", err);
             exit(1);
         })
-    } else {
-        Keypair::new()
-    };
-    let identity_keypair = Arc::new(identity_keypair);
-
-    let mut ephemeral_voting_keypair = false;
-    let voting_keypair = if let Some(identity) = matches.value_of("voting_keypair") {
-        read_keypair_file(identity).unwrap_or_else(|err| {
-            error!("{}: Unable to open keypair file: {}", err, identity);
-            exit(1);
-        })
-    } else {
-        ephemeral_voting_keypair = true;
-        Keypair::new()
-    };
-    let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
-        read_keypair_file(storage_keypair).unwrap_or_else(|err| {
-            error!("{}: Unable to open keypair file: {}", err, storage_keypair);
-            exit(1);
-        })
-    } else {
-        Keypair::new()
-    };
+        .keypair;
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let entrypoint = matches.value_of("entrypoint");
@@ -582,7 +593,7 @@ pub fn main() {
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", usize);
     let snapshot_path = ledger_path.clone().join("snapshot");
     fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
-        error!(
+        eprintln!(
             "Failed to create snapshots directory {:?}: {}",
             snapshot_path, err
         );

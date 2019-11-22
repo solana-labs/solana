@@ -19,3 +19,4 @@ macro_rules! version {
 
 pub mod input_parsers;
 pub mod input_validators;
+pub mod keypair;
