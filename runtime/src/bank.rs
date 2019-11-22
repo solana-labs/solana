@@ -54,7 +54,7 @@ use std::{
 
 pub const SECONDS_PER_YEAR: f64 = (365.25 * 24.0 * 60.0 * 60.0);
 
-const MAX_LEADER_SCHEDULE_STAKES: Epoch = 200; // what value shold this be???
+const MAX_LEADER_SCHEDULE_STAKES: Epoch = 32;
 
 type BankStatusCache = StatusCache<Result<()>>;
 
@@ -486,8 +486,6 @@ impl Bank {
         //  if my parent didn't populate for this staker's epoch, we've
         //  crossed a boundary
         if self.epoch_stakes.get(&leader_schedule_epoch).is_none() {
-            // should add assertion for incremental insersion for epochs?
-
             self.epoch_stakes
                 .insert(leader_schedule_epoch, self.stakes.read().unwrap().clone());
 
