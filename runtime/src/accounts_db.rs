@@ -1282,8 +1282,8 @@ pub mod tests {
         let slot_b = slot_a + 1;
         db.add_root(slot_b);
 
-        debug!("{:?}", db.store(slot_a, &[(&key0, &account0)]));
-        debug!("{:?}", db.store(slot_a, &[(&key1, &account1)]));
+        db.store(slot_a, &[(&key0, &account0)]);
+        db.store(slot_a, &[(&key1, &account1)]);
 
         {
             let stores = db.storage.read().unwrap();
@@ -1303,10 +1303,8 @@ pub mod tests {
                 vec![2]
             );
         }
-        debug!(
-            "{:?}",
-            db.store(slot_b, &[(&key0, &account0), (&key2, &account2)])
-        );
+
+        db.store(slot_b, &[(&key0, &account0), (&key2, &account2)]);
 
         {
             let stores = db.storage.read().unwrap();
@@ -1349,7 +1347,7 @@ pub mod tests {
         let lamport_0 = 0;
         let account3 = Account::new(lamport_0, 0, &Account::default().owner);
         assert!(db.verify_account_balances(&ancestors));
-        debug!("{:?}", db.store(slot_b, &[(&key3, &account3)]));
+        db.store(slot_b, &[(&key3, &account3)]);
 
         let mut db2 = AccountsDB::new(None);
         db2.storage = RwLock::new(db.storage.read().unwrap().clone());
