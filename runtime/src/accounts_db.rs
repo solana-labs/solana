@@ -971,19 +971,26 @@ impl AccountsDB {
 
     pub fn verify_hash_internal_state(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {
         let mut hash_state = BankHash::default();
-        let hashes: Vec<_> = self.scan_accounts(
+        let hashes: (Vec<_>, bool) = self.scan_accounts(
             ancestors,
-            |collector: &mut Vec<BankHash>, option: Option<(&Pubkey, Account, Slot)>| {
+            |collector: &mut (Vec<BankHash>, bool), option: Option<(&Pubkey, Account, Slot)>| {
                 if let Some((pubkey, account, slot)) = option {
                     if !sysvar::check_id(&account.owner) {
-                        let hash = BankHash::from_hash(&Self::hash_account(slot, &account, pubkey));
-                        debug!("xoring..{} key: {}", hash, pubkey);
-                        collector.push(hash);
+                        let hash = Self::hash_account(slot, &account, pubkey);
+                        if hash != account.hash {
+                            collector.1 = false;
+                        }
+                        let bank_hash = BankHash::from_hash(&hash);
+                        debug!("xoring..{} key: {}", bank_hash, pubkey);
+                        collector.0.push(bank_hash);
                     }
                 }
             },
         );
-        for hash in hashes {
+        if hashes.1 {
+            return false;
+        }
+        for hash in hashes.0 {
             hash_state.xor(hash);
         }
         let slot_hashes = self.slot_hashes.read().unwrap();
