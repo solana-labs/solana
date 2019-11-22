@@ -10,12 +10,10 @@ the correct cluster before voting. There are two major risks if they do not:
 The validator may be fed a snapshot and gossip info for a different (though not
 necessarily malicious) cluster. If that cluster is at slot 100,000 while the
 cluster the validator intended to join is at 10,000, if the validator votes
-once on the wrong cluster, it is locked out of the correct cluster for 90,000
-slots. This is because slashing is based on slot numbers, so when the validator
-votes on the wrong cluster's slot 100,000, it can't make any vote on the
-correct cluster that locks it out of the correct cluster's slot 100,000. Due to
-this, it can't achieve `MAX_LOCKOUT` on the correct cluster until that goes
-past slot 100,000.
+once on the wrong cluster, it is locked out of the correct cluster for at least
+90,000 slots. This is because slashing is based on slot numbers, so when the
+validator makes a vote `V` on the wrong cluster's slot 100,000, it is locked
+out of voting on any slot < `100,000 + lockout(V)` on the correct cluster.
 
 ### Voting Before Catching Up
 
@@ -61,8 +59,9 @@ different fork than the one this validiator last rooted. Thus it's critical for
 consistency in `replay_stage` that the order of events when setting a new root
 is:
 
-    1) Write the root to locktower 2) Write the root to blocktree 3) Generate
-    snapshot for that root
+    1) Write the root to locktower
+    2) Write the root to blocktree
+    3) Generate snapshot for that root
 
 3) On startup, the validator checks that the current root in locktower exists
 in blocktree. If not (there was a crash between 2-1 and 2-2), then rewrite the
@@ -109,8 +108,8 @@ slot `S_n` that it can vote on without violating the lockouts of any vote in
 true.
 
 2) `V` and every vote after it needs to expire before the validator can vote on
-any descendant of `S`, so `S_n = V + lockout(V)`. If no `V` exists, then `S_n =
-S`.
+any descendant of `S`, so with all the votes `V_i` in locktower where `V_i >=
+V`, `S_n = max(V_i + lockout(V_i))`. If no `V` exists, then `S_n = S`.
 
 
 ## Achieving Safety
