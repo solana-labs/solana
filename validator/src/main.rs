@@ -309,20 +309,8 @@ fn download_ledger(
     Ok(())
 }
 
-const IDENTITY_KEYPAIR_NAME: &str = "identity";
-const STORAGE_KEYPAIR_NAME: &str = "storage-keypair";
-const VOTING_KEYPAIR_NAME: &str = "voting-keypair";
-
 #[allow(clippy::cognitive_complexity)]
 pub fn main() {
-    solana_logger::setup_with_filter(
-        &[
-            "solana=info", /* info logging for all solana modules */
-            "rpc=trace",   /* json_rpc request/response logging */
-        ]
-        .join(","),
-    );
-
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
 
@@ -336,18 +324,18 @@ pub fn main() {
                 .help("Stream entries to this unix domain socket path")
         )
         .arg(
-            Arg::with_name("mnemonic_stdin")
-                .long("mnemonic-stdin")
+            Arg::with_name("ask_mnemonic")
+                .long("ask-mnemonic")
                 .value_name("KEYPAIR NAME")
                 .multiple(true)
                 .takes_value(true)
-                .possible_values(&[IDENTITY_KEYPAIR_NAME, STORAGE_KEYPAIR_NAME, VOTING_KEYPAIR_NAME])
+                .possible_values(&["identity-keypair", "storage-keypair", "voting-keypair"])
                 .help("Securely input a mnemonic code and optional passphrase for a keypair"),
         )
         .arg(
-            Arg::with_name("identity")
+            Arg::with_name("identity_keypair")
                 .short("i")
-                .long("identity")
+                .long("identity-keypair")
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair)
@@ -543,21 +531,21 @@ pub fn main() {
         .get_matches();
 
     let identity_keypair = Arc::new(
-        keypair_input(&matches, "identity")
+        keypair_input(&matches, "identity-keypair")
             .unwrap_or_else(|err| {
-                error!("Identity keypair input failed: {}", err);
+                eprintln!("Identity keypair input failed: {}", err);
                 exit(1);
             })
             .0,
     );
     let (voting_keypair, ephemeral_voting_keypair) = keypair_input(&matches, "voting-keypair")
         .unwrap_or_else(|err| {
-            error!("Voting keypair input failed: {}", err);
+            eprintln!("Voting keypair input failed: {}", err);
             exit(1);
         });
     let storage_keypair = keypair_input(&matches, "storage-keypair")
         .unwrap_or_else(|err| {
-            error!("Storage keypair input failed: {}", err);
+            eprintln!("Storage keypair input failed: {}", err);
             exit(1);
         })
         .0;
@@ -595,7 +583,7 @@ pub fn main() {
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", usize);
     let snapshot_path = ledger_path.clone().join("snapshot");
     fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
-        error!(
+        eprintln!(
             "Failed to create snapshots directory {:?}: {}",
             snapshot_path, err
         );
@@ -662,6 +650,14 @@ pub fn main() {
             ()
         }
     };
+
+    solana_logger::setup_with_filter(
+        &[
+            "solana=info", /* info logging for all solana modules */
+            "rpc=trace",   /* json_rpc request/response logging */
+        ]
+        .join(","),
+    );
 
     if matches.is_present("no_voting") {
         validator_config.voting_disabled = true;

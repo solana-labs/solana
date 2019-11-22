@@ -12,32 +12,29 @@ use std::{
 
 /// Reads user input from stdin to retrieve a mnemonic and passphrase for keypair derivation
 pub fn keypair_from_mnemonic(keypair_name: &str) -> Result<Keypair, Box<dyn error::Error>> {
-    let mnemonic_phrase =
-        prompt_password_stderr(&format!("[{}] mnemonic phrase: ", keypair_name)).unwrap();
+    let mnemonic_phrase = prompt_password_stderr(&format!("[{}] mnemonic phrase: ", keypair_name))?;
     match Mnemonic::from_phrase(mnemonic_phrase.trim(), Language::English) {
         Ok(mnemonic) => {
             let passphrase =
-                prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))
-                    .unwrap();
+                prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))?;
             let seed = Seed::new(&mnemonic, &passphrase);
             keypair_from_seed(seed.as_bytes())
         }
         Err(err) => {
             print!(
-                "[{}] mnemonic phrase validation failed, continue anyways? (y/n): ",
-                keypair_name
+                "Your mnemonic phrase failed to validate with the official BIP39 English word list.
+If your phrase used a different word list, you can optionally continue. (y/n): "
             );
-            stdout().flush().unwrap();
+            stdout().flush()?;
 
             let mut buffer = String::new();
-            stdin().read_line(&mut buffer).unwrap();
-            if buffer.trim() != "y" {
+            stdin().read_line(&mut buffer)?;
+            if buffer.trim().to_lowercase() != "y" {
                 return Err(err.into());
             }
 
             let passphrase =
-                prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))
-                    .unwrap();
+                prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))?;
 
             keypair_from_mnemonic_and_passphrase(&mnemonic_phrase, &passphrase)
         }
@@ -54,14 +51,13 @@ pub fn keypair_input(
     matches: &clap::ArgMatches,
     keypair_name: &str,
 ) -> Result<(Keypair, bool), Box<dyn error::Error>> {
-    let mnemonic_matches =
-        values_t!(matches.values_of("mnemonic_stdin"), String).unwrap_or_default();
+    let mnemonic_matches = values_t!(matches.values_of("ask_mnemonic"), String).unwrap_or_default();
     let keypair_match_name = keypair_name.replace('-', "_");
     if mnemonic_matches.iter().any(|s| s.as_str() == keypair_name) {
         if matches.value_of(keypair_match_name).is_some() {
             clap::Error::with_description(
                 &format!(
-                    "`--mnemonic-stdin {}` cannot be used with `{} <PATH>`",
+                    "`--ask-mnemonic {}` cannot be used with `{} <PATH>`",
                     keypair_name, keypair_name
                 ),
                 clap::ErrorKind::ArgumentConflict,
