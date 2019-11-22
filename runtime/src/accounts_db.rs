@@ -1210,15 +1210,9 @@ impl AccountsDB {
                     storage_maps.iter().for_each(|storage| {
                         storage.all_existing_accounts().iter().for_each(|a| {
                             if a.meta.pubkey == *pubkey && *version != a.meta.write_version {
-                                trace!(
-                                    "ryoqun: hi: slot: {:?} {:?} {:?}",
-                                    (*slot_id, storage.slot_id, storage_entry.slot_id),
-                                    *pubkey,
-                                    a
-                                );
-                                storage.remove_account();
-                                //ZZZ remove slots?
-                                trace!("ryoqun: hi end");
+                                if storage.remove_account() == 0 {
+                                    dead_slots.insert(*slot_id);
+                                }
                             }
                         })
                     });
@@ -1243,9 +1237,7 @@ impl AccountsDB {
                                 slot_id, store.slot_id,
                                 "AccountDB::accounts_index corrupted. Storage should only point to one slot"
                             );
-                            let count = store.remove_account();
-                            trace!("ryoqun count, {}", count);
-                            if count == 0 {
+                            if store.remove_account() == 0 {
                                 dead_slots.insert(slot_id);
                             }
                         }
