@@ -187,8 +187,8 @@ pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> 
     Ok(keypair)
 }
 
-pub fn keypair_from_mnemonic_and_passphrase(
-    mnemonic: &str,
+pub fn keypair_from_seed_phrase_and_passphrase(
+    seed_phrase: &str,
     passphrase: &str,
 ) -> Result<Keypair, Box<dyn error::Error>> {
     const PBKDF2_ROUNDS: usize = 2048;
@@ -198,7 +198,7 @@ pub fn keypair_from_mnemonic_and_passphrase(
 
     let mut seed = vec![0u8; PBKDF2_BYTES];
     pbkdf2::pbkdf2::<Hmac<sha2::Sha512>>(
-        mnemonic.as_bytes(),
+        seed_phrase.as_bytes(),
         salt.as_bytes(),
         PBKDF2_ROUNDS,
         &mut seed,
@@ -323,12 +323,12 @@ mod tests {
     }
 
     #[test]
-    fn test_keypair_from_mnemonic_and_passphrase() {
+    fn test_keypair_from_seed_phrase_and_passphrase() {
         let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
         let passphrase = "42";
         let seed = Seed::new(&mnemonic, passphrase);
         let expected_keypair = keypair_from_seed(seed.as_bytes()).unwrap();
-        let keypair = keypair_from_mnemonic_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
+        let keypair = keypair_from_seed_phrase_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
         assert_eq!(keypair.pubkey(), expected_keypair.pubkey());
     }
 }

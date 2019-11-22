@@ -7,7 +7,7 @@ use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_keypair, is_pubkey_or_keypair},
     keypair::{
-        keypair_input, KeypairWithGenerated, ASK_MNEMONIC_ARG, SKIP_MNEMONIC_VALIDATION_ARG,
+        keypair_input, KeypairWithGenerated, ASK_SEED_PHRASE_ARG, SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
 };
 use solana_client::rpc_client::RpcClient;
@@ -326,19 +326,19 @@ pub fn main() {
                 .help("Stream entries to this unix domain socket path")
         )
         .arg(
-            Arg::with_name(ASK_MNEMONIC_ARG)
-                .long("ask-mnemonic")
+            Arg::with_name(ASK_SEED_PHRASE_ARG)
+                .long("ask-seed-phrase")
                 .value_name("KEYPAIR NAME")
                 .multiple(true)
                 .takes_value(true)
                 .possible_values(&["identity-keypair", "storage-keypair", "voting-keypair"])
-                .help("Securely input a mnemonic code and optional passphrase for a keypair"),
+                .help("Securely recover a keypair using a seed phrase and optional passphrase"),
         )
         .arg(
-            Arg::with_name(SKIP_MNEMONIC_VALIDATION_ARG)
-                .long("skip-mnemonic-validation")
-                .requires(ASK_MNEMONIC_ARG)
-                .help("Skip validation of mnemonic phrases. Use this if your phrase does not use the BIP39 official English word list"),
+            Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG)
+                .long("skip-seed-phrase-validation")
+                .requires(ASK_SEED_PHRASE_ARG)
+                .help("Skip validation of seed phrases. Use this if your phrase does not use the BIP39 official English word list"),
         )
         .arg(
             Arg::with_name("identity_keypair")
