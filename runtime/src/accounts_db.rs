@@ -258,7 +258,9 @@ impl AccountStorageEntry {
         let new_count = self.all_existing_accounts().len();
         trace!(
             "ryoqun: restored storage: from {:?} {:?} to {}",
-            self, *count_and_status, new_count
+            self,
+            *count_and_status,
+            new_count
         );
         *count_and_status = (new_count, count_and_status.1);
     }
@@ -1127,7 +1129,7 @@ impl AccountsDB {
             .collect()
     }
 
-    fn merge<'a>(
+    fn merge(
         dest: &mut HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
         source: &HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
     ) {
@@ -1168,24 +1170,26 @@ impl AccountsDB {
                 storage.restore_account_count();
             }
 
-            let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>> = self
-                .scan_account_storage_slow(
-                    *slot_id,
-                    |stored_account: &StoredAccount,
-                     id: AppendVecId,
-                     accum: &mut HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
-                     entry: Arc<AccountStorageEntry>| {
-                        let account_info = AccountInfo {
-                            id,
-                            offset: stored_account.offset,
-                            lamports: stored_account.account_meta.lamports,
-                        };
-                        accum.insert(
-                            stored_account.meta.pubkey,
-                            (stored_account.meta.write_version, account_info, entry),
-                        );
-                    },
-                );
+            #[allow(clippy::type_complexity)]
+            let mut accumulator: Vec<
+                HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
+            > = self.scan_account_storage_slow(
+                *slot_id,
+                |stored_account: &StoredAccount,
+                 id: AppendVecId,
+                 accum: &mut HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
+                 entry: Arc<AccountStorageEntry>| {
+                    let account_info = AccountInfo {
+                        id,
+                        offset: stored_account.offset,
+                        lamports: stored_account.account_meta.lamports,
+                    };
+                    accum.insert(
+                        stored_account.meta.pubkey,
+                        (stored_account.meta.write_version, account_info, entry),
+                    );
+                },
+            );
 
             let mut account_maps = accumulator.pop().unwrap();
             while let Some(maps) = accumulator.pop() {
@@ -1203,24 +1207,31 @@ impl AccountsDB {
                     .cloned()
                     .collect();
                 for (pubkey, (version, _account_info, storage_entry)) in account_maps.iter() {
-                    storage_maps
-                        .iter()
-                        .for_each(|storage| {
-                            storage.all_existing_accounts().iter().for_each(|a| {
-                                if a.meta.pubkey == *pubkey && *version != a.meta.write_version {
-                                    trace!("ryoqun: hi: slot: {:?} {:?} {:?}", (*slot_id, storage.slot_id, storage_entry.slot_id), *pubkey, a);
-                                    storage.remove_account();
-                                    //ZZZ remove slots?
-                                    trace!("ryoqun: hi end");
-                                }
-                            })
-                        });
+                    storage_maps.iter().for_each(|storage| {
+                        storage.all_existing_accounts().iter().for_each(|a| {
+                            if a.meta.pubkey == *pubkey && *version != a.meta.write_version {
+                                trace!(
+                                    "ryoqun: hi: slot: {:?} {:?} {:?}",
+                                    (*slot_id, storage.slot_id, storage_entry.slot_id),
+                                    *pubkey,
+                                    a
+                                );
+                                storage.remove_account();
+                                //ZZZ remove slots?
+                                trace!("ryoqun: hi end");
+                            }
+                        })
+                    });
                 }
                 accounts_index.roots.insert(*slot_id);
                 trace!("ryoqun account_maps: {:?}", account_maps.len());
                 let mut reclaims: Vec<(u64, AccountInfo)> = vec![];
                 for (pubkey, (_, account_info, _)) in account_maps.iter() {
-                    trace!("ryoqun slot: {}, account_info: {:?}", *slot_id, account_info);
+                    trace!(
+                        "ryoqun slot: {}, account_info: {:?}",
+                        *slot_id,
+                        account_info
+                    );
                     accounts_index.insert(*slot_id, pubkey, account_info.clone(), &mut reclaims);
                 }
 

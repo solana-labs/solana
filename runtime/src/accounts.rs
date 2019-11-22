@@ -1,6 +1,4 @@
-use crate::accounts_db::{
-    AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters,
-};
+use crate::accounts_db::{AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters};
 use crate::accounts_index::AccountsIndex;
 use crate::append_vec::StoredAccount;
 use crate::blockhash_queue::BlockhashQueue;
