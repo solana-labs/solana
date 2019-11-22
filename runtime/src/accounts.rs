@@ -458,9 +458,11 @@ impl Accounts {
         }
     }
 
-    pub fn hash_internal_state(&self, slot_id: Slot) -> Option<BankHash> {
+    pub fn hash_internal_state(&self, slot_id: Slot) -> BankHash {
         let slot_hashes = self.accounts_db.slot_hashes.read().unwrap();
-        slot_hashes.get(&slot_id).cloned()
+        *slot_hashes
+            .get(&slot_id)
+            .expect("No accounts hash was found for this bank, that should not be possible")
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the
@@ -1093,11 +1095,18 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_accounts_empty_hash_internal_state() {
         let accounts = Accounts::new(None);
-        assert_eq!(accounts.hash_internal_state(0), None);
+        accounts.hash_internal_state(0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_accounts_empty_account_hash_internal_state() {
+        let accounts = Accounts::new(None);
         accounts.store_slow(0, &Pubkey::default(), &Account::new(1, 0, &sysvar::id()));
-        assert_eq!(accounts.hash_internal_state(0), None);
+        accounts.hash_internal_state(0);
     }
 
     fn check_accounts(accounts: &Accounts, pubkeys: &Vec<Pubkey>, num: usize) {
