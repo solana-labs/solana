@@ -5,39 +5,29 @@ use solana_sdk::signature::{
     keypair_from_mnemonic_and_passphrase, keypair_from_seed, read_keypair_file, Keypair,
     KeypairUtil,
 };
-use std::{
-    error,
-    io::{stdin, stdout, Write},
-};
+use std::error;
+
+pub const ASK_MNEMONIC_ARG: &str = "ask_mnemonic";
+pub const SKIP_MNEMONIC_VALIDATION_ARG: &str = "skip_mnemonic_validation";
 
 /// Reads user input from stdin to retrieve a mnemonic and passphrase for keypair derivation
-pub fn keypair_from_mnemonic(keypair_name: &str) -> Result<Keypair, Box<dyn error::Error>> {
+pub fn keypair_from_mnemonic(
+    keypair_name: &str,
+    skip_validation: bool,
+) -> Result<Keypair, Box<dyn error::Error>> {
     let mnemonic_phrase = prompt_password_stderr(&format!("[{}] mnemonic phrase: ", keypair_name))?;
-    match Mnemonic::from_phrase(mnemonic_phrase.trim(), Language::English) {
-        Ok(mnemonic) => {
-            let passphrase =
-                prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))?;
-            let seed = Seed::new(&mnemonic, &passphrase);
-            keypair_from_seed(seed.as_bytes())
-        }
-        Err(err) => {
-            print!(
-                "Your mnemonic phrase failed to validate with the official BIP39 English word list.
-If your phrase used a different word list, you can optionally continue. (y/n): "
-            );
-            stdout().flush()?;
+    let mnemonic_phrase = mnemonic_phrase.trim();
 
-            let mut buffer = String::new();
-            stdin().read_line(&mut buffer)?;
-            if buffer.trim().to_lowercase() != "y" {
-                return Err(err.into());
-            }
-
-            let passphrase =
-                prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))?;
-
-            keypair_from_mnemonic_and_passphrase(&mnemonic_phrase, &passphrase)
-        }
+    if skip_validation {
+        let passphrase =
+            prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))?;
+        keypair_from_mnemonic_and_passphrase(&mnemonic_phrase, &passphrase)
+    } else {
+        let mnemonic = Mnemonic::from_phrase(mnemonic_phrase, Language::English)?;
+        let passphrase =
+            prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))?;
+        let seed = Seed::new(&mnemonic, &passphrase);
+        keypair_from_seed(seed.as_bytes())
     }
 }
 
@@ -51,21 +41,24 @@ pub fn keypair_input(
     matches: &clap::ArgMatches,
     keypair_name: &str,
 ) -> Result<(Keypair, bool), Box<dyn error::Error>> {
-    let mnemonic_matches = values_t!(matches.values_of("ask_mnemonic"), String).unwrap_or_default();
+    let mnemonic_matches =
+        values_t!(matches.values_of(ASK_MNEMONIC_ARG), String).unwrap_or_default();
     let keypair_match_name = keypair_name.replace('-', "_");
     if mnemonic_matches.iter().any(|s| s.as_str() == keypair_name) {
         if matches.value_of(keypair_match_name).is_some() {
+            let ask_mnemonic_kebab = ASK_MNEMONIC_ARG.replace('_', "-");
             clap::Error::with_description(
                 &format!(
-                    "`--ask-mnemonic {}` cannot be used with `{} <PATH>`",
-                    keypair_name, keypair_name
+                    "`--{} {}` cannot be used with `{} <PATH>`",
+                    ask_mnemonic_kebab, keypair_name, keypair_name
                 ),
                 clap::ErrorKind::ArgumentConflict,
             )
             .exit();
         }
 
-        keypair_from_mnemonic(keypair_name).map(|keypair| (keypair, false))
+        let skip_validation = matches.is_present(SKIP_MNEMONIC_VALIDATION_ARG);
+        keypair_from_mnemonic(keypair_name, skip_validation).map(|keypair| (keypair, false))
     } else if let Some(keypair_file) = matches.value_of(keypair_match_name) {
         read_keypair_file(keypair_file).map(|keypair| (keypair, false))
     } else {
