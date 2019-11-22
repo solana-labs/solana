@@ -7,16 +7,7 @@ pub use crate::clock::Epoch;
 use crate::{account::Account, sysvar::Sysvar};
 use std::ops::Deref;
 
-const ID: [u8; 32] = [
-    6, 167, 213, 23, 25, 53, 132, 208, 254, 237, 155, 179, 67, 29, 19, 32, 107, 229, 68, 40, 27,
-    87, 184, 86, 108, 197, 55, 95, 244, 0, 0, 0,
-];
-
-crate::solana_sysvar_id!(
-    ID,
-    "SysvarStakeHistory1111111111111111111111111",
-    StakeHistory
-);
+crate::declare_sysvar_id!("SysvarStakeHistory1111111111111111111111111", StakeHistory);
 
 pub const MAX_STAKE_HISTORY: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 

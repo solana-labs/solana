@@ -10,12 +10,7 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 
 // base rewards pool ID
-const ID: [u8; 32] = [
-    6, 162, 25, 123, 127, 71, 141, 232, 129, 171, 58, 183, 79, 88, 181, 17, 163, 11, 51, 111, 22,
-    123, 67, 115, 5, 131, 109, 161, 16, 0, 0, 0,
-];
-
-solana_sdk::solana_name_id!(ID, "StorageMiningPoo111111111111111111111111111");
+solana_sdk::declare_id!("StorageMiningPoo111111111111111111111111111");
 
 // to cut down on collisions for redemptions, we make multiple accounts
 pub const NUM_REWARDS_POOLS: usize = 32;
@@ -31,7 +26,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
 }
 
 pub fn random_id() -> Pubkey {
-    let mut id = Hash::new(&ID);
+    let mut id = Hash::new(id().as_ref());
 
     for _i in 0..thread_rng().gen_range(0, NUM_REWARDS_POOLS) {
         id = hash(id.as_ref());

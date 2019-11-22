@@ -2,13 +2,7 @@
 //!
 use crate::{account::Account, fee_calculator::FeeCalculator, sysvar::Sysvar};
 
-///  fees account pubkey
-const ID: [u8; 32] = [
-    6, 167, 213, 23, 24, 226, 90, 141, 131, 80, 60, 37, 26, 122, 240, 113, 38, 253, 114, 0, 223,
-    111, 196, 237, 82, 106, 156, 144, 0, 0, 0, 0,
-];
-
-crate::solana_sysvar_id!(ID, "SysvarFees111111111111111111111111111111111", Fees);
+crate::declare_sysvar_id!("SysvarFees111111111111111111111111111111111", Fees);
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default)]

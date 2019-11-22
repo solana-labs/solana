@@ -28,9 +28,9 @@ pub fn is_sysvar_id(id: &Pubkey) -> bool {
 }
 
 #[macro_export]
-macro_rules! solana_sysvar_id(
-    ($id:ident, $name:expr, $type:ty) => (
-        $crate::solana_name_id!($id, $name);
+macro_rules! declare_sysvar_id(
+    ($name:expr, $type:ty) => (
+        $crate::declare_id!($name);
 
         impl $crate::sysvar::SysvarId for $type {
             fn check_id(pubkey: &$crate::pubkey::Pubkey) -> bool {
@@ -48,14 +48,8 @@ macro_rules! solana_sysvar_id(
     )
 );
 
-/// "Sysvar1111111111111111111111111111111111111"
-///   owner pubkey for sysvar accounts
-const ID: [u8; 32] = [
-    6, 167, 213, 23, 24, 117, 247, 41, 199, 61, 147, 64, 143, 33, 97, 32, 6, 126, 216, 140, 118,
-    224, 140, 40, 127, 193, 148, 96, 0, 0, 0, 0,
-];
-
-crate::solana_name_id!(ID, "Sysvar1111111111111111111111111111111111111");
+// owner pubkey for sysvar accounts
+crate::declare_id!("Sysvar1111111111111111111111111111111111111");
 
 pub trait SysvarId {
     fn check_id(pubkey: &Pubkey) -> bool;

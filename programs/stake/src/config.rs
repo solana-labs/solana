@@ -10,12 +10,7 @@ use solana_sdk::{
 };
 
 // stake config ID
-const ID: [u8; 32] = [
-    6, 161, 216, 23, 165, 2, 5, 11, 104, 7, 145, 230, 206, 109, 184, 142, 30, 91, 113, 80, 246, 31,
-    198, 121, 10, 78, 180, 209, 0, 0, 0, 0,
-];
-
-solana_sdk::solana_name_id!(ID, "StakeConfig11111111111111111111111111111111");
+solana_sdk::declare_id!("StakeConfig11111111111111111111111111111111");
 
 // means that no more than RATE of current effective stake may be added or subtracted per
 //  epoch

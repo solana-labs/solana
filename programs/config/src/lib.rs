@@ -6,13 +6,7 @@ use bincode::{deserialize, serialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{account::Account, pubkey::Pubkey, short_vec};
 
-const CONFIG_PROGRAM_ID: [u8; 32] = [
-    3, 6, 74, 163, 0, 47, 116, 220, 200, 110, 67, 49, 15, 12, 5, 42, 248, 197, 218, 39, 246, 16,
-    64, 25, 163, 35, 239, 160, 0, 0, 0, 0,
-];
-
 solana_sdk::declare_program!(
-    CONFIG_PROGRAM_ID,
     "Config1111111111111111111111111111111111111",
     solana_config_program,
     process_instruction

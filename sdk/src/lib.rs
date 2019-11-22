@@ -51,5 +51,6 @@ pub mod transport;
 
 #[macro_use]
 extern crate serde_derive;
-
+pub extern crate bs58;
+pub extern crate lazy_static;
 extern crate log as logger;

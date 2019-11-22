@@ -30,8 +30,7 @@ macro_rules! solana_entrypoint(
 
 /// Convenience macro to declare a native program
 ///
-/// id: Variable containing the program's id (public key bytes)
-/// bs58:  BS58 encoding of the id, used verify check the id bytes
+/// bs58_string: bs58 string representation the program's id
 /// name: Name of the program, must match the library name in Cargo.toml
 /// entrypoint: Program's entrypoint, must be of `type Entrypoint`
 ///
@@ -43,11 +42,6 @@ macro_rules! solana_entrypoint(
 /// use solana_sdk::pubkey::Pubkey;
 /// use solana_sdk::declare_program;
 ///
-/// const MY_PROGRAM_ID: [u8; 32] = [
-///     6, 161, 216, 23, 145, 55, 84, 42, 152, 52, 55, 189, 254, 42, 122, 178, 85, 127, 83, 92, 138,
-///     120, 114, 43, 104, 164, 157, 192, 0, 0, 0, 0,
-/// ];
-///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
 ///     keyed_accounts: &mut [KeyedAccount],
@@ -58,7 +52,6 @@ macro_rules! solana_entrypoint(
 /// }
 ///
 /// solana_sdk::declare_program!(
-///     MY_PROGRAM_ID,
 ///     "My!!!11111111111111111111111111111111111111",
 ///     solana_my_program,
 ///     my_process_instruction
@@ -66,8 +59,8 @@ macro_rules! solana_entrypoint(
 /// ```
 #[macro_export]
 macro_rules! declare_program(
-    ($id:ident, $bs58:expr, $name:ident, $entrypoint:expr) => (
-        $crate::solana_name_id!($id, $bs58);
+    ($bs58_string:expr, $name:ident, $entrypoint:expr) => (
+        $crate::declare_id!($bs58_string);
 
         #[macro_export]
         macro_rules! $name {

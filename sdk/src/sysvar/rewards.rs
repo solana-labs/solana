@@ -2,13 +2,7 @@
 //!
 use crate::{account::Account, sysvar::Sysvar};
 
-///  account pubkey
-const ID: [u8; 32] = [
-    6, 167, 213, 23, 25, 44, 97, 55, 206, 224, 146, 217, 182, 146, 62, 225, 204, 214, 25, 3, 250,
-    130, 184, 161, 97, 145, 87, 141, 128, 0, 0, 0,
-];
-
-crate::solana_sysvar_id!(ID, "SysvarRewards111111111111111111111111111111", Rewards);
+crate::declare_sysvar_id!("SysvarRewards111111111111111111111111111111", Rewards);
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
