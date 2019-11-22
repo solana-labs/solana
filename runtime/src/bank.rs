@@ -1771,7 +1771,7 @@ mod tests {
 
     #[test]
     fn test_bank_update_epoch_stakes() {
-        let (genesis_config, mint_keypair) = create_genesis_config(100_000);
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
         let mut bank = Bank::new(&genesis_config);
 
         let initial_epochs = bank.epoch_stake_keys();
