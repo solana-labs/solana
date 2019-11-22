@@ -675,7 +675,7 @@ impl AccountsDB {
     }
 
     // PERF: Sequentially read each storage entry in parallel
-    pub fn scan_account_storage_slow<F, B>(&self, slot_id: Slot, scan_func: F) -> Vec<usize>
+    pub fn scan_account_storage_slow<F, B>(&self, slot_id: Slot, scan_func: F) -> Vec<B>
     where
         F: Fn(&StoredAccount, AppendVecId, &mut B, Arc<AccountStorageEntry>) -> () + Send + Sync,
         B: Send + Default,
@@ -1128,8 +1128,8 @@ impl AccountsDB {
     }
 
     fn merge<'a>(
-        dest: &mut HashMap<Pubkey, (u64, AccountInfo, &'a AccountStorageEntry)>,
-        source: &HashMap<Pubkey, (u64, AccountInfo, &'a AccountStorageEntry)>,
+        dest: &mut HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
+        source: &HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
     ) {
         for (key, (source_version, source_info, entry)) in source.iter() {
             if let Some((dest_version, _, _)) = dest.get(key) {
@@ -1137,7 +1137,7 @@ impl AccountsDB {
                     continue;
                 }
             }
-            dest.insert(*key, (*source_version, source_info.clone(), entry));
+            dest.insert(*key, (*source_version, source_info.clone(), entry.clone()));
         }
     }
 
@@ -1167,7 +1167,7 @@ impl AccountsDB {
                 storage.restore_account_count();
             }
 
-            self
+            let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>> = self
                 .scan_account_storage_slow(
                     *slot_id,
                     |stored_account: &StoredAccount,
@@ -1181,7 +1181,7 @@ impl AccountsDB {
                         };
                         //error!("count: {}", count);
                         if let Some((_, _, old_entry)) = accum.get(&stored_account.meta.pubkey) {
-                            //old_entry.remove_account();
+                            old_entry.remove_account();
                             //ZZZ remove slots?
                         }
                         accum.insert(
@@ -1191,7 +1191,6 @@ impl AccountsDB {
                     },
                 );
 
-            /*
             let mut account_maps = accumulator.pop().unwrap();
             while let Some(maps) = accumulator.pop() {
                 AccountsDB::merge(&mut account_maps, &maps);
@@ -1222,7 +1221,6 @@ impl AccountsDB {
                     }
                 }
             }
-            */
         }
 
         let mut counts = HashMap::new();
