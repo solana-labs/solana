@@ -9,6 +9,7 @@ RC=false
 if [ -f "$SOLANA_LOCK_FILE" ]; then
   exec 9<>"$SOLANA_LOCK_FILE"
   flock -x -n 9 || ( echo "Failed to acquire lock!" 1>&2 && exit 1 )
+  # shellcheck disable=SC1090
   . "$SOLANA_LOCK_FILE"
   if [ "$SOLANA_LOCK_USER" = "$SOLANA_USER" ]; then
     # Begin running process cleanup
@@ -19,10 +20,10 @@ if [ -f "$SOLANA_LOCK_FILE" ]; then
       CLEANUP_PIDS=()
       CLEANUP_PPIDS=()
       declare line maybe_ppid maybe_pid
-      while read line; do
-        read maybe_ppid maybe_pid _ _ _ _ _ _ _ _ <<<"$line"
-        CLEANUP_PIDS+=( $maybe_pid )
-        CLEANUP_PPIDS+=( $maybe_ppid )
+      while read -r line; do
+        read -r maybe_ppid maybe_pid _ _ _ _ _ _ _ _ <<<"$line"
+        CLEANUP_PIDS+=( "$maybe_pid" )
+        CLEANUP_PPIDS+=( "$maybe_ppid" )
       done < <(ps jxh | sort -rn -k2,2)
     }
 
@@ -54,7 +55,7 @@ if [ -f "$SOLANA_LOCK_FILE" ]; then
     }
 
     # Kill screen sessions
-    while read SID; do
+    while read -r SID; do
       screen -S "$SID" -X quit
     done < <(screen -wipe 2>&1 | sed -e 's/^\s\+\([^[:space:]]\+\)\s.*/\1/;t;d')
 
@@ -70,14 +71,14 @@ if [ -f "$SOLANA_LOCK_FILE" ]; then
         resolve_chains
         for p in "${CLEANUP_PROC_CHAINS[@]}"; do
           if ! grep -q "\b$CLEANUP_PID\b" <<<"$p"; then
-            read -a TO_KILL <<<"$p"
+            read -ra TO_KILL <<<"$p"
             N=${#TO_KILL[@]}
             ROOT_PPID="${TO_KILL[$((N-1))]}"
             if [[ 1 -ne $ROOT_PPID ]]; then
               LAST_PID_IDX=$((N-2))
               for I in $(seq 0 $LAST_PID_IDX); do
                 pid="${TO_KILL[$I]}"
-                kill -$SIG $pid &>/dev/null
+                kill "-$SIG" "$pid" &>/dev/null
               done
             fi
           fi
@@ -105,7 +106,7 @@ EOAK
   else
     echo "Invalid user: expected \"$SOLANA_LOCK_USER\" got \"$SOLANA_USER\"" 1>&2
   fi
-  9>&-
+  exec 9>&-
 fi
 $RC
 
