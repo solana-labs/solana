@@ -193,10 +193,17 @@ colo_node_requisition() {
   INDEX=$(colo_res_index_from_ip "$IP")
   declare RC=false
 
-  colo_instance_run "$IP" "$(eval "cat <<EOF
-  $(<"$__colo_here"/colo-node-onacquire-sh)
+  colo_instance_run "$IP" "$(cat <<EOF
+SOLANA_LOCK_FILE="${SOLANA_LOCK_FILE}"
+INSTANCE_NAME="${INSTANCE_NAME}"
+SSH_AUTHORIZED_KEYS='$("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)'
+SSH_PRIVATE_KEY_TEXT="$(<"${SSH_PRIVATE_KEY}")"
+SSH_PUBLIC_KEY_TEXT="$(<"${SSH_PRIVATE_KEY}.pub")"
+NETWORK_INFO="$(printNetworkInfo 2>/dev/null)"
+CREATION_INFO="$(creationInfo 2>/dev/null)"
+$(<"$__colo_here"/colo-node-onacquire-sh)
 EOF
-  ")"
+  )"
   # shellcheck disable=SC2181
   if [[ 0 -eq $? ]]; then
     COLO_RES_REQUISITIONED+=("$INDEX")
@@ -231,10 +238,13 @@ colo_machine_types_compatible() {
 
 colo_node_free() {
   declare IP=$1
-  colo_instance_run "$IP" "$(eval "cat <<EOF
-  $(<"$__colo_here"/colo-node-onfree-sh)
+  colo_instance_run "$IP" "$(cat <<EOF
+SOLANA_LOCK_FILE="${SOLANA_LOCK_FILE}"
+SECONDARY_DISK_MOUNT_POINT="${SECONDARY_DISK_MOUNT_POINT}"
+SSH_AUTHORIZED_KEYS='$("$__colo_here"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)'
+$(<"$__colo_here"/colo-node-onfree-sh)
 EOF
-  ")"
+  )"
 }
 
 
