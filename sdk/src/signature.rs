@@ -328,7 +328,8 @@ mod tests {
         let passphrase = "42";
         let seed = Seed::new(&mnemonic, passphrase);
         let expected_keypair = keypair_from_seed(seed.as_bytes()).unwrap();
-        let keypair = keypair_from_seed_phrase_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
+        let keypair =
+            keypair_from_seed_phrase_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
         assert_eq!(keypair.pubkey(), expected_keypair.pubkey());
     }
 }

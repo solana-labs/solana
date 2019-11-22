@@ -2,7 +2,7 @@ use bip39::{Language, Mnemonic, Seed};
 use clap::values_t;
 use rpassword::prompt_password_stderr;
 use solana_sdk::signature::{
-    keypair_from_seed_phrase_and_passphrase, keypair_from_seed, read_keypair_file, Keypair,
+    keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair,
     KeypairUtil,
 };
 use std::error;
@@ -17,15 +17,17 @@ pub fn keypair_from_seed_phrase(
 ) -> Result<Keypair, Box<dyn error::Error>> {
     let seed_phrase = prompt_password_stderr(&format!("[{}] seed phrase: ", keypair_name))?;
     let seed_phrase = seed_phrase.trim();
+    let passphrase_prompt = format!(
+        "[{}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
+        keypair_name,
+    );
 
     if skip_validation {
-        let passphrase =
-            prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))?;
+        let passphrase = prompt_password_stderr(&passphrase_prompt)?;
         keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)
     } else {
         let mnemonic = Mnemonic::from_phrase(seed_phrase, Language::English)?;
-        let passphrase =
-            prompt_password_stderr(&format!("[{}] (optional) passphrase: ", keypair_name))?;
+        let passphrase = prompt_password_stderr(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
         keypair_from_seed(seed.as_bytes())
     }
@@ -53,7 +55,10 @@ pub fn keypair_input(
     let ask_seed_phrase_matches =
         values_t!(matches.values_of(ASK_SEED_PHRASE_ARG), String).unwrap_or_default();
     let keypair_match_name = keypair_name.replace('-', "_");
-    if ask_seed_phrase_matches.iter().any(|s| s.as_str() == keypair_name) {
+    if ask_seed_phrase_matches
+        .iter()
+        .any(|s| s.as_str() == keypair_name)
+    {
         if matches.value_of(keypair_match_name).is_some() {
             let ask_seed_phrase_kebab = ASK_SEED_PHRASE_ARG.replace('_', "-");
             clap::Error::with_description(
