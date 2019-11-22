@@ -677,34 +677,6 @@ impl AccountsDB {
     }
 
     // PERF: Sequentially read each storage entry in parallel
-    pub fn scan_account_storage_slow<F, B>(&self, slot_id: Slot, scan_func: F) -> Vec<B>
-    where
-        F: Fn(&StoredAccount, AppendVecId, &mut B, Arc<AccountStorageEntry>) -> () + Send + Sync,
-        B: Send + Default,
-    {
-        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-            .storage
-            .read()
-            .unwrap()
-            .0
-            .get(&slot_id)
-            .unwrap_or(&HashMap::new())
-            .values()
-            .cloned()
-            .collect();
-        storage_maps
-            .iter()
-            .map(|storage| {
-                let mut retval = B::default();
-                let accounts = storage.all_existing_accounts();
-                accounts.iter().for_each(|stored_account| {
-                    scan_func(stored_account, storage.id, &mut retval, storage.clone())
-                });
-                retval
-            })
-            .collect()
-    }
-
     pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
         let mut slot_hashes = self.slot_hashes.write().unwrap();
         let hash = *slot_hashes
@@ -1130,16 +1102,16 @@ impl AccountsDB {
     }
 
     fn merge(
-        dest: &mut HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
-        source: &HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
+        dest: &mut HashMap<Pubkey, (u64, AccountInfo)>,
+        source: &HashMap<Pubkey, (u64, AccountInfo)>,
     ) {
-        for (key, (source_version, source_info, entry)) in source.iter() {
-            if let Some((dest_version, _, _)) = dest.get(key) {
+        for (key, (source_version, source_info)) in source.iter() {
+            if let Some((dest_version, _)) = dest.get(key) {
                 if dest_version > source_version {
                     continue;
                 }
             }
-            dest.insert(*key, (*source_version, source_info.clone(), entry.clone()));
+            dest.insert(*key, (*source_version, source_info.clone()));
         }
     }
 
@@ -1170,15 +1142,13 @@ impl AccountsDB {
                 storage.restore_account_count();
             }
 
-            #[allow(clippy::type_complexity)]
             let mut accumulator: Vec<
-                HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
-            > = self.scan_account_storage_slow(
+                HashMap<Pubkey, (u64, AccountInfo)>,
+            > = self.scan_account_storage(
                 *slot_id,
                 |stored_account: &StoredAccount,
                  id: AppendVecId,
-                 accum: &mut HashMap<Pubkey, (u64, AccountInfo, Arc<AccountStorageEntry>)>,
-                 entry: Arc<AccountStorageEntry>| {
+                 accum: &mut HashMap<Pubkey, (u64, AccountInfo)>| {
                     let account_info = AccountInfo {
                         id,
                         offset: stored_account.offset,
@@ -1186,7 +1156,7 @@ impl AccountsDB {
                     };
                     accum.insert(
                         stored_account.meta.pubkey,
-                        (stored_account.meta.write_version, account_info, entry),
+                        (stored_account.meta.write_version, account_info),
                     );
                 },
             );
@@ -1206,7 +1176,7 @@ impl AccountsDB {
                     .values()
                     .cloned()
                     .collect();
-                for (pubkey, (version, _account_info, storage_entry)) in account_maps.iter() {
+                for (pubkey, (version, _account_info)) in account_maps.iter() {
                     storage_maps.iter().for_each(|storage| {
                         storage.all_existing_accounts().iter().for_each(|a| {
                             if a.meta.pubkey == *pubkey && *version != a.meta.write_version {
@@ -1220,7 +1190,7 @@ impl AccountsDB {
                 accounts_index.roots.insert(*slot_id);
                 trace!("ryoqun account_maps: {:?}", account_maps.len());
                 let mut reclaims: Vec<(u64, AccountInfo)> = vec![];
-                for (pubkey, (_, account_info, _)) in account_maps.iter() {
+                for (pubkey, (_, account_info)) in account_maps.iter() {
                     trace!(
                         "ryoqun slot: {}, account_info: {:?}",
                         *slot_id,
