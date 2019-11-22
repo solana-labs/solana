@@ -9,7 +9,6 @@ use crate::{
     rpc_subscriptions::RpcSubscriptions,
     thread_mem_usage,
 };
-use jemalloc_ctl::thread::allocatedp;
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
@@ -220,8 +219,7 @@ impl ReplayStage {
                 let mut last_reset = Hash::default();
                 let mut partition = false;
                 loop {
-                    let allocated = allocatedp::mib().unwrap();
-                    let allocated = allocated.read().unwrap();
+                    let allocated = thread_mem_usage::Allocatedp::default();
 
                     thread_mem_usage::datapoint("solana-replay-stage");
                     let now = Instant::now();

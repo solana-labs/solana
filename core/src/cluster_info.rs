@@ -30,7 +30,6 @@ use crate::{
 use bincode::{serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
-use jemalloc_ctl::thread::allocatedp;
 use rand::{thread_rng, Rng};
 use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree, staking_utils};
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
@@ -1221,8 +1220,7 @@ impl ClusterInfo {
         response_sender: &PacketSender,
     ) {
         // iter over the packets, collect pulls separately and process everything else
-        let allocated = allocatedp::mib().unwrap();
-        let allocated = allocated.read().unwrap();
+        let allocated = thread_mem_usage::Allocatedp::default();
         let mut gossip_pull_data: Vec<PullData> = vec![];
         packets.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();
