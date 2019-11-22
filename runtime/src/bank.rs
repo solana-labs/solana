@@ -1413,11 +1413,7 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let accounts_delta_hash = self
-            .rc
-            .accounts
-            .hash_internal_state(self.slot())
-            .expect("No accounts delta was found for this bank, that should not be possible");
+        let accounts_delta_hash = self.rc.accounts.hash_internal_state(self.slot());
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
         hashv(&[
