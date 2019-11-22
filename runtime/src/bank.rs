@@ -54,6 +54,8 @@ use std::{
 
 pub const SECONDS_PER_YEAR: f64 = (365.25 * 24.0 * 60.0 * 60.0);
 
+const MAX_LEADER_SCHEDULE_STAKES: Epoch = 200; // what value shold this be???
+
 type BankStatusCache = StatusCache<Result<()>>;
 
 #[derive(Default)]
@@ -386,14 +388,7 @@ impl Bank {
             }
         }
 
-        // update epoch_stakes cache
-        //  if my parent didn't populate for this staker's epoch, we've
-        //  crossed a boundary
-        if new.epoch_stakes.get(&leader_schedule_epoch).is_none() {
-            new.epoch_stakes
-                .insert(leader_schedule_epoch, new.stakes.read().unwrap().clone());
-        }
-
+        new.update_epoch_stakes(leader_schedule_epoch);
         new.ancestors.insert(new.slot(), 0);
         new.parents().iter().enumerate().for_each(|(i, p)| {
             new.ancestors.insert(p.slot(), i + 1);
@@ -484,6 +479,23 @@ impl Bank {
         slot_hashes.to_account(&mut account).unwrap();
 
         self.store_account(&sysvar::slot_hashes::id(), &account);
+    }
+
+    fn update_epoch_stakes(&mut self, leader_schedule_epoch: Epoch) {
+        // update epoch_stakes cache
+        //  if my parent didn't populate for this staker's epoch, we've
+        //  crossed a boundary
+        if self.epoch_stakes.get(&leader_schedule_epoch).is_none() {
+            // should add assertion for incremental insersion for epochs?
+
+            self.epoch_stakes
+                .insert(leader_schedule_epoch, self.stakes.read().unwrap().clone());
+
+            if leader_schedule_epoch >= MAX_LEADER_SCHEDULE_STAKES {
+                self.epoch_stakes
+                    .remove(&(leader_schedule_epoch - MAX_LEADER_SCHEDULE_STAKES));
+            }
+        }
     }
 
     fn update_fees(&self) {
@@ -1741,6 +1753,45 @@ mod tests {
         assert_eq!(bank0.block_height(), 0);
         let bank1 = Arc::new(new_from_parent(&bank0));
         assert_eq!(bank1.block_height(), 1);
+    }
+
+    impl Bank {
+        fn epoch_stake_keys(&self) -> Vec<Epoch> {
+            let mut keys: Vec<Epoch> = self.epoch_stakes.keys().map(|k| *k).collect();
+            keys.sort();
+            keys
+        }
+
+        fn epoch_stake_key_info(&self) -> (Epoch, Epoch, usize) {
+            let mut keys: Vec<Epoch> = self.epoch_stakes.keys().map(|k| *k).collect();
+            keys.sort();
+            (*keys.first().unwrap(), *keys.last().unwrap(), keys.len())
+        }
+    }
+
+    #[test]
+    fn test_bank_update_epoch_stakes() {
+        let (genesis_config, mint_keypair) = create_genesis_config(100_000);
+        let mut bank = Bank::new(&genesis_config);
+
+        let initial_epochs = bank.epoch_stake_keys();
+        assert_eq!(initial_epochs, vec![0, 1]);
+
+        for existing_epoch in &initial_epochs {
+            bank.update_epoch_stakes(*existing_epoch);
+            assert_eq!(bank.epoch_stake_keys(), initial_epochs);
+        }
+
+        for epoch in (initial_epochs.len() as Epoch)..MAX_LEADER_SCHEDULE_STAKES {
+            bank.update_epoch_stakes(epoch);
+            assert_eq!(bank.epoch_stakes.len() as Epoch, epoch + 1);
+        }
+
+        bank.update_epoch_stakes(MAX_LEADER_SCHEDULE_STAKES);
+        assert_eq!(bank.epoch_stake_key_info(), (1, 200, 200));
+
+        bank.update_epoch_stakes(MAX_LEADER_SCHEDULE_STAKES + 1);
+        assert_eq!(bank.epoch_stake_key_info(), (2, 201, 200));
     }
 
     #[test]
