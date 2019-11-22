@@ -1142,24 +1142,23 @@ impl AccountsDB {
                 storage.restore_account_count();
             }
 
-            let mut accumulator: Vec<
-                HashMap<Pubkey, (u64, AccountInfo)>,
-            > = self.scan_account_storage(
-                *slot_id,
-                |stored_account: &StoredAccount,
-                 id: AppendVecId,
-                 accum: &mut HashMap<Pubkey, (u64, AccountInfo)>| {
-                    let account_info = AccountInfo {
-                        id,
-                        offset: stored_account.offset,
-                        lamports: stored_account.account_meta.lamports,
-                    };
-                    accum.insert(
-                        stored_account.meta.pubkey,
-                        (stored_account.meta.write_version, account_info),
-                    );
-                },
-            );
+            let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
+                .scan_account_storage(
+                    *slot_id,
+                    |stored_account: &StoredAccount,
+                     id: AppendVecId,
+                     accum: &mut HashMap<Pubkey, (u64, AccountInfo)>| {
+                        let account_info = AccountInfo {
+                            id,
+                            offset: stored_account.offset,
+                            lamports: stored_account.account_meta.lamports,
+                        };
+                        accum.insert(
+                            stored_account.meta.pubkey,
+                            (stored_account.meta.write_version, account_info),
+                        );
+                    },
+                );
 
             let mut account_maps = accumulator.pop().unwrap();
             while let Some(maps) = accumulator.pop() {
@@ -1179,10 +1178,11 @@ impl AccountsDB {
                 for (pubkey, (version, _account_info)) in account_maps.iter() {
                     storage_maps.iter().for_each(|storage| {
                         storage.all_existing_accounts().iter().for_each(|a| {
-                            if a.meta.pubkey == *pubkey && *version != a.meta.write_version {
-                                if storage.remove_account() == 0 {
-                                    dead_slots.insert(*slot_id);
-                                }
+                            if a.meta.pubkey == *pubkey
+                                && *version != a.meta.write_version
+                                && storage.remove_account() == 0
+                            {
+                                dead_slots.insert(*slot_id);
                             }
                         })
                     });
