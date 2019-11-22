@@ -1,15 +1,18 @@
 use clap::{crate_description, crate_name, App, Arg};
 use console::style;
-use solana_clap_utils::input_validators::is_keypair;
+use solana_clap_utils::{
+    input_validators::is_keypair,
+    keypair::{
+        self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
+        SKIP_SEED_PHRASE_VALIDATION_ARG,
+    },
+};
 use solana_core::{
     archiver::Archiver,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
 };
-use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    signature::{read_keypair_file, Keypair, KeypairUtil},
-};
+use solana_sdk::{commitment_config::CommitmentConfig, signature::KeypairUtil};
 use std::{net::SocketAddr, path::PathBuf, process::exit, sync::Arc};
 
 fn main() {
@@ -19,9 +22,9 @@ fn main() {
         .about(crate_description!())
         .version(solana_clap_utils::version!())
         .arg(
-            Arg::with_name("identity")
+            Arg::with_name("identity_keypair")
                 .short("i")
-                .long("identity")
+                .long("identity-keypair")
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair)
@@ -52,30 +55,48 @@ fn main() {
                 .long("storage-keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .required(true)
                 .validator(is_keypair)
                 .help("File containing the storage account keypair"),
+        )
+        .arg(
+            Arg::with_name(ASK_SEED_PHRASE_ARG.name)
+                .long(ASK_SEED_PHRASE_ARG.long)
+                .value_name("KEYPAIR NAME")
+                .multiple(true)
+                .takes_value(true)
+                .possible_values(&["identity-keypair", "storage-keypair"])
+                .help(ASK_SEED_PHRASE_ARG.help),
+        )
+        .arg(
+            Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
+                .requires(ASK_SEED_PHRASE_ARG.name)
+                .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
         )
         .get_matches();
 
     let ledger_path = PathBuf::from(matches.value_of("ledger").unwrap());
 
-    let keypair = if let Some(identity) = matches.value_of("identity") {
-        read_keypair_file(identity).unwrap_or_else(|err| {
-            eprintln!("{}: Unable to open keypair file: {}", err, identity);
+    let identity_keypair = keypair_input(&matches, "identity_keypair")
+        .unwrap_or_else(|err| {
+            eprintln!("Identity keypair input failed: {}", err);
             exit(1);
         })
-    } else {
-        Keypair::new()
-    };
-    let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
-        read_keypair_file(storage_keypair).unwrap_or_else(|err| {
-            eprintln!("{}: Unable to open keypair file: {}", err, storage_keypair);
-            exit(1);
-        })
-    } else {
-        Keypair::new()
-    };
+        .keypair;
+    let KeypairWithSource {
+        keypair: storage_keypair,
+        source: storage_keypair_source,
+    } = keypair_input(&matches, "storage_keypair").unwrap_or_else(|err| {
+        eprintln!("Storage keypair input failed: {}", err);
+        exit(1);
+    });
+    if storage_keypair_source == keypair::Source::Generated {
+        clap::Error::with_description(
+            "The `storage-keypair` argument was not found",
+            clap::ErrorKind::ArgumentNotFound,
+        )
+        .exit();
+    }
 
     let entrypoint_addr = matches
         .value_of("entrypoint")
@@ -91,8 +112,11 @@ fn main() {
         addr.set_ip(solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap());
         addr
     };
-    let node =
-        Node::new_archiver_with_external_ip(&keypair.pubkey(), &gossip_addr, VALIDATOR_PORT_RANGE);
+    let node = Node::new_archiver_with_external_ip(
+        &identity_keypair.pubkey(),
+        &gossip_addr,
+        VALIDATOR_PORT_RANGE,
+    );
 
     println!(
         "{} version {} (branch={}, commit={})",
@@ -101,10 +125,10 @@ fn main() {
         option_env!("CI_BRANCH").unwrap_or("unknown"),
         option_env!("CI_COMMIT").unwrap_or("unknown")
     );
-    solana_metrics::set_host_id(keypair.pubkey().to_string());
+    solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     println!(
-        "replicating the data with keypair={:?} gossip_addr={:?}",
-        keypair.pubkey(),
+        "replicating the data with identity_keypair={:?} gossip_addr={:?}",
+        identity_keypair.pubkey(),
         gossip_addr
     );
 
@@ -113,7 +137,7 @@ fn main() {
         &ledger_path,
         node,
         entrypoint_info,
-        Arc::new(keypair),
+        Arc::new(identity_keypair),
         Arc::new(storage_keypair),
         CommitmentConfig::recent(),
     )

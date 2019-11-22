@@ -17,6 +17,12 @@ macro_rules! version {
     };
 }
 
+pub struct ArgConstant<'a> {
+    pub long: &'a str,
+    pub name: &'a str,
+    pub help: &'a str,
+}
+
 pub mod input_parsers;
 pub mod input_validators;
 pub mod keypair;

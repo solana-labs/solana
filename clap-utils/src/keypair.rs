@@ -1,3 +1,4 @@
+use crate::ArgConstant;
 use bip39::{Language, Mnemonic, Seed};
 use clap::values_t;
 use rpassword::prompt_password_stderr;
@@ -5,13 +6,57 @@ use solana_sdk::signature::{
     keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair,
     KeypairUtil,
 };
-use std::error;
+use std::{error, fmt};
 
-pub const ASK_SEED_PHRASE_ARG: &str = "ask_seed_phrase";
-pub const SKIP_SEED_PHRASE_VALIDATION_ARG: &str = "skip_seed_phrase_validation";
+pub const ASK_SEED_PHRASE_ARG: ArgConstant<'static> = ArgConstant {
+    long: "ask-seed-phrase",
+    name: "ask_seed_phrase",
+    help: "Securely recover a keypair using a seed phrase and optional passphrase",
+};
+
+pub const SKIP_SEED_PHRASE_VALIDATION_ARG: ArgConstant<'static> = ArgConstant {
+    long: "skip-seed-phrase-validation",
+    name: "skip_seed_phrase_validation",
+    help: "Skip validation of seed phrases. Use this if your phrase does not use the BIP39 official English word list",
+};
+
+#[derive(PartialEq)]
+pub enum Source {
+    File,
+    Generated,
+    SeedPhrase,
+}
+
+pub struct KeypairWithSource {
+    pub keypair: Keypair,
+    pub source: Source,
+}
+
+impl KeypairWithSource {
+    fn new(keypair: Keypair, source: Source) -> Self {
+        Self { keypair, source }
+    }
+}
+
+#[derive(Debug)]
+pub struct Error(Box<dyn error::Error>);
+
+impl error::Error for Error {}
+
+impl From<Box<dyn error::Error>> for Error {
+    fn from(err: Box<dyn error::Error>) -> Self {
+        Self(err)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Reads user input from stdin to retrieve a seed phrase and passphrase for keypair derivation
-pub fn keypair_from_seed_phrase(
+fn keypair_from_seed_phrase(
     keypair_name: &str,
     skip_validation: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
@@ -33,17 +78,6 @@ pub fn keypair_from_seed_phrase(
     }
 }
 
-pub struct KeypairWithGenerated {
-    pub keypair: Keypair,
-    pub generated: bool,
-}
-
-impl KeypairWithGenerated {
-    fn new(keypair: Keypair, generated: bool) -> Self {
-        Self { keypair, generated }
-    }
-}
-
 /// Checks CLI arguments to determine whether a keypair should be:
 ///   - inputted securely via stdin,
 ///   - read in from a file,
@@ -51,33 +85,35 @@ impl KeypairWithGenerated {
 pub fn keypair_input(
     matches: &clap::ArgMatches,
     keypair_name: &str,
-) -> Result<KeypairWithGenerated, Box<dyn error::Error>> {
+) -> Result<KeypairWithSource, Error> {
     let ask_seed_phrase_matches =
-        values_t!(matches.values_of(ASK_SEED_PHRASE_ARG), String).unwrap_or_default();
+        values_t!(matches.values_of(ASK_SEED_PHRASE_ARG.name), String).unwrap_or_default();
     let keypair_match_name = keypair_name.replace('-', "_");
     if ask_seed_phrase_matches
         .iter()
         .any(|s| s.as_str() == keypair_name)
     {
         if matches.value_of(keypair_match_name).is_some() {
-            let ask_seed_phrase_kebab = ASK_SEED_PHRASE_ARG.replace('_', "-");
             clap::Error::with_description(
                 &format!(
                     "`--{} {}` cannot be used with `{} <PATH>`",
-                    ask_seed_phrase_kebab, keypair_name, keypair_name
+                    ASK_SEED_PHRASE_ARG.long, keypair_name, keypair_name
                 ),
                 clap::ErrorKind::ArgumentConflict,
             )
             .exit();
         }
 
-        let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG);
+        let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
         keypair_from_seed_phrase(keypair_name, skip_validation)
-            .map(|keypair| KeypairWithGenerated::new(keypair, false))
+            .map(|keypair| KeypairWithSource::new(keypair, Source::SeedPhrase))
+            .map_err(|err| err.into())
     } else if let Some(keypair_file) = matches.value_of(keypair_match_name) {
-        read_keypair_file(keypair_file).map(|keypair| KeypairWithGenerated::new(keypair, false))
+        read_keypair_file(keypair_file)
+            .map(|keypair| KeypairWithSource::new(keypair, Source::File))
+            .map_err(|err| err.into())
     } else {
-        Ok(KeypairWithGenerated::new(Keypair::new(), true))
+        Ok(KeypairWithSource::new(Keypair::new(), Source::Generated))
     }
 }
 
@@ -89,7 +125,7 @@ mod tests {
     #[test]
     fn test_keypair_input() {
         let arg_matches = ArgMatches::default();
-        let KeypairWithGenerated { generated, .. } = keypair_input(&arg_matches, "").unwrap();
-        assert!(generated);
+        let KeypairWithSource { source, .. } = keypair_input(&arg_matches, "").unwrap();
+        assert!(source, Source::Generated);
     }
 }

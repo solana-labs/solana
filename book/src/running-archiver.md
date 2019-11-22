@@ -138,7 +138,7 @@ Note: Every time the testnet restarts, run the steps to setup the archiver accou
 To start the archiver:
 
 ```bash
-solana-archiver --entrypoint testnet.solana.com:8001 --identity archiver-keypair.json --storage-keypair storage-keypair.json --ledger archiver-ledger
+solana-archiver --entrypoint testnet.solana.com:8001 --identity-keypair archiver-keypair.json --storage-keypair storage-keypair.json --ledger archiver-ledger
 ```
 
 ## Verify Archiver Setup
