@@ -18,26 +18,26 @@ if [ ! -f "${SOLANA_LOCK_FILE}" ]; then
     echo "[ -v SSH_TTY -a -f \"${HOME}/.solana-motd\" ] && cat \"${HOME}/.solana-motd\" 1>&2"
   } >&9 ) || ( rm "${SOLANA_LOCK_FILE}" && echo "SOLANA_USER undefined" 1>&2 && false )
   exec 9>&-
-  cat > /solana-scratch/id_ecdsa <<EOK
+  cat > /solana-scratch/id_ecdsa <<EOF
 ${SSH_PRIVATE_KEY_TEXT}
-EOK
-  cat > /solana-scratch/id_ecdsa.pub <<EOK
+EOF
+  cat > /solana-scratch/id_ecdsa.pub <<EOF
 ${SSH_PUBLIC_KEY_TEXT}
-EOK
+EOF
   chmod 0600 /solana-scratch/id_ecdsa
-  cat > /solana-scratch/authorized_keys <<EOAK
+  cat > /solana-scratch/authorized_keys <<EOF
 ${SSH_AUTHORIZED_KEYS}
 ${SSH_PUBLIC_KEY_TEXT}
-EOAK
+EOF
   cp /solana-scratch/id_ecdsa "${HOME}/.ssh/id_ecdsa"
   cp /solana-scratch/id_ecdsa.pub "${HOME}/.ssh/id_ecdsa.pub"
   cp /solana-scratch/authorized_keys "${HOME}/.ssh/authorized_keys"
-  cat > "${HOME}/.solana-motd" <<EOM
+  cat > "${HOME}/.solana-motd" <<EOF
 
 
 ${NETWORK_INFO}
 ${CREATION_INFO}
-EOM
+EOF
 
   # Stamp creation MUST be last!
   touch /solana-scratch/.instance-startup-complete
