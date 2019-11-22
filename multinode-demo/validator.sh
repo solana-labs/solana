@@ -36,7 +36,6 @@ EOF
 args=()
 airdrops_enabled=1
 node_lamports=500000000000 # 500 SOL: number of lamports to airdrop the node for transaction fees (ignored if airdrops_enabled=0)
-poll_for_new_genesis_config=0
 label=
 identity_keypair_path=
 voting_keypair_path=
@@ -53,9 +52,6 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --no-restart ]]; then
       no_restart=1
-      shift
-    elif [[ $1 = --poll-for-new-genesis-config ]]; then
-      poll_for_new_genesis_config=1
       shift
     elif [[ $1 = --node-lamports ]]; then
       node_lamports="$2"
@@ -226,26 +222,6 @@ if [[ -z $CI ]]; then # Skip in CI
   source "$here"/../scripts/tune-system.sh
 fi
 
-new_genesis_config() {
-  if [[ ! -d "$ledger_dir" ]]; then
-    return
-  fi
-
-  rm -f "$ledger_dir"/new-genesis.tar.bz2
-  (
-    set -x
-    curl -f "$rpc_url"/genesis.tar.bz2 -o "$ledger_dir"/new-genesis.tar.bz2
-  ) || {
-    echo "Error: failed to fetch new genesis ledger"
-    rm -f "$ledger_dir"/new-genesis.tar.bz2
-  }
-  if [[ -f "$ledger_dir"/new-genesis.tar.bz2 ]]; then
-    diff -q "$ledger_dir"/new-genesis.tar.bz2 "$ledger_dir"/genesis.tar.bz2 >/dev/null 2>&1 && false
-  else
-    false
-  fi
-}
-
 set -e
 PS4="$(basename "$0"): "
 
@@ -321,28 +297,12 @@ while true; do
     exit $?
   fi
 
-  secs_to_next_genesis_poll=60
   while true; do
     if [[ -z $pid ]] || ! kill -0 "$pid"; then
       echo "############## validator exited, restarting ##############"
       break
     fi
-
     sleep 1
-
-    if ((poll_for_new_genesis_config && --secs_to_next_genesis_poll == 0)); then
-      echo "Polling for new genesis config..."
-      if new_genesis_config; then
-        echo "############## New genesis detected, restarting ##############"
-        (
-          set -x
-          rm -rf "$ledger_dir"
-        )
-        break
-      fi
-      secs_to_next_genesis_poll=60
-    fi
-
   done
 
   kill_node
