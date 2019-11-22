@@ -1220,7 +1220,7 @@ impl ClusterInfo {
         response_sender: &PacketSender,
     ) {
         // iter over the packets, collect pulls separately and process everything else
-        let allocated = thread_mem_usage::Allocatedp::new();
+        let allocated = thread_mem_usage::Allocatedp::default();
         let mut gossip_pull_data: Vec<PullData> = vec![];
         packets.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();

@@ -17,7 +17,7 @@ pub struct Allocatedp {
 }
 
 impl Allocatedp {
-    pub fn new() -> Self {
+    pub fn default() -> Self {
         #[cfg(unix)]
         {
             let allocated = thread::allocatedp::mib().unwrap();

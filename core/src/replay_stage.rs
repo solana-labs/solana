@@ -219,7 +219,7 @@ impl ReplayStage {
                 let mut last_reset = Hash::default();
                 let mut partition = false;
                 loop {
-                    let allocated = thread_mem_usage::Allocatedp::new();
+                    let allocated = thread_mem_usage::Allocatedp::default();
 
                     thread_mem_usage::datapoint("solana-replay-stage");
                     let now = Instant::now();
