@@ -1,5 +1,6 @@
 pub mod config_instruction;
 pub mod config_processor;
+pub mod date_instruction;
 
 use crate::config_processor::process_instruction;
 use bincode::{deserialize, serialize, serialized_size};
