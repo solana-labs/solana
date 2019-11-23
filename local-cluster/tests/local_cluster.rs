@@ -60,7 +60,7 @@ fn test_ledger_cleanup_service() {
     );
     cluster.close_preserve_ledgers();
     //check everyone's ledgers and make sure only ~100 slots are stored
-    for (_, info) in &cluster.validator_infos {
+    for (_, info) in &cluster.validators {
         let mut slots = 0;
         let blocktree = Blocktree::open(&info.info.ledger_path).unwrap();
         blocktree
@@ -224,7 +224,7 @@ fn run_network_partition(partitions: &[(usize, bool)]) {
         "PARTITION_TEST starting cluster with {:?} partitions",
         partitions
     );
-    let mut cluster = LocalCluster::new(&config);
+    let (mut cluster, validator_pubkeys) = LocalCluster::new_with_keys(&config);
     let now = timestamp();
     let timeout = partition_start as i64 - now as i64;
     info!(
@@ -242,19 +242,23 @@ fn run_network_partition(partitions: &[(usize, bool)]) {
         "PARTITION_TEST sleeping until partition end timeout {}",
         timeout
     );
-    let mut alive_node_contact_info = None;
+    let mut alive_node_contact_infos = vec![];
+    let should_exits: Vec<_> = partitions
+        .iter()
+        .flat_map(|(num, should_exit)| vec![should_exit; *num])
+        .collect();
+    assert_eq!(should_exits.len(), validator_pubkeys.len());
     if timeout > 0 {
         sleep(Duration::from_millis(timeout as u64));
-        let all_pubkeys = cluster.get_node_pubkeys();
-        for (pubkey, (_, should_exit)) in all_pubkeys.iter().zip(partitions) {
+        for (pubkey, should_exit) in validator_pubkeys.iter().zip(should_exits) {
             if *should_exit {
                 info!("Killing validator with id: {}", pubkey);
                 cluster.exit_node(pubkey);
                 dead_nodes.insert(*pubkey);
             } else {
-                alive_node_contact_info = Some(
+                alive_node_contact_infos.push(
                     cluster
-                        .validator_infos
+                        .validators
                         .get(pubkey)
                         .unwrap()
                         .info
@@ -264,25 +268,22 @@ fn run_network_partition(partitions: &[(usize, bool)]) {
             }
         }
     }
-    let alive_node_contact_info =
-        alive_node_contact_info.expect("Not all the validiators can be dead");
+
+    assert!(alive_node_contact_infos.len() > 0);
 
     info!("PARTITION_TEST done sleeping until partition end timeout");
     info!("PARTITION_TEST discovering nodes");
     let (cluster_nodes, _) = discover_cluster(
-        &alive_node_contact_info.gossip,
-        num_nodes - dead_nodes.len(),
+        &alive_node_contact_infos[0].gossip,
+        alive_node_contact_infos.len(),
     )
     .unwrap();
     info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
     info!("PARTITION_TEST looking for new roots on all nodes");
-    let mut roots = vec![HashSet::new(); cluster_nodes.len()];
+    let mut roots = vec![HashSet::new(); alive_node_contact_infos.len()];
     let mut done = false;
     while !done {
-        for (i, ingress_node) in cluster_nodes.iter().enumerate() {
-            if dead_nodes.contains(&ingress_node.id) {
-                continue;
-            }
+        for (i, ingress_node) in alive_node_contact_infos.iter().enumerate() {
             let client = create_client(
                 ingress_node.client_facing_addr(),
                 solana_core::cluster_info::VALIDATOR_PORT_RANGE,
@@ -355,10 +356,7 @@ fn test_two_unbalanced_stakes() {
     );
     cluster.close_preserve_ledgers();
     let leader_pubkey = cluster.entry_point_info.id;
-    let leader_ledger = cluster.validator_infos[&leader_pubkey]
-        .info
-        .ledger_path
-        .clone();
+    let leader_ledger = cluster.validators[&leader_pubkey].info.ledger_path.clone();
     cluster_tests::verify_ledger_ticks(&leader_ledger, num_ticks_per_slot as usize);
 }
 
@@ -619,7 +617,7 @@ fn test_snapshots_blocktree_floor() {
 
     // Check the validator ledger doesn't contain any slots < slot_floor
     cluster.close_preserve_ledgers();
-    let validator_ledger_path = &cluster.validator_infos[&validator_id];
+    let validator_ledger_path = &cluster.validators[&validator_id];
     let blocktree = Blocktree::open(&validator_ledger_path.info.ledger_path).unwrap();
 
     // Skip the zeroth slot in blocktree that the ledger is initialized with
@@ -757,7 +755,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     );
 
     let corrupt_node = cluster
-        .validator_infos
+        .validators
         .iter()
         .find(|(_, v)| v.config.broadcast_stage_type == faulty_node_type)
         .unwrap()
@@ -804,10 +802,7 @@ fn test_no_voting() {
 
     cluster.close_preserve_ledgers();
     let leader_pubkey = cluster.entry_point_info.id;
-    let ledger_path = cluster.validator_infos[&leader_pubkey]
-        .info
-        .ledger_path
-        .clone();
+    let ledger_path = cluster.validators[&leader_pubkey].info.ledger_path.clone();
     let ledger = Blocktree::open(&ledger_path).unwrap();
     for i in 0..2 * VOTE_THRESHOLD_DEPTH {
         let meta = ledger.meta(i as u64).unwrap().unwrap();
