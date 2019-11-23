@@ -7,7 +7,8 @@ use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_keypair, is_pubkey_or_keypair},
     keypair::{
-        keypair_input, KeypairWithGenerated, ASK_SEED_PHRASE_ARG, SKIP_SEED_PHRASE_VALIDATION_ARG,
+        self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
+        SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
 };
 use solana_client::rpc_client::RpcClient;
@@ -326,19 +327,19 @@ pub fn main() {
                 .help("Stream entries to this unix domain socket path")
         )
         .arg(
-            Arg::with_name(ASK_SEED_PHRASE_ARG)
-                .long("ask-seed-phrase")
+            Arg::with_name(ASK_SEED_PHRASE_ARG.name)
+                .long(ASK_SEED_PHRASE_ARG.long)
                 .value_name("KEYPAIR NAME")
                 .multiple(true)
                 .takes_value(true)
                 .possible_values(&["identity-keypair", "storage-keypair", "voting-keypair"])
-                .help("Securely recover a keypair using a seed phrase and optional passphrase"),
+                .help(ASK_SEED_PHRASE_ARG.help),
         )
         .arg(
-            Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG)
-                .long("skip-seed-phrase-validation")
-                .requires(ASK_SEED_PHRASE_ARG)
-                .help("Skip validation of seed phrases. Use this if your phrase does not use the BIP39 official English word list"),
+            Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
+                .requires(ASK_SEED_PHRASE_ARG.name)
+                .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
         )
         .arg(
             Arg::with_name("identity_keypair")
@@ -546,13 +547,14 @@ pub fn main() {
             })
             .keypair,
     );
-    let KeypairWithGenerated {
+    let KeypairWithSource {
         keypair: voting_keypair,
-        generated: ephemeral_voting_keypair,
+        source: voting_keypair_source,
     } = keypair_input(&matches, "voting-keypair").unwrap_or_else(|err| {
         eprintln!("Voting keypair input failed: {}", err);
         exit(1);
     });
+    let ephemeral_voting_keypair = voting_keypair_source == keypair::Source::Generated;
     let storage_keypair = keypair_input(&matches, "storage-keypair")
         .unwrap_or_else(|err| {
             eprintln!("Storage keypair input failed: {}", err);

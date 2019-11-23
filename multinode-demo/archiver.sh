@@ -18,7 +18,7 @@ while [[ -n $1 ]]; do
       entrypoint=$2
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --identity ]]; then
+    elif [[ $1 = --identity-keypair ]]; then
       identity_keypair=$2
       [[ -r $identity_keypair ]] || {
         echo "$identity_keypair does not exist"
@@ -74,7 +74,7 @@ if [[ ! -r $storage_keypair ]]; then
 fi
 
 default_arg --entrypoint "$entrypoint"
-default_arg --identity "$identity_keypair"
+default_arg --identity-keypair "$identity_keypair"
 default_arg --storage-keypair "$storage_keypair"
 default_arg --ledger "$ledger"
 
