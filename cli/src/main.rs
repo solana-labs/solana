@@ -186,7 +186,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Arg::with_name(ASK_SEED_PHRASE_ARG.name)
             .long(ASK_SEED_PHRASE_ARG.long)
             .value_name("KEYPAIR NAME")
-            .multiple(true)
             .global(true)
             .takes_value(true)
             .possible_values(&["keypair"])
@@ -195,7 +194,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     .arg(
         Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
             .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
-            .requires(ASK_SEED_PHRASE_ARG.name)
             .global(true)
             .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
     )
