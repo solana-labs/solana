@@ -1,0 +1,17 @@
+[package]
+name = "rayoff"
+version = "0.21.0"
+authors = ["Anatoly Yakovenko <anatoly@solana.com>"]
+
+[dependencies]
+sys-info = "0.5.8" 
+
+[dev-dependencies]
+rayon = "1.1"
+
+[lib]
+crate-type = ["lib"]
+name = "rayoff"
+
+[[bench]]                                           
+name = "rayoff"

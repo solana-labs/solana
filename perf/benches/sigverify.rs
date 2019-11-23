@@ -24,6 +24,19 @@ fn bench_sigverify(bencher: &mut Bencher) {
 }
 
 #[bench]
+fn bench_sigverify_rayoff(bencher: &mut Bencher) {
+    let tx = test_tx();
+
+    // generate packet vector
+    let batches = to_packets(&vec![tx; 128]);
+
+    // verify packets
+    bencher.iter(|| {
+        let _ans = sigverify::ed25519_verify_rayoff(&batches);
+    })
+}
+
+#[bench]
 fn bench_get_offsets(bencher: &mut Bencher) {
     let tx = test_tx();
 

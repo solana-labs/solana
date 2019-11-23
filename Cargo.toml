@@ -42,6 +42,7 @@ members = [
     "programs/vote",
     "archiver",
     "runtime",
+    "rayoff",
     "sdk",
     "sdk-c",
     "upload-perf",
