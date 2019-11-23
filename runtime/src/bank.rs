@@ -41,7 +41,7 @@ use solana_sdk::{
     slot_hashes::SlotHashes,
     system_transaction,
     sysvar::{self, Sysvar},
-    timing::{duration_as_ns, years_as_slots},
+    timing::duration_as_ns,
     transaction::{Result, Transaction, TransactionError},
 };
 use std::{
@@ -1674,6 +1674,7 @@ mod tests {
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_LEADER_LAMPORTS,
         },
         status_cache::MAX_CACHE_ENTRIES,
+        timing::years_as_slots,
     };
     use bincode::{deserialize_from, serialize_into, serialized_size};
     use solana_sdk::instruction::AccountMeta;
