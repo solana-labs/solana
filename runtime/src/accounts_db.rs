@@ -1121,6 +1121,29 @@ impl AccountsDB {
                 }
             }
         }
+
+        let mut counts = HashMap::new();
+        for slot_list in accounts_index.account_maps.values() {
+            for (_slot, account_entry) in slot_list.read().unwrap().iter() {
+                *counts.entry(account_entry.id).or_insert(0) += 1;
+            }
+        }
+        for slot_stores in storage.0.values() {
+            for (id, store) in slot_stores {
+                if let Some(count) = counts.get(&id) {
+                    trace!(
+                        "id: {} setting count: {} cur: {}",
+                        id,
+                        count,
+                        store.count_and_status.read().unwrap().0
+                    );
+                    store.count_and_status.write().unwrap().0 = *count;
+                } else {
+                    trace!("id: {} clearing count", id);
+                    store.count_and_status.write().unwrap().0 = 0;
+                }
+            }
+        }
     }
 }
 
@@ -1382,7 +1405,7 @@ pub mod tests {
 
     fn check_accounts(
         accounts: &AccountsDB,
-        pubkeys: &Vec<Pubkey>,
+        pubkeys: &[Pubkey],
         slot: Slot,
         num: usize,
         count: usize,
@@ -1600,21 +1623,62 @@ pub mod tests {
         assert_eq!(accounts.load_slow(&ancestors, &pubkey), Some((account, 1)));
     }
 
+    fn print_count_and_status(label: &'static str, accounts: &AccountsDB) {
+        for (_slot, slot_stores) in &accounts.storage.read().unwrap().0 {
+            for (id, entry) in slot_stores {
+                info!(
+                    "{}: {} count_and_status: {:?}",
+                    label,
+                    id,
+                    *entry.count_and_status.read().unwrap()
+                );
+            }
+        }
+    }
+
     #[test]
     fn test_accounts_db_serialize() {
         solana_logger::setup();
         let accounts = AccountsDB::new_single();
         let mut pubkeys: Vec<Pubkey> = vec![];
+
+        // Create 100 accounts in slot 0
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         assert_eq!(check_storage(&accounts, 0, 100), true);
         check_accounts(&accounts, &pubkeys, 0, 100, 1);
+
+        // do some updates to those accounts and re-check
         modify_accounts(&accounts, &pubkeys, 0, 100, 2);
         check_accounts(&accounts, &pubkeys, 0, 100, 2);
         accounts.add_root(0);
 
         let mut pubkeys1: Vec<Pubkey> = vec![];
         let latest_slot = 1;
+
+        // Modify the first 10 of the slot 0 accounts as updates in slot 1
+        modify_accounts(&accounts, &pubkeys, latest_slot, 10, 3);
+
+        // Create 10 new accounts in slot 1
         create_account(&accounts, &mut pubkeys1, latest_slot, 10, 0, 0);
+
+        // Store a lamports=0 account in slot 1
+        let account = Account::new(0, 0, &Account::default().owner);
+        accounts.store(latest_slot, &[(&pubkeys[30], &account)]);
+        accounts.add_root(latest_slot);
+        info!("added root 1");
+
+        let latest_slot = 2;
+        let mut pubkeys2: Vec<Pubkey> = vec![];
+        // Modify original slot 0 accounts in slot 2
+        modify_accounts(&accounts, &pubkeys, latest_slot, 20, 4);
+
+        // Create 10 new accounts in slot 2
+        create_account(&accounts, &mut pubkeys2, latest_slot, 10, 0, 0);
+
+        // Store a lamports=0 account in slot 2
+        let account = Account::new(0, 0, &Account::default().owner);
+        accounts.store(latest_slot, &[(&pubkeys[31], &account)]);
+        accounts.add_root(latest_slot);
 
         let mut writer = Cursor::new(vec![]);
         serialize_into(
@@ -1622,17 +1686,21 @@ pub mod tests {
             &AccountsDBSerialize::new(&accounts, latest_slot),
         )
         .unwrap();
-        assert!(check_storage(&accounts, 0, 100));
-        assert!(check_storage(&accounts, 1, 10));
+        assert!(check_storage(&accounts, 0, 90));
+        assert!(check_storage(&accounts, 1, 21));
+        assert!(check_storage(&accounts, 2, 31));
 
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(None);
 
+        print_count_and_status("accounts", &accounts);
+
         let local_paths = {
             let paths = daccounts.paths.read().unwrap();
             AccountsDB::format_paths(paths.to_vec())
         };
+
         let copied_accounts = TempDir::new().unwrap();
         // Simulate obtaining a copy of the AppendVecs from a tarball
         copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
@@ -1650,16 +1718,21 @@ pub mod tests {
         );
 
         // Get the hash for the latest slot, which should be the only hash in the
-        // slot_hashes map on the deserializied AccountsDb
+        // slot_hashes map on the deserialized AccountsDb
         assert_eq!(daccounts.slot_hashes.read().unwrap().len(), 1);
         assert_eq!(
             daccounts.slot_hashes.read().unwrap().get(&latest_slot),
             accounts.slot_hashes.read().unwrap().get(&latest_slot)
         );
-        check_accounts(&daccounts, &pubkeys, 0, 100, 2);
+
+        print_count_and_status("daccounts", &daccounts);
+
+        // Don't check the first 35 accounts which have not been modified on slot 0
+        check_accounts(&daccounts, &pubkeys[35..], 0, 65, 37);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
-        assert!(check_storage(&daccounts, 0, 100));
-        assert!(check_storage(&daccounts, 1, 10));
+        assert!(check_storage(&daccounts, 0, 78));
+        assert!(check_storage(&daccounts, 1, 11));
+        assert!(check_storage(&daccounts, 2, 31));
     }
 
     #[test]

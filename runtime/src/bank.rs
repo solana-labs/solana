@@ -3605,6 +3605,9 @@ mod tests {
         bank.deposit(&key.pubkey(), 10);
         assert_eq!(bank.get_balance(&key.pubkey()), 10);
 
+        let key2 = Keypair::new();
+        bank.deposit(&key2.pubkey(), 0);
+
         let len = serialized_size(&bank).unwrap() + serialized_size(&bank.rc).unwrap();
         let mut buf = vec![0u8; len as usize];
         let mut writer = Cursor::new(&mut buf[..]);
@@ -3629,6 +3632,7 @@ mod tests {
             .accounts_from_stream(&mut reader, dbank_paths, copied_accounts.path())
             .unwrap();
         assert_eq!(dbank.get_balance(&key.pubkey()), 10);
+        assert_eq!(dbank.get_balance(&key2.pubkey()), 0);
         bank.compare_bank(&dbank);
     }
 
