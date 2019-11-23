@@ -41,7 +41,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("STAKE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_keypair)
+                        .validator(is_keypair_or_ask_keyword)
                         .help("Keypair of the stake account to fund")
                 )
                 .arg(

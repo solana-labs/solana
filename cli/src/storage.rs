@@ -35,7 +35,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("STORAGE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_keypair),
+                        .validator(is_keypair_or_ask_keyword),
                 ),
         )
         .subcommand(
@@ -55,7 +55,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("STORAGE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_keypair),
+                        .validator(is_keypair_or_ask_keyword),
                 ),
         )
         .subcommand(

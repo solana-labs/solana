@@ -1,3 +1,4 @@
+use crate::keypair::{keypair_from_seed_phrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG};
 use clap::ArgMatches;
 use solana_sdk::{
     native_token::sol_to_lamports,
@@ -32,7 +33,12 @@ where
 // Return the keypair for an argument with filename `name` or None if not present.
 pub fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
     if let Some(value) = matches.value_of(name) {
-        read_keypair_file(value).ok()
+        if value == ASK_KEYWORD {
+            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+            keypair_from_seed_phrase(name, skip_validation).ok()
+        } else {
+            read_keypair_file(value).ok()
+        }
     } else {
         None
     }

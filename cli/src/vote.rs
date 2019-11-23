@@ -30,7 +30,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("VOTE ACCOUNT KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_keypair)
+                        .validator(is_keypair_or_ask_keyword)
                         .help("Vote account keypair to fund"),
                 )
                 .arg(

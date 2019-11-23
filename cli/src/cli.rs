@@ -219,19 +219,28 @@ pub struct CliConfig {
     pub rpc_client: Option<RpcClient>,
 }
 
-impl Default for CliConfig {
-    fn default() -> CliConfig {
+impl CliConfig {
+    pub fn default_keypair_path() -> String {
         let mut keypair_path = dirs::home_dir().expect("home directory");
         keypair_path.extend(&[".config", "solana", "id.json"]);
+        keypair_path.to_str().unwrap().to_string()
+    }
 
+    pub fn default_json_rpc_url() -> String {
+        "http://127.0.0.1:8899".to_string()
+    }
+}
+
+impl Default for CliConfig {
+    fn default() -> CliConfig {
         CliConfig {
             command: CliCommand::Balance {
                 pubkey: Some(Pubkey::default()),
                 use_lamports_unit: false,
             },
-            json_rpc_url: "http://127.0.0.1:8899".to_string(),
+            json_rpc_url: Self::default_json_rpc_url(),
             keypair: Keypair::new(),
-            keypair_path: Some(keypair_path.to_str().unwrap().to_string()),
+            keypair_path: Some(Self::default_keypair_path()),
             rpc_client: None,
         }
     }

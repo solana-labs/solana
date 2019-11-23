@@ -1,3 +1,4 @@
+use crate::keypair::ASK_KEYWORD;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::read_keypair_file;
 
@@ -11,6 +12,16 @@ pub fn is_pubkey(string: String) -> Result<(), String> {
 
 // Return an error if a keypair file cannot be parsed.
 pub fn is_keypair(string: String) -> Result<(), String> {
+    read_keypair_file(&string)
+        .map(|_| ())
+        .map_err(|err| format!("{:?}", err))
+}
+
+// Return an error if a keypair file cannot be parsed
+pub fn is_keypair_or_ask_keyword(string: String) -> Result<(), String> {
+    if string.as_str() == ASK_KEYWORD {
+        return Ok(());
+    }
     read_keypair_file(&string)
         .map(|_| ())
         .map_err(|err| format!("{:?}", err))
