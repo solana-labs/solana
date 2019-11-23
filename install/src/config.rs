@@ -33,7 +33,7 @@ impl Config {
             json_rpc_url: json_rpc_url.to_string(),
             update_manifest_pubkey: *update_manifest_pubkey,
             current_update_manifest: None,
-            update_poll_secs: 60, // check for updates once a minute
+            update_poll_secs: 60 * 60, // check for updates once an hour
             explicit_release,
             releases_dir: PathBuf::from(data_dir).join("releases"),
             active_release_dir: PathBuf::from(data_dir).join("active_release"),

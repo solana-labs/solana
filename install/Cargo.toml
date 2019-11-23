@@ -26,7 +26,6 @@ reqwest = { version = "0.9.22", default-features = false, features = ["rustls-tl
 serde = "1.0.102"
 serde_derive = "1.0.102"
 serde_yaml = "0.8.11"
-sha2 = "0.8.0"
 solana-clap-utils = { path = "../clap-utils", version = "0.21.0" }
 solana-client = { path = "../client", version = "0.21.0" }
 solana-config-program = { path = "../programs/config", version = "0.21.0" }
