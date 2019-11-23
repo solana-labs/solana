@@ -188,37 +188,37 @@ fn test_leader_failure_4() {
     );
 }
 
-fn run_network_partition(partitions: &[(usize, bool)]) {
+fn run_network_partition(partitions: &[&[(usize, bool)]]) {
     solana_logger::setup();
     info!("PARTITION_TEST!");
-    let num_nodes = partitions.iter().map(|x| x.0).sum();
+    let num_nodes = partitions.iter().map(|x| x.len()).sum();
     let validator_config = ValidatorConfig::default();
+    let node_stakes: Vec<_> = partitions
+        .iter()
+        .flat_map(|p| p.iter().map(|(stake_weight, _)| 100 * *stake_weight as u64))
+        .collect();
+    let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100; num_nodes],
+        cluster_lamports,
+        node_stakes,
         validator_configs: vec![validator_config.clone(); num_nodes],
         ..ClusterConfig::default()
     };
     let now = timestamp();
     let partition_start = now + 60_000;
     let partition_end = partition_start + 10_000;
-    let mut total = 0;
-    for (j, (pn, _)) in partitions.iter().enumerate() {
-        info!(
-            "PARTITION_TEST configuring partition {} for nodes {} - {}",
-            j,
-            total,
-            total + *pn
-        );
-        for i in total..(total + *pn) {
+    let mut validator_index = 0;
+    for (i, partition) in partitions.iter().enumerate() {
+        for _ in partition.iter() {
             let mut p1 = Partition::default();
             p1.num_partitions = partitions.len();
-            p1.my_partition = j;
+            p1.my_partition = i;
             p1.start_ts = partition_start;
             p1.end_ts = partition_end;
-            config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p1]));
+            config.validator_configs[validator_index].partition_cfg =
+                Some(PartitionCfg::new(vec![p1]));
+            validator_index += 1;
         }
-        total += *pn;
     }
     info!(
         "PARTITION_TEST starting cluster with {:?} partitions",
@@ -245,7 +245,7 @@ fn run_network_partition(partitions: &[(usize, bool)]) {
     let mut alive_node_contact_infos = vec![];
     let should_exits: Vec<_> = partitions
         .iter()
-        .flat_map(|(num, should_exit)| vec![should_exit; *num])
+        .flat_map(|p| p.iter().map(|(_, should_exit)| should_exit))
         .collect();
     assert_eq!(should_exits.len(), validator_pubkeys.len());
     if timeout > 0 {
@@ -304,7 +304,7 @@ fn run_network_partition(partitions: &[(usize, bool)]) {
 #[test]
 #[serial]
 fn test_network_partition_1_2() {
-    run_network_partition(&[(1, false), (2, false)])
+    run_network_partition(&[&[(1, false)], &[(1, false), (1, false)]])
 }
 
 #[allow(unused_attributes)]
@@ -312,19 +312,19 @@ fn test_network_partition_1_2() {
 #[test]
 #[serial]
 fn test_network_partition_1_1() {
-    run_network_partition(&[(1, false), (1, false)])
+    run_network_partition(&[&[(1, false)], &[(1, false)]])
 }
 
 #[test]
 #[serial]
 fn test_network_partition_1_1_1() {
-    run_network_partition(&[(1, false), (1, false), (1, false)])
+    run_network_partition(&[&[(1, false)], &[(1, false)], &[(1, false)]])
 }
 
 #[test]
 #[serial]
 fn test_kill_partition() {
-    run_network_partition(&[(2, true), (1, false), (1, false), (1, false), (1, false)])
+    run_network_partition(&[&[(32, true)], &[(34, false)], &[(34, false)]])
 }
 
 #[test]
