@@ -13,8 +13,18 @@
 #   $ source ci/rust-version.sh
 #
 
-stable_version=1.39.0
-nightly_version=2019-11-13
+if [[ -n $RUST_STABLE_VERSION ]]; then
+  stable_version="$RUST_STABLE_VERSION"
+else
+  stable_version=1.39.0
+fi
+
+if [[ -n $RUST_NIGHTLY_VERSION ]]; then
+  nightly_version="$RUST_NIGHTLY_VERSION"
+else
+  nightly_version=2019-11-13
+fi
+
 
 export rust_stable="$stable_version"
 export rust_stable_docker_image=solanalabs/rust:"$stable_version"

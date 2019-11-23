@@ -13,7 +13,7 @@ source ci/_
 reportName="lcov-${CI_COMMIT:0:9}"
 
 if [[ -z $1 ]]; then
-   packages=( --lib --all --exclude solana-local-cluster )
+  packages=( --lib --all --exclude solana-local-cluster )
 else
   packages=( "$@" )
 fi
@@ -24,7 +24,7 @@ coverageFlags+=("-Ccodegen-units=1")     # Disable code generation parallelism w
 coverageFlags+=("-Cinline-threshold=0")  # Disable inlining, which complicates control flow.
 coverageFlags+=("-Coverflow-checks=off") # Disable overflow checks, which create unnecessary branches.
 
-export RUSTFLAGS="${coverageFlags[*]}"
+export RUSTFLAGS="${coverageFlags[*]} $RUSTFLAGS"
 export CARGO_INCREMENTAL=0
 export RUST_BACKTRACE=1
 export RUST_MIN_STACK=8388608
