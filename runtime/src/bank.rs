@@ -1674,7 +1674,6 @@ mod tests {
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_LEADER_LAMPORTS,
         },
         status_cache::MAX_CACHE_ENTRIES,
-        timing::years_as_slots,
     };
     use bincode::{deserialize_from, serialize_into, serialized_size};
     use solana_sdk::instruction::AccountMeta;
@@ -1690,6 +1689,7 @@ mod tests {
         rent::Rent,
         signature::{Keypair, KeypairUtil},
         system_instruction,
+        timing::years_as_slots,
         sysvar::{fees::Fees, rewards::Rewards},
     };
     use solana_stake_program::stake_state::Stake;
