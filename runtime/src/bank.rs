@@ -41,7 +41,7 @@ use solana_sdk::{
     slot_hashes::SlotHashes,
     system_transaction,
     sysvar::{self, Sysvar},
-    timing::years_as_slots,
+    timing::duration_as_ns,
     transaction::{Result, Transaction, TransactionError},
 };
 use std::{
@@ -699,11 +699,12 @@ impl Bank {
         self.ticks_per_slot = genesis_config.ticks_per_slot;
         self.slots_per_segment = genesis_config.slots_per_segment;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
-        self.slots_per_year = years_as_slots(
-            1.0,
-            &genesis_config.poh_config.target_tick_duration,
-            self.ticks_per_slot,
-        );
+        //   ticks/year     =      seconds/year ...
+        self.slots_per_year = SECONDS_PER_YEAR
+        //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
+            *(1_000_000_000.0 / duration_as_ns(&genesis_config.poh_config.target_tick_duration) as f64)
+        //  / ticks/slot
+            / self.ticks_per_slot as f64;
 
         self.epoch_schedule = genesis_config.epoch_schedule;
 
@@ -1689,6 +1690,7 @@ mod tests {
         signature::{Keypair, KeypairUtil},
         system_instruction,
         sysvar::{fees::Fees, rewards::Rewards},
+        timing::years_as_slots,
     };
     use solana_stake_program::stake_state::Stake;
     use solana_vote_program::{

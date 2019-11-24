@@ -1,22 +1,19 @@
 //! A command-line executable for generating the chain's genesis config.
 
-mod address_generator;
 mod genesis_accounts;
-mod stakes;
-mod unlocks;
 
-use crate::genesis_accounts::add_genesis_accounts;
+use crate::genesis_accounts::create_genesis_accounts;
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::input_parsers::pubkey_of;
 use solana_genesis::Base64Account;
-use solana_ledger::{blocktree::create_new_ledger, poh::compute_hashes_per_tick};
+use solana_ledger::blocktree::create_new_ledger;
+use solana_ledger::poh::compute_hashes_per_tick;
 use solana_sdk::{
     account::Account,
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     genesis_config::{GenesisConfig, OperatingMode},
-    native_token::lamports_to_sol,
     native_token::sol_to_lamports,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -53,8 +50,7 @@ fn pubkey_from_str(key_str: &str) -> Result<Pubkey, Box<dyn error::Error>> {
     })
 }
 
-pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> io::Result<u64> {
-    let mut lamports = 0;
+pub fn add_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> io::Result<()> {
     let accounts_file = File::open(file.to_string())?;
 
     let genesis_accounts: HashMap<String, Base64Account> =
@@ -86,11 +82,11 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
             })?;
         }
         account.executable = account_details.executable;
-        lamports += account.lamports;
+
         genesis_config.add_account(pubkey, account);
     }
 
-    Ok(lamports)
+    Ok(())
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -326,14 +322,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
     let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
+    let bootstrap_leader_vote_account =
+        vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
+
     let rent = Rent {
         lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
         exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
         burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
     };
-
-    let bootstrap_leader_vote_account =
-        vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
 
     let bootstrap_leader_stake_account = stake_state::create_account(
         &bootstrap_leader_pubkey,
@@ -362,6 +358,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ));
     }
 
+    if let Some(faucet_pubkey) = faucet_pubkey {
+        accounts.push((
+            faucet_pubkey,
+            Account::new(faucet_lamports.unwrap(), 0, &system_program::id()),
+        ));
+    }
+    accounts.append(&mut create_genesis_accounts());
+
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
 
     let fee_calculator = FeeCalculator::new(
@@ -384,6 +388,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             OperatingMode::Development => {
                 let hashes_per_tick =
                     compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
+                println!("Hashes per tick: {}", hashes_per_tick);
                 poh_config.hashes_per_tick = Some(hashes_per_tick);
             }
             OperatingMode::SoftLaunch => {
@@ -408,11 +413,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     };
     let epoch_schedule = EpochSchedule::new(slots_per_epoch);
+    println!(
+        "Genesis mode: {:?} hashes per tick: {:?} slots_per_epoch: {}",
+        operating_mode, poh_config.hashes_per_tick, slots_per_epoch
+    );
 
     let native_instruction_processors =
         solana_genesis_programs::get_programs(operating_mode, 0).unwrap();
     let inflation = solana_genesis_programs::get_inflation(operating_mode, 0).unwrap();
-
     let mut genesis_config = GenesisConfig {
         accounts,
         native_instruction_processors,
@@ -426,46 +434,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ..GenesisConfig::default()
     };
 
-    if let Some(faucet_pubkey) = faucet_pubkey {
-        genesis_config.add_account(
-            faucet_pubkey,
-            Account::new(faucet_lamports.unwrap(), 0, &system_program::id()),
-        );
+    if let Some(files) = matches.values_of("primordial_accounts_file") {
+        for file in files {
+            add_genesis_accounts(file, &mut genesis_config)?;
+        }
     }
 
     // add genesis stuff from storage and stake
     solana_storage_program::rewards_pools::add_genesis_accounts(&mut genesis_config);
     solana_stake_program::add_genesis_accounts(&mut genesis_config);
 
-    if let Some(files) = matches.values_of("primordial_accounts_file") {
-        for file in files {
-            load_genesis_accounts(file, &mut genesis_config)?;
-        }
-    }
-
-    add_genesis_accounts(&mut genesis_config);
-
     create_new_ledger(&ledger_path, &genesis_config)?;
-
-    println!(
-        "Genesis mode: {:?} hashes per tick: {:?} slots_per_epoch: {} capitalization: {}SOL in {} accounts",
-        operating_mode,
-        genesis_config.poh_config.hashes_per_tick,
-        slots_per_epoch,
-        lamports_to_sol(
-            genesis_config
-                .accounts
-                .iter()
-                .map(|(pubkey, account)| {
-                    if account.lamports == 0 {
-                        panic!("{:?}", (pubkey, account));
-                    }
-                    account.lamports
-                })
-                .sum::<u64>()),
-        genesis_config.accounts.len()
-    );
-
     Ok(())
 }
 
@@ -483,7 +462,7 @@ mod tests {
     #[test]
     fn test_append_primordial_accounts_to_genesis() {
         // Test invalid file returns error
-        assert!(load_genesis_accounts("unknownfile", &mut GenesisConfig::default()).is_err());
+        assert!(add_genesis_accounts("unknownfile", &mut GenesisConfig::default()).is_err());
 
         let mut genesis_config = GenesisConfig::default();
 
@@ -521,7 +500,7 @@ mod tests {
         let mut file = File::create(path).unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
-        load_genesis_accounts(
+        add_genesis_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
             &mut genesis_config,
         )
@@ -593,7 +572,7 @@ mod tests {
         let mut file = File::create(path).unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
-        load_genesis_accounts(
+        add_genesis_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
             &mut genesis_config,
         )
@@ -693,7 +672,7 @@ mod tests {
         let mut file = File::create(path).unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
-        load_genesis_accounts(
+        add_genesis_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
             &mut genesis_config,
         )
@@ -827,7 +806,7 @@ mod tests {
         file.write_all(yaml_string_pubkey.as_bytes()).unwrap();
 
         let mut genesis_config = GenesisConfig::default();
-        load_genesis_accounts(path.to_str().unwrap(), &mut genesis_config).expect("genesis");
+        add_genesis_accounts(path.to_str().unwrap(), &mut genesis_config).expect("genesis");
         remove_file(path).unwrap();
 
         assert_eq!(genesis_config.accounts.len(), 4);
@@ -855,7 +834,7 @@ mod tests {
         file.write_all(yaml_string_keypair.as_bytes()).unwrap();
 
         let mut genesis_config = GenesisConfig::default();
-        load_genesis_accounts(path.to_str().unwrap(), &mut genesis_config).expect("genesis");
+        add_genesis_accounts(path.to_str().unwrap(), &mut genesis_config).expect("genesis");
         remove_file(path).unwrap();
 
         assert_eq!(genesis_config.accounts.len(), 3);

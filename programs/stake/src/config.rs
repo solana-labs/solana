@@ -5,8 +5,8 @@ use serde_derive::{Deserialize, Serialize};
 use solana_config_program::{create_config_account, get_config_data, ConfigState};
 use solana_sdk::{
     account::{Account, KeyedAccount},
-    genesis_config::GenesisConfig,
     instruction::InstructionError,
+    pubkey::Pubkey,
 };
 
 // stake config ID
@@ -52,15 +52,8 @@ impl ConfigState for Config {
     }
 }
 
-pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
-    let mut account = create_config_account(vec![], &Config::default(), 0);
-    let lamports = genesis_config.rent.minimum_balance(account.data.len());
-
-    account.lamports = lamports.max(1);
-
-    genesis_config.add_account(id(), account);
-
-    lamports
+pub fn create_genesis_account() -> (Pubkey, Account) {
+    (id(), create_config_account(vec![], &Config::default(), 100))
 }
 
 pub fn create_account(lamports: u64, config: &Config) -> Account {
@@ -77,15 +70,19 @@ pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, InstructionE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test() {
-        let mut account = create_account(0, &Config::default());
+        let mut account = create_account(1, &Config::default());
         assert_eq!(Config::from(&account), Some(Config::default()));
         assert_eq!(
             from_keyed_account(&KeyedAccount::new(&Pubkey::default(), false, &mut account)),
             Err(InstructionError::InvalidArgument)
+        );
+        let (pubkey, mut account) = create_genesis_account();
+        assert_eq!(
+            from_keyed_account(&KeyedAccount::new(&pubkey, false, &mut account)),
+            Ok(Config::default())
         );
     }
 }

@@ -365,7 +365,7 @@ mod tests {
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
                     sysvar::stake_history::create_account(1, &StakeHistory::default())
                 } else if config::check_id(&meta.pubkey) {
-                    config::create_account(0, &config::Config::default())
+                    config::create_account(1, &config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     sysvar::rent::create_account(1, &Rent::default())
                 } else {
@@ -588,7 +588,7 @@ mod tests {
                     KeyedAccount::new(
                         &config::id(),
                         false,
-                        &mut config::create_account(0, &config::Config::default())
+                        &mut config::create_account(1, &config::Config::default())
                     ),
                 ],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
