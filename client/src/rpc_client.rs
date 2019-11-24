@@ -197,9 +197,16 @@ impl RpcClient {
     }
 
     pub fn get_epoch_info(&self) -> io::Result<RpcEpochInfo> {
+        self.get_epoch_info_with_commitment(CommitmentConfig::default())
+    }
+
+    pub fn get_epoch_info_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<RpcEpochInfo> {
         let response = self
             .client
-            .send(&RpcRequest::GetEpochInfo, None, 0, None)
+            .send(&RpcRequest::GetEpochInfo, None, 0, commitment_config.ok())
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,

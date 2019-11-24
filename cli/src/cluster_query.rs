@@ -55,14 +55,40 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
         .subcommand(
             SubCommand::with_name("get-epoch-info")
-                .about("Get information about the current epoch"),
+            .about("Get information about the current epoch")
+            .arg(
+                Arg::with_name("confirmed")
+                    .long("confirmed")
+                    .takes_value(false)
+                    .help(
+                        "Return information at maximum-lockout commitment level",
+                    ),
+            ),
         )
         .subcommand(
             SubCommand::with_name("get-genesis-hash").about("Get the genesis hash"),
         )
-        .subcommand(SubCommand::with_name("get-slot").about("Get current slot"))
         .subcommand(
-            SubCommand::with_name("get-transaction-count").about("Get current transaction count"),
+            SubCommand::with_name("get-slot").about("Get current slot")
+            .arg(
+                Arg::with_name("confirmed")
+                    .long("confirmed")
+                    .takes_value(false)
+                    .help(
+                        "Return slot at maximum-lockout commitment level",
+                    ),
+            ),
+        )
+        .subcommand(
+            SubCommand::with_name("get-transaction-count").about("Get current transaction count")
+            .arg(
+                Arg::with_name("confirmed")
+                    .long("confirmed")
+                    .takes_value(false)
+                    .help(
+                        "Return count at maximum-lockout commitment level",
+                    ),
+            ),
         )
         .subcommand(
             SubCommand::with_name("ping")
@@ -161,6 +187,42 @@ pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Cl
     })
 }
 
+pub fn parse_get_epoch_info(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = if matches.is_present("confirmed") {
+        CommitmentConfig::default()
+    } else {
+        CommitmentConfig::recent()
+    };
+    Ok(CliCommandInfo {
+        command: CliCommand::GetEpochInfo { commitment_config },
+        require_keypair: false,
+    })
+}
+
+pub fn parse_get_slot(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = if matches.is_present("confirmed") {
+        CommitmentConfig::default()
+    } else {
+        CommitmentConfig::recent()
+    };
+    Ok(CliCommandInfo {
+        command: CliCommand::GetSlot { commitment_config },
+        require_keypair: false,
+    })
+}
+
+pub fn parse_get_transaction_count(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = if matches.is_present("confirmed") {
+        CommitmentConfig::default()
+    } else {
+        CommitmentConfig::recent()
+    };
+    Ok(CliCommandInfo {
+        command: CliCommand::GetTransactionCount { commitment_config },
+        require_keypair: false,
+    })
+}
+
 pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
 
@@ -251,8 +313,11 @@ pub fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
     ))
 }
 
-pub fn process_get_epoch_info(rpc_client: &RpcClient) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info()?;
+pub fn process_get_epoch_info(
+    rpc_client: &RpcClient,
+    commitment_config: &CommitmentConfig,
+) -> ProcessResult {
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config.clone())?;
     println!();
     println_name_value("Current epoch:", &epoch_info.epoch.to_string());
     println_name_value("Current slot:", &epoch_info.absolute_slot.to_string());
@@ -285,13 +350,20 @@ pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
     Ok(genesis_hash.to_string())
 }
 
-pub fn process_get_slot(rpc_client: &RpcClient) -> ProcessResult {
-    let slot = rpc_client.get_slot()?;
+pub fn process_get_slot(
+    rpc_client: &RpcClient,
+    commitment_config: &CommitmentConfig,
+) -> ProcessResult {
+    let slot = rpc_client.get_slot_with_commitment(commitment_config.clone())?;
     Ok(slot.to_string())
 }
 
-pub fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
-    let transaction_count = rpc_client.get_transaction_count()?;
+pub fn process_get_transaction_count(
+    rpc_client: &RpcClient,
+    commitment_config: &CommitmentConfig,
+) -> ProcessResult {
+    let transaction_count =
+        rpc_client.get_transaction_count_with_commitment(commitment_config.clone())?;
     Ok(transaction_count.to_string())
 }
 
@@ -590,7 +662,9 @@ mod tests {
         assert_eq!(
             parse_command(&test_get_epoch_info).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetEpochInfo,
+                command: CliCommand::GetEpochInfo {
+                    commitment_config: CommitmentConfig::recent(),
+                },
                 require_keypair: false
             }
         );
@@ -612,7 +686,9 @@ mod tests {
         assert_eq!(
             parse_command(&test_get_slot).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetSlot,
+                command: CliCommand::GetSlot {
+                    commitment_config: CommitmentConfig::recent(),
+                },
                 require_keypair: false
             }
         );
@@ -623,7 +699,9 @@ mod tests {
         assert_eq!(
             parse_command(&test_transaction_count).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetTransactionCount,
+                command: CliCommand::GetTransactionCount {
+                    commitment_config: CommitmentConfig::recent(),
+                },
                 require_keypair: false
             }
         );
