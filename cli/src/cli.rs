@@ -223,6 +223,7 @@ pub struct CliConfig {
     pub keypair: Keypair,
     pub keypair_path: Option<String>,
     pub rpc_client: Option<RpcClient>,
+    pub print_header: bool,
 }
 
 impl CliConfig {
@@ -248,6 +249,7 @@ impl Default for CliConfig {
             keypair: Keypair::new(),
             keypair_path: Some(Self::default_keypair_path()),
             rpc_client: None,
+            print_header: true,
         }
     }
 }
@@ -841,14 +843,16 @@ fn process_witness(
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
-    if let Some(keypair_path) = &config.keypair_path {
-        println_name_value("Keypair:", keypair_path);
+    if config.print_header {
+        if let Some(keypair_path) = &config.keypair_path {
+            println_name_value("Keypair:", keypair_path);
+        }
+        if let CliCommand::Address = config.command {
+            // Get address of this client
+            return Ok(format!("{}", config.keypair.pubkey()));
+        }
+        println_name_value("RPC Endpoint:", &config.json_rpc_url);
     }
-    if let CliCommand::Address = config.command {
-        // Get address of this client
-        return Ok(format!("{}", config.keypair.pubkey()));
-    }
-    println_name_value("RPC Endpoint:", &config.json_rpc_url);
 
     let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
