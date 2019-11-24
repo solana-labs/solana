@@ -1689,8 +1689,8 @@ mod tests {
         rent::Rent,
         signature::{Keypair, KeypairUtil},
         system_instruction,
-        timing::years_as_slots,
         sysvar::{fees::Fees, rewards::Rewards},
+        timing::years_as_slots,
     };
     use solana_stake_program::stake_state::Stake;
     use solana_vote_program::{
