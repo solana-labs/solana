@@ -1,6 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions};
+use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::typed::Subscriber;
@@ -87,6 +87,18 @@ pub trait RpcSolPubSub {
         name = "signatureUnsubscribe"
     )]
     fn signature_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
+
+    // Get notification when slot is encountered
+    #[pubsub(subscription = "slotNotification", subscribe, name = "slotSubscribe")]
+    fn slot_subscribe(&self, _: Self::Metadata, _: Subscriber<SlotInfo>);
+
+    // Unsubscribe from slot notification subscription.
+    #[pubsub(
+        subscription = "slotNotification",
+        unsubscribe,
+        name = "slotUnsubscribe"
+    )]
+    fn slot_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
 }
 
 #[derive(Default)]
@@ -227,6 +239,29 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     ) -> Result<bool> {
         info!("signature_unsubscribe");
         if self.subscriptions.remove_signature_subscription(&id) {
+            Ok(true)
+        } else {
+            Err(Error {
+                code: ErrorCode::InvalidParams,
+                message: "Invalid Request: Subscription id does not exist".into(),
+                data: None,
+            })
+        }
+    }
+
+    fn slot_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<SlotInfo>) {
+        info!("slot_subscribe");
+        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
+        let sub_id = SubscriptionId::Number(id as u64);
+        info!("slot_subscribe: id={:?}", sub_id);
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+
+        self.subscriptions.add_slot_subscription(&sub_id, &sink);
+    }
+
+    fn slot_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
+        info!("slot_unsubscribe");
+        if self.subscriptions.remove_slot_subscription(&id) {
             Ok(true)
         } else {
             Err(Error {
@@ -584,5 +619,61 @@ mod tests {
         if let Async::Ready(Some(response)) = string.unwrap() {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
+    }
+
+    #[test]
+    fn test_slot_subscribe() {
+        let rpc = RpcSolPubSubImpl::default();
+        let session = create_session();
+        let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("slotNotification");
+        rpc.slot_subscribe(session, subscriber);
+
+        rpc.subscriptions.notify_slot(0, 0, 0);
+
+        // Test slot confirmation notification
+        let string = receiver.poll();
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            let expected_res = SlotInfo {
+                parent: 0,
+                slot: 0,
+                root: 0,
+            };
+            let expected_res_str =
+                serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#, expected_res_str);
+            assert_eq!(expected, response);
+        }
+    }
+
+    #[test]
+    fn test_slot_unsubscribe() {
+        let rpc = RpcSolPubSubImpl::default();
+        let session = create_session();
+        let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("slotNotification");
+        rpc.slot_subscribe(session, subscriber);
+        rpc.subscriptions.notify_slot(0, 0, 0);
+
+        let string = receiver.poll();
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            let expected_res = SlotInfo {
+                parent: 0,
+                slot: 0,
+                root: 0,
+            };
+            let expected_res_str =
+                serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#, expected_res_str);
+            assert_eq!(expected, response);
+        }
+
+        let session = create_session();
+        assert!(rpc
+            .slot_unsubscribe(Some(session), SubscriptionId::Number(42))
+            .is_err());
+
+        let session = create_session();
+        assert!(rpc
+            .slot_unsubscribe(Some(session), SubscriptionId::Number(0))
+            .is_ok());
     }
 }

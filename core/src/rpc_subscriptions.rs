@@ -493,4 +493,40 @@ mod tests {
             .unwrap()
             .contains_key(&signature));
     }
+    #[test]
+    fn test_check_slot_subscribe() {
+        let (subscriber, _id_receiver, mut transport_receiver) =
+            Subscriber::new_test("slotNotification");
+        let sub_id = SubscriptionId::Number(0 as u64);
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        let subscriptions = RpcSubscriptions::default();
+        subscriptions.add_slot_subscription(&sub_id, &sink);
+
+        assert!(subscriptions
+            .slot_subscriptions
+            .read()
+            .unwrap()
+            .contains_key(&sub_id));
+
+        subscriptions.notify_slot(0, 0, 0);
+        let string = transport_receiver.poll();
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            let expected_res = SlotInfo {
+                parent: 0,
+                slot: 0,
+                root: 0,
+            };
+            let expected_res_str =
+                serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#, expected_res_str);
+            assert_eq!(expected, response);
+        }
+
+        subscriptions.remove_slot_subscription(&sub_id);
+        assert!(!subscriptions
+            .slot_subscriptions
+            .read()
+            .unwrap()
+            .contains_key(&sub_id));
+    }
 }
