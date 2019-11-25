@@ -185,8 +185,7 @@ impl LocalCluster {
             stake_config::create_account(
                 1,
                 &stake_config::Config {
-                    warmup_rate: 1_000_000_000.0f64,
-                    cooldown_rate: 1_000_000_000.0f64,
+                    warmup_cooldown_rate: 1_000_000_000.0f64,
                     slash_penalty: std::u8::MAX,
                 },
             ),
@@ -551,8 +550,8 @@ impl LocalCluster {
                     VoteState::from(&vote_account),
                 ) {
                     (Some(stake_state), Some(vote_state)) => {
-                        if stake_state.voter_pubkey != vote_account_pubkey
-                            || stake_state.stake != amount
+                        if stake_state.delegation.voter_pubkey != vote_account_pubkey
+                            || stake_state.delegation.stake != amount
                         {
                             Err(Error::new(ErrorKind::Other, "invalid stake account state"))
                         } else if vote_state.node_pubkey != node_pubkey {

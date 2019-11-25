@@ -4,17 +4,29 @@ use solana_sdk::account::Account;
 use solana_sdk::clock::Epoch;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::stake_history::StakeHistory;
-use solana_stake_program::stake_state::{new_stake_history_entry, StakeState};
+use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
 use solana_vote_program::vote_state::VoteState;
 use std::collections::HashMap;
+
+#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct StakeDelegation {
+    /// to whom the stake is delegated
+    pub voter_pubkey: Pubkey,
+    /// activated stake amount, set at delegate_stake() time
+    pub stake: u64,
+    /// epoch at which this stake was activated, std::Epoch::MAX if is a bootstrap stake
+    pub activation_epoch: Epoch,
+    /// epoch the stake was deactivated, std::Epoch::MAX if not deactivated
+    pub deactivation_epoch: Epoch,
+}
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Stakes {
     /// vote accounts
     vote_accounts: HashMap<Pubkey, (u64, Account)>,
 
-    /// stake_accounts
-    stake_accounts: HashMap<Pubkey, Account>,
+    /// stake_delegations
+    stake_delegations: HashMap<Pubkey, Delegation>,
 
     /// unclaimed points.
     //  a point is a credit multiplied by the stake
@@ -41,19 +53,15 @@ impl Stakes {
                 self.epoch,
                 new_stake_history_entry(
                     self.epoch,
-                    self.stake_accounts
+                    self.stake_delegations
                         .iter()
-                        .filter_map(|(_pubkey, stake_account)| {
-                            StakeState::stake_from(stake_account)
-                        })
-                        .collect::<Vec<_>>()
-                        .iter(),
+                        .map(|(_pubkey, stake_delegation)| stake_delegation),
                     Some(&self.stake_history),
                 ),
             );
 
             Stakes {
-                stake_accounts: self.stake_accounts.clone(),
+                stake_delegations: self.stake_delegations.clone(),
                 points: self.points,
                 epoch,
                 vote_accounts: self
@@ -81,16 +89,14 @@ impl Stakes {
         epoch: Epoch,
         stake_history: Option<&StakeHistory>,
     ) -> u64 {
-        self.stake_accounts
+        self.stake_delegations
             .iter()
-            .map(|(_, stake_account)| {
-                StakeState::stake_from(stake_account).map_or(0, |stake| {
-                    if &stake.voter_pubkey == voter_pubkey {
-                        stake.stake(epoch, stake_history)
-                    } else {
-                        0
-                    }
-                })
+            .map(|(_, stake_delegation)| {
+                if &stake_delegation.voter_pubkey == voter_pubkey {
+                    stake_delegation.stake(epoch, stake_history)
+                } else {
+                    0
+                }
             })
             .sum()
     }
@@ -126,20 +132,20 @@ impl Stakes {
             }
         } else if solana_stake_program::check_id(&account.owner) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
-            let old_stake = self.stake_accounts.get(pubkey).and_then(|old_account| {
-                StakeState::stake_from(old_account).map(|stake| {
-                    (
-                        stake.voter_pubkey,
-                        stake.stake(self.epoch, Some(&self.stake_history)),
-                    )
-                })
+            let old_stake = self.stake_delegations.get(pubkey).map(|delegation| {
+                (
+                    delegation.voter_pubkey,
+                    delegation.stake(self.epoch, Some(&self.stake_history)),
+                )
             });
 
-            let stake = StakeState::stake_from(account).map(|stake| {
+            let delegation = StakeState::delegation_from(account);
+
+            let stake = delegation.map(|delegation| {
                 (
-                    stake.voter_pubkey,
+                    delegation.voter_pubkey,
                     if account.lamports != 0 {
-                        stake.stake(self.epoch, Some(&self.stake_history))
+                        delegation.stake(self.epoch, Some(&self.stake_history))
                     } else {
                         0
                     },
@@ -161,28 +167,15 @@ impl Stakes {
             }
 
             if account.lamports == 0 {
-                self.stake_accounts.remove(pubkey);
-            } else {
-                self.stake_accounts.insert(*pubkey, account.clone());
+                self.stake_delegations.remove(pubkey);
+            } else if let Some(delegation) = delegation {
+                self.stake_delegations.insert(*pubkey, delegation);
             }
         }
     }
 
     pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, Account)> {
         &self.vote_accounts
-    }
-
-    pub fn stake_accounts(&self) -> &HashMap<Pubkey, Account> {
-        &self.stake_accounts
-    }
-
-    pub fn rewards_pools(&self) -> impl Iterator<Item = (&Pubkey, &Account)> {
-        self.stake_accounts
-            .iter()
-            .filter(|(_key, account)| match StakeState::from(account) {
-                Some(StakeState::RewardsPool) => true,
-                _ => false,
-            })
     }
 
     pub fn highest_staked_node(&self) -> Option<Pubkey> {

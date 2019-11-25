@@ -1558,11 +1558,6 @@ impl Bank {
         self.stakes.read().unwrap().vote_accounts().clone()
     }
 
-    /// current stake accounts for this bank
-    pub fn stake_accounts(&self) -> HashMap<Pubkey, Account> {
-        self.stakes.read().unwrap().stake_accounts().clone()
-    }
-
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
     pub fn epoch_vote_accounts(&self, epoch: Epoch) -> Option<&HashMap<Pubkey, (u64, Account)>> {
@@ -1692,7 +1687,7 @@ mod tests {
         sysvar::{fees::Fees, rewards::Rewards},
         timing::years_as_slots,
     };
-    use solana_stake_program::stake_state::Stake;
+    use solana_stake_program::stake_state::{Delegation, Stake};
     use solana_vote_program::{
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
@@ -3277,8 +3272,11 @@ mod tests {
         assert!(leader_stake > 0);
 
         let leader_stake = Stake {
-            stake: leader_lamports,
-            activation_epoch: std::u64::MAX, // bootstrap
+            delegation: Delegation {
+                stake: leader_lamports,
+                activation_epoch: std::u64::MAX, // bootstrap
+                ..Delegation::default()
+            },
             ..Stake::default()
         };
 

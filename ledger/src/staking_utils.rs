@@ -115,7 +115,7 @@ pub(crate) mod tests {
     };
     use solana_stake_program::{
         stake_instruction,
-        stake_state::{Authorized, Stake},
+        stake_state::{Authorized, Delegation, Stake},
     };
     use solana_vote_program::{vote_instruction, vote_state::VoteInit};
     use std::sync::Arc;
@@ -183,8 +183,11 @@ pub(crate) mod tests {
         solana_logger::setup();
         let stake = BOOTSTRAP_LEADER_LAMPORTS * 100;
         let leader_stake = Stake {
-            stake: BOOTSTRAP_LEADER_LAMPORTS,
-            activation_epoch: std::u64::MAX, // mark as bootstrap
+            delegation: Delegation {
+                stake: BOOTSTRAP_LEADER_LAMPORTS,
+                activation_epoch: std::u64::MAX, // mark as bootstrap
+                ..Delegation::default()
+            },
             ..Stake::default()
         };
 
@@ -217,8 +220,11 @@ pub(crate) mod tests {
 
         // simulated stake
         let other_stake = Stake {
-            stake,
-            activation_epoch: bank.epoch(),
+            delegation: Delegation {
+                stake,
+                activation_epoch: bank.epoch(),
+                ..Delegation::default()
+            },
             ..Stake::default()
         };
 
