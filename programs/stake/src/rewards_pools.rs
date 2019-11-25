@@ -26,7 +26,7 @@ pub fn random_id() -> Pubkey {
     Pubkey::new(id.as_ref())
 }
 
-pub fn create_rewards_accounts() -> Vec<(Pubkey, Account)> {
+pub fn create_genesis_accounts() -> Vec<(Pubkey, Account)> {
     let mut accounts = Vec::with_capacity(NUM_REWARDS_POOLS);
     let mut pubkey = id();
 
@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn test() {
-        let accounts = create_rewards_accounts();
+        let accounts = create_genesis_accounts();
 
         for _i in 0..NUM_REWARDS_POOLS {
             let id = random_id();
