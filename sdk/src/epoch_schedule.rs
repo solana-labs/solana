@@ -45,7 +45,7 @@ impl EpochSchedule {
     pub fn new(slots_per_epoch: u64) -> Self {
         Self::custom(slots_per_epoch, slots_per_epoch, true)
     }
-    pub fn custom(slots_per_epoch: Epoch, leader_schedule_slot_offset: u64, warmup: bool) -> Self {
+    pub fn custom(slots_per_epoch: u64, leader_schedule_slot_offset: u64, warmup: bool) -> Self {
         assert!(slots_per_epoch >= MINIMUM_SLOTS_PER_EPOCH as u64);
         let (first_normal_epoch, first_normal_slot) = if warmup {
             let next_power_of_two = slots_per_epoch.next_power_of_two();
