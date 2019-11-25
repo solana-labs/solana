@@ -931,3 +931,39 @@ test('program account change notification', async () => {
 
   await connection.removeProgramAccountChangeListener(subscriptionId);
 });
+
+test('slot notification', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url, 'recent');
+
+  // let notified = false;
+  const subscriptionId = connection.onSlotChange(slotInfo => {
+    expect(slotInfo.parent).toBeDefined();
+    expect(slotInfo.slot).toBeDefined();
+    expect(slotInfo.root).toBeDefined();
+    expect(slotInfo.slot).toBeGreaterThan(slotInfo.parent);
+    expect(slotInfo.slot).toBeGreaterThanOrEqual(slotInfo.root);
+    // notified = true;
+  });
+
+  //
+  // FIXME: enable this check when slotNotification is live
+  //
+  // // Wait for mockCallback to receive a call
+  // let i = 0;
+  // while (!notified) {
+  //   //for (;;) {
+  //   if (++i === 30) {
+  //     throw new Error('Slot change notification not observed');
+  //   }
+  //   // Sleep for a 1/4 of a slot, notifications only occur after a block is
+  //   // processed
+  //   await sleep((250 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
+  // }
+
+  await connection.removeSlotChangeListener(subscriptionId);
+});

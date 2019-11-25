@@ -319,6 +319,23 @@ const ProgramAccountNotificationResult = struct({
 });
 
 /**
+ * @private
+ */
+const SlotInfo = struct({
+  parent: 'number',
+  slot: 'number',
+  root: 'number',
+});
+
+/***
+ * Expected JSON RPC response for the "slotNotification" message
+ */
+const SlotNotificationResult = struct({
+  subscription: 'number',
+  result: SlotInfo,
+});
+
+/**
  * Expected JSON RPC response for the "getProgramAccounts" message
  */
 const GetProgramAccountsRpcResult = jsonRpcResult(
@@ -570,6 +587,19 @@ type ProgramAccountSubscriptionInfo = {
 };
 
 /**
+ * @private
+ */
+type SlotSubscriptionInfo = {
+  callback: SlotChangeCallback,
+  subscriptionId: null | number, // null when there's no current server subscription id
+};
+
+/**
+ * Callback function for slot change notifications
+ */
+export type SlotChangeCallback = (slotInfo: SlotInfo) => void;
+
+/**
  * Signature status: Success
  *
  * @typedef {Object} SignatureSuccess
@@ -618,6 +648,10 @@ export class Connection {
     [number]: ProgramAccountSubscriptionInfo,
   } = {};
   _programAccountChangeSubscriptionCounter: number = 0;
+  _slotSubscriptions: {
+    [number]: SlotSubscriptionInfo,
+  } = {};
+  _slotSubscriptionCounter: number = 0;
 
   /**
    * Establish a JSON RPC connection
@@ -656,6 +690,10 @@ export class Connection {
     this._rpcWebSocket.on(
       'programNotification',
       this._wsOnProgramAccountNotification.bind(this),
+    );
+    this._rpcWebSocket.on(
+      'slotNotification',
+      this._wsOnSlotNotification.bind(this),
     );
   }
 
@@ -1256,7 +1294,12 @@ export class Connection {
     const programKeys = Object.keys(
       this._programAccountChangeSubscriptions,
     ).map(Number);
-    if (accountKeys.length === 0 && programKeys.length === 0) {
+    const slotKeys = Object.keys(this._slotSubscriptions).map(Number);
+    if (
+      accountKeys.length === 0 &&
+      programKeys.length === 0 &&
+      slotKeys.length === 0
+    ) {
       this._rpcWebSocket.close();
       return;
     }
@@ -1267,6 +1310,9 @@ export class Connection {
       }
       for (let id of programKeys) {
         this._programAccountChangeSubscriptions[id].subscriptionId = null;
+      }
+      for (let id of slotKeys) {
+        this._slotSubscriptions[id].subscriptionId = null;
       }
       this._rpcWebSocket.connect();
       return;
@@ -1304,6 +1350,18 @@ export class Connection {
           console.log(
             `programSubscribe error for ${programId}: ${err.message}`,
           );
+        }
+      }
+    }
+    for (let id of slotKeys) {
+      const {subscriptionId} = this._slotSubscriptions[id];
+      if (subscriptionId === null) {
+        try {
+          this._slotSubscriptions[
+            id
+          ].subscriptionId = await this._rpcWebSocket.call('slotSubscribe', []);
+        } catch (err) {
+          console.log(`slotSubscribe error: ${err.message}`);
         }
       }
     }
@@ -1452,6 +1510,69 @@ export class Connection {
       this._updateSubscriptions();
     } else {
       throw new Error(`Unknown account change id: ${id}`);
+    }
+  }
+
+  /**
+   * @private
+   */
+  _wsOnSlotNotification(notification: Object) {
+    const res = SlotNotificationResult(notification);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    const {parent, slot, root} = res.result;
+
+    const keys = Object.keys(this._slotSubscriptions).map(Number);
+    for (let id of keys) {
+      const sub = this._slotSubscriptions[id];
+      if (sub.subscriptionId === res.subscription) {
+        sub.callback({
+          parent,
+          slot,
+          root,
+        });
+        return true;
+      }
+    }
+  }
+
+  /**
+   * Register a callback to be invoked upon slot changes
+   *
+   * @param callback Function to invoke whenever the slot changes
+   * @return subscription id
+   */
+  onSlotChange(callback: SlotChangeCallback): number {
+    const id = ++this._slotSubscriptionCounter;
+    this._slotSubscriptions[id] = {
+      callback,
+      subscriptionId: id,
+    };
+    this._updateSubscriptions();
+    return id;
+  }
+
+  /**
+   * Deregister a slot notification callback
+   *
+   * @param id subscription id to deregister
+   */
+  async removeSlotChangeListener(id: number): Promise<void> {
+    if (this._slotSubscriptions[id]) {
+      const {subscriptionId} = this._slotSubscriptions[id];
+      delete this._slotSubscriptions[id];
+      if (subscriptionId !== null) {
+        try {
+          await this._rpcWebSocket.call('slotUnsubscribe', [subscriptionId]);
+        } catch (err) {
+          console.log('slotUnsubscribe error:', err.message);
+        }
+      }
+      this._updateSubscriptions();
+    } else {
+      throw new Error(`Unknown slot change id: ${id}`);
     }
   }
 
