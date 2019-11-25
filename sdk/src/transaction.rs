@@ -225,7 +225,7 @@ impl Transaction {
         }
     }
 
-    // Verify the transactioon
+    /// Verify the transactioon
     pub fn verify(&self) -> bool {
         self.signatures
             .iter()
