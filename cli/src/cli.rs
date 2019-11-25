@@ -74,10 +74,16 @@ pub enum CliCommand {
     },
     ClusterVersion,
     Fees,
-    GetEpochInfo,
+    GetEpochInfo {
+        commitment_config: CommitmentConfig,
+    },
     GetGenesisHash,
-    GetSlot,
-    GetTransactionCount,
+    GetSlot {
+        commitment_config: CommitmentConfig,
+    },
+    GetTransactionCount {
+        commitment_config: CommitmentConfig,
+    },
     Ping {
         lamports: u64,
         interval: Duration,
@@ -217,6 +223,7 @@ pub struct CliConfig {
     pub keypair: Keypair,
     pub keypair_path: Option<String>,
     pub rpc_client: Option<RpcClient>,
+    pub print_header: bool,
 }
 
 impl CliConfig {
@@ -242,6 +249,7 @@ impl Default for CliConfig {
             keypair: Keypair::new(),
             keypair_path: Some(Self::default_keypair_path()),
             rpc_client: None,
+            print_header: true,
         }
     }
 }
@@ -258,22 +266,13 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             command: CliCommand::Fees,
             require_keypair: false,
         }),
-        ("get-epoch-info", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::GetEpochInfo,
-            require_keypair: false,
-        }),
+        ("get-epoch-info", Some(matches)) => parse_get_epoch_info(matches),
         ("get-genesis-hash", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::GetGenesisHash,
             require_keypair: false,
         }),
-        ("get-slot", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::GetSlot,
-            require_keypair: false,
-        }),
-        ("get-transaction-count", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::GetTransactionCount,
-            require_keypair: false,
-        }),
+        ("get-slot", Some(matches)) => parse_get_slot(matches),
+        ("get-transaction-count", Some(matches)) => parse_get_transaction_count(matches),
         ("ping", Some(matches)) => parse_cluster_ping(matches),
         ("show-gossip", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ShowGossip,
@@ -844,14 +843,16 @@ fn process_witness(
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
-    if let Some(keypair_path) = &config.keypair_path {
-        println_name_value("Keypair:", keypair_path);
+    if config.print_header {
+        if let Some(keypair_path) = &config.keypair_path {
+            println_name_value("Keypair:", keypair_path);
+        }
+        if let CliCommand::Address = config.command {
+            // Get address of this client
+            return Ok(format!("{}", config.keypair.pubkey()));
+        }
+        println_name_value("RPC Endpoint:", &config.json_rpc_url);
     }
-    if let CliCommand::Address = config.command {
-        // Get address of this client
-        return Ok(format!("{}", config.keypair.pubkey()));
-    }
-    println_name_value("RPC Endpoint:", &config.json_rpc_url);
 
     let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
@@ -870,9 +871,15 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
         CliCommand::Fees => process_fees(&rpc_client),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
-        CliCommand::GetSlot => process_get_slot(&rpc_client),
-        CliCommand::GetEpochInfo => process_get_epoch_info(&rpc_client),
-        CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
+        CliCommand::GetEpochInfo { commitment_config } => {
+            process_get_epoch_info(&rpc_client, commitment_config)
+        }
+        CliCommand::GetSlot { commitment_config } => {
+            process_get_slot(&rpc_client, commitment_config)
+        }
+        CliCommand::GetTransactionCount { commitment_config } => {
+            process_get_transaction_count(&rpc_client, commitment_config)
+        }
         CliCommand::Ping {
             lamports,
             interval,
@@ -1888,10 +1895,14 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        config.command = CliCommand::GetSlot;
+        config.command = CliCommand::GetSlot {
+            commitment_config: CommitmentConfig::default(),
+        };
         assert_eq!(process_command(&config).unwrap(), "0");
 
-        config.command = CliCommand::GetTransactionCount;
+        config.command = CliCommand::GetTransactionCount {
+            commitment_config: CommitmentConfig::default(),
+        };
         assert_eq!(process_command(&config).unwrap(), "1234");
 
         config.command = CliCommand::Pay {
@@ -2025,10 +2036,14 @@ mod tests {
         config.command = CliCommand::VoteAuthorize(bob_pubkey, bob_pubkey, VoteAuthorize::Voter);
         assert!(process_command(&config).is_err());
 
-        config.command = CliCommand::GetSlot;
+        config.command = CliCommand::GetSlot {
+            commitment_config: CommitmentConfig::default(),
+        };
         assert!(process_command(&config).is_err());
 
-        config.command = CliCommand::GetTransactionCount;
+        config.command = CliCommand::GetTransactionCount {
+            commitment_config: CommitmentConfig::default(),
+        };
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::Pay {
