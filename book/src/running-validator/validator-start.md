@@ -32,13 +32,37 @@ solana-gossip --entrypoint testnet.solana.com:8001 spy
 # Press ^C to exit
 ```
 
-## Start your Validator
+## Enabling CUDA
+
+If your machine has a GPU with CUDA installed \(Linux-only currently\), include the `--cuda` argument to `solana-validator`.
+
+```bash
+export SOLANA_CUDA=1
+```
+
+When your validator is started look for the following log message to indicate that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
+
+## Generate identity
 
 Create an identity keypair for your validator by running:
 
 ```bash
 solana-keygen new -o ~/validator-keypair.json
 ```
+
+The identity public key can now be viewed by running:
+
+```bash
+    solana-keygen pubkey ~/validator-keypair.json
+```
+
+> Note: The "validator-keypair.json” file is also your \(ed25519\) private key.
+
+Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
+
+If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF LAMPORTS TOO.
+
+To back-up your validator identify keypair, **back-up your "validator-keypair.json” file to a secure location.**
 
 ### Wallet Configuration
 
@@ -48,7 +72,21 @@ You can set solana configuration to use your validator keypair for all following
 solana set --keypair ~/validator-keypair.json
 ```
 
-**All following solana commands assume you have set `--keypair` config to** your validator identity keypair.\*\* If you haven't, you will need to add the `--keypair` argument to each command, like:
+You should see the following output:
+
+```text
+Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
+* url: http://tds.solana.com:8899
+* keypair: /home/solana/validator-keypair.json
+```
+
+You can see the wallet configuration at any time by running:
+
+```text
+solana get
+```
+
+**All following solana commands assume you have set `--keypair` config** to your validator identity keypair.\*\* If you haven't, you will need to add the `--keypair` argument to each command, for example:
 
 ```bash
 solana --keypair ~/validator-keypair.json airdrop 10
@@ -56,12 +94,50 @@ solana --keypair ~/validator-keypair.json airdrop 10
 
 \(You can always override the set configuration by explicitly passing the `--keypair` argument with a command.\)
 
-### Validator Start
+### Check Validator Balance
+
+To view your current balance:
+
+```text
+solana balance
+```
+
+Or to see in finer detail:
+
+```text
+solana balance --lamports
+```
+
+Read more about the [difference between SOL and lamports here](https://solana-labs.github.io/book/introduction.html?highlight=lamport#what-are-sols).
+
+## Validator Start
+
+Connect to a testnet cluster by running:
+
+```bash
+export SOLANA_METRICS_CONFIG="host=https://testnet-metrics.solana.com:8086,db=testnet,u=testnet_writer,p=dry_run"
+```
+
+```bash
+solana-validator --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json \
+    --ledger ~/validator-ledger --rpc-port 8899 --entrypoint testnet.solana.com:8001 \
+    --limit-ledger-size
+```
+
+To force validator logging to the console add a `--log -` argument, otherwise the validator will automatically log to a file.
+
+Confirm your validator connected to the network by running:
+
+```bash
+solana-gossip spy --entrypoint tds.solana.com:8001
+```
+
+This command will display all the nodes that are visible to the TdS network’s entrypoint. If your validator is connected, its public key and IP address will appear in the list.
 
 Airdrop yourself some SOL to get started:
 
 ```bash
-solana airdrop 10
+solana airdrop 1000
 ```
 
 Your validator will need a vote account. Create it now with the following commands:
@@ -90,18 +166,6 @@ If you built from source:
 ```bash
 NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --entrypoint testnet.solana.com:8001
 ```
-
-### Enabling CUDA
-
-If your machine has a GPU with CUDA installed \(Linux-only currently\), include the `--cuda` argument to `solana-validator`.
-
-Or if you built from source, define the SOLANA\_CUDA flag in your environment _before_ running any of the previously mentioned commands
-
-```bash
-export SOLANA_CUDA=1
-```
-
-When your validator is started look for the following log message to indicate that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
 ### Controlling local network port allocation
 
