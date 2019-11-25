@@ -48,7 +48,9 @@ impl LeaderScheduleCache {
 
         // Calculate the schedule for all epochs between 0 and leader_schedule_epoch(root)
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(root_bank.slot());
-        for epoch in (leader_schedule_epoch - MAX_LEADER_SCHEDULE_STAKES)..leader_schedule_epoch {
+        for epoch in (leader_schedule_epoch.max(MAX_LEADER_SCHEDULE_STAKES)
+            - MAX_LEADER_SCHEDULE_STAKES)..leader_schedule_epoch
+        {
             let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
             cache.slot_leader_at(first_slot_in_epoch, Some(root_bank));
         }
@@ -85,7 +87,14 @@ impl LeaderScheduleCache {
 
     pub fn slot_leader_at(&self, slot: Slot, bank: Option<&Bank>) -> Option<Pubkey> {
         let slot_epoch = self.epoch_schedule.get_epoch_and_slot_index(slot).0;
-        if slot_epoch < *self.max_epoch.read().unwrap() - MAX_LEADER_SCHEDULE_STAKES {
+        if slot_epoch
+            < self
+                .max_epoch
+                .read()
+                .unwrap()
+                .max(MAX_LEADER_SCHEDULE_STAKES)
+                - MAX_LEADER_SCHEDULE_STAKES
+        {
             panic!(
                 "Requested too old epoch!: {} < {}",
                 slot_epoch,
