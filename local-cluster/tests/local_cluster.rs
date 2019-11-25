@@ -249,7 +249,7 @@ fn run_network_partition(partitions: &[&[(usize, bool)]]) {
         .collect();
     assert_eq!(should_exits.len(), validator_pubkeys.len());
     if timeout > 0 {
-        sleep(Duration::from_millis(timeout as u64));
+        sleep(Duration::from_millis(timeout as u64 + 10_000));
         for (pubkey, should_exit) in validator_pubkeys.iter().zip(should_exits) {
             if *should_exit {
                 info!("Killing validator with id: {}", pubkey);
@@ -324,7 +324,13 @@ fn test_network_partition_1_1_1() {
 #[test]
 #[serial]
 fn test_kill_partition() {
-    run_network_partition(&[&[(32, true)], &[(34, false)], &[(34, false)]])
+    run_network_partition(&[
+        &[(32, true)],
+        &[(17, false)],
+        &[(17, false)],
+        &[(17, false)],
+        &[(17, false)],
+    ])
 }
 
 #[test]
