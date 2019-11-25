@@ -180,6 +180,8 @@ pub struct Bank {
     /// Hash of this Bank's parent's state
     parent_hash: Hash,
 
+    parent_slot: u64,
+
     /// The number of transactions processed without error
     #[serde(serialize_with = "serialize_atomicu64")]
     #[serde(deserialize_with = "deserialize_atomicu64")]
@@ -358,6 +360,7 @@ impl Bank {
             epoch_stakes: parent.epoch_stakes.clone(),
             storage_accounts: RwLock::new(parent.storage_accounts.read().unwrap().clone()),
             parent_hash: parent.hash(),
+            parent_slot: parent.slot(),
             collector_id: *collector_id,
             collector_fees: AtomicU64::new(0),
             ancestors: HashMap::new(),
@@ -660,6 +663,10 @@ impl Bank {
     /// Return the more recent checkpoint of this bank instance.
     pub fn parent(&self) -> Option<Arc<Bank>> {
         self.rc.parent.read().unwrap().clone()
+    }
+
+    pub fn parent_slot(&self) -> u64 {
+        self.parent_slot
     }
 
     fn process_genesis_config(&mut self, genesis_config: &GenesisConfig) {

@@ -141,13 +141,7 @@ impl StandardBroadcastRun {
         {
             self.slot_broadcast_start = Some(Instant::now());
             let slot = bank.slot();
-            let parent_slot = {
-                if let Some(parent_bank) = bank.parent() {
-                    parent_bank.slot()
-                } else {
-                    0
-                }
-            };
+            let parent_slot = bank.parent_slot();
 
             self.current_slot_and_parent = Some((slot, parent_slot));
             receive_elapsed = Duration::new(0, 0);
