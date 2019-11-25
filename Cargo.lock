@@ -442,10 +442,9 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.9"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-integer 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2212,7 +2211,7 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3014,7 +3013,7 @@ version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "atty 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "term 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "thread_local 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3160,7 +3159,7 @@ name = "solana-btc-spv-program"
 version = "0.21.0"
 dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3175,7 +3174,7 @@ name = "solana-budget-program"
 version = "0.21.0"
 dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3210,7 +3209,7 @@ version = "0.21.0"
 dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "console 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "criterion-stats 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3269,7 +3268,7 @@ name = "solana-config-program"
 version = "0.21.0"
 dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3299,7 +3298,7 @@ dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "core_affinity 0.5.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "crc 1.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam-channel 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3493,7 +3492,7 @@ dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bzip2 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "console 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ctrlc 3.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3539,7 +3538,7 @@ dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bzip2 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam-channel 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "dir-diff 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "dlopen 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3968,7 +3967,7 @@ name = "solana-validator"
 version = "0.21.0"
 dependencies = [
  "bzip2 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "console 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gag 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3998,7 +3997,7 @@ name = "solana-vest-program"
 version = "0.21.0"
 dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4217,7 +4216,7 @@ version = "0.0.1-sol4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "backtrace 0.3.40 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4324,7 +4323,7 @@ dependencies = [
  "bech32 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5417,7 +5416,7 @@ dependencies = [
 "checksum cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "b486ce3ccf7ffd79fdeb678eac06a9e6c09fc88d33836340becb8fffe87c5e33"
 "checksum cgmath 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)" = "64a4b57c8f4e3a2e9ac07e0f6abc9c24b6fc9e1b54c3478cfb598f3d0023e51c"
 "checksum chashmap 2.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "ff41a3c2c1e39921b9003de14bf0439c7b63a9039637c291e1a64925d8ddfa45"
-"checksum chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)" = "e8493056968583b0193c1bb04d6f7684586f3726992d6c573261941a895dbd68"
+"checksum chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)" = "31850b4a4d6bae316f7a09e691c944c28299298837edc0a03f755618c23cbc01"
 "checksum clang-sys 0.28.1 (registry+https://github.com/rust-lang/crates.io-index)" = "81de550971c976f176130da4b2978d3b524eaa0fd9ac31f3ceb5ae1231fb4853"
 "checksum clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5067f5bb2d80ef5d68b4c87db81601f0b75bca627bc2ef76b141d7b846a3c6d9"
 "checksum clear_on_drop 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "97276801e127ffb46b66ce23f35cc96bd454fa311294bced4bbace7baa8b1d17"
