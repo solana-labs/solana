@@ -493,7 +493,10 @@ impl Bank {
                 self.epoch_stakes
                     .remove(&(leader_schedule_epoch - MAX_LEADER_SCHEDULE_STAKES));
             }
-            error!("new epoch stakes: {:#?}", self.epoch_stakes.keys().collect::<Vec<_>>());
+            error!(
+                "new epoch stakes: {:#?}",
+                self.epoch_stakes.keys().collect::<Vec<_>>()
+            );
         }
     }
 

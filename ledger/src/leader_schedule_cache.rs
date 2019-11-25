@@ -87,7 +87,9 @@ impl LeaderScheduleCache {
         let slot_epoch = self.epoch_schedule.get_epoch_and_slot_index(slot).0;
         if slot_epoch < *self.max_epoch.read().unwrap() - MAX_LEADER_SCHEDULE_STAKES {
             panic!(
-                "Requested too old epoch!: {} < {}", slot_epoch, *self.max_epoch.read().unwrap()
+                "Requested too old epoch!: {} < {}",
+                slot_epoch,
+                *self.max_epoch.read().unwrap()
             );
         }
 
@@ -120,8 +122,15 @@ impl LeaderScheduleCache {
             );
             return None;
         }
-        if (self.get_epoch_schedule_else_compute(epoch, bank).is_none() /* && epoch < bank.epoch()*/) {
-            panic!("getting failed! epoch: {}, slot: {}, bank epoch: {}", epoch, current_slot, bank.epoch());
+        if self.get_epoch_schedule_else_compute(epoch, bank).is_none()
+        /* && epoch < bank.epoch()*/
+        {
+            panic!(
+                "getting failed! epoch: {}, slot: {}, bank epoch: {}",
+                epoch,
+                current_slot,
+                bank.epoch()
+            );
         }
         while let Some(leader_schedule) = self.get_epoch_schedule_else_compute(epoch, bank) {
             // clippy thinks I should do this:
