@@ -9,6 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
+itertools = "0.8.1"
 log = "0.4.8"
 rand = "0.6.5"
 solana-config-program = { path = "../programs/config", version = "0.22.0" }

@@ -23,11 +23,13 @@ use solana_sdk::{
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
     genesis_config::OperatingMode,
     poh_config::PohConfig,
+    signature::{Keypair, KeypairUtil},
 };
 use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
+    sync::Arc,
     thread::sleep,
     time::Duration,
 };
@@ -198,10 +200,15 @@ fn run_network_partition(partitions: &[&[(usize, bool)]]) {
         .flat_map(|p| p.iter().map(|(stake_weight, _)| 100 * *stake_weight as u64))
         .collect();
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
+    let validator_keys: Vec<_> = (0..partitions.len())
+        .map(|_| Arc::new(Keypair::new()))
+        .collect();
+    let validator_pubkeys: Vec<_> = validator_keys.iter().map(|v| v.pubkey()).collect();
     let mut config = ClusterConfig {
         cluster_lamports,
         node_stakes,
         validator_configs: vec![validator_config.clone(); num_nodes],
+        validator_keys: Some(validator_keys),
         ..ClusterConfig::default()
     };
     let now = timestamp();
@@ -224,7 +231,7 @@ fn run_network_partition(partitions: &[&[(usize, bool)]]) {
         "PARTITION_TEST starting cluster with {:?} partitions",
         partitions
     );
-    let (mut cluster, validator_pubkeys) = LocalCluster::new_with_keys(&config);
+    let mut cluster = LocalCluster::new(&config);
     let now = timestamp();
     let timeout = partition_start as i64 - now as i64;
     info!(
@@ -600,6 +607,7 @@ fn test_snapshots_blocktree_floor() {
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
         validator_stake,
+        Arc::new(Keypair::new()),
     );
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
@@ -887,7 +895,7 @@ fn run_repairman_catchup(num_repairmen: u64) {
     // Start up a new node, wait for catchup. Backwards repair won't be sufficient because the
     // leader is sending shreds past this validator's first two confirmed epochs. Thus, the repairman
     // protocol will have to kick in for this validator to repair.
-    cluster.add_validator(&validator_config, repairee_stake);
+    cluster.add_validator(&validator_config, repairee_stake, Arc::new(Keypair::new()));
 
     let all_pubkeys = cluster.get_node_pubkeys();
     let repairee_id = all_pubkeys

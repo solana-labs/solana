@@ -185,7 +185,7 @@ impl Validator {
             config.snapshot_config.clone(),
             poh_verify,
             config.dev_halt_at_slot,
-            config.fixed_leader_schedule,
+            config.fixed_leader_schedule.clone(),
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);

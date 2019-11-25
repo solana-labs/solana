@@ -1,4 +1,5 @@
 use crate::cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo};
+use itertools::izip;
 use log::*;
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
@@ -66,6 +67,8 @@ pub struct ClusterConfig {
     pub num_archivers: usize,
     /// Number of nodes that are unstaked and not voting (a.k.a listening)
     pub num_listeners: u64,
+    /// The specific pubkeys of each node if specified
+    pub validator_keys: Option<Vec<Arc<Keypair>>>,
     /// The stakes of each node
     pub node_stakes: Vec<u64>,
     /// The total lamports available to the cluster
@@ -85,6 +88,7 @@ impl Default for ClusterConfig {
             validator_configs: vec![],
             num_archivers: 0,
             num_listeners: 0,
+            validator_keys: None,
             node_stakes: vec![],
             cluster_lamports: 0,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
@@ -126,15 +130,21 @@ impl LocalCluster {
     }
 
     pub fn new(config: &ClusterConfig) -> Self {
-        Self::new_with_keys(config).0
-    }
-
-    pub fn new_with_keys(config: &ClusterConfig) -> (Self, Vec<Pubkey>) {
         assert_eq!(config.validator_configs.len(), config.node_stakes.len());
-        let leader_keypair = Arc::new(Keypair::new());
+        let validator_keys = {
+            if let Some(ref keys) = config.validator_keys {
+                assert_eq!(config.validator_configs.len(), keys.len());
+                keys.clone()
+            } else {
+                (0..config.validator_configs.len())
+                    .map(|_| Arc::new(Keypair::new()))
+                    .collect()
+            }
+        };
+
+        let leader_keypair = &validator_keys[0];
         let leader_pubkey = leader_keypair.pubkey();
-        let mut validator_pubkeys = vec![leader_pubkey];
-        let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
+        let leader_node = Node::new_localhost_with_pubkey(&leader_pubkey);
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,
@@ -213,7 +223,7 @@ impl LocalCluster {
         let mut validators = HashMap::new();
         error!("leader_pubkey: {}", leader_pubkey);
         let leader_info = ValidatorInfo {
-            keypair: leader_keypair,
+            keypair: leader_keypair.clone(),
             voting_keypair: leader_voting_keypair,
             storage_keypair: leader_storage_keypair,
             ledger_path: leader_ledger_path,
@@ -237,11 +247,12 @@ impl LocalCluster {
             archiver_infos: HashMap::new(),
         };
 
-        for (stake, validator_config) in (&config.node_stakes[1..])
-            .iter()
-            .zip((&config.validator_configs[1..]).iter())
-        {
-            validator_pubkeys.push(cluster.add_validator(validator_config, *stake));
+        for (stake, validator_config, key) in izip!(
+            (&config.node_stakes[1..]).iter(),
+            config.validator_configs[1..].iter(),
+            validator_keys[1..].iter(),
+        ) {
+            cluster.add_validator(validator_config, *stake, key.clone());
         }
 
         let listener_config = ValidatorConfig {
@@ -249,7 +260,7 @@ impl LocalCluster {
             ..config.validator_configs[0].clone()
         };
         (0..config.num_listeners).for_each(|_| {
-            cluster.add_validator(&listener_config, 0);
+            cluster.add_validator(&listener_config, 0, Arc::new(Keypair::new()));
         });
 
         discover_cluster(
@@ -268,7 +279,7 @@ impl LocalCluster {
         )
         .unwrap();
 
-        (cluster, validator_pubkeys)
+        cluster
     }
 
     pub fn exit(&mut self) {
@@ -294,14 +305,18 @@ impl LocalCluster {
         }
     }
 
-    pub fn add_validator(&mut self, validator_config: &ValidatorConfig, stake: u64) -> Pubkey {
+    pub fn add_validator(
+        &mut self,
+        validator_config: &ValidatorConfig,
+        stake: u64,
+        validator_keypair: Arc<Keypair>,
+    ) -> Pubkey {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             VALIDATOR_PORT_RANGE,
         );
 
         // Must have enough tokens to fund vote account and set delegate
-        let validator_keypair = Arc::new(Keypair::new());
         let voting_keypair = Keypair::new();
         let storage_keypair = Arc::new(Keypair::new());
         let validator_pubkey = validator_keypair.pubkey();
