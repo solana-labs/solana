@@ -24,6 +24,7 @@ impl AddressGenerator {
             .as_ref(),
         )
     }
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Pubkey {
         let nth = self.nth;
         self.nth += 1;

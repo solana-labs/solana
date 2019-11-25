@@ -1683,7 +1683,7 @@ mod tests {
         system_instruction,
         sysvar::{fees::Fees, rewards::Rewards},
     };
-    use solana_stake_program::stake_state::{Delegation, Stake};
+    use solana_stake_program::stake_state::{Authorized, Delegation, Lockup, Stake};
     use solana_vote_program::{
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
@@ -3920,5 +3920,50 @@ mod tests {
             bank1.register_tick(&Hash::default());
         }
         assert_ne!(bank1.hash_internal_state(), hash1);
+    }
+
+    #[ignore]
+    #[test]
+    fn test_banks_leak() {
+        fn add_lotsa_stake_accounts(genesis_config: &mut GenesisConfig) {
+            const LOTSA: usize = 4_096;
+
+            (0..LOTSA).for_each(|_| {
+                let pubkey = Pubkey::new_rand();
+                genesis_config.add_account(
+                    pubkey,
+                    solana_stake_program::stake_state::create_lockup_stake_account(
+                        &Authorized::auto(&pubkey),
+                        &Lockup::default(),
+                        &Rent::default(),
+                        42,
+                    ),
+                );
+            });
+        }
+        solana_logger::setup();
+        let (mut genesis_config, _) = create_genesis_config(100_000_000);
+        add_lotsa_stake_accounts(&mut genesis_config);
+        let mut bank = std::sync::Arc::new(Bank::new(&genesis_config));
+        let mut i = 0;
+        loop {
+            i += 1;
+            bank = std::sync::Arc::new(new_from_parent(&bank));
+            if i % 100 == 0 {
+                let mem = std::fs::read_to_string(format!("/proc/{}/statm", std::process::id()))
+                    .unwrap()
+                    .split_whitespace()
+                    .next()
+                    .unwrap()
+                    .parse::<usize>()
+                    .unwrap();
+                error!(
+                    "at {} banks: {} mem or {}kB/bank",
+                    i,
+                    mem * 4096,
+                    (mem * 4) / i
+                );
+            }
+        }
     }
 }
