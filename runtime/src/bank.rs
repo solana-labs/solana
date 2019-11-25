@@ -54,7 +54,7 @@ use std::{
 
 pub const SECONDS_PER_YEAR: f64 = (365.25 * 24.0 * 60.0 * 60.0);
 
-const MAX_LEADER_SCHEDULE_STAKES: Epoch = 32;
+pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 3;
 
 type BankStatusCache = StatusCache<Result<()>>;
 
@@ -493,6 +493,7 @@ impl Bank {
                 self.epoch_stakes
                     .remove(&(leader_schedule_epoch - MAX_LEADER_SCHEDULE_STAKES));
             }
+            error!("new epoch stakes: {:#?}", self.epoch_stakes.keys().collect::<Vec<_>>());
         }
     }
 
