@@ -301,11 +301,6 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    // The `get_confirmed_block` method is not fully implemented. It currenlty returns a partially
-    // complete RpcConfirmedBlock. The `blockhash` and `previous_blockhash` fields are legitimate
-    // data, while the `transactions` field contains transaction tuples (Transaction,
-    // transaction::Result), where the Transaction is a legitimate transaction, but the
-    // Option<RpcTransactionStatus> is always None.
     pub fn get_confirmed_block(&self, slot: Slot) -> Result<Option<RpcConfirmedBlock>> {
         Ok(self.blocktree.get_confirmed_block(slot).ok())
     }
@@ -980,6 +975,7 @@ pub mod tests {
     use crate::{
         contact_info::ContactInfo,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        replay_stage::tests::create_test_transactions_and_populate_blocktree,
     };
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
     use solana_ledger::get_tmp_ledger_path;
@@ -1007,6 +1003,7 @@ pub mod tests {
         alice: Keypair,
         leader_pubkey: Pubkey,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        confirmed_block_signatures: Vec<Signature>,
     }
 
     fn start_rpc_handler_with_tx(pubkey: &Pubkey) -> RpcHandler {
@@ -1026,6 +1023,18 @@ pub mod tests {
             Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
         let ledger_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blocktree = Arc::new(blocktree);
+
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+        bank.transfer(4, &alice, &keypair2.pubkey()).unwrap();
+        let confirmed_block_signatures = create_test_transactions_and_populate_blocktree(
+            vec![&alice, &keypair1, &keypair2, &keypair3],
+            0,
+            bank.clone(),
+            blocktree.clone(),
+        );
 
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
@@ -1042,7 +1051,7 @@ pub mod tests {
             JsonRpcConfig::default(),
             bank_forks,
             block_commitment_cache.clone(),
-            Arc::new(blocktree),
+            blocktree,
             StorageState::default(),
             &validator_exit,
         )));
@@ -1074,6 +1083,7 @@ pub mod tests {
             alice,
             leader_pubkey,
             block_commitment_cache,
+            confirmed_block_signatures,
         }
     }
 
@@ -1180,7 +1190,7 @@ pub mod tests {
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta);
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":1,"id":1}}"#);
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":3,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
@@ -1768,5 +1778,44 @@ pub mod tests {
             };
         assert_eq!(commitment, None);
         assert_eq!(total_staked, 42);
+    }
+
+    #[test]
+    fn test_get_confirmed_block() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io,
+            meta,
+            confirmed_block_signatures,
+            blockhash,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req =
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0]}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_block: Option<RpcConfirmedBlock> =
+            serde_json::from_value(result["result"].clone()).unwrap();
+        let confirmed_block = confirmed_block.unwrap();
+        assert_eq!(confirmed_block.transactions.len(), 3);
+
+        for (transaction, result) in confirmed_block.transactions.into_iter() {
+            if transaction.signatures[0] == confirmed_block_signatures[0] {
+                assert_eq!(transaction.message.recent_blockhash, blockhash);
+                assert_eq!(result.unwrap().status, Ok(()));
+            } else if transaction.signatures[0] == confirmed_block_signatures[1] {
+                assert_eq!(
+                    result.unwrap().status,
+                    Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::CustomError(1)
+                    ))
+                );
+            } else {
+                assert_eq!(result, None);
+            }
+        }
     }
 }
