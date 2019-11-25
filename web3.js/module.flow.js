@@ -96,10 +96,17 @@ declare module '@solana/web3.js' {
     commission: number,
   };
 
+  declare export type SlotInfo = {
+    parent: 'number',
+    slot: 'number',
+    root: 'number',
+  };
+
   declare type AccountChangeCallback = (accountInfo: AccountInfo) => void;
   declare type ProgramAccountChangeCallback = (
     keyedAccountInfo: KeyedAccountInfo,
   ) => void;
+  declare type SlotChangeCallback = (slotInfo: SlotInfo) => void;
 
   declare export type SignatureSuccess = {|
     Ok: null,
@@ -191,6 +198,7 @@ declare module '@solana/web3.js' {
       programId: PublicKey,
       callback: ProgramAccountChangeCallback,
     ): number;
+    onSlotChange(callback: SlotChangeCallback): number;
     removeProgramAccountChangeListener(id: number): Promise<void>;
     validatorExit(): Promise<boolean>;
   }
