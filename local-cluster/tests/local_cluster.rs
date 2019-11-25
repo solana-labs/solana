@@ -8,7 +8,10 @@ use solana_core::{
     partition_cfg::{Partition, PartitionCfg},
     validator::ValidatorConfig,
 };
-use solana_ledger::{bank_forks::SnapshotConfig, blocktree::Blocktree, snapshot_utils};
+use solana_ledger::{
+    bank_forks::SnapshotConfig, blocktree::Blocktree, leader_schedule::FixedSchedule,
+    leader_schedule::LeaderSchedule, snapshot_utils,
+};
 use solana_local_cluster::{
     cluster::Cluster,
     cluster_tests,
@@ -190,19 +193,40 @@ fn test_leader_failure_4() {
     );
 }
 
-fn run_network_partition(partitions: &[&[(usize, bool)]]) {
+fn run_network_partition(
+    partitions: &[&[(usize, bool)]],
+    fixed_schedule: Option<(FixedSchedule, Vec<Arc<Keypair>>)>,
+) {
     solana_logger::setup();
     info!("PARTITION_TEST!");
-    let num_nodes = partitions.iter().map(|x| x.len()).sum();
-    let validator_config = ValidatorConfig::default();
+    let num_nodes = partitions.len();
     let node_stakes: Vec<_> = partitions
         .iter()
         .flat_map(|p| p.iter().map(|(stake_weight, _)| 100 * *stake_weight as u64))
         .collect();
+    assert_eq!(node_stakes.len(), num_nodes);
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
-    let validator_keys: Vec<_> = (0..partitions.len())
-        .map(|_| Arc::new(Keypair::new()))
-        .collect();
+
+    let mut validator_config = ValidatorConfig::default();
+    let (validator_keys, wait_time): (Vec<_>, u64) = {
+        if let Some((fixed_schedule, validator_keys)) = fixed_schedule {
+            assert_eq!(validator_keys.len(), num_nodes);
+            let num_slots_per_rotation = fixed_schedule.leader_schedule.num_slots() as u64;
+            validator_config.fixed_leader_schedule = Some(fixed_schedule);
+            (
+                validator_keys,
+                num_slots_per_rotation * clock::DEFAULT_MS_PER_SLOT,
+            )
+        } else {
+            (
+                (0..partitions.len())
+                    .map(|_| Arc::new(Keypair::new()))
+                    .collect(),
+                10_000,
+            )
+        }
+    };
+
     let validator_pubkeys: Vec<_> = validator_keys.iter().map(|v| v.pubkey()).collect();
     let mut config = ClusterConfig {
         cluster_lamports,
@@ -211,9 +235,10 @@ fn run_network_partition(partitions: &[&[(usize, bool)]]) {
         validator_keys: Some(validator_keys),
         ..ClusterConfig::default()
     };
+
     let now = timestamp();
     let partition_start = now + 60_000;
-    let partition_end = partition_start + 10_000;
+    let partition_end = partition_start + wait_time as u64;
     let mut validator_index = 0;
     for (i, partition) in partitions.iter().enumerate() {
         for _ in partition.iter() {
@@ -256,7 +281,9 @@ fn run_network_partition(partitions: &[&[(usize, bool)]]) {
         .collect();
     assert_eq!(should_exits.len(), validator_pubkeys.len());
     if timeout > 0 {
-        sleep(Duration::from_millis(timeout as u64 + 10_000));
+        // Give partitions time to propagate their blocks after the partition resolves
+        let propagation_time = wait_time;
+        sleep(Duration::from_millis(timeout as u64 + propagation_time));
         for (pubkey, should_exit) in validator_pubkeys.iter().zip(should_exits) {
             if *should_exit {
                 info!("Killing validator with id: {}", pubkey);
@@ -311,7 +338,7 @@ fn run_network_partition(partitions: &[&[(usize, bool)]]) {
 #[test]
 #[serial]
 fn test_network_partition_1_2() {
-    run_network_partition(&[&[(1, false)], &[(1, false), (1, false)]])
+    run_network_partition(&[&[(1, false)], &[(1, false), (1, false)]], None)
 }
 
 #[allow(unused_attributes)]
@@ -319,25 +346,43 @@ fn test_network_partition_1_2() {
 #[test]
 #[serial]
 fn test_network_partition_1_1() {
-    run_network_partition(&[&[(1, false)], &[(1, false)]])
+    run_network_partition(&[&[(1, false)], &[(1, false)]], None)
 }
 
 #[test]
 #[serial]
 fn test_network_partition_1_1_1() {
-    run_network_partition(&[&[(1, false)], &[(1, false)], &[(1, false)]])
+    run_network_partition(&[&[(1, false)], &[(1, false)], &[(1, false)]], None)
 }
 
 #[test]
 #[serial]
 fn test_kill_partition() {
-    run_network_partition(&[
-        &[(32, true)],
-        &[(17, false)],
-        &[(17, false)],
-        &[(17, false)],
-        &[(17, false)],
-    ])
+    let mut leader_schedule = vec![];
+    let num_slots_per_validator = 8;
+    let partitions: [&[(usize, bool)]; 3] = [&[(9, true)], &[(10, false)], &[(10, false)]];
+    let validator_keys: Vec<_> = (0..partitions.len())
+        .map(|_| Arc::new(Keypair::new()))
+        .collect();
+    for (i, k) in validator_keys.iter().enumerate() {
+        let num_slots = {
+            if i == 0 {
+                // Set up the leader to have 50% of the slots
+                num_slots_per_validator * (partitions.len() - 1)
+            } else {
+                num_slots_per_validator
+            }
+        };
+        for _ in 0..num_slots {
+            leader_schedule.push(k.pubkey())
+        }
+    }
+
+    let fixed_schedule = FixedSchedule {
+        start_epoch: 2,
+        leader_schedule: Arc::new(LeaderSchedule::new_from_schedule(leader_schedule)),
+    };
+    run_network_partition(&partitions, Some((fixed_schedule, validator_keys)))
 }
 
 #[test]
