@@ -22,7 +22,7 @@ pub struct Response<T> {
     pub value: T,
 }
 
-#[derive(Debug, Default, PartialEq, Serialize)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedBlock {
     pub previous_blockhash: Hash,
