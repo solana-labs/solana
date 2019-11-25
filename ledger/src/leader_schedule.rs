@@ -3,6 +3,14 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_sdk::pubkey::Pubkey;
 use std::ops::Index;
+use std::sync::Arc;
+
+// Used for testing
+#[derive(Clone, Debug)]
+pub struct FixedSchedule {
+    pub leader_schedule: Arc<LeaderSchedule>,
+    pub start_epoch: u64,
+}
 
 /// Stake-weighted leader schedule for one epoch.
 #[derive(Debug, Default, PartialEq)]
