@@ -16,6 +16,7 @@ pub use crate::{
     blocktree_meta::SlotMeta,
 };
 use bincode::deserialize;
+use chrono::{offset::TimeZone, Duration, Utc};
 use log::*;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
@@ -27,7 +28,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
-    clock::{Slot, DEFAULT_TICKS_PER_SECOND},
+    clock::{Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SECOND},
     genesis_config::GenesisConfig,
     hash::Hash,
     signature::{Keypair, KeypairUtil, Signature},
@@ -38,6 +39,7 @@ use std::{
     cell::RefCell,
     cmp,
     collections::HashMap,
+    convert::TryFrom,
     fs,
     path::{Path, PathBuf},
     rc::Rc,
@@ -1127,6 +1129,24 @@ impl Blocktree {
             )
         } else {
             vec![]
+        }
+    }
+
+    // The `get_block_time` method is not fully implemented (depends on validator timestamp
+    // transactions). It currently returns Some(`slot` * DEFAULT_MS_PER_SLOT) offset from 0 for all
+    // transactions, and None for any values that would overflow any step.
+    pub fn get_block_time(&self, slot: Slot) -> Option<UnixTimestamp> {
+        let (offset_millis, overflow) = slot.overflowing_mul(DEFAULT_MS_PER_SLOT);
+        if !overflow {
+            i64::try_from(offset_millis)
+                .ok()
+                .and_then(|millis| {
+                    let median_datetime = Utc.timestamp(0, 0);
+                    median_datetime.checked_add_signed(Duration::milliseconds(millis))
+                })
+                .map(|dt| dt.timestamp())
+        } else {
+            None
         }
     }
 

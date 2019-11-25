@@ -20,7 +20,7 @@ use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
-    clock::Slot,
+    clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
@@ -304,6 +304,13 @@ impl JsonRpcRequestProcessor {
     pub fn get_confirmed_block(&self, slot: Slot) -> Result<Option<RpcConfirmedBlock>> {
         Ok(self.blocktree.get_confirmed_block(slot).ok())
     }
+
+    // The `get_block_time` method is not fully implemented. It currently returns `slot` *
+    // DEFAULT_MS_PER_SLOT offset from 0 for all requests, and null for any values that would
+    // overflow.
+    pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
+        Ok(self.blocktree.get_block_time(slot))
+    }
 }
 
 fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
@@ -513,6 +520,9 @@ pub trait RpcSol {
         meta: Self::Metadata,
         slot: Slot,
     ) -> Result<Option<RpcConfirmedBlock>>;
+
+    #[rpc(meta, name = "getBlockTime")]
+    fn get_block_time(&self, meta: Self::Metadata, slot: Slot) -> Result<Option<UnixTimestamp>>;
 }
 
 pub struct RpcSolImpl;
@@ -967,6 +977,10 @@ impl RpcSol for RpcSolImpl {
             .unwrap()
             .get_confirmed_block(slot)
     }
+
+    fn get_block_time(&self, meta: Self::Metadata, slot: Slot) -> Result<Option<UnixTimestamp>> {
+        meta.request_processor.read().unwrap().get_block_time(slot)
+    }
 }
 
 #[cfg(test)]
@@ -980,6 +994,7 @@ pub mod tests {
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
     use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::{
+        clock::DEFAULT_MS_PER_SLOT,
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
         instruction::InstructionError,
@@ -1817,5 +1832,56 @@ pub mod tests {
                 assert_eq!(result, None);
             }
         }
+    }
+
+    #[test]
+    fn test_get_block_time() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let slot = 100;
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockTime","params":[{}]}}"#,
+            slot
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = format!(
+            r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#,
+            slot * DEFAULT_MS_PER_SLOT / 1000
+        );
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        let slot = 12345;
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockTime","params":[{}]}}"#,
+            slot
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = format!(
+            r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#,
+            slot * DEFAULT_MS_PER_SLOT / 1000
+        );
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        let slot = 123450000000000000u64;
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockTime","params":[{}]}}"#,
+            slot
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":null,"id":1}}"#);
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
     }
 }
