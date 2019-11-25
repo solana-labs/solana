@@ -86,6 +86,19 @@ impl Pool {
         job.execute();
         job.wait(self.senders.len() + 1);
     }
+    pub fn map<F, A, B>(&self, inputs: &[A], func: F) -> Vec<B>
+    where
+        B: Default + Clone,
+        F: (Fn(&A) -> B) + 'static,
+    {
+        let mut outs = Vec::new();
+        outs.resize(inputs.len(), B::default());
+        let mut elems: Vec<(&A, &mut B)> = inputs.iter().zip(outs.iter_mut()).collect();
+        self.dispatch_mut(&mut elems, move |item: &mut (&A, &mut B)| {
+            *item.1 = func(item.0);
+        });
+        outs
+    }
 }
 
 #[cfg(test)]
@@ -99,6 +112,16 @@ mod tests {
         let expected = [1usize; 100];
         for i in 0..100 {
             assert_eq!(array[i], expected[i]);
+        }
+    }
+    #[test]
+    fn test_map() {
+        let pool = Pool::default();
+        let array = [0usize; 100];
+        let output = pool.map(&array, |val: &usize| val + 1);
+        let expected = [1usize; 100];
+        for i in 0..100 {
+            assert_eq!(expected[i], output[i]);
         }
     }
 }

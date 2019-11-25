@@ -5,7 +5,6 @@ use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use crate::rent_collector::RentCollector;
 use log::*;
-use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
@@ -288,8 +287,8 @@ impl Accounts {
     /// returns only the latest/current version of B for this slot
     fn scan_slot<F, B>(&self, slot: Slot, func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount) -> Option<B> + Send + Sync,
-        B: Send + Default,
+        F: Fn(&StoredAccount) -> Option<B> + 'static,
+        B: Clone + Default,
     {
         let accumulator: Vec<Vec<(Pubkey, u64, B)>> = self.accounts_db.scan_account_storage(
             slot,
@@ -307,9 +306,7 @@ impl Accounts {
         );
 
         let mut versions: Vec<(Pubkey, u64, B)> = accumulator.into_iter().flatten().collect();
-        self.accounts_db.thread_pool.install(|| {
-            versions.par_sort_by_key(|s| (s.0, s.1));
-        });
+        versions.sort_by_key(|s| (s.0, s.1));
         versions.dedup_by_key(|s| s.0);
         versions
             .into_iter()

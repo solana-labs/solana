@@ -246,26 +246,20 @@ pub fn generate_offsets(
 
 thread_local!(static RAYOFF_POOL: RefCell<Pool> = RefCell::new(Pool::default()));
 
-pub fn ed25519_verify_rayoff(batches: &[Packets]) -> Vec<Vec<u8>> {
+pub fn ed25519_verify_cpu(batches: &[Packets]) -> Vec<Vec<u8>> {
     let count = batch_size(batches);
     debug!("CPU ECDSA for {}", batch_size(batches));
     let rv = batches
         .iter()
         .map(|batch| {
-            let mut items: Vec<(_, u8)> = batch.packets.iter().map(|b| (b, 0)).collect();
-            RAYOFF_POOL.with(|pool| {
-                pool.borrow()
-                    .dispatch_mut(&mut items, |(packet, out)| *out = verify_packet(packet));
-                let rv: Vec<u8> = items.into_iter().map(|x| x.1).collect();
-                rv
-            })
+            RAYOFF_POOL.with(|pool| pool.borrow().map(&batch.packets[..], |p| verify_packet(p)))
         })
         .collect();
     inc_new_counter_debug!("ed25519_verify_cpu", count);
     rv
 }
 
-pub fn ed25519_verify_cpu(batches: &[Packets]) -> Vec<Vec<u8>> {
+pub fn ed25519_verify_rayon(batches: &[Packets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("CPU ECDSA for {}", batch_size(batches));

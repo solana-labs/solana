@@ -24,7 +24,7 @@ fn bench_sigverify(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn bench_sigverify_rayoff(bencher: &mut Bencher) {
+fn bench_sigverify_rayon(bencher: &mut Bencher) {
     let tx = test_tx();
 
     // generate packet vector
@@ -32,7 +32,7 @@ fn bench_sigverify_rayoff(bencher: &mut Bencher) {
 
     // verify packets
     bencher.iter(|| {
-        let _ans = sigverify::ed25519_verify_rayoff(&batches);
+        let _ans = sigverify::ed25519_verify_rayon(&batches);
     })
 }
 

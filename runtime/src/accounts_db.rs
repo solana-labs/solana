@@ -25,8 +25,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use fs_extra::dir::CopyOptions;
 use log::*;
 use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use rayon::ThreadPool;
+use rayoff::rayoff::Pool;
 use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
@@ -78,6 +77,7 @@ pub struct AccountInfo {
     /// lamports in the account used when squashing kept for optimization
     /// purposes to remove accounts with zero balance.
     lamports: u64,
+
 }
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
@@ -379,15 +379,14 @@ pub struct AccountsDB {
     /// Starting file size of appendvecs
     file_size: u64,
 
-    /// Thread pool used for par_iter
-    pub thread_pool: ThreadPool,
-
     /// Number of append vecs to create to maximize parallelism when scanning
     /// the accounts
     min_num_stores: usize,
 
     /// slot to BankHash and a status flag to indicate if the hash has been initialized or not
     pub slot_hashes: RwLock<HashMap<Slot, BankHash>>,
+
+    pub thread_pool: Arc<Pool>,
 }
 
 impl Default for AccountsDB {
@@ -402,12 +401,9 @@ impl Default for AccountsDB {
             paths: RwLock::new(vec![]),
             temp_paths: None,
             file_size: DEFAULT_FILE_SIZE,
-            thread_pool: rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap(),
             min_num_stores: num_threads,
             slot_hashes: RwLock::new(HashMap::default()),
+            thread_pool: Arc::new(Pool::default()),
         }
     }
 }
@@ -615,8 +611,8 @@ impl AccountsDB {
     // PERF: Sequentially read each storage entry in parallel
     pub fn scan_account_storage<F, B>(&self, slot_id: Slot, scan_func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount, AppendVecId, &mut B) -> () + Send + Sync,
-        B: Send + Default,
+        F: Fn(&StoredAccount, AppendVecId, &mut B) -> () + 'static,
+        B: Default + Clone,
     {
         let storage_maps: Vec<Arc<AccountStorageEntry>> = self
             .storage
@@ -628,19 +624,14 @@ impl AccountsDB {
             .values()
             .cloned()
             .collect();
-        self.thread_pool.install(|| {
-            storage_maps
-                .into_par_iter()
-                .map(|storage| {
-                    let accounts = storage.accounts.accounts(0);
-                    let mut retval = B::default();
-                    accounts.iter().for_each(|stored_account| {
-                        scan_func(stored_account, storage.id, &mut retval)
-                    });
-                    retval
-                })
-                .collect()
-        })
+        self.thread_pool.map(&storage_maps, |storage| {
+                let accounts = storage.accounts.accounts(0);
+                let mut retval = B::default();
+                accounts
+                    .iter()
+                    .for_each(|stored_account| scan_func(stored_account, storage.id, &mut retval));
+                retval
+            })
     }
 
     pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
