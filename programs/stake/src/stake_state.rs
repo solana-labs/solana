@@ -44,17 +44,27 @@ impl StakeState {
     pub fn stake_from(account: &Account) -> Option<Stake> {
         Self::from(account).and_then(|state: Self| state.stake())
     }
-
-    pub fn authorized_from(account: &Account) -> Option<Authorized> {
-        Self::from(account).and_then(|state: Self| state.authorized())
-    }
-
     pub fn stake(&self) -> Option<Stake> {
         match self {
             StakeState::Stake(_meta, stake) => Some(*stake),
             _ => None,
         }
     }
+
+    pub fn delegation_from(account: &Account) -> Option<Delegation> {
+        Self::from(account).and_then(|state: Self| state.delegation())
+    }
+    pub fn delegation(&self) -> Option<Delegation> {
+        match self {
+            StakeState::Stake(_meta, stake) => Some(stake.delegation),
+            _ => None,
+        }
+    }
+
+    pub fn authorized_from(account: &Account) -> Option<Authorized> {
+        Self::from(account).and_then(|state: Self| state.authorized())
+    }
+
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
             StakeState::Stake(meta, _stake) => Some(meta.authorized),
@@ -105,82 +115,47 @@ impl Meta {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
-pub struct Stake {
-    /// most recently delegated vote account pubkey
+pub struct Delegation {
+    /// to whom the stake is delegated
     pub voter_pubkey: Pubkey,
-    /// the epoch when voter_pubkey was most recently set
-    pub voter_pubkey_epoch: Epoch,
-    /// credits observed is credits from vote account state when delegated or redeemed
-    pub credits_observed: u64,
     /// activated stake amount, set at delegate_stake() time
     pub stake: u64,
     /// epoch at which this stake was activated, std::Epoch::MAX if is a bootstrap stake
     pub activation_epoch: Epoch,
     /// epoch the stake was deactivated, std::Epoch::MAX if not deactivated
     pub deactivation_epoch: Epoch,
-    /// stake config (warmup, etc.)
-    pub config: Config,
-    /// history of prior delegates and the epoch ranges for which
-    ///  they were set, circular buffer
-    pub prior_delegates: [(Pubkey, Epoch, Epoch, Slot); MAX_PRIOR_DELEGATES],
-    /// next pointer
-    pub prior_delegates_idx: usize,
+    /// how much stake we can activate per-epoch as a fraction of currently effective stake
+    pub warmup_cooldown_rate: f64,
 }
 
-const MAX_PRIOR_DELEGATES: usize = 32; // this is how many epochs a stake is exposed to a slashing condition
-
-impl Default for Stake {
+impl Default for Delegation {
     fn default() -> Self {
         Self {
             voter_pubkey: Pubkey::default(),
-            voter_pubkey_epoch: 0,
-            credits_observed: 0,
             stake: 0,
             activation_epoch: 0,
             deactivation_epoch: std::u64::MAX,
-            config: Config::default(),
-            prior_delegates: <[(Pubkey, Epoch, Epoch, Slot); MAX_PRIOR_DELEGATES]>::default(),
-            prior_delegates_idx: MAX_PRIOR_DELEGATES - 1,
+            warmup_cooldown_rate: Config::default().warmup_cooldown_rate,
         }
     }
 }
 
-impl Authorized {
-    pub fn auto(authorized: &Pubkey) -> Self {
+impl Delegation {
+    pub fn new(
+        voter_pubkey: &Pubkey,
+        stake: u64,
+        activation_epoch: Epoch,
+        warmup_cooldown_rate: f64,
+    ) -> Self {
         Self {
-            staker: *authorized,
-            withdrawer: *authorized,
+            voter_pubkey: *voter_pubkey,
+            stake,
+            activation_epoch,
+            warmup_cooldown_rate,
+            ..Delegation::default()
         }
     }
-    pub fn check(
-        &self,
-        signers: &HashSet<Pubkey>,
-        stake_authorize: StakeAuthorize,
-    ) -> Result<(), InstructionError> {
-        match stake_authorize {
-            StakeAuthorize::Staker if signers.contains(&self.staker) => Ok(()),
-            StakeAuthorize::Withdrawer if signers.contains(&self.withdrawer) => Ok(()),
-            _ => Err(InstructionError::MissingRequiredSignature),
-        }
-    }
-
-    pub fn authorize(
-        &mut self,
-        signers: &HashSet<Pubkey>,
-        new_authorized: &Pubkey,
-        stake_authorize: StakeAuthorize,
-    ) -> Result<(), InstructionError> {
-        self.check(signers, stake_authorize)?;
-        match stake_authorize {
-            StakeAuthorize::Staker => self.staker = *new_authorized,
-            StakeAuthorize::Withdrawer => self.withdrawer = *new_authorized,
-        }
-        Ok(())
-    }
-}
-
-impl Stake {
-    fn is_bootstrap(&self) -> bool {
+    pub fn is_bootstrap(&self) -> bool {
         self.activation_epoch == std::u64::MAX
     }
 
@@ -222,7 +197,7 @@ impl Stake {
 
                 // portion of activating stake in this epoch I'm entitled to
                 effective_stake = effective_stake.saturating_sub(
-                    ((weight * entry.effective as f64 * self.config.cooldown_rate) as u64).max(1),
+                    ((weight * entry.effective as f64 * self.warmup_cooldown_rate) as u64).max(1),
                 );
 
                 if effective_stake == 0 {
@@ -274,7 +249,7 @@ impl Stake {
 
                 // portion of activating stake in this epoch I'm entitled to
                 effective_stake +=
-                    ((weight * entry.effective as f64 * self.config.warmup_rate) as u64).max(1);
+                    ((weight * entry.effective as f64 * self.warmup_cooldown_rate) as u64).max(1);
 
                 if effective_stake >= self.stake {
                     effective_stake = self.stake;
@@ -297,7 +272,74 @@ impl Stake {
             (self.stake, 0)
         }
     }
+}
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+pub struct Stake {
+    pub delegation: Delegation,
+    /// the epoch when voter_pubkey was most recently set
+    pub voter_pubkey_epoch: Epoch,
+    /// credits observed is credits from vote account state when delegated or redeemed
+    pub credits_observed: u64,
+    /// history of prior delegates and the epoch ranges for which
+    ///  they were set, circular buffer
+    pub prior_delegates: [(Pubkey, Epoch, Epoch, Slot); MAX_PRIOR_DELEGATES],
+    /// next pointer
+    pub prior_delegates_idx: usize,
+}
+
+const MAX_PRIOR_DELEGATES: usize = 32; // this is how many epochs a stake is exposed to a slashing condition
+
+impl Default for Stake {
+    fn default() -> Self {
+        Self {
+            delegation: Delegation::default(),
+            voter_pubkey_epoch: 0,
+            credits_observed: 0,
+            prior_delegates: <[(Pubkey, Epoch, Epoch, Slot); MAX_PRIOR_DELEGATES]>::default(),
+            prior_delegates_idx: MAX_PRIOR_DELEGATES - 1,
+        }
+    }
+}
+
+impl Authorized {
+    pub fn auto(authorized: &Pubkey) -> Self {
+        Self {
+            staker: *authorized,
+            withdrawer: *authorized,
+        }
+    }
+    pub fn check(
+        &self,
+        signers: &HashSet<Pubkey>,
+        stake_authorize: StakeAuthorize,
+    ) -> Result<(), InstructionError> {
+        match stake_authorize {
+            StakeAuthorize::Staker if signers.contains(&self.staker) => Ok(()),
+            StakeAuthorize::Withdrawer if signers.contains(&self.withdrawer) => Ok(()),
+            _ => Err(InstructionError::MissingRequiredSignature),
+        }
+    }
+
+    pub fn authorize(
+        &mut self,
+        signers: &HashSet<Pubkey>,
+        new_authorized: &Pubkey,
+        stake_authorize: StakeAuthorize,
+    ) -> Result<(), InstructionError> {
+        self.check(signers, stake_authorize)?;
+        match stake_authorize {
+            StakeAuthorize::Staker => self.staker = *new_authorized,
+            StakeAuthorize::Withdrawer => self.withdrawer = *new_authorized,
+        }
+        Ok(())
+    }
+}
+
+impl Stake {
+    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
+        self.delegation.stake(epoch, history)
+    }
     /// for a given stake and vote_state, calculate what distributions and what updates should be made
     /// returns a tuple in the case of a payout of:
     ///   * voter_rewards to be distributed
@@ -332,7 +374,7 @@ impl Stake {
             };
 
             total_rewards +=
-                (self.stake(*epoch, stake_history) * epoch_credits) as f64 * point_value;
+                (self.delegation.stake(*epoch, stake_history) * epoch_credits) as f64 * point_value;
 
             // don't want to assume anything about order of the iterator...
             credits_observed = credits_observed.max(*credits);
@@ -372,25 +414,28 @@ impl Stake {
         self.prior_delegates_idx %= MAX_PRIOR_DELEGATES;
 
         self.prior_delegates[self.prior_delegates_idx] = (
-            self.voter_pubkey,
+            self.delegation.voter_pubkey,
             self.voter_pubkey_epoch,
             clock.epoch,
             clock.slot,
         );
 
-        self.voter_pubkey = *voter_pubkey;
+        self.delegation.voter_pubkey = *voter_pubkey;
         self.voter_pubkey_epoch = clock.epoch;
         self.credits_observed = vote_state.credits();
         Ok(())
     }
 
     fn split(&mut self, lamports: u64) -> Result<Self, StakeError> {
-        if lamports > self.stake {
+        if lamports > self.delegation.stake {
             return Err(StakeError::InsufficientStake);
         }
-        self.stake -= lamports;
+        self.delegation.stake -= lamports;
         let new = Self {
-            stake: lamports,
+            delegation: Delegation {
+                stake: lamports,
+                ..self.delegation
+            },
             ..*self
         };
         Ok(new)
@@ -404,21 +449,23 @@ impl Stake {
         config: &Config,
     ) -> Self {
         Self {
-            stake,
-            activation_epoch,
-            voter_pubkey: *voter_pubkey,
+            delegation: Delegation::new(
+                voter_pubkey,
+                stake,
+                activation_epoch,
+                config.warmup_cooldown_rate,
+            ),
             voter_pubkey_epoch: activation_epoch,
             credits_observed: vote_state.credits(),
-            config: *config,
             ..Stake::default()
         }
     }
 
     fn deactivate(&mut self, epoch: Epoch) -> Result<(), StakeError> {
-        if self.deactivation_epoch != std::u64::MAX {
+        if self.delegation.deactivation_epoch != std::u64::MAX {
             Err(StakeError::AlreadyDeactivated)
         } else {
-            self.deactivation_epoch = epoch;
+            self.delegation.deactivation_epoch = epoch;
             Ok(())
         }
     }
@@ -576,7 +623,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
             // the only valid use of current voter_pubkey, redelegation breaks
             //  rewards redemption for previous voter_pubkey
-            if stake.voter_pubkey != *vote_account.unsigned_key() {
+            if stake.delegation.voter_pubkey != *vote_account.unsigned_key() {
                 return Err(InstructionError::InvalidArgument);
             }
 
@@ -596,7 +643,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 vote_account.account.lamports += voters_reward;
 
                 stake.credits_observed = credits_observed;
-                stake.stake += stakers_reward;
+                stake.delegation.stake += stakers_reward;
 
                 self.set_state(&StakeState::Stake(meta, stake))
             } else {
@@ -688,13 +735,13 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Stake(meta, stake) => {
                 meta.authorized.check(signers, StakeAuthorize::Withdrawer)?;
                 // if we have a deactivation epoch and we're in cooldown
-                let staked = if clock.epoch >= stake.deactivation_epoch {
-                    stake.stake(clock.epoch, Some(stake_history))
+                let staked = if clock.epoch >= stake.delegation.deactivation_epoch {
+                    stake.delegation.stake(clock.epoch, Some(stake_history))
                 } else {
                     // Assume full stake if the stake account hasn't been
                     //  de-activated, because in the future the exposed stake
                     //  might be higher than stake.stake() due to warmup
-                    stake.stake
+                    stake.delegation.stake
                 };
 
                 (meta.lockup, staked + meta.rent_exempt_reserve, staked != 0)
@@ -746,7 +793,7 @@ pub fn new_stake_history_entry<'a, I>(
     history: Option<&StakeHistory>,
 ) -> StakeHistoryEntry
 where
-    I: Iterator<Item = &'a Stake>,
+    I: Iterator<Item = &'a Delegation>,
 {
     // whatever the stake says they  had for the epoch
     //  and whatever the were still waiting for
@@ -820,17 +867,17 @@ mod tests {
     #[test]
     fn test_stake_is_bootstrap() {
         assert_eq!(
-            Stake {
+            Delegation {
                 activation_epoch: std::u64::MAX,
-                ..Stake::default()
+                ..Delegation::default()
             }
             .is_bootstrap(),
             true
         );
         assert_eq!(
-            Stake {
+            Delegation {
                 activation_epoch: 0,
-                ..Stake::default()
+                ..Delegation::default()
             }
             .is_bootstrap(),
             false
@@ -911,12 +958,15 @@ mod tests {
         assert_eq!(
             stake,
             Stake {
-                voter_pubkey: vote_pubkey,
+                delegation: Delegation {
+                    voter_pubkey: vote_pubkey,
+                    stake: stake_lamports,
+                    activation_epoch: clock.epoch,
+                    deactivation_epoch: std::u64::MAX,
+                    ..Delegation::default()
+                },
                 voter_pubkey_epoch: clock.epoch,
                 credits_observed: vote_state.credits(),
-                stake: stake_lamports,
-                activation_epoch: clock.epoch,
-                deactivation_epoch: std::u64::MAX,
                 ..Stake::default()
             }
         );
@@ -950,7 +1000,10 @@ mod tests {
     fn test_stake_redelegate() {
         // what a freshly delegated stake looks like
         let mut stake = Stake {
-            voter_pubkey: Pubkey::new_rand(),
+            delegation: Delegation {
+                voter_pubkey: Pubkey::new_rand(),
+                ..Delegation::default()
+            },
             voter_pubkey_epoch: 0,
             ..Stake::default()
         };
@@ -981,22 +1034,22 @@ mod tests {
                 ),
                 Err(StakeError::TooSoonToRedelegate)
             );
-            assert_eq!(stake.voter_pubkey, voter_pubkey);
+            assert_eq!(stake.delegation.voter_pubkey, voter_pubkey);
         }
     }
 
-    fn create_stake_history_from_stakes(
+    fn create_stake_history_from_delegations(
         bootstrap: Option<u64>,
         epochs: std::ops::Range<Epoch>,
-        stakes: &[Stake],
+        delegations: &[Delegation],
     ) -> StakeHistory {
         let mut stake_history = StakeHistory::default();
 
-        let bootstrap_stake = if let Some(bootstrap) = bootstrap {
-            vec![Stake {
+        let bootstrap_delegation = if let Some(bootstrap) = bootstrap {
+            vec![Delegation {
                 activation_epoch: std::u64::MAX,
                 stake: bootstrap,
-                ..Stake::default()
+                ..Delegation::default()
             }]
         } else {
             vec![]
@@ -1005,7 +1058,7 @@ mod tests {
         for epoch in epochs {
             let entry = new_stake_history_entry(
                 epoch,
-                stakes.iter().chain(bootstrap_stake.iter()),
+                delegations.iter().chain(bootstrap_delegation.iter()),
                 Some(&stake_history),
             );
             stake_history.add(epoch, entry);
@@ -1016,15 +1069,15 @@ mod tests {
 
     #[test]
     fn test_stake_activating_and_deactivating() {
-        let stake = Stake {
+        let stake = Delegation {
             stake: 1_000,
             activation_epoch: 0, // activating at zero
             deactivation_epoch: 5,
-            ..Stake::default()
+            ..Delegation::default()
         };
 
         // save this off so stake.config.warmup_rate changes don't break this test
-        let increment = (1_000 as f64 * stake.config.warmup_rate) as u64;
+        let increment = (1_000 as f64 * stake.warmup_cooldown_rate) as u64;
 
         let mut stake_history = StakeHistory::default();
         // assert that this stake follows step function if there's no history
@@ -1123,11 +1176,11 @@ mod tests {
     #[test]
     fn test_stop_activating_after_deactivation() {
         solana_logger::setup();
-        let stake = Stake {
+        let stake = Delegation {
             stake: 1_000,
             activation_epoch: 0,
             deactivation_epoch: 3,
-            ..Stake::default()
+            ..Delegation::default()
         };
 
         let base_stake = 1_000;
@@ -1158,11 +1211,11 @@ mod tests {
             );
 
             if epoch < stake.deactivation_epoch {
-                let increase = (effective as f64 * stake.config.warmup_rate) as u64;
+                let increase = (effective as f64 * stake.warmup_cooldown_rate) as u64;
                 effective += increase.min(activating);
                 other_activations.push(0);
             } else {
-                let decrease = (effective as f64 * stake.config.cooldown_rate) as u64;
+                let decrease = (effective as f64 * stake.warmup_cooldown_rate) as u64;
                 effective -= decrease.min(deactivating);
                 effective += other_activation;
                 other_activations.push(other_activation);
@@ -1187,25 +1240,26 @@ mod tests {
 
     #[test]
     fn test_stake_warmup_cooldown_sub_integer_moves() {
-        let stakes = [Stake {
+        let delegations = [Delegation {
             stake: 2,
             activation_epoch: 0, // activating at zero
             deactivation_epoch: 5,
-            ..Stake::default()
+            ..Delegation::default()
         }];
         // give 2 epochs of cooldown
         let epochs = 7;
         // make boostrap stake smaller than warmup so warmup/cooldownn
         //  increment is always smaller than 1
-        let bootstrap = (stakes[0].config.warmup_rate * 100.0 / 2.0) as u64;
-        let stake_history = create_stake_history_from_stakes(Some(bootstrap), 0..epochs, &stakes);
+        let bootstrap = (delegations[0].warmup_cooldown_rate * 100.0 / 2.0) as u64;
+        let stake_history =
+            create_stake_history_from_delegations(Some(bootstrap), 0..epochs, &delegations);
         let mut max_stake = 0;
         let mut min_stake = 2;
 
         for epoch in 0..epochs {
-            let stake = stakes
+            let stake = delegations
                 .iter()
-                .map(|stake| stake.stake(epoch, Some(&stake_history)))
+                .map(|delegation| delegation.stake(epoch, Some(&stake_history)))
                 .sum::<u64>();
             max_stake = max_stake.max(stake);
             min_stake = min_stake.min(stake);
@@ -1216,42 +1270,42 @@ mod tests {
 
     #[test]
     fn test_stake_warmup_cooldown() {
-        let stakes = [
-            Stake {
+        let delegations = [
+            Delegation {
                 // never deactivates
                 stake: 1_000,
                 activation_epoch: std::u64::MAX,
-                ..Stake::default()
+                ..Delegation::default()
             },
-            Stake {
+            Delegation {
                 stake: 1_000,
                 activation_epoch: 0,
                 deactivation_epoch: 9,
-                ..Stake::default()
+                ..Delegation::default()
             },
-            Stake {
+            Delegation {
                 stake: 1_000,
                 activation_epoch: 1,
                 deactivation_epoch: 6,
-                ..Stake::default()
+                ..Delegation::default()
             },
-            Stake {
+            Delegation {
                 stake: 1_000,
                 activation_epoch: 2,
                 deactivation_epoch: 5,
-                ..Stake::default()
+                ..Delegation::default()
             },
-            Stake {
+            Delegation {
                 stake: 1_000,
                 activation_epoch: 2,
                 deactivation_epoch: 4,
-                ..Stake::default()
+                ..Delegation::default()
             },
-            Stake {
+            Delegation {
                 stake: 1_000,
                 activation_epoch: 4,
                 deactivation_epoch: 4,
-                ..Stake::default()
+                ..Delegation::default()
             },
         ];
         // chosen to ensure that the last activated stake (at 4) finishes
@@ -1260,19 +1314,19 @@ mod tests {
         //  when all alone, but the above overlap a lot
         let epochs = 20;
 
-        let stake_history = create_stake_history_from_stakes(None, 0..epochs, &stakes);
+        let stake_history = create_stake_history_from_delegations(None, 0..epochs, &delegations);
 
-        let mut prev_total_effective_stake = stakes
+        let mut prev_total_effective_stake = delegations
             .iter()
-            .map(|stake| stake.stake(0, Some(&stake_history)))
+            .map(|delegation| delegation.stake(0, Some(&stake_history)))
             .sum::<u64>();
 
         // uncomment and add ! for fun with graphing
         // eprintln("\n{:8} {:8} {:8}", "   epoch", "   total", "   delta");
         for epoch in 1..epochs {
-            let total_effective_stake = stakes
+            let total_effective_stake = delegations
                 .iter()
-                .map(|stake| stake.stake(epoch, Some(&stake_history)))
+                .map(|delegation| delegation.stake(epoch, Some(&stake_history)))
                 .sum::<u64>();
 
             let delta = if total_effective_stake > prev_total_effective_stake {
@@ -1288,7 +1342,7 @@ mod tests {
 
             assert!(
                 delta
-                    <= ((prev_total_effective_stake as f64 * Config::default().warmup_rate) as u64)
+                    <= ((prev_total_effective_stake as f64 * Config::default().warmup_cooldown_rate) as u64)
                         .max(1)
             );
 
@@ -1610,10 +1664,12 @@ mod tests {
             Ok(())
         );
 
-        let stake_history = create_stake_history_from_stakes(
+        let stake_history = create_stake_history_from_delegations(
             None,
             0..future.epoch,
-            &[StakeState::stake_from(&stake_keyed_account.account).unwrap()],
+            &[StakeState::stake_from(&stake_keyed_account.account)
+                .unwrap()
+                .delegation],
         );
 
         // Try to withdraw stake
@@ -1763,14 +1819,14 @@ mod tests {
 
         // this one should be able to collect exactly 2
         assert_eq!(
-            Some((0, stake.stake * 2, 2)),
+            Some((0, stake.delegation.stake * 2, 2)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
 
         stake.credits_observed = 1;
         // this one should be able to collect exactly 1 (only observed one)
         assert_eq!(
-            Some((0, stake.stake * 1, 2)),
+            Some((0, stake.delegation.stake * 1, 2)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
 
@@ -1783,7 +1839,7 @@ mod tests {
         vote_state.increment_credits(2);
         // this one should be able to collect 1 now, one credit by a stake of 1
         assert_eq!(
-            Some((0, stake.stake * 1, 3)),
+            Some((0, stake.delegation.stake * 1, 3)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
 
@@ -1791,7 +1847,11 @@ mod tests {
         // this one should be able to collect everything from t=0 a warmed up stake of 2
         // (2 credits at stake of 1) + (1 credit at a stake of 2)
         assert_eq!(
-            Some((0, stake.stake * 1 + stake.stake * 2, 3)),
+            Some((
+                0,
+                stake.delegation.stake * 1 + stake.delegation.stake * 2,
+                3
+            )),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
 
@@ -1858,10 +1918,12 @@ mod tests {
             .delegate_stake(&vote_keyed_account, &clock, &Config::default(), &signers)
             .is_ok());
 
-        let stake_history = create_stake_history_from_stakes(
+        let stake_history = create_stake_history_from_delegations(
             Some(100),
             0..10,
-            &[StakeState::stake_from(&stake_keyed_account.account).unwrap()],
+            &[StakeState::stake_from(&stake_keyed_account.account)
+                .unwrap()
+                .delegation],
         );
 
         // no credits to claim
@@ -1936,7 +1998,7 @@ mod tests {
         );
         // verify rewards are added to stake
         let stake = StakeState::stake_from(&stake_keyed_account.account).unwrap();
-        assert_eq!(stake.stake, stake_keyed_account.account.lamports);
+        assert_eq!(stake.delegation.stake, stake_keyed_account.account.lamports);
 
         let wrong_vote_pubkey = Pubkey::new_rand();
         let mut wrong_vote_keyed_account =
@@ -2124,13 +2186,7 @@ mod tests {
         let stake_lamports = 42;
         let mut stake_account = Account::new_data_with_space(
             stake_lamports,
-            &StakeState::Stake(
-                Meta::auto(&stake_pubkey),
-                Stake {
-                    stake: stake_lamports,
-                    ..Stake::default()
-                },
-            ),
+            &StakeState::Stake(Meta::auto(&stake_pubkey), Stake::just_stake(stake_lamports)),
             std::mem::size_of::<StakeState>(),
             &id(),
         )
@@ -2154,6 +2210,17 @@ mod tests {
             Err(InstructionError::InvalidAccountData)
         );
     }
+    impl Stake {
+        fn just_stake(stake: u64) -> Self {
+            Self {
+                delegation: Delegation {
+                    stake,
+                    ..Delegation::default()
+                },
+                ..Stake::default()
+            }
+        }
+    }
 
     #[test]
     fn test_split_more_than_staked() {
@@ -2163,10 +2230,7 @@ mod tests {
             stake_lamports,
             &StakeState::Stake(
                 Meta::auto(&stake_pubkey),
-                Stake {
-                    stake: stake_lamports / 2 - 1,
-                    ..Stake::default()
-                },
+                Stake::just_stake(stake_lamports / 2 - 1),
             ),
             std::mem::size_of::<StakeState>(),
             &id(),
@@ -2209,13 +2273,7 @@ mod tests {
         // test splitting both an Initialized stake and a Staked stake
         for state in &[
             StakeState::Initialized(meta),
-            StakeState::Stake(
-                meta,
-                Stake {
-                    stake: stake_lamports,
-                    ..Stake::default()
-                },
-            ),
+            StakeState::Stake(meta, Stake::just_stake(stake_lamports)),
         ] {
             let mut stake_account = Account::new_data_with_space(
                 stake_lamports,
@@ -2277,7 +2335,10 @@ mod tests {
                     Ok(StakeState::Stake(
                         *meta,
                         Stake {
-                            stake: stake_lamports - rent_exempt_reserve,
+                            delegation: Delegation {
+                                stake: stake_lamports - rent_exempt_reserve,
+                                ..stake.delegation
+                            },
                             ..*stake
                         }
                     ))
@@ -2306,13 +2367,7 @@ mod tests {
         // test splitting both an Initialized stake and a Staked stake
         for state in &[
             StakeState::Initialized(Meta::auto(&stake_pubkey)),
-            StakeState::Stake(
-                Meta::auto(&stake_pubkey),
-                Stake {
-                    stake: stake_lamports,
-                    ..Stake::default()
-                },
-            ),
+            StakeState::Stake(Meta::auto(&stake_pubkey), Stake::just_stake(stake_lamports)),
         ] {
             let mut split_stake_account = Account::new_data_with_space(
                 0,
@@ -2370,7 +2425,10 @@ mod tests {
                         Ok(StakeState::Stake(
                             *meta,
                             Stake {
-                                stake: stake_lamports / 2,
+                                delegation: Delegation {
+                                    stake: stake_lamports / 2,
+                                    ..stake.delegation
+                                },
                                 ..*stake
                             }
                         )),
@@ -2380,7 +2438,10 @@ mod tests {
                         Ok(StakeState::Stake(
                             *meta,
                             Stake {
-                                stake: stake_lamports / 2,
+                                delegation: Delegation {
+                                    stake: stake_lamports / 2,
+                                    ..stake.delegation
+                                },
                                 ..*stake
                             }
                         )),
@@ -2467,7 +2528,7 @@ mod tests {
             Ok(())
         );
         let stake = StakeState::stake_from(&stake_keyed_account.account).unwrap();
-        assert_eq!(stake.voter_pubkey, new_voter_pubkey);
+        assert_eq!(stake.delegation.voter_pubkey, new_voter_pubkey);
 
         // Test another staking action
         assert_eq!(

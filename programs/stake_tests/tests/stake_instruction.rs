@@ -70,7 +70,7 @@ fn fill_epoch_with_votes(
 fn warmed_up(bank: &Bank, stake_pubkey: &Pubkey) -> bool {
     let stake = StakeState::stake_from(&bank.get_account(stake_pubkey).unwrap()).unwrap();
 
-    stake.stake
+    stake.delegation.stake
         == stake.stake(
             bank.epoch(),
             Some(
@@ -150,7 +150,7 @@ fn test_stake_account_lifetime() {
     let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
     if let StakeState::Stake(_meta, stake) = stake_state {
-        assert_eq!(stake.stake, 1_000_000);
+        assert_eq!(stake.delegation.stake, 1_000_000);
     } else {
         assert!(false, "wrong account type found")
     }
@@ -173,7 +173,7 @@ fn test_stake_account_lifetime() {
     let account = bank.get_account(&stake_pubkey).expect("account not found");
     let stake_state = account.state().expect("couldn't unpack account data");
     if let StakeState::Stake(_meta, stake) = stake_state {
-        assert_eq!(stake.stake, 1_000_000);
+        assert_eq!(stake.delegation.stake, 1_000_000);
     } else {
         assert!(false, "wrong account type found")
     }

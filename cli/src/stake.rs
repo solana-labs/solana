@@ -564,23 +564,23 @@ pub fn process_show_stake_account(
             println!("credits observed: {}", stake.credits_observed);
             println!(
                 "delegated stake: {}",
-                build_balance_message(stake.stake, use_lamports_unit, true)
+                build_balance_message(stake.delegation.stake, use_lamports_unit, true)
             );
-            if stake.voter_pubkey != Pubkey::default() {
-                println!("delegated voter pubkey: {}", stake.voter_pubkey);
+            if stake.delegation.voter_pubkey != Pubkey::default() {
+                println!("delegated voter pubkey: {}", stake.delegation.voter_pubkey);
             }
             println!(
                 "stake activates starting from epoch: {}",
-                if stake.activation_epoch < std::u64::MAX {
-                    stake.activation_epoch
+                if stake.delegation.activation_epoch < std::u64::MAX {
+                    stake.delegation.activation_epoch
                 } else {
                     0
                 }
             );
-            if stake.deactivation_epoch < std::u64::MAX {
+            if stake.delegation.deactivation_epoch < std::u64::MAX {
                 println!(
                     "stake deactivates starting from epoch: {}",
-                    stake.deactivation_epoch
+                    stake.delegation.deactivation_epoch
                 );
             }
             show_authorized(&authorized);
