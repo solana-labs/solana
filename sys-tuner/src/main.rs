@@ -5,10 +5,10 @@ use unix_socket::UnixListener;
 pub const SOLANA_SYS_TUNER_PATH: &str = "/tmp/solana-sys-tuner";
 
 // Use abstract sockets for Unix builds
-#[cfg(all(unix, target_os = "unix"))]
+#[cfg(all(unix, target_os = "linux"))]
 pub const SOLANA_SYS_TUNER_PATH: &str = "\0/tmp/solana-sys-tuner";
 
-#[cfg(target_os = "unix")]
+#[cfg(target_os = "linux")]
 fn tune_system() {
     use std::process::Command;
     use std::str::from_utf8;
@@ -25,9 +25,8 @@ fn tune_system() {
             for t in threads.iter_mut() {
                 if let Some(_) = t.find("solana-poh-ser") {
                     let pids: Vec<&str> = t.split_whitespace().collect();
-                    println!("{}", pids[1]);
-                    let thread_id = pids[1].parse::<i32>().unwrap();
-                    set_thread_priority(
+                    let thread_id = pids[1].parse::<u64>().unwrap();
+                    let _ignored = set_thread_priority(
                         thread_id,
                         ThreadPriority::Max,
                         ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
@@ -36,8 +35,6 @@ fn tune_system() {
                 }
             }
         }
-    } else {
-        println!("stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
     }
 }
 
