@@ -79,6 +79,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Do not prompt for a passphrase"),
                 )
                 .arg(
+                    Arg::with_name("no_outfile")
+                        .long("no-outfile")
+                        .conflicts_with_all(&["outfile", "silent"])
+                        .help("Only print a seed phrase and pubkey. Do not output a keypair file"),
+                )
+                .arg(
                     Arg::with_name("silent")
                         .short("s")
                         .long("silent")
@@ -201,14 +207,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ("new", Some(matches)) => {
             let mut path = dirs::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
-                matches.value_of("outfile").unwrap()
+                matches.value_of("outfile")
+            } else if matches.is_present("no_outfile") {
+                None
             } else {
                 path.extend(&[".config", "solana", "id.json"]);
-                path.to_str().unwrap()
+                Some(path.to_str().unwrap())
             };
 
-            if outfile != "-" {
-                check_for_overwrite(&outfile, &matches);
+            match outfile {
+                Some("-") => (),
+                Some(outfile) => check_for_overwrite(&outfile, &matches),
+                None => (),
             }
 
             let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
@@ -223,7 +233,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let seed = Seed::new(&mnemonic, &passphrase);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
-            output_keypair(&keypair, &outfile, "new")?;
+            if let Some(outfile) = outfile {
+                output_keypair(&keypair, &outfile, "new")?;
+            }
 
             let silent = matches.is_present("silent");
             if !silent {
