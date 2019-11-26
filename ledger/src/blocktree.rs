@@ -28,7 +28,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
-    clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND},
+    clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
     genesis_config::GenesisConfig,
     hash::Hash,
     signature::{Keypair, KeypairUtil, Signature},
@@ -59,6 +59,7 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
 
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
+pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
 
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 
@@ -1082,9 +1083,7 @@ impl Blocktree {
                 &db_iterator.value().expect("couldn't read value"),
             ));
 
-            let ms_per_tick = 1000 / DEFAULT_TICKS_PER_SECOND;
-            let turbine_delay_in_ticks = MAX_TURBINE_PROPAGATION_IN_MS / ms_per_tick;
-            if ticks_since_first_insert < reference_tick + turbine_delay_in_ticks {
+            if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
                 // The higher index holes have not timed out yet
                 break 'outer;
             }
