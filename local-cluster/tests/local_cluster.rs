@@ -307,6 +307,7 @@ fn test_two_unbalanced_stakes() {
         validator_configs: vec![validator_config.clone(); 2],
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
+        stakers_slot_offset: num_slots_per_epoch,
         poh_config: PohConfig::new_sleep(Duration::from_millis(1000 / num_ticks_per_second)),
         ..ClusterConfig::default()
     });
