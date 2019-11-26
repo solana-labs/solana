@@ -28,6 +28,7 @@ use solana_sdk::{
     inflation::Inflation,
     pubkey::Pubkey,
     signature::Signature,
+    timing::slot_duration_from_slots_per_year,
     transaction::{self, Transaction},
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
@@ -309,7 +310,15 @@ impl JsonRpcRequestProcessor {
     // DEFAULT_MS_PER_SLOT offset from 0 for all requests, and null for any values that would
     // overflow.
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
-        Ok(self.blocktree.get_block_time(slot))
+        // This calculation currently assumes that bank.ticks_per_slot and bank.slots_per_year will
+        // remain unchanged after genesis. If these values will be variable in the future, those
+        // timing parameters will need to be stored persistently, and this calculation will likely
+        // need to be moved upstream into blocktree. Also, an explicit commitment level will need
+        // to be set.
+        let bank = self.bank(None);
+        let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
+
+        Ok(self.blocktree.get_block_time(slot, slot_duration))
     }
 }
 
@@ -994,7 +1003,6 @@ pub mod tests {
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
     use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::{
-        clock::DEFAULT_MS_PER_SLOT,
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
         instruction::InstructionError,
@@ -1837,7 +1845,9 @@ pub mod tests {
     #[test]
     fn test_get_block_time() {
         let bob_pubkey = Pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
 
         let slot = 100;
         let req = format!(
@@ -1847,7 +1857,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = format!(
             r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#,
-            slot * DEFAULT_MS_PER_SLOT / 1000
+            (slot * slot_duration).as_secs()
         );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -1863,7 +1873,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = format!(
             r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#,
-            slot * DEFAULT_MS_PER_SLOT / 1000
+            (slot * slot_duration).as_secs()
         );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
