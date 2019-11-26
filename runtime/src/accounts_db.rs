@@ -1735,7 +1735,12 @@ pub mod tests {
         assert!(check_storage(&daccounts, 2, 31));
     }
 
-    fn assert_load_account(accounts: &AccountsDB, slot: Slot, pubkey: Pubkey, expected_lamports: u64) {
+    fn assert_load_account(
+        accounts: &AccountsDB,
+        slot: Slot,
+        pubkey: Pubkey,
+        expected_lamports: u64,
+    ) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
         let (account, slot) = accounts.load_slow(&ancestors, &pubkey).unwrap();
         assert_eq!((account.lamports, slot), (expected_lamports, slot));
@@ -1743,16 +1748,11 @@ pub mod tests {
 
     fn reconstruct_accounts_db_via_serialization(accounts: AccountsDB, slot: Slot) -> AccountsDB {
         let mut writer = Cursor::new(vec![]);
-        serialize_into(
-            &mut writer,
-            &AccountsDBSerialize::new(&accounts, slot),
-        )
-        .unwrap();
+        serialize_into(&mut writer, &AccountsDBSerialize::new(&accounts, slot)).unwrap();
 
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(None);
-
 
         let local_paths = {
             let paths = daccounts.paths.read().unwrap();
@@ -1766,7 +1766,6 @@ pub mod tests {
             .accounts_from_stream(&mut reader, local_paths, copied_accounts.path())
             .unwrap();
 
-
         print_count_and_status("daccounts", &daccounts);
 
         daccounts
@@ -1776,7 +1775,6 @@ pub mod tests {
         let ancestors = vec![(slot as Slot, 0)].into_iter().collect();
         accounts.purge_zero_lamport_accounts(&ancestors);
     }
-
 
     #[test]
     fn test_accounts_db_serialize_zero_and_free() {
