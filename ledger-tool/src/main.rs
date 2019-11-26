@@ -30,6 +30,7 @@ enum LedgerOutputMethod {
 }
 
 fn output_slot(blocktree: &Blocktree, slot: Slot, method: &LedgerOutputMethod) {
+    println!("Slot Meta {:?}", blocktree.meta(slot));
     let entries = blocktree
         .get_slot_entries(slot, 0, None)
         .unwrap_or_else(|err| {
