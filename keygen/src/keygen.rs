@@ -4,7 +4,9 @@ use clap::{
     crate_description, crate_name, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
 use num_cpus;
-use solana_clap_utils::keypair::{keypair_from_seed_phrase, SKIP_SEED_PHRASE_VALIDATION_ARG};
+use solana_clap_utils::keypair::{
+    keypair_from_seed_phrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+};
 use solana_sdk::{
     pubkey::write_pubkey_file,
     signature::{
@@ -139,6 +141,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Path to keypair file"),
                 )
                 .arg(
+                    Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                        .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
+                        .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
+                )
+                .arg(
                     Arg::with_name("outfile")
                         .short("o")
                         .long("outfile")
@@ -192,6 +199,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let keypair = if infile == "-" {
                 let mut stdin = std::io::stdin();
                 read_keypair(&mut stdin)?
+            } else if infile == ASK_KEYWORD {
+                let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                keypair_from_seed_phrase("pubkey recovery", skip_validation)?
             } else {
                 read_keypair_file(infile)?
             };
