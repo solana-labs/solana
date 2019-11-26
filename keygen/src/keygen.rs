@@ -75,7 +75,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
                 .arg(
                     Arg::with_name("no_passphrase")
-                        .short("n")
                         .long("no-passphrase")
                         .help("Do not prompt for a passphrase"),
                 )
