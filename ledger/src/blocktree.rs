@@ -58,7 +58,7 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
                     .unwrap()));
 
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
-pub const MAX_TURBINE_PROPAGATION_DELAY_TICKS: u64 = 16;
+pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 
@@ -1082,7 +1082,9 @@ impl Blocktree {
                 &db_iterator.value().expect("couldn't read value"),
             ));
 
-            if ticks_since_first_insert < reference_tick + MAX_TURBINE_PROPAGATION_DELAY_TICKS {
+            let ms_per_tick = 1000 / DEFAULT_TICKS_PER_SECOND;
+            let turbine_delay_in_ticks = MAX_TURBINE_PROPAGATION_IN_MS / ms_per_tick;
+            if ticks_since_first_insert < reference_tick + turbine_delay_in_ticks {
                 // The higher index holes have not timed out yet
                 break 'outer;
             }
