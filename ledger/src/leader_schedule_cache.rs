@@ -160,7 +160,7 @@ impl LeaderScheduleCache {
     }
 
     pub fn set_fixed_leader_schedule(&mut self, fixed_schedule: Option<FixedSchedule>) {
-        self.fixed_schedule = fixed_schedule.map(|f| Arc::new(f));
+        self.fixed_schedule = fixed_schedule.map(Arc::new);
     }
 
     fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<Pubkey> {

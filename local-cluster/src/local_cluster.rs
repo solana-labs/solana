@@ -284,20 +284,18 @@ impl LocalCluster {
 
     pub fn exit(&mut self) {
         for node in self.validators.values_mut() {
-            node.validator
-                .as_mut()
-                .expect("Validator must exist")
-                .exit();
+            if let Some(ref mut v) = node.validator {
+                v.exit();
+            }
         }
     }
 
     pub fn close_preserve_ledgers(&mut self) {
         self.exit();
-        for (_, node) in self.validators.drain() {
-            node.validator
-                .expect("Validator must exist")
-                .join()
-                .unwrap();
+        for (_, node) in self.validators.iter_mut() {
+            if let Some(v) = node.validator.take() {
+                v.join().unwrap();
+            }
         }
 
         while let Some(archiver) = self.archivers.pop() {

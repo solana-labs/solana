@@ -249,10 +249,11 @@ fn run_network_partition(
     // Partition needs to start after the first few shorter warmup epochs, otherwise
     // no root will be set before the partition is resolved, the leader schedule will
     // not be computable, and the cluster wll halt.
-    let epoch_schedule =
-        EpochSchedule::custom(config.slots_per_epoch, config.stakers_slot_offset, true);
-    let partition_epoch_start_offset =
-        epoch_schedule.get_last_slot_in_epoch(partition_start_epoch) * clock::DEFAULT_MS_PER_SLOT;
+    let partition_epoch_start_offset = cluster_tests::time_untl_nth_epoch(
+        partition_start_epoch,
+        config.slots_per_epoch,
+        config.stakers_slot_offset,
+    );
     // Assume it takes <= 10 seconds for `LocalCluster::new` to boot up.
     let local_cluster_boot_time = 10_000;
     let partition_start = now + partition_epoch_start_offset + local_cluster_boot_time;
@@ -280,7 +281,7 @@ fn run_network_partition(
     assert!(elapsed.as_millis() < local_cluster_boot_time as u128);
 
     let now = timestamp();
-    let timeout = partition_start as i64 - now as i64;
+    let timeout = partition_start as u64 - now as u64;
     info!(
         "PARTITION_TEST sleeping until partition start timeout {}",
         timeout
@@ -291,7 +292,7 @@ fn run_network_partition(
     }
     info!("PARTITION_TEST done sleeping until partition start timeout");
     let now = timestamp();
-    let timeout = partition_end as i64 - now as i64;
+    let timeout = partition_end as u64 - now as u64;
     info!(
         "PARTITION_TEST sleeping until partition end timeout {}",
         timeout
@@ -309,7 +310,7 @@ fn run_network_partition(
         info!("PARTITION_TEST resolving partition");
         sleep(Duration::from_millis(timeout));
         info!("PARTITION_TEST waiting for blocks to propagate after partition");
-        sleep(propagation_time);
+        sleep(Duration::from_millis(propagation_time));
         info!("PARTITION_TEST resuming normal operation");
         for (pubkey, should_exit) in validator_pubkeys.iter().zip(should_exits) {
             if *should_exit {
@@ -385,13 +386,13 @@ fn test_network_partition_1_1_1() {
 fn test_kill_partition() {
     // This test:
     // 1) Spins up three partitions
-    // 2) Forces more slots in the leader schedule for the first partition so that this
-    // partition will be the heaviiest
-    // 3) Schedules the other validators for sufficient slots in the schedule so that
-    // they will still be locked out of voting for the major partitoin when the partition
-    // resolves
-    // 4) Kills the major partition. Validators are locked out, but should be able to reset
-    // to the major partition
+    // 2) Forces more slots in the leader schedule for the first partition so
+    // that this partition will be the heaviiest
+    // 3) Schedules the other validators for sufficient slots in the schedule
+    // so that they will still be locked out of voting for the major partitoin
+    // when the partition resolves
+    // 4) Kills the major partition. Validators are locked out, but should be
+    // able to reset to the major partition
     // 5) Check for recovery
     let mut leader_schedule = vec![];
     let num_slots_per_validator = 8;
