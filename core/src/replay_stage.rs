@@ -233,6 +233,7 @@ impl ReplayStage {
                         &blocktree,
                         &mut bank_forks.write().unwrap(),
                         &leader_schedule_cache,
+                        &subscriptions,
                     );
                     datapoint_debug!(
                         "replay_stage-memory",
@@ -370,6 +371,7 @@ impl ReplayStage {
                             &bank_forks,
                             &poh_recorder,
                             &leader_schedule_cache,
+                            &subscriptions,
                         );
 
                         if let Some(bank) = poh_recorder.lock().unwrap().bank() {
@@ -442,6 +444,7 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -496,7 +499,12 @@ impl ReplayStage {
                 ("leader", next_leader.to_string(), String),
             );
 
-            info!("new fork:{} parent:{} (leader)", poh_slot, parent_slot);
+            let root_slot = bank_forks.read().unwrap().root();
+            info!(
+                "new fork:{} parent:{} (leader) root:{}",
+                poh_slot, parent_slot, root_slot
+            );
+            subscriptions.notify_slot(poh_slot, parent_slot, root_slot);
             let tpu_bank = bank_forks
                 .write()
                 .unwrap()
@@ -1085,6 +1093,7 @@ impl ReplayStage {
         blocktree: &Blocktree,
         forks: &mut BankForks,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) {
         // Find the next slot that chains to the old slot
         let frozen_banks = forks.frozen_banks();
@@ -1111,7 +1120,13 @@ impl ReplayStage {
                 let leader = leader_schedule_cache
                     .slot_leader_at(child_slot, Some(&parent_bank))
                     .unwrap();
-                info!("new fork:{} parent:{}", child_slot, parent_slot);
+                info!(
+                    "new fork:{} parent:{} root:{}",
+                    child_slot,
+                    parent_slot,
+                    forks.root()
+                );
+                subscriptions.notify_slot(child_slot, parent_slot, forks.root());
                 forks.insert(Bank::new_from_parent(&parent_bank, &leader, child_slot));
             }
         }
@@ -1170,6 +1185,7 @@ pub(crate) mod tests {
             let genesis_config = create_genesis_config(10_000).genesis_config;
             let bank0 = Bank::new(&genesis_config);
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
+            let subscriptions = Arc::new(RpcSubscriptions::default());
             let mut bank_forks = BankForks::new(0, bank0);
             bank_forks.working_bank().freeze();
 
@@ -1181,6 +1197,7 @@ pub(crate) mod tests {
                 &blocktree,
                 &mut bank_forks,
                 &leader_schedule_cache,
+                &subscriptions,
             );
             assert!(bank_forks.get(1).is_some());
 
@@ -1192,6 +1209,7 @@ pub(crate) mod tests {
                 &blocktree,
                 &mut bank_forks,
                 &leader_schedule_cache,
+                &subscriptions,
             );
             assert!(bank_forks.get(1).is_some());
             assert!(bank_forks.get(2).is_some());
