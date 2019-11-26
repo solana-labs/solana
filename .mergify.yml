@@ -19,46 +19,6 @@ pull_request_rules:
       label:
         add:
           - automerge
-  - name: v0.16 backport
-    conditions:
-      - base=master
-      - label=v0.16
-    actions:
-      backport:
-        branches:
-          - v0.16
-  - name: v0.17 backport
-    conditions:
-      - base=master
-      - label=v0.17
-    actions:
-      backport:
-        branches:
-          - v0.17
-  - name: v0.18 backport
-    conditions:
-      - base=master
-      - label=v0.18
-    actions:
-      backport:
-        branches:
-          - v0.18
-  - name: v0.19 backport
-    conditions:
-      - base=master
-      - label=v0.19
-    actions:
-      backport:
-        branches:
-          - v0.19
-  - name: v0.20 backport
-    conditions:
-      - base=master
-      - label=v0.20
-    actions:
-      backport:
-        branches:
-          - v0.20
   - name: v0.21 backport
     conditions:
       - base=master
@@ -75,3 +35,11 @@ pull_request_rules:
       backport:
         branches:
           - v0.22
+  - name: v0.23 backport
+    conditions:
+      - base=master
+      - label=v0.23
+    actions:
+      backport:
+        branches:
+          - v0.23
