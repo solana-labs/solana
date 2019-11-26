@@ -3,6 +3,7 @@
 use crate::poh_recorder::PohRecorder;
 use core_affinity;
 use solana_sdk::poh_config::PohConfig;
+use solana_sys_tuner;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
@@ -47,6 +48,7 @@ impl PohService {
                     if let Some(cores) = core_affinity::get_core_ids() {
                         core_affinity::set_for_current(cores[0]);
                     }
+                    solana_sys_tuner::request_system_tuning();
                     Self::tick_producer(poh_recorder, &poh_exit_);
                 }
                 poh_exit_.store(true, Ordering::Relaxed);

@@ -129,6 +129,8 @@ cat >> ~/solana/on-reboot <<EOF
   # shellcheck source=/dev/null
   SUDO_OK=1 source scripts/tune-system.sh
 
+  sudo solana-sys-tuner &
+
   (
     sudo SOLANA_METRICS_CONFIG="$SOLANA_METRICS_CONFIG" scripts/oom-monitor.sh
   ) > oom-monitor.log 2>&1 &

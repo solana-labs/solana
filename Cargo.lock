@@ -3351,6 +3351,7 @@ dependencies = [
  "solana-sdk 0.22.0",
  "solana-stake-program 0.22.0",
  "solana-storage-program 0.22.0",
+ "solana-sys-tuner 0.22.0",
  "solana-vote-program 0.22.0",
  "solana-vote-signer 0.22.0",
  "symlink 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3962,13 +3963,12 @@ dependencies = [
 
 [[package]]
 name = "solana-sys-tuner"
-version = "0.1.0"
+version = "0.22.0"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-clap-utils 0.21.0",
- "solana-logger 0.21.0",
+ "solana-logger 0.22.0",
  "thread-priority 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unix_socket2 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
