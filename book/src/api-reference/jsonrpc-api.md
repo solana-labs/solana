@@ -18,6 +18,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 * [getBalance](jsonrpc-api.md#getbalance)
 * [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
+* [getBlockTime](jsonrpc-api.md#getblocktime)
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
 * [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
@@ -207,6 +208,31 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":[{"commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32]},42],"id":1}
+```
+
+### getBlockTime
+
+Returns the estimated production time of a block. Validators report their UTC
+time to the ledger on a regular interval. A block's time is calculated as an
+offset from the median value of the most recent validator time report.
+
+#### Parameters:
+
+* `u64` - block, identified by Slot
+
+#### Results:
+
+* `null` - block has not yet been produced
+* `i64` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getBlockTime","params":[5]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":1574721591,"id":1}
 ```
 
 ### getClusterNodes

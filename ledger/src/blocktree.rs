@@ -16,6 +16,7 @@ pub use crate::{
     blocktree_meta::SlotMeta,
 };
 use bincode::deserialize;
+use chrono::{offset::TimeZone, Duration as ChronoDuration, Utc};
 use log::*;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
@@ -27,17 +28,18 @@ use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
-    clock::{Slot, DEFAULT_TICKS_PER_SECOND},
+    clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND},
     genesis_config::GenesisConfig,
     hash::Hash,
     signature::{Keypair, KeypairUtil, Signature},
-    timing::timestamp,
+    timing::{duration_as_ms, timestamp},
     transaction::Transaction,
 };
 use std::{
     cell::RefCell,
     cmp,
     collections::HashMap,
+    convert::TryFrom,
     fs,
     path::{Path, PathBuf},
     rc::Rc,
@@ -45,6 +47,7 @@ use std::{
         mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
         Arc, Mutex, RwLock,
     },
+    time::Duration,
 };
 
 pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
@@ -1127,6 +1130,25 @@ impl Blocktree {
             )
         } else {
             vec![]
+        }
+    }
+
+    // The `get_block_time` method is not fully implemented (depends on validator timestamp
+    // transactions). It currently returns Some(`slot` * DEFAULT_MS_PER_SLOT) offset from 0 for all
+    // transactions, and None for any values that would overflow any step.
+    pub fn get_block_time(&self, slot: Slot, slot_duration: Duration) -> Option<UnixTimestamp> {
+        let ms_per_slot = duration_as_ms(&slot_duration);
+        let (offset_millis, overflow) = slot.overflowing_mul(ms_per_slot);
+        if !overflow {
+            i64::try_from(offset_millis)
+                .ok()
+                .and_then(|millis| {
+                    let median_datetime = Utc.timestamp(0, 0);
+                    median_datetime.checked_add_signed(ChronoDuration::milliseconds(millis))
+                })
+                .map(|dt| dt.timestamp())
+        } else {
+            None
         }
     }
 
