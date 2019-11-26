@@ -1680,15 +1680,28 @@ pub mod tests {
         accounts.store(latest_slot, &[(&pubkeys[31], &account)]);
         accounts.add_root(latest_slot);
 
+        let latest_slot = 3;
+        let account = Account::new(0, 0, &Account::default().owner);
+        accounts.store(latest_slot, &[(&pubkeys[32], &account)]);
+        accounts.add_root(latest_slot);
+
+        let mut ancestors = HashMap::new();
+        ancestors.insert(1, 0);
+        ancestors.insert(2, 1);
+        ancestors.insert(3, 2);
+        accounts.purge_zero_lamport_accounts(&ancestors);
+
+        assert_eq!(accounts.load_slow(&ancestors, &pubkeys[32]), None);
+
         let mut writer = Cursor::new(vec![]);
         serialize_into(
             &mut writer,
             &AccountsDBSerialize::new(&accounts, latest_slot),
         )
         .unwrap();
-        assert!(check_storage(&accounts, 0, 90));
-        assert!(check_storage(&accounts, 1, 21));
-        assert!(check_storage(&accounts, 2, 31));
+        assert!(check_storage(&accounts, 0, 87));
+        assert!(check_storage(&accounts, 1, 20));
+        assert!(check_storage(&accounts, 2, 30));
 
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
@@ -1730,7 +1743,8 @@ pub mod tests {
         // Don't check the first 35 accounts which have not been modified on slot 0
         check_accounts(&daccounts, &pubkeys[35..], 0, 65, 37);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
-        assert!(check_storage(&daccounts, 0, 78));
+        assert_eq!(daccounts.load_slow(&ancestors, &pubkeys[32]), None);
+        assert!(check_storage(&daccounts, 0, 77));
         assert!(check_storage(&daccounts, 1, 11));
         assert!(check_storage(&daccounts, 2, 31));
     }
