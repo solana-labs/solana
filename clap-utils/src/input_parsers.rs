@@ -53,9 +53,9 @@ pub fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
 
 // Return pubkey/signature pairs for a string of the form pubkey=signature
 pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
-    matches.values_of(name).map(|xs| {
-        xs.map(|s| {
-            let mut signer = s.split('=');
+    matches.values_of(name).map(|values| {
+        values.map(|pubkey_signer_string| {
+            let mut signer = pubkey_signer_string.split('=');
             let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
             let sig = Signature::from_str(signer.next().unwrap()).unwrap();
             (key, sig)

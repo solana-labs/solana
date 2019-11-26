@@ -581,15 +581,12 @@ pub fn return_signers(tx: &Transaction) -> ProcessResult {
 }
 
 pub fn replace_signatures(tx: &mut Transaction, signers: &[(Pubkey, Signature)]) -> ProcessResult {
-    tx.replace_signatures(signers)
-        .map_err(|_| CliError::BadParameter("Wrong number of signers provided".to_string()))?;
-    if !tx.verify() {
-        return Err(CliError::BadParameter(
-            "Transaction verification failed, incorrect signature or public key provided"
+    tx.replace_signatures(signers).map_err(|_| {
+        CliError::BadParameter(
+            "Transaction construction failed, incorrect signature or public key provided"
                 .to_string(),
         )
-        .into());
-    }
+    })?;
     Ok("".to_string())
 }
 

@@ -51,6 +51,9 @@ pub enum TransactionError {
 
     /// Transaction contains an invalid account reference
     InvalidAccountIndex,
+
+    /// Transaction did not pass signature verification
+    SignatureFailure,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
@@ -225,13 +228,17 @@ impl Transaction {
         }
     }
 
-    /// Verify the transactioon
-    pub fn verify(&self) -> bool {
-        self.signatures
+    /// Verify the transaction
+    pub fn verify(&self) -> Result<()> {
+        if !self.signatures
             .iter()
             .zip(&self.message.account_keys)
             .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), &self.message_data()))
-            .all(|verify_result| verify_result)
+            .all(|verify_result| verify_result) {
+                Err(TransactionError::SignatureFailure)
+            } else {
+                Ok(())
+            }
     }
 
     /// Get the positions of the pubkeys in `account_keys` associated with signing keypairs
@@ -272,7 +279,9 @@ impl Transaction {
                 self.signatures[i] = *signature;
                 self.message.account_keys[i] = *pubkey;
             });
-        Ok(())
+
+
+        self.verify()
     }
 
     pub fn is_signed(&self) -> bool {
