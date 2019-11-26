@@ -230,15 +230,17 @@ impl Transaction {
 
     /// Verify the transaction
     pub fn verify(&self) -> Result<()> {
-        if !self.signatures
+        if !self
+            .signatures
             .iter()
             .zip(&self.message.account_keys)
             .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), &self.message_data()))
-            .all(|verify_result| verify_result) {
-                Err(TransactionError::SignatureFailure)
-            } else {
-                Ok(())
-            }
+            .all(|verify_result| verify_result)
+        {
+            Err(TransactionError::SignatureFailure)
+        } else {
+            Ok(())
+        }
     }
 
     /// Get the positions of the pubkeys in `account_keys` associated with signing keypairs
@@ -279,7 +281,6 @@ impl Transaction {
                 self.signatures[i] = *signature;
                 self.message.account_keys[i] = *pubkey;
             });
-
 
         self.verify()
     }
