@@ -611,8 +611,8 @@ impl AccountsDB {
     // PERF: Sequentially read each storage entry in parallel
     pub fn scan_account_storage<F, B>(&self, slot_id: Slot, scan_func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount, AppendVecId, &mut B) -> () + 'static,
-        B: Default + Clone,
+        F: Fn(&StoredAccount, AppendVecId, &mut B) -> () + Send + Sync,
+        B: Default + Clone + Send,
     {
         let storage_maps: Vec<Arc<AccountStorageEntry>> = self
             .storage

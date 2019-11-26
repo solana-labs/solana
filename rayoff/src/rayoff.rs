@@ -2,32 +2,30 @@ extern crate sys_info;
 
 use job::Job;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::Arc;
-use std::thread::{spawn, JoinHandle};
+use std::sync::{Mutex, Arc};
+use std::thread::{spawn};
 
+#[derive(Debug)]
 pub struct Pool {
-    senders: Vec<Sender<Arc<Job>>>,
-    threads: Vec<JoinHandle<()>>,
+    senders: Mutex<Vec<Sender<Arc<Job>>>>,
 }
 
 impl Default for Pool {
     fn default() -> Self {
         let num_threads = sys_info::cpu_num().unwrap_or(16) - 1;
-        let mut pool = Self {
-            senders: vec![],
-            threads: vec![],
-        };
+        let mut senders = vec![];
         (0..num_threads).for_each(|_| {
             let (sender, recvr): (Sender<Arc<Job>>, Receiver<Arc<Job>>) = channel();
-            let t = spawn(move || {
+            let _ = spawn(move || {
                 for job in recvr.iter() {
                     job.execute()
                 }
             });
-            pool.senders.push(sender);
-            pool.threads.push(t);
+            senders.push(sender);
         });
-        pool
+        Self {
+            senders: Mutex::new(senders),
+        }
     }
 }
 
@@ -39,11 +37,9 @@ impl Pool {
         // Job must be destroyed in the frame that its created
         let job = unsafe { Job::new(elems, func) };
         let job = Arc::new(job);
-        for s in &self.senders {
-            s.send(job.clone()).expect("send should never fail");
-        }
+        let len = self.notify_all(job.clone());
         job.execute();
-        job.wait(self.senders.len() + 1);
+        job.wait(len + 1);
     }
     pub fn map<F, A, B>(&self, inputs: &[A], func: F) -> Vec<B>
     where
@@ -57,6 +53,14 @@ impl Pool {
             *item.1 = func(item.0);
         });
         outs
+    }
+    fn notify_all(&self, job: Arc<Job>) -> usize {
+        let senders = self.senders.lock().unwrap();
+        let len = senders.len();
+        for s in senders.iter() {
+            s.send(job.clone()).expect("send should never fail");
+        }
+        len
     }
 }
 

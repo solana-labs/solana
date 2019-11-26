@@ -287,8 +287,8 @@ impl Accounts {
     /// returns only the latest/current version of B for this slot
     fn scan_slot<F, B>(&self, slot: Slot, func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount) -> Option<B> + 'static,
-        B: Clone + Default,
+        F: Fn(&StoredAccount) -> Option<B> + Send + Sync,
+        B: Clone + Default + Send,
     {
         let accumulator: Vec<Vec<(Pubkey, u64, B)>> = self.accounts_db.scan_account_storage(
             slot,
