@@ -50,31 +50,31 @@ leader_keypair="$dataDir/leader-keypair.json"
 if [[ -e $leader_keypair ]]; then
   echo "Use existing leader keypair"
 else
-  solana-keygen new -o "$leader_keypair"
+  solana-keygen new --no-passphrase -so "$leader_keypair"
 fi
 leader_vote_account_keypair="$dataDir/leader-vote-account-keypair.json"
 if [[ -e $leader_vote_account_keypair ]]; then
   echo "Use existing leader vote account keypair"
 else
-  solana-keygen new -o "$leader_vote_account_keypair"
+  solana-keygen new --no-passphrase -so "$leader_vote_account_keypair"
 fi
 leader_stake_account_keypair="$dataDir/leader-stake-account-keypair.json"
 if [[ -e $leader_stake_account_keypair ]]; then
   echo "Use existing leader stake account keypair"
 else
-  solana-keygen new -o "$leader_stake_account_keypair"
+  solana-keygen new --no-passphrase -so "$leader_stake_account_keypair"
 fi
 faucet_keypair="$dataDir"/faucet-keypair.json
 if [[ -e $faucet_keypair ]]; then
   echo "Use existing faucet keypair"
 else
-  solana-keygen new -f -o "$faucet_keypair"
+  solana-keygen new --no-passphrase -fso "$faucet_keypair"
 fi
 leader_storage_account_keypair="$dataDir"/leader-storage-account-keypair.json
 if [[ -e $leader_storage_account_keypair ]]; then
   echo "Use existing leader storage account keypair"
 else
-  solana-keygen new -f -o "$leader_storage_account_keypair"
+  solana-keygen new --no-passphrase -fso "$leader_storage_account_keypair"
 fi
 
 solana-genesis \

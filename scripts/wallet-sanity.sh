@@ -15,7 +15,7 @@ else
   args=("$@")
 fi
 
-$solana_keygen new -f
+$solana_keygen new --no-passphrase -sf
 
 node_readiness=false
 timeout=60

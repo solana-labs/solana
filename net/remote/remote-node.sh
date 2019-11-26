@@ -166,7 +166,7 @@ EOF
         if [[ -f net/keypairs/"$name".json ]]; then
           cp net/keypairs/"$name".json config/"$name".json
         else
-          solana-keygen new -o config/"$name".json
+          solana-keygen new --no-passphrase -so config/"$name".json
         fi
         if [[ -n $internalNodesLamports ]]; then
           declare pubkey
@@ -302,7 +302,7 @@ EOF
     fi
 
     if [[ ! -f config/validator-identity.json ]]; then
-      solana-keygen new -o config/validator-identity.json
+      solana-keygen new --no-passphrase -so config/validator-identity.json
     fi
     args+=(--identity-keypair config/validator-identity.json)
 

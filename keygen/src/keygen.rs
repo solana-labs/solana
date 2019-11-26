@@ -4,6 +4,7 @@ use clap::{
     crate_description, crate_name, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
 use num_cpus;
+use solana_clap_utils::keypair::{keypair_from_seed_phrase, SKIP_SEED_PHRASE_VALIDATION_ARG};
 use solana_sdk::{
     pubkey::write_pubkey_file,
     signature::{
@@ -56,7 +57,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(
             SubCommand::with_name("new")
-                .about("Generate new keypair file")
+                .about("Generate new keypair file from a passphrase and random seed phrase")
                 .setting(AppSettings::DisableVersion)
                 .arg(
                     Arg::with_name("outfile")
@@ -73,10 +74,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Overwrite the output file if it exists"),
                 )
                 .arg(
+                    Arg::with_name("no_passphrase")
+                        .long("no-passphrase")
+                        .help("Do not prompt for a passphrase"),
+                )
+                .arg(
                     Arg::with_name("silent")
                         .short("s")
                         .long("silent")
-                        .help("Do not display mnemonic phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
+                        .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
         )
         .subcommand(
@@ -143,7 +149,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .subcommand(
             SubCommand::with_name("recover")
-                .about("Recover keypair from mnemonic phrase")
+                .about("Recover keypair from seed phrase and passphrase")
                 .setting(AppSettings::DisableVersion)
                 .arg(
                     Arg::with_name("outfile")
@@ -158,7 +164,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .short("f")
                         .long("force")
                         .help("Overwrite the output file if it exists"),
+                )
+                .arg(
+                    Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                        .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
+                        .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
                 ),
+
         )
         .get_matches();
 
@@ -200,7 +212,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
 
             let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-            let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
+            let passphrase = if matches.is_present("no_passphrase") {
+                NO_PASSPHRASE.to_string()
+            } else {
+                eprintln!("Generating a new keypair");
+                rpassword::prompt_password_stderr(
+                    "For added security, enter a passphrase (empty for no passphrase):",
+                )?
+            };
+            let seed = Seed::new(&mnemonic, &passphrase);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
             output_keypair(&keypair, &outfile, "new")?;
@@ -210,7 +230,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 let phrase: &str = mnemonic.phrase();
                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                 eprintln!(
-                    "{}\npubkey: {}\n{}\nSave this mnemonic phrase to recover your new keypair:\n{}\n{}",
+                    "{}\npubkey: {}\n{}\nSave this seed phrase to recover your new keypair:\n{}\n{}",
                     &divider, keypair.pubkey(), &divider, phrase, &divider
                 );
             }
@@ -228,11 +248,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(&outfile, &matches);
             }
 
-            let phrase = rpassword::prompt_password_stderr("Mnemonic recovery phrase: ").unwrap();
-            let mnemonic = Mnemonic::from_phrase(phrase.trim(), Language::English)?;
-            let seed = Seed::new(&mnemonic, NO_PASSPHRASE);
-            let keypair = keypair_from_seed(seed.as_bytes())?;
-
+            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+            let keypair = keypair_from_seed_phrase("recover", skip_validation)?;
             output_keypair(&keypair, &outfile, "recovered")?;
         }
         ("grind", Some(matches)) => {
