@@ -3,8 +3,9 @@ use clap::ArgMatches;
 use solana_sdk::{
     native_token::sol_to_lamports,
     pubkey::Pubkey,
-    signature::{read_keypair_file, Keypair, KeypairUtil},
+    signature::{read_keypair_file, Keypair, KeypairUtil, Signature},
 };
+use std::str::FromStr;
 
 // Return parsed values from matches at `name`
 pub fn values_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<T>>
@@ -48,6 +49,20 @@ pub fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
 // or is a filename that can be read as a keypair
 pub fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
+}
+
+// Return pubkey/signature pairs for a string of the form pubkey=signature
+pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
+    matches.values_of(name).map(|values| {
+        values
+            .map(|pubkey_signer_string| {
+                let mut signer = pubkey_signer_string.split('=');
+                let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
+                let sig = Signature::from_str(signer.next().unwrap()).unwrap();
+                (key, sig)
+            })
+            .collect()
+    })
 }
 
 pub fn amount_of(matches: &ArgMatches<'_>, name: &str, unit: &str) -> Option<u64> {
@@ -171,5 +186,26 @@ mod tests {
         assert_eq!(pubkey_of(&matches, "single"), None);
 
         fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_pubkeys_sigs_of() {
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+        let sig1 = Keypair::new().sign_message(&[0u8]);
+        let sig2 = Keypair::new().sign_message(&[1u8]);
+        let signer1 = format!("{}={}", key1, sig1);
+        let signer2 = format!("{}={}", key2, sig2);
+        let matches = app().clone().get_matches_from(vec![
+            "test",
+            "--multiple",
+            &signer1,
+            "--multiple",
+            &signer2,
+        ]);
+        assert_eq!(
+            pubkeys_sigs_of(&matches, "multiple"),
+            Some(vec![(key1, sig1), (key2, sig2)])
+        );
     }
 }

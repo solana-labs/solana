@@ -1,14 +1,16 @@
 use crate::cli::{
     build_balance_message, check_account_for_fee, check_unique_pubkeys,
-    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+    get_blockhash_fee_calculator, log_instruction_custom_error, replace_signatures, return_signers,
+    CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use console::style;
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::signature::Keypair;
+use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::{
     account_utils::State,
+    hash::Hash,
     pubkey::Pubkey,
     signature::KeypairUtil,
     system_instruction::SystemError,
@@ -120,6 +122,29 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair)
                         .help("The vote account to which the stake will be delegated")
                 )
+                .arg(
+                    Arg::with_name("sign_only")
+                        .long("sign-only")
+                        .takes_value(false)
+                        .help("Sign the transaction offline"),
+                )
+                .arg(
+                    Arg::with_name("signer")
+                        .long("signer")
+                        .value_name("PUBKEY=BASE58_SIG")
+                        .takes_value(true)
+                        .validator(is_pubkey_sig)
+                        .multiple(true)
+                        .help("Provide a public-key/signature pair for the transaction"),
+                )
+                .arg(
+                    Arg::with_name("blockhash")
+                        .long("blockhash")
+                        .value_name("BLOCKHASH")
+                        .takes_value(true)
+                        .validator(is_hash)
+                        .help("Use the supplied blockhash"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("stake-authorize-staker")
@@ -176,6 +201,29 @@ impl StakeSubCommands for App<'_, '_> {
                         .required(true)
                         .help("Stake account to be deactivated.")
                 )
+                .arg(
+                    Arg::with_name("sign_only")
+                        .long("sign-only")
+                        .takes_value(false)
+                        .help("Sign the transaction offline"),
+                )
+                .arg(
+                    Arg::with_name("signer")
+                        .long("signer")
+                        .value_name("PUBKEY=BASE58_SIG")
+                        .takes_value(true)
+                        .validator(is_pubkey_sig)
+                        .multiple(true)
+                        .help("Provide a public-key/signature pair for the transaction"),
+                )
+                .arg(
+                    Arg::with_name("blockhash")
+                        .long("blockhash")
+                        .value_name("BLOCKHASH")
+                        .takes_value(true)
+                        .validator(is_hash)
+                        .help("Use the supplied blockhash"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("withdraw-stake")
@@ -293,10 +341,20 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let force = matches.is_present("force");
+    let sign_only = matches.is_present("sign_only");
+    let signers = pubkeys_sigs_of(&matches, "signer");
+    let blockhash = value_of(matches, "blockhash");
 
     Ok(CliCommandInfo {
-        command: CliCommand::DelegateStake(stake_account_pubkey, vote_account_pubkey, force),
-        require_keypair: true,
+        command: CliCommand::DelegateStake {
+            stake_account_pubkey,
+            vote_account_pubkey,
+            force,
+            sign_only,
+            signers,
+            blockhash,
+        },
+        require_keypair: !sign_only,
     })
 }
 
@@ -328,9 +386,17 @@ pub fn parse_redeem_vote_credits(matches: &ArgMatches<'_>) -> Result<CliCommandI
 
 pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+    let sign_only = matches.is_present("sign_only");
+    let signers = pubkeys_sigs_of(&matches, "signer");
+    let blockhash = value_of(matches, "blockhash");
     Ok(CliCommandInfo {
-        command: CliCommand::DeactivateStake(stake_account_pubkey),
-        require_keypair: true,
+        command: CliCommand::DeactivateStake {
+            stake_account_pubkey,
+            sign_only,
+            signers,
+            blockhash,
+        },
+        require_keypair: !sign_only,
     })
 }
 
@@ -463,8 +529,12 @@ pub fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
+    sign_only: bool,
+    signers: &Option<Vec<(Pubkey, Signature)>>,
+    blockhash: Option<Hash>,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) =
+        get_blockhash_fee_calculator(rpc_client, sign_only, blockhash)?;
     let ixs = vec![stake_instruction::deactivate_stake(
         stake_account_pubkey,
         &config.keypair.pubkey(),
@@ -475,9 +545,16 @@ pub fn process_deactivate_stake_account(
         &[&config.keypair],
         recent_blockhash,
     );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<StakeError>(result)
+    if let Some(signers) = signers {
+        replace_signatures(&mut tx, &signers)?;
+    }
+    if sign_only {
+        return_signers(&tx)
+    } else {
+        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+        log_instruction_custom_error::<StakeError>(result)
+    }
 }
 
 pub fn process_withdraw_stake(
@@ -644,6 +721,9 @@ pub fn process_delegate_stake(
     stake_account_pubkey: &Pubkey,
     vote_account_pubkey: &Pubkey,
     force: bool,
+    sign_only: bool,
+    signers: &Option<Vec<(Pubkey, Signature)>>,
+    blockhash: Option<Hash>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
@@ -690,7 +770,8 @@ pub fn process_delegate_stake(
         }
     }
 
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, fee_calculator) =
+        get_blockhash_fee_calculator(rpc_client, sign_only, blockhash)?;
 
     let ixs = vec![stake_instruction::delegate_stake(
         stake_account_pubkey,
@@ -704,9 +785,16 @@ pub fn process_delegate_stake(
         &[&config.keypair],
         recent_blockhash,
     );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<StakeError>(result)
+    if let Some(signers) = signers {
+        replace_signatures(&mut tx, &signers)?;
+    }
+    if sign_only {
+        return_signers(&tx)
+    } else {
+        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+        log_instruction_custom_error::<StakeError>(result)
+    }
 }
 
 #[cfg(test)]
@@ -831,18 +919,25 @@ mod tests {
         );
 
         // Test DelegateStake Subcommand
-        let stake_pubkey = Pubkey::new_rand();
-        let stake_pubkey_string = stake_pubkey.to_string();
+        let vote_account_pubkey = Pubkey::new_rand();
+        let vote_account_string = vote_account_pubkey.to_string();
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
-            &stake_pubkey_string,
             &stake_account_string,
+            &vote_account_string,
         ]);
         assert_eq!(
             parse_command(&test_delegate_stake).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DelegateStake(stake_pubkey, stake_account_pubkey, false),
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    force: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None
+                },
                 require_keypair: true
             }
         );
@@ -851,13 +946,124 @@ mod tests {
             "test",
             "delegate-stake",
             "--force",
-            &stake_pubkey_string,
             &stake_account_string,
+            &vote_account_string,
         ]);
         assert_eq!(
             parse_command(&test_delegate_stake).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DelegateStake(stake_pubkey, stake_account_pubkey, true),
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    force: true,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test Delegate Subcommand w/ Blockhash
+        let blockhash = Hash::default();
+        let blockhash_string = format!("{}", blockhash);
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            &stake_account_string,
+            &vote_account_string,
+            "--blockhash",
+            &blockhash_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_delegate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    force: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: Some(blockhash)
+                },
+                require_keypair: true
+            }
+        );
+
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            &stake_account_string,
+            &vote_account_string,
+            "--sign-only",
+        ]);
+        assert_eq!(
+            parse_command(&test_delegate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    force: false,
+                    sign_only: true,
+                    signers: None,
+                    blockhash: None
+                },
+                require_keypair: false
+            }
+        );
+
+        // Test Delegate Subcommand w/ signer
+        let key1 = Pubkey::new_rand();
+        let sig1 = Keypair::new().sign_message(&[0u8]);
+        let signer1 = format!("{}={}", key1, sig1);
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            &stake_account_string,
+            &vote_account_string,
+            "--signer",
+            &signer1,
+        ]);
+        assert_eq!(
+            parse_command(&test_delegate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    force: false,
+                    sign_only: false,
+                    signers: Some(vec![(key1, sig1)]),
+                    blockhash: None
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test Delegate Subcommand w/ signers
+        let key2 = Pubkey::new_rand();
+        let sig2 = Keypair::new().sign_message(&[0u8]);
+        let signer2 = format!("{}={}", key2, sig2);
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            &stake_account_string,
+            &vote_account_string,
+            "--signer",
+            &signer1,
+            "--signer",
+            &signer2,
+        ]);
+        assert_eq!(
+            parse_command(&test_delegate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    force: false,
+                    sign_only: false,
+                    signers: Some(vec![(key1, sig1), (key2, sig2)]),
+                    blockhash: None
+                },
                 require_keypair: true
             }
         );
@@ -866,7 +1072,7 @@ mod tests {
         let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "withdraw-stake",
-            &stake_pubkey_string,
+            &stake_account_string,
             &stake_account_string,
             "42",
             "lamports",
@@ -875,7 +1081,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_withdraw_stake).unwrap(),
             CliCommandInfo {
-                command: CliCommand::WithdrawStake(stake_pubkey, stake_account_pubkey, 42),
+                command: CliCommand::WithdrawStake(stake_account_pubkey, stake_account_pubkey, 42),
                 require_keypair: true
             }
         );
@@ -884,12 +1090,109 @@ mod tests {
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "deactivate-stake",
-            &stake_pubkey_string,
+            &stake_account_string,
         ]);
         assert_eq!(
             parse_command(&test_deactivate_stake).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DeactivateStake(stake_pubkey),
+                command: CliCommand::DeactivateStake {
+                    stake_account_pubkey,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test Deactivate Subcommand w/ Blockhash
+        let blockhash = Hash::default();
+        let blockhash_string = format!("{}", blockhash);
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_deactivate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DeactivateStake {
+                    stake_account_pubkey,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: Some(blockhash)
+                },
+                require_keypair: true
+            }
+        );
+
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &stake_account_string,
+            "--sign-only",
+        ]);
+        assert_eq!(
+            parse_command(&test_deactivate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DeactivateStake {
+                    stake_account_pubkey,
+                    sign_only: true,
+                    signers: None,
+                    blockhash: None
+                },
+                require_keypair: false
+            }
+        );
+
+        // Test Deactivate Subcommand w/ signers
+        let key1 = Pubkey::new_rand();
+        let sig1 = Keypair::new().sign_message(&[0u8]);
+        let signer1 = format!("{}={}", key1, sig1);
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &stake_account_string,
+            "--signer",
+            &signer1,
+        ]);
+        assert_eq!(
+            parse_command(&test_deactivate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DeactivateStake {
+                    stake_account_pubkey,
+                    sign_only: false,
+                    signers: Some(vec![(key1, sig1)]),
+                    blockhash: None
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test Deactivate Subcommand w/ signers
+        let key2 = Pubkey::new_rand();
+        let sig2 = Keypair::new().sign_message(&[0u8]);
+        let signer2 = format!("{}={}", key2, sig2);
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &stake_account_string,
+            "--signer",
+            &signer1,
+            "--signer",
+            &signer2,
+        ]);
+        assert_eq!(
+            parse_command(&test_deactivate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DeactivateStake {
+                    stake_account_pubkey,
+                    sign_only: false,
+                    signers: Some(vec![(key1, sig1), (key2, sig2)]),
+                    blockhash: None
+                },
                 require_keypair: true
             }
         );

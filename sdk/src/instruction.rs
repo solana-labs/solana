@@ -117,7 +117,7 @@ impl Instruction {
 pub struct AccountMeta {
     /// An account's public key
     pub pubkey: Pubkey,
-    /// True if an Instruciton requires a Transaction signature matching `pubkey`.
+    /// True if an Instruction requires a Transaction signature matching `pubkey`.
     pub is_signer: bool,
     /// True if the `pubkey` can be loaded as a read-write account.
     pub is_writable: bool,
