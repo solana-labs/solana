@@ -1,14 +1,14 @@
-# Keypair Generation and Recovery
+# Creating and Using a Seed Phrase
 
-Using the `solana-keygen` tool, it is possible to generate new seed phrases for key derivation as well as recover keypairs directly from a seed phrase and optional passphrase. The seed phrase and passphrase together can be used as a paper wallet.
+Using the `solana-keygen` tool, it is possible to generate new seed phrases as well as derive public keys from an existing seed phrase and (optional) passphrase. The seed phrase and passphrase can be used together as a paper wallet.
 
 {% hint style="info" %}
-We do not offer advice on how to securely handle your paper wallet. Please research the security concerns carefully.
+We do not intend to advise on how to *securely* create or manage paper wallets. Please research the security concerns carefully.
 {% endhint %}
 
-## Keypair Generation
+## Seed Phrase Generation
 
-Keypair creation can be done using the `solana-keygen new` command. The command will walk you through choosing an optional passphrase and will display the generated seed phrase for your paper wallet.
+Generating a new keypair can be done using the `solana-keygen new` command. The command will generate a random seed phrase, ask you to enter an optional passphrase, and then will display the derived public key and the generated seed phrase for your paper wallet.
 
 ```bash
 solana-keygen new --no-outfile
@@ -18,52 +18,32 @@ solana-keygen new --no-outfile
 If `--no-outfile` is not specified, the default behavior is to write the keypair to `~/.config/solana/id.json`
 {% endhint %}
 
-Full usage details:
+For full usage details run:
 
 ```bash
-Generate new keypair file from a passphrase and random seed phrase
-
-USAGE:
-    solana-keygen new [FLAGS] [OPTIONS]
-
-FLAGS:
-    -f, --force            Overwrite the output file if it exists
-    -h, --help             Prints help information
-        --no-outfile       Only print a seed phrase and pubkey. Do not output a keypair file
-        --no-passphrase    Do not prompt for a passphrase
-    -s, --silent           Do not display seed phrase. Useful when piping output to other programs that prompt for user
-                           input, like gpg
-
-OPTIONS:
-    -o, --outfile <PATH>    Path to generated file
+solana-keygen new -h
 ```
 
-## Keypair Recovery
+## Public Key Derivation
 
-Keypair recovery can be done using the `solana-keygen recover` command. This is useful for using your paper wallet to create a keypair file on a machine for easy access. The `solana-keygen recover` command will walk you through entering your seed phrase and a passphrase if you chose to use one.
+Public keys can be derived from a seed phrase and a passphrase if you choose to use one. This is useful for using using an offline generated seed phrase to derive a valid public key. The `solana-keygen pubkey` command will walk you through entering your seed phrase and a passphrase if you chose to use one.
 
 ```bash
-solana-keygen recover
+solana-keygen pubkey ASK
 ```
 
 {% hint style="info" %}
-If an `--outfile` is not specified, the default behavior is to write the keypair to `~/.config/solana/id.json`
+Note that you could potentially use different passphrases for the same seed phrase. Each unique passphrase will yield a different keypair.
 {% endhint %}
 
-Full usage details:
+The `solana-keygen` tool assumes the use of the BIP39 standard English word list. If you choose to deviate from the word list or use a different language for your seed phrase, you can still derive a valid public key but will need to explicitly skip seed phrase validation.
 
 ```bash
-Recover keypair from seed phrase and passphrase
+solana-keygen pubkey ASK --skip-seed-phrase-validation
+```
 
-USAGE:
-    solana-keygen recover [FLAGS] [OPTIONS]
+For full usage details run:
 
-FLAGS:
-    -f, --force                          Overwrite the output file if it exists
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-
-OPTIONS:
-    -o, --outfile <PATH>    Path to generated file
+```bash
+solana-keygen pubkey -h
 ```
