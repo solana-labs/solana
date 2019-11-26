@@ -154,7 +154,7 @@ impl Blocktree {
         adjust_ulimit_nofile();
 
         // Open the database
-        let measure = Measure::start("open");
+        let mut measure = Measure::start("open");
         let db = Database::open(&blocktree_path)?;
 
         // Create the metadata column family
