@@ -96,7 +96,7 @@ if ((airdrops_enabled)); then
   $solana_cli "${common_args[@]}" airdrop "$stake_lamports" lamports
 fi
 
-$solana_keygen new -o "$stake_keypair_path"
+$solana_keygen new --no-passphrase -so "$stake_keypair_path"
 
 set -x
 $solana_cli "${common_args[@]}" \

@@ -59,7 +59,7 @@ ledger="$SOLANA_ROOT"/farf/archiver-ledger"$label"
 rpc_url=$($solana_gossip get-rpc-url --entrypoint "$entrypoint")
 
 if [[ ! -r $identity_keypair ]]; then
-  $solana_keygen new -o "$identity_keypair"
+  $solana_keygen new --no-passphrase -so "$identity_keypair"
 
   # See https://github.com/solana-labs/solana/issues/4344
   $solana_cli --keypair "$identity_keypair" --url "$rpc_url" airdrop 1
@@ -67,7 +67,7 @@ fi
 identity_pubkey=$($solana_keygen pubkey "$identity_keypair")
 
 if [[ ! -r $storage_keypair ]]; then
-  $solana_keygen new -o "$storage_keypair"
+  $solana_keygen new --no-passphrase -so "$storage_keypair"
 
   $solana_cli --keypair "$identity_keypair" --url "$rpc_url" \
     create-archiver-storage-account "$identity_pubkey" "$storage_keypair"

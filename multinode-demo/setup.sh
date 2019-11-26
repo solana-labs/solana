@@ -13,18 +13,18 @@ mkdir -p "$SOLANA_CONFIG_DIR"/bootstrap-leader
 if [[ -r $FAUCET_KEYPAIR ]]; then
   cp -f "$FAUCET_KEYPAIR" "$SOLANA_CONFIG_DIR"/faucet-keypair.json
 else
-  $solana_keygen new -f -o "$SOLANA_CONFIG_DIR"/faucet-keypair.json
+  $solana_keygen new --no-passphrase -fso "$SOLANA_CONFIG_DIR"/faucet-keypair.json
 fi
 
 if [[ -f $BOOTSTRAP_LEADER_IDENTITY_KEYPAIR ]]; then
   cp -f "$BOOTSTRAP_LEADER_IDENTITY_KEYPAIR" "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
 else
-  $solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
+  $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
 fi
 
-$solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
-$solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/stake-keypair.json
-$solana_keygen new -o "$SOLANA_CONFIG_DIR"/bootstrap-leader/storage-keypair.json
+$solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
+$solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-leader/stake-keypair.json
+$solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-leader/storage-keypair.json
 
 args=("$@")
 default_arg --bootstrap-leader-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-leader/identity-keypair.json
