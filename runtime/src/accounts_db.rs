@@ -1972,7 +1972,8 @@ pub mod tests {
         expected_lamports: u64,
     ) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
-        let (account, slot) = accounts.load_slow(&ancestors, &pubkey).unwrap();
+        let owner = Account::default().owner;
+        let (account, slot) = accounts.load_slow(&ancestors, &pubkey).unwrap_or((Account::new(0, 0, &owner), slot));
         assert_eq!((account.lamports, slot), (expected_lamports, slot));
     }
 
