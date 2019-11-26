@@ -426,6 +426,10 @@ test('get confirmed block', async () => {
   }
   const connection = new Connection(url);
 
+  while ((await connection.getSlot()) <= 0) {
+    continue;
+  }
+
   // Block 0 never has any transactions in automation localnet
   const block0 = await connection.getConfirmedBlock(0);
   const blockhash0 = block0.blockhash;
