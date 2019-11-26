@@ -1,6 +1,6 @@
 [package]
 name = "solana-stake-program"
-version = "0.21.0"
+version = "0.22.0"
 description = "Solana Stake program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -16,11 +16,11 @@ num-traits = "0.2"
 rand = "0.6.5"
 serde = "1.0.102"
 serde_derive = "1.0.102"
-solana-logger = { path = "../../logger", version = "0.21.0" }
-solana-metrics = { path = "../../metrics", version = "0.21.0" }
-solana-sdk = { path = "../../sdk", version = "0.21.0" }
-solana-vote-program = { path = "../vote", version = "0.21.0" }
-solana-config-program = { path = "../config", version = "0.21.0" }
+solana-logger = { path = "../../logger", version = "0.22.0" }
+solana-metrics = { path = "../../metrics", version = "0.22.0" }
+solana-sdk = { path = "../../sdk", version = "0.22.0" }
+solana-vote-program = { path = "../vote", version = "0.22.0" }
+solana-config-program = { path = "../config", version = "0.22.0" }
 
 [lib]
 crate-type = ["lib", "cdylib"]

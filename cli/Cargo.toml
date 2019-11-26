@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-cli"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.21.0"
+version = "0.22.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -27,24 +27,24 @@ serde = "1.0.102"
 serde_derive = "1.0.102"
 serde_json = "1.0.41"
 serde_yaml = "0.8.11"
-solana-budget-program = { path = "../programs/budget", version = "0.21.0" }
-solana-clap-utils = { path = "../clap-utils", version = "0.21.0" }
-solana-client = { path = "../client", version = "0.21.0" }
-solana-config-program = { path = "../programs/config", version = "0.21.0" }
-solana-drone = { path = "../drone", version = "0.21.0" }
-solana-logger = { path = "../logger", version = "0.21.0" }
-solana-net-utils = { path = "../net-utils", version = "0.21.0" }
-solana-runtime = { path = "../runtime", version = "0.21.0" }
-solana-sdk = { path = "../sdk", version = "0.21.0" }
-solana-stake-program = { path = "../programs/stake", version = "0.21.0" }
-solana-storage-program = { path = "../programs/storage", version = "0.21.0" }
-solana-vote-program = { path = "../programs/vote", version = "0.21.0" }
-solana-vote-signer = { path = "../vote-signer", version = "0.21.0" }
+solana-budget-program = { path = "../programs/budget", version = "0.22.0" }
+solana-clap-utils = { path = "../clap-utils", version = "0.22.0" }
+solana-client = { path = "../client", version = "0.22.0" }
+solana-config-program = { path = "../programs/config", version = "0.22.0" }
+solana-drone = { path = "../drone", version = "0.22.0" }
+solana-logger = { path = "../logger", version = "0.22.0" }
+solana-net-utils = { path = "../net-utils", version = "0.22.0" }
+solana-runtime = { path = "../runtime", version = "0.22.0" }
+solana-sdk = { path = "../sdk", version = "0.22.0" }
+solana-stake-program = { path = "../programs/stake", version = "0.22.0" }
+solana-storage-program = { path = "../programs/storage", version = "0.22.0" }
+solana-vote-program = { path = "../programs/vote", version = "0.22.0" }
+solana-vote-signer = { path = "../vote-signer", version = "0.22.0" }
 url = "2.1.0"
 
 [dev-dependencies]
-solana-core = { path = "../core", version = "0.21.0" }
-solana-budget-program = { path = "../programs/budget", version = "0.21.0" }
+solana-core = { path = "../core", version = "0.22.0" }
+solana-budget-program = { path = "../programs/budget", version = "0.22.0" }
 tempfile = "3.1.0"
 
 [[bin]]

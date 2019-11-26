@@ -1,6 +1,6 @@
 [package]
 name = "solana-fixed-buf"
-version = "0.21.0"
+version = "0.22.0"
 description = "A fixed-size byte array that supports bincode serde"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
