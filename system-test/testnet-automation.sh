@@ -11,7 +11,7 @@ function collect_logs {
   execution_step "Collect logs from remote nodes"
   rm -rf net/log
   net/net.sh logs
-  for logfile in net/log/* ; do
+  for logfile in net/log/*; do
     (
       new_log=net/log/"$TESTNET_TAG"_"$NUMBER_OF_VALIDATOR_NODES"-nodes_"$(basename "$logfile")"
       cp "$logfile" "$new_log"
@@ -73,7 +73,7 @@ function wait_for_bootstrap_leader_stake_drop {
 
 function cleanup_testnet {
   RC=$?
-  if [[ $RC != 0 ]] ; then
+  if [[ $RC != 0 ]]; then
     RESULT_DETAILS="
 Test failed during step:
 ${STEP}
@@ -83,7 +83,7 @@ $(eval echo "$@")"
   fi
 
   FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
-  if [[ "$UPLOAD_RESULTS_TO_SLACK" = "true" ]] ; then
+  if [[ "$UPLOAD_RESULTS_TO_SLACK" = "true" ]]; then
     upload_results_to_slack
   fi
 
@@ -118,7 +118,7 @@ function launchTestnet() {
 
   case $CLOUD_PROVIDER in
     gce)
-      if [[ -z $VALIDATOR_NODE_MACHINE_TYPE ]] ; then
+      if [[ -z $VALIDATOR_NODE_MACHINE_TYPE ]]; then
         echo VALIDATOR_NODE_MACHINE_TYPE not defined
         exit 1
       fi
@@ -169,15 +169,15 @@ function launchTestnet() {
   net/init-metrics.sh -e
 
   execution_step "Fetch reusable testnet keypairs"
-  if [[ ! -d net/keypairs ]] ; then
+  if [[ ! -d net/keypairs ]]; then
     git clone git@github.com:solana-labs/testnet-keypairs.git net/keypairs
     # If we have provider-specific keys (CoLo*, GCE*, etc) use them instead of generic val*
-    if [[ -d net/keypairs/"${CLOUD_PROVIDER}" ]] ; then
+    if [[ -d net/keypairs/"${CLOUD_PROVIDER}" ]]; then
       cp net/keypairs/"${CLOUD_PROVIDER}"/* net/keypairs/
     fi
   fi
 
-  if [[ "$CLOUD_PROVIDER" = "colo" ]] ; then
+  if [[ "$CLOUD_PROVIDER" = "colo" ]]; then
     execution_step "Stopping Colo nodes before we start"
     net/net.sh stop
   fi
@@ -200,9 +200,27 @@ function launchTestnet() {
   execution_step "Waiting for bootstrap leader's stake percentage to fall below $BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD %"
   wait_for_bootstrap_leader_stake_drop "$BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD"
 
-  execution_step "Wait ${TEST_DURATION_SECONDS} seconds to complete test"
-  sleep "$TEST_DURATION_SECONDS"
+  if [[ -n $TEST_DURATION_SECONDS ]]; then
+    execution_step "Wait ${TEST_DURATION_SECONDS} seconds to complete test"
+    sleep "$TEST_DURATION_SECONDS"
+  elif [[ "$APPLY_PARTITIONS" = "true" ]]; then
+    execution_step "Wait $PARTITION_INACTIVE_DURATION before beginning to apply partitions"
+    sleep "$PARTITION_INACTIVE_DURATION"
+    for i in {0.."$PARTITION_ITERATION_COUNT"}; do
+      execution_step "Partition Iteration $i of $PARTITION_ITERATION_COUNT"
+      execution_step "Applying netem config $NETEM_CONFIG_FILE for $PARTITION_ACTIVE_DURATION seconds"
+      net/net.sh netem --config-file $NETEM_CONFIG_FILE
+      sleep $PARTITION_ACTIVE_DURATION
 
+      execution_step "Resolving partitions for $PARTITION_INACTIVE_DURATION seconds"
+      net/net.sh netem --config-file $NETEM_CONFIG_FILE --netem-cmd cleanup
+      sleep $PARTITION_INACTIVE_DURATION
+    done
+  else
+    # We should never get here
+    echo Test duration and partition config not defined
+  fi
+  
   execution_step "Collect statistics about run"
   declare q_mean_tps='
     SELECT ROUND(MEAN("median_sum")) as "mean_tps" FROM (
@@ -259,26 +277,21 @@ cd "$(dirname "$0")/.."
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
 [[ -n $BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD ]] || BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD=66
 
-if [[ -z $TEST_DURATION_SECONDS ]] ; then
-  echo TEST_DURATION_SECONDS not defined
-  exit 1
-fi
-
-if [[ -z $NUMBER_OF_VALIDATOR_NODES ]] ; then
+if [[ -z $NUMBER_OF_VALIDATOR_NODES ]]; then
   echo NUMBER_OF_VALIDATOR_NODES not defined
   exit 1
 fi
 
 startGpuMode="off"
-if [[ -z $ENABLE_GPU ]] ; then
+if [[ -z $ENABLE_GPU ]]; then
   ENABLE_GPU=false
 fi
-if [[ "$ENABLE_GPU" = "true" ]] ; then
+if [[ "$ENABLE_GPU" = "true" ]]; then
   maybeEnableGpu="--enable-gpu"
   startGpuMode="on"
 fi
 
-if [[ -z $NUMBER_OF_CLIENT_NODES ]] ; then
+if [[ -z $NUMBER_OF_CLIENT_NODES ]]; then
   echo NUMBER_OF_CLIENT_NODES not defined
   exit 1
 fi
@@ -292,22 +305,35 @@ if [[ -z $SOLANA_METRICS_CONFIG ]]; then
 fi
 echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
 
-if [[ -z $ALLOW_BOOT_FAILURES ]] ; then
+if [[ -z $ALLOW_BOOT_FAILURES ]]; then
   ALLOW_BOOT_FAILURES=false
 fi
-if [[ "$ALLOW_BOOT_FAILURES" = "true" ]] ; then
+if [[ "$ALLOW_BOOT_FAILURES" = "true" ]]; then
   maybeCreateAllowBootFailures="--allow-boot-failures"
   maybeStartAllowBootFailures="-F"
 fi
 
-if [[ -z $USE_PUBLIC_IP_ADDRESSES ]] ; then
+if [[ -z $USE_PUBLIC_IP_ADDRESSES ]]; then
   USE_PUBLIC_IP_ADDRESSES=false
 fi
-if [[ "$USE_PUBLIC_IP_ADDRESSES" = "true" ]] ; then
+if [[ "$USE_PUBLIC_IP_ADDRESSES" = "true" ]]; then
   maybePublicIpAddresses="-P"
 fi
 
 : "${CLIENT_DELAY_START:=0}"
+
+if [[ -z $APPLY_PARTITIONS ]]; then
+  APPLY_PARTITIONS=false
+fi
+if [[ "$APPLY_PARTITIONS" = "true" ]]; then
+  if [[ -n $TEST_DURATION_SECONDS ]]; then
+    echo Cannot accept TEST_DURATION_SECONDS and a parition looping config
+    exit 1
+  fi
+elif [[ -z $TEST_DURATION_SECONDS ]]; then
+  echo TEST_DURATION_SECONDS not defined
+  exit 1
+fi
 
 if [[ -z $CHANNEL ]]; then
   execution_step "Downloading tar from build artifacts"
@@ -337,11 +363,17 @@ TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         TEST_DURATION_SECONDS \
                         USE_PUBLIC_IP_ADDRESSES \
                         ALLOW_BOOT_FAILURES \
-                        ADDITIONAL_FLAGS)
+                        ADDITIONAL_FLAGS \
+                        APPLY_PARTITIONS \
+                        NETEM_CONFIG_FILE \
+                        PARTITION_ACTIVE_DURATION \
+                        PARTITION_INACTIVE_DURATION \
+                        PARTITION_ITERATION_COUNT \
+                        )
 
 TEST_CONFIGURATION=
-for i in "${TEST_PARAMS_TO_DISPLAY[@]}" ; do
-  if [[ -n ${!i} ]] ; then
+for i in "${TEST_PARAMS_TO_DISPLAY[@]}"; do
+  if [[ -n ${!i} ]]; then
     TEST_CONFIGURATION+="${i} = ${!i} | "
   fi
 done

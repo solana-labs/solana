@@ -1,0 +1,39 @@
+{
+  "partitions":[
+    34,
+    33,
+    33
+  ],
+  "interconnects":[
+    {
+      "a":0,
+      "b":1,
+      "config":"loss 15% delay 25ms"
+    },
+    {
+      "a":1,
+      "b":0,
+      "config":"loss 15% delay 25ms"
+    },
+    {
+      "a":0,
+      "b":2,
+      "config":"loss 10% delay 15ms"
+    },
+    {
+      "a":2,
+      "b":0,
+      "config":"loss 10% delay 15ms"
+    },
+    {
+      "a":2,
+      "b":1,
+      "config":"loss 5% delay 5ms"
+    },
+    {
+      "a":1,
+      "b":2,
+      "config":"loss 5% delay 5ms"
+    }
+  ]
+}
