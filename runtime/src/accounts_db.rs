@@ -2018,6 +2018,7 @@ pub mod tests {
 
         let account = Account::new(some_lamport, no_data, &owner);
         let pubkey = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
         let filler_account = Account::new(some_lamport, no_data, &owner);
@@ -2027,6 +2028,7 @@ pub mod tests {
 
         let mut current_slot = 1;
         accounts.store(current_slot, &[(&pubkey, &account)]);
+        //accounts.store(current_slot, &[(&pubkey2, &account)]); // <= Enabling this line causes even my PR fails...
         error!("#1: {:#?}", accounts.get_storage_entries()); // #1
         accounts.add_root(current_slot);
 
