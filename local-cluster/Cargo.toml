@@ -30,5 +30,5 @@ tempfile = "3.1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.22.0" }
 
 [dev-dependencies]
-serial_test = "0.2.0"
+serial_test = "0.3.1"
 serial_test_derive = "0.2.0"
