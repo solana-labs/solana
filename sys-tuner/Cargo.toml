@@ -1,0 +1,25 @@
+[package]
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+edition = "2018"
+name = "solana-sys-tuner"
+description = "The solana cluster system tuner daemon"
+version = "0.1.0"
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+publish = true
+
+[dependencies]
+clap = "2.33.0"
+log = "0.4.8"
+semver = "0.9.0"
+solana-clap-utils = { path = "../clap-utils", version = "0.21.0" }
+solana-logger = { path = "../logger", version = "0.21.0" }
+unix_socket2 = "0.5.4"
+
+[target."cfg(linux)".dependencies]
+thread-priority = "0.1.0"
+
+[[bin]]
+name = "solana-sys-tuner"
+path = "src/main.rs"
