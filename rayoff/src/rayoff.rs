@@ -12,7 +12,10 @@ struct Job {
     work_index: AtomicUsize,
     done_index: AtomicUsize,
 }
+//Safe because Job only lives for the duration of the dispatch call
+//and any thread lifetimes are within that call
 unsafe impl Send for Job {}
+//Safe because data is either atomic or read only
 unsafe impl Sync for Job {}
 
 pub struct Pool {
@@ -64,10 +67,12 @@ impl Default for Pool {
 }
 
 impl Pool {
-    pub fn dispatch_mut<F, A>(&self, elems: &mut [A], func: F)
+    pub fn dispatch_mut<F, A>(&self, elems: &mut [A], func: &F)
     where
-        F: Fn(&mut A) + 'static,
+        F: Fn(&mut A) + Send + Sync,
     {
+        let elems: &'static mut [A] = unsafe {std::mem::transmute(elems)};
+        let func:&'static (dyn Fn(&'static mut A) + 'static) = unsafe {std::mem::transmute(func)};
         let job = Job {
             elems: elems.as_mut_ptr() as *mut u64,
             num: elems.len(),
@@ -89,7 +94,7 @@ impl Pool {
     pub fn map<F, A, B>(&self, inputs: &[A], func: F) -> Vec<B>
     where
         B: Default + Clone,
-        F: (Fn(&A) -> B) + 'static,
+        F: (Fn(&A) -> B) + Send + Sync,
     {
         let mut outs = Vec::new();
         outs.resize(inputs.len(), B::default());
