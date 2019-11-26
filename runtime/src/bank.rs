@@ -1472,6 +1472,11 @@ impl Bank {
         self.ticks_per_slot
     }
 
+    /// Return the number of slots per year
+    pub fn slots_per_year(&self) -> f64 {
+        self.slots_per_year
+    }
+
     /// Return the number of slots per segment
     pub fn slots_per_segment(&self) -> u64 {
         self.slots_per_segment
@@ -1944,23 +1949,40 @@ mod tests {
         bank: &Bank,
         keypairs: &mut Vec<Keypair>,
         mock_program_id: Pubkey,
+        generic_rent_due_for_system_account: u64,
     ) {
         let mut account_pairs: Vec<(Pubkey, Account)> = Vec::with_capacity(keypairs.len() - 1);
         account_pairs.push((
             keypairs[0].pubkey(),
-            Account::new(51224, 1, &Pubkey::default()),
+            Account::new(
+                generic_rent_due_for_system_account + 2,
+                1,
+                &Pubkey::default(),
+            ),
         ));
         account_pairs.push((
             keypairs[1].pubkey(),
-            Account::new(51224, 1, &Pubkey::default()),
+            Account::new(
+                generic_rent_due_for_system_account + 2,
+                1,
+                &Pubkey::default(),
+            ),
         ));
         account_pairs.push((
             keypairs[2].pubkey(),
-            Account::new(51224, 1, &Pubkey::default()),
+            Account::new(
+                generic_rent_due_for_system_account + 2,
+                1,
+                &Pubkey::default(),
+            ),
         ));
         account_pairs.push((
             keypairs[3].pubkey(),
-            Account::new(51224, 1, &Pubkey::default()),
+            Account::new(
+                generic_rent_due_for_system_account + 2,
+                1,
+                &Pubkey::default(),
+            ),
         ));
         account_pairs.push((
             keypairs[4].pubkey(),
@@ -1972,12 +1994,20 @@ mod tests {
         ));
         account_pairs.push((
             keypairs[6].pubkey(),
-            Account::new(102_468, 1, &Pubkey::default()),
+            Account::new(
+                (2 * generic_rent_due_for_system_account) + 24,
+                1,
+                &Pubkey::default(),
+            ),
         ));
 
         account_pairs.push((
             keypairs[8].pubkey(),
-            Account::new(52153, 1, &Pubkey::default()),
+            Account::new(
+                generic_rent_due_for_system_account + 2 + 929,
+                1,
+                &Pubkey::default(),
+            ),
         ));
         account_pairs.push((
             keypairs[9].pubkey(),
@@ -1987,15 +2017,19 @@ mod tests {
         // Feeding to MockProgram to test read only rent behaviour
         account_pairs.push((
             keypairs[10].pubkey(),
-            Account::new(51225, 1, &Pubkey::default()),
+            Account::new(
+                generic_rent_due_for_system_account + 3,
+                1,
+                &Pubkey::default(),
+            ),
         ));
         account_pairs.push((
             keypairs[11].pubkey(),
-            Account::new(51225, 1, &mock_program_id),
+            Account::new(generic_rent_due_for_system_account + 3, 1, &mock_program_id),
         ));
         account_pairs.push((
             keypairs[12].pubkey(),
-            Account::new(51225, 1, &mock_program_id),
+            Account::new(generic_rent_due_for_system_account + 3, 1, &mock_program_id),
         ));
         account_pairs.push((
             keypairs[13].pubkey(),
@@ -2055,7 +2089,25 @@ mod tests {
 
         assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
-        store_accounts_for_rent_test(&bank, &mut keypairs, mock_program_id);
+        let slots_elapsed: u64 = (0..=bank.epoch)
+            .map(|epoch| {
+                bank.rent_collector
+                    .epoch_schedule
+                    .get_slots_in_epoch(epoch + 1)
+            })
+            .sum();
+        let (generic_rent_due_for_system_account, _) = bank.rent_collector.rent.due(
+            bank.get_minimum_balance_for_rent_exemption(1) - 1,
+            1,
+            slots_elapsed as f64 / bank.rent_collector.slots_per_year,
+        );
+
+        store_accounts_for_rent_test(
+            &bank,
+            &mut keypairs,
+            mock_program_id,
+            generic_rent_due_for_system_account,
+        );
 
         let t1 = system_transaction::transfer(
             &keypairs[0],
@@ -2078,7 +2130,7 @@ mod tests {
         let t4 = system_transaction::transfer(
             &keypairs[6],
             &keypairs[7].pubkey(),
-            51223,
+            49373,
             genesis_config.hash(),
         );
         let t5 = system_transaction::transfer(
@@ -2118,32 +2170,35 @@ mod tests {
 
         let mut rent_collected = 0;
 
-        // 51224 - 51222(Rent) - 1(transfer)
+        // 49374 - 49372(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[0].pubkey()), 1);
-        rent_collected += 51222;
+        rent_collected += generic_rent_due_for_system_account;
 
-        // 51224 - 51222(Rent) - 1(transfer)
+        // 49374 - 49372(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[1].pubkey()), 3);
-        rent_collected += 51222;
+        rent_collected += generic_rent_due_for_system_account;
 
-        // 51224 - 51222(Rent) - 1(transfer)
+        // 49374 - 49372(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[2].pubkey()), 1);
-        rent_collected += 51222;
+        rent_collected += generic_rent_due_for_system_account;
 
-        // 51224 - 51222(Rent) - 1(transfer)
+        // 49374 - 49372(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[3].pubkey()), 3);
-        rent_collected += 51222;
+        rent_collected += generic_rent_due_for_system_account;
 
         // No rent deducted
         assert_eq!(bank.get_balance(&keypairs[4].pubkey()), 10);
         assert_eq!(bank.get_balance(&keypairs[5].pubkey()), 10);
 
-        // 102_468 - 51222(Rent) - 51223(transfer)
+        // 98768 - 49372(Rent) - 49373(transfer)
         assert_eq!(bank.get_balance(&keypairs[6].pubkey()), 23);
-        rent_collected += 51222;
+        rent_collected += generic_rent_due_for_system_account;
 
-        // 0 + 51223(transfer) - 917(Rent)
-        assert_eq!(bank.get_balance(&keypairs[7].pubkey()), 50306);
+        // 0 + 49373(transfer) - 917(Rent)
+        assert_eq!(
+            bank.get_balance(&keypairs[7].pubkey()),
+            generic_rent_due_for_system_account + 1 - 917
+        );
         // Epoch should be updated
         // Rent deducted on store side
         let account8 = bank.get_account(&keypairs[7].pubkey()).unwrap();
@@ -2151,9 +2206,9 @@ mod tests {
         assert_eq!(account8.rent_epoch, bank.epoch + 1);
         rent_collected += 917;
 
-        // 52153 - 51222(Rent) - 929(Transfer)
+        // 50303 - 49372(Rent) - 929(Transfer)
         assert_eq!(bank.get_balance(&keypairs[8].pubkey()), 2);
-        rent_collected += 51222;
+        rent_collected += generic_rent_due_for_system_account;
 
         let account10 = bank.get_account(&keypairs[9].pubkey()).unwrap();
         // Account was overwritten at load time, since it didn't have sufficient balance to pay rent
@@ -2165,17 +2220,17 @@ mod tests {
         assert_eq!(account10.lamports, 12);
         rent_collected += 927;
 
-        // 51225 - 51222(Rent)
+        // 49375 - 49372(Rent)
         assert_eq!(bank.get_balance(&keypairs[10].pubkey()), 3);
-        rent_collected += 51222;
+        rent_collected += generic_rent_due_for_system_account;
 
-        // 51225 - 51222(Rent) + 1(Addition by program)
+        // 49375 - 49372(Rent) + 1(Addition by program)
         assert_eq!(bank.get_balance(&keypairs[11].pubkey()), 4);
-        rent_collected += 51222;
+        rent_collected += generic_rent_due_for_system_account;
 
-        // 51225 - 51222(Rent) - 1(Deduction by program)
+        // 49375 - 49372(Rent) - 1(Deduction by program)
         assert_eq!(bank.get_balance(&keypairs[12].pubkey()), 2);
-        rent_collected += 51222;
+        rent_collected += generic_rent_due_for_system_account;
 
         // No rent for read-only account
         assert_eq!(bank.get_balance(&keypairs[13].pubkey()), 14);

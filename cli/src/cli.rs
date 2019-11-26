@@ -20,6 +20,7 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::{
     bpf_loader,
+    clock::Slot,
     commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -79,6 +80,9 @@ pub enum CliCommand {
     },
     ClusterVersion,
     Fees,
+    GetBlockTime {
+        slot: Slot,
+    },
     GetEpochInfo {
         commitment_config: CommitmentConfig,
     },
@@ -286,6 +290,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             command: CliCommand::Fees,
             require_keypair: false,
         }),
+        ("get-block-time", Some(matches)) => parse_get_block_time(matches),
         ("get-epoch-info", Some(matches)) => parse_get_epoch_info(matches),
         ("get-genesis-hash", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::GetGenesisHash,
@@ -964,6 +969,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Catchup { node_pubkey } => process_catchup(&rpc_client, node_pubkey),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
         CliCommand::Fees => process_fees(&rpc_client),
+        CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, *slot),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
         CliCommand::GetEpochInfo { commitment_config } => {
             process_get_epoch_info(&rpc_client, commitment_config)

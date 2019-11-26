@@ -85,6 +85,10 @@ pub type Segment = u64;
 ///  some number of Slots.
 pub type Epoch = u64;
 
+/// UnixTimestamp is an approximate measure of real-world time,
+/// expressed as Unix time (ie. seconds since the Unix epoch)
+pub type UnixTimestamp = i64;
+
 /// Clock represents network time.  Members of Clock start from 0 upon
 ///  network boot.  The best way to map Clock to wallclock time is to use
 ///  current Slot, as Epochs vary in duration (they start short and grow

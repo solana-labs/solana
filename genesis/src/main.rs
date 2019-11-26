@@ -116,7 +116,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
     };
     let default_target_tick_duration =
-        &timing::duration_as_ms(&PohConfig::default().target_tick_duration).to_string();
+        timing::duration_as_us(&PohConfig::default().target_tick_duration);
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
     let default_operating_mode = "softlaunch";
 
@@ -261,7 +261,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("target-tick-duration")
                 .value_name("MILLIS")
                 .takes_value(true)
-                .default_value(default_target_tick_duration)
                 .help("The target tick rate of the cluster in milliseconds"),
         )
         .arg(
@@ -370,8 +369,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
 
     let mut poh_config = PohConfig::default();
-    poh_config.target_tick_duration =
-        Duration::from_millis(value_t_or_exit!(matches, "target_tick_duration", u64));
+    poh_config.target_tick_duration = if matches.is_present("target_tick_duration") {
+        Duration::from_micros(value_t_or_exit!(matches, "target_tick_duration", u64))
+    } else {
+        Duration::from_micros(default_target_tick_duration)
+    };
 
     let operating_mode = if matches.value_of("operating_mode").unwrap() == "development" {
         OperatingMode::Development

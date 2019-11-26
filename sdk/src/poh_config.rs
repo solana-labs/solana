@@ -28,6 +28,8 @@ impl PohConfig {
 
 impl Default for PohConfig {
     fn default() -> Self {
-        Self::new_sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND))
+        Self::new_sleep(Duration::from_micros(
+            1000 * 1000 / DEFAULT_TICKS_PER_SECOND,
+        ))
     }
 }

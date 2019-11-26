@@ -11,7 +11,7 @@ use log::*;
 use serde_json::{json, Value};
 use solana_sdk::{
     account::Account,
-    clock::{Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT},
+    clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT},
     commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
@@ -194,6 +194,32 @@ impl RpcClient {
                 format!("GetClusterNodes parse failure: {}", err),
             )
         })
+    }
+
+    pub fn get_block_time(&self, slot: Slot) -> io::Result<UnixTimestamp> {
+        let params = json!(slot);
+        let response = self
+            .client
+            .send(&RpcRequest::GetBlockTime, Some(params), 0, None);
+
+        response
+            .map(|result_json| {
+                if result_json.is_null() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Block Not Found: slot={}", slot),
+                    ));
+                }
+                let result = serde_json::from_value(result_json)?;
+                trace!("Response block timestamp {:?} {:?}", slot, result);
+                Ok(result)
+            })
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetBlockTime request failure: {:?}", err),
+                )
+            })?
     }
 
     pub fn get_epoch_info(&self) -> io::Result<RpcEpochInfo> {
