@@ -23,7 +23,7 @@ rand = "0.6.5"
 rayon = "1.2.0"
 serde = { version = "1.0.102", features = ["rc"] }
 serde_derive = "1.0.102"
-serde_json = "1.0.41"
+serde_json = "1.0.42"
 solana-logger = { path = "../logger", version = "0.22.0" }
 solana-measure = { path = "../measure", version = "0.22.0" }
 solana-metrics = { path = "../metrics", version = "0.22.0" }
