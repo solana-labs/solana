@@ -79,6 +79,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Do not prompt for a passphrase"),
                 )
                 .arg(
+                    Arg::with_name("no_outfile")
+                        .long("no-outfile")
+                        .conflicts_with_all(&["outfile", "silent"])
+                        .help("Only print a seed phrase and pubkey. Do not output a keypair file"),
+                )
+                .arg(
                     Arg::with_name("silent")
                         .short("s")
                         .long("silent")
@@ -199,18 +205,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("new", Some(matches)) => {
-            let mut path = dirs::home_dir().expect("home directory");
-            let outfile = if matches.is_present("outfile") {
-                matches.value_of("outfile").unwrap()
-            } else {
-                path.extend(&[".config", "solana", "id.json"]);
-                path.to_str().unwrap()
-            };
-
-            if outfile != "-" {
-                check_for_overwrite(&outfile, &matches);
-            }
-
             let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
             let passphrase = if matches.is_present("no_passphrase") {
                 NO_PASSPHRASE.to_string()
@@ -223,7 +217,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let seed = Seed::new(&mnemonic, &passphrase);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
-            output_keypair(&keypair, &outfile, "new")?;
+            if !matches.is_present("no_outfile") {
+                let mut path = dirs::home_dir().expect("home directory");
+                let outfile = if matches.is_present("outfile") {
+                    matches.value_of("outfile").unwrap()
+                } else {
+                    path.extend(&[".config", "solana", "id.json"]);
+                    path.to_str().unwrap()
+                };
+
+                if outfile != "-" {
+                    check_for_overwrite(&outfile, &matches);
+                }
+
+                output_keypair(&keypair, &outfile, "new")?;
+            }
 
             let silent = matches.is_present("silent");
             if !silent {
