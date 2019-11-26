@@ -1965,6 +1965,84 @@ pub mod tests {
         assert!(check_storage(&daccounts, 2, 31));
     }
 
+    fn assert_load_account(
+        accounts: &AccountsDB,
+        slot: Slot,
+        pubkey: Pubkey,
+        expected_lamports: u64,
+    ) {
+        let ancestors = vec![(slot, 0)].into_iter().collect();
+        let (account, slot) = accounts.load_slow(&ancestors, &pubkey).unwrap();
+        assert_eq!((account.lamports, slot), (expected_lamports, slot));
+    }
+
+    fn reconstruct_accounts_db_via_serialization(accounts: AccountsDB, slot: Slot) -> AccountsDB {
+        let mut writer = Cursor::new(vec![]);
+        serialize_into(&mut writer, &AccountsDBSerialize::new(&accounts, slot)).unwrap();
+
+        let buf = writer.into_inner();
+        let mut reader = BufReader::new(&buf[..]);
+        let daccounts = AccountsDB::new(None);
+
+        let local_paths = {
+            let paths = daccounts.paths.read().unwrap();
+            AccountsDB::format_paths(paths.to_vec())
+        };
+
+        let copied_accounts = TempDir::new().unwrap();
+        // Simulate obtaining a copy of the AppendVecs from a tarball
+        copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
+        daccounts
+            .accounts_from_stream(&mut reader, local_paths, copied_accounts.path())
+            .unwrap();
+
+        daccounts
+    }
+
+    fn purge_zero_lamport_accounts(accounts: &AccountsDB, slot: Slot) {
+        let ancestors = vec![(slot as Slot, 0)].into_iter().collect();
+        accounts.purge_zero_lamport_accounts(&ancestors);
+    }
+
+    #[test]
+    fn test_accounts_db_serialize_zero_and_free() {
+        solana_logger::setup();
+
+        let some_lamport = 223;
+        let zero_lamport = 0;
+        let no_data = 0;
+        let owner = Account::default().owner;
+
+        let account = Account::new(some_lamport, no_data, &owner);
+        let pubkey = Pubkey::new_rand();
+        let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
+
+        let filler_account = Account::new(some_lamport, no_data, &owner);
+        let filler_account_pubkey = Pubkey::new_rand();
+
+        let accounts = AccountsDB::new_single();
+
+        let mut current_slot = 1;
+        accounts.store(current_slot, &[(&pubkey, &account)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey, &zero_lamport_account)]);
+        for _ in 0..33000 {
+            accounts.store(current_slot, &[(&filler_account_pubkey, &filler_account)]);
+        }
+        accounts.add_root(current_slot);
+
+        error!("doesn't fail:");
+        assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
+
+        purge_zero_lamport_accounts(&accounts, current_slot);
+        let accounts = reconstruct_accounts_db_via_serialization(accounts, current_slot);
+
+        error!("does fail due to a reconstruction bug:");
+        assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
+    }
+
     #[test]
     #[ignore]
     fn test_store_account_stress() {
