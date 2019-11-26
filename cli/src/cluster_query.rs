@@ -11,7 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::{rpc_client::RpcClient, rpc_request::RpcVoteAccountInfo};
 use solana_sdk::{
-    clock,
+    clock::{self, Slot},
     commitment_config::CommitmentConfig,
     hash::Hash,
     pubkey::Pubkey,
@@ -53,6 +53,17 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Get the version of the cluster entrypoint"),
         )
         .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
+        .subcommand(SubCommand::with_name("get-block-time")
+            .about("Get estimated production time of a block")
+            .arg(
+                Arg::with_name("slot")
+                    .index(1)
+                    .takes_value(true)
+                    .value_name("SLOT")
+                    .required(true)
+                    .help("Slot number of the block to query")
+            )
+        )
         .subcommand(
             SubCommand::with_name("get-epoch-info")
             .about("Get information about the current epoch")
@@ -187,6 +198,14 @@ pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Cl
     })
 }
 
+pub fn parse_get_block_time(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let slot = value_t_or_exit!(matches, "slot", u64);
+    Ok(CliCommandInfo {
+        command: CliCommand::GetBlockTime { slot },
+        require_keypair: false,
+    })
+}
+
 pub fn parse_get_epoch_info(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let commitment_config = if matches.is_present("confirmed") {
         CommitmentConfig::default()
@@ -311,6 +330,11 @@ pub fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
         "blockhash: {}\nlamports per signature: {}",
         recent_blockhash, fee_calculator.lamports_per_signature
     ))
+}
+
+pub fn process_get_block_time(rpc_client: &RpcClient, slot: Slot) -> ProcessResult {
+    let timestamp = rpc_client.get_block_time(slot)?;
+    Ok(timestamp.to_string())
 }
 
 pub fn process_get_epoch_info(
@@ -442,8 +466,7 @@ pub fn process_ping(
                     // Sleep for half a slot
                     if signal_receiver
                         .recv_timeout(Duration::from_millis(
-                            500 * solana_sdk::clock::DEFAULT_TICKS_PER_SLOT
-                                / solana_sdk::clock::DEFAULT_TICKS_PER_SECOND,
+                            500 * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
                         ))
                         .is_ok()
                     {
@@ -652,6 +675,20 @@ mod tests {
             parse_command(&test_fees).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Fees,
+                require_keypair: false
+            }
+        );
+
+        let slot = 100;
+        let test_get_block_time = test_commands.clone().get_matches_from(vec![
+            "test",
+            "get-block-time",
+            &slot.to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_get_block_time).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::GetBlockTime { slot },
                 require_keypair: false
             }
         );
