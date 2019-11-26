@@ -1,5 +1,10 @@
 use crate::{
-    cluster_query::*, display::println_name_value, stake::*, storage::*, validator_info::*, vote::*,
+    cluster_query::*,
+    display::{println_name_value, println_signers},
+    stake::*,
+    storage::*,
+    validator_info::*,
+    vote::*,
 };
 use chrono::prelude::*;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -105,8 +110,20 @@ pub enum CliCommand {
         lockup: Lockup,
         lamports: u64,
     },
-    DeactivateStake(Pubkey),
-    DelegateStake(Pubkey, Pubkey, bool),
+    DeactivateStake {
+        stake_account_pubkey: Pubkey,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash: Option<Hash>,
+    },
+    DelegateStake {
+        stake_account_pubkey: Pubkey,
+        vote_account_pubkey: Pubkey,
+        force: bool,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash: Option<Hash>,
+    },
     RedeemVoteCredits(Pubkey, Pubkey),
     ShowStakeHistory {
         use_lamports_unit: bool,
@@ -174,6 +191,9 @@ pub enum CliCommand {
         timestamp_pubkey: Option<Pubkey>,
         witnesses: Option<Vec<Pubkey>>,
         cancelable: bool,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash: Option<Hash>,
     },
     ShowAccount {
         pubkey: Pubkey,
@@ -413,6 +433,9 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             let timestamp_pubkey = value_of(&matches, "timestamp_pubkey");
             let witnesses = values_of(&matches, "witness");
             let cancelable = matches.is_present("cancelable");
+            let sign_only = matches.is_present("sign_only");
+            let signers = pubkeys_sigs_of(&matches, "signer");
+            let blockhash = value_of(&matches, "blockhash");
 
             Ok(CliCommandInfo {
                 command: CliCommand::Pay {
@@ -422,8 +445,11 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
                     timestamp_pubkey,
                     witnesses,
                     cancelable,
+                    sign_only,
+                    signers,
+                    blockhash,
                 },
-                require_keypair: true,
+                require_keypair: !sign_only,
             })
         }
         ("show-account", Some(matches)) => {
@@ -520,6 +546,48 @@ pub fn check_unique_pubkeys(
     } else {
         Ok(())
     }
+}
+
+pub fn get_blockhash_fee_calculator(
+    rpc_client: &RpcClient,
+    sign_only: bool,
+    blockhash: Option<Hash>,
+) -> Result<(Hash, FeeCalculator), Box<dyn std::error::Error>> {
+    Ok(if let Some(blockhash) = blockhash {
+        if sign_only {
+            (blockhash, FeeCalculator::default())
+        } else {
+            (blockhash, rpc_client.get_recent_blockhash()?.1)
+        }
+    } else {
+        rpc_client.get_recent_blockhash()?
+    })
+}
+
+pub fn return_signers(tx: &Transaction) -> ProcessResult {
+    println_signers(tx);
+    let signers: Vec<_> = tx
+        .signatures
+        .iter()
+        .zip(tx.message.account_keys.clone())
+        .map(|(signature, pubkey)| format!("{}={}", pubkey, signature))
+        .collect();
+
+    Ok(json!({
+        "blockhash": tx.message.recent_blockhash.to_string(),
+        "signers": &signers,
+    })
+    .to_string())
+}
+
+pub fn replace_signatures(tx: &mut Transaction, signers: &[(Pubkey, Signature)]) -> ProcessResult {
+    tx.replace_signatures(signers).map_err(|_| {
+        CliError::BadParameter(
+            "Transaction construction failed, incorrect signature or public key provided"
+                .to_string(),
+        )
+    })?;
+    Ok("".to_string())
 }
 
 fn process_airdrop(
@@ -694,6 +762,7 @@ fn process_deploy(
     .to_string())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_pay(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -703,12 +772,17 @@ fn process_pay(
     timestamp_pubkey: Option<Pubkey>,
     witnesses: &Option<Vec<Pubkey>>,
     cancelable: bool,
+    sign_only: bool,
+    signers: &Option<Vec<(Pubkey, Signature)>>,
+    blockhash: Option<Hash>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
         (to, "to".to_string()),
     )?;
-    let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    let (blockhash, fee_calculator) =
+        get_blockhash_fee_calculator(rpc_client, sign_only, blockhash)?;
 
     let cancelable = if cancelable {
         Some(config.keypair.pubkey())
@@ -718,9 +792,17 @@ fn process_pay(
 
     if timestamp == None && *witnesses == None {
         let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash);
-        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-        log_instruction_custom_error::<SystemError>(result)
+        if let Some(signers) = signers {
+            replace_signatures(&mut tx, &signers)?;
+        }
+
+        if sign_only {
+            return_signers(&tx)
+        } else {
+            check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+            let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+            log_instruction_custom_error::<SystemError>(result)
+        }
     } else if *witnesses == None {
         let dt = timestamp.unwrap();
         let dt_pubkey = match timestamp_pubkey {
@@ -745,19 +827,24 @@ fn process_pay(
             ixs,
             blockhash,
         );
-        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-        let result =
-            rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
-        let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
+        if let Some(signers) = signers {
+            replace_signatures(&mut tx, &signers)?;
+        }
+        if sign_only {
+            return_signers(&tx)
+        } else {
+            check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+            let result = rpc_client
+                .send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
+            let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
-        Ok(json!({
-            "signature": signature_str,
-            "processId": format!("{}", contract_state.pubkey()),
-        })
-        .to_string())
+            Ok(json!({
+                "signature": signature_str,
+                "processId": format!("{}", contract_state.pubkey()),
+            })
+            .to_string())
+        }
     } else if timestamp == None {
-        let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-
         let witness = if let Some(ref witness_vec) = *witnesses {
             witness_vec[0]
         } else {
@@ -783,16 +870,23 @@ fn process_pay(
             ixs,
             blockhash,
         );
-        let result =
-            rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
-        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
-        let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
+        if let Some(signers) = signers {
+            replace_signatures(&mut tx, &signers)?;
+        }
+        if sign_only {
+            return_signers(&tx)
+        } else {
+            let result = rpc_client
+                .send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
+            check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+            let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
-        Ok(json!({
-            "signature": signature_str,
-            "processId": format!("{}", contract_state.pubkey()),
-        })
-        .to_string())
+            Ok(json!({
+                "signature": signature_str,
+                "processId": format!("{}", contract_state.pubkey()),
+            })
+            .to_string())
+        }
     } else {
         Ok("Combo transactions not yet handled".to_string())
     }
@@ -926,18 +1020,36 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *lamports,
         ),
         // Deactivate stake account
-        CliCommand::DeactivateStake(stake_account_pubkey) => {
-            process_deactivate_stake_account(&rpc_client, config, &stake_account_pubkey)
-        }
-        CliCommand::DelegateStake(stake_account_pubkey, vote_account_pubkey, force) => {
-            process_delegate_stake(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-                *force,
-            )
-        }
+        CliCommand::DeactivateStake {
+            stake_account_pubkey,
+            sign_only,
+            ref signers,
+            blockhash,
+        } => process_deactivate_stake_account(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            *sign_only,
+            signers,
+            *blockhash,
+        ),
+        CliCommand::DelegateStake {
+            stake_account_pubkey,
+            vote_account_pubkey,
+            force,
+            sign_only,
+            ref signers,
+            blockhash,
+        } => process_delegate_stake(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            &vote_account_pubkey,
+            *force,
+            *sign_only,
+            signers,
+            *blockhash,
+        ),
         CliCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey) => {
             process_redeem_vote_credits(
                 &rpc_client,
@@ -1118,6 +1230,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             timestamp_pubkey,
             ref witnesses,
             cancelable,
+            sign_only,
+            ref signers,
+            blockhash,
         } => process_pay(
             &rpc_client,
             config,
@@ -1127,6 +1242,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *timestamp_pubkey,
             witnesses,
             *cancelable,
+            *sign_only,
+            signers,
+            *blockhash,
         ),
         CliCommand::ShowAccount {
             pubkey,
@@ -1410,6 +1528,29 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                     Arg::with_name("cancelable")
                         .long("cancelable")
                         .takes_value(false),
+                )
+                .arg(
+                    Arg::with_name("sign_only")
+                        .long("sign-only")
+                        .takes_value(false)
+                        .help("Sign the transaction offline"),
+                )
+                .arg(
+                    Arg::with_name("signer")
+                        .long("signer")
+                        .value_name("PUBKEY=BASE58_SIG")
+                        .takes_value(true)
+                        .validator(is_pubkey_sig)
+                        .multiple(true)
+                        .help("Provide a public-key/signature pair for the transaction"),
+                )
+                .arg(
+                    Arg::with_name("blockhash")
+                        .long("blockhash")
+                        .value_name("BLOCKHASH")
+                        .takes_value(true)
+                        .validator(is_hash)
+                        .help("Use the supplied blockhash"),
                 ),
         )
         .subcommand(
@@ -1667,6 +1808,9 @@ mod tests {
                     timestamp_pubkey: None,
                     witnesses: None,
                     cancelable: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None,
                 },
                 require_keypair: true
             }
@@ -1694,6 +1838,9 @@ mod tests {
                     timestamp_pubkey: None,
                     witnesses: Some(vec![witness0, witness1]),
                     cancelable: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None,
                 },
                 require_keypair: true
             }
@@ -1717,6 +1864,9 @@ mod tests {
                     timestamp_pubkey: None,
                     witnesses: Some(vec![witness0]),
                     cancelable: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None,
                 },
                 require_keypair: true
             }
@@ -1744,6 +1894,130 @@ mod tests {
                     timestamp_pubkey: Some(witness0),
                     witnesses: None,
                     cancelable: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None,
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test Pay Subcommand w/ sign-only
+        let test_pay = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            &pubkey_string,
+            "50",
+            "lamports",
+            "--sign-only",
+        ]);
+        assert_eq!(
+            parse_command(&test_pay).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports: 50,
+                    to: pubkey,
+                    timestamp: None,
+                    timestamp_pubkey: None,
+                    witnesses: None,
+                    cancelable: false,
+                    sign_only: true,
+                    signers: None,
+                    blockhash: None,
+                },
+                require_keypair: false
+            }
+        );
+
+        // Test Pay Subcommand w/ signer
+        let key1 = Pubkey::new_rand();
+        let sig1 = Keypair::new().sign_message(&[0u8]);
+        let signer1 = format!("{}={}", key1, sig1);
+        let test_pay = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            &pubkey_string,
+            "50",
+            "lamports",
+            "--signer",
+            &signer1,
+        ]);
+        assert_eq!(
+            parse_command(&test_pay).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports: 50,
+                    to: pubkey,
+                    timestamp: None,
+                    timestamp_pubkey: None,
+                    witnesses: None,
+                    cancelable: false,
+                    sign_only: false,
+                    signers: Some(vec![(key1, sig1)]),
+                    blockhash: None,
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test Pay Subcommand w/ signers
+        let key2 = Pubkey::new_rand();
+        let sig2 = Keypair::new().sign_message(&[1u8]);
+        let signer2 = format!("{}={}", key2, sig2);
+        let test_pay = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            &pubkey_string,
+            "50",
+            "lamports",
+            "--signer",
+            &signer1,
+            "--signer",
+            &signer2,
+        ]);
+        assert_eq!(
+            parse_command(&test_pay).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports: 50,
+                    to: pubkey,
+                    timestamp: None,
+                    timestamp_pubkey: None,
+                    witnesses: None,
+                    cancelable: false,
+                    sign_only: false,
+                    signers: Some(vec![(key1, sig1), (key2, sig2)]),
+                    blockhash: None,
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test Pay Subcommand w/ Blockhash
+        let blockhash = Hash::default();
+        let blockhash_string = format!("{}", blockhash);
+        let test_pay = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            &pubkey_string,
+            "50",
+            "lamports",
+            "--blockhash",
+            &blockhash_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_pay).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Pay {
+                    lamports: 50,
+                    to: pubkey,
+                    timestamp: None,
+                    timestamp_pubkey: None,
+                    witnesses: None,
+                    cancelable: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: Some(blockhash),
                 },
                 require_keypair: true
             }
@@ -1788,6 +2062,9 @@ mod tests {
                     timestamp_pubkey: Some(witness0),
                     witnesses: Some(vec![witness0, witness1]),
                     cancelable: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None,
                 },
                 require_keypair: true
             }
@@ -1894,7 +2171,12 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let stake_pubkey = Pubkey::new_rand();
-        config.command = CliCommand::DeactivateStake(stake_pubkey);
+        config.command = CliCommand::DeactivateStake {
+            stake_account_pubkey: stake_pubkey,
+            sign_only: false,
+            signers: None,
+            blockhash: None,
+        };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -1915,6 +2197,9 @@ mod tests {
             timestamp_pubkey: None,
             witnesses: None,
             cancelable: false,
+            sign_only: false,
+            signers: None,
+            blockhash: None,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -1928,6 +2213,9 @@ mod tests {
             timestamp_pubkey: Some(config.keypair.pubkey()),
             witnesses: None,
             cancelable: false,
+            sign_only: false,
+            signers: None,
+            blockhash: None,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -1949,6 +2237,9 @@ mod tests {
             timestamp_pubkey: None,
             witnesses: Some(vec![witness]),
             cancelable: true,
+            sign_only: false,
+            signers: None,
+            blockhash: None,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -2056,6 +2347,9 @@ mod tests {
             timestamp_pubkey: None,
             witnesses: None,
             cancelable: false,
+            sign_only: false,
+            signers: None,
+            blockhash: None,
         };
         assert!(process_command(&config).is_err());
 
@@ -2066,6 +2360,9 @@ mod tests {
             timestamp_pubkey: Some(config.keypair.pubkey()),
             witnesses: None,
             cancelable: false,
+            sign_only: false,
+            signers: None,
+            blockhash: None,
         };
         assert!(process_command(&config).is_err());
 
@@ -2076,6 +2373,9 @@ mod tests {
             timestamp_pubkey: None,
             witnesses: Some(vec![witness]),
             cancelable: true,
+            sign_only: false,
+            signers: None,
+            blockhash: None,
         };
         assert!(process_command(&config).is_err());
 
