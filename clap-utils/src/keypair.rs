@@ -42,7 +42,7 @@ impl KeypairWithSource {
 }
 
 /// Reads user input from stdin to retrieve a seed phrase and passphrase for keypair derivation
-pub(crate) fn keypair_from_seed_phrase(
+pub fn keypair_from_seed_phrase(
     keypair_name: &str,
     skip_validation: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
