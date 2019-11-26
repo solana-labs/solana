@@ -1472,6 +1472,11 @@ impl Bank {
         self.ticks_per_slot
     }
 
+    /// Return the number of slots per year
+    pub fn slots_per_year(&self) -> f64 {
+        self.slots_per_year
+    }
+
     /// Return the number of slots per segment
     pub fn slots_per_segment(&self) -> u64 {
         self.slots_per_segment
