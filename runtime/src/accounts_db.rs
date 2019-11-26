@@ -2027,21 +2027,27 @@ pub mod tests {
 
         let mut current_slot = 1;
         accounts.store(current_slot, &[(&pubkey, &account)]);
+        error!("#1: {:#?}", accounts.get_storage_entries()); // #1
         accounts.add_root(current_slot);
 
         current_slot += 1;
         accounts.store(current_slot, &[(&pubkey, &zero_lamport_account)]);
+        error!("#2: {:#?}", accounts.get_storage_entries()); // #2
         for _ in 0..33000 {
             accounts.store(current_slot, &[(&filler_account_pubkey, &filler_account)]);
         }
+        error!("#3: {:#?}", accounts.get_storage_entries()); // #3
         accounts.add_root(current_slot);
 
         error!("doesn't fail:");
-        assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
+        assert_load_account(&accounts, current_slot, pubkey, zero_lamport); // #4
 
-        purge_zero_lamport_accounts(&accounts, current_slot);
+        purge_zero_lamport_accounts(&accounts, current_slot); // #5
+        error!("#6: {:#?}", accounts.get_storage_entries()); // #6
+
         let accounts = reconstruct_accounts_db_via_serialization(accounts, current_slot);
 
+        error!("#7: {:#?}", accounts.get_storage_entries()); // #7
         error!("does fail due to a reconstruction bug:");
         assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
     }
