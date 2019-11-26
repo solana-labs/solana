@@ -34,7 +34,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
     thread::sleep,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tempfile::TempDir;
 
@@ -195,7 +195,7 @@ fn test_leader_failure_4() {
 
 fn run_network_partition(
     partitions: &[&[(usize, bool)]],
-    fixed_schedule: Option<(FixedSchedule, Vec<Arc<Keypair>>)>,
+    leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
 ) {
     solana_logger::setup();
     info!("PARTITION_TEST!");
@@ -206,12 +206,21 @@ fn run_network_partition(
         .collect();
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
-
+    let partition_start_epoch = 2;
     let mut validator_config = ValidatorConfig::default();
-    let (validator_keys, wait_time): (Vec<_>, u64) = {
-        if let Some((fixed_schedule, validator_keys)) = fixed_schedule {
+
+    // Returns:
+    // 1) The keys for the validiators
+    // 2) The amount of time it would take to iterate through one full iteration of the given
+    // leader schedule
+    let (validator_keys, leader_schedule_time): (Vec<_>, u64) = {
+        if let Some((leader_schedule, validator_keys)) = leader_schedule {
             assert_eq!(validator_keys.len(), num_nodes);
-            let num_slots_per_rotation = fixed_schedule.leader_schedule.num_slots() as u64;
+            let num_slots_per_rotation = leader_schedule.num_slots() as u64;
+            let fixed_schedule = FixedSchedule {
+                start_epoch: partition_start_epoch,
+                leader_schedule: Arc::new(leader_schedule),
+            };
             validator_config.fixed_leader_schedule = Some(fixed_schedule);
             (
                 validator_keys,
@@ -237,8 +246,17 @@ fn run_network_partition(
     };
 
     let now = timestamp();
-    let partition_start = now + 60_000;
-    let partition_end = partition_start + wait_time as u64;
+    // Partition needs to start after the first few shorter warmup epochs, otherwise
+    // no root will be set before the partition is resolved, the leader schedule will
+    // not be computable, and the cluster wll halt.
+    let epoch_schedule =
+        EpochSchedule::custom(config.slots_per_epoch, config.stakers_slot_offset, true);
+    let partition_epoch_start_offset =
+        epoch_schedule.get_last_slot_in_epoch(partition_start_epoch) * clock::DEFAULT_MS_PER_SLOT;
+    // Assume it takes <= 10 seconds for `LocalCluster::new` to boot up.
+    let local_cluster_boot_time = 10_000;
+    let partition_start = now + partition_epoch_start_offset + local_cluster_boot_time;
+    let partition_end = partition_start + leader_schedule_time as u64;
     let mut validator_index = 0;
     for (i, partition) in partitions.iter().enumerate() {
         for _ in partition.iter() {
@@ -256,7 +274,11 @@ fn run_network_partition(
         "PARTITION_TEST starting cluster with {:?} partitions",
         partitions
     );
+    let now = Instant::now();
     let mut cluster = LocalCluster::new(&config);
+    let elapsed = now.elapsed();
+    assert!(elapsed.as_millis() < local_cluster_boot_time as u128);
+
     let now = timestamp();
     let timeout = partition_start as i64 - now as i64;
     info!(
@@ -267,10 +289,10 @@ fn run_network_partition(
     if timeout > 0 {
         sleep(Duration::from_millis(timeout as u64));
     }
-    println!("PARTITION_TEST done sleeping until partition start timeout");
+    info!("PARTITION_TEST done sleeping until partition start timeout");
     let now = timestamp();
     let timeout = partition_end as i64 - now as i64;
-    println!(
+    info!(
         "PARTITION_TEST sleeping until partition end timeout {}",
         timeout
     );
@@ -281,9 +303,14 @@ fn run_network_partition(
         .collect();
     assert_eq!(should_exits.len(), validator_pubkeys.len());
     if timeout > 0 {
-        // Give partitions time to propagate their blocks after the partition resolves
-        let propagation_time = wait_time;
-        sleep(Duration::from_millis(timeout as u64 + propagation_time));
+        // Give partitions time to propagate their blocks from durinig the partition
+        // after the partition resolves
+        let propagation_time = leader_schedule_time;
+        info!("PARTITION_TEST resolving partition");
+        sleep(Duration::from_millis(timeout));
+        info!("PARTITION_TEST waiting for blocks to propagate after partition");
+        sleep(propagation_time);
+        info!("PARTITION_TEST resuming normal operation");
         for (pubkey, should_exit) in validator_pubkeys.iter().zip(should_exits) {
             if *should_exit {
                 info!("Killing validator with id: {}", pubkey);
@@ -304,8 +331,6 @@ fn run_network_partition(
     }
 
     assert!(alive_node_contact_infos.len() > 0);
-
-    info!("PARTITION_TEST done sleeping until partition end timeout");
     info!("PARTITION_TEST discovering nodes");
     let (cluster_nodes, _) = discover_cluster(
         &alive_node_contact_infos[0].gossip,
@@ -358,6 +383,16 @@ fn test_network_partition_1_1_1() {
 #[test]
 #[serial]
 fn test_kill_partition() {
+    // This test:
+    // 1) Spins up three partitions
+    // 2) Forces more slots in the leader schedule for the first partition so that this
+    // partition will be the heaviiest
+    // 3) Schedules the other validators for sufficient slots in the schedule so that
+    // they will still be locked out of voting for the major partitoin when the partition
+    // resolves
+    // 4) Kills the major partition. Validators are locked out, but should be able to reset
+    // to the major partition
+    // 5) Check for recovery
     let mut leader_schedule = vec![];
     let num_slots_per_validator = 8;
     let partitions: [&[(usize, bool)]; 3] = [&[(9, true)], &[(10, false)], &[(10, false)]];
@@ -378,11 +413,13 @@ fn test_kill_partition() {
         }
     }
 
-    let fixed_schedule = FixedSchedule {
-        start_epoch: 2,
-        leader_schedule: Arc::new(LeaderSchedule::new_from_schedule(leader_schedule)),
-    };
-    run_network_partition(&partitions, Some((fixed_schedule, validator_keys)))
+    run_network_partition(
+        &partitions,
+        Some((
+            LeaderSchedule::new_from_schedule(leader_schedule),
+            validator_keys,
+        )),
+    )
 }
 
 #[test]
