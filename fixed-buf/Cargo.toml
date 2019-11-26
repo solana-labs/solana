@@ -16,4 +16,4 @@ serde = "1.0.102"
 name = "solana_fixed_buf"
 
 [dev-dependencies]
-serde_derive = "1.0.102"
+serde_derive = "1.0.103"
