@@ -185,6 +185,7 @@ impl Blocktree {
             .unwrap_or(0);
         let last_root = Arc::new(RwLock::new(max_root));
 
+        measure.stop();
         info!("{:?} {}", blocktree_path, measure);
         Ok(Blocktree {
             db,
