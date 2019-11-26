@@ -205,6 +205,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("new", Some(matches)) => {
+            let mut path = dirs::home_dir().expect("home directory");
+            let outfile = if matches.is_present("outfile") {
+                matches.value_of("outfile")
+            } else if matches.is_present("no_outfile") {
+                None
+            } else {
+                path.extend(&[".config", "solana", "id.json"]);
+                Some(path.to_str().unwrap())
+            };
+
+            match outfile {
+                Some("-") => (),
+                Some(outfile) => check_for_overwrite(&outfile, &matches),
+                None => (),
+            }
+
             let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
             let passphrase = if matches.is_present("no_passphrase") {
                 NO_PASSPHRASE.to_string()
@@ -217,19 +233,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let seed = Seed::new(&mnemonic, &passphrase);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
-            if !matches.is_present("no_outfile") {
-                let mut path = dirs::home_dir().expect("home directory");
-                let outfile = if matches.is_present("outfile") {
-                    matches.value_of("outfile").unwrap()
-                } else {
-                    path.extend(&[".config", "solana", "id.json"]);
-                    path.to_str().unwrap()
-                };
-
-                if outfile != "-" {
-                    check_for_overwrite(&outfile, &matches);
-                }
-
+            if let Some(outfile) = outfile {
                 output_keypair(&keypair, &outfile, "new")?;
             }
 
