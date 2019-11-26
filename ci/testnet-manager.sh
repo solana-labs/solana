@@ -246,7 +246,7 @@ sanity() {
     (
       set -x
       NO_INSTALL_CHECK=1 \
-        ci/testnet-sanity.sh beta-testnet-solana-com gce us-west1-b
+        ci/testnet-sanity.sh beta-testnet-solana-com gce -P us-west1-b
       maybe_deploy_software --deploy-if-newer
     )
     ;;
@@ -260,7 +260,7 @@ sanity() {
   testnet)
     (
       set -x
-      ci/testnet-sanity.sh testnet-solana-com gce us-west1-b
+      ci/testnet-sanity.sh testnet-solana-com gce -P us-west1-b
     )
     ;;
   testnet-perf)
