@@ -399,15 +399,15 @@ const GetVoteAccounts = jsonRpcResult(
   }),
 );
 
+const SignatureStatusResult = struct.union([
+  'null',
+  struct.union([struct({Ok: 'null'}), struct({Err: 'object'})]),
+]);
+
 /**
  * Expected JSON RPC response for the "getSignatureStatus" message
  */
-const GetSignatureStatusRpcResult = jsonRpcResult(
-  struct.union([
-    'null',
-    struct.union([struct({Ok: 'null'}), struct({Err: 'object'})]),
-  ]),
-);
+const GetSignatureStatusRpcResult = jsonRpcResult(SignatureStatusResult);
 
 /**
  * Expected JSON RPC response for the "getTransactionCount" message
@@ -463,7 +463,7 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
         struct.union([
           'null',
           struct({
-            status: GetSignatureStatusRpcResult,
+            status: SignatureStatusResult,
             fee: 'number',
           }),
         ]),

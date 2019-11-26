@@ -75,7 +75,9 @@ declare module '@solana/web3.js' {
     blockhash: Blockhash,
     previousBlockhash: Blockhash,
     parentSlot: number,
-    transactions: Array<[Transaction, SignatureSuccess | TransactionError | null]>,
+    transactions: Array<
+      [Transaction, SignatureSuccess | TransactionError | null],
+    >,
   };
 
   declare export type KeyedAccountInfo = {
