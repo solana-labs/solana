@@ -1,14 +1,10 @@
 #![allow(clippy::implicit_hasher)]
 use crate::shred::ShredType;
 use ed25519_dalek::{Keypair, PublicKey, SecretKey};
-use rayon::{
-    iter::{
-        IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
-    },
-    ThreadPool,
-};
+use rayoff::rayoff::Pool;
 use sha2::{Digest, Sha512};
 use solana_metrics::inc_new_counter_debug;
+use itertools::Itertools;
 use solana_perf::{
     cuda_runtime::PinnedVec,
     packet::{limited_deserialize, Packet, Packets},
@@ -16,15 +12,10 @@ use solana_perf::{
     recycler_cache::RecyclerCache,
     sigverify::{self, TxOffset},
 };
-use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::signature::Signature;
 use std::{cell::RefCell, collections::HashMap, mem::size_of};
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("sigverify_shreds_{}", ix))
-                    .build()
-                    .unwrap()));
+thread_local!(static PAR_THREAD_POOL: RefCell<Pool> = RefCell::new(Pool::default()));
 
 /// Assuming layout is
 /// signature: Signature
@@ -60,19 +51,13 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> O
 }
 
 fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, [u8; 32]>) -> Vec<Vec<u8>> {
-    use rayon::prelude::*;
     let count = sigverify::batch_size(batches);
     debug!("CPU SHRED ECDSA for {}", count);
     let rv = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map(|p| {
-                    p.packets
-                        .iter()
-                        .map(|p| verify_shred_cpu(p, slot_leaders).unwrap_or(0))
-                        .collect()
-                })
+        thread_pool.borrow().map(&batches, |p| {
+            p.packets
+                .iter()
+                .map(|p| verify_shred_cpu(p, slot_leaders).unwrap_or(0))
                 .collect()
         })
     });
@@ -91,26 +76,21 @@ fn slot_key_data_for_gpu<
     //TODO: mark Pubkey::default shreds as failed after the GPU returns
     assert_eq!(slot_keys.get(&std::u64::MAX), Some(&T::default()));
     let slots: Vec<Vec<u64>> = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map(|p| {
-                    p.packets
-                        .iter()
-                        .map(|packet| {
-                            let slot_start = size_of::<Signature>() + size_of::<ShredType>();
-                            let slot_end = slot_start + size_of::<u64>();
-                            if packet.meta.size < slot_end {
-                                return std::u64::MAX;
-                            }
-                            let slot: Option<u64> =
-                                limited_deserialize(&packet.data[slot_start..slot_end]).ok();
-                            match slot {
-                                Some(slot) if slot_keys.get(&slot).is_some() => slot,
-                                _ => std::u64::MAX,
-                            }
-                        })
-                        .collect()
+        thread_pool.borrow().map(&batches, |p| {
+            p.packets
+                .iter()
+                .map(|packet| {
+                    let slot_start = size_of::<Signature>() + size_of::<ShredType>();
+                    let slot_end = slot_start + size_of::<u64>();
+                    if packet.meta.size < slot_end {
+                        return std::u64::MAX;
+                    }
+                    let slot: Option<u64> =
+                        limited_deserialize(&packet.data[slot_start..slot_end]).ok();
+                    match slot {
+                        Some(slot) if slot_keys.get(&slot).is_some() => slot,
+                        _ => std::u64::MAX,
+                    }
                 })
                 .collect()
         })
@@ -327,16 +307,13 @@ fn sign_shreds_cpu(
     slot_leaders_pubkeys: &HashMap<u64, [u8; 32]>,
     slot_leaders_privkeys: &HashMap<u64, [u8; 32]>,
 ) {
-    use rayon::prelude::*;
     let count = sigverify::batch_size(batches);
     debug!("CPU SHRED ECDSA for {}", count);
     PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches.par_iter_mut().for_each(|p| {
-                p.packets.iter_mut().for_each(|mut p| {
+        thread_pool.borrow().dispatch_mut(batches, |batch| {
+                batch.packets.iter_mut().for_each(|mut p| {
                     sign_shred_cpu(&mut p, slot_leaders_pubkeys, slot_leaders_privkeys)
                 });
-            });
         })
     });
     inc_new_counter_debug!("ed25519_shred_verify_cpu", count);
@@ -446,12 +423,10 @@ pub fn sign_shreds_gpu(
     let mut sizes: Vec<usize> = vec![0];
     sizes.extend(batches.iter().map(|b| b.packets.len()));
     PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .par_iter_mut()
-                .enumerate()
-                .for_each(|(batch_ix, batch)| {
-                    let num_packets = sizes[batch_ix];
+        for chunk in batches.into_iter().enumerate().chunks(Pool::get_thread_count()).into_iter() {
+            let mut data:Vec<(usize, &mut Packets)>  = chunk.collect();
+            thread_pool.borrow().dispatch_mut(&mut data, |(batch_ix, batch)| {
+                    let num_packets = sizes[*batch_ix];
                     batch
                         .packets
                         .iter_mut()
@@ -463,8 +438,8 @@ pub fn sign_shreds_gpu(
                             packet.data[0..sig_size]
                                 .copy_from_slice(&signatures_out[sig_start..sig_end]);
                         });
-                });
-        });
+            });
+        }
     });
     inc_new_counter_debug!("ed25519_shred_sign_gpu", count);
     recycler_cache.buffer().recycle(signatures_out);

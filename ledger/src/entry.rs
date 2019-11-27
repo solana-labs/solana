@@ -4,14 +4,12 @@
 //! represents an approximate amount of time since the last Entry was created.
 use crate::poh::Poh;
 use log::*;
-use rayon::prelude::*;
-use rayon::ThreadPool;
+use rayoff::rayoff::Pool;
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_merkle_tree::MerkleTree;
 use solana_metrics::*;
 use solana_perf::perf_libs;
-use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
@@ -22,10 +20,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Instant;
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .build()
-                    .unwrap()));
+thread_local!(static PAR_THREAD_POOL: RefCell<Pool> = RefCell::new(Pool::default()));
 
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
@@ -168,24 +163,27 @@ impl EntryVerifyState {
                 .into_inner()
                 .expect("into_inner");
             let res = PAR_THREAD_POOL.with(|thread_pool| {
-                thread_pool.borrow().install(|| {
-                    hashes
-                        .into_par_iter()
-                        .zip(&self.tx_hashes)
-                        .zip(entries)
-                        .all(|((hash, tx_hash), answer)| {
-                            if answer.num_hashes == 0 {
-                                hash == answer.hash
+                let items: Vec<_> = hashes
+                    .into_iter()
+                    .zip(&self.tx_hashes)
+                    .zip(entries)
+                    .collect();
+                thread_pool
+                    .borrow()
+                    .map(&items, |((hash, tx_hash), answer)| {
+                        if answer.num_hashes == 0 {
+                            *hash == answer.hash
+                        } else {
+                            let mut poh = Poh::new(*hash, None);
+                            if let Some(mixin) = tx_hash {
+                                poh.record(*mixin).unwrap().hash == answer.hash
                             } else {
-                                let mut poh = Poh::new(hash, None);
-                                if let Some(mixin) = tx_hash {
-                                    poh.record(*mixin).unwrap().hash == answer.hash
-                                } else {
-                                    poh.tick().unwrap().hash == answer.hash
-                                }
+                                poh.tick().unwrap().hash == answer.hash
                             }
-                        })
-                })
+                        }
+                    })
+                    .into_iter()
+                    .all(|x| x)
             });
             verify_check_time.stop();
             inc_new_counter_warn!(
@@ -224,10 +222,11 @@ impl EntrySlice for [Entry] {
             hash: *start_hash,
             transactions: vec![],
         }];
-        let entry_pairs = genesis.par_iter().chain(self).zip(self);
         let res = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                entry_pairs.all(|(x0, x1)| {
+            let entry_pairs: Vec<_> = genesis.iter().chain(self).zip(self).collect();
+            thread_pool
+                .borrow()
+                .map(&entry_pairs, |(x0, x1)| {
                     let r = x1.verify(&x0.hash);
                     if !r {
                         warn!(
@@ -239,7 +238,8 @@ impl EntrySlice for [Entry] {
                     }
                     r
                 })
-            })
+                .into_iter()
+                .all(|x| x)
         });
         inc_new_counter_warn!(
             "entry_verify-duration",
@@ -309,16 +309,12 @@ impl EntrySlice for [Entry] {
         });
 
         let tx_hashes = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                self.into_par_iter()
-                    .map(|entry| {
-                        if entry.transactions.is_empty() {
-                            None
-                        } else {
-                            Some(hash_transactions(&entry.transactions))
-                        }
-                    })
-                    .collect()
+            thread_pool.borrow().map(self, |entry| {
+                if entry.transactions.is_empty() {
+                    None
+                } else {
+                    Some(hash_transactions(&entry.transactions))
+                }
             })
         });
 

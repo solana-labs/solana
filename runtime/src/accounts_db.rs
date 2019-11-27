@@ -30,7 +30,6 @@ use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
-use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
 use solana_sdk::clock::Slot;
@@ -77,7 +76,6 @@ pub struct AccountInfo {
     /// lamports in the account used when squashing kept for optimization
     /// purposes to remove accounts with zero balance.
     lamports: u64,
-
 }
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
@@ -391,7 +389,7 @@ pub struct AccountsDB {
 
 impl Default for AccountsDB {
     fn default() -> Self {
-        let num_threads = get_thread_count();
+        let num_threads = Pool::get_thread_count();
 
         AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),
@@ -625,13 +623,13 @@ impl AccountsDB {
             .cloned()
             .collect();
         self.thread_pool.map(&storage_maps, |storage| {
-                let accounts = storage.accounts.accounts(0);
-                let mut retval = B::default();
-                accounts
-                    .iter()
-                    .for_each(|stored_account| scan_func(stored_account, storage.id, &mut retval));
-                retval
-            })
+            let accounts = storage.accounts.accounts(0);
+            let mut retval = B::default();
+            accounts
+                .iter()
+                .for_each(|stored_account| scan_func(stored_account, storage.id, &mut retval));
+            retval
+        })
     }
 
     pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {

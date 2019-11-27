@@ -57,6 +57,7 @@ impl Pool {
         });
         outs
     }
+
     fn notify_all(&self, job: Arc<Job>) {
         let senders = self.senders.lock().unwrap();
         for s in senders.iter() {
