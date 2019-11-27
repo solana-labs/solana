@@ -148,6 +148,10 @@ impl BlocktreeInsertionMetrics {
 }
 
 impl Blocktree {
+    pub fn db(self) -> Arc<Database> {
+        self.db
+    }
+
     /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blocktree> {
         fs::create_dir_all(&ledger_path)?;

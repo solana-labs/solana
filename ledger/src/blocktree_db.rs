@@ -228,6 +228,10 @@ pub trait Column {
     const NAME: &'static str;
     type Index;
 
+    fn key_size() -> usize {
+        std::mem::size_of::<Self::Index>()
+    }
+
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
     fn slot(index: Self::Index) -> Slot;
