@@ -4,7 +4,7 @@
 //! represents an approximate amount of time since the last Entry was created.
 use crate::poh::Poh;
 use log::*;
-use rayoff::rayoff::Pool;
+use rayoff::pool::Pool;
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_merkle_tree::MerkleTree;

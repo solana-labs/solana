@@ -1,7 +1,7 @@
 #![allow(clippy::implicit_hasher)]
 use crate::shred::ShredType;
 use ed25519_dalek::{Keypair, PublicKey, SecretKey};
-use rayoff::rayoff::Pool;
+use rayoff::pool::Pool;
 use sha2::{Digest, Sha512};
 use solana_metrics::inc_new_counter_debug;
 use itertools::Itertools;
