@@ -8,15 +8,15 @@ would allow a Solana cluster to satisfy this need.
 The general outline of the proposed implementation is as follows:
 
 - At regular intervals, each validator records its observed time for a known slot
-  on-chain (via a Timestamp transaction)
+  on-chain (via a Timestamp added to a slot Vote)
 - A client can request a block time using the `getBlockTime` RPC method. When a
   client requests a timestamp for block N:
 
-  1. A validator determines a "cluster" timestamp for a recent slot before
-  block N by observing all the Timestamp transactions recorded on the
-  ledger that reference that slot, and determining the median timestamp.
+  1. A validator determines a "cluster" timestamp for a recent slot before block N
+  by observing all the Timestamp instructions recorded on the ledger that
+  reference that slot, and determining the stake-weighted mean timestamp.
 
-  2. This recent median timestamp is then used to calculate the timestamp of
+  2. This recent mean timestamp is then used to calculate the timestamp of
   block N using the cluster's established slot duration
 
 Requirements:
@@ -31,40 +31,39 @@ Requirements:
 ## Recording Time
 
 At regular intervals, each validator records its observed time by submitting a
-Timestamp transaction to the cluster as it is processing a particular slot. The
-transaction contains the slot index and the validator's system time as Unix
-timestamp (seconds since the Unix epoch), and is signed by the validator's
-identity keypair.
+VoteWithTimestamp instruction to the cluster as it is voting on a particular
+slot. In addition to the normal Vote data, the instruction contains the slot
+index and the validator's system time as Unix timestamp (seconds since the Unix
+epoch). It is signed by the validator's identity keypair as a usual Vote.
 
-This proposal suggests that Timestamp transactions be issued every 30min, which
-should be short enough to prevent block times drifting very much, without adding
-too much transaction overhead to the cluster. Validators can convert this time
-to a slot interval using the `slots_per_year` value that is stored in each bank.
+This proposal suggests that VoteWithTimestamp instructions be issued every
+30min, which should be short enough to prevent block times drifting very much,
+without adding too much transaction overhead to the cluster. Validators can
+convert this time to a slot interval using the `slots_per_year` value that is
+stored in each bank.
 
 ```text
 let seconds_in_30min = 1800;
 let timestamp_interval = (slots_per_year / SECONDS_PER_YEAR) * seconds_in_30min;
 ```
 
-This transaction should be triggered in replay_stage (likely near where
-`subscriptions.notify_slot()` is executed) when `current_slot %
-timestamp_interval == 0`.
+The VoteWithTimestamp variation should be triggered in `replay_stage::handle_votable_bank()`
+when `bank.slot() % timestamp_interval == 0`.
 
-### Timestamp Accounts
+### Vote Accounts
 
-Before beginning operation, a validator needs to create and initialize a
-Timestamp account that will hold its most recent slot-timestamp. Like the
-validator's vote account, this account needs to be rent exempt.
+A validator's vote account will hold its most recent slot-timestamp in VoteState.
 
-### Timestamp Program
+### Vote Program
 
-The on-chain Timestamp program processes Timestamp transactions from validators.
-It needs to load the correct Timestamp account, verify that the transaction
-signer is the expected validator, compare the slot and timestamp to the
-currently stored values to verify that they are both monotonically increasing,
-and store the new slot and timestamp in the account.
+The on-chain Vote program needs to be extended to process a VoteWithTimestamp
+instruction from validators. In addition to its current process_vote
+functionality (including loading the correct Vote account and verifying that the
+transaction signer is the expected validator), this process needs to compare the
+slot and timestamp to the currently stored values to verify that they are both
+monotonically increasing, and store the new slot and timestamp in the account.
 
-## Calculating Median Timestamp
+## Calculating Stake-Weighted Mean Timestamp
 
 In order to calculate the estimated timestamp for a particular block, a
 validator first needs to identify the most recently timestamped slot:
@@ -73,25 +72,29 @@ validator first needs to identify the most recently timestamped slot:
 let timestamp_slot = floor(current_slot / timestamp_interval);
 ```
 
-Then the validator needs to gather all Timestamp transactions from the ledger
-that reference that slot, using `Blocktree::get_slot_entries()`. As these
+Then the validator needs to gather all Vote WithTimestamp transactions from the
+ledger that reference that slot, using `Blocktree::get_slot_entries()`. As these
 transactions could have taken some time to reach and be processed by the leader,
 the validator needs to scan several completed blocks after the timestamp_slot to
 get a reasonable set of Timestamps. The exact number of slots will need to be
 tuned: More slots will enable greater cluster participation and more timestamp
-datapoints; fewer slots will speed how long Timestamp filtering takes.
+datapoints; fewer slots will speed how long timestamp filtering takes.
 
-From this collection of transactions, the validator selects the median timestamp.
+From this collection of transactions, the validator calculates the
+stake-weighted mean timestamp, cross-referencing the epoch stakes from
+`staking_utils::staked_nodes_at_epoch()`.
 
-Any validator replaying the ledger should derive the same median timestamp by processing the Timestamp transactions from the same number of slots.
+Any validator replaying the ledger should derive the same stake-weighted mean
+timestamp by processing the Timestamp transactions from the same number of
+slots.
 
 ## Calculating Estimated Time for a Particular Block
 
-Once the median timestamp for a known slot is calculated, it is trivial to
+Once the mean timestamp for a known slot is calculated, it is trivial to
 calculate the estimated timestamp for subsequent block N:
 
 ```text
-let block_n_timestamp = median_timestamp + (block_n_slot_offset * slot_duration);
+let block_n_timestamp = mean_timestamp + (block_n_slot_offset * slot_duration);
 ```
 
 where `block_n_slot_offset` is the difference between the slot of block N and
@@ -102,9 +105,14 @@ the timestamp_slot, and `slot_duration` is derived from the cluster's
 
 1. This proposal puts a distinct processing burden on a validator when it receives
 a `getBlockTime` RPC request. Another approach would be for a validator to
-maintain a list of median timestamps, populated as the validator
+maintain a list of mean timestamps, populated as the validator
 builds/replays the ledger.
 
 2. This proposal doesn't address the 4th requirement, that each validator must
-maintain a timestamp oracle. It is not clear how to require this without tying
-timestamp reporting to voting/rewards in some fashion.
+maintain a timestamp oracle. Even though timestamps are tied to voting, there
+are no lockout implications if a validator does not use VoteWithTimestamp. One
+sociological approach would be to include timestamp expectations in validator
+uptime calculations, where uptime is redefined as a function of a validator both
+promptly submitting votes and timestamps over an epoch. This might require
+storing more information about historical timestamps in the vote account,
+however.
