@@ -656,14 +656,16 @@ impl Shredder {
 
         let now = Instant::now();
         let slots = Self::read_slots(&data_shreds);
-        let pubkeys: HashMap<u64, [u8; 32]> = slots
+        let mut pubkeys: HashMap<u64, [u8; 32]> = slots
             .iter()
             .map(|s| (*s, self.keypair.pubkey().to_bytes()))
             .collect();
-        let privkeys: HashMap<u64, [u8; 32]> = slots
+        pubkeys.insert(std::u64::MAX, [0u8; 32]);
+        let mut privkeys: HashMap<u64, [u8; 32]> = slots
             .iter()
             .map(|s| (*s, self.keypair.secret.to_bytes()))
             .collect();
+        privkeys.insert(std::u64::MAX, [0u8; 32]);
         sigverify_shreds::sign_shreds_gpu(&mut data_shreds, &pubkeys, &privkeys, recycler_cache);
         let sign_data_time = now.elapsed().as_millis();
 
