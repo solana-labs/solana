@@ -21,17 +21,16 @@ pub struct StakerInfo {
 }
 
 // lamports required to run staking operations for one year
-//  the staker account needs to be rent exempt *and* carry enough
+//  the staker account needs carry enough
 //  lamports to cover TX fees (delegation) for one year,
 //  and we support one delegation per epoch
-fn calculate_staker_lamports(genesis_config: &GenesisConfig) -> u64 {
-    genesis_config.rent.minimum_balance(0).max(1)
-        + genesis_config.fee_calculator.max_lamports_per_signature
-            * genesis_config.epoch_schedule.get_epoch(years_as_slots(
-                1.0,
-                &genesis_config.poh_config.target_tick_duration,
-                genesis_config.ticks_per_slot,
-            ) as Slot)
+fn calculate_staker_fees(genesis_config: &GenesisConfig, years: f64) -> u64 {
+    genesis_config.fee_calculator.max_lamports_per_signature
+        * genesis_config.epoch_schedule.get_epoch(years_as_slots(
+            years,
+            &genesis_config.poh_config.target_tick_duration,
+            genesis_config.ticks_per_slot,
+        ) as Slot)
 }
 
 /// create stake accounts for lamports with at most stake_granularity in each
@@ -53,19 +52,23 @@ pub fn create_and_add_stakes(
 
     let total_lamports = sol_to_lamports(staker_info.sol);
 
-    let staker_lamports = calculate_staker_lamports(genesis_config);
-    let staker_account = (
-        authorized.staker,
-        Account::new(staker_lamports, 0, &system_program::id()),
-    );
+    let staker_rent_reserve = get_stake_rent_exempt_reserve(&genesis_config.rent).max(1);
+    let staker_fees = calculate_staker_fees(genesis_config, 1.0);
 
-    let stakes_lamports = if !genesis_config.accounts.contains(&staker_account) {
-        genesis_config.accounts.push(staker_account);
+    let mut stakes_lamports = total_lamports - staker_fees;
 
-        total_lamports - staker_lamports
-    } else {
-        total_lamports
-    };
+    // lamports required to run staking operations for one year
+    //  the staker account needs to be rent exempt *and* carry enough
+    //  lamports to cover TX fees (delegation) for one year,
+    //  and we support one delegation per epoch
+    genesis_config
+        .accounts
+        .entry(authorized.staker)
+        .or_insert_with(|| {
+            stakes_lamports -= staker_rent_reserve;
+            Account::new(staker_rent_reserve, 0, &system_program::id())
+        })
+        .lamports += staker_fees;
 
     // the staker account needs to be rent exempt *and* carry enough
     //  lamports to cover TX fees (delegation) for one year
@@ -150,11 +153,10 @@ mod tests {
         granularity: u64,
         len: usize,
     ) {
-        assert!(
-            total_lamports
-                == create_and_add_stakes(genesis_config, staker_info, unlock_info, granularity)
+        assert_eq!(
+            total_lamports,
+            create_and_add_stakes(genesis_config, staker_info, unlock_info, granularity)
         );
-
         assert_eq!(genesis_config.accounts.len(), len);
         assert_eq!(
             genesis_config
@@ -169,7 +171,7 @@ mod tests {
             .iter()
             .all(|(_pubkey, account)| account.lamports <= granularity
                 || account.lamports - granularity
-                    < get_stake_rent_exempt_reserve(&genesis_config.rent)));
+                    <= get_stake_rent_exempt_reserve(&genesis_config.rent)));
     }
 
     #[test]
@@ -236,9 +238,34 @@ mod tests {
             2 + 1,
         );
 
-        // exactly reserve as a remainder
+        // exactly reserve as a remainder, reserve gets folded in
         let granularity = reserve * 3;
         let total_lamports = reserve + (granularity + reserve) * 2;
+        create_and_check_stakes(
+            &mut GenesisConfig {
+                rent,
+                ..GenesisConfig::default()
+            },
+            &StakerInfo {
+                name: "fun",
+                staker: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
+                withdrawer: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
+                sol: lamports_to_sol(total_lamports),
+                custodian: "0000000000000000000000000000000000000000000000000000000000000000",
+            },
+            &UnlockInfo {
+                cliff_fraction: 0.5,
+                cliff_years: 0.5,
+                unlocks: 1,
+                unlock_years: 0.5,
+            },
+            total_lamports,
+            granularity,
+            2 + 1,
+        );
+        // exactly reserve + 1 as a remainder, reserve + 1 gets its own stake
+        let granularity = reserve * 3;
+        let total_lamports = reserve + (granularity + reserve + 1) * 2;
         create_and_check_stakes(
             &mut GenesisConfig {
                 rent,

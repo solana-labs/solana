@@ -27,7 +27,15 @@ use solana_sdk::{
 use solana_stake_program::stake_state;
 use solana_storage_program::storage_contract;
 use solana_vote_program::vote_state;
-use std::{collections::HashMap, error, fs::File, io, path::PathBuf, str::FromStr, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    error,
+    fs::File,
+    io,
+    path::PathBuf,
+    str::FromStr,
+    time::Duration,
+};
 
 pub enum AccountFileFormat {
     Pubkey,
@@ -342,7 +350,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         bootstrap_leader_stake_lamports,
     );
 
-    let mut accounts = vec![
+    let mut accounts: BTreeMap<Pubkey, Account> = [
         // node needs an account to issue votes from
         (
             bootstrap_leader_pubkey,
@@ -352,13 +360,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         (bootstrap_vote_pubkey, bootstrap_leader_vote_account),
         // bootstrap leader stake
         (bootstrap_stake_pubkey, bootstrap_leader_stake_account),
-    ];
+    ]
+    .iter()
+    .cloned()
+    .collect();
 
     if let Some(bootstrap_storage_pubkey) = bootstrap_storage_pubkey {
-        accounts.push((
+        accounts.insert(
             bootstrap_storage_pubkey,
             storage_contract::create_validator_storage_account(bootstrap_leader_pubkey, 1),
-        ));
+        );
     }
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
@@ -537,27 +548,28 @@ mod tests {
             assert_eq!(genesis_config.accounts.len(), genesis_accounts.len());
 
             // Test account data matches
-            (0..genesis_accounts.len()).for_each(|i| {
+            for (pubkey_str, b64_account) in genesis_accounts.iter() {
+                let pubkey = pubkey_str.parse().unwrap();
                 assert_eq!(
-                    genesis_accounts[&genesis_config.accounts[i].0.to_string()].owner,
-                    genesis_config.accounts[i].1.owner.to_string()
+                    b64_account.owner,
+                    genesis_config.accounts[&pubkey].owner.to_string()
                 );
 
                 assert_eq!(
-                    genesis_accounts[&genesis_config.accounts[i].0.to_string()].balance,
-                    genesis_config.accounts[i].1.lamports
+                    b64_account.balance,
+                    genesis_config.accounts[&pubkey].lamports
                 );
 
                 assert_eq!(
-                    genesis_accounts[&genesis_config.accounts[i].0.to_string()].executable,
-                    genesis_config.accounts[i].1.executable
+                    b64_account.executable,
+                    genesis_config.accounts[&pubkey].executable
                 );
 
                 assert_eq!(
-                    genesis_accounts[&genesis_config.accounts[i].0.to_string()].data,
-                    base64::encode(&genesis_config.accounts[i].1.data)
+                    b64_account.data,
+                    base64::encode(&genesis_config.accounts[&pubkey].data)
                 );
-            });
+            }
         }
 
         // Test more accounts can be appended
@@ -610,54 +622,37 @@ mod tests {
         );
 
         // Test old accounts are still there
-        (0..genesis_accounts.len()).for_each(|i| {
+        for (pubkey_str, b64_account) in genesis_accounts.iter() {
+            let pubkey = &pubkey_str.parse().unwrap();
             assert_eq!(
-                genesis_accounts[&genesis_config.accounts[i].0.to_string()].balance,
-                genesis_config.accounts[i].1.lamports,
+                b64_account.balance,
+                genesis_config.accounts[&pubkey].lamports,
             );
-        });
+        }
 
         // Test new account data matches
-        (0..genesis_accounts1.len()).for_each(|i| {
+        for (pubkey_str, b64_account) in genesis_accounts1.iter() {
+            let pubkey = pubkey_str.parse().unwrap();
             assert_eq!(
-                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
-                    .0
-                    .to_string()]
-                    .owner,
-                genesis_config.accounts[genesis_accounts.len() + i]
-                    .1
-                    .owner
-                    .to_string(),
+                b64_account.owner,
+                genesis_config.accounts[&pubkey].owner.to_string()
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
-                    .0
-                    .to_string()]
-                    .balance,
-                genesis_config.accounts[genesis_accounts.len() + i]
-                    .1
-                    .lamports,
+                b64_account.balance,
+                genesis_config.accounts[&pubkey].lamports,
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
-                    .0
-                    .to_string()]
-                    .executable,
-                genesis_config.accounts[genesis_accounts.len() + i]
-                    .1
-                    .executable,
+                b64_account.executable,
+                genesis_config.accounts[&pubkey].executable,
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
-                    .0
-                    .to_string()]
-                    .data,
-                base64::encode(&genesis_config.accounts[genesis_accounts.len() + i].1.data),
+                b64_account.data,
+                base64::encode(&genesis_config.accounts[&pubkey].data),
             );
-        });
+        }
 
         // Test accounts from keypairs can be appended
         let account_keypairs: Vec<_> = (0..3).map(|_| Keypair::new()).collect();
@@ -712,89 +707,60 @@ mod tests {
         );
 
         // Test old accounts are still there
-        (0..genesis_accounts.len()).for_each(|i| {
+        for (pubkey_str, b64_account) in genesis_accounts {
+            let pubkey = pubkey_str.parse().unwrap();
             assert_eq!(
-                genesis_accounts[&genesis_config.accounts[i].0.to_string()].balance,
-                genesis_config.accounts[i].1.lamports,
+                b64_account.balance,
+                genesis_config.accounts[&pubkey].lamports,
             );
-        });
+        }
 
         // Test new account data matches
-        (0..genesis_accounts1.len()).for_each(|i| {
+        for (pubkey_str, b64_account) in genesis_accounts1 {
+            let pubkey = pubkey_str.parse().unwrap();
             assert_eq!(
-                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
-                    .0
-                    .to_string()]
-                    .owner,
-                genesis_config.accounts[genesis_accounts.len() + i]
-                    .1
-                    .owner
-                    .to_string(),
+                b64_account.owner,
+                genesis_config.accounts[&pubkey].owner.to_string(),
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
-                    .0
-                    .to_string()]
-                    .balance,
-                genesis_config.accounts[genesis_accounts.len() + i]
-                    .1
-                    .lamports,
+                b64_account.balance,
+                genesis_config.accounts[&pubkey].lamports,
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
-                    .0
-                    .to_string()]
-                    .executable,
-                genesis_config.accounts[genesis_accounts.len() + i]
-                    .1
-                    .executable,
+                b64_account.executable,
+                genesis_config.accounts[&pubkey].executable,
             );
 
             assert_eq!(
-                genesis_accounts1[&genesis_config.accounts[genesis_accounts.len() + i]
-                    .0
-                    .to_string()]
-                    .data,
-                base64::encode(&genesis_config.accounts[genesis_accounts.len() + i].1.data),
+                b64_account.data,
+                base64::encode(&genesis_config.accounts[&pubkey].data),
             );
-        });
+        }
 
-        let offset = genesis_accounts.len() + genesis_accounts1.len();
         // Test account data for keypairs matches
         account_keypairs.iter().for_each(|keypair| {
-            let mut i = 0;
-            (offset..(offset + account_keypairs.len())).for_each(|n| {
-                if keypair.pubkey() == genesis_config.accounts[n].0 {
-                    i = n;
-                }
-            });
-
-            assert_ne!(i, 0);
-
+            let keypair_str = serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap();
+            let pubkey = keypair.pubkey();
             assert_eq!(
-                genesis_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
-                    .owner,
-                genesis_config.accounts[i].1.owner.to_string(),
+                genesis_accounts2[&keypair_str].owner,
+                genesis_config.accounts[&pubkey].owner.to_string(),
             );
 
             assert_eq!(
-                genesis_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
-                    .balance,
-                genesis_config.accounts[i].1.lamports,
+                genesis_accounts2[&keypair_str].balance,
+                genesis_config.accounts[&pubkey].lamports,
             );
 
             assert_eq!(
-                genesis_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
-                    .executable,
-                genesis_config.accounts[i].1.executable,
+                genesis_accounts2[&keypair_str].executable,
+                genesis_config.accounts[&pubkey].executable,
             );
 
             assert_eq!(
-                genesis_accounts2[&serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap()]
-                    .data,
-                base64::encode(&genesis_config.accounts[i].1.data),
+                genesis_accounts2[&keypair_str].data,
+                base64::encode(&genesis_config.accounts[&pubkey].data),
             );
         });
     }
