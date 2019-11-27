@@ -23,7 +23,7 @@ lazy_static = "1.4.0"
 log = "0.4.8"
 nix = "0.15.0"
 reqwest = { version = "0.9.22", default-features = false, features = ["rustls-tls"] }
-serde = "1.0.102"
+serde = "1.0.103"
 serde_derive = "1.0.103"
 serde_yaml = "0.8.11"
 solana-clap-utils = { path = "../clap-utils", version = "0.22.0" }

@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.2.0"
-serde = "1.0.102"
+serde = "1.0.103"
 serde_derive = "1.0.103"
 solana-sdk = { path = "../../sdk", version = "0.22.0" }
 num-derive = "0.3"
