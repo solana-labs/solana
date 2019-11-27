@@ -45,8 +45,6 @@ use solana_sdk::{
     transaction::{Result, Transaction, TransactionError},
 };
 use solana_vote_program::vote_state::VoteState;
-use std::borrow::Borrow;
-use std::collections::hash_map::RandomState;
 use std::{
     collections::HashMap,
     io::{BufReader, Cursor, Error as IOError, Read},
