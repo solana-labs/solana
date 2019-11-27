@@ -32,7 +32,7 @@ solana-move-loader-program = { path = "../programs/move_loader", version = "0.22
 
 [dev-dependencies]
 serial_test = "0.3.1"
-serial_test_derive = "0.2.0"
+serial_test_derive = "0.3.1"
 solana-local-cluster = { path = "../local-cluster", version = "0.22.0" }
 
 [features]
