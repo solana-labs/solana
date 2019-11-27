@@ -650,15 +650,5 @@ mod tests {
             .sum::<u64>();
 
         assert_eq!(issued_lamports, lamports);
-
-        genesis_config
-            .accounts
-            .sort_by(|(ka, _), (kb, _)| ka.cmp(kb));
-
-        let len = genesis_config.accounts.len();
-        genesis_config
-            .accounts
-            .dedup_by(|(ka, _), (kb, _)| ka == kb);
-        assert_eq!(genesis_config.accounts.len(), len);
     }
 }

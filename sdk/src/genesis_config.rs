@@ -16,6 +16,7 @@ use crate::{
 use bincode::{deserialize, serialize};
 use memmap::Mmap;
 use std::{
+    collections::BTreeMap,
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
@@ -29,9 +30,9 @@ pub enum OperatingMode {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GenesisConfig {
-    pub accounts: Vec<(Pubkey, Account)>,
+    pub accounts: BTreeMap<Pubkey, Account>,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
-    pub rewards_pools: Vec<(Pubkey, Account)>,
+    pub rewards_pools: BTreeMap<Pubkey, Account>,
     pub ticks_per_slot: u64,
     pub slots_per_segment: u64,
     pub poh_config: PohConfig,
@@ -60,9 +61,9 @@ pub fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
 impl Default for GenesisConfig {
     fn default() -> Self {
         Self {
-            accounts: Vec::new(),
-            native_instruction_processors: Vec::new(),
-            rewards_pools: Vec::new(),
+            accounts: BTreeMap::default(),
+            native_instruction_processors: Vec::default(),
+            rewards_pools: BTreeMap::default(),
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_segment: DEFAULT_SLOTS_PER_SEGMENT,
             poh_config: PohConfig::default(),
@@ -81,15 +82,18 @@ impl GenesisConfig {
         native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         Self {
-            accounts: accounts.to_vec(),
+            accounts: accounts
+                .iter()
+                .cloned()
+                .collect::<BTreeMap<Pubkey, Account>>(),
             native_instruction_processors: native_instruction_processors.to_vec(),
             ..GenesisConfig::default()
         }
     }
 
     pub fn hash(&self) -> Hash {
-        let serialized = serde_json::to_string(self).unwrap();
-        hash(&serialized.into_bytes())
+        let serialized = serialize(&self).unwrap();
+        hash(&serialized)
     }
 
     fn genesis_filename(ledger_path: &Path) -> PathBuf {
@@ -140,7 +144,7 @@ impl GenesisConfig {
     }
 
     pub fn add_account(&mut self, pubkey: Pubkey, account: Account) {
-        self.accounts.push((pubkey, account));
+        self.accounts.insert(pubkey, account);
     }
 
     pub fn add_native_instruction_processor(&mut self, name: String, program_id: Pubkey) {
@@ -148,7 +152,7 @@ impl GenesisConfig {
     }
 
     pub fn add_rewards_pool(&mut self, pubkey: Pubkey, account: Account) {
-        self.rewards_pools.push((pubkey, account));
+        self.rewards_pools.insert(pubkey, account);
     }
 }
 
