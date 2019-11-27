@@ -44,6 +44,9 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
+use solana_vote_program::vote_state::VoteState;
+use std::borrow::Borrow;
+use std::collections::hash_map::RandomState;
 use std::{
     collections::HashMap,
     io::{BufReader, Cursor, Error as IOError, Read},
@@ -1213,13 +1216,49 @@ impl Bank {
     fn distribute_rent(&self) {
         let total_rent_collected = self.collected_rent.load(Ordering::Relaxed);
 
-        if total_rent_collected != 0 {
-            let burned_portion =
-                (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
-            let _rent_to_be_distributed = total_rent_collected - burned_portion;
-            // TODO: distribute remaining rent amount to validators
-            // self.capitalization.fetch_sub(burned_portion, Ordering::Relaxed);
+        if total_rent_collected == 0 {
+            return;
         }
+
+        let burned_portion =
+            (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
+        let rent_to_be_distributed = total_rent_collected - burned_portion;
+
+        let vote_account_hashmap = self.epoch_vote_accounts(self.epoch).unwrap();
+        let mut node_stake_hashmap: HashMap<Pubkey, u64> = HashMap::new();
+        let mut total_staked = 0;
+
+        vote_account_hashmap
+            .iter()
+            .map(|(_vote_pubkey, (staked, account))| {
+                total_staked += *staked;
+                VoteState::deserialize(&account.data)
+                    .ok()
+                    .map(|vote_state| (*staked, vote_state.node_pubkey))
+                    .unwrap_or((0, Pubkey::default()))
+            })
+            .collect::<HashMap<u64, Pubkey>>()
+            .drain()
+            .for_each(|(staked, node_pubkey)| {
+                node_stake_hashmap
+                    .entry(node_pubkey)
+                    .and_modify(|stake| {
+                        *stake += staked;
+                    })
+                    .or_insert(staked);
+            });
+
+        assert!(total_staked > 0);
+
+        node_stake_hashmap.iter().for_each(|(pubkey, staked)| {
+            let rent_to_be_paid = (((staked * 100) / total_staked) * rent_to_be_distributed) / 100;
+            let mut account = self.get_account(pubkey).unwrap_or_default();
+            account.lamports += rent_to_be_paid;
+            self.store_account(pubkey, &account);
+        });
+
+        self.capitalization
+            .fetch_sub(burned_portion, Ordering::Relaxed);
     }
 
     fn collect_rent(&self, res: &[Result<()>], loaded_accounts: &[Result<TransactionLoadResult>]) {
