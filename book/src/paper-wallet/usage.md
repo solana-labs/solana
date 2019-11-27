@@ -8,8 +8,4 @@ Even using this secure input method, it's still possible that a private key gets
 
 ---
 
-TODO
-
----
-
 {% page-ref page="api-reference/cli.md" %}
