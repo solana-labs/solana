@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 clap="2.33.0"
 reqwest = { version = "0.9.22", default-features = false, features = ["rustls-tls"] }
-serde="1.0.102"
+serde="1.0.103"
 serde_derive="1.0.103"
 serde_json = "1.0.42"
 hex = "0.3.2"

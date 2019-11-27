@@ -21,7 +21,7 @@ log = "0.4.8"
 memmap = "0.6.2"
 rand = "0.6.5"
 rayon = "1.2.0"
-serde = { version = "1.0.102", features = ["rc"] }
+serde = { version = "1.0.103", features = ["rc"] }
 serde_derive = "1.0.103"
 serde_json = "1.0.42"
 solana-logger = { path = "../logger", version = "0.22.0" }
