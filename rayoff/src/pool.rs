@@ -75,7 +75,7 @@ mod tests {
     fn test_pool() {
         let pool = Pool::default();
         let mut array = [0usize; 100];
-        pool.dispatch_mut(&mut array, Box::new(|val: &mut usize| *val += 1));
+        pool.dispatch_mut(&mut array, |val: &mut usize| *val += 1);
         let expected = [1usize; 100];
         for i in 0..100 {
             assert_eq!(array[i], expected[i]);
@@ -107,5 +107,39 @@ mod tests {
         for i in 0..100 {
             assert_eq!(expected[i], output[i]);
         }
+    }
+
+    #[test]
+    fn test_job_order_1() {
+        let pool = Pool::default();
+        let mut elems = [0usize; 100];
+        // Job must wait to completion before this frame returns
+        let job = unsafe {
+            Job::new(&mut elems, |val: &mut usize| {
+                assert_eq!(*val, 0);
+                *val += 1
+            })
+        };
+        let job = Arc::new(job);
+        job.execute();
+        pool.notify_all(job.clone());
+        job.wait();
+    }
+
+    #[test]
+    fn test_job_order_2() {
+        let pool = Pool::default();
+        let mut elems = [0usize; 100];
+        // Job must wait to completion before this frame returns
+        let job = unsafe {
+            Job::new(&mut elems, |val: &mut usize| {
+                assert_eq!(*val, 0);
+                *val += 1
+            })
+        };
+        let job = Arc::new(job);
+        job.execute();
+        job.wait();
+        pool.notify_all(job.clone());
     }
 }

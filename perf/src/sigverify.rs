@@ -9,7 +9,7 @@ use crate::packet::{Packet, Packets};
 use crate::perf_libs;
 use crate::recycler::Recycler;
 use bincode::serialized_size;
-use rayoff::rayoff::Pool;
+use rayoff::pool::Pool;
 use rayon::ThreadPool;
 use solana_metrics::inc_new_counter_debug;
 use solana_rayon_threadlimit::get_thread_count;

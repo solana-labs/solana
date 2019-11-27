@@ -25,7 +25,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use fs_extra::dir::CopyOptions;
 use log::*;
 use rand::{thread_rng, Rng};
-use rayoff::rayoff::Pool;
+use rayoff::pool::Pool;
 use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
