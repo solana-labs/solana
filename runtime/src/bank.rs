@@ -1218,11 +1218,16 @@ impl Bank {
             return;
         }
 
+        let vote_account_hashmap = self.epoch_vote_accounts(self.epoch);
+        if vote_account_hashmap.is_none() {
+            return;
+        }
+        let vote_account_hashmap = vote_account_hashmap.unwrap();
+
         let burned_portion =
             (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
         let rent_to_be_distributed = total_rent_collected - burned_portion;
 
-        let vote_account_hashmap = self.epoch_vote_accounts(self.epoch).unwrap();
         let mut node_stake_hashmap: HashMap<Pubkey, u64> = HashMap::new();
         let mut total_staked = 0;
 
