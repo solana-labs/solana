@@ -11,18 +11,20 @@ pub struct Job {
     done_index: AtomicUsize,
 }
 
-/// Safe because Job only lives for the duration of the dispatch call
-/// and any thread lifetimes are within that call
+/// Safe because ctx/elems are only touched until job is complete.
+/// Job::wait must be called to complete the job
 unsafe impl Send for Job {}
 
-/// Safe because data is either atomic or read only
+/// Safe because data access either atomic or read only
+/// elems atomic access is guarded by the work_index
+/// Job::wait must be called to complete the job
 unsafe impl Sync for Job {}
 
 type Progress = extern "C" fn(*mut c_void, *mut c_void, u64);
 
 impl Job {
     /// This function is unsafe because the Job object must
-    /// be destroyed before `elems` and `func` arguments.
+    /// be complete.  Users must call Job::wait befor returning.
     pub unsafe fn new<F, A>(elems: &mut [A], func: F) -> Self
     where
         F: Fn(&mut A) + Send + Sync,
@@ -62,16 +64,16 @@ impl Job {
         loop {
             let index = self.work_index.fetch_add(1, Ordering::Relaxed);
             if index as u64 >= self.num {
-                self.done_index.fetch_add(1, Ordering::Relaxed);
                 break;
             }
             (self.func)(self.ctx, self.elems, index as u64);
+            self.done_index.fetch_add(1, Ordering::Relaxed);
         }
     }
-    pub fn wait(&self, num: usize) {
+    pub fn wait(&self) {
         loop {
             let guard = self.done_index.load(Ordering::Relaxed);
-            if guard >= num {
+            if guard >= self.num as usize {
                 break;
             }
             yield_now();

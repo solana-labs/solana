@@ -12,7 +12,7 @@ pub struct Pool {
 
 impl Default for Pool {
     fn default() -> Self {
-        let num_threads = sys_info::cpu_num().unwrap_or(16) - 1;
+        let num_threads = Pool::get_thread_count() - 1;
         let mut senders = vec![];
         (0..num_threads).for_each(|_| {
             let (sender, recvr): (Sender<Arc<Job>>, Receiver<Arc<Job>>) = channel();
@@ -29,17 +29,22 @@ impl Default for Pool {
     }
 }
 
+
+
 impl Pool {
+    pub fn get_thread_count() -> usize {
+        sys_info::cpu_num().unwrap_or(16) as usize
+    }
     pub fn dispatch_mut<F, A>(&self, elems: &mut [A], func: F)
     where
         F: Fn(&mut A) + Send + Sync,
     {
-        // Job must be destroyed in the frame that its created
+        // Job must wait to completion before this frame returns
         let job = unsafe { Job::new(elems, func) };
         let job = Arc::new(job);
-        let len = self.notify_all(job.clone());
+        self.notify_all(job.clone());
         job.execute();
-        job.wait(len + 1);
+        job.wait();
     }
     pub fn map<F, A, B>(&self, inputs: &[A], func: F) -> Vec<B>
     where
@@ -54,13 +59,11 @@ impl Pool {
         });
         outs
     }
-    fn notify_all(&self, job: Arc<Job>) -> usize {
+    fn notify_all(&self, job: Arc<Job>) {
         let senders = self.senders.lock().unwrap();
-        let len = senders.len();
         for s in senders.iter() {
             s.send(job.clone()).expect("send should never fail");
         }
-        len
     }
 }
 
