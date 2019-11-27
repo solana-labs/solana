@@ -2,8 +2,8 @@ extern crate sys_info;
 
 use job::Job;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Mutex, Arc};
-use std::thread::{spawn};
+use std::sync::{Arc, Mutex};
+use std::thread::spawn;
 
 #[derive(Debug)]
 pub struct Pool {
@@ -28,8 +28,6 @@ impl Default for Pool {
         }
     }
 }
-
-
 
 impl Pool {
     pub fn get_thread_count() -> usize {
@@ -70,6 +68,8 @@ impl Pool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+
     #[test]
     fn test_pool() {
         let pool = Pool::default();
@@ -86,6 +86,23 @@ mod tests {
         let array = [0usize; 100];
         let output = pool.map(&array, |val: &usize| val + 1);
         let expected = [1usize; 100];
+        for i in 0..100 {
+            assert_eq!(expected[i], output[i]);
+        }
+    }
+    #[test]
+    fn test_static_reentrancy() {
+        thread_local!(static RAYOFF_POOL: RefCell<Pool> = RefCell::new(Pool::default()));
+        let array = [0usize; 100];
+        let output = RAYOFF_POOL.with(|pool| {
+            pool.borrow().map(&array, |val: &usize| {
+                let array = [0usize; 100];
+                let rv = RAYOFF_POOL.with(|pool| pool.borrow().map(&array, |val| val + 1));
+                let total: usize = rv.into_iter().sum();
+                val + total
+            })
+        });
+        let expected = [100usize; 100];
         for i in 0..100 {
             assert_eq!(expected[i], output[i]);
         }
