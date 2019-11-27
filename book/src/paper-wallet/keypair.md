@@ -1,9 +1,9 @@
-# Creating and Using a Seed Phrase
+# Creating a Paper Wallet
 
-Using the `solana-keygen` tool, it is possible to generate new seed phrases as well as derive public keys from an existing seed phrase and (optional) passphrase. The seed phrase and passphrase can be used together as a paper wallet.
+Using the `solana-keygen` tool, it is possible to generate new seed phrases as well as derive a keypair from an existing seed phrase and (optional) passphrase. The seed phrase and passphrase can be used together as a paper wallet. As long as you keep your seed phrase and passphrase stored safely, you can use them to access your account.
 
 {% hint style="info" %}
-We do not intend to advise on how to *securely* create or manage paper wallets. Please research the security concerns carefully.
+For more information about how seed phrases work, review this [Bitcoin Wiki page](https://en.bitcoin.it/wiki/Seed_phrase).
 {% endhint %}
 
 ## Seed Phrase Generation
@@ -15,7 +15,7 @@ solana-keygen new --no-outfile
 ```
 
 {% hint style="warning" %}
-If `--no-outfile` is not specified, the default behavior is to write the keypair to `~/.config/solana/id.json`
+If `--no-outfile` is **not** specified, the default behavior is to write the keypair to `~/.config/solana/id.json`
 {% endhint %}
 
 For full usage details run:
@@ -26,7 +26,7 @@ solana-keygen new --help
 
 ## Public Key Derivation
 
-Public keys can be derived from a seed phrase and a passphrase if you choose to use one. This is useful for using using an offline generated seed phrase to derive a valid public key. The `solana-keygen pubkey` command will walk you through entering your seed phrase and a passphrase if you chose to use one.
+Public keys can be derived from a seed phrase and a passphrase if you choose to use one. This is useful for using using an offline-generated seed phrase to derive a valid public key. The `solana-keygen pubkey` command will walk you through entering your seed phrase and a passphrase if you chose to use one.
 
 ```bash
 solana-keygen pubkey ASK
