@@ -37,7 +37,7 @@
   * [FAQ](running-validator/validator-faq.md)
 * [Running an Archiver](running-archiver.md)
 * [Paper Wallet](paper-wallet/README.md)
-  * [Keypair Generation and Recovery](paper-wallet/keypair.md)
+  * [Creating and Using a Seed Phrase](paper-wallet/keypair.md)
   * [Paper Wallet Usage](paper-wallet/usage.md)
 * [API Reference](api-reference/README.md)
   * [Transaction](api-reference/transaction-api.md)

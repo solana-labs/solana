@@ -21,7 +21,7 @@ If `--no-outfile` is not specified, the default behavior is to write the keypair
 For full usage details run:
 
 ```bash
-solana-keygen new -h
+solana-keygen new --help
 ```
 
 ## Public Key Derivation
@@ -36,7 +36,7 @@ solana-keygen pubkey ASK
 Note that you could potentially use different passphrases for the same seed phrase. Each unique passphrase will yield a different keypair.
 {% endhint %}
 
-The `solana-keygen` tool assumes the use of the BIP39 standard English word list. If you choose to deviate from the word list or use a different language for your seed phrase, you can still derive a valid public key but will need to explicitly skip seed phrase validation.
+The `solana-keygen` tool assumes the use of the BIP39 standard English word list. If you chose to deviate from the word list or used a different language for your seed phrase, you can still derive a valid public key but will need to explicitly skip seed phrase validation.
 
 ```bash
 solana-keygen pubkey ASK --skip-seed-phrase-validation
@@ -45,5 +45,5 @@ solana-keygen pubkey ASK --skip-seed-phrase-validation
 For full usage details run:
 
 ```bash
-solana-keygen pubkey -h
+solana-keygen pubkey --help
 ```
