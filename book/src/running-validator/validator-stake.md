@@ -27,7 +27,7 @@ and then delegating that stake to your validator:
 solana delegate-stake ~/validator-stake-keypair.json ~/validator-vote-keypair.json
 ```
 
-> Don’t delegate your remaining 1 SOL, your validator will use those tokens to vote.
+> Don’t delegate your remaining SOL, as your validator will use those tokens to vote.
 
 Stakes can be re-delegated to another node at any time with the same command, but only one re-delegation is permitted per epoch:
 
@@ -45,7 +45,7 @@ The rewards lamports earned are split between your stake account and the vote ac
 
 At the end of each slot, a validator is expected to send a vote transaction. These vote transactions are paid for by lamports from a validator's identity account.
 
-This is a normal transaction so the standard transaction fee will apply. The transaction fee range is defined by the genesis block. The actual fee will fluctuate based on transaction load. You can determine the current fee via the [RPC API “getRecentBlockhash”](https://solana-labs.github.io/book-edge/jsonrpc-api.html#getrecentblockhash) before submitting a transaction.
+This is a normal transaction so the standard transaction fee will apply. The transaction fee range is defined by the genesis block. The actual fee will fluctuate based on transaction load. You can determine the current fee via the [RPC API “getRecentBlockhash”](https://docs.solana.com/book/api-reference/jsonrpc-api#getrecentblockhash) before submitting a transaction.
 
 Learn more about [transaction fees here](https://docs.solana.com/book/implemented-proposals/transaction-fees).
 
@@ -88,7 +88,7 @@ Helpful JSON-RPC methods:
 
 Before detaching your validator from the TdS cluster, you should deactivate the stake that was previously delegated by running:
 
-```
+```bash
 solana deactivate-stake ~/validator-stake-keypair.json
 ```
 

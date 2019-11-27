@@ -76,7 +76,7 @@ You should see the following output:
 
 ```text
 Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
-* url: http://tds.solana.com:8899
+* url: http://testnet.solana.com:8899
 * keypair: /home/solana/validator-keypair.json
 ```
 
@@ -129,7 +129,7 @@ To force validator logging to the console add a `--log -` argument, otherwise th
 Confirm your validator connected to the network by running:
 
 ```bash
-solana-gossip spy --entrypoint tds.solana.com:8001
+solana-gossip spy --entrypoint testnet.solana.com:8001
 ```
 
 This command will display all the nodes that are visible to the TdS network’s entrypoint. If your validator is connected, its public key and IP address will appear in the list.

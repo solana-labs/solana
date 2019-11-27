@@ -26,7 +26,7 @@
   * [The Runtime](validator/runtime.md)
 * [Anatomy of a Transaction](transaction.md)
 * [Running a Validator](running-validator/README.md)
-  * [Hardware Requirements](running-validator/validator-hardware.md)
+  * [Hardware Requirements](running-validator/validator-reqs.md)
   * [Choosing a Testnet](running-validator/validator-testnet.md)
   * [Installing the Validator Software](running-validator/validator-software.md)
   * [Starting a Validator](running-validator/validator-start.md)

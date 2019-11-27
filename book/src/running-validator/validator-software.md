@@ -20,14 +20,6 @@ Update successful
 
 After a successful install, `solana-install update` may be used to easily update the cluster software to a newer version at any time.
 
-## Build from Source
-
-Alternatively, you can build the `solana-install` program from source and run the following command to obtain the same result:
-
-```bash
-solana-install init
-```
-
 ## Download Prebuilt Binaries
 
 If you would rather not use `solana-install` to manage the install, you can manually download and install the binaries.
@@ -59,4 +51,10 @@ If you are unable to use the prebuilt binaries or prefer to build it yourself fr
 ```bash
 ./scripts/cargo-install-all.sh .
 export PATH=$PWD/bin:$PATH
+```
+
+You can then run the following command to obtain the same result as with prebuilt binaries:
+
+```bash
+solana-install init
 ```
