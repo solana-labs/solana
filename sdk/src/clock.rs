@@ -4,6 +4,8 @@
 // rate at any given time should be expected to drift
 pub const DEFAULT_TICKS_PER_SECOND: u64 = 160;
 
+pub const MS_PER_TICK: u64 = 1000 / DEFAULT_TICKS_PER_SECOND;
+
 // At 160 ticks/s, 64 ticks per slot implies that leader rotation and voting will happen
 // every 400 ms. A fast voting cadence ensures faster finality and convergence
 pub const DEFAULT_TICKS_PER_SLOT: u64 = 64;
