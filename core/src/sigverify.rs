@@ -37,15 +37,9 @@ impl SigVerifier for TransactionSigVerifier {
 
 pub fn mark_disabled(batches: &mut Vec<Packets>, r: &[Vec<u8>]) {
     batches.iter_mut().zip(r).for_each(|(b, v)| {
-        b.packets
-            .iter_mut()
-            .zip(v)
-            .for_each(|(p, f)| {
-                p.meta.discard = *f == 0;
-                if p.meta.discard {
-                    warn!("packet discarded by sigverify");
-                }
-            })
+        b.packets.iter_mut().zip(v).for_each(|(p, f)| {
+            p.meta.discard = *f == 0;
+        })
     });
 }
 

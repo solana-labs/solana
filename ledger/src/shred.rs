@@ -96,7 +96,8 @@ pub struct ShredCommonHeader {
 impl ShredCommonHeader {
     pub fn from_packet(packet: &Packet) -> Result<Self> {
         let mut start = 0;
-        let common_header: ShredCommonHeader = Shred::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &packet.data)?;
+        let common_header: ShredCommonHeader =
+            Shred::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &packet.data)?;
         Ok(common_header)
     }
     pub fn seed(&self) -> [u8; 32] {
@@ -138,15 +139,18 @@ pub enum ShredHeaders {
 impl ShredHeaders {
     pub fn from_packet(packet: &Packet) -> Result<Self> {
         let mut start = 0;
-        let common_header: ShredCommonHeader = Shred::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &packet.data)?;
+        let common_header: ShredCommonHeader =
+            Shred::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &packet.data)?;
         if common_header.shred_type == ShredType(DATA_SHRED) {
-            let data_header: DataShredHeader = Shred::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &packet.data)?;
+            let data_header: DataShredHeader =
+                Shred::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &packet.data)?;
             Ok(ShredHeaders::Data {
                 common_header,
                 data_header,
             })
         } else if common_header.shred_type == ShredType(CODING_SHRED) {
-            let coding_header: CodingShredHeader = Shred::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &packet.data)?;
+            let coding_header: CodingShredHeader =
+                Shred::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &packet.data)?;
             Ok(ShredHeaders::Coding {
                 common_header,
                 coding_header,
@@ -665,12 +669,7 @@ impl Shredder {
             .map(|s| (*s, self.keypair.secret.to_bytes()))
             .collect();
         privkeys.insert(std::u64::MAX, [0u8; 32]);
-        sigverify_shreds::sign_shreds_cpu(&mut data_shreds, &pubkeys, &privkeys);
-        for batch in &data_shreds {
-            for p in &batch.packets {
-                assert!(Shred::from_packet(p).verify(&self.keypair.pubkey()));
-            }
-        }
+        sigverify_shreds::sign_shreds_gpu(&mut data_shreds, &pubkeys, &privkeys, recycler_cache);
         let sign_data_time = now.elapsed().as_millis();
 
         let now = Instant::now();
@@ -1790,6 +1789,9 @@ pub mod tests {
         let from_packets = Shred::from_packets(vec![packets.clone()]);
         assert_eq!(shred, from_packets[0]);
         assert_eq!(shred.headers(), from_packets[0].headers());
-        assert_eq!(shred.headers(), ShredHeaders::from_packet(&packets.packets[0]).unwrap());
+        assert_eq!(
+            shred.headers(),
+            ShredHeaders::from_packet(&packets.packets[0]).unwrap()
+        );
     }
 }

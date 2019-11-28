@@ -1997,13 +1997,13 @@ pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: u64) -> bool
     if !is_valid_write_to_slot_0(slot, parent_slot, last_root) {
         // Check that the parent_slot < slot
         if parent_slot >= slot {
-            warn!("blocktree parent slot is to high {} {}", parent_slot, slot);
+            trace!("blocktree parent slot is to high {} {}", parent_slot, slot);
             return false;
         }
 
         // Ignore shreds that chain to slots before the last root
         if parent_slot < last_root {
-            warn!("blocktree parent slot is to low");
+            trace!("blocktree parent slot is to low");
             return false;
         }
 

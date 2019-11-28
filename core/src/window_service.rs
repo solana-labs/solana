@@ -49,15 +49,15 @@ pub fn should_retransmit_and_persist(
     };
     if let Some(leader_id) = slot_leader_pubkey {
         if leader_id == *my_pubkey {
-            warn!("shred pubkey check failed");
+            trace!("shred pubkey check failed");
             inc_new_counter_debug!("streamer-recv_window-circular_transmission", 1);
             false
         } else if !verify_shred_slot(shred, root) {
-            warn!("shred slot check failed");
+            trace!("shred slot check failed");
             inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
             false
         } else if shred.version() != shred_version {
-            warn!("shred version check failed");
+            trace!("shred version check failed");
             inc_new_counter_debug!("streamer-recv_window-incorrect_shred_version", 1);
             false
         } else {
@@ -111,11 +111,9 @@ where
                         packet.meta.seed = shred.seed();
                     } else {
                         packet.meta.discard = true;
-                        warn!("packet discard 1");
                     }
                 } else {
                     packet.meta.discard = true;
-                    warn!("packet discard 2");
                 }
             });
         });
