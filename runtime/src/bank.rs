@@ -1242,8 +1242,8 @@ impl Bank {
         assert!(total_staked > 0);
 
         node_stake_hashmap.iter().for_each(|(pubkey, staked)| {
-            let rent_to_be_paid = (((staked * rent_to_be_distributed * 100) as f64)
-                / (total_staked * 100) as f64) as u64;
+            let rent_to_be_paid =
+                (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
             let mut account = self.get_account(pubkey).unwrap_or_default();
             account.lamports += rent_to_be_paid;
             self.store_account(pubkey, &account);
