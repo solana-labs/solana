@@ -667,6 +667,12 @@ impl Shredder {
             .collect();
         privkeys.insert(std::u64::MAX, [0u8; 32]);
         sigverify_shreds::sign_shreds_gpu(&mut data_shreds, &pubkeys, &privkeys, recycler_cache);
+        for batch in &data_shreds {
+            for p in &batch.packets {
+                assert!(Shred::from_packet(p).verify(&self.keypair.pubkey()));
+            }
+
+        }
         let sign_data_time = now.elapsed().as_millis();
 
         let now = Instant::now();
@@ -1606,6 +1612,10 @@ pub mod tests {
         let (data_shreds, coding_shreds, next_index) =
             shredder.entries_to_shreds(&recycler_cache, &entries, true, 0);
         let data_shreds = Shred::from_packets(data_shreds);
+        for s in &data_shreds {
+            println!("sig {} {}", s.index(), s.signature());
+            assert!(s.verify(&keypair.pubkey()));
+        }
         let coding_shreds = Shred::from_packets(coding_shreds);
         assert_eq!(next_index as usize, num_data_shreds);
         assert_eq!(data_shreds.len(), num_data_shreds);
@@ -1642,6 +1652,7 @@ pub mod tests {
 
             for (i, recovered_shred) in recovered_data.into_iter().enumerate() {
                 let index = shred_start_index + (i * 2);
+                println!("sig {} {}", recovered_shred.index(), recovered_shred.signature());
                 verify_test_data_shred(
                     &recovered_shred,
                     index.try_into().unwrap(),

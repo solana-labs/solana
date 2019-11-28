@@ -473,6 +473,10 @@ pub fn sign_shreds_gpu(
     recycler_cache.offsets().recycle(pubkey_offsets);
     recycler_cache.offsets().recycle(msg_sizes);
     recycler_cache.offsets().recycle(msg_start_offsets);
+    let rvs = verify_shreds_cpu(batches, slot_leaders_pubkeys);
+    for (ix, i) in rvs.into_iter().flatten().enumerate() {
+        assert!(i == 1, "failed to verify {}", ix);
+    }
 }
 
 #[cfg(test)]
