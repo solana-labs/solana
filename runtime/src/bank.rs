@@ -2248,6 +2248,8 @@ mod tests {
         let payee_account = Account::new(70, 1, &system_program::id());
         bank.store_account(&payee.pubkey(), &payee_account);
 
+        let bootstrap_leader_initial_balance = bank.get_balance(&bootstrap_leader_pubkey);
+
         let tx = system_transaction::transfer(&payer, &payee.pubkey(), 180, genesis_config.hash());
 
         let result = bank.process_transaction(&tx);
@@ -2277,7 +2279,7 @@ mod tests {
             ((bootstrap_leader_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
         assert_eq!(
             bank.get_balance(&bootstrap_leader_pubkey),
-            bootstrap_leader_portion + 42
+            bootstrap_leader_portion + bootstrap_leader_initial_balance
         );
 
         let validator_1_portion =
