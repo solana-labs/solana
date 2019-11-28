@@ -4,7 +4,6 @@ There is a **\#validator-support** Discord channel available to reach other test
 
 ## Useful Links & Discussion
 * [Tour de SOL Docs](https://docs.solana.com/tour-de-sol)
-* [Solana Book](https://docs.solana.com/book/)
 * [Network Explorer](http://explorer.solana.com/)
 * [TdS metrics dashboard](https://metrics.solana.com:3000/d/testnet-edge/testnet-monitor-edge?refresh=1m&from=now-15m&to=now&var-testnet=tds&orgId=2&var-datasource=TdS%20Metrics%20%28read-only%29)
 * Validator chat channels

@@ -2,11 +2,9 @@
 
 ## Hardware
 
-See our [suggested hardware configurations here](https://solana-labs.github.io/book/testnet-participation.html#machine-requirements).
-
 * CPU Recommendations
-  * We recommend a CPU with the highest number of cores as possible. AMD Threadripper or Intel Server \(Xeon\) CPUs are fine. 
-  * We recommend AMD Threadripper as you get a larger number of cores for parallelization compared to Intel. 
+  * We recommend a CPU with the highest number of cores as possible. AMD Threadripper or Intel Server \(Xeon\) CPUs are fine.
+  * We recommend AMD Threadripper as you get a larger number of cores for parallelization compared to Intel.
   * Threadripper also has a cost-per-core advantage and a greater number of PCIe lanes compared to the equivalent Intel part. PoH \(Proof of History\) is based on sha256 and Threadripper also supports sha256 hardware instructions.
 * SSD size and I/O style \(SATA vs NVMe/M.2\) for a validator
   * Minimum example - Samsung 860 Evo 2TB
@@ -35,13 +33,12 @@ Here are our recommendations for low, medium, and high end machine specification
 ## **Software**
 
 * We build and run on Ubuntu 18.04.  Some users have had trouble when running on Ubuntu 16.04
-* See [Connecting Your Validator](steps-to-create-a-validator/connecting-your-validator.md#install-software) for the current Solana software release.
+* See [Validator Software](validator-software.md) for the current Solana software release.
 
-Be sure to ensure that the machine used is not behind a residential NAT to avoid NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.** For more information on port forwarding with regards to residential networks, see [this document](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf). 
+Be sure to ensure that the machine used is not behind a residential NAT to avoid NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.** For more information on port forwarding with regards to residential networks, see [this document](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf).
 
 Prebuilt binaries are available for Linux x86\_64 \(Ubuntu 18.04 recommended\). MacOS or WSL users may build from source.
 
 ## GPU Requirements
 
 CUDA is required to make use of the GPU on your system. The provided Solana release binaries are built on Ubuntu 18.04 with [CUDA Toolkit 10.1 update 1"](https://developer.nvidia.com/cuda-toolkit-archive). If your machine is using a different CUDA version then you will need to rebuild from source.
-

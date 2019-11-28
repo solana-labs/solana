@@ -45,9 +45,9 @@ The rewards lamports earned are split between your stake account and the vote ac
 
 At the end of each slot, a validator is expected to send a vote transaction. These vote transactions are paid for by lamports from a validator's identity account.
 
-This is a normal transaction so the standard transaction fee will apply. The transaction fee range is defined by the genesis block. The actual fee will fluctuate based on transaction load. You can determine the current fee via the [RPC API “getRecentBlockhash”](https://docs.solana.com/book/api-reference/jsonrpc-api#getrecentblockhash) before submitting a transaction.
+This is a normal transaction so the standard transaction fee will apply. The transaction fee range is defined by the genesis block. The actual fee will fluctuate based on transaction load. You can determine the current fee via the [RPC API “getRecentBlockhash”](../api-reference/jsonrpc-api#getrecentblockhash) before submitting a transaction.
 
-Learn more about [transaction fees here](https://docs.solana.com/book/implemented-proposals/transaction-fees).
+Learn more about [transaction fees here](../implemented-proposals/transaction-fees).
 
 ## Validator Stake Warm-up
 
@@ -65,7 +65,7 @@ To monitor your validator during its warmup period:
 
 ## Monitor Your Staked Validator
 
-Confirm your validator becomes a [leader](https://solana-labs.github.io/book/terminology.html#leader)
+Confirm your validator becomes a [leader](../terminology.md#leader)
 
 * After your validator is caught up, use the `$ solana balance` command to monitor the earnings as your validator is selected as leader and collects transaction fees
 * Solana nodes offer a number of useful JSON-RPC methods to return information about the network and your validator's participation. Make a request by using curl \(or another http client of your choosing\), specifying the desired method in JSON-RPC-formatted data. For example:
@@ -80,9 +80,9 @@ Confirm your validator becomes a [leader](https://solana-labs.github.io/book/ter
 
 Helpful JSON-RPC methods:
 
-* `getEpochInfo`[ An epoch](https://solana-labs.github.io/book/terminology.html#epoch) is the time, i.e. number of [slots](https://solana-labs.github.io/book/terminology.html?highlight=epoch#slot), for which a [leader schedule](https://solana-labs.github.io/book/terminology.html?highlight=epoch#leader-schedule) is valid. This will tell you what the current epoch is and how far into it the cluster is.
-* `getVoteAccounts` This will tell you how much active stake your validator currently has. A % of the validator's stake is activated on an epoch boundary. You can learn more about staking on Solana [here](https://solana-labs.github.io/book-edge/stake-delegation-and-rewards.html).
-* `getLeaderSchedule` At any given moment, the network expects only one validator to produce ledger entries. The [validator currently selected to produce ledger entries](https://solana-labs.github.io/book/leader-rotation.html?highlight=leader#leader-rotation) is called the “leader”.  This will return the complete leader schedule \(on a slot-by-slot basis\) for the current epoch. If you validator is scheduled to be leader based on its currently activated stake, the identity pubkey will show up 1 or more times here.
+* `getEpochInfo`[ An epoch](../terminology.md#epoch) is the time, i.e. number of [slots](../terminology.md#slot), for which a [leader schedule](../terminology.md#leader-schedule) is valid. This will tell you what the current epoch is and how far into it the cluster is.
+* `getVoteAccounts` This will tell you how much active stake your validator currently has. A % of the validator's stake is activated on an epoch boundary. You can learn more about staking on Solana [here](../cluster/stake-delegation-and-rewards.md).
+* `getLeaderSchedule` At any given moment, the network expects only one validator to produce ledger entries. The [validator currently selected to produce ledger entries](../cluster/leader-rotation.md#leader-rotation) is called the “leader”.  This will return the complete leader schedule \(on a slot-by-slot basis\) for the current epoch. If you validator is scheduled to be leader based on its currently activated stake, the identity pubkey will show up 1 or more times here.
 
 ## Deactivating Stake
 

@@ -16,16 +16,7 @@ View the [metrics dashboard](https://metrics.solana.com:3000/d/testnet-beta/test
 
 ## Confirm your Installation
 
-Sanity check that you are able to interact with the cluster by receiving a small airdrop of lamports from the testnet drone:
-
-```bash
-solana set --url http://testnet.solana.com:8899
-solana get
-solana airdrop 123 lamports
-solana balance --lamports
-```
-
-Also try running following command to join the gossip network and view all the other nodes in the cluster:
+Try running following command to join the gossip network and view all the other nodes in the cluster:
 
 ```bash
 solana-gossip --entrypoint testnet.solana.com:8001 spy
@@ -64,12 +55,12 @@ If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VA
 
 To back-up your validator identify keypair, **back-up your "validator-keypair.json” file to a secure location.**
 
-### Wallet Configuration
+## Wallet Configuration
 
-You can set solana configuration to use your validator keypair for all following commands:
+You can set solana configuration to use your validator keypair and the stable testnet for all following commands:
 
 ```bash
-solana set --keypair ~/validator-keypair.json
+solana set set --url http://testnet.solana.com:8899 --keypair ~/validator-keypair.json
 ```
 
 You should see the following output:
@@ -80,21 +71,13 @@ Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
 * keypair: /home/solana/validator-keypair.json
 ```
 
-You can see the wallet configuration at any time by running:
+## Airdrop & Check Validator Balance
 
-```text
-solana get
-```
-
-**All following solana commands assume you have set `--keypair` config** to your validator identity keypair.\*\* If you haven't, you will need to add the `--keypair` argument to each command, for example:
+Airdrop yourself some SOL to get started:
 
 ```bash
-solana --keypair ~/validator-keypair.json airdrop 10
+solana airdrop 1000
 ```
-
-\(You can always override the set configuration by explicitly passing the `--keypair` argument with a command.\)
-
-### Check Validator Balance
 
 To view your current balance:
 
@@ -108,15 +91,25 @@ Or to see in finer detail:
 solana balance --lamports
 ```
 
-Read more about the [difference between SOL and lamports here](https://solana-labs.github.io/book/introduction.html?highlight=lamport#what-are-sols).
+Read more about the [difference between SOL and lamports here](../introduction.md#what-are-sols).
 
-## Validator Start
+## Create Vote Account
 
-Connect to a testnet cluster by running:
+If you haven’t already done so, create a vote-account keypair and create the vote account on the network. If you have completed this step, you should see the “validator-vote-keypair.json” in your Solana runtime directory:
 
 ```bash
-export SOLANA_METRICS_CONFIG="host=https://testnet-metrics.solana.com:8086,db=testnet,u=testnet_writer,p=dry_run"
+solana-keygen new -o ~/validator-vote-keypair.json
 ```
+
+Create your vote account on the blockchain:
+
+```bash
+solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json
+```
+
+## Connect Your Validator
+
+Connect to a testnet cluster by running:
 
 ```bash
 solana-validator --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json \
@@ -126,46 +119,13 @@ solana-validator --identity-keypair ~/validator-keypair.json --voting-keypair ~/
 
 To force validator logging to the console add a `--log -` argument, otherwise the validator will automatically log to a file.
 
-Confirm your validator connected to the network by running:
+Confirm your validator connected to the network by opening a new terminal and running:
 
 ```bash
 solana-gossip spy --entrypoint testnet.solana.com:8001
 ```
 
-This command will display all the nodes that are visible to the TdS network’s entrypoint. If your validator is connected, its public key and IP address will appear in the list.
-
-Airdrop yourself some SOL to get started:
-
-```bash
-solana airdrop 1000
-```
-
-Your validator will need a vote account. Create it now with the following commands:
-
-```bash
-solana-keygen new -o ~/validator-vote-keypair.json
-solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json
-```
-
-Then use one of the following commands, depending on your installation choice, to start the node:
-
-If this is a `solana-install`-installation:
-
-```bash
-solana-validator --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --entrypoint testnet.solana.com:8001
-```
-
-Alternatively, the `solana-install run` command can be used to run the validator node while periodically checking for and applying software updates:
-
-```bash
-solana-install run solana-validator -- --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 --entrypoint testnet.solana.com:8001
-```
-
-If you built from source:
-
-```bash
-NDEBUG=1 USE_INSTALL=1 ./multinode-demo/validator.sh --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --rpc-port 8899 --entrypoint testnet.solana.com:8001
-```
+If your validator is connected, its public key and IP address will appear in the list.
 
 ### Controlling local network port allocation
 
@@ -173,4 +133,4 @@ By default the validator will dynamically select available network ports in the 
 
 ### Limiting ledger size to conserve disk space
 
-By default the validator will retain the full ledger. To conserve disk space start the validator with the `--limit-ledger-size`, which will instruct the validator to only retain the last couple hours of ledger.
+The `--limit-ledger-size` arg will instruct the validator to only retain the last couple hours of ledger. To retain the full ledger, simply remove that arg.
