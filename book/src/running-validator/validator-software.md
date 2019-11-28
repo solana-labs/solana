@@ -1,17 +1,21 @@
 # Installing the Validator Software
 
-## Bootstrap with `solana-install`
-
-The `solana-install` tool can be used to easily install and upgrade the validator software on Linux x86\_64 and mac OS systems.
+Install the Solana release [v0.21.0](https://github.com/solana-labs/solana/releases/tag/v0.21.0) on your machine by running:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.18.0/install/solana-install-init.sh | sh -s
+curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.21.0/install/solana-install-init.sh | sh -s - 0.21.0
 ```
 
-Alternatively build the `solana-install` program from source and run the following command to obtain the same result:
+The following output indicates a successful update:
 
-```bash
-solana-install init
+```text
+looking for latest release
+downloading v0.21.0 installer
+Configuration: /home/solana/.config/solana/install/config.yml
+Active release directory: /home/solana/.local/share/solana/install/active_release
+* Release version: 0.21.0
+* Release URL: https://github.com/solana-labs/solana/releases/download/v0.21.0/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+Update successful
 ```
 
 After a successful install, `solana-install update` may be used to easily update the cluster software to a newer version at any time.
@@ -30,7 +34,7 @@ cd solana-release/
 export PATH=$PWD/bin:$PATH
 ```
 
-### mac OS
+### macOS
 
 Download the binaries by navigating to [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest), download **solana-release-x86\_64-apple-darwin.tar.bz2**, then extract the archive:
 
@@ -47,4 +51,10 @@ If you are unable to use the prebuilt binaries or prefer to build it yourself fr
 ```bash
 ./scripts/cargo-install-all.sh .
 export PATH=$PWD/bin:$PATH
+```
+
+You can then run the following command to obtain the same result as with prebuilt binaries:
+
+```bash
+solana-install init
 ```

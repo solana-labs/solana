@@ -16,6 +16,28 @@ For details about optional fields for VALIDATOR\_INFO\_ARGS:
 solana validator-info publish --help
 ```
 
+## Example Commands
+
+Example publish command:
+
+```bash
+solana validator-info publish "Elvis Validator" -n elvis -w "https://elvis-validates.com"
+```
+
+Example query command:
+
+```bash
+solana validator-info get
+```
+
+which outputs
+
+```text
+Validator info from 8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah
+  Validator pubkey: 6dMH3u76qZ7XG4bVboVRnBHR2FfrxEqTTTyj4xmyDMWo
+  Info: {"keybaseUsername":"elvis","name":"Elvis Validator","website":"https://elvis-validates.com"}
+```
+
 ## Keybase
 
 Including a Keybase username allows client applications \(like the Solana Network Explorer\) to automatically pull in your validator public profile, including cryptographic proofs, brand identity, etc. To connect your validator pubkey with Keybase:
