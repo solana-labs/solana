@@ -322,7 +322,7 @@ fn sign_shred_cpu(
     packet.data[0..sig_end].copy_from_slice(&signature.to_bytes());
 }
 
-fn sign_shreds_cpu(
+pub fn sign_shreds_cpu(
     batches: &mut [Packets],
     slot_leaders_pubkeys: &HashMap<u64, [u8; 32]>,
     slot_leaders_privkeys: &HashMap<u64, [u8; 32]>,
@@ -474,14 +474,20 @@ pub fn sign_shreds_gpu(
     recycler_cache.offsets().recycle(msg_sizes);
     recycler_cache.offsets().recycle(msg_start_offsets);
     let rvs = verify_shreds_cpu(batches, slot_leaders_pubkeys);
+    for r in rvs.iter() {
+        trace!("batch size: {}", r.len());
+    }
     for (ix, i) in rvs.into_iter().flatten().enumerate() {
-        assert!(i == 1, "failed to verify {}", ix);
+        if i == 0 {
+            trace!("failed to verify {}", ix);
+        }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::shred::SIZE_OF_DATA_SHRED_PAYLOAD;
     use crate::shred::{Shred, Shredder};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     #[test]
@@ -616,14 +622,26 @@ pub mod tests {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
-        let mut batch = [Packets::default()];
+        let mut packets = Packets::default();
+        let num_packets = 32;
+        let num_batches = 100;
         let slot = 0xdeadc0de;
+        packets.packets.resize(num_packets, Packet::default());
+        for p in packets.packets.iter_mut() {
+            let shred = Shred::new_from_data(
+                slot,
+                0xc0de,
+                0xdead,
+                Some(&[5; SIZE_OF_DATA_SHRED_PAYLOAD]),
+                true,
+                true,
+                1,
+                2,
+            );
+            shred.copy_to_packet(p);
+        }
+        let mut batch = vec![packets; num_batches];
         let keypair = Keypair::new();
-        let shred =
-            Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true, 0, 0);
-        batch[0].packets.resize(1, Packet::default());
-        batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batch[0].packets[0].meta.size = shred.payload.len();
         let pubkeys = [
             (slot, keypair.pubkey().to_bytes()),
             (std::u64::MAX, [0u8; 32]),
@@ -640,14 +658,14 @@ pub mod tests {
         .collect();
         //unsigned
         let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_cache);
-        assert_eq!(rv, vec![vec![0]]);
+        assert_eq!(rv, vec![vec![0; num_packets]; num_batches]);
         //signed
         sign_shreds_gpu(&mut batch, &pubkeys, &privkeys, &recycler_cache);
         let rv = verify_shreds_cpu(&batch, &pubkeys);
-        assert_eq!(rv, vec![vec![1]]);
+        assert_eq!(rv, vec![vec![1; num_packets]; num_batches]);
 
         let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_cache);
-        assert_eq!(rv, vec![vec![1]]);
+        assert_eq!(rv, vec![vec![1; num_packets]; num_batches]);
     }
 
     #[test]

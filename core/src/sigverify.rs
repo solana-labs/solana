@@ -40,7 +40,12 @@ pub fn mark_disabled(batches: &mut Vec<Packets>, r: &[Vec<u8>]) {
         b.packets
             .iter_mut()
             .zip(v)
-            .for_each(|(p, f)| p.meta.discard = *f == 0)
+            .for_each(|(p, f)| {
+                p.meta.discard = *f == 0;
+                if p.meta.discard {
+                    warn!("packet discarded by sigverify");
+                }
+            })
     });
 }
 
