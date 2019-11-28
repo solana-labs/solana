@@ -520,7 +520,7 @@ impl Blocktree {
 
         shreds.packets.iter().for_each(|packet| {
             if packet.meta.discard {
-                warn!("discarding packet");
+                debug!("packet discarded: blocktree discarding packet");
                 return;
             }
             let shred = Shred::from_packet(packet);
