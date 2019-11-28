@@ -95,9 +95,9 @@ pub struct ShredCommonHeader {
 }
 impl ShredCommonHeader {
     pub fn from_packet(packet: &Packet) -> Result<Self> {
-        let end = size_of::<ShredCommonHeader>();
-        let rv = limited_deserialize(&packet.data[..end])?;
-        Ok(rv)
+        let mut start = 0;
+        let common_header: ShredCommonHeader = Shred::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &packet.data)?;
+        Ok(common_header)
     }
     pub fn seed(&self) -> [u8; 32] {
         let mut seed = [0; 32];
@@ -123,6 +123,7 @@ pub struct CodingShredHeader {
     pub position: u16,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum ShredHeaders {
     Data {
         common_header: ShredCommonHeader,
@@ -136,18 +137,16 @@ pub enum ShredHeaders {
 
 impl ShredHeaders {
     pub fn from_packet(packet: &Packet) -> Result<Self> {
-        let common_header = ShredCommonHeader::from_packet(packet)?;
-        let start = size_of::<ShredCommonHeader>();
+        let mut start = 0;
+        let common_header: ShredCommonHeader = Shred::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &packet.data)?;
         if common_header.shred_type == ShredType(DATA_SHRED) {
-            let end = start + size_of::<DataShredHeader>();
-            let data_header = limited_deserialize(&packet.data[start..end])?;
+            let data_header: DataShredHeader = Shred::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &packet.data)?;
             Ok(ShredHeaders::Data {
                 common_header,
                 data_header,
             })
         } else if common_header.shred_type == ShredType(CODING_SHRED) {
-            let end = start + size_of::<CodingShredHeader>();
-            let coding_header = limited_deserialize(&packet.data[start..end])?;
+            let coding_header: CodingShredHeader = Shred::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &packet.data)?;
             Ok(ShredHeaders::Coding {
                 common_header,
                 coding_header,
@@ -1788,7 +1787,9 @@ pub mod tests {
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
         let packets = Shred::make_packets(&vec![shred.clone()]);
-        let from_packets = Shred::from_packets(vec![packets]);
+        let from_packets = Shred::from_packets(vec![packets.clone()]);
         assert_eq!(shred, from_packets[0]);
+        assert_eq!(shred.headers(), from_packets[0].headers());
+        assert_eq!(shred.headers(), ShredHeaders::from_packet(&packets.packets[0]).unwrap());
     }
 }
