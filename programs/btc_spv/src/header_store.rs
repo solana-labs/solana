@@ -5,7 +5,7 @@ use solana_sdk::pubkey::Pubkey;
 
 // HeaderStore is a data structure that allows linked list style cheap appends and
 // sequential reads, but also has a "lookup index" to speed up random access
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum HeaderStoreError {
     InvalidHeader,
     GroupExists,

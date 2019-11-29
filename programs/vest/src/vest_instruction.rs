@@ -10,7 +10,7 @@ use solana_sdk::{
     system_instruction,
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
+#[derive(Debug, Clone, PartialEq, FromPrimitive)]
 pub enum VestError {
     DestinationMissing,
     Unauthorized,

@@ -1,5 +1,4 @@
 use num_derive::{FromPrimitive, ToPrimitive};
-use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     instruction_processor_utils::DecodeError,
@@ -7,7 +6,7 @@ use solana_sdk::{
     system_instruction,
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum OwnableError {
     IncorrectOwner,
 }
