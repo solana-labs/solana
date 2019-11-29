@@ -562,7 +562,7 @@ impl Shredder {
         let now = Instant::now();
         let serialized_shreds =
             bincode::serialize(entries).expect("Expect to serialize all entries");
-        let serialize_time = now.elapsed().as_millis();
+        let serialize_time = now.elapsed().as_micros();
         let now = Instant::now();
 
         let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD;
@@ -613,7 +613,7 @@ impl Shredder {
                     .collect()
             })
         });
-        let gen_data_time = now.elapsed().as_millis();
+        let gen_data_time = now.elapsed().as_micros();
         datapoint_debug!(
             "shredding-stats",
             ("slot", self.slot as i64, i64),
@@ -671,7 +671,7 @@ impl Shredder {
         privkeys.insert(std::u64::MAX, [0u8; 32]);
         //sigverify_shreds::sign_shreds_gpu(&mut data_shreds, &pubkeys, &privkeys, recycler_cache);
         sigverify_shreds::sign_shreds_cpu(&mut data_shreds, &pubkeys, &privkeys);
-        let sign_data_time = now.elapsed().as_millis();
+        let sign_data_time = now.elapsed().as_micros();
 
         let now = Instant::now();
         // 2) Generate coding shreds
@@ -691,12 +691,12 @@ impl Shredder {
                     .collect()
             })
         });
-        let gen_coding_time = now.elapsed().as_millis();
+        let gen_coding_time = now.elapsed().as_micros();
 
         let now = Instant::now();
         //sigverify_shreds::sign_shreds_gpu(&mut coding_shreds, &pubkeys, &privkeys, recycler_cache);
         sigverify_shreds::sign_shreds_cpu(&mut coding_shreds, &pubkeys, &privkeys);
-        let sign_coding_time = now.elapsed().as_millis();
+        let sign_coding_time = now.elapsed().as_micros();
 
         datapoint_debug!(
             "shredding-stats",
