@@ -31,6 +31,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use thiserror::Error;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -224,18 +225,19 @@ pub struct BankForksInfo {
     pub bank_slot: u64,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq)]
 pub enum BlocktreeProcessorError {
+    #[error("failed to load entries")]
     FailedToLoadEntries,
-    FailedToLoadMeta,
-    InvalidBlock(BlockError),
-    InvalidTransaction,
-}
 
-impl From<BlockError> for BlocktreeProcessorError {
-    fn from(block_error: BlockError) -> Self {
-        BlocktreeProcessorError::InvalidBlock(block_error)
-    }
+    #[error("failed to load meta")]
+    FailedToLoadMeta,
+
+    #[error("invalid block")]
+    InvalidBlock(#[from] BlockError),
+
+    #[error("invalid transaction")]
+    InvalidTransaction,
 }
 
 /// Callback for accessing bank state while processing the blocktree

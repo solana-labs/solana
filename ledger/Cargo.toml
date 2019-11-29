@@ -44,6 +44,7 @@ solana-stake-program = { path = "../programs/stake", version = "0.22.0" }
 solana-vote-program = { path = "../programs/vote", version = "0.22.0" }
 sys-info = "0.5.8"
 tar = "0.4.26"
+thiserror = "1.0"
 tempfile = "3.1.0"
 
 [dependencies.rocksdb]

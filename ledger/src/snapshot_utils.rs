@@ -14,6 +14,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use tar::Archive;
+use thiserror::Error;
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
@@ -25,31 +26,18 @@ pub struct SlotSnapshotPaths {
     pub snapshot_file_path: PathBuf,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum SnapshotError {
-    IO(std::io::Error),
-    Serialize(std::boxed::Box<bincode::ErrorKind>),
-    FsExtra(fs_extra::error::Error),
+    #[error("I/O error")]
+    IO(#[from] std::io::Error),
+
+    #[error("serialization error")]
+    Serialize(#[from] Box<bincode::ErrorKind>),
+
+    #[error("file system error")]
+    FsExtra(#[from] fs_extra::error::Error),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
-
-impl std::convert::From<std::io::Error> for SnapshotError {
-    fn from(e: std::io::Error) -> SnapshotError {
-        SnapshotError::IO(e)
-    }
-}
-
-impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for SnapshotError {
-    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> SnapshotError {
-        SnapshotError::Serialize(e)
-    }
-}
-
-impl std::convert::From<fs_extra::error::Error> for SnapshotError {
-    fn from(e: fs_extra::error::Error) -> SnapshotError {
-        SnapshotError::FsExtra(e)
-    }
-}
 
 impl PartialOrd for SlotSnapshotPaths {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

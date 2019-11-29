@@ -21,6 +21,7 @@ use solana_sdk::{
 };
 use std::mem::size_of;
 use std::{sync::Arc, time::Instant};
+use thiserror::Error;
 
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
@@ -52,21 +53,22 @@ pub const SHRED_TICK_REFERENCE_MASK: u8 = 0b0011_1111;
 const LAST_SHRED_IN_SLOT: u8 = 0b1000_0000;
 pub const DATA_COMPLETE_SHRED: u8 = 0b0100_0000;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ShredError {
+    #[error("invalid shred type")]
     InvalidShredType,
-    InvalidFecRate(f32), // FEC rate must be more than 0.0 and less than 1.0
-    SlotTooLow { slot: Slot, parent_slot: Slot }, // "Current slot must be > Parent slot, but the difference must not be > u16::MAX
-    Serialize(std::boxed::Box<bincode::ErrorKind>),
+
+    #[error("invalid FEC rate; must be 0.0 < {0} < 1.0")]
+    InvalidFecRate(f32),
+
+    #[error("slot too low; current slot {slot} must be above parent slot {parent_slot}, but the difference must be below u16::MAX")]
+    SlotTooLow { slot: Slot, parent_slot: Slot },
+
+    #[error("serialization error")]
+    Serialize(#[from] Box<bincode::ErrorKind>),
 }
 
 pub type Result<T> = std::result::Result<T, ShredError>;
-
-impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for ShredError {
-    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> ShredError {
-        ShredError::Serialize(e)
-    }
-}
 
 #[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
 pub struct ShredType(pub u8);

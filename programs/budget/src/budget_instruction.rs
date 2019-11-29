@@ -10,9 +10,11 @@ use solana_sdk::{
     pubkey::Pubkey,
     system_instruction,
 };
+use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum BudgetError {
+    #[error("destination missing")]
     DestinationMissing,
 }
 
@@ -21,19 +23,6 @@ impl<T> DecodeError<T> for BudgetError {
         "BudgetError"
     }
 }
-
-impl std::fmt::Display for BudgetError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                BudgetError::DestinationMissing => "destination missing",
-            }
-        )
-    }
-}
-impl std::error::Error for BudgetError {}
 
 /// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
