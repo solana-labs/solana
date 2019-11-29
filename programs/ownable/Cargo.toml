@@ -1,7 +1,7 @@
 [package]
-name = "solana-ownable-api"
+name = "solana-ownable"
 version = "0.22.0"
-description = "ownable program API"
+description = "ownable program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -20,5 +20,5 @@ num-traits = "0.2"
 solana-runtime = { path = "../../runtime", version = "0.22.0" }
 
 [lib]
-crate-type = ["lib"]
-name = "solana_ownable_api"
+crate-type = ["lib", "cdylib"]
+name = "solana_ownable"

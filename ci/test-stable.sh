@@ -96,7 +96,7 @@ test-move)
     ^ci/test-stable.sh \
     ^ci/test-move.sh \
     ^programs/move_loader \
-    ^programs/librapay_api \
+    ^programs/librapay \
     ^logger/ \
     ^runtime/ \
     ^sdk/ \
@@ -106,7 +106,7 @@ test-move)
     exit 0
   }
   _ cargo +"$rust_stable" test --manifest-path programs/move_loader/Cargo.toml ${V:+--verbose} -- --nocapture
-  _ cargo +"$rust_stable" test --manifest-path programs/librapay_api/Cargo.toml ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --manifest-path programs/librapay/Cargo.toml ${V:+--verbose} -- --nocapture
   exit 0
   ;;
 test-local-cluster)

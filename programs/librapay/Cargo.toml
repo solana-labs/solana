@@ -1,5 +1,5 @@
 [package]
-name = "solana-librapay-api"
+name = "solana-librapay"
 version = "0.22.0"
 description = "Solana Libra Payment"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
@@ -19,5 +19,5 @@ language_e2e_tests = { version = "0.0.1-sol4", package = "solana_libra_language_
 types = { version = "0.0.1-sol4", package = "solana_libra_types" }
 
 [lib]
-crate-type = ["lib"]
-name = "solana_librapay_api"
+crate-type = ["lib", "cdylib"]
+name = "solana_librapay"

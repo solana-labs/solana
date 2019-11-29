@@ -5,7 +5,7 @@ use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
 #[cfg(feature = "move")]
-use solana_librapay_api::{create_genesis, upload_mint_script, upload_payment_script};
+use solana_librapay::{create_genesis, upload_mint_script, upload_payment_script};
 use solana_measure::measure::Measure;
 use solana_metrics::{self, datapoint_debug};
 use solana_sdk::{
@@ -37,7 +37,7 @@ const MAX_TX_QUEUE_AGE: u64 =
     MAX_PROCESSING_AGE as u64 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
 
 #[cfg(feature = "move")]
-use solana_librapay_api::librapay_transaction;
+use solana_librapay::librapay_transaction;
 
 pub const MAX_SPENDS_PER_TX: u64 = 4;
 

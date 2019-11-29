@@ -99,7 +99,7 @@ The Stake account is moved from Ininitialized to StakeState::Stake form. This is
 * `account[0]` - RW - The StakeState::Stake instance.  `StakeState::Stake::credits_observed` is initialized to `VoteState::credits`,  `StakeState::Stake::voter_pubkey` is initialized to `account[1]`.  If this is the initial delegation of stake, `StakeState::Stake::stake` is initialized to the account's balance in lamports,  `StakeState::Stake::activated` is initialized to the current Bank epoch, and  `StakeState::Stake::deactivated` is initialized to std::u64::MAX
 * `account[1]` - R - The VoteState instance.
 * `account[2]` - R - sysvar::clock account, carries information about current Bank epoch
-* `account[3]` - R - stake\_api::Config accoount, carries warmup, cooldown, and slashing configuration
+* `account[3]` - R - stake::Config accoount, carries warmup, cooldown, and slashing configuration
 
 ### StakeInstruction::Authorize\(Pubkey, StakeAuthorize\)
 
