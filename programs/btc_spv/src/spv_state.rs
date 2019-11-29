@@ -399,7 +399,7 @@ impl Default for AccountState {
 }
 
 ///Errors
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SpvError {
     InvalidBlockHeader,
     // blockheader is malformed or out of order

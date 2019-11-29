@@ -38,7 +38,7 @@ impl Credits {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
+#[derive(Debug, Clone, PartialEq, FromPrimitive)]
 pub enum StorageError {
     InvalidSegment,
     InvalidBlockhash,

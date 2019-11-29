@@ -17,7 +17,7 @@ use solana_sdk::{
 };
 
 /// Reasons the stake might have had an error
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum StakeError {
     NoCreditsToRedeem,
     LockupInForce,

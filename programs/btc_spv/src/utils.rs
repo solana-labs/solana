@@ -30,7 +30,7 @@ impl fmt::Display for DecodeHexError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LengthError {
     OddLength,
     Maximum(u32),

@@ -33,7 +33,7 @@ members = [
     "programs/exchange",
     "programs/failure",
     "programs/noop",
-    "programs/ownable_api",
+    "programs/ownable",
     "programs/stake",
     "programs/stake_tests",
     "programs/storage",
@@ -55,5 +55,5 @@ members = [
 exclude = [
     "programs/bpf",
     "programs/move_loader",
-    "programs/librapay_api",
+    "programs/librapay",
 ]

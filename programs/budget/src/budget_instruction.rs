@@ -11,7 +11,7 @@ use solana_sdk::{
     system_instruction,
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum BudgetError {
     DestinationMissing,
 }

@@ -3131,7 +3131,7 @@ dependencies = [
  "solana-core 0.22.0",
  "solana-drone 0.22.0",
  "solana-genesis 0.22.0",
- "solana-librapay-api 0.22.0",
+ "solana-librapay 0.22.0",
  "solana-local-cluster 0.22.0",
  "solana-logger 0.22.0",
  "solana-measure 0.22.0",
@@ -3599,7 +3599,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-librapay-api"
+name = "solana-librapay"
 version = "0.22.0"
 dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3766,7 +3766,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-ownable-api"
+name = "solana-ownable"
 version = "0.22.0"
 dependencies = [
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
