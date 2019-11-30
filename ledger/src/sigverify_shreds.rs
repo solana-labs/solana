@@ -69,7 +69,7 @@ fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, [u8; 32]>)
                 .into_par_iter()
                 .map(|p| {
                     p.packets
-                        .iter()
+                        .par_iter()
                         .map(|p| verify_shred_cpu(p, slot_leaders).unwrap_or(0))
                         .collect()
                 })
@@ -333,7 +333,7 @@ pub fn sign_shreds_cpu(
     PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches.par_iter_mut().for_each(|p| {
-                p.packets.iter_mut().for_each(|mut p| {
+                p.packets[..].par_iter_mut().for_each(|mut p| {
                     sign_shred_cpu(&mut p, slot_leaders_pubkeys, slot_leaders_privkeys)
                 });
             });

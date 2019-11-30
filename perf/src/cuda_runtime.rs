@@ -156,6 +156,15 @@ impl<'a, T: Send + Sync> IntoParallelIterator for &'a PinnedVec<T> {
     }
 }
 
+impl<'a, T: Send + Sync> IntoParallelRefMutIterator<'a> for &'a mut PinnedVec<T> {
+    type Iter = rayon::slice::IterMut<'a, T>;
+    type Item = &'a mut T;
+    fn par_iter_mut(&'a mut self) -> Self::Iter {
+        self.x.par_iter_mut()
+    }
+}
+
+
 impl<T: Clone> PinnedVec<T> {
     pub fn reserve_and_pin(&mut self, size: usize) {
         if self.x.capacity() < size {
