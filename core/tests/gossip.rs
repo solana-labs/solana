@@ -6,7 +6,6 @@ use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::gossip_service::GossipService;
 
 use solana_core::packet::Packet;
-use solana_core::result;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
@@ -66,7 +65,7 @@ where
 }
 /// ring a -> b -> c -> d -> e -> a
 #[test]
-fn gossip_ring() -> result::Result<()> {
+fn gossip_ring() {
     solana_logger::setup();
     run_gossip_topo(50, |listen| {
         let num = listen.len();
@@ -80,14 +79,12 @@ fn gossip_ring() -> result::Result<()> {
             xv.insert_info(d);
         }
     });
-
-    Ok(())
 }
 
 /// ring a -> b -> c -> d -> e -> a
 #[test]
 #[ignore]
-fn gossip_ring_large() -> result::Result<()> {
+fn gossip_ring_large() {
     solana_logger::setup();
     run_gossip_topo(600, |listen| {
         let num = listen.len();
@@ -101,8 +98,6 @@ fn gossip_ring_large() -> result::Result<()> {
             xv.insert_info(d);
         }
     });
-
-    Ok(())
 }
 /// star a -> (b,c,d,e)
 #[test]
@@ -144,7 +139,7 @@ fn gossip_rstar() {
 }
 
 #[test]
-pub fn cluster_info_retransmit() -> result::Result<()> {
+pub fn cluster_info_retransmit() {
     solana_logger::setup();
     let exit = Arc::new(AtomicBool::new(false));
     trace!("c1:");
@@ -177,7 +172,7 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
     p.meta.size = 10;
     let peers = c1.read().unwrap().retransmit_peers();
     let retransmit_peers: Vec<_> = peers.iter().collect();
-    ClusterInfo::retransmit_to(&retransmit_peers, &mut p, None, &tn1, false)?;
+    ClusterInfo::retransmit_to(&retransmit_peers, &mut p, None, &tn1, false).unwrap();
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {
@@ -194,6 +189,4 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
     dr1.join().unwrap();
     dr2.join().unwrap();
     dr3.join().unwrap();
-
-    Ok(())
 }

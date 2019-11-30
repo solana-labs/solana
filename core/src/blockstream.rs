@@ -2,13 +2,13 @@
 //! local unix socket, to provide client services such as a block explorer with
 //! real-time access to entries.
 
-use crate::result::Result;
 use bincode::serialize;
 use chrono::{SecondsFormat, Utc};
 use serde_json::json;
 use solana_ledger::entry::Entry;
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::cell::RefCell;
+use std::io::Result;
 use std::path::{Path, PathBuf};
 
 pub trait EntryWriter: std::fmt::Debug {
@@ -61,10 +61,10 @@ impl EntryWriter for EntrySocket {
     }
     #[cfg(windows)]
     fn write(&self, _payload: String) -> Result<()> {
-        Err(crate::result::Error::from(std::io::Error::new(
+        Err(std::io::Error::new(
             std::io::ErrorKind::Other,
             "EntryWriter::write() not implemented for windows",
-        )))
+        ))
     }
 }
 
