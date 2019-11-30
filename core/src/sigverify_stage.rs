@@ -6,10 +6,9 @@
 //! if perf-libs are available
 
 use crate::packet::Packets;
-use crate::result::{Error, Result};
 use crate::sigverify;
-use crate::streamer::{self, PacketReceiver};
-use crossbeam_channel::Sender as CrossbeamSender;
+use crate::streamer::{self, PacketReceiver, StreamerError};
+use crossbeam_channel::{SendError, Sender as CrossbeamSender};
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_debug;
 use solana_perf::perf_libs;
@@ -17,9 +16,21 @@ use solana_sdk::timing;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
+use thiserror::Error;
 
 const RECV_BATCH_MAX_CPU: usize = 1_000;
 const RECV_BATCH_MAX_GPU: usize = 5_000;
+
+#[derive(Error, Debug)]
+pub enum SigVerifyServiceError {
+    #[error("send packets batch error")]
+    SendError(#[from] SendError<Vec<Packets>>),
+
+    #[error("streamer error")]
+    StreamerError(#[from] StreamerError),
+}
+
+type Result<T> = std::result::Result<T, SigVerifyServiceError>;
 
 pub struct SigVerifyStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -78,9 +89,7 @@ impl SigVerifyStage {
         let verified_batch = verifier.verify_batch(batch);
 
         for v in verified_batch {
-            if sendr.send(vec![v]).is_err() {
-                return Err(Error::SendError);
-            }
+            sendr.send(vec![v])?;
         }
 
         verify_batch_time.stop();
@@ -118,9 +127,13 @@ impl SigVerifyStage {
             .spawn(move || loop {
                 if let Err(e) = Self::verifier(&packet_receiver, &verified_sender, id, &verifier) {
                     match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::SendError => {
+                        SigVerifyServiceError::StreamerError(StreamerError::RecvTimeoutError(
+                            RecvTimeoutError::Disconnected,
+                        )) => break,
+                        SigVerifyServiceError::StreamerError(StreamerError::RecvTimeoutError(
+                            RecvTimeoutError::Timeout,
+                        )) => (),
+                        SigVerifyServiceError::SendError(_) => {
                             break;
                         }
                         _ => error!("{:?}", e),

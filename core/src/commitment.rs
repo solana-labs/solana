@@ -1,4 +1,3 @@
-use crate::result::{Error, Result};
 use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_program::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
@@ -113,15 +112,10 @@ impl AggregateCommitmentService {
                             break;
                         }
 
-                        if let Err(e) = Self::run(&receiver, &block_commitment_cache, &exit_) {
-                            match e {
-                                Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                                _ => info!(
-                                    "Unexpected error from AggregateCommitmentService: {:?}",
-                                    e
-                                ),
-                            }
+                        if let Err(RecvTimeoutError::Disconnected) =
+                            Self::run(&receiver, &block_commitment_cache, &exit_)
+                        {
+                            break;
                         }
                     })
                     .unwrap(),
@@ -133,7 +127,7 @@ impl AggregateCommitmentService {
         receiver: &Receiver<CommitmentAggregationData>,
         block_commitment_cache: &RwLock<BlockCommitmentCache>,
         exit: &Arc<AtomicBool>,
-    ) -> Result<()> {
+    ) -> Result<(), RecvTimeoutError> {
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());

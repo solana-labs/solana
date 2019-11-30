@@ -1,14 +1,14 @@
-use crate::result::{Error, Result};
 use bincode::serialize_into;
 use solana_ledger::snapshot_package::{SnapshotPackage, SnapshotPackageReceiver};
-use solana_ledger::snapshot_utils::{self, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
+use solana_ledger::snapshot_utils::{self, SnapshotError, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::status_cache::SlotDelta;
 use solana_sdk::transaction::Result as TransactionResult;
 use std::fs;
 use std::fs::File;
-use std::io::{BufWriter, Error as IOError, ErrorKind};
+use std::io::BufWriter;
+use std::process::ExitStatus;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::Arc;
@@ -16,6 +16,30 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use symlink;
 use tempfile::TempDir;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum SnapshotServiceError {
+    #[error("I/O error")]
+    IO(#[from] std::io::Error),
+
+    #[error("serialization error")]
+    Serialize(#[from] Box<bincode::ErrorKind>),
+
+    #[error("receive timeout error")]
+    RecvTimeoutError(#[from] RecvTimeoutError),
+
+    #[error("snapshot error")]
+    SnapshotError(#[from] SnapshotError),
+
+    #[error("archive generation failure {0}")]
+    ArchiveGenerationFailure(ExitStatus),
+
+    #[error("storage path symlink is invalid")]
+    StoragePathSymlinkInvalid,
+}
+
+type Result<T> = std::result::Result<T, SnapshotServiceError>;
 
 pub struct SnapshotPackagerService {
     t_snapshot_packager: JoinHandle<()>,
@@ -32,8 +56,10 @@ impl SnapshotPackagerService {
                 }
                 if let Err(e) = Self::run(&snapshot_package_receiver) {
                     match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        SnapshotServiceError::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
+                            break
+                        }
+                        SnapshotServiceError::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                         _ => info!("Error from package_snapshots: {:?}", e),
                     }
                 }
@@ -91,9 +117,7 @@ impl SnapshotPackagerService {
                 fs::canonicalize(storage_path).expect("Could not get absolute path for accounts");
             symlink::symlink_dir(storage_path, &output_path)?;
             if !output_path.is_file() {
-                return Err(Self::get_io_error(
-                    "Error trying to generate snapshot archive: storage path symlink is invalid",
-                ));
+                return Err(SnapshotServiceError::StoragePathSymlinkInvalid);
             }
         }
 
@@ -115,10 +139,9 @@ impl SnapshotPackagerService {
             info!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
             info!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
 
-            return Err(Self::get_io_error(&format!(
-                "Error trying to generate snapshot archive: {}",
-                output.status
-            )));
+            return Err(SnapshotServiceError::ArchiveGenerationFailure(
+                output.status,
+            ));
         }
 
         // Once everything is successful, overwrite the previous tarball so that other validators
@@ -152,11 +175,6 @@ impl SnapshotPackagerService {
         Ok(())
     }
 
-    fn get_io_error(error: &str) -> Error {
-        warn!("Snapshot Packaging Error: {:?}", error);
-        Error::IO(IOError::new(ErrorKind::Other, error))
-    }
-
     fn serialize_status_cache(
         slot_deltas: &[SlotDelta<TransactionResult<()>>],
         snapshot_links: &TempDir,
@@ -172,8 +190,7 @@ impl SnapshotPackagerService {
 
         let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
         // write the status cache
-        serialize_into(&mut status_cache_stream, slot_deltas)
-            .map_err(|_| Self::get_io_error("serialize status cache error"))?;
+        serialize_into(&mut status_cache_stream, slot_deltas)?;
         status_cache_serialize.stop();
         inc_new_counter_info!(
             "serialize-status-cache-ms",
