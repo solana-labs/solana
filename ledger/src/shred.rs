@@ -17,7 +17,7 @@ use solana_metrics::datapoint_debug;
 use solana_perf::packet::batch_size;
 use solana_perf::packet::limited_deserialize;
 use solana_perf::packet::Packets;
-use solana_perf::recycler_cache::RecyclerCache;
+use solana_perf::recycler_cache::{RecyclerCache, PACKETS_CAPACITY};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     clock::Slot,
@@ -575,11 +575,11 @@ impl Shredder {
                 serialized_shreds
                     .par_chunks(no_header_size)
                     .enumerate()
-                    .chunks(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
+                    .chunks(PACKETS_CAPACITY)
                     .map(|chunk| {
                         let mut packets = Packets::new_with_recycler(
                             recycler_cache.packets().clone(),
-                            MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
+                            PACKETS_CAPACITY as usize,
                             "data shreds",
                         );
                         for (i, shred_data) in &chunk {
@@ -751,32 +751,42 @@ impl Shredder {
         data_shred_batch: &Packets,
         version: u16,
     ) -> Option<Packets> {
+        // Create empty coding shreds, with correctly populated headers
+        let mut coding_shreds = Packets::new_with_recycler(
+            recycler_cache.packets().clone(),
+            PACKETS_CAPACITY as usize,
+            "coding shreds",
+        );
         assert!(!data_shred_batch.packets.is_empty());
-        if fec_rate != 0.0 {
-            let num_data = data_shred_batch.packets.len();
+        for i in 0..(data_shred_batch.packets.len() / MAX_DATA_SHREDS_PER_FEC_BLOCK as usize) + 1 {
+            let start = i * MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
+            let end = std::cmp::min(
+                data_shred_batch.packets.len(),
+                start + MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
+            );
+            let packets = &data_shred_batch.packets[start..end];
+            let num_data = packets.len();
+            if num_data == 0 {
+                continue;
+            }
+            assert!(num_data <= MAX_DATA_SHREDS_PER_FEC_BLOCK as usize);
             // always generate at least 1 coding shred even if the fec_rate doesn't allow it
             let num_coding = Self::calculate_num_coding_shreds(num_data as f32, fec_rate);
+            assert!(num_coding > 0);
             let session =
                 Session::new(num_data, num_coding).expect("Failed to create erasure session");
-            let common_header = ShredCommonHeader::from_packet(&data_shred_batch.packets[0])
-                .expect("invalid packet");
+            let common_header =
+                ShredCommonHeader::from_packet(&packets[0]).expect("invalid packet");
             let start_index = common_header.index;
 
             // All information after coding shred field in a data shred is encoded
             let valid_data_len = PACKET_DATA_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
-            let data_ptrs: Vec<_> = data_shred_batch
-                .packets
+            let data_ptrs: Vec<_> = packets
                 .iter()
                 .map(|packet| &packet.data[..valid_data_len])
                 .collect();
 
-            // Create empty coding shreds, with correctly populated headers
-            let mut coding_shreds = Packets::new_with_recycler(
-                recycler_cache.packets().clone(),
-                MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
-                "data shreds",
-            );
-
+            let start = coding_shreds.packets.len();
             (0..num_coding).for_each(|i| {
                 let (header, coding_header) = Self::new_coding_shred_header(
                     slot,
@@ -795,8 +805,7 @@ impl Shredder {
 
             // Grab pointers for the coding blocks
             let coding_block_offset = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
-            let mut coding_ptrs: Vec<_> = coding_shreds
-                .packets
+            let mut coding_ptrs: Vec<_> = coding_shreds.packets[start..]
                 .iter_mut()
                 .map(|packet| &mut packet.data[coding_block_offset..])
                 .collect();
@@ -805,6 +814,8 @@ impl Shredder {
             session
                 .encode(&data_ptrs, coding_ptrs.as_mut_slice())
                 .expect("Failed in erasure encode");
+        }
+        if fec_rate != 0.0 {
             Some(coding_shreds)
         } else {
             None

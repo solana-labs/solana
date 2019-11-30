@@ -3,6 +3,8 @@ use crate::packet::PacketsRecycler;
 use crate::recycler::Recycler;
 use crate::sigverify::TxOffset;
 
+pub const PACKETS_CAPACITY: usize = 1024;
+
 #[derive(Default, Clone)]
 pub struct RecyclerCache {
     recycler_packets: PacketsRecycler,
@@ -13,7 +15,7 @@ pub struct RecyclerCache {
 impl RecyclerCache {
     pub fn warmed() -> Self {
         Self {
-            recycler_packets: Recycler::warmed(1000, 1024),
+            recycler_packets: Recycler::warmed(1000, PACKETS_CAPACITY),
             recycler_offsets: Recycler::warmed(50, 4096),
             recycler_buffer: Recycler::warmed(50, 4096),
         }
