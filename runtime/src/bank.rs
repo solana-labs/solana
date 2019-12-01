@@ -1253,7 +1253,14 @@ impl Bank {
     fn distribute_rent(&self) {
         let total_rent_collected = self.collected_rent.load(Ordering::Relaxed);
 
-        if total_rent_collected == 0 {
+        let burned_portion =
+            (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
+        let rent_to_be_distributed = total_rent_collected - burned_portion;
+
+        self.capitalization
+            .fetch_sub(burned_portion, Ordering::Relaxed);
+
+        if rent_to_be_distributed == 0 {
             return;
         }
 
@@ -1263,14 +1270,7 @@ impl Bank {
         }
         let vote_account_hashmap = vote_account_hashmap.unwrap();
 
-        let burned_portion =
-            (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
-        let rent_to_be_distributed = total_rent_collected - burned_portion;
-
         self.distribute_rent_to_validators(vote_account_hashmap, rent_to_be_distributed);
-
-        self.capitalization
-            .fetch_sub(burned_portion, Ordering::Relaxed);
     }
 
     fn collect_rent(&self, res: &[Result<()>], loaded_accounts: &[Result<TransactionLoadResult>]) {
@@ -2265,6 +2265,8 @@ mod tests {
         assert_eq!(bank.get_balance(&payee.pubkey()), 159);
         total_rent_deducted += 70 + 21;
 
+        let previous_capitalization = bank.capitalization.load(Ordering::Relaxed);
+
         bank.freeze();
 
         assert_eq!(
@@ -2272,8 +2274,9 @@ mod tests {
             total_rent_deducted
         );
 
-        let rent_to_be_distributed = total_rent_deducted
-            - total_rent_deducted * u64::from(bank.rent_collector.rent.burn_percent) / 100;
+        let burned_portion =
+            total_rent_deducted * u64::from(bank.rent_collector.rent.burn_percent) / 100;
+        let rent_to_be_distributed = total_rent_deducted - burned_portion;
 
         let bootstrap_leader_portion =
             ((bootstrap_leader_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
@@ -2301,6 +2304,13 @@ mod tests {
         assert_eq!(
             bank.get_balance(&validator_3_pubkey),
             validator_3_portion + 42
+        );
+
+        let current_capitalization = bank.capitalization.load(Ordering::Relaxed);
+
+        assert_eq!(
+            previous_capitalization - current_capitalization,
+            burned_portion
         );
     }
 
