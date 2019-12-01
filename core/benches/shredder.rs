@@ -36,6 +36,11 @@ fn bench_shredder_ticks(bencher: &mut Bencher) {
     // ~1Mb
     let num_ticks = max_ticks_per_n_shreds(1) * num_shreds as u64;
     let entries = create_ticks(num_ticks, 0, Hash::default());
+    //warmup
+    for _ in 0..1000 {
+        let shredder = Shredder::new(1, 0, RECOMMENDED_FEC_RATE, kp.clone(), 0, 0).unwrap();
+        shredder.entries_to_shreds(&recycler, &entries, true, 0);
+    }
     bencher.iter(|| {
         let shredder = Shredder::new(1, 0, RECOMMENDED_FEC_RATE, kp.clone(), 0, 0).unwrap();
         shredder.entries_to_shreds(&recycler, &entries, true, 0);
