@@ -244,7 +244,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("The account to which the lamports should be transfered")
+                        .help("The account to which the lamports should be transferred")
                 )
                 .arg(
                     Arg::with_name("amount")
