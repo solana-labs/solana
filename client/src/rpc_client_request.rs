@@ -56,6 +56,10 @@ impl GenericRpcClientRequest for RpcClientRequest {
                 .send()
             {
                 Ok(mut response) => {
+                    if !response.status().is_success() {
+                        return Err(response.error_for_status().unwrap_err().into());
+                    }
+
                     let json: serde_json::Value = serde_json::from_str(&response.text()?)?;
                     if json["error"].is_object() {
                         return Err(RpcError::RpcRequestError(format!(
