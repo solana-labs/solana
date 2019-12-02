@@ -40,7 +40,10 @@ Validator info from 8WdJvDz6obhADdxpGCiJKZsDYwTLNEDFizayqziDc9ah
 
 ## Keybase
 
-Including a Keybase username allows client applications \(like the Solana Network Explorer\) to automatically pull in your validator public profile, including cryptographic proofs, brand identity, etc. To connect your validator pubkey with Keybase:
+Including a Keybase username allows client applications \(like the Solana
+Network Explorer\) to automatically pull in your validator public profile,
+including cryptographic proofs, brand identity, etc. To connect your validator
+pubkey with Keybase:
 
 1. Join [https://keybase.io/](https://keybase.io/) and complete the profile for your validator
 2. Add your validator **identity pubkey** to Keybase:
