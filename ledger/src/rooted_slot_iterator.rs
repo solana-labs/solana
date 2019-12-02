@@ -1,3 +1,4 @@
+use crate::blocktree_db::Result;
 use crate::{blocktree::*, blocktree_meta::SlotMeta};
 use log::*;
 use solana_sdk::clock::Slot;

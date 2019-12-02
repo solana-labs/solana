@@ -36,7 +36,7 @@ pub enum BankForksError {
     #[error("snapshot package send error")]
     SnapshotPackageSendError(#[from] SnapshotPackageSendError),
 }
-pub type Result<T> = std::result::Result<T, BankForksError>;
+type Result<T> = std::result::Result<T, BankForksError>;
 
 pub struct BankForks {
     pub banks: HashMap<Slot, Arc<Bank>>,

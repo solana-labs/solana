@@ -45,7 +45,7 @@ pub enum BlocktreeError {
     IO(#[from] std::io::Error),
     Serialize(#[from] Box<bincode::ErrorKind>),
 }
-pub type Result<T> = std::result::Result<T, BlocktreeError>;
+pub(crate) type Result<T> = std::result::Result<T, BlocktreeError>;
 
 impl std::fmt::Display for BlocktreeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
