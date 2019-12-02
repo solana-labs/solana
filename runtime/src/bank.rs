@@ -10,8 +10,7 @@ use crate::{
     nonce_utils,
     rent_collector::RentCollector,
     serde_utils::{
-        deserialize_atomicbool, deserialize_atomicu64, deserialize_for_snapshot,
-        serialize_atomicbool, serialize_atomicu64,
+        deserialize_atomicbool, deserialize_atomicu64, serialize_atomicbool, serialize_atomicu64,
     },
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -1877,6 +1876,7 @@ mod tests {
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_LEADER_LAMPORTS,
         },
+        serde_utils::deserialize_for_snapshot,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use bincode::{deserialize_from, serialize_into, serialized_size};
