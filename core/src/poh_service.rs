@@ -31,6 +31,7 @@ impl PohService {
         let tick_producer = Builder::new()
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
+                solana_sys_tuner::request_system_tuning();
                 if poh_config.hashes_per_tick.is_none() {
                     if poh_config.target_tick_count.is_none() {
                         Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
@@ -48,7 +49,6 @@ impl PohService {
                     if let Some(cores) = core_affinity::get_core_ids() {
                         core_affinity::set_for_current(cores[0]);
                     }
-                    solana_sys_tuner::request_system_tuning();
                     Self::tick_producer(poh_recorder, &poh_exit_);
                 }
                 poh_exit_.store(true, Ordering::Relaxed);
