@@ -1225,10 +1225,9 @@ impl Bank {
                 VoteState::deserialize(&account.data)
                     .ok()
                     .map(|vote_state| (vote_state.node_pubkey, *staked))
+                    .filter(|(_pubkey, staked)| *staked != 0)
             })
             .collect::<HashMap<Pubkey, u64>>();
-
-        assert!(total_staked > 0);
 
         node_stakes.iter().for_each(|(pubkey, staked)| {
             let rent_to_be_paid =
