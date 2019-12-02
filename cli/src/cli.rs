@@ -1,6 +1,7 @@
 use crate::{
     cluster_query::*,
     display::{println_name_value, println_signers},
+    nonce::*,
     stake::*,
     storage::*,
     validator_info::*,
@@ -206,6 +207,22 @@ pub enum CliCommand {
     },
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
     Witness(Pubkey, Pubkey),                    // Witness(to, process_id)
+    // Nonce commands
+    CreateNonceAccount {
+        nonce_account: KeypairEq,
+        lamports: u64,
+    },
+    NewNonce(KeypairEq),
+    GetNonce(Pubkey),
+    WithdrawFromNonceAccount {
+        nonce_account: KeypairEq,
+        destination_account_pubkey: Pubkey,
+        lamports: u64,
+    },
+    ShowNonceAccount {
+        nonce_account_pubkey: Pubkey,
+        use_lamports_unit: bool,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -497,6 +514,15 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
                 require_keypair: true,
             })
         }
+        // Nonce Commands
+        ("create-nonce-account", Some(matches)) => parse_nonce_create_account(matches),
+        ("new-nonce", Some(matches)) => parse_new_nonce(matches),
+        ("get-nonce", Some(matches)) => parse_get_nonce(matches),
+        ("withdraw-from-nonce-account", Some(matches)) => {
+            parse_withdraw_from_nonce_account(matches)
+        }
+        ("show-nonce-account", Some(matches)) => parse_show_nonce_account(matches),
+        //
         ("", None) => {
             eprintln!("{}", matches.usage());
             Err(CliError::CommandNotRecognized(
@@ -1304,6 +1330,39 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         }
         // Apply witness signature to contract
         CliCommand::Witness(to, pubkey) => process_witness(&rpc_client, config, &to, &pubkey),
+
+        // Nonce Commands
+
+        // Create nonce account
+        CliCommand::CreateNonceAccount {
+            nonce_account,
+            lamports,
+        } => process_create_nonce_account(&rpc_client, config, nonce_account, *lamports),
+        // Get a new nonce
+        CliCommand::NewNonce(nonce_account) => {
+            process_new_nonce(&rpc_client, config, nonce_account)
+        }
+        // Show the contents of a nonce account
+        CliCommand::GetNonce(nonce_account_pubkey) => {
+            process_get_nonce(&rpc_client, &nonce_account_pubkey)
+        }
+        // Withdraw lamports from nonce account
+        CliCommand::WithdrawFromNonceAccount {
+            nonce_account,
+            destination_account_pubkey,
+            lamports,
+        } => process_withdraw_from_nonce_account(
+            &rpc_client,
+            config,
+            &nonce_account,
+            &destination_account_pubkey,
+            *lamports,
+        ),
+        // Show the contents of a nonce account
+        CliCommand::ShowNonceAccount {
+            nonce_account_pubkey,
+            use_lamports_unit,
+        } => process_show_nonce_account(&rpc_client, &nonce_account_pubkey, *use_lamports_unit),
     }
 }
 
@@ -1431,6 +1490,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("/path/to/program.o"),
                 ),
         )
+        .nonce_subcommands()
         .stake_subcommands()
         .storage_subcommands()
         .subcommand(
