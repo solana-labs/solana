@@ -3945,24 +3945,41 @@ mod tests {
         let (mut genesis_config, _) = create_genesis_config(100_000_000);
         add_lotsa_stake_accounts(&mut genesis_config);
         let mut bank = std::sync::Arc::new(Bank::new(&genesis_config));
-        let mut i = 0;
+        let mut num_banks = 0;
+        let pid = std::process::id();
+        #[cfg(not(target_os = "linux"))]
+        error!(
+            "\nYou can run this to watch RAM:\n   while read -p 'banks: '; do echo $(( $(ps -h -o %z --pid={})/$REPLY));done", pid
+        );
         loop {
-            i += 1;
+            num_banks += 1;
             bank = std::sync::Arc::new(new_from_parent(&bank));
-            if i % 100 == 0 {
-                let mem = std::fs::read_to_string(format!("/proc/{}/statm", std::process::id()))
-                    .unwrap()
-                    .split_whitespace()
-                    .next()
-                    .unwrap()
-                    .parse::<usize>()
-                    .unwrap();
-                error!(
-                    "at {} banks: {} mem or {}kB/bank",
-                    i,
-                    mem * 4096,
-                    (mem * 4) / i
-                );
+            if num_banks % 100 == 0 {
+                #[cfg(target_os = "linux")]
+                {
+                    let pages_consumed = std::fs::read_to_string(format!("/proc/{}/statm", pid))
+                        .unwrap()
+                        .split_whitespace()
+                        .next()
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap();
+                    error!(
+                        "at {} banks: {} mem or {}kB/bank",
+                        num_banks,
+                        pages_consumed * 4096,
+                        (pages_consumed * 4) / num_banks
+                    );
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    error!(
+                        "{} banks, get mem usage for pid {} from ps or activity monitor, sleeping for 5 sec",
+                        num_banks,
+                        pid
+                    );
+                    std::thread::sleep(Duration::new(5, 0));
+                }
             }
         }
     }
