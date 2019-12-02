@@ -61,6 +61,14 @@ impl SlotSnapshotPaths {
     }
 }
 
+pub fn limited_deserialize_from<R, T>(reader: R) -> bincode::Result<T>
+where
+    R: std::io::Read,
+    T: serde::de::DeserializeOwned,
+{
+    bincode::config().limit(1).deserialize_from(reader)
+}
+
 pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     bank: &Bank,
     snapshot_files: &SlotSnapshotPaths,
@@ -190,7 +198,7 @@ pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<u64> {
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
     let file = File::open(&last_root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
-    let bank: Bank = deserialize_from(&mut stream)?;
+    let bank: Bank = limited_deserialize_from(&mut stream)?;
     Ok(bank.slot())
 }
 
@@ -273,7 +281,7 @@ where
     info!("Loading from {:?}", &root_paths.snapshot_file_path);
     let file = File::open(&root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
-    let bank: Bank = deserialize_from(&mut stream)?;
+    let bank: Bank = limited_deserialize_from(&mut stream)?;
 
     // Rebuild accounts
     bank.rc
@@ -284,7 +292,7 @@ where
     let status_cache = File::open(status_cache_path)?;
     let mut stream = BufReader::new(status_cache);
     let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
-        deserialize_from(&mut stream).unwrap_or_default();
+        limited_deserialize_from(&mut stream).unwrap_or_default();
 
     bank.src.append(&slot_deltas);
 
