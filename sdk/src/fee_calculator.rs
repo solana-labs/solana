@@ -25,7 +25,7 @@ pub struct FeeCalculator {
     pub burn_percent: u8,
 }
 
-pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 100_000;
+pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 10_000;
 pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: usize =
     50_000 * DEFAULT_TICKS_PER_SLOT as usize / DEFAULT_TICKS_PER_SECOND as usize;
 pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
