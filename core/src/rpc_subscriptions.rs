@@ -313,7 +313,6 @@ impl RpcSubscriptions {
     }
 
     pub fn notify_slot(&self, slot: Slot, parent: Slot, root: Slot) {
-        info!("notify_slot!! {} from {} (root={})", slot, parent, root);
         let subscriptions = self.slot_subscriptions.read().unwrap();
         for (_, sink) in subscriptions.iter() {
             sink.notify(Ok(SlotInfo { slot, parent, root }))
