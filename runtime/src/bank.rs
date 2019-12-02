@@ -180,7 +180,7 @@ pub struct Bank {
     /// Hash of this Bank's parent's state
     parent_hash: Hash,
 
-    parent_slot: u64,
+    parent_slot: Slot,
 
     /// The number of transactions processed without error
     #[serde(serialize_with = "serialize_atomicu64")]
@@ -665,7 +665,7 @@ impl Bank {
         self.rc.parent.read().unwrap().clone()
     }
 
-    pub fn parent_slot(&self) -> u64 {
+    pub fn parent_slot(&self) -> Slot {
         self.parent_slot
     }
 
