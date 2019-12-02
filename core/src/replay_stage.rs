@@ -9,6 +9,7 @@ use crate::{
     rpc_subscriptions::RpcSubscriptions,
     thread_mem_usage,
 };
+use chrono::prelude::*;
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
@@ -22,23 +23,23 @@ use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
-    clock::Slot,
+    clock::{Slot, DEFAULT_TIMESTAMP_INTERVAL_MINS},
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
-    timing::{self, duration_as_ms},
+    timing::{self, duration_as_ms, slots_per_interval},
     transaction::Transaction,
 };
 use solana_vote_program::vote_instruction;
 use std::{
-    collections::HashMap,
-    collections::HashSet,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
-    sync::{Arc, Mutex, RwLock},
+    collections::{HashMap, HashSet},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{channel, Receiver, RecvTimeoutError, Sender},
+        Arc, Mutex, RwLock,
+    },
     thread::{self, Builder, JoinHandle},
-    time::Duration,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
@@ -655,8 +656,14 @@ impl ReplayStage {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
 
             // Send our last few votes along with the new one
+            let mut last_vote = tower.last_vote();
+            let timestamp_interval =
+                slots_per_interval(bank.slots_per_year(), DEFAULT_TIMESTAMP_INTERVAL_MINS);
+            if bank.slot() % timestamp_interval == 0 {
+                last_vote.timestamp = Some(Utc::now().timestamp());
+            }
             let vote_ix =
-                vote_instruction::vote(&vote_account, &voting_keypair.pubkey(), tower.last_vote());
+                vote_instruction::vote(&vote_account, &voting_keypair.pubkey(), last_vote);
 
             let mut vote_tx =
                 Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));

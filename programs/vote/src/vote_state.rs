@@ -8,7 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
-    clock::{Epoch, Slot},
+    clock::{Epoch, Slot, UnixTimestamp},
     hash::Hash,
     instruction::InstructionError,
     pubkey::Pubkey,
@@ -32,11 +32,17 @@ pub struct Vote {
     pub slots: Vec<Slot>,
     /// signature of the bank's state at the last slot
     pub hash: Hash,
+    /// processing timestamp of last slot
+    pub timestamp: Option<UnixTimestamp>,
 }
 
 impl Vote {
     pub fn new(slots: Vec<Slot>, hash: Hash) -> Self {
-        Self { slots, hash }
+        Self {
+            slots,
+            hash,
+            timestamp: None,
+        }
     }
 }
 

@@ -180,10 +180,7 @@ impl Tower {
         last_bank_slot: Option<Slot>,
     ) -> (Vote, usize) {
         let mut local_vote_state = local_vote_state.clone();
-        let vote = Vote {
-            slots: vec![slot],
-            hash,
-        };
+        let vote = Vote::new(vec![slot], hash);
         local_vote_state.process_vote_unchecked(&vote);
         let slots = if let Some(last_bank_slot) = last_bank_slot {
             local_vote_state
@@ -201,7 +198,7 @@ impl Tower {
             slots,
             local_vote_state.votes
         );
-        (Vote { slots, hash }, local_vote_state.votes.len() - 1)
+        (Vote::new(slots, hash), local_vote_state.votes.len() - 1)
     }
 
     fn last_bank_vote(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
@@ -235,10 +232,7 @@ impl Tower {
     }
 
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
-        let vote = Vote {
-            slots: vec![slot],
-            hash,
-        };
+        let vote = Vote::new(vec![slot], hash);
         self.record_bank_vote(vote)
     }
 
@@ -791,6 +785,7 @@ mod test {
         let vote = Vote {
             slots: vec![0],
             hash: Hash::default(),
+            timestamp: None,
         };
         local.process_vote_unchecked(&vote);
         assert_eq!(local.votes.len(), 1);
@@ -805,6 +800,7 @@ mod test {
         let vote = Vote {
             slots: vec![0],
             hash: Hash::default(),
+            timestamp: None,
         };
         local.process_vote_unchecked(&vote);
         assert_eq!(local.votes.len(), 1);

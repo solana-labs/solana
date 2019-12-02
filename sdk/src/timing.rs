@@ -47,6 +47,12 @@ pub fn slot_duration_from_slots_per_year(slots_per_year: f64) -> Duration {
     Duration::from_nanos(slot_in_ns as u64)
 }
 
+/// From slots per year to slots per some minutes, rounded
+pub fn slots_per_interval(slots_per_year: f64, interval_mins: u64) -> u64 {
+    let seconds = interval_mins * 60;
+    (slots_per_year * seconds as f64 / SECONDS_PER_YEAR).round() as u64
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -91,5 +97,16 @@ mod test {
             slot_duration_from_slots_per_year(slots_per_year),
             Duration::from_millis(1000) * ticks_per_slot
         );
+    }
+
+    #[test]
+    fn test_slots_per_interval() {
+        let slots_per_year = 1_262_277_039.0;
+
+        assert_eq!(slots_per_interval(slots_per_year, 1), 2400);
+        assert_eq!(slots_per_interval(slots_per_year, 4), 9600);
+        assert_eq!(slots_per_interval(slots_per_year, 30), 72000);
+        assert_eq!(slots_per_interval(slots_per_year, 0), 0);
+        assert_eq!(slots_per_interval(0.0, 30), 0);
     }
 }
