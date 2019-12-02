@@ -1225,7 +1225,7 @@ impl Bank {
                 total_staked += *staked;
                 VoteState::deserialize(&account.data)
                     .ok()
-                    .and_then(|vote_state| Some((*staked, vote_state.node_pubkey)))
+                    .map(|vote_state| (*staked, vote_state.node_pubkey))
             })
             .collect::<HashMap<u64, Pubkey>>()
             .drain()
