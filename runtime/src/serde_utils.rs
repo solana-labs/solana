@@ -61,10 +61,21 @@ where
     s.serialize_bool(x.load(Ordering::Relaxed))
 }
 
+// This is used for starting validator one shot to deserialize snapshot
 pub fn limited_deserialize_from<R, T>(reader: R) -> bincode::Result<T>
 where
     R: std::io::Read,
     T: serde::de::DeserializeOwned,
 {
-    bincode::config().limit(1).deserialize_from(reader)
+    let mem_info = sys_info::mem_info();
+
+    if let Ok(mem_info) = mem_info {
+        // use as much as memory while maintaining 20% memory available so as not to trigger our earlyoom
+        eprintln!("use at most {:#?}", mem_info);
+        let mem_limit = mem_info.total.saturating_sub(mem_info.total / 5);
+        //let mem_limit = mem_info.avail.saturating_sub(mem_info.total / 5);
+        bincode::config().limit(mem_limit).deserialize_from(reader)
+    } else {
+        bincode::config().deserialize_from(reader)
+    }
 }
