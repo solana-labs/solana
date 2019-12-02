@@ -41,6 +41,19 @@ export SOLANA_CUDA=1
 When your validator is started look for the following log message to indicate
 that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
+## Tune System
+
+For Linux validators, the solana repo includes a script to adjust system
+settings to optimize performance (namely by increasing the OS UDP buffer limits).
+
+Download the script here: https://github.com/solana-labs/solana/blob/master/scripts/tune-system.sh
+
+And run:
+
+```bash
+./tune-system.sh
+```
+
 ## Generate identity
 
 Create an identity keypair for your validator by running:
@@ -67,9 +80,19 @@ ALLOCATION OF LAMPORTS TOO.
 To back-up your validator identify keypair, **back-up your
 "validator-keypair.json” file to a secure location.**
 
+### Vanity Keypair
+
+You can generate a custom vanity keypair using solana-keygen. For instance:
+
+```bash
+solana-keygen grind --starts-with e1v1s
+```
+
+Depending on the string requested, it may take days to find a match...
+
 ## Wallet Configuration
 
-You can set solana configuration to use your validator keypair and the stable
+Set solana configuration to use your validator keypair and the stable
 testnet for all following commands:
 
 ```bash
