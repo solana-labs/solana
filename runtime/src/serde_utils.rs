@@ -74,7 +74,7 @@ where
         // allow use of memory as much as possible while maintaining 20% memory available so as not to trigger our earlyoom
         let mem_limit = mem_info.total.saturating_sub(mem_info.total / 5);
         //let mem_limit = mem_info.avail.saturating_sub(mem_info.total / 5);
-        eprintln!("use at most {} {:#?}", mem_limit, mem_info);
+        //eprintln!("use at most {} {:#?}", mem_limit, mem_info);
         bincode::config().limit(mem_limit).deserialize_from(reader)
     } else {
         bincode::config().deserialize_from(reader)
