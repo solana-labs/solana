@@ -1683,7 +1683,7 @@ mod tests {
         system_instruction,
         sysvar::{fees::Fees, rewards::Rewards},
     };
-    use solana_stake_program::stake_state::{Delegation, Stake};
+    use solana_stake_program::stake_state::{Authorized, Delegation, Lockup, Stake};
     use solana_vote_program::{
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
@@ -3920,5 +3920,67 @@ mod tests {
             bank1.register_tick(&Hash::default());
         }
         assert_ne!(bank1.hash_internal_state(), hash1);
+    }
+
+    #[ignore]
+    #[test]
+    fn test_banks_leak() {
+        fn add_lotsa_stake_accounts(genesis_config: &mut GenesisConfig) {
+            const LOTSA: usize = 4_096;
+
+            (0..LOTSA).for_each(|_| {
+                let pubkey = Pubkey::new_rand();
+                genesis_config.add_account(
+                    pubkey,
+                    solana_stake_program::stake_state::create_lockup_stake_account(
+                        &Authorized::auto(&pubkey),
+                        &Lockup::default(),
+                        &Rent::default(),
+                        42,
+                    ),
+                );
+            });
+        }
+        solana_logger::setup();
+        let (mut genesis_config, _) = create_genesis_config(100_000_000);
+        add_lotsa_stake_accounts(&mut genesis_config);
+        let mut bank = std::sync::Arc::new(Bank::new(&genesis_config));
+        let mut num_banks = 0;
+        let pid = std::process::id();
+        #[cfg(not(target_os = "linux"))]
+        error!(
+            "\nYou can run this to watch RAM:\n   while read -p 'banks: '; do echo $(( $(ps -h -o %z --pid={})/$REPLY));done", pid
+        );
+        loop {
+            num_banks += 1;
+            bank = std::sync::Arc::new(new_from_parent(&bank));
+            if num_banks % 100 == 0 {
+                #[cfg(target_os = "linux")]
+                {
+                    let pages_consumed = std::fs::read_to_string(format!("/proc/{}/statm", pid))
+                        .unwrap()
+                        .split_whitespace()
+                        .next()
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap();
+                    error!(
+                        "at {} banks: {} mem or {}kB/bank",
+                        num_banks,
+                        pages_consumed * 4096,
+                        (pages_consumed * 4) / num_banks
+                    );
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    error!(
+                        "{} banks, get mem usage for pid {} from ps or activity monitor, sleeping for 5 sec",
+                        num_banks,
+                        pid
+                    );
+                    std::thread::sleep(Duration::new(5, 0));
+                }
+            }
+        }
     }
 }

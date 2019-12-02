@@ -24,3 +24,11 @@ solana-stake-program = { path = "../programs/stake", version = "0.22.0" }
 solana-storage-program = { path = "../programs/storage", version = "0.22.0" }
 solana-vote-program = { path = "../programs/vote", version = "0.22.0" }
 tempfile = "3.1.0"
+
+[[bin]]
+name = "solana-genesis"
+path = "src/main.rs"
+
+
+[lib]
+name = "solana_genesis"

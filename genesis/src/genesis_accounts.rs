@@ -614,7 +614,7 @@ fn add_stakes(
         .sum::<u64>()
 }
 
-pub(crate) fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
+pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
     add_stakes(
         genesis_config,
         &BATCH_ONE_STAKER_INFOS,

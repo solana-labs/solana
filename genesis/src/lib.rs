@@ -1,3 +1,8 @@
+pub mod address_generator;
+pub mod genesis_accounts;
+pub mod stakes;
+pub mod unlocks;
+
 use serde::{Deserialize, Serialize};
 
 /// An account where the data is encoded as a Base64 string.
