@@ -4,7 +4,7 @@ use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
-use solana_runtime::{bank::Bank, status_cache::SlotDelta, serde_utils::limited_deserialize_from};
+use solana_runtime::{bank::Bank, status_cache::SlotDelta, serde_utils::deserialize_for_snapshot};
 use solana_sdk::{clock::Slot, transaction};
 use std::{
     cmp::Ordering,
@@ -190,7 +190,7 @@ pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<u64> {
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
     let file = File::open(&last_root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
-    let bank: Bank = limited_deserialize_from(&mut stream)?;
+    let bank: Bank = deserialize_for_snapshot(&mut stream)?;
     Ok(bank.slot())
 }
 
@@ -273,7 +273,7 @@ where
     info!("Loading from {:?}", &root_paths.snapshot_file_path);
     let file = File::open(&root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
-    let bank: Bank = limited_deserialize_from(&mut stream)?;
+    let bank: Bank = deserialize_for_snapshot(&mut stream)?;
 
     // Rebuild accounts
     bank.rc
@@ -284,7 +284,7 @@ where
     let status_cache = File::open(status_cache_path)?;
     let mut stream = BufReader::new(status_cache);
     let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
-        limited_deserialize_from(&mut stream).unwrap_or_default();
+        deserialize_for_snapshot(&mut stream).unwrap_or_default();
 
     bank.src.append(&slot_deltas);
 

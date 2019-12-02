@@ -20,7 +20,7 @@
 
 use crate::accounts_index::AccountsIndex;
 use crate::append_vec::{AppendVec, StoredAccount, StoredMeta};
-use crate::serde_utils::limited_deserialize_from;
+use crate::serde_utils::deserialize_for_snapshot;
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use fs_extra::dir::CopyOptions;
@@ -461,7 +461,7 @@ impl AccountsDB {
         let _len: usize =
             deserialize_from(&mut stream).map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
         let storage: AccountStorage =
-            limited_deserialize_from(&mut stream).map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
+            deserialize_for_snapshot(&mut stream).map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
 
         // Remap the deserialized AppendVec paths to point to correct local paths
         let new_storage_map: Result<HashMap<Slot, SlotStores>, IOError> = storage
