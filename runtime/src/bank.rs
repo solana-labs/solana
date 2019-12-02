@@ -1446,20 +1446,6 @@ impl Bank {
         self.rc
             .accounts
             .verify_hash_internal_state(self.slot(), &self.ancestors)
-            && !self.has_accounts_with_zero_lamports()
-    }
-
-    fn has_accounts_with_zero_lamports(&self) -> bool {
-        self.rc.accounts.accounts_db.scan_accounts(
-            &self.ancestors,
-            |collector: &mut bool, option| {
-                if let Some((_, account, _)) = option {
-                    if account.lamports == 0 {
-                        *collector = true;
-                    }
-                }
-            },
-        )
     }
 
     /// Return the number of hashes per tick
@@ -2316,10 +2302,6 @@ mod tests {
         );
     }
 
-    fn assert_no_zero_balance_accounts(bank: &Arc<Bank>) {
-        assert!(!bank.has_accounts_with_zero_lamports());
-    }
-
     // Test that purging 0 lamports accounts works.
     #[test]
     fn test_purge_empty_accounts() {
@@ -2337,8 +2319,6 @@ mod tests {
         }
 
         bank.purge_zero_lamport_accounts();
-
-        assert_no_zero_balance_accounts(&bank);
 
         let bank0 = Arc::new(new_from_parent(&bank));
         let blockhash = bank.last_blockhash();
@@ -2378,7 +2358,6 @@ mod tests {
         bank1.purge_zero_lamport_accounts();
 
         assert!(bank1.verify_hash_internal_state());
-        assert_no_zero_balance_accounts(&bank1);
     }
 
     #[test]
