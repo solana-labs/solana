@@ -1221,12 +1221,11 @@ impl Bank {
 
         vote_account_hashmap
             .iter()
-            .map(|(_vote_pubkey, (staked, account))| {
+            .filter_map(|(_vote_pubkey, (staked, account))| {
                 total_staked += *staked;
                 VoteState::deserialize(&account.data)
                     .ok()
-                    .map(|vote_state| (*staked, vote_state.node_pubkey))
-                    .unwrap_or((0, Pubkey::default()))
+                    .and_then(|vote_state| Some((*staked, vote_state.node_pubkey)))
             })
             .collect::<HashMap<u64, Pubkey>>()
             .drain()
