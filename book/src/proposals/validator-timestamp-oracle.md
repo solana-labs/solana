@@ -30,24 +30,26 @@ Requirements:
 
 ## Recording Time
 
-At regular intervals, each validator records its observed time by submitting a
-VoteWithTimestamp instruction to the cluster as it is voting on a particular
-slot. In addition to the normal Vote data, the instruction contains the slot
-index and the validator's system time as Unix timestamp (seconds since the Unix
-epoch). It is signed by the validator's identity keypair as a usual Vote.
+At regular intervals as it is voting on a particular slot, each validator
+records its observed time by including a timestamp in its Vote instruction
+submission. The corresponding slot for the timestamp is the newest Slot in the
+Vote vector (`Vote::slots.iter().max()`). It is signed by the validator's
+identity keypair as a usual Vote. In order to enable this reporting, the Vote
+struct needs to be extended to include a timestamp field, `timestamp:
+Option<UnixTimestamp>`, which will be set to `None` in most Votes.
 
-This proposal suggests that VoteWithTimestamp instructions be issued every
-30min, which should be short enough to prevent block times drifting very much,
-without adding too much transaction overhead to the cluster. Validators can
-convert this time to a slot interval using the `slots_per_year` value that is
-stored in each bank.
+This proposal suggests that Vote instructions with `Some(timestamp)` be issued
+every 30min, which should be short enough to prevent block times drifting very
+much, without adding too much transaction overhead to the cluster. Validators
+can convert this time to a slot interval using the `slots_per_year` value that
+is stored in each bank.
 
 ```text
 let seconds_in_30min = 1800;
 let timestamp_interval = (slots_per_year / SECONDS_PER_YEAR) * seconds_in_30min;
 ```
 
-The VoteWithTimestamp variation should be triggered in `replay_stage::handle_votable_bank()`
+Votes with `Some(timestamp)` should be triggered in `replay_stage::handle_votable_bank()`
 when `bank.slot() % timestamp_interval == 0`.
 
 ### Vote Accounts
@@ -56,12 +58,13 @@ A validator's vote account will hold its most recent slot-timestamp in VoteState
 
 ### Vote Program
 
-The on-chain Vote program needs to be extended to process a VoteWithTimestamp
-instruction from validators. In addition to its current process_vote
+The on-chain Vote program needs to be extended to process a timestamp sent with
+a Vote instruction from validators. In addition to its current process_vote
 functionality (including loading the correct Vote account and verifying that the
 transaction signer is the expected validator), this process needs to compare the
-slot and timestamp to the currently stored values to verify that they are both
-monotonically increasing, and store the new slot and timestamp in the account.
+timestamp and corresponding slot to the currently stored values to verify that
+they are both monotonically increasing, and store the new slot and timestamp in
+the account.
 
 ## Calculating Stake-Weighted Mean Timestamp
 
@@ -110,9 +113,9 @@ builds/replays the ledger.
 
 2. This proposal doesn't address the 4th requirement, that each validator must
 maintain a timestamp oracle. Even though timestamps are tied to voting, there
-are no lockout implications if a validator does not use VoteWithTimestamp. One
-sociological approach would be to include timestamp expectations in validator
-uptime calculations, where uptime is redefined as a function of a validator both
-promptly submitting votes and timestamps over an epoch. This might require
-storing more information about historical timestamps in the vote account,
-however.
+are no lockout implications if a validator does not ever included timestamps
+with Votes. One sociological approach would be to include timestamp expectations
+in validator uptime calculations, where uptime is redefined as a function of a
+validator both promptly submitting votes and timestamps over an epoch. This
+might require storing more information about historical timestamps in the vote
+account, however.
