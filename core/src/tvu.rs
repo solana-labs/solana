@@ -8,7 +8,7 @@ use crate::{
     ledger_cleanup_service::LedgerCleanupService,
     partition_cfg::PartitionCfg,
     poh_recorder::PohRecorder,
-    replay_stage::ReplayStage,
+    replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
     rpc_subscriptions::RpcSubscriptions,
     shred_fetch_stage::ShredFetchStage,
@@ -65,9 +65,9 @@ impl Tvu {
     /// * `sockets` - fetch, repair, and retransmit sockets
     /// * `blocktree` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new<T>(
+    pub fn new(
         vote_account: &Pubkey,
-        voting_keypair: Option<&Arc<T>>,
+        voting_keypair: Option<Arc<Keypair>>,
         storage_keypair: &Arc<Keypair>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -87,10 +87,7 @@ impl Tvu {
         cfg: Option<PartitionCfg>,
         shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> Self
-    where
-        T: 'static + KeypairUtil + Sync + Send,
-    {
+    ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()
             .expect("Unable to read from cluster_info during Tvu creation")
@@ -162,23 +159,25 @@ impl Tvu {
             }
         };
 
-        let (replay_stage, root_bank_receiver) = ReplayStage::new(
-            &keypair.pubkey(),
-            vote_account,
+        let replay_stage_config = ReplayStageConfig {
+            my_pubkey: keypair.pubkey(),
+            vote_account: *vote_account,
             voting_keypair,
-            blocktree.clone(),
-            &bank_forks,
-            cluster_info.clone(),
-            &exit,
+            blocktree: blocktree.clone(),
+            bank_forks: bank_forks.clone(),
+            cluster_info: cluster_info.clone(),
+            exit: exit.clone(),
             ledger_signal_receiver,
-            subscriptions,
-            poh_recorder,
-            leader_schedule_cache,
-            vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
+            subscriptions: subscriptions.clone(),
+            poh_recorder: poh_recorder.clone(),
+            leader_schedule_cache: leader_schedule_cache.clone(),
+            slot_full_senders: vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
             snapshot_package_sender,
             block_commitment_cache,
             transaction_status_sender,
-        );
+        };
+
+        let (replay_stage, root_bank_receiver) = ReplayStage::new(replay_stage_config);
 
         let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
             let blockstream_service = BlockstreamService::new(
@@ -284,7 +283,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
-            Some(&Arc::new(voting_keypair)),
+            Some(Arc::new(voting_keypair)),
             &storage_keypair,
             &Arc::new(RwLock::new(bank_forks)),
             &cref1,

@@ -25,7 +25,7 @@ use solana_sdk::{
     clock::Slot,
     hash::Hash,
     pubkey::Pubkey,
-    signature::KeypairUtil,
+    signature::{Keypair, KeypairUtil},
     timing::{self, duration_as_ms},
     transaction::Transaction,
 };
@@ -62,6 +62,24 @@ impl Drop for Finalizer {
     fn drop(&mut self) {
         self.exit_sender.clone().store(true, Ordering::Relaxed);
     }
+}
+
+pub struct ReplayStageConfig {
+    pub my_pubkey: Pubkey,
+    pub vote_account: Pubkey,
+    pub voting_keypair: Option<Arc<Keypair>>,
+    pub blocktree: Arc<Blocktree>,
+    pub bank_forks: Arc<RwLock<BankForks>>,
+    pub cluster_info: Arc<RwLock<ClusterInfo>>,
+    pub exit: Arc<AtomicBool>,
+    pub ledger_signal_receiver: Receiver<bool>,
+    pub subscriptions: Arc<RpcSubscriptions>,
+    pub poh_recorder: Arc<Mutex<PohRecorder>>,
+    pub leader_schedule_cache: Arc<LeaderScheduleCache>,
+    pub slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
+    pub snapshot_package_sender: Option<SnapshotPackageSender>,
+    pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+    pub transaction_status_sender: Option<TransactionStatusSender>,
 }
 
 pub struct ReplayStage {
@@ -162,51 +180,39 @@ impl ForkProgress {
 }
 
 impl ReplayStage {
-    #[allow(
-        clippy::new_ret_no_self,
-        clippy::too_many_arguments,
-        clippy::type_complexity
-    )]
-    pub fn new<T>(
-        my_pubkey: &Pubkey,
-        vote_account: &Pubkey,
-        voting_keypair: Option<&Arc<T>>,
-        blocktree: Arc<Blocktree>,
-        bank_forks: &Arc<RwLock<BankForks>>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
-        exit: &Arc<AtomicBool>,
-        ledger_signal_receiver: Receiver<bool>,
-        subscriptions: &Arc<RpcSubscriptions>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
-        snapshot_package_sender: Option<SnapshotPackageSender>,
-        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-        transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> (Self, Receiver<Vec<Arc<Bank>>>)
-    where
-        T: 'static + KeypairUtil + Send + Sync,
-    {
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new(config: ReplayStageConfig) -> (Self, Receiver<Vec<Arc<Bank>>>) {
+        let ReplayStageConfig {
+            my_pubkey,
+            vote_account,
+            voting_keypair,
+            blocktree,
+            bank_forks,
+            cluster_info,
+            exit,
+            ledger_signal_receiver,
+            subscriptions,
+            poh_recorder,
+            leader_schedule_cache,
+            slot_full_senders,
+            snapshot_package_sender,
+            block_commitment_cache,
+            transaction_status_sender,
+        } = config;
+
         let (root_bank_sender, root_bank_receiver) = channel();
         trace!("replay stage");
-        let exit_ = exit.clone();
-        let subscriptions = subscriptions.clone();
-        let bank_forks = bank_forks.clone();
-        let poh_recorder = poh_recorder.clone();
-        let my_pubkey = *my_pubkey;
         let mut tower = Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
+
         // Start the replay stage loop
-        let leader_schedule_cache = leader_schedule_cache.clone();
-        let vote_account = *vote_account;
-        let voting_keypair = voting_keypair.cloned();
 
         let (lockouts_sender, commitment_service) =
-            AggregateCommitmentService::new(exit, block_commitment_cache);
+            AggregateCommitmentService::new(&exit, block_commitment_cache);
 
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
-                let _exit = Finalizer::new(exit_.clone());
+                let _exit = Finalizer::new(exit.clone());
                 let mut progress = HashMap::new();
                 // Initialize progress map with any root banks
                 for bank in bank_forks.read().unwrap().frozen_banks().values() {
@@ -224,7 +230,7 @@ impl ReplayStage {
                     thread_mem_usage::datapoint("solana-replay-stage");
                     let now = Instant::now();
                     // Stop getting entries if we get exit signal
-                    if exit_.load(Ordering::Relaxed) {
+                    if exit.load(Ordering::Relaxed) {
                         break;
                     }
 
@@ -593,13 +599,13 @@ impl ReplayStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn handle_votable_bank<T>(
+    fn handle_votable_bank(
         bank: &Arc<Bank>,
         bank_forks: &Arc<RwLock<BankForks>>,
         tower: &mut Tower,
         progress: &mut HashMap<u64, ForkProgress>,
         vote_account: &Pubkey,
-        voting_keypair: &Option<Arc<T>>,
+        voting_keypair: &Option<Arc<Keypair>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -607,10 +613,7 @@ impl ReplayStage {
         total_staked: u64,
         lockouts_sender: &Sender<CommitmentAggregationData>,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
-    ) -> Result<()>
-    where
-        T: 'static + KeypairUtil + Send + Sync,
-    {
+    ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
