@@ -36,7 +36,7 @@ snapshot. With that set, the validator can follow the procedure detailed in the
 
 For the sections below:
 
-Assume an arbitrary locktower state `L`, a snapshot root `S`, and a trusted
+Assume an arbitrary tower state `L`, a snapshot root `S`, and a trusted
 bank slot `T` (defined in step 7-1 of the `Boot Procedure` section).
 
 Define `L_i` to be: The slot of the ith vote in `L`.
@@ -59,11 +59,11 @@ different fork than the one this validiator last rooted. Thus it's critical for
 consistency in `replay_stage` that the order of events when setting a new root
 is:
 
-    1) Write the root to locktower
+    1) Write the root to tower
     2) Write the root to blocktree
     3) Generate snapshot for that root
 
-3) On startup, the validator checks that the current root in locktower exists
+3) On startup, the validator checks that the current root in tower exists
 in blocktree. If not (there was a crash between 2-1 and 2-2), then rewrite the
 root to blocktree.
 
@@ -73,11 +73,11 @@ which are then stored in an output `BankForks`. This is done in
 `blocktree_processor.rs`. The root of this `BankForks` is set to `S`.
 
 5) On startup, the validator calculates the first slot `S_n` from which it is
-not locked out for voting. Every validator persists its locktower state and
+not locked out for voting. Every validator persists its tower state and
 must consult this state in order to boot safely and resume from a snapshot
-without being slashed. From this locktower state and the ancestry information
+without being slashed. From this tower state and the ancestry information
 embedded in the snapshot, a validiator can derive which banks, are "safe" (See
-the `Determining Vote Safety From a Snapshot and Locktower` section for more
+the `Determining Vote Safety From a Snapshot and Tower` section for more
 detals) to vote for.
 
 6) Periodically send canary transactions to the cluster using the validator's
@@ -96,7 +96,7 @@ state and also calculate leader schedules as it moves across epochs.
 `S_current` > `S_n`
 
 
-## Determining `S_n` From a Snapshot and Locktower
+## Determining `S_n` From a Snapshot and Tower
 
 Define the "safety" condition to be:
 
@@ -108,7 +108,7 @@ slot `S_n` that it can vote on without violating the lockouts of any vote in
 true.
 
 2) `V` and every vote after it needs to expire before the validator can vote on
-any descendant of `S`, so with all the votes `V_i` in locktower where `V_i >=
+any descendant of `S`, so with all the votes `V_i` in tower where `V_i >=
 V`, `S_n = max(V_i + lockout(V_i))`. If no `V` exists, then `S_n = S`.
 
 
@@ -116,7 +116,7 @@ V`, `S_n = max(V_i + lockout(V_i))`. If no `V` exists, then `S_n = S`.
 
 Define the "Safety Criteria" to be: Given a `BankForks` any descendant of `S`,
 `S_d` that has a bank `B_d` that is present in `BankForks.banks`, and any slot
-`L_i` in locktower, the validator is able to determine `is_ancestor(L_i, S_d)`.
+`L_i` in tower, the validator is able to determine `is_ancestor(L_i, S_d)`.
 
 Assume the "Safety Criteria" is true, we show we can then achieve the "safety"
 condition:
@@ -205,14 +205,14 @@ all frozen ancestors `>= R`. Furthermore, `BankForks` prunes ancestors in its
 set of `banks` that are `< R'` after setting a new root `R'`, so this invariant
 is always true.
 
-**Lemma 2:** Given a root bank `R` of `BankForks` and some `L_i` in locktower,
+**Lemma 2:** Given a root bank `R` of `BankForks` and some `L_i` in tower,
 if `L_i >= S`, then `L_i >= R`.
 
 **Proof:** When we boot from a snapshot, we set `R == S`, and in this case
 because we are assuming `L_i > S`, then we know `L_i >= R` at bootup. Then when
 we set a new root in BankForks `R'` after booting, we guarantee this only
-happens if the locktower root is also set to `R'`. By the construction of
-locktower, all votes in the tower must be greater than the locktower root, so
+happens if the tower root is also set to `R'`. By the construction of
+tower, all votes in the tower must be greater than the tower root, so
 `L_i >= R'`. 
 
 For `Case 2` we assumed `L_i` >= `S`, so from Lemma 2 we know `L_i` >= `R`.
