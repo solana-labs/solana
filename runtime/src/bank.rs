@@ -1216,31 +1216,21 @@ impl Bank {
         vote_account_hashmap: &HashMap<Pubkey, (u64, Account)>,
         rent_to_be_distributed: u64,
     ) {
-        let mut node_stake_hashmap: HashMap<Pubkey, u64> = HashMap::new();
         let mut total_staked = 0;
 
-        vote_account_hashmap
+        let node_stakes = vote_account_hashmap
             .iter()
             .filter_map(|(_vote_pubkey, (staked, account))| {
                 total_staked += *staked;
                 VoteState::deserialize(&account.data)
                     .ok()
-                    .map(|vote_state| (*staked, vote_state.node_pubkey))
+                    .map(|vote_state| (vote_state.node_pubkey, *staked))
             })
-            .collect::<HashMap<u64, Pubkey>>()
-            .drain()
-            .for_each(|(staked, node_pubkey)| {
-                node_stake_hashmap
-                    .entry(node_pubkey)
-                    .and_modify(|stake| {
-                        *stake += staked;
-                    })
-                    .or_insert(staked);
-            });
+            .collect::<HashMap<Pubkey, u64>>();
 
         assert!(total_staked > 0);
 
-        node_stake_hashmap.iter().for_each(|(pubkey, staked)| {
+        node_stakes.iter().for_each(|(pubkey, staked)| {
             let rent_to_be_paid =
                 (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
             let mut account = self.get_account(pubkey).unwrap_or_default();
