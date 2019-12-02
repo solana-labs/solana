@@ -1,13 +1,34 @@
 use log::*;
-use std::fs;
+use std::{fs, io};
+
+use std::fs::DirEntry;
+use std::path::Path;
+#[cfg(unix)]
 use unix_socket::UnixListener;
 
-#[cfg(any(not(unix), target_os = "macos"))]
 pub const SOLANA_SYS_TUNER_PATH: &str = "/tmp/solana-sys-tuner";
 
-// Use abstract sockets for Unix builds
-#[cfg(all(unix, target_os = "linux"))]
-pub const SOLANA_SYS_TUNER_PATH: &str = "\0/tmp/solana-sys-tuner";
+#[allow(dead_code)]
+fn find_pid<P: AsRef<Path>, F>(name: &str, path: P, processor: F) -> Option<u64>
+where
+    F: Fn(&DirEntry) -> Option<u64>,
+{
+    for entry in fs::read_dir(path).expect("Failed to read /proc folder") {
+        if let Ok(dir) = entry {
+            let mut path = dir.path();
+            path.push("comm");
+            if let Ok(comm) = fs::read_to_string(path.as_path()) {
+                if comm.starts_with(name) {
+                    if let Some(pid) = processor(&dir) {
+                        return Some(pid);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
 
 #[allow(dead_code)]
 #[cfg(target_os = "linux")]
@@ -15,34 +36,30 @@ fn tune_system() {
     use std::process::Command;
     use std::str::from_utf8;
 
-    let output = Command::new("ps")
-        .arg("-eT")
-        .output()
-        .expect("Expected to see all threads");
-
-    if output.status.success() {
-        if let Ok(threads) = from_utf8(&output.stdout) {
-            let mut threads: Vec<&str> = threads.split('\n').collect();
-            for t in threads.iter_mut() {
-                if t.find("solana-poh-ser").is_some() {
-                    let pids: Vec<&str> = t.split_whitespace().collect();
-                    let thread_id = pids[1].parse::<u64>().unwrap();
-                    info!("Thread ID is {}", thread_id);
-                    let output = Command::new("chrt")
-                        .args(&["-r", "-p", "99", pids[1]])
-                        .output()
-                        .expect("Expected to set priority of thread");
-                    if output.status.success() {
-                        info!("Done setting thread priority");
-                    } else {
-                        error!("chrt stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
-                    }
-                    break;
-                }
+    if let Some(pid) = find_pid("solana-validato", "/proc", |dir| {
+        let mut path = dir.path();
+        path.push("task");
+        find_pid("solana-poh-serv", path, |dir1| {
+            if let Ok(pid) = dir1.file_name().into_string() {
+                pid.parse::<u64>().ok()
+            } else {
+                None
             }
+        })
+    }) {
+        info!("POH thread PID is {}", pid);
+        let pid = format!("{}", pid);
+        let output = Command::new("chrt")
+            .args(&["-r", "-p", "99", pid.as_str()])
+            .output()
+            .expect("Expected to set priority of thread");
+        if output.status.success() {
+            info!("Done setting thread priority");
+        } else {
+            error!("chrt stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
         }
     } else {
-        error!("ps stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
+        error!("Could not find pid for POH thread");
     }
 }
 
@@ -51,17 +68,41 @@ fn tune_system() {
 fn tune_system() {}
 
 #[allow(dead_code)]
+#[cfg(target_os = "linux")]
+fn set_socket_permissions() {
+    if let Some(user) = users::get_user_by_name("solana") {
+        let uid = format!("{}", user.uid());
+        info!("UID for solana is {}", uid);
+        nix::unistd::chown(
+            SOLANA_SYS_TUNER_PATH,
+            Some(nix::unistd::Uid::from_raw(user.uid())),
+            None,
+        )
+        .expect("Expected to change UID of the socket file");
+    } else {
+        error!("Could not find UID for solana user");
+    }
+}
+
+#[allow(dead_code)]
+#[cfg(any(not(unix), target_os = "macos"))]
+fn set_socket_permissions() {}
+
+#[allow(dead_code)]
 fn main() {
     solana_logger::setup();
-    let listener = match UnixListener::bind(SOLANA_SYS_TUNER_PATH) {
-        Ok(l) => l,
-        Err(_) => {
-            fs::remove_file(SOLANA_SYS_TUNER_PATH).expect("Failed to remove stale socket file");
-            UnixListener::bind(SOLANA_SYS_TUNER_PATH).expect("Failed to bind to the socket file")
+    if let Err(e) = fs::remove_file(SOLANA_SYS_TUNER_PATH) {
+        if e.kind() != io::ErrorKind::NotFound {
+            panic!("Failed to remove stale socket file: {:?}", e)
         }
-    };
+    }
 
-    info!("Waiting for requests");
+    let listener =
+        UnixListener::bind(SOLANA_SYS_TUNER_PATH).expect("Failed to bind to the socket file");
+
+    set_socket_permissions();
+
+    info!("Waiting for tuning requests");
     for stream in listener.incoming() {
         if stream.is_ok() {
             info!("Tuning the system now");
