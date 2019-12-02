@@ -29,13 +29,21 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
-    pub fn purge(&mut self, pubkey: &Pubkey) -> Vec<(Slot, T)> {
-        let mut list = self.account_maps.get(&pubkey).unwrap().write().unwrap();
-        let reclaims = list
-            .iter()
+    fn get_rooted_entries(&self, list: &[(Slot, T)]) -> Vec<(Slot, T)> {
+        list.iter()
             .filter(|(slot, _)| self.is_root(*slot))
             .cloned()
-            .collect();
+            .collect()
+    }
+
+    pub fn would_purge(&self, pubkey: &Pubkey) -> Vec<(Slot, T)> {
+        let list = self.account_maps.get(&pubkey).unwrap().read().unwrap();
+        self.get_rooted_entries(&list)
+    }
+
+    pub fn purge(&self, pubkey: &Pubkey) -> Vec<(Slot, T)> {
+        let mut list = self.account_maps.get(&pubkey).unwrap().write().unwrap();
+        let reclaims = self.get_rooted_entries(&list);
         list.retain(|(slot, _)| !self.is_root(*slot));
         reclaims
     }
