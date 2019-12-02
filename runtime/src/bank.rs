@@ -1252,9 +1252,10 @@ impl Bank {
     fn distribute_rent(&self) {
         let total_rent_collected = self.collected_rent.load(Ordering::Relaxed);
 
-        let burned_portion =
-            (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
-        let rent_to_be_distributed = total_rent_collected - burned_portion;
+        let (burned_portion, rent_to_be_distributed) = self
+            .rent_collector
+            .rent
+            .calculate_burn(total_rent_collected);
 
         self.capitalization
             .fetch_sub(burned_portion, Ordering::Relaxed);

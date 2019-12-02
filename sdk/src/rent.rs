@@ -40,6 +40,11 @@ impl Default for Rent {
 }
 
 impl Rent {
+    /// calculate how much rent to burn from the collected rent
+    pub fn calculate_burn(&self, rent_collected: u64) -> (u64, u64) {
+        let burned_portion = (rent_collected * u64::from(self.burn_percent)) / 100;
+        (burned_portion, rent_collected - burned_portion)
+    }
     /// minimum balance due for a given size Account::data.len()
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
