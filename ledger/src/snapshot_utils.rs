@@ -1,10 +1,10 @@
 use crate::snapshot_package::SnapshotPackage;
-use bincode::{deserialize_from, serialize_into};
+use bincode::serialize_into;
 use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
-use solana_runtime::{bank::Bank, status_cache::SlotDelta};
+use solana_runtime::{bank::Bank, status_cache::SlotDelta, serde_utils::limited_deserialize_from};
 use solana_sdk::{clock::Slot, transaction};
 use std::{
     cmp::Ordering,
@@ -59,14 +59,6 @@ impl SlotSnapshotPaths {
         )?;
         Ok(())
     }
-}
-
-pub fn limited_deserialize_from<R, T>(reader: R) -> bincode::Result<T>
-where
-    R: std::io::Read,
-    T: serde::de::DeserializeOwned,
-{
-    bincode::config().limit(1).deserialize_from(reader)
 }
 
 pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(

@@ -4309,7 +4309,7 @@ mod tests {
         serialize_into(&mut writer, &bank2.rc).unwrap();
 
         let mut rdr = Cursor::new(&buf[..]);
-        let mut dbank: Bank = deserialize_from(&mut rdr).unwrap();
+        let mut dbank: Bank = limited_deserialize_from(&mut rdr).unwrap();
         let mut reader = BufReader::new(&buf[rdr.position() as usize..]);
 
         // Create a new set of directories for this bank's accounts

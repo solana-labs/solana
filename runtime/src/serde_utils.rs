@@ -60,3 +60,11 @@ where
 {
     s.serialize_bool(x.load(Ordering::Relaxed))
 }
+
+pub fn limited_deserialize_from<R, T>(reader: R) -> bincode::Result<T>
+where
+    R: std::io::Read,
+    T: serde::de::DeserializeOwned,
+{
+    bincode::config().limit(1).deserialize_from(reader)
+}

@@ -12,7 +12,7 @@ pub mod message_processor;
 mod native_loader;
 mod nonce_utils;
 pub mod rent_collector;
-mod serde_utils;
+pub mod serde_utils;
 pub mod stakes;
 pub mod status_cache;
 pub mod storage_utils;
