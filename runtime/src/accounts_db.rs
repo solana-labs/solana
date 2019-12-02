@@ -460,8 +460,8 @@ impl AccountsDB {
     ) -> Result<(), IOError> {
         let _len: usize =
             deserialize_from(&mut stream).map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
-        let storage: AccountStorage =
-            deserialize_for_snapshot(&mut stream).map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
+        let storage: AccountStorage = deserialize_for_snapshot(&mut stream)
+            .map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
 
         // Remap the deserialized AppendVec paths to point to correct local paths
         let new_storage_map: Result<HashMap<Slot, SlotStores>, IOError> = storage

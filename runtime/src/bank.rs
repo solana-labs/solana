@@ -10,7 +10,8 @@ use crate::{
     nonce_utils,
     rent_collector::RentCollector,
     serde_utils::{
-        deserialize_atomicbool, deserialize_atomicu64, serialize_atomicbool, serialize_atomicu64, deserialize_for_snapshot,
+        deserialize_atomicbool, deserialize_atomicu64, deserialize_for_snapshot,
+        serialize_atomicbool, serialize_atomicu64,
     },
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
