@@ -15,33 +15,32 @@ use solana_sdk::{
         self, clock::Clock, rent::Rent, rewards::Rewards, stake_history::StakeHistory, Sysvar,
     },
 };
+use thiserror::Error;
 
 /// Reasons the stake might have had an error
-#[derive(Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum StakeError {
+    #[error("not enough credits to redeem")]
     NoCreditsToRedeem,
+
+    #[error("lockup has not yet expired")]
     LockupInForce,
+
+    #[error("stake already deactivated")]
     AlreadyDeactivated,
+
+    #[error("one re-delegation permitted per epoch")]
     TooSoonToRedelegate,
+
+    #[error("split amount is more than is staked")]
     InsufficientStake,
 }
+
 impl<E> DecodeError<E> for StakeError {
     fn type_of() -> &'static str {
         "StakeError"
     }
 }
-impl std::fmt::Display for StakeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            StakeError::NoCreditsToRedeem => write!(f, "not enough credits to redeem"),
-            StakeError::LockupInForce => write!(f, "lockup has not yet expired"),
-            StakeError::AlreadyDeactivated => write!(f, "stake already deactivated"),
-            StakeError::TooSoonToRedelegate => write!(f, "one re-delegation permitted per epoch"),
-            StakeError::InsufficientStake => write!(f, "split amount is more than is staked"),
-        }
-    }
-}
-impl std::error::Error for StakeError {}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum StakeInstruction {

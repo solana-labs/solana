@@ -17,13 +17,21 @@ use solana_sdk::{
     system_instruction,
     sysvar::{self, clock::Clock, slot_hashes::SlotHashes, Sysvar},
 };
+use thiserror::Error;
 
 /// Reasons the stake might have had an error
-#[derive(Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum VoteError {
+    #[error("vote already recorded or not in slot hashes history")]
     VoteTooOld,
+
+    #[error("vote slots do not match bank history")]
     SlotsMismatch,
+
+    #[error("vote hash does not match bank hash")]
     SlotHashMismatch,
+
+    #[error("vote has no slots, invalid")]
     EmptySlots,
 }
 impl<E> DecodeError<E> for VoteError {
@@ -31,22 +39,6 @@ impl<E> DecodeError<E> for VoteError {
         "VoteError"
     }
 }
-
-impl std::fmt::Display for VoteError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                VoteError::VoteTooOld => "vote already recorded or not in slot hashes history",
-                VoteError::SlotsMismatch => "vote slots do not match bank history",
-                VoteError::SlotHashMismatch => "vote hash does not match bank hash",
-                VoteError::EmptySlots => "vote has no slots, invalid",
-            }
-        )
-    }
-}
-impl std::error::Error for VoteError {}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {

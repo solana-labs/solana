@@ -12,6 +12,7 @@ use serde::Serialize;
 use solana_client::rpc_request::RpcTransactionStatus;
 use solana_sdk::{clock::Slot, signature::Signature};
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
+use thiserror::Error;
 
 // A good value for this is the number of cores on the machine
 const TOTAL_THREADS: i32 = 8;
@@ -35,40 +36,20 @@ const CODE_SHRED_CF: &str = "code_shred";
 /// Column family for Transaction Status
 const TRANSACTION_STATUS_CF: &str = "transaction_status";
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum BlocktreeError {
     ShredForIndexExists,
     InvalidShredData(Box<bincode::ErrorKind>),
-    RocksDb(rocksdb::Error),
+    RocksDb(#[from] rocksdb::Error),
     SlotNotRooted,
-    IO(std::io::Error),
-    Serialize(std::boxed::Box<bincode::ErrorKind>),
+    IO(#[from] std::io::Error),
+    Serialize(#[from] Box<bincode::ErrorKind>),
 }
-pub type Result<T> = std::result::Result<T, BlocktreeError>;
-
-impl std::error::Error for BlocktreeError {}
+pub(crate) type Result<T> = std::result::Result<T, BlocktreeError>;
 
 impl std::fmt::Display for BlocktreeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "blocktree error")
-    }
-}
-
-impl std::convert::From<std::io::Error> for BlocktreeError {
-    fn from(e: std::io::Error) -> BlocktreeError {
-        BlocktreeError::IO(e)
-    }
-}
-
-impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for BlocktreeError {
-    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> BlocktreeError {
-        BlocktreeError::Serialize(e)
-    }
-}
-
-impl std::convert::From<rocksdb::Error> for BlocktreeError {
-    fn from(e: rocksdb::Error) -> BlocktreeError {
-        BlocktreeError::RocksDb(e)
     }
 }
 

@@ -9,10 +9,14 @@ use solana_sdk::{
     pubkey::Pubkey,
     system_instruction,
 };
+use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, FromPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, FromPrimitive)]
 pub enum VestError {
+    #[error("destination missing")]
     DestinationMissing,
+
+    #[error("unauthorized")]
     Unauthorized,
 }
 

@@ -5,9 +5,11 @@ use solana_sdk::{
     pubkey::Pubkey,
     system_instruction,
 };
+use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum OwnableError {
+    #[error("incorrect error")]
     IncorrectOwner,
 }
 
@@ -16,19 +18,6 @@ impl<T> DecodeError<T> for OwnableError {
         "OwnableError"
     }
 }
-
-impl std::fmt::Display for OwnableError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                OwnableError::IncorrectOwner => "incorrect owner",
-            }
-        )
-    }
-}
-impl std::error::Error for OwnableError {}
 
 fn initialize_account(account_pubkey: &Pubkey, owner_pubkey: &Pubkey) -> Instruction {
     let keys = vec![AccountMeta::new(*account_pubkey, false)];

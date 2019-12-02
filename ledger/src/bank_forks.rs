@@ -14,6 +14,7 @@ use std::{
     sync::Arc,
     time::Instant,
 };
+use thiserror::Error;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotConfig {
@@ -27,24 +28,15 @@ pub struct SnapshotConfig {
     pub snapshot_path: PathBuf,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum BankForksError {
-    SnapshotError(SnapshotError),
-    SnapshotPackageSendError(SnapshotPackageSendError),
-}
-pub type Result<T> = std::result::Result<T, BankForksError>;
+    #[error("snapshot error")]
+    SnapshotError(#[from] SnapshotError),
 
-impl std::convert::From<SnapshotError> for BankForksError {
-    fn from(e: SnapshotError) -> BankForksError {
-        BankForksError::SnapshotError(e)
-    }
+    #[error("snapshot package send error")]
+    SnapshotPackageSendError(#[from] SnapshotPackageSendError),
 }
-
-impl std::convert::From<SnapshotPackageSendError> for BankForksError {
-    fn from(e: SnapshotPackageSendError) -> BankForksError {
-        BankForksError::SnapshotPackageSendError(e)
-    }
-}
+type Result<T> = std::result::Result<T, BankForksError>;
 
 pub struct BankForks {
     pub banks: HashMap<Slot, Arc<Bank>>,
