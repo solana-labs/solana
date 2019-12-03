@@ -115,6 +115,9 @@ pub struct VoteState {
     /// history of how many credits earned by the end of each epoch
     ///  each tuple is (Epoch, credits, prev_credits)
     epoch_credits: Vec<(Epoch, u64, u64)>,
+
+    /// most recent timestamp submitted with a vote
+    pub last_timestamp: (Slot, UnixTimestamp),
 }
 
 impl VoteState {
@@ -345,6 +348,26 @@ impl VoteState {
             }
         }
     }
+
+    fn check_timestamp(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<(), VoteError> {
+        if (slot > self.last_timestamp.0 && timestamp > self.last_timestamp.1)
+            || (slot, timestamp) == self.last_timestamp
+        {
+            Ok(())
+        } else {
+            Err(VoteError::TimestampTooOld)
+        }
+    }
+
+    pub fn process_timestamp(
+        &mut self,
+        slot: Slot,
+        timestamp: UnixTimestamp,
+    ) -> Result<(), VoteError> {
+        self.check_timestamp(slot, timestamp)?;
+        self.last_timestamp = (slot, timestamp);
+        Ok(())
+    }
 }
 
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
@@ -450,6 +473,17 @@ pub fn process_vote(
     verify_authorized_signer(&vote_state.authorized_voter, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
+    if let Some(timestamp) = vote.timestamp {
+        let slot = vote
+            .slots
+            .iter()
+            .max()
+            .expect("vote must contain at least one slot");
+        let res = vote_state.process_timestamp(*slot, timestamp);
+        if let Err(err) = res {
+            warn!("Timestamp: {:?}, Error: {:?}", (slot, timestamp), err);
+        };
+    }
     vote_account.set_state(&vote_state)
 }
 
@@ -1264,5 +1298,43 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn test_vote_check_timestamp() {
+        let (slot, timestamp) = (15, 1575412285);
+        let mut vote_state = VoteState::default();
+        vote_state.last_timestamp = (slot, timestamp);
+
+        assert_eq!(
+            vote_state.check_timestamp(slot - 1, timestamp + 1),
+            Err(VoteError::TimestampTooOld)
+        );
+        assert_eq!(
+            vote_state.check_timestamp(slot + 1, timestamp - 1),
+            Err(VoteError::TimestampTooOld)
+        );
+        assert_eq!(vote_state.check_timestamp(slot, timestamp), Ok(()));
+        assert_eq!(vote_state.check_timestamp(slot + 1, timestamp + 1), Ok(()));
+    }
+
+    #[test]
+    fn test_vote_process_timestamp() {
+        let (slot, timestamp) = (15, 1575412285);
+        let mut vote_state = VoteState::default();
+        vote_state.last_timestamp = (slot, timestamp);
+
+        assert_eq!(
+            vote_state.process_timestamp(slot - 1, timestamp + 1),
+            Err(VoteError::TimestampTooOld)
+        );
+        assert_eq!(vote_state.last_timestamp, (slot, timestamp));
+        assert_eq!(vote_state.process_timestamp(slot, timestamp), Ok(()));
+        assert_eq!(vote_state.last_timestamp, (slot, timestamp));
+        assert_eq!(
+            vote_state.process_timestamp(slot + 1, timestamp + 1),
+            Ok(())
+        );
+        assert_eq!(vote_state.last_timestamp, (slot + 1, timestamp + 1));
     }
 }
