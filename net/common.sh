@@ -48,6 +48,7 @@ buildSshOptions() {
     -o "StrictHostKeyChecking=no"
     -o "UserKnownHostsFile=/dev/null"
     -o "User=solana"
+    -o "IdentitiesOnly=yes"
     -o "IdentityFile=$sshPrivateKey"
     -o "LogLevel=ERROR"
   )
