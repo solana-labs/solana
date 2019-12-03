@@ -1,12 +1,4 @@
 //! Convenience macro to declare a static public key and functions to interact with it
-//!
-//! bs58_string: bs58 string representation the program's id
-//!
-//! # Examples
-//!
-//! ```
-//! solana_sdk::declare_id!("My!!!11111111111111111111111111111111111111");
-//! ```
 
 extern crate proc_macro;
 
