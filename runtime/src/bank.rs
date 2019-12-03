@@ -1870,21 +1870,24 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
 // This protects from memory exhaustion assuming being used only once when starting validator
 pub fn deserialize_for_snapshot<R, T>(reader: R) -> bincode::Result<T>
 where
-    R: std::io::Read,
+    R: Read,
     T: serde::de::DeserializeOwned,
 {
+    let mut config = bincode::config();
     let mem_info = sys_info::mem_info();
 
+    // Because we're are about to restore full process state from file,
+    // allow use of memory as much as possible while maintaining 20% memory available
+    // so as not to trigger our earlyoom.
     if let Ok(mem_info) = mem_info {
-        // Because we're are about to restore full process state from file,
-        // allow use of memory as much as possible while maintaining 20% memory available so as not to trigger our earlyoom
-        let mem_limit = mem_info.total.saturating_sub(mem_info.total / 5);
-        //let mem_limit = mem_info.avail.saturating_sub(mem_info.total / 5);
-        //eprintln!("use at most {} {:#?}", mem_limit, mem_info);
-        bincode::config().limit(mem_limit).deserialize_from(reader)
+        let mem_limit = mem_info.total - mem_info.total / 5;
+        config.limit(mem_limit);
     } else {
-        bincode::config().deserialize_from(reader)
+        // Somehow getting system mem_info failed, so we don't explicitly limit memory usage and
+        // use unlimited memory (bincode's default).
     }
+
+    config.deserialize_from(reader)
 }
 
 #[cfg(test)]
