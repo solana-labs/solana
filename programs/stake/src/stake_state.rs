@@ -1391,10 +1391,7 @@ mod tests {
             stake_keyed_account.initialize(
                 &Authorized::default(),
                 &Lockup::default(),
-                &Rent {
-                    lamports_per_byte_year: 42,
-                    ..Rent::default()
-                }
+                &Rent::new(42, 1.0, 100),
             ),
             Err(InstructionError::InsufficientFunds)
         );

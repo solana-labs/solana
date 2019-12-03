@@ -10,7 +10,7 @@ pub struct Rent {
     pub exemption_threshold: f64,
 
     // What portion of collected rent are to be destroyed, percentage-wise
-    pub burn_percent: u8,
+    burn_percent: u8,
 }
 
 /// default rental rate in lamports/byte-year, based on:
@@ -23,8 +23,8 @@ pub const DEFAULT_LAMPORTS_PER_BYTE_YEAR: u64 = 0; //1_000_000_000 / 100 * 365 /
 /// default amount of time (in years) the balance has to include rent for
 pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 
-/// default amount of rent to burn, as a fraction of std::u8::MAX
-pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
+/// default percentage of rent to burn (Valid values are 0 to 100)
+pub const DEFAULT_BURN_PERCENT: u8 = 100;
 
 /// account storage overhead for calculation of base rent
 pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 128;
@@ -40,6 +40,10 @@ impl Default for Rent {
 }
 
 impl Rent {
+    pub fn get_burn_percentage(&self) -> u8 {
+        self.burn_percent
+    }
+
     /// minimum balance due for a given size Account::data.len()
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
@@ -63,6 +67,16 @@ impl Rent {
                     * years_elapsed) as u64,
                 false,
             )
+        }
+    }
+
+    pub fn new(lamports_per_byte_year: u64, exemption_threshold: f64, burn_percent: u8) -> Self {
+        assert!(burn_percent <= 100);
+
+        Rent {
+            lamports_per_byte_year,
+            exemption_threshold,
+            burn_percent,
         }
     }
 

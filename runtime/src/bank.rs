@@ -1214,8 +1214,9 @@ impl Bank {
         let total_rent_collected = self.collected_rent.load(Ordering::Relaxed);
 
         if total_rent_collected != 0 {
-            let burned_portion =
-                (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
+            let burned_portion = (total_rent_collected
+                * u64::from(self.rent_collector.rent.get_burn_percentage()))
+                / 100;
             let _rent_to_be_distributed = total_rent_collected - burned_portion;
             // TODO: distribute remaining rent amount to validators
             // self.capitalization.fetch_sub(burned_portion, Ordering::Relaxed);
@@ -1706,11 +1707,8 @@ mod tests {
             &dummy_leader_pubkey,
             dummy_leader_lamports,
         );
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 5,
-            exemption_threshold: 1.2,
-            burn_percent: 5,
-        };
+
+        genesis_config.rent = Rent::new(5, 1.2, 5);
 
         let bank = Bank::new(&genesis_config);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), mint_lamports);
@@ -1722,7 +1720,7 @@ mod tests {
         let rent_account = bank.get_account(&sysvar::rent::id()).unwrap();
         let rent = sysvar::rent::Rent::from_account(&rent_account).unwrap();
 
-        assert_eq!(rent.burn_percent, 5);
+        assert_eq!(rent.get_burn_percentage(), 5);
         assert_eq!(rent.exemption_threshold, 1.2);
         assert_eq!(rent.lamports_per_byte_year, 5);
     }
@@ -1791,11 +1789,7 @@ mod tests {
         let keypair5: Keypair = Keypair::new();
         let keypair6: Keypair = Keypair::new();
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 21.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = Rent::new(1, 21.0, 10);
 
         let root_bank = Arc::new(Bank::new(&genesis_config));
         let bank = Bank::new_from_parent(
@@ -2064,11 +2058,7 @@ mod tests {
             keypairs.push(Keypair::new());
         }
 
-        genesis_config.rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 1000.0,
-            burn_percent: 10,
-        };
+        genesis_config.rent = Rent::new(1, 1000.0, 10);
 
         let root_bank = Arc::new(Bank::new(&genesis_config));
         let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config, mock_program_id);

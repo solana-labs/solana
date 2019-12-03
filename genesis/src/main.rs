@@ -120,7 +120,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         (
             &rent.lamports_per_byte_year.to_string(),
             &rent.exemption_threshold.to_string(),
-            &rent.burn_percent.to_string(),
+            &rent.get_burn_percentage().to_string(),
         )
     };
     let default_target_tick_duration =
@@ -333,11 +333,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
     let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
-    let rent = Rent {
-        lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
-        exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
-        burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
-    };
+    let rent_burn_percentage = value_t_or_exit!(matches, "rent_burn_percentage", u8);
+    if rent_burn_percentage > 100 {
+        panic!(
+            "rent burn percentage cannot be greater than 100, provided: {}",
+            rent_burn_percentage
+        );
+    }
+
+    let rent = Rent::new(
+        value_t_or_exit!(matches, "lamports_per_byte_year", u64),
+        value_t_or_exit!(matches, "rent_exemption_threshold", f64),
+        rent_burn_percentage,
+    );
 
     let bootstrap_leader_vote_account =
         vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
