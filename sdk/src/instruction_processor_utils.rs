@@ -37,6 +37,9 @@ macro_rules! solana_entrypoint(
 /// # Examples
 ///
 /// ```
+/// # // wrapper is used so that the macro invocation occurs in the item position
+/// # // rather than in the statement position which isn't allowed.
+/// # mod item_wrapper {
 /// use solana_sdk::account::KeyedAccount;
 /// use solana_sdk::instruction::InstructionError;
 /// use solana_sdk::pubkey::Pubkey;
@@ -51,11 +54,12 @@ macro_rules! solana_entrypoint(
 ///   Ok(())
 /// }
 ///
-/// solana_sdk::declare_program!(
-///     "My!!!11111111111111111111111111111111111111",
+/// declare_program!(
+///     "My11111111111111111111111111111111111111111",
 ///     solana_my_program,
 ///     my_process_instruction
 /// );
+/// # }
 /// ```
 #[macro_export]
 macro_rules! declare_program(

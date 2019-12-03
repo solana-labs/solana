@@ -3895,6 +3895,7 @@ dependencies = [
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-crate-features 0.22.0",
  "solana-logger 0.22.0",
+ "solana-sdk-macro 0.22.0",
  "tiny-bip39 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3911,6 +3912,16 @@ dependencies = [
  "rand_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk 0.22.0",
+]
+
+[[package]]
+name = "solana-sdk-macro"
+version = "0.22.0"
+dependencies = [
+ "bs58 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proc-macro2 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
