@@ -9,12 +9,13 @@ The general outline of the proposed implementation is as follows:
 
 - At regular intervals, each validator records its observed time for a known slot
   on-chain (via a Timestamp added to a slot Vote)
-- A client can request a block time using the `getBlockTime` RPC method. When a
-  client requests a timestamp for block N:
+- A client can request a block time for a rooted block using the `getBlockTime`
+RPC method. When a client requests a timestamp for block N:
 
-  1. A validator determines a "cluster" timestamp for a recent slot before block N
-  by observing all the Timestamp instructions recorded on the ledger that
-  reference that slot, and determining the stake-weighted mean timestamp.
+  1. A validator determines a "cluster" timestamp for a recent timestamped slot
+  before block N by observing all the timestamped Vote instructions recorded on
+  the ledger that reference that slot, and determining the stake-weighted mean
+  timestamp.
 
   2. This recent mean timestamp is then used to calculate the timestamp of
   block N using the cluster's established slot duration
@@ -27,6 +28,13 @@ Requirements:
 - The block times are not controlled by a single centralized oracle, but
   ideally based on a function that uses inputs from all validators
 - Each validator must maintain a timestamp oracle
+
+The same implementation can provide a timestamp estimate for a not-yet-rooted
+block. However, because the most recent timestamped slot may or may not be
+rooted yet, this timestamp would be unstable (potentially failing requirement
+1). Initial implementation will target rooted blocks, but if there is a use case
+for recent-block timestamping, it will be trivial to add the RPC apis in the
+future.
 
 ## Recording Time
 
