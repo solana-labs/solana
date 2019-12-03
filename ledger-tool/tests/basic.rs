@@ -31,6 +31,7 @@ fn bad_arguments() {
 fn nominal() {
     let genesis_config = create_genesis_config(100).genesis_config;
     let ticks_per_slot = genesis_config.ticks_per_slot;
+    let meta_lines = 1;
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
     let ticks = ticks_per_slot as usize;
@@ -44,5 +45,5 @@ fn nominal() {
     // Print everything
     let output = run_ledger_tool(&["-l", &ledger_path, "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), ticks + 1);
+    assert_eq!(count_newlines(&output.stdout), ticks + meta_lines + 1);
 }
