@@ -353,6 +353,7 @@ pub fn process_show_vote_account(
             None => "~".to_string(),
         }
     );
+    println!("recent timestamp: {:?}", vote_state.last_timestamp);
     if !vote_state.votes.is_empty() {
         println!("recent votes:");
         for vote in &vote_state.votes {
