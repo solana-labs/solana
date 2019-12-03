@@ -97,3 +97,24 @@ pub fn is_port(port: String) -> Result<(), String> {
         .map(|_| ())
         .map_err(|e| format!("{:?}", e))
 }
+
+pub fn is_valid_percentage(percentage: String) -> Result<(), String> {
+    percentage
+        .parse::<u8>()
+        .map_err(|e| {
+            format!(
+                "Unable to parse input percentage, provided: {}, err: {:?}",
+                percentage, e
+            )
+        })
+        .and_then(|v| {
+            if v > 100 {
+                Err(format!(
+                    "Percentage must be in range of 0 to 100, provided: {}",
+                    v
+                ))
+            } else {
+                Ok(())
+            }
+        })
+}
