@@ -659,7 +659,7 @@ impl ReplayStage {
             let mut last_vote = tower.last_vote();
             let timestamp_interval =
                 slots_per_interval(bank.slots_per_year(), DEFAULT_TIMESTAMP_INTERVAL_MINS);
-            if bank.slot() % timestamp_interval == 0 {
+            if bank.slot() % timestamp_interval == 1 {
                 last_vote.timestamp = Some(Utc::now().timestamp());
             }
             let vote_ix =
