@@ -1868,6 +1868,8 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
 }
 
 // This protects from memory exhaustion assuming being used only once when starting validator
+// This should be called infrequently (= it isn't intended called inside tight loops),
+// because of calling sys_info::mem_info().
 pub fn deserialize_for_snapshot<R, T>(reader: R) -> bincode::Result<T>
 where
     R: Read,
