@@ -21,7 +21,6 @@ users = "0.9.1"
 nix = "0.16.0"
 
 [lib]
-crate-type = ["lib"]
 name = "solana_sys_tuner"
 
 [[bin]]

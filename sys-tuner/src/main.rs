@@ -1,14 +1,17 @@
 use log::*;
 use std::{fs, io};
 
-use std::fs::DirEntry;
-use std::path::Path;
+use solana_sys_tuner::SOLANA_SYS_TUNER_PATH;
+
 #[cfg(unix)]
 use unix_socket::UnixListener;
 
-pub const SOLANA_SYS_TUNER_PATH: &str = "/tmp/solana-sys-tuner";
+#[cfg(target_os = "linux")]
+use std::fs::DirEntry;
+#[cfg(target_os = "linux")]
+use std::path::Path;
 
-#[allow(dead_code)]
+#[cfg(target_os = "linux")]
 fn find_pid<P: AsRef<Path>, F>(name: &str, path: P, processor: F) -> Option<u64>
 where
     F: Fn(&DirEntry) -> Option<u64>,
@@ -30,7 +33,6 @@ where
     None
 }
 
-#[allow(dead_code)]
 #[cfg(target_os = "linux")]
 fn tune_system() {
     use std::process::Command;
@@ -63,7 +65,6 @@ fn tune_system() {
     }
 }
 
-#[allow(dead_code)]
 #[cfg(any(not(unix), target_os = "macos"))]
 fn tune_system() {}
 
@@ -84,11 +85,9 @@ fn set_socket_permissions() {
     }
 }
 
-#[allow(dead_code)]
 #[cfg(any(not(unix), target_os = "macos"))]
 fn set_socket_permissions() {}
 
-#[allow(dead_code)]
 fn main() {
     solana_logger::setup();
     if let Err(e) = fs::remove_file(SOLANA_SYS_TUNER_PATH) {
