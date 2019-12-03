@@ -20,7 +20,7 @@ To learn more about the BIP39 standard, visit the Bitcoin BIPs Github repository
 ## Installation
 
 The tools used in this guide can all be installed by following the
-[Installing the Validator Software](running-validator/validator-software.md)
+[Installing the Validator Software](../running-validator/validator-software.md)
 guide. After installation, you will have access to the `solana`,
 `solana-keygen`, and `solana-validator` tools.
 
