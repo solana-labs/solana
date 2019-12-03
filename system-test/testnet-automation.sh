@@ -206,7 +206,7 @@ function launchTestnet() {
   elif [[ "$APPLY_PARTITIONS" = "true" ]]; then
     execution_step "Wait $PARTITION_INACTIVE_DURATION before beginning to apply partitions"
     sleep "$PARTITION_INACTIVE_DURATION"
-    for i in {0.."$PARTITION_ITERATION_COUNT"}; do
+    for (( i=1; i<=$PARTITION_ITERATION_COUNT; i++ )); do
       execution_step "Partition Iteration $i of $PARTITION_ITERATION_COUNT"
       execution_step "Applying netem config $NETEM_CONFIG_FILE for $PARTITION_ACTIVE_DURATION seconds"
       net/net.sh netem --config-file $NETEM_CONFIG_FILE
@@ -272,6 +272,7 @@ STEP=
 execution_step "Initialize Environment"
 
 cd "$(dirname "$0")/.."
+source foo.sh
 
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
@@ -341,8 +342,8 @@ if [[ -z $CHANNEL ]]; then
 fi
 
 # shellcheck disable=SC1091
-source ci/upload-ci-artifact.sh
-source system-test/upload_results_to_slack.sh
+#source ci/upload-ci-artifact.sh
+#source system-test/upload_results_to_slack.sh
 
 maybeClientOptions=${CLIENT_OPTIONS:+"-c"}
 maybeCustomMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"--custom-machine-type"}
