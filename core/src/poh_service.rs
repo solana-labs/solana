@@ -3,6 +3,7 @@
 use crate::poh_recorder::PohRecorder;
 use core_affinity;
 use solana_sdk::poh_config::PohConfig;
+use solana_sys_tuner;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
@@ -30,6 +31,7 @@ impl PohService {
         let tick_producer = Builder::new()
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
+                solana_sys_tuner::request_realtime_poh();
                 if poh_config.hashes_per_tick.is_none() {
                     if poh_config.target_tick_count.is_none() {
                         Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);

@@ -82,6 +82,7 @@ BINS=(
   solana-log-analyzer
   solana-net-shaper
   solana-archiver
+  solana-sys-tuner
   solana-validator
 )
 
