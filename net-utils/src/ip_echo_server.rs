@@ -70,6 +70,19 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
                         ));
                     }
 
+                    let expected_len =
+                        bincode::serialized_size(&IpEchoServerMessage::default()).unwrap() as usize;
+                    let actual_len = data[4..].len();
+                    if actual_len < expected_len {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            format!(
+                                "Request too short, actual {} < expected {}",
+                                actual_len, expected_len
+                            ),
+                        ));
+                    }
+
                     bincode::deserialize::<IpEchoServerMessage>(&data[4..])
                         .map(Some)
                         .or_else(|err| {
