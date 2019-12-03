@@ -1253,13 +1253,7 @@ impl Bank {
             return;
         }
 
-        let vote_account_hashmap = self.epoch_vote_accounts(self.epoch);
-        if vote_account_hashmap.is_none() {
-            return;
-        }
-        let vote_account_hashmap = vote_account_hashmap.unwrap();
-
-        self.distribute_rent_to_validators(vote_account_hashmap, rent_to_be_distributed);
+        self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
     }
 
     fn collect_rent(&self, res: &[Result<()>], loaded_accounts: &[Result<TransactionLoadResult>]) {
