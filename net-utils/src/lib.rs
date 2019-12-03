@@ -29,14 +29,15 @@ fn ip_echo_server_request(
     let timeout = Duration::new(5, 0);
     TcpStream::connect_timeout(ip_echo_server_addr, timeout)
         .and_then(|mut stream| {
-            let msg = bincode::serialize(&msg).expect("serialize IpEchoServerMessage");
-            // Start with 4 null bytes to avoid looking like an HTTP GET/POST request
-            stream.write_all(&[0; 4])?;
+            let mut bytes = vec![0; 4]; // Start with 4 null bytes to avoid looking like an HTTP GET/POST request
 
-            stream.write_all(&msg)?;
+            bytes.append(&mut bincode::serialize(&msg).expect("serialize IpEchoServerMessage"));
 
-            // Send a '\n' to make this request look HTTP-ish and tickle an error response back from an HTTP server
-            stream.write_all(b"\n")?;
+            // End with '\n' to make this request look HTTP-ish and tickle an error response back
+            // from an HTTP server
+            bytes.push(b'\n');
+
+            stream.write_all(&bytes)?;
             stream.shutdown(std::net::Shutdown::Write)?;
             stream
                 .set_read_timeout(Some(Duration::new(10, 0)))
