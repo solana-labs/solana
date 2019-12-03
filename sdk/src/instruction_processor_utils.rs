@@ -61,6 +61,31 @@ macro_rules! solana_entrypoint(
 /// );
 /// # }
 /// ```
+/// ```
+/// # // wrapper is used so that the macro invocation occurs in the item position
+/// # // rather than in the statement position which isn't allowed.
+/// # mod item_wrapper {
+/// use solana_sdk::account::KeyedAccount;
+/// use solana_sdk::instruction::InstructionError;
+/// use solana_sdk::pubkey::Pubkey;
+/// use solana_sdk::declare_program;
+///
+/// fn my_process_instruction(
+///     program_id: &Pubkey,
+///     keyed_accounts: &mut [KeyedAccount],
+///     data: &[u8],
+/// ) -> Result<(), InstructionError> {
+///   // Process an instruction
+///   Ok(())
+/// }
+///
+/// declare_program!(
+///     solana_sdk::system_program::ID,
+///     solana_my_program,
+///     my_process_instruction
+/// );
+/// # }
+/// ```
 #[macro_export]
 macro_rules! declare_program(
     ($bs58_string:expr, $name:ident, $entrypoint:expr) => (

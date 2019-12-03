@@ -6,7 +6,7 @@ pub mod processor;
 use crate::processor::process_instruction;
 
 solana_sdk::declare_program!(
-    "MoveLdr111111111111111111111111111111111111",
+    solana_sdk::move_loader::ID,
     solana_move_loader_program,
     process_instruction
 );

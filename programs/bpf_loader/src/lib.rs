@@ -18,7 +18,7 @@ use std::io::Error;
 use std::mem;
 
 solana_sdk::declare_program!(
-    "BPFLoader1111111111111111111111111111111111",
+    solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
     process_instruction
 );
