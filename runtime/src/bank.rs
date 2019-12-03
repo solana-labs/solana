@@ -1723,6 +1723,7 @@ mod tests {
         system_instruction, system_program,
         sysvar::{fees::Fees, rewards::Rewards},
     };
+    use solana_stake_program::stake_state;
     use solana_stake_program::stake_state::{Authorized, Delegation, Lockup, Stake};
     use solana_vote_program::{
         vote_instruction,
