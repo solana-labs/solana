@@ -8,6 +8,7 @@ mod unlocks;
 use crate::genesis_accounts::add_genesis_accounts;
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::input_parsers::pubkey_of;
+use solana_clap_utils::input_validators::is_valid_percentage;
 use solana_genesis::Base64Account;
 use solana_ledger::{blocktree::create_new_ledger, poh::compute_hashes_per_tick};
 use solana_sdk::{
@@ -120,7 +121,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         (
             &rent.lamports_per_byte_year.to_string(),
             &rent.exemption_threshold.to_string(),
-            &rent.get_burn_percentage().to_string(),
+            &rent.burn_percent.to_string(),
         )
     };
     let default_target_tick_duration =
@@ -249,7 +250,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(default_rent_burn_percentage)
-                .help("amount of rent to burn, as a fraction of std::u8::MAX."),
+                .help("percentage of collected rent to burn")
+                .validator(is_valid_percentage),
         )
         .arg(
             Arg::with_name("target_signatures_per_slot")
@@ -333,19 +335,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
     let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
-    let rent_burn_percentage = value_t_or_exit!(matches, "rent_burn_percentage", u8);
-    if rent_burn_percentage > 100 {
-        panic!(
-            "rent burn percentage cannot be greater than 100, provided: {}",
-            rent_burn_percentage
-        );
-    }
-
-    let rent = Rent::new(
-        value_t_or_exit!(matches, "lamports_per_byte_year", u64),
-        value_t_or_exit!(matches, "rent_exemption_threshold", f64),
-        rent_burn_percentage,
-    );
+    let rent = Rent {
+        lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
+        exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
+        burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
+    };
 
     let bootstrap_leader_vote_account =
         vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);

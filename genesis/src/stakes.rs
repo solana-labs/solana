@@ -178,7 +178,11 @@ mod tests {
     fn test_create_stakes() {
         // 2 unlocks
 
-        let rent = Rent::new(1, 1.0, 100);
+        let rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1.0,
+            ..Rent::default()
+        };
 
         let reserve = get_stake_rent_exempt_reserve(&rent);
 
