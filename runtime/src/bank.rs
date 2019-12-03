@@ -2067,7 +2067,7 @@ mod tests {
 
         genesis_config.rent = Rent {
             lamports_per_byte_year: 1,
-            exemption_threshold: 21.0,
+            exemption_threshold: 1000.0,
             burn_percent: 10,
         };
 
