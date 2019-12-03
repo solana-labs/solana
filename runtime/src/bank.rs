@@ -1879,7 +1879,7 @@ mod tests {
         serde_utils::deserialize_for_snapshot,
         status_cache::MAX_CACHE_ENTRIES,
     };
-    use bincode::{deserialize_from, serialize_into, serialized_size};
+    use bincode::{serialize_into, serialized_size};
     use solana_sdk::instruction::AccountMeta;
     use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
