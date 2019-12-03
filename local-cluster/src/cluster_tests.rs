@@ -172,7 +172,7 @@ pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
     }
 }
 
-pub fn time_untl_nth_epoch(epoch: u64, slots_per_epoch: u64, stakers_slot_offset: u64) -> u64 {
+pub fn time_until_nth_epoch(epoch: u64, slots_per_epoch: u64, stakers_slot_offset: u64) -> u64 {
     let epoch_schedule = EpochSchedule::custom(slots_per_epoch, stakers_slot_offset, true);
     epoch_schedule.get_last_slot_in_epoch(epoch) * DEFAULT_MS_PER_SLOT
 }

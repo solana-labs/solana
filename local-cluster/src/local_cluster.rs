@@ -40,6 +40,7 @@ use std::{
     collections::HashMap,
     fs::remove_dir_all,
     io::{Error, ErrorKind, Result},
+    iter,
     path::PathBuf,
     sync::Arc,
 };
@@ -136,8 +137,8 @@ impl LocalCluster {
                 assert_eq!(config.validator_configs.len(), keys.len());
                 keys.clone()
             } else {
-                (0..config.validator_configs.len())
-                    .map(|_| Arc::new(Keypair::new()))
+                iter::repeat_with(|| Arc::new(Keypair::new()))
+                    .take(config.validator_configs.len())
                     .collect()
             }
         };

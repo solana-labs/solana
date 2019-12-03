@@ -30,7 +30,7 @@ use solana_sdk::{
 };
 use std::{
     collections::{HashMap, HashSet},
-    fs,
+    fs, iter,
     path::{Path, PathBuf},
     sync::Arc,
     thread::sleep,
@@ -193,7 +193,16 @@ fn test_leader_failure_4() {
     );
 }
 
-fn run_network_partition(
+/// This function runs a network, initiates a partition based on a
+/// configuration, resolve the partition, then checks that the network
+/// continues to achieve consensus
+/// # Arguments
+/// * `partitions` - A slice of partition configurations, where each partition
+/// configuration is a slice of (usize, bool), representing a node's stake and
+/// whether or not it should be killed during the partition
+/// * `leader_schedule` - An option that specifies whether the cluster should
+/// run with a fixed, predetermined leader schedule
+fn run_cluster_partition(
     partitions: &[&[(usize, bool)]],
     leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
 ) {
@@ -228,8 +237,8 @@ fn run_network_partition(
             )
         } else {
             (
-                (0..partitions.len())
-                    .map(|_| Arc::new(Keypair::new()))
+                iter::repeat_with(|| Arc::new(Keypair::new()))
+                    .take(partitions.len())
                     .collect(),
                 10_000,
             )
@@ -249,7 +258,7 @@ fn run_network_partition(
     // Partition needs to start after the first few shorter warmup epochs, otherwise
     // no root will be set before the partition is resolved, the leader schedule will
     // not be computable, and the cluster wll halt.
-    let partition_epoch_start_offset = cluster_tests::time_untl_nth_epoch(
+    let partition_epoch_start_offset = cluster_tests::time_until_nth_epoch(
         partition_start_epoch,
         config.slots_per_epoch,
         config.stakers_slot_offset,
@@ -363,22 +372,22 @@ fn run_network_partition(
 #[ignore]
 #[test]
 #[serial]
-fn test_network_partition_1_2() {
-    run_network_partition(&[&[(1, false)], &[(1, false), (1, false)]], None)
+fn test_cluster_partition_1_2() {
+    run_cluster_partition(&[&[(1, false)], &[(1, false), (1, false)]], None)
 }
 
 #[allow(unused_attributes)]
 #[ignore]
 #[test]
 #[serial]
-fn test_network_partition_1_1() {
-    run_network_partition(&[&[(1, false)], &[(1, false)]], None)
+fn test_cluster_partition_1_1() {
+    run_cluster_partition(&[&[(1, false)], &[(1, false)]], None)
 }
 
 #[test]
 #[serial]
-fn test_network_partition_1_1_1() {
-    run_network_partition(&[&[(1, false)], &[(1, false)], &[(1, false)]], None)
+fn test_cluster_partition_1_1_1() {
+    run_cluster_partition(&[&[(1, false)], &[(1, false)], &[(1, false)]], None)
 }
 
 #[test]
@@ -397,8 +406,8 @@ fn test_kill_partition() {
     let mut leader_schedule = vec![];
     let num_slots_per_validator = 8;
     let partitions: [&[(usize, bool)]; 3] = [&[(9, true)], &[(10, false)], &[(10, false)]];
-    let validator_keys: Vec<_> = (0..partitions.len())
-        .map(|_| Arc::new(Keypair::new()))
+    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
+        .take(partitions.len())
         .collect();
     for (i, k) in validator_keys.iter().enumerate() {
         let num_slots = {
@@ -414,7 +423,7 @@ fn test_kill_partition() {
         }
     }
 
-    run_network_partition(
+    run_cluster_partition(
         &partitions,
         Some((
             LeaderSchedule::new_from_schedule(leader_schedule),
