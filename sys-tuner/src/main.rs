@@ -81,7 +81,7 @@ fn main() {
         )
         .get_matches();
 
-    let user = value_t_or_exit!(matches, "file", String);
+    let user = value_t_or_exit!(matches, "user", String);
 
     info!("Tune will service requests only from user {}", user);
 
