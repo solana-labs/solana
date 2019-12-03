@@ -113,8 +113,6 @@ waitForNodeToInit() {
     sleep 5
   done
   echo "$hostname booted up"
-  # shellcheck disable=SC2009 # cannot use pgrep to find pid of thread
-  sudo chrt -r -p 99 "$(ps -eT | grep solana-poh-serv | awk '{print $2}')"
 }
 
 case $deployMethod in
