@@ -3949,7 +3949,7 @@ mod tests {
         let pid = std::process::id();
         #[cfg(not(target_os = "linux"))]
         error!(
-            "\nYou can run this to watch RAM:\n   while read -p 'banks: '; do echo $(( $(ps -h -o %z --pid={})/$REPLY));done", pid
+            "\nYou can run this to watch RAM:\n   while read -p 'banks: '; do echo $(( $(ps -o vsize= -p {})/$REPLY));done", pid
         );
         loop {
             num_banks += 1;
@@ -3973,11 +3973,7 @@ mod tests {
                 }
                 #[cfg(not(target_os = "linux"))]
                 {
-                    error!(
-                        "{} banks, get mem usage for pid {} from ps or activity monitor, sleeping for 5 sec",
-                        num_banks,
-                        pid
-                    );
+                    error!("{} banks, sleeping for 5 sec", num_banks);
                     std::thread::sleep(Duration::new(5, 0));
                 }
             }
