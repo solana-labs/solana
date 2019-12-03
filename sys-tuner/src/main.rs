@@ -56,6 +56,7 @@ fn tune_system() {
 #[cfg(unix)]
 fn main() {
     solana_logger::setup();
+    unsafe { libc::umask(0o077) };
     if let Err(e) = std::fs::remove_file(solana_sys_tuner::SOLANA_SYS_TUNER_PATH) {
         if e.kind() != std::io::ErrorKind::NotFound {
             panic!("Failed to remove stale socket file: {:?}", e)
