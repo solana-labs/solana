@@ -1394,7 +1394,7 @@ mod tests {
                 &Rent {
                     lamports_per_byte_year: 42,
                     ..Rent::default()
-                }
+                },
             ),
             Err(InstructionError::InsufficientFunds)
         );

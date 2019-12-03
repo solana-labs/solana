@@ -8,6 +8,7 @@ mod unlocks;
 use crate::genesis_accounts::add_genesis_accounts;
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::input_parsers::pubkey_of;
+use solana_clap_utils::input_validators::is_valid_percentage;
 use solana_genesis::Base64Account;
 use solana_ledger::{blocktree::create_new_ledger, poh::compute_hashes_per_tick};
 use solana_sdk::{
@@ -249,7 +250,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .default_value(default_rent_burn_percentage)
-                .help("amount of rent to burn, as a fraction of std::u8::MAX."),
+                .help("percentage of collected rent to burn")
+                .validator(is_valid_percentage),
         )
         .arg(
             Arg::with_name("target_signatures_per_slot")
