@@ -1706,6 +1706,7 @@ mod tests {
             &dummy_leader_pubkey,
             dummy_leader_lamports,
         );
+
         genesis_config.rent = Rent {
             lamports_per_byte_year: 5,
             exemption_threshold: 1.2,

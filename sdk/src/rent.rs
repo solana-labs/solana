@@ -23,8 +23,8 @@ pub const DEFAULT_LAMPORTS_PER_BYTE_YEAR: u64 = 0; //1_000_000_000 / 100 * 365 /
 /// default amount of time (in years) the balance has to include rent for
 pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 
-/// default amount of rent to burn, as a fraction of std::u8::MAX
-pub const DEFAULT_BURN_PERCENT: u8 = ((50usize * std::u8::MAX as usize) / 100usize) as u8;
+/// default percentage of rent to burn (Valid values are 0 to 100)
+pub const DEFAULT_BURN_PERCENT: u8 = 100;
 
 /// account storage overhead for calculation of base rent
 pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 128;
