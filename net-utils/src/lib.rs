@@ -139,7 +139,7 @@ pub fn verify_reachable_ports(
                 );
                 std::process::exit(1);
             });
-        info!("tdp/{} is reachable", port);
+        info!("tcp/{} is reachable", port);
     }
 
     // Wait for a datagram to arrive at each UDP port
