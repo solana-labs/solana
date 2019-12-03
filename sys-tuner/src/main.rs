@@ -75,25 +75,20 @@ fn main() {
     let listener = unix_socket::UnixListener::bind(solana_sys_tuner::SOLANA_SYS_TUNER_PATH)
         .expect("Failed to bind to the socket file");
 
-    #[cfg(target_os = "linux")]
-    let mut peer_uid = 0;
+    let peer_uid;
 
     // set socket permission
-    #[cfg(target_os = "linux")]
-    {
-        if let Some(user) = users::get_user_by_name("solana") {
-            peer_uid = user.uid();
-            let uid = format!("{}", user.uid());
-            info!("UID for solana is {}", uid);
-            nix::unistd::chown(
-                solana_sys_tuner::SOLANA_SYS_TUNER_PATH,
-                Some(nix::unistd::Uid::from_raw(user.uid())),
-                None,
-            )
-            .expect("Expected to change UID of the socket file");
-        } else {
-            error!("Could not find UID for solana user");
-        }
+    if let Some(user) = users::get_user_by_name("solana") {
+        peer_uid = user.uid();
+        info!("UID for solana is {}", peer_uid);
+        nix::unistd::chown(
+            solana_sys_tuner::SOLANA_SYS_TUNER_PATH,
+            Some(nix::unistd::Uid::from_raw(peer_uid)),
+            None,
+        )
+        .expect("Expected to change UID of the socket file");
+    } else {
+        panic!("Could not find UID for solana user");
     }
 
     info!("Waiting for tuning requests");
