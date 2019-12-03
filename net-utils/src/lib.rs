@@ -75,7 +75,7 @@ fn ip_echo_server_request(
                 ));
             }
 
-            bincode::deserialize(&data[3..]).map_err(|err| {
+            bincode::deserialize(&data[4..]).map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("Failed to deserialize: {:?}", err),
@@ -481,7 +481,10 @@ mod tests {
         let _runtime = ip_echo_server(server_tcp_listener);
 
         let ip_echo_server_addr = server_udp_socket.local_addr().unwrap();
-        get_public_ip_addr(&ip_echo_server_addr).unwrap();
+        assert_eq!(
+            get_public_ip_addr(&ip_echo_server_addr),
+            parse_host("127.0.0.1"),
+        );
 
         verify_reachable_ports(
             &ip_echo_server_addr,
