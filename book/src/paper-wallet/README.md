@@ -18,11 +18,20 @@ To learn more about the BIP39 standard, visit the Bitcoin BIPs Github repository
 [here](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki).
 
 ## Installation
+Solana provides a CLI tool for key generation called `solana-keygen`
 
-The tools used in this guide can all be installed by following the
-[Installing the Validator Software](../running-validator/validator-software.md)
-guide. After installation, you will have access to the `solana`,
-`solana-keygen`, and `solana-validator` tools.
+First, install Rust's package manager `cargo`
+
+```bash
+$ curl https://sh.rustup.rs -sSf | sh
+$ source $HOME/.cargo/env
+```
+
+Then, install the `solana-keygen` tool
+
+```bash
+cargo install solana-keygen
+```
 
 {% page-ref page="paper-wallet/keypair.md" %}
 
