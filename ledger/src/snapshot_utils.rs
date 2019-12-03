@@ -4,7 +4,7 @@ use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
-use solana_runtime::{bank::Bank, serde_utils::deserialize_for_snapshot, status_cache::SlotDelta};
+use solana_runtime::{bank::{Bank, deserialize_for_snapshot}, status_cache::SlotDelta};
 use solana_sdk::{clock::Slot, transaction};
 use std::{
     cmp::Ordering,

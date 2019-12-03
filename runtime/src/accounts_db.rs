@@ -20,7 +20,7 @@
 
 use crate::accounts_index::AccountsIndex;
 use crate::append_vec::{AppendVec, StoredAccount, StoredMeta};
-use crate::serde_utils::deserialize_for_snapshot;
+use crate::bank::deserialize_for_snapshot;
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use fs_extra::dir::CopyOptions;
