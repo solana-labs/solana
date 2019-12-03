@@ -41,6 +41,18 @@ impl KeypairWithSource {
     }
 }
 
+/// Prompts user for a passphrase and then asks for confirmirmation to check for mistakes
+pub fn prompt_passphrase(prompt: &str) -> Result<String, Box<dyn error::Error>> {
+    let passphrase = prompt_password_stderr(&prompt)?;
+    if !passphrase.is_empty() {
+        let confirmed = rpassword::prompt_password_stderr("Enter same passphrase again: ")?;
+        if confirmed != passphrase {
+            return Err("Passphrases did not match".into());
+        }
+    }
+    Ok(passphrase)
+}
+
 /// Reads user input from stdin to retrieve a seed phrase and passphrase for keypair derivation
 pub fn keypair_from_seed_phrase(
     keypair_name: &str,
@@ -54,11 +66,11 @@ pub fn keypair_from_seed_phrase(
     );
 
     if skip_validation {
-        let passphrase = prompt_password_stderr(&passphrase_prompt)?;
+        let passphrase = prompt_passphrase(&passphrase_prompt)?;
         keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)
     } else {
         let mnemonic = Mnemonic::from_phrase(seed_phrase, Language::English)?;
-        let passphrase = prompt_password_stderr(&passphrase_prompt)?;
+        let passphrase = prompt_passphrase(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
         keypair_from_seed(seed.as_bytes())
     }

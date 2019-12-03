@@ -5,7 +5,7 @@ use clap::{
 };
 use num_cpus;
 use solana_clap_utils::keypair::{
-    keypair_from_seed_phrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+    keypair_from_seed_phrase, prompt_passphrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use solana_sdk::{
     pubkey::write_pubkey_file,
@@ -236,8 +236,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 NO_PASSPHRASE.to_string()
             } else {
                 eprintln!("Generating a new keypair");
-                rpassword::prompt_password_stderr(
-                    "For added security, enter a passphrase (empty for no passphrase):",
+                prompt_passphrase(
+                    "For added security, enter a passphrase (empty for no passphrase): ",
                 )?
             };
             let seed = Seed::new(&mnemonic, &passphrase);
