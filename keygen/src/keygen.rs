@@ -1,7 +1,8 @@
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use bs58;
 use clap::{
-    crate_description, crate_name, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
+    crate_description, crate_name, value_t, values_t_or_exit, App, AppSettings, Arg, ArgMatches,
+    SubCommand,
 };
 use num_cpus;
 use solana_clap_utils::keypair::{
@@ -74,6 +75,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .short("f")
                         .long("force")
                         .help("Overwrite the output file if it exists"),
+                )
+                .arg(
+                    Arg::with_name("word_count")
+                        .long("word-count")
+                        .possible_values(&["12", "15", "18", "21", "24"])
+                        .default_value("12")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("Specify the number of words that will be present in the generated seed phrase"),
                 )
                 .arg(
                     Arg::with_name("no_passphrase")
@@ -231,7 +241,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 None => (),
             }
 
-            let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+            let word_count = value_t!(matches.value_of("word_count"), usize).unwrap();
+            let mnemonic_type = MnemonicType::for_word_count(word_count)?;
+            let mnemonic = Mnemonic::new(mnemonic_type, Language::English);
             let passphrase = if matches.is_present("no_passphrase") {
                 NO_PASSPHRASE.to_string()
             } else {
