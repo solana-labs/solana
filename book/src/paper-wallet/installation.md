@@ -34,8 +34,6 @@ Now add the tool to your PATH environment variable with the following command
 export PATH="$(pwd)/solana-release/bin:${PATH}"
 ```
 
-This can be made permanent by adding the above line to your `~/.profile`
-
 ## Check
 Finally, check that `solana-keygen` can be run by running
 ```bash
