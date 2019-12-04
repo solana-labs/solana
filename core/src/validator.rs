@@ -350,7 +350,7 @@ impl Validator {
         let voting_keypair = if config.voting_disabled {
             None
         } else {
-            Some(voting_keypair)
+            Some(voting_keypair.clone())
         };
 
         let tvu = Tvu::new(
