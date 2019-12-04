@@ -4,6 +4,7 @@ mod address_generator;
 mod genesis_accounts;
 mod stakes;
 mod unlocks;
+mod validators;
 
 use crate::genesis_accounts::add_genesis_accounts;
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};

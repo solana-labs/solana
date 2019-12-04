@@ -12,6 +12,7 @@ use solana_sdk::{
     hash::Hash,
     instruction::InstructionError,
     pubkey::Pubkey,
+    rent::Rent,
     slot_hashes::SlotHash,
     sysvar::clock::Clock,
 };
@@ -119,6 +120,10 @@ impl VoteState {
             commission: vote_init.commission,
             ..VoteState::default()
         }
+    }
+
+    pub fn get_rent_exempt_reserve(rent: &Rent) -> u64 {
+        rent.minimum_balance(VoteState::size_of())
     }
 
     pub fn size_of() -> usize {
