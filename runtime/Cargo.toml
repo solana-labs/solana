@@ -42,4 +42,5 @@ crate-type = ["lib"]
 name = "solana_runtime"
 
 [dev-dependencies]
+assert_matches = "1.3.0"
 solana-noop-program = { path = "../programs/noop", version = "0.22.0" }
