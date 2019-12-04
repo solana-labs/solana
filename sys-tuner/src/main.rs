@@ -1,19 +1,29 @@
 use log::*;
 
 #[cfg(target_os = "linux")]
-fn tune_system() {
-    fn find_pid<P: AsRef<std::path::Path>, F>(name: &str, path: P, processor: F) -> Option<u64>
+fn tune_system(uid: u32) {
+    fn find_pid<P: AsRef<std::path::Path>, F>(
+        name: &str,
+        path: P,
+        uid: u32,
+        processor: F,
+    ) -> Option<u64>
     where
         F: Fn(&std::fs::DirEntry) -> Option<u64>,
     {
         for entry in std::fs::read_dir(path).expect("Failed to read /proc folder") {
+            use std::os::unix::fs::MetadataExt;
             if let Ok(dir) = entry {
-                let mut path = dir.path();
-                path.push("comm");
-                if let Ok(comm) = std::fs::read_to_string(path.as_path()) {
-                    if comm.starts_with(name) {
-                        if let Some(pid) = processor(&dir) {
-                            return Some(pid);
+                if let Ok(meta) = std::fs::metadata(dir.path()) {
+                    if uid == meta.uid() {
+                        let mut path = dir.path();
+                        path.push("comm");
+                        if let Ok(comm) = std::fs::read_to_string(path.as_path()) {
+                            if comm.starts_with(name) {
+                                if let Some(pid) = processor(&dir) {
+                                    return Some(pid);
+                                }
+                            }
                         }
                     }
                 }
@@ -26,10 +36,10 @@ fn tune_system() {
     use std::process::Command;
     use std::str::from_utf8;
 
-    if let Some(pid) = find_pid("solana-validato", "/proc", |dir| {
+    if let Some(pid) = find_pid("solana-validato", "/proc", uid, |dir| {
         let mut path = dir.path();
         path.push("task");
-        find_pid("solana-poh-serv", path, |dir1| {
+        find_pid("solana-poh-serv", path, uid, |dir1| {
             if let Ok(pid) = dir1.file_name().into_string() {
                 pid.parse::<u64>().ok()
             } else {
@@ -66,21 +76,20 @@ fn main() {
     let listener = unix_socket::UnixListener::bind(solana_sys_tuner::SOLANA_SYS_TUNER_PATH)
         .expect("Failed to bind to the socket file");
 
+    let peer_uid;
+
     // set socket permission
-    #[cfg(target_os = "linux")]
-    {
-        if let Some(user) = users::get_user_by_name("solana") {
-            let uid = format!("{}", user.uid());
-            info!("UID for solana is {}", uid);
-            nix::unistd::chown(
-                solana_sys_tuner::SOLANA_SYS_TUNER_PATH,
-                Some(nix::unistd::Uid::from_raw(user.uid())),
-                None,
-            )
-            .expect("Expected to change UID of the socket file");
-        } else {
-            error!("Could not find UID for solana user");
-        }
+    if let Some(user) = users::get_user_by_name("solana") {
+        peer_uid = user.uid();
+        info!("UID for solana is {}", peer_uid);
+        nix::unistd::chown(
+            solana_sys_tuner::SOLANA_SYS_TUNER_PATH,
+            Some(nix::unistd::Uid::from_raw(peer_uid)),
+            None,
+        )
+        .expect("Expected to change UID of the socket file");
+    } else {
+        panic!("Could not find UID for solana user");
     }
 
     info!("Waiting for tuning requests");
@@ -88,7 +97,7 @@ fn main() {
         if stream.is_ok() {
             info!("Tuning the system now");
             #[cfg(target_os = "linux")]
-            tune_system();
+            tune_system(peer_uid);
         }
     }
 
