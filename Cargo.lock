@@ -3280,21 +3280,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-config-tests"
-version = "0.22.0"
-dependencies = [
- "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-config-program 0.22.0",
- "solana-logger 0.22.0",
- "solana-runtime 0.22.0",
- "solana-sdk 0.22.0",
-]
-
-[[package]]
 name = "solana-core"
 version = "0.22.0"
 dependencies = [
@@ -3948,6 +3933,7 @@ dependencies = [
 name = "solana-storage-program"
 version = "0.22.0"
 dependencies = [
+ "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
