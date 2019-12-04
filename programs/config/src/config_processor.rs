@@ -326,8 +326,6 @@ mod tests {
         );
     }
 
-    // TODO need from_pubkey in all theses?
-
     #[test]
     fn test_config_updates() {
         solana_logger::setup();
