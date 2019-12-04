@@ -217,11 +217,6 @@ else
   program=$solana_validator
 fi
 
-if [[ -z $CI ]]; then # Skip in CI
-  # shellcheck source=scripts/tune-system.sh
-  source "$here"/../scripts/tune-system.sh
-fi
-
 set -e
 PS4="$(basename "$0"): "
 
