@@ -1,6 +1,7 @@
 use crate::{
     stakes::{create_and_add_stakes, StakerInfo},
     unlocks::UnlockInfo,
+    validators::{create_and_add_validator, ValidatorInfo},
 };
 use solana_sdk::{genesis_config::GenesisConfig, native_token::sol_to_lamports};
 
@@ -614,6 +615,21 @@ fn add_stakes(
         .sum::<u64>()
 }
 
+pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[ValidatorInfo {
+    name: "aurel@ethereum.ro",
+    node: "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1",
+    vote: "7ZdRx2EBYoRuPfyeoNbuHodMUXcAQRcC37MUw3kP6akn",
+    node_sol: 500.0,
+    commission: 0,
+}];
+
+fn add_validators(genesis_config: &mut GenesisConfig, validator_infos: &[ValidatorInfo]) -> u64 {
+    validator_infos
+        .iter()
+        .map(|validator_info| create_and_add_validator(genesis_config, validator_info))
+        .sum::<u64>()
+}
+
 pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
     add_stakes(
         genesis_config,
@@ -630,7 +646,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
         &BATCH_THREE_STAKER_INFOS,
         &BATCH_THREE_UNLOCK_INFO,
         sol_to_lamports(1_000_000.0),
-    )
+    ) + add_validators(genesis_config, &VALIDATOR_INFOS)
 }
 
 #[cfg(test)]

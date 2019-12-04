@@ -36,6 +36,10 @@ impl Default for StakeState {
 }
 
 impl StakeState {
+    pub fn get_rent_exempt_reserve(rent: &Rent) -> u64 {
+        rent.minimum_balance(std::mem::size_of::<StakeState>())
+    }
+
     // utility function, used by Stakes, tests
     pub fn from(account: &Account) -> Option<StakeState> {
         account.state().ok()
@@ -799,10 +803,6 @@ where
         activating,
         deactivating,
     }
-}
-
-pub fn get_stake_rent_exempt_reserve(rent: &Rent) -> u64 {
-    rent.minimum_balance(std::mem::size_of::<StakeState>())
 }
 
 // genesis investor accounts
