@@ -43,15 +43,15 @@ that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
 ## Tune System
 
-For Linux validators, the solana repo includes a script to adjust system
-settings to optimize performance (namely by increasing the OS UDP buffer limits).
+For Linux validators, the solana repo includes a daemon to adjust system settings to optimize
+performance (namely by increasing the OS UDP buffer limits, and scheduling PoH with realtime policy).
 
-Download the script here: https://github.com/solana-labs/solana/blob/master/scripts/tune-system.sh
+The daemon (`solana-sys-tuner`) is included in the solana binary release.
 
-And run:
+To run it:
 
 ```bash
-./tune-system.sh
+sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
 ## Generate identity
