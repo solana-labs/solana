@@ -398,8 +398,8 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>    
-    <STORAGE ACCOUNT PUBKEY>          
+    <STORAGE ACCOUNT OWNER PUBKEY>
+    <STORAGE ACCOUNT PUBKEY>
 ```
 
 #### solana-create-stake-account
@@ -448,8 +448,8 @@ OPTIONS:
     -k, --keypair <PATH>    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>    
-    <STORAGE ACCOUNT PUBKEY>          
+    <STORAGE ACCOUNT OWNER PUBKEY>
+    <STORAGE ACCOUNT PUBKEY>
 ```
 
 #### solana-create-vote-account
@@ -467,7 +467,7 @@ FLAGS:
 OPTIONS:
         --authorized-voter <PUBKEY>         Public key of the authorized voter (defaults to vote account)
         --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to cli config pubkey)
-        --commission <NUM>                  The commission taken on reward redemption (0-255), default: 0
+        --commission <NUM>                  The commission taken on reward redemption (0-100), default: 0
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -674,7 +674,7 @@ USAGE:
     solana pay [FLAGS] [OPTIONS] <PUBKEY> <AMOUNT> [--] [UNIT]
 
 FLAGS:
-        --cancelable    
+        --cancelable
     -h, --help          Prints help information
     -V, --version       Prints version information
 

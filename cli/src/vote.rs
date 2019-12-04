@@ -47,7 +47,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .long("commission")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("The commission taken on reward redemption (0-255), default: 0"),
+                        .help("The commission taken on reward redemption (0-100), default: 0"),
                 )
                 .arg(
                     Arg::with_name("authorized_voter")
@@ -345,10 +345,7 @@ pub fn process_show_vote_account(
         vote_state.authorized_withdrawer
     );
     println!("credits: {}", vote_state.credits());
-    println!(
-        "commission: {}%",
-        f64::from(vote_state.commission) / f64::from(std::u32::MAX)
-    );
+    println!("commission: {}%", vote_state.commission);
     println!(
         "root slot: {}",
         match vote_state.root_slot {
