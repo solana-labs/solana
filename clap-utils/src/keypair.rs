@@ -70,7 +70,7 @@ pub fn keypair_from_seed_phrase(
         keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)
     } else {
         let sanitized = seed_phrase
-            .split(" ")
+            .split(' ')
             .filter(|word| !word.is_empty())
             .collect::<Vec<&str>>()
             .join(" ");
