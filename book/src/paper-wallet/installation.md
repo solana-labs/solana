@@ -14,11 +14,13 @@ MacOS
 ```bash
 $ curl -L -sSf -o solana-release.tar.bz2 'https://github.com/solana-labs/solana/releases/latest/download/solana-release-x86_64-apple-darwin.tar.bz2'
 ```
+**`'https://github.com/solana-labs/solana/releases/latest/download/solana-release-x86_64-apple-darwin.tar.bz2'`**
 
 Linux
 ```bash
 $ curl -L -sSf -o solana-release.tar.bz2 'https://github.com/solana-labs/solana/releases/latest/download/solana-release-x86_64-unknown-linux-gnu.tar.bz2'
 ```
+**`'https://github.com/solana-labs/solana/releases/latest/download/solana-release-x86_64-unknown-linux-gnu.tar.bz2'`**
 
 Next, extract the tarball
 ```bash
