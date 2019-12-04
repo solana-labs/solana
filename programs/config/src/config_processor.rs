@@ -497,5 +497,4 @@ mod tests {
             TransactionError::InstructionError(1, InstructionError::NotEnoughAccountKeys)
         );
     }
-
 }
