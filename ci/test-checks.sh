@@ -23,7 +23,6 @@ _ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0013 --ignore RUSTSEC-2018-0
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
-_ book/build-svg.sh
 _ ci/check-ssh-keys.sh
 
 {
