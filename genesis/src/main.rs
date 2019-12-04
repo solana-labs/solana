@@ -1,16 +1,9 @@
 //! A command-line executable for generating the chain's genesis config.
 
-mod address_generator;
-mod genesis_accounts;
-mod stakes;
-mod unlocks;
-mod validators;
-
-use crate::genesis_accounts::add_genesis_accounts;
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::input_parsers::pubkey_of;
 use solana_clap_utils::input_validators::is_valid_percentage;
-use solana_genesis::Base64Account;
+use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
 use solana_ledger::{blocktree::create_new_ledger, poh::compute_hashes_per_tick};
 use solana_sdk::{
     account::Account,
