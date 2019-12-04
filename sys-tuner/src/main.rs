@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
 use log::*;
 
 #[cfg(target_os = "linux")]
-fn tune_system(uid: u32) {
+fn tune_poh_service_priority(uid: u32) {
     fn find_pid<P: AsRef<std::path::Path>, F>(
         name: &str,
         path: P,
@@ -64,6 +64,34 @@ fn tune_system(uid: u32) {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn tune_kernel_udp_buffers() {
+    use sysctl::CtlValue::String;
+    use sysctl::Sysctl;
+    fn sysctl_write(name: &str, value: &str) {
+        if let Ok(ctl) = sysctl::Ctl::new(name) {
+            info!("Old {} value {:?}", name, ctl.value());
+            let ctl_value = String(value.to_string());
+            match ctl.set_value(String(value.to_string())) {
+                Ok(v) if v == ctl_value => info!("Updated {} to {:?}", name, ctl_value),
+                Ok(v) => info!(
+                    "Update returned success but {} was set to {:?}, instead of {:?}",
+                    name, v, ctl_value
+                ),
+                Err(e) => error!("Failed to set {} to {:?}. Err {:?}", name, ctl_value, e),
+            }
+        } else {
+            error!("Failed to find sysctl {}", name);
+        }
+    }
+
+    // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
+    sysctl_write("net.core.rmem_max", "134217728");
+    sysctl_write("net.core.rmem_default", "134217728");
+    sysctl_write("net.core.wmem_max", "134217728");
+    sysctl_write("net.core.wmem_default", "134217728");
+}
+
 #[cfg(unix)]
 fn main() {
     solana_logger::setup();
@@ -115,7 +143,10 @@ fn main() {
         if stream.is_ok() {
             info!("Tuning the system now");
             #[cfg(target_os = "linux")]
-            tune_system(peer_uid);
+            {
+                tune_kernel_udp_buffers();
+                tune_poh_service_priority(peer_uid);
+            }
         }
     }
 
