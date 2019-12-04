@@ -1,32 +1,12 @@
 use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-// All native programs export a symbol named process()
-pub const ENTRYPOINT: &str = "process";
-
 // Native program ENTRYPOINT prototype
 pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError>;
-
-// Deprecated
-// Convenience macro to define the native program entrypoint.  Supply a fn to this macro that
-// conforms to the `Entrypoint` type signature.
-#[macro_export]
-macro_rules! solana_entrypoint(
-    ($entrypoint:ident) => (
-        #[no_mangle]
-        pub extern "C" fn process(
-            program_id: &$crate::pubkey::Pubkey,
-            keyed_accounts: &mut [$crate::account::KeyedAccount],
-            data: &[u8],
-        ) -> Result<(), $crate::instruction::InstructionError> {
-            $entrypoint(program_id, keyed_accounts, data)
-        }
-    )
-);
 
 /// Convenience macro to declare a native program
 ///
