@@ -91,7 +91,7 @@ pub struct VoteState {
     pub authorized_voter: Pubkey,
     /// the signer for withdrawals
     pub authorized_withdrawer: Pubkey,
-    /// fraction of std::u8::MAX that represents what part of a rewards
+    /// percentage (0-100) that represents what part of a rewards
     ///  payout should be given to this VoteAccount
     pub commission: u8,
 
@@ -167,11 +167,11 @@ impl VoteState {
     ///  if commission calculation is 100% one way or other,
     ///   indicate with false for was_split
     pub fn commission_split(&self, on: f64) -> (f64, f64, bool) {
-        match self.commission {
+        match self.commission.min(100) {
             0 => (0.0, on, false),
-            std::u8::MAX => (on, 0.0, false),
+            100 => (on, 0.0, false),
             split => {
-                let mine = on * f64::from(split) / f64::from(std::u8::MAX);
+                let mine = on * f64::from(split) / f64::from(100);
                 (mine, on - mine, true)
             }
         }
@@ -1066,7 +1066,7 @@ mod tests {
         vote_state.commission = std::u8::MAX;
         assert_eq!(vote_state.commission_split(1.0), (1.0, 0.0, false));
 
-        vote_state.commission = std::u8::MAX / 2;
+        vote_state.commission = 50;
         let (voter_portion, staker_portion, was_split) = vote_state.commission_split(10.0);
 
         assert_eq!(

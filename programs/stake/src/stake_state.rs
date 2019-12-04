@@ -1902,9 +1902,9 @@ mod tests {
             None, // would be Some((0, 2 * 1 + 1 * 2, 3)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
-        vote_state.commission = std::u8::MAX - 1;
+        vote_state.commission = 99;
         assert_eq!(
-            None, // would be pSome((0, 2 * 1 + 1 * 2, 3)),
+            None, // would be Some((0, 2 * 1 + 1 * 2, 3)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
     }
@@ -1993,7 +1993,7 @@ mod tests {
 
         let mut vote_state = VoteState::from(&vote_account).unwrap();
         // split credits 3:1 between staker and voter
-        vote_state.commission = std::u8::MAX / 4;
+        vote_state.commission = 25;
         // put in some credits in epoch 0 for which we should have a non-zero stake
         for _i in 0..100 {
             vote_state.increment_credits(1);
@@ -2033,7 +2033,7 @@ mod tests {
         assert!(voter_commission > 0);
         assert!(staker_rewards > 0);
         assert!(
-            staker_rewards / 3 > voter_commission,
+            staker_rewards / 3 >= voter_commission,
             "rewards should be split ~3:1"
         );
         // verify rewards are added to stake

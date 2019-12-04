@@ -616,7 +616,7 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
             }
         }
         println!(
-            "{} {:<44}  {:<44}  {:>3} ({:>4.1}%)  {:>10}  {:>11}  {:>11}",
+            "{} {:<44}  {:<44}  {:>3}%  {:>10}  {:>11}  {:>11}",
             if delinquent {
                 WARNING.to_string()
             } else {
@@ -625,7 +625,6 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
             vote_account.node_pubkey,
             vote_account.vote_pubkey,
             vote_account.commission,
-            f64::from(vote_account.commission) * 100.0 / f64::from(std::u8::MAX),
             non_zero_or_dash(vote_account.last_vote),
             non_zero_or_dash(vote_account.root_slot),
             if vote_account.activated_stake > 0 {
