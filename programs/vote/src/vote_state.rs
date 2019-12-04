@@ -367,6 +367,22 @@ pub fn authorize(
     vote_account.set_state(&vote_state)
 }
 
+/// Update the node_pubkey, requires signature of the authorized voter
+pub fn update_node(
+    vote_account: &mut KeyedAccount,
+    node_pubkey: &Pubkey,
+    signers: &HashSet<Pubkey>,
+) -> Result<(), InstructionError> {
+    let mut vote_state: VoteState = vote_account.state()?;
+
+    // current authorized voter must say "yay"
+    verify_authorized_signer(&vote_state.authorized_voter, signers)?;
+
+    vote_state.node_pubkey = *node_pubkey;
+
+    vote_account.set_state(&vote_state)
+}
+
 fn verify_authorized_signer(
     authorized: &Pubkey,
     signers: &HashSet<Pubkey>,
@@ -619,6 +635,27 @@ mod tests {
             simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[], 0),
             Err(VoteError::VoteTooOld.into())
         );
+    }
+
+    #[test]
+    fn test_vote_update_node_id() {
+        let (vote_pubkey, mut vote_account) = create_test_account();
+
+        let node_pubkey = Pubkey::new_rand();
+
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, false, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
+        let res = update_node(&mut keyed_accounts[0], &node_pubkey, &signers);
+        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+        let vote_state: VoteState = vote_account.state().unwrap();
+        assert!(vote_state.node_pubkey != node_pubkey);
+
+        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let signers = get_signers(keyed_accounts);
+        let res = update_node(&mut keyed_accounts[0], &node_pubkey, &signers);
+        assert_eq!(res, Ok(()));
+        let vote_state: VoteState = vote_account.state().unwrap();
+        assert_eq!(vote_state.node_pubkey, node_pubkey);
     }
 
     #[test]
