@@ -9,7 +9,6 @@ use crate::{
     rpc_subscriptions::RpcSubscriptions,
     thread_mem_usage,
 };
-use chrono::prelude::*;
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
@@ -656,14 +655,11 @@ impl ReplayStage {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
 
             // Send our last few votes along with the new one
-            let mut last_vote = tower.last_vote();
-            if tower.needs_timestamp(bank.slot()) {
-                let timestamp = Utc::now().timestamp();
-                last_vote.timestamp = Some(timestamp);
-                tower.record_recent_timestamp(bank.slot(), timestamp);
-            }
-            let vote_ix =
-                vote_instruction::vote(&vote_account, &voting_keypair.pubkey(), last_vote);
+            let vote_ix = vote_instruction::vote(
+                &vote_account,
+                &voting_keypair.pubkey(),
+                tower.last_vote_and_timestamp(),
+            );
 
             let mut vote_tx =
                 Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));

@@ -1,3 +1,4 @@
+use chrono::prelude::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_metrics::datapoint_debug;
 use solana_runtime::bank::Bank;
@@ -249,6 +250,13 @@ impl Tower {
         self.last_vote.clone()
     }
 
+    pub fn last_vote_and_timestamp(&mut self) -> Vote {
+        let mut last_vote = self.last_vote();
+        let current_slot = last_vote.slots.iter().max().unwrap_or(&0);
+        last_vote.timestamp = self.maybe_timestamp(*current_slot);
+        last_vote
+    }
+
     pub fn root(&self) -> Option<Slot> {
         self.lockouts.root_slot
     }
@@ -422,19 +430,23 @@ impl Tower {
         }
     }
 
-    pub fn record_recent_timestamp(&mut self, slot: Slot, timestamp: UnixTimestamp) {
-        self.last_timestamp = (slot, timestamp);
-    }
-
-    pub fn needs_timestamp(&self, current_slot: Slot) -> bool {
-        self.last_timestamp.0 == 0
+    fn maybe_timestamp(&mut self, current_slot: Slot) -> Option<UnixTimestamp> {
+        if self.last_timestamp.0 == 0
             || self.last_timestamp.0 + DEFAULT_TIMESTAMP_SLOTS <= current_slot
+        {
+            let timestamp = Utc::now().timestamp();
+            self.last_timestamp = (current_slot, timestamp);
+            Some(timestamp)
+        } else {
+            None
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::{thread::sleep, time::Duration};
 
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, Account))> {
         let mut stakes = vec![];
@@ -908,19 +920,19 @@ mod test {
     }
 
     #[test]
-    fn test_needs_timestamp() {
+    fn test_maybe_timestamp() {
         let mut tower = Tower::default();
-        assert_eq!(tower.needs_timestamp(1), true);
+        assert!(tower.maybe_timestamp(DEFAULT_TIMESTAMP_SLOTS).is_some());
+        let (slot, timestamp) = tower.last_timestamp;
 
-        let (slot, timestamp) = (15, 1575412285);
-        tower.record_recent_timestamp(slot, timestamp);
+        assert_eq!(tower.maybe_timestamp(1), None);
+        assert_eq!(tower.maybe_timestamp(slot), None);
+        assert_eq!(tower.maybe_timestamp(slot + 1), None);
 
-        assert_eq!(tower.needs_timestamp(slot - 1), false);
-        assert_eq!(tower.needs_timestamp(slot + 1), false);
-        assert_eq!(tower.needs_timestamp(slot + DEFAULT_TIMESTAMP_SLOTS), true);
-        assert_eq!(
-            tower.needs_timestamp(slot + DEFAULT_TIMESTAMP_SLOTS + 1),
-            true
-        );
+        sleep(Duration::from_secs(1));
+        assert!(tower
+            .maybe_timestamp(slot + DEFAULT_TIMESTAMP_SLOTS + 1)
+            .is_some());
+        assert!(tower.last_timestamp.1 > timestamp);
     }
 }
