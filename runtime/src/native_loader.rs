@@ -93,7 +93,11 @@ pub fn invoke_entrypoint(
                 match library.get(name.as_bytes()) {
                     Ok(s) => s,
                     Err(e) => {
-                        warn!("Unable to find entrypoint {:?} (error: {:?})", name.as_bytes(), e);
+                        warn!(
+                            "Unable to find entrypoint {:?} (error: {:?})",
+                            name.as_bytes(),
+                            e
+                        );
                         return Err(InstructionError::GenericError);
                     }
                 };
