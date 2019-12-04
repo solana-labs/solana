@@ -53,27 +53,10 @@ pub fn create_and_add_stakes(
 
     let total_lamports = sol_to_lamports(staker_info.sol);
 
-<<<<<<< HEAD
-    let staker_lamports = calculate_staker_lamports(genesis_config);
-    let staker_account = (
-        authorized.staker,
-        Account::new(staker_lamports, 0, &system_program::id()),
-    );
-=======
     // staker is a system account
     let staker_rent_reserve = genesis_config.rent.minimum_balance(0).max(1);
     let staker_fees = calculate_staker_fees(genesis_config, 1.0);
->>>>>>> 369f37a0a... genesis validators (#7235)
 
-    let stakes_lamports = if !genesis_config.accounts.contains(&staker_account) {
-        genesis_config.accounts.push(staker_account);
-
-<<<<<<< HEAD
-        total_lamports - staker_lamports
-    } else {
-        total_lamports
-    };
-=======
     // lamports required to run staking operations for one year
     //  the staker account needs to be rent exempt *and* carry enough
     //  lamports to cover TX fees (delegation) for one year,
@@ -87,7 +70,6 @@ pub fn create_and_add_stakes(
             Account::new(staker_rent_reserve, 0, &system_program::id())
         })
         .lamports += staker_fees;
->>>>>>> 369f37a0a... genesis validators (#7235)
 
     // the staker account needs to be rent exempt *and* carry enough
     //  lamports to cover TX fees (delegation) for one year
@@ -191,11 +173,7 @@ mod tests {
             .iter()
             .all(|(_pubkey, account)| account.lamports <= granularity
                 || account.lamports - granularity
-<<<<<<< HEAD
-                    < get_stake_rent_exempt_reserve(&genesis_config.rent)));
-=======
                     <= StakeState::get_rent_exempt_reserve(&genesis_config.rent)));
->>>>>>> 369f37a0a... genesis validators (#7235)
     }
 
     #[test]
@@ -286,8 +264,6 @@ mod tests {
             },
             total_lamports,
             granularity,
-<<<<<<< HEAD
-=======
             2 + 1,
         );
         // exactly reserve + 1 as a remainder, reserve + 1 gets its own stake
@@ -313,7 +289,6 @@ mod tests {
             },
             total_lamports,
             granularity,
->>>>>>> 369f37a0a... genesis validators (#7235)
             4 + 1,
         );
     }

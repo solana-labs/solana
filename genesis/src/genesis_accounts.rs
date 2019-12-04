@@ -615,9 +615,6 @@ fn add_stakes(
         .sum::<u64>()
 }
 
-<<<<<<< HEAD
-pub(crate) fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
-=======
 pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[ValidatorInfo {
     name: "aurel@ethereum.ro",
     node: "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1",
@@ -634,7 +631,6 @@ fn add_validators(genesis_config: &mut GenesisConfig, validator_infos: &[Validat
 }
 
 pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
->>>>>>> 369f37a0a... genesis validators (#7235)
     add_stakes(
         genesis_config,
         &BATCH_ONE_STAKER_INFOS,
