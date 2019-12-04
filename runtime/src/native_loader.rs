@@ -89,22 +89,18 @@ pub fn invoke_entrypoint(
     let path = create_path(&name);
     match library_open(&path) {
         Ok(library) => unsafe {
-            let entrypoint: Symbol<instruction_processor_utils::Entrypoint> = match library
-                .get(name.as_bytes())
-            {
-                Ok(s) => s,
-                Err(_) => match library.get(instruction_processor_utils::ENTRYPOINT.as_bytes()) {
+            let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
+                match library.get(name.as_bytes()) {
                     Ok(s) => s,
                     Err(e) => {
                         warn!(
-                            "{:?}: Unable to find {:?} in program",
-                            e,
-                            instruction_processor_utils::ENTRYPOINT
+                            "Unable to find entrypoint {:?} (error: {:?})",
+                            name.as_bytes(),
+                            e
                         );
                         return Err(InstructionError::GenericError);
                     }
-                },
-            };
+                };
             let ret = entrypoint(program_id, params, ix_data);
             symbol_cache
                 .write()
