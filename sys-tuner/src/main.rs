@@ -1,3 +1,4 @@
+use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
 use log::*;
 
 #[cfg(target_os = "linux")]
@@ -66,6 +67,23 @@ fn tune_system(uid: u32) {
 #[cfg(unix)]
 fn main() {
     solana_logger::setup();
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
+        .version(solana_clap_utils::version!())
+        .arg(
+            Arg::with_name("user")
+                .long("user")
+                .value_name("user name")
+                .takes_value(true)
+                .required(true)
+                .help("Username of the peer process"),
+        )
+        .get_matches();
+
+    let user = value_t_or_exit!(matches, "user", String);
+
+    info!("Tune will service requests only from user {}", user);
+
     unsafe { libc::umask(0o077) };
     if let Err(e) = std::fs::remove_file(solana_sys_tuner::SOLANA_SYS_TUNER_PATH) {
         if e.kind() != std::io::ErrorKind::NotFound {
@@ -79,7 +97,7 @@ fn main() {
     let peer_uid;
 
     // set socket permission
-    if let Some(user) = users::get_user_by_name("solana") {
+    if let Some(user) = users::get_user_by_name(&user) {
         peer_uid = user.uid();
         info!("UID for solana is {}", peer_uid);
         nix::unistd::chown(
@@ -89,7 +107,7 @@ fn main() {
         )
         .expect("Expected to change UID of the socket file");
     } else {
-        panic!("Could not find UID for solana user");
+        panic!("Could not find UID for {:?} user", user);
     }
 
     info!("Waiting for tuning requests");
