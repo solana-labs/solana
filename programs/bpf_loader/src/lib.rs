@@ -34,6 +34,13 @@ pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm, MemoryRegion), Error> {
     Ok((vm, heap_region))
 }
 
+pub fn check_elf(prog: &[u8]) -> Result<(), Error> {
+    let mut vm = EbpfVm::new(None)?;
+    vm.set_verifier(bpf_verifier::check)?;
+    vm.set_elf(&prog)?;
+    Ok(())
+}
+
 fn serialize_parameters(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
@@ -116,6 +123,11 @@ pub fn process_instruction(
                 if program.signer_key().is_none() {
                     warn!("key[0] did not sign the transaction");
                     return Err(InstructionError::MissingRequiredSignature);
+                }
+
+                if let Err(e) = check_elf(&program.account.data) {
+                    warn!("Invalid ELF: {}", e);
+                    return Err(InstructionError::InvalidAccountData);
                 }
 
                 rent::verify_rent_exemption(&program, &rent)?;
@@ -244,7 +256,11 @@ mod tests {
         let program_id = Pubkey::new_rand();
         let program_key = Pubkey::new_rand();
         let rent_key = rent::id();
+        let mut file = File::open("test_elfs/noop.so").expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
         let mut program_account = Account::new(1, 0, &program_id);
+        program_account.data = elf;
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
         let ix_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
 
@@ -273,6 +289,17 @@ mod tests {
             process_instruction(&program_id, &mut keyed_accounts, &ix_data)
         );
         assert!(keyed_accounts[0].account.executable);
+
+        // Case: Finalize
+        program_account.data[0] = 0; // bad elf
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program_key, true, &mut program_account),
+            KeyedAccount::new(&rent_key, false, &mut rent_account),
+        ];
+        assert_eq!(
+            Err(InstructionError::InvalidAccountData),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
     }
 
     #[test]
