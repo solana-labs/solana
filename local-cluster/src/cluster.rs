@@ -1,5 +1,6 @@
 use solana_client::thin_client::ThinClient;
 use solana_core::contact_info::ContactInfo;
+use solana_core::validator::Validator;
 use solana_core::validator::ValidatorConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
@@ -17,13 +18,19 @@ pub struct ValidatorInfo {
 pub struct ClusterValidatorInfo {
     pub info: ValidatorInfo,
     pub config: ValidatorConfig,
+    pub validator: Option<Validator>,
 }
 
 impl ClusterValidatorInfo {
-    pub fn new(validator_info: ValidatorInfo, config: ValidatorConfig) -> Self {
+    pub fn new(
+        validator_info: ValidatorInfo,
+        config: ValidatorConfig,
+        validator: Validator,
+    ) -> Self {
         Self {
             info: validator_info,
             config,
+            validator: Some(validator),
         }
     }
 }

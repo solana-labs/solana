@@ -3631,6 +3631,7 @@ dependencies = [
 name = "solana-local-cluster"
 version = "0.22.0"
 dependencies = [
+ "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",

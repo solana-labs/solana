@@ -1033,7 +1033,7 @@ impl ReplayStage {
             );
 
             datapoint_error!(
-                "replay-stage-entry_verification_failure",
+                "replay-stage-block-error",
                 ("slot", bank.slot(), i64),
                 ("last_entry", last_entry.to_string(), String),
             );

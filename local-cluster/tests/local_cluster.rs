@@ -8,7 +8,10 @@ use solana_core::{
     partition_cfg::{Partition, PartitionCfg},
     validator::ValidatorConfig,
 };
-use solana_ledger::{bank_forks::SnapshotConfig, blocktree::Blocktree, snapshot_utils};
+use solana_ledger::{
+    bank_forks::SnapshotConfig, blocktree::Blocktree, leader_schedule::FixedSchedule,
+    leader_schedule::LeaderSchedule, snapshot_utils,
+};
 use solana_local_cluster::{
     cluster::Cluster,
     cluster_tests,
@@ -23,13 +26,15 @@ use solana_sdk::{
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
     genesis_config::OperatingMode,
     poh_config::PohConfig,
+    signature::{Keypair, KeypairUtil},
 };
 use std::{
     collections::{HashMap, HashSet},
-    fs,
+    fs, iter,
     path::{Path, PathBuf},
+    sync::Arc,
     thread::sleep,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tempfile::TempDir;
 
@@ -60,7 +65,7 @@ fn test_ledger_cleanup_service() {
     );
     cluster.close_preserve_ledgers();
     //check everyone's ledgers and make sure only ~100 slots are stored
-    for (_, info) in &cluster.validator_infos {
+    for (_, info) in &cluster.validators {
         let mut slots = 0;
         let blocktree = Blocktree::open(&info.info.ledger_path).unwrap();
         blocktree
@@ -188,71 +193,166 @@ fn test_leader_failure_4() {
     );
 }
 
-fn run_network_partition(partitions: &[usize]) {
+/// This function runs a network, initiates a partition based on a
+/// configuration, resolve the partition, then checks that the network
+/// continues to achieve consensus
+/// # Arguments
+/// * `partitions` - A slice of partition configurations, where each partition
+/// configuration is a slice of (usize, bool), representing a node's stake and
+/// whether or not it should be killed during the partition
+/// * `leader_schedule` - An option that specifies whether the cluster should
+/// run with a fixed, predetermined leader schedule
+fn run_cluster_partition(
+    partitions: &[&[(usize, bool)]],
+    leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
+) {
     solana_logger::setup();
     info!("PARTITION_TEST!");
-    let num_nodes = partitions.iter().sum();
-    let validator_config = ValidatorConfig::default();
+    let num_nodes = partitions.len();
+    let node_stakes: Vec<_> = partitions
+        .iter()
+        .flat_map(|p| p.iter().map(|(stake_weight, _)| 100 * *stake_weight as u64))
+        .collect();
+    assert_eq!(node_stakes.len(), num_nodes);
+    let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
+    let partition_start_epoch = 2;
+    let mut validator_config = ValidatorConfig::default();
+
+    // Returns:
+    // 1) The keys for the validiators
+    // 2) The amount of time it would take to iterate through one full iteration of the given
+    // leader schedule
+    let (validator_keys, leader_schedule_time): (Vec<_>, u64) = {
+        if let Some((leader_schedule, validator_keys)) = leader_schedule {
+            assert_eq!(validator_keys.len(), num_nodes);
+            let num_slots_per_rotation = leader_schedule.num_slots() as u64;
+            let fixed_schedule = FixedSchedule {
+                start_epoch: partition_start_epoch,
+                leader_schedule: Arc::new(leader_schedule),
+            };
+            validator_config.fixed_leader_schedule = Some(fixed_schedule);
+            (
+                validator_keys,
+                num_slots_per_rotation * clock::DEFAULT_MS_PER_SLOT,
+            )
+        } else {
+            (
+                iter::repeat_with(|| Arc::new(Keypair::new()))
+                    .take(partitions.len())
+                    .collect(),
+                10_000,
+            )
+        }
+    };
+
+    let validator_pubkeys: Vec<_> = validator_keys.iter().map(|v| v.pubkey()).collect();
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100; num_nodes],
+        cluster_lamports,
+        node_stakes,
         validator_configs: vec![validator_config.clone(); num_nodes],
+        validator_keys: Some(validator_keys),
         ..ClusterConfig::default()
     };
+
     let now = timestamp();
-    let partition_start = now + 60_000;
-    let partition_end = partition_start + 10_000;
-    let mut total = 0;
-    for (j, pn) in partitions.iter().enumerate() {
-        info!(
-            "PARTITION_TEST configuring partition {} for nodes {} - {}",
-            j,
-            total,
-            total + *pn
-        );
-        for i in total..(total + *pn) {
+    // Partition needs to start after the first few shorter warmup epochs, otherwise
+    // no root will be set before the partition is resolved, the leader schedule will
+    // not be computable, and the cluster wll halt.
+    let partition_epoch_start_offset = cluster_tests::time_until_nth_epoch(
+        partition_start_epoch,
+        config.slots_per_epoch,
+        config.stakers_slot_offset,
+    );
+    // Assume it takes <= 10 seconds for `LocalCluster::new` to boot up.
+    let local_cluster_boot_time = 10_000;
+    let partition_start = now + partition_epoch_start_offset + local_cluster_boot_time;
+    let partition_end = partition_start + leader_schedule_time as u64;
+    let mut validator_index = 0;
+    for (i, partition) in partitions.iter().enumerate() {
+        for _ in partition.iter() {
             let mut p1 = Partition::default();
             p1.num_partitions = partitions.len();
-            p1.my_partition = j;
+            p1.my_partition = i;
             p1.start_ts = partition_start;
             p1.end_ts = partition_end;
-            config.validator_configs[i].partition_cfg = Some(PartitionCfg::new(vec![p1]));
+            config.validator_configs[validator_index].partition_cfg =
+                Some(PartitionCfg::new(vec![p1]));
+            validator_index += 1;
         }
-        total += *pn;
     }
     info!(
         "PARTITION_TEST starting cluster with {:?} partitions",
         partitions
     );
-    let cluster = LocalCluster::new(&config);
+    let now = Instant::now();
+    let mut cluster = LocalCluster::new(&config);
+    let elapsed = now.elapsed();
+    assert!(elapsed.as_millis() < local_cluster_boot_time as u128);
+
     let now = timestamp();
-    let timeout = partition_start as i64 - now as i64;
+    let timeout = partition_start as u64 - now as u64;
     info!(
         "PARTITION_TEST sleeping until partition start timeout {}",
         timeout
     );
+    let mut dead_nodes = HashSet::new();
     if timeout > 0 {
         sleep(Duration::from_millis(timeout as u64));
     }
     info!("PARTITION_TEST done sleeping until partition start timeout");
     let now = timestamp();
-    let timeout = partition_end as i64 - now as i64;
+    let timeout = partition_end as u64 - now as u64;
     info!(
         "PARTITION_TEST sleeping until partition end timeout {}",
         timeout
     );
+    let mut alive_node_contact_infos = vec![];
+    let should_exits: Vec<_> = partitions
+        .iter()
+        .flat_map(|p| p.iter().map(|(_, should_exit)| should_exit))
+        .collect();
+    assert_eq!(should_exits.len(), validator_pubkeys.len());
     if timeout > 0 {
-        sleep(Duration::from_millis(timeout as u64));
+        // Give partitions time to propagate their blocks from durinig the partition
+        // after the partition resolves
+        let propagation_time = leader_schedule_time;
+        info!("PARTITION_TEST resolving partition");
+        sleep(Duration::from_millis(timeout));
+        info!("PARTITION_TEST waiting for blocks to propagate after partition");
+        sleep(Duration::from_millis(propagation_time));
+        info!("PARTITION_TEST resuming normal operation");
+        for (pubkey, should_exit) in validator_pubkeys.iter().zip(should_exits) {
+            if *should_exit {
+                info!("Killing validator with id: {}", pubkey);
+                cluster.exit_node(pubkey);
+                dead_nodes.insert(*pubkey);
+            } else {
+                alive_node_contact_infos.push(
+                    cluster
+                        .validators
+                        .get(pubkey)
+                        .unwrap()
+                        .info
+                        .contact_info
+                        .clone(),
+                );
+            }
+        }
     }
-    info!("PARTITION_TEST done sleeping until partition end timeout");
+
+    assert!(alive_node_contact_infos.len() > 0);
     info!("PARTITION_TEST discovering nodes");
-    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
+    let (cluster_nodes, _) = discover_cluster(
+        &alive_node_contact_infos[0].gossip,
+        alive_node_contact_infos.len(),
+    )
+    .unwrap();
     info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
     info!("PARTITION_TEST looking for new roots on all nodes");
-    let mut roots = vec![HashSet::new(); cluster_nodes.len()];
+    let mut roots = vec![HashSet::new(); alive_node_contact_infos.len()];
     let mut done = false;
     while !done {
-        for (i, ingress_node) in cluster_nodes.iter().enumerate() {
+        for (i, ingress_node) in alive_node_contact_infos.iter().enumerate() {
             let client = create_client(
                 ingress_node.client_facing_addr(),
                 solana_core::cluster_info::VALIDATOR_PORT_RANGE,
@@ -272,22 +372,64 @@ fn run_network_partition(partitions: &[usize]) {
 #[ignore]
 #[test]
 #[serial]
-fn test_network_partition_1_2() {
-    run_network_partition(&[1, 2])
+fn test_cluster_partition_1_2() {
+    run_cluster_partition(&[&[(1, false)], &[(1, false), (1, false)]], None)
 }
 
 #[allow(unused_attributes)]
 #[ignore]
 #[test]
 #[serial]
-fn test_network_partition_1_1() {
-    run_network_partition(&[1, 1])
+fn test_cluster_partition_1_1() {
+    run_cluster_partition(&[&[(1, false)], &[(1, false)]], None)
 }
 
 #[test]
 #[serial]
-fn test_network_partition_1_1_1() {
-    run_network_partition(&[1, 1, 1])
+fn test_cluster_partition_1_1_1() {
+    run_cluster_partition(&[&[(1, false)], &[(1, false)], &[(1, false)]], None)
+}
+
+#[test]
+#[serial]
+fn test_kill_partition() {
+    // This test:
+    // 1) Spins up three partitions
+    // 2) Forces more slots in the leader schedule for the first partition so
+    // that this partition will be the heaviiest
+    // 3) Schedules the other validators for sufficient slots in the schedule
+    // so that they will still be locked out of voting for the major partitoin
+    // when the partition resolves
+    // 4) Kills the major partition. Validators are locked out, but should be
+    // able to reset to the major partition
+    // 5) Check for recovery
+    let mut leader_schedule = vec![];
+    let num_slots_per_validator = 8;
+    let partitions: [&[(usize, bool)]; 3] = [&[(9, true)], &[(10, false)], &[(10, false)]];
+    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
+        .take(partitions.len())
+        .collect();
+    for (i, k) in validator_keys.iter().enumerate() {
+        let num_slots = {
+            if i == 0 {
+                // Set up the leader to have 50% of the slots
+                num_slots_per_validator * (partitions.len() - 1)
+            } else {
+                num_slots_per_validator
+            }
+        };
+        for _ in 0..num_slots {
+            leader_schedule.push(k.pubkey())
+        }
+    }
+
+    run_cluster_partition(
+        &partitions,
+        Some((
+            LeaderSchedule::new_from_schedule(leader_schedule),
+            validator_keys,
+        )),
+    )
 }
 
 #[test]
@@ -319,10 +461,7 @@ fn test_two_unbalanced_stakes() {
     );
     cluster.close_preserve_ledgers();
     let leader_pubkey = cluster.entry_point_info.id;
-    let leader_ledger = cluster.validator_infos[&leader_pubkey]
-        .info
-        .ledger_path
-        .clone();
+    let leader_ledger = cluster.validators[&leader_pubkey].info.ledger_path.clone();
     cluster_tests::verify_ledger_ticks(&leader_ledger, num_ticks_per_slot as usize);
 }
 
@@ -560,6 +699,7 @@ fn test_snapshots_blocktree_floor() {
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
         validator_stake,
+        Arc::new(Keypair::new()),
     );
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
@@ -583,7 +723,7 @@ fn test_snapshots_blocktree_floor() {
 
     // Check the validator ledger doesn't contain any slots < slot_floor
     cluster.close_preserve_ledgers();
-    let validator_ledger_path = &cluster.validator_infos[&validator_id];
+    let validator_ledger_path = &cluster.validators[&validator_id];
     let blocktree = Blocktree::open(&validator_ledger_path.info.ledger_path).unwrap();
 
     // Skip the zeroth slot in blocktree that the ledger is initialized with
@@ -721,7 +861,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     );
 
     let corrupt_node = cluster
-        .validator_infos
+        .validators
         .iter()
         .find(|(_, v)| v.config.broadcast_stage_type == faulty_node_type)
         .unwrap()
@@ -768,10 +908,7 @@ fn test_no_voting() {
 
     cluster.close_preserve_ledgers();
     let leader_pubkey = cluster.entry_point_info.id;
-    let ledger_path = cluster.validator_infos[&leader_pubkey]
-        .info
-        .ledger_path
-        .clone();
+    let ledger_path = cluster.validators[&leader_pubkey].info.ledger_path.clone();
     let ledger = Blocktree::open(&ledger_path).unwrap();
     for i in 0..2 * VOTE_THRESHOLD_DEPTH {
         let meta = ledger.meta(i as u64).unwrap().unwrap();
@@ -850,7 +987,7 @@ fn run_repairman_catchup(num_repairmen: u64) {
     // Start up a new node, wait for catchup. Backwards repair won't be sufficient because the
     // leader is sending shreds past this validator's first two confirmed epochs. Thus, the repairman
     // protocol will have to kick in for this validator to repair.
-    cluster.add_validator(&validator_config, repairee_stake);
+    cluster.add_validator(&validator_config, repairee_stake, Arc::new(Keypair::new()));
 
     let all_pubkeys = cluster.get_node_pubkeys();
     let repairee_id = all_pubkeys
