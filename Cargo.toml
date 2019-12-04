@@ -34,7 +34,6 @@ members = [
     "programs/noop",
     "programs/ownable",
     "programs/stake",
-    "programs/stake_tests",
     "programs/storage",
     "programs/storage_tests",
     "programs/vest",
