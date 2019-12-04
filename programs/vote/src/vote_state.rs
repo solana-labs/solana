@@ -27,7 +27,7 @@ pub const INITIAL_LOCKOUT: usize = 2;
 pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
 // Frequency of timestamp Votes
-pub const DEFAULT_TIMESTAMP_INTERVAL_SLOTS: u64 = 4500;
+pub const DEFAULT_TIMESTAMP_SLOTS: u64 = 4500;
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {

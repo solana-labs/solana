@@ -1,8 +1,15 @@
 use solana_ledger::bank_forks::BankForks;
 use solana_metrics::datapoint_debug;
 use solana_runtime::bank::Bank;
-use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
-use solana_vote_program::vote_state::{Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY};
+use solana_sdk::{
+    account::Account,
+    clock::{Slot, UnixTimestamp},
+    hash::Hash,
+    pubkey::Pubkey,
+};
+use solana_vote_program::vote_state::{
+    Lockout, Vote, VoteState, DEFAULT_TIMESTAMP_SLOTS, MAX_LOCKOUT_HISTORY,
+};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -36,6 +43,7 @@ pub struct Tower {
     threshold_size: f64,
     lockouts: VoteState,
     last_vote: Vote,
+    last_timestamp: (Slot, UnixTimestamp),
 }
 
 impl Tower {
@@ -46,6 +54,7 @@ impl Tower {
             threshold_size: VOTE_THRESHOLD_SIZE,
             lockouts: VoteState::default(),
             last_vote: Vote::default(),
+            last_timestamp: (Slot::default(), UnixTimestamp::default()),
         };
 
         tower.initialize_lockouts_from_bank_forks(&bank_forks, vote_account_pubkey);
@@ -411,6 +420,15 @@ impl Tower {
                 self.lockouts = vote_state;
             }
         }
+    }
+
+    pub fn record_recent_timestamp(&mut self, slot: Slot, timestamp: UnixTimestamp) {
+        self.last_timestamp = (slot, timestamp);
+    }
+
+    pub fn needs_timestamp(&self, current_slot: Slot) -> bool {
+        self.last_timestamp.0 == 0
+            || self.last_timestamp.0 + DEFAULT_TIMESTAMP_SLOTS <= current_slot
     }
 }
 
@@ -887,5 +905,22 @@ mod test {
     #[test]
     fn test_recent_votes_exact() {
         vote_and_check_recent(5)
+    }
+
+    #[test]
+    fn test_needs_timestamp() {
+        let mut tower = Tower::default();
+        assert_eq!(tower.needs_timestamp(1), true);
+
+        let (slot, timestamp) = (15, 1575412285);
+        tower.record_recent_timestamp(slot, timestamp);
+
+        assert_eq!(tower.needs_timestamp(slot - 1), false);
+        assert_eq!(tower.needs_timestamp(slot + 1), false);
+        assert_eq!(tower.needs_timestamp(slot + DEFAULT_TIMESTAMP_SLOTS), true);
+        assert_eq!(
+            tower.needs_timestamp(slot + DEFAULT_TIMESTAMP_SLOTS + 1),
+            true
+        );
     }
 }

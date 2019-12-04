@@ -30,7 +30,7 @@ use solana_sdk::{
     timing::{self, duration_as_ms},
     transaction::Transaction,
 };
-use solana_vote_program::{vote_instruction, vote_state::DEFAULT_TIMESTAMP_INTERVAL_SLOTS};
+use solana_vote_program::vote_instruction;
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -657,8 +657,10 @@ impl ReplayStage {
 
             // Send our last few votes along with the new one
             let mut last_vote = tower.last_vote();
-            if bank.slot() % DEFAULT_TIMESTAMP_INTERVAL_SLOTS == 1 {
-                last_vote.timestamp = Some(Utc::now().timestamp());
+            if tower.needs_timestamp(bank.slot()) {
+                let timestamp = Utc::now().timestamp();
+                last_vote.timestamp = Some(timestamp);
+                tower.record_recent_timestamp(bank.slot(), timestamp);
             }
             let vote_ix =
                 vote_instruction::vote(&vote_account, &voting_keypair.pubkey(), last_vote);
