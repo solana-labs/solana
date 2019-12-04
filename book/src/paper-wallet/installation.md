@@ -26,7 +26,7 @@ First, download the latest release tarball from GitHub.
   solana_release=solana-release-x86_64-unknown-linux-gnu.tar.bz2
   ```
 
-2. Download
+3. Download
 
   ```bash
   curl -L -sSf -o solana-release.tar.bz2 $solana_downloads/$solana_release
