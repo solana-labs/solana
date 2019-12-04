@@ -1,4 +1,4 @@
-use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
 use log::*;
 
 #[cfg(target_os = "linux")]
@@ -69,10 +69,9 @@ fn main() {
     solana_logger::setup();
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(solana_clap_utils::version!())
         .arg(
             Arg::with_name("user")
-                .short("u")
                 .long("user")
                 .value_name("user name")
                 .takes_value(true)
