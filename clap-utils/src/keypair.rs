@@ -69,11 +69,7 @@ pub fn keypair_from_seed_phrase(
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)
     } else {
-        let sanitized = seed_phrase
-            .split(' ')
-            .filter(|word| !word.is_empty())
-            .collect::<Vec<&str>>()
-            .join(" ");
+        let sanitized = sanitize_seed_phrase(seed_phrase);
         let mnemonic = Mnemonic::from_phrase(sanitized, Language::English)?;
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
@@ -117,6 +113,13 @@ pub fn keypair_input(
     }
 }
 
+fn sanitize_seed_phrase(seed_phrase: &str) -> String {
+    seed_phrase
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,5 +130,14 @@ mod tests {
         let arg_matches = ArgMatches::default();
         let KeypairWithSource { source, .. } = keypair_input(&arg_matches, "").unwrap();
         assert_eq!(source, Source::Generated);
+    }
+
+    #[test]
+    fn test_sanitize_seed_phrase() {
+        let seed_phrase = " Mary   had\ta\u{2009}little  \n\t lamb";
+        assert_eq!(
+            "Mary had a little lamb".to_owned(),
+            sanitize_seed_phrase(seed_phrase)
+        );
     }
 }
