@@ -54,6 +54,9 @@ pub enum VoteInstruction {
 
     /// Withdraw some amount of funds
     Withdraw(u64),
+
+    /// Update the vote account's node id
+    UpdateNode(Pubkey),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -92,6 +95,20 @@ pub fn authorize(
     Instruction::new(
         id(),
         &VoteInstruction::Authorize(*new_authorized_pubkey, vote_authorize),
+        account_metas,
+    )
+}
+
+pub fn update_node(
+    vote_pubkey: &Pubkey,       // vote account
+    authorized_pubkey: &Pubkey, // currently authorized
+    node_pubkey: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*vote_pubkey, false)].with_signer(authorized_pubkey);
+
+    Instruction::new(
+        id(),
+        &VoteInstruction::UpdateNode(*node_pubkey),
         account_metas,
     )
 }
@@ -144,6 +161,9 @@ pub fn process_instruction(
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
             vote_state::authorize(me, &voter_pubkey, vote_authorize, &signers)
+        }
+        VoteInstruction::UpdateNode(node_pubkey) => {
+            vote_state::update_node(me, &node_pubkey, &signers)
         }
         VoteInstruction::Vote(vote) => {
             datapoint_debug!("vote-native", ("count", 1, i64));
@@ -237,6 +257,15 @@ mod tests {
             )),
             Err(InstructionError::InvalidAccountData),
         );
+        assert_eq!(
+            process_instruction(&update_node(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+            )),
+            Err(InstructionError::InvalidAccountData),
+        );
+
         assert_eq!(
             process_instruction(&withdraw(
                 &Pubkey::default(),
