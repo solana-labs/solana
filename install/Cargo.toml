@@ -21,7 +21,7 @@ dirs = "2.0.2"
 indicatif = "0.13.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
-nix = "0.15.0"
+nix = "0.16.0"
 reqwest = { version = "0.9.22", default-features = false, features = ["rustls-tls"] }
 serde = "1.0.103"
 serde_derive = "1.0.103"
