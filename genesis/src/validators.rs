@@ -1,7 +1,7 @@
 //! validators generator
 use solana_sdk::{
-    account::Account, genesis_config::GenesisConfig, pubkey::Pubkey, system_program,
-    timing::years_as_slots,
+    account::Account, genesis_config::GenesisConfig, native_token::sol_to_lamports, pubkey::Pubkey,
+    system_program, timing::years_as_slots,
 };
 use solana_vote_program::vote_state::{self, VoteState};
 
@@ -9,6 +9,7 @@ use solana_vote_program::vote_state::{self, VoteState};
 pub struct ValidatorInfo {
     pub name: &'static str,
     pub node: &'static str,
+    pub node_sol: f64,
     pub vote: &'static str,
     pub commission: u8,
 }
@@ -33,6 +34,7 @@ pub fn create_and_add_validator(
 ) -> u64 {
     let node: Pubkey = validator_info.node.parse().expect("invalide node");
     let vote: Pubkey = validator_info.vote.parse().expect("invalide vote");
+    let node_lamports = sol_to_lamports(validator_info.node_sol);
 
     // node is the system account from which votes will be issued
     let node_rent_reserve = genesis_config.rent.minimum_balance(0).max(1);
@@ -40,7 +42,7 @@ pub fn create_and_add_validator(
 
     let vote_rent_reserve = VoteState::get_rent_exempt_reserve(&genesis_config.rent).max(1);
 
-    let mut total_lamports = node_voting_fees + vote_rent_reserve;
+    let mut total_lamports = node_voting_fees + vote_rent_reserve + node_lamports;
 
     genesis_config
         .accounts
@@ -49,7 +51,7 @@ pub fn create_and_add_validator(
             total_lamports += node_rent_reserve;
             Account::new(node_rent_reserve, 0, &system_program::id())
         })
-        .lamports += node_voting_fees;
+        .lamports += node_voting_fees + node_lamports;
 
     assert!(
         genesis_config.accounts.get(&vote).is_none(),
@@ -120,6 +122,7 @@ mod tests {
             &[ValidatorInfo {
                 name: "fun",
                 node: "AiTDdNHW2vNtHt7PqWMHx3B8cMPRDNgc7kMiLPJM25QC", // random pubkeys
+                node_sol: 0.0,
                 vote: "77TQYZTHodhnxJcSuVjUvx8GYRCkykPyHtmFTFLjj1Rc",
                 commission: 50,
             }],
@@ -141,7 +144,8 @@ mod tests {
         };
         let total_lamports = VoteState::get_rent_exempt_reserve(&rent) * 2
             + calculate_voting_fees(&genesis_config, 1.0) * 2 // two vote accounts
-            + rent.minimum_balance(0); // one node account
+            + rent.minimum_balance(0) // one node account
+            + sol_to_lamports(1.0); // 2nd vote account ask has SOL
 
         // weird case, just wanted to verify that the duplicated node account gets double fees
         create_and_check_validators(
@@ -150,18 +154,56 @@ mod tests {
                 ValidatorInfo {
                     name: "fun",
                     node: "3VTm54dw8w6jTTsPH4BfoV5vo6mF985JAMtNDRYcaGFc", // random pubkeys
+                    node_sol: 0.0,
                     vote: "GTKWbUoLw3Bv7Ld92crhyXcEk9zUu3VEKfzeuWJZdnfW",
                     commission: 50,
                 },
                 ValidatorInfo {
                     name: "unfun",
-                    node: "3VTm54dw8w6jTTsPH4BfoV5vo6mF985JAMtNDRYcaGFc", // random pubkeys
+                    node: "3VTm54dw8w6jTTsPH4BfoV5vo6mF985JAMtNDRYcaGFc", // random pubkeys, same node
+                    node_sol: 1.0,
                     vote: "8XrFPRULg98kSm535kFaLV4GMnK5JQSuAymyrCHXsUcy",
                     commission: 50,
                 },
             ],
             total_lamports,
             3,
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_vote_collision() {
+        let rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1.0,
+            ..Rent::default()
+        };
+        let mut genesis_config = GenesisConfig {
+            rent,
+            ..GenesisConfig::default()
+        };
+
+        create_and_check_validators(
+            &mut genesis_config,
+            &[
+                ValidatorInfo {
+                    name: "fun",
+                    node: "3VTm54dw8w6jTTsPH4BfoV5vo6mF985JAMtNDRYcaGFc", // random pubkeys
+                    node_sol: 0.0,
+                    vote: "GTKWbUoLw3Bv7Ld92crhyXcEk9zUu3VEKfzeuWJZdnfW",
+                    commission: 50,
+                },
+                ValidatorInfo {
+                    name: "unfun",
+                    node: "3VTm54dw8w6jTTsPH4BfoV5vo6mF985JAMtNDRYcaGFc", // random pubkeys, same node
+                    node_sol: 0.0,
+                    vote: "GTKWbUoLw3Bv7Ld92crhyXcEk9zUu3VEKfzeuWJZdnfW", // duplicate vote, bad juju
+                    commission: 50,
+                },
+            ],
+            0,
+            0,
         );
     }
 }

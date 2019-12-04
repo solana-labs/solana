@@ -619,6 +619,7 @@ pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[ValidatorInfo {
     name: "aurel@ethereum.ro",
     node: "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1",
     vote: "7ZdRx2EBYoRuPfyeoNbuHodMUXcAQRcC37MUw3kP6akn",
+    node_sol: 500.0,
     commission: 50,
 }];
 
