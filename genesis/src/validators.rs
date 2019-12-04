@@ -32,8 +32,8 @@ pub fn create_and_add_validator(
     // information about this validator
     validator_info: &ValidatorInfo,
 ) -> u64 {
-    let node: Pubkey = validator_info.node.parse().expect("invalide node");
-    let vote: Pubkey = validator_info.vote.parse().expect("invalide vote");
+    let node: Pubkey = validator_info.node.parse().expect("invalid node");
+    let vote: Pubkey = validator_info.vote.parse().expect("invalid vote");
     let node_lamports = sol_to_lamports(validator_info.node_sol);
 
     // node is the system account from which votes will be issued
