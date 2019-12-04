@@ -272,7 +272,6 @@ STEP=
 execution_step "Initialize Environment"
 
 cd "$(dirname "$0")/.."
-source foo.sh
 
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
@@ -342,8 +341,8 @@ if [[ -z $CHANNEL ]]; then
 fi
 
 # shellcheck disable=SC1091
-#source ci/upload-ci-artifact.sh
-#source system-test/upload_results_to_slack.sh
+source ci/upload-ci-artifact.sh
+source system-test/upload_results_to_slack.sh
 
 maybeClientOptions=${CLIENT_OPTIONS:+"-c"}
 maybeCustomMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"--custom-machine-type"}
