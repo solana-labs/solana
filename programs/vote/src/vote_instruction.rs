@@ -49,14 +49,14 @@ pub enum VoteInstruction {
     ///  to withdraw
     Authorize(Pubkey, VoteAuthorize),
 
-    /// Update the vote account's node id
-    UpdateNode(Pubkey),
-
     /// A Vote instruction with recent votes
     Vote(Vote),
 
     /// Withdraw some amount of funds
     Withdraw(u64),
+
+    /// Update the vote account's node id
+    UpdateNode(Pubkey),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
