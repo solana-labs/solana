@@ -95,7 +95,7 @@ type ContactInfo = {
  * @property {string} nodePubkey Identity public key of the node voting with this account
  * @property {number} activatedStake The stake, in lamports, delegated to this vote account and activated
  * @property {boolean} epochVoteAccount Whether the vote account is staked for this epoch
- * @property {number} commission A 8-bit unsigned integer used as a fraction (commission/0xFF) for rewards payout
+ * @property {number} commission A percentage (0-100) of rewards payout owed to the voter
  * @property {number} lastVote Most recent slot voted on by this vote account
  */
 type VoteAccountInfo = {
