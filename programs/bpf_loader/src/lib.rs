@@ -7,7 +7,6 @@ use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use log::*;
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::bpf_loader;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils::{limited_deserialize, next_keyed_account};
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -19,7 +18,7 @@ use std::io::Error;
 use std::mem;
 
 solana_sdk::declare_program!(
-    bpf_loader::BS58_STRING,
+    solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
     process_instruction
 );
