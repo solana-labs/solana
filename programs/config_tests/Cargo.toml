@@ -1,7 +1,7 @@
 [package]
-name = "solana-config-program"
+name = "solana-config-tests"
 version = "0.22.0"
-description = "Solana Config program"
+description = "Solana config api tests"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -10,13 +10,14 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.2.0"
-chrono = { version = "0.4.10", features = ["serde"] }
 log = "0.4.8"
 serde = "1.0.103"
 serde_derive = "1.0.103"
 solana-logger = { path = "../../logger", version = "0.22.0" }
 solana-sdk = { path = "../../sdk", version = "0.22.0" }
+solana-config-program = { path = "../config", version = "0.22.0" }
 
-[lib]
-crate-type = ["lib", "cdylib"]
-name = "solana_config_program"
+
+[dev-dependencies]
+solana-runtime = { path = "../../runtime", version = "0.22.0" }
+assert_matches = "1.3.0"
