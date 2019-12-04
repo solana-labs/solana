@@ -290,16 +290,16 @@ mod tests {
         );
         assert!(keyed_accounts[0].account.executable);
 
-                // Case: Finalize
-                program_account.data[0] = 0; // bad elf
-                let mut keyed_accounts = vec![
-                    KeyedAccount::new(&program_key, true, &mut program_account),
-                    KeyedAccount::new(&rent_key, false, &mut rent_account),
-                ];
-                assert_eq!(
-                    Err(InstructionError::InvalidAccountData),
-                    process_instruction(&program_id, &mut keyed_accounts, &ix_data)
-                );
+        // Case: Finalize
+        program_account.data[0] = 0; // bad elf
+        let mut keyed_accounts = vec![
+            KeyedAccount::new(&program_key, true, &mut program_account),
+            KeyedAccount::new(&rent_key, false, &mut rent_account),
+        ];
+        assert_eq!(
+            Err(InstructionError::InvalidAccountData),
+            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+        );
     }
 
     #[test]
