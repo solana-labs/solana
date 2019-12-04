@@ -37,6 +37,10 @@ macro_rules! solana_entrypoint(
 /// # Examples
 ///
 /// ```
+/// use std::str::FromStr;
+/// # // wrapper is used so that the macro invocation occurs in the item position
+/// # // rather than in the statement position which isn't allowed.
+/// # mod item_wrapper {
 /// use solana_sdk::account::KeyedAccount;
 /// use solana_sdk::instruction::InstructionError;
 /// use solana_sdk::pubkey::Pubkey;
@@ -51,11 +55,46 @@ macro_rules! solana_entrypoint(
 ///   Ok(())
 /// }
 ///
-/// solana_sdk::declare_program!(
-///     "My!!!11111111111111111111111111111111111111",
+/// declare_program!(
+///     "My11111111111111111111111111111111111111111",
 ///     solana_my_program,
 ///     my_process_instruction
 /// );
+///
+/// # }
+/// # use solana_sdk::pubkey::Pubkey;
+/// # use item_wrapper::id;
+/// let my_id = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+/// assert_eq!(id(), my_id);
+/// ```
+/// ```
+/// use std::str::FromStr;
+/// # // wrapper is used so that the macro invocation occurs in the item position
+/// # // rather than in the statement position which isn't allowed.
+/// # mod item_wrapper {
+/// use solana_sdk::account::KeyedAccount;
+/// use solana_sdk::instruction::InstructionError;
+/// use solana_sdk::pubkey::Pubkey;
+/// use solana_sdk::declare_program;
+///
+/// fn my_process_instruction(
+///     program_id: &Pubkey,
+///     keyed_accounts: &mut [KeyedAccount],
+///     data: &[u8],
+/// ) -> Result<(), InstructionError> {
+///   // Process an instruction
+///   Ok(())
+/// }
+///
+/// declare_program!(
+///     solana_sdk::system_program::ID,
+///     solana_my_program,
+///     my_process_instruction
+/// );
+/// # }
+///
+/// # use item_wrapper::id;
+/// assert_eq!(id(), solana_sdk::system_program::ID);
 /// ```
 #[macro_export]
 macro_rules! declare_program(
