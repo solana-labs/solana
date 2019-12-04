@@ -29,7 +29,6 @@ members = [
     "programs/btc_spv",
     "programs/btc_spv_bin",
     "programs/config",
-    "programs/config_tests",
     "programs/exchange",
     "programs/failure",
     "programs/noop",

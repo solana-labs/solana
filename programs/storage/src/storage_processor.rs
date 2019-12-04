@@ -94,3 +94,192 @@ pub fn process_instruction(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        id,
+        storage_contract::STORAGE_ACCOUNT_SPACE,
+        storage_instruction::{self, StorageAccountType},
+    };
+    use log::*;
+
+    use assert_matches::assert_matches;
+    use solana_sdk::{
+        account::{create_keyed_accounts, Account, KeyedAccount},
+        clock::DEFAULT_SLOTS_PER_SEGMENT,
+        hash::Hash,
+        instruction::{Instruction, InstructionError},
+        signature::Signature,
+        sysvar::{
+            clock::{self, Clock},
+            Sysvar,
+        },
+    };
+
+    fn test_instruction(
+        ix: &Instruction,
+        program_accounts: &mut [Account],
+    ) -> Result<(), InstructionError> {
+        let mut keyed_accounts: Vec<_> = ix
+            .accounts
+            .iter()
+            .zip(program_accounts.iter_mut())
+            .map(|(account_meta, account)| {
+                KeyedAccount::new(&account_meta.pubkey, account_meta.is_signer, account)
+            })
+            .collect();
+
+        let ret = process_instruction(&id(), &mut keyed_accounts, &ix.data);
+        info!("ret: {:?}", ret);
+        ret
+    }
+
+    #[test]
+    fn test_proof_bounds() {
+        let account_owner = Pubkey::new_rand();
+        let pubkey = Pubkey::new_rand();
+        let mut account = Account {
+            data: vec![0; STORAGE_ACCOUNT_SPACE as usize],
+            ..Account::default()
+        };
+        {
+            let mut storage_account = StorageAccount::new(pubkey, &mut account);
+            storage_account
+                .initialize_storage(account_owner, StorageAccountType::Archiver)
+                .unwrap();
+        }
+
+        let ix = storage_instruction::mining_proof(
+            &pubkey,
+            Hash::default(),
+            0,
+            Signature::default(),
+            Hash::default(),
+        );
+        // the proof is for segment 0, need to move the slot into segment 2
+        let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+        Clock::to_account(
+            &Clock {
+                slot: DEFAULT_SLOTS_PER_SEGMENT * 2,
+                segment: 2,
+                ..Clock::default()
+            },
+            &mut clock_account,
+        );
+
+        assert_eq!(test_instruction(&ix, &mut [account, clock_account]), Ok(()));
+    }
+
+    #[test]
+    fn test_storage_tx() {
+        let pubkey = Pubkey::new_rand();
+        let mut accounts = [(pubkey, Account::default())];
+        let mut keyed_accounts = create_keyed_accounts(&mut accounts);
+        assert!(process_instruction(&id(), &mut keyed_accounts, &[]).is_err());
+    }
+
+    #[test]
+    fn test_serialize_overflow() {
+        let pubkey = Pubkey::new_rand();
+        let clock_id = clock::id();
+        let mut keyed_accounts = Vec::new();
+        let mut user_account = Account::default();
+        let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+        keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
+        keyed_accounts.push(KeyedAccount::new(&clock_id, false, &mut clock_account));
+
+        let ix = storage_instruction::advertise_recent_blockhash(&pubkey, Hash::default(), 1);
+
+        assert_eq!(
+            process_instruction(&id(), &mut keyed_accounts, &ix.data),
+            Err(InstructionError::InvalidAccountData)
+        );
+    }
+
+    #[test]
+    fn test_invalid_accounts_len() {
+        let pubkey = Pubkey::new_rand();
+        let mut accounts = [Account::default()];
+
+        let ix = storage_instruction::mining_proof(
+            &pubkey,
+            Hash::default(),
+            0,
+            Signature::default(),
+            Hash::default(),
+        );
+        // move tick height into segment 1
+        let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+        Clock::to_account(
+            &Clock {
+                slot: 16,
+                segment: 1,
+                ..Clock::default()
+            },
+            &mut clock_account,
+        );
+
+        assert!(test_instruction(&ix, &mut accounts).is_err());
+
+        let mut accounts = [Account::default(), clock_account, Account::default()];
+
+        assert!(test_instruction(&ix, &mut accounts).is_err());
+    }
+
+    #[test]
+    fn test_submit_mining_invalid_slot() {
+        solana_logger::setup();
+        let pubkey = Pubkey::new_rand();
+        let mut accounts = [Account::default(), Account::default()];
+        accounts[0].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
+        accounts[1].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
+
+        let ix = storage_instruction::mining_proof(
+            &pubkey,
+            Hash::default(),
+            0,
+            Signature::default(),
+            Hash::default(),
+        );
+
+        // submitting a proof for a slot in the past, so this should fail
+        assert!(test_instruction(&ix, &mut accounts).is_err());
+    }
+
+    #[test]
+    fn test_submit_mining_ok() {
+        solana_logger::setup();
+        let account_owner = Pubkey::new_rand();
+        let pubkey = Pubkey::new_rand();
+        let mut account = Account::default();
+        account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
+        {
+            let mut storage_account = StorageAccount::new(pubkey, &mut account);
+            storage_account
+                .initialize_storage(account_owner, StorageAccountType::Archiver)
+                .unwrap();
+        }
+
+        let ix = storage_instruction::mining_proof(
+            &pubkey,
+            Hash::default(),
+            0,
+            Signature::default(),
+            Hash::default(),
+        );
+        // move slot into segment 1
+        let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+        Clock::to_account(
+            &Clock {
+                slot: DEFAULT_SLOTS_PER_SEGMENT,
+                segment: 1,
+                ..Clock::default()
+            },
+            &mut clock_account,
+        );
+
+        assert_matches!(test_instruction(&ix, &mut [account, clock_account]), Ok(_));
+    }
+}
