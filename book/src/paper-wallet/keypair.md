@@ -36,7 +36,7 @@ solana-keygen new --help
 ## Public Key Derivation
 
 Public keys can be derived from a seed phrase and a passphrase if you choose to
-use one. This is useful for using using an offline-generated seed phrase to
+use one. This is useful for using an offline-generated seed phrase to
 derive a valid public key. The `solana-keygen pubkey` command will walk you
 through entering your seed phrase and a passphrase if you chose to use one.
 
