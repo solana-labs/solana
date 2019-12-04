@@ -23,14 +23,14 @@ use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
-    clock::{Slot, DEFAULT_TIMESTAMP_INTERVAL_MINS},
+    clock::Slot,
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
-    timing::{self, duration_as_ms, slots_per_interval},
+    timing::{self, duration_as_ms},
     transaction::Transaction,
 };
-use solana_vote_program::vote_instruction;
+use solana_vote_program::{vote_instruction, vote_state::DEFAULT_TIMESTAMP_INTERVAL_SLOTS};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -657,9 +657,7 @@ impl ReplayStage {
 
             // Send our last few votes along with the new one
             let mut last_vote = tower.last_vote();
-            let timestamp_interval =
-                slots_per_interval(bank.slots_per_year(), DEFAULT_TIMESTAMP_INTERVAL_MINS);
-            if bank.slot() % timestamp_interval == 1 {
+            if bank.slot() % DEFAULT_TIMESTAMP_INTERVAL_SLOTS == 1 {
                 last_vote.timestamp = Some(Utc::now().timestamp());
             }
             let vote_ix =

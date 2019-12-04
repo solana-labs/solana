@@ -38,19 +38,13 @@ pub fn years_as_slots(years: f64, tick_duration: &Duration, ticks_per_slot: u64)
         / ticks_per_slot as f64
 }
 
-/// From slots per year to tick_duration
+/// From slots per year to slot duration
 pub fn slot_duration_from_slots_per_year(slots_per_year: f64) -> Duration {
     // Regarding division by zero potential below: for some reason, if Rust stores an `inf` f64 and
     // then converts it to a u64 on use, it always returns 0, as opposed to std::u64::MAX or any
     // other huge value
     let slot_in_ns = (SECONDS_PER_YEAR * 1_000_000_000.0) / slots_per_year;
     Duration::from_nanos(slot_in_ns as u64)
-}
-
-/// From slots per year to slots per some minutes, rounded
-pub fn slots_per_interval(slots_per_year: f64, interval_mins: u64) -> u64 {
-    let seconds = interval_mins * 60;
-    (slots_per_year * seconds as f64 / SECONDS_PER_YEAR).round() as u64
 }
 
 #[cfg(test)]
@@ -97,16 +91,5 @@ mod test {
             slot_duration_from_slots_per_year(slots_per_year),
             Duration::from_millis(1000) * ticks_per_slot
         );
-    }
-
-    #[test]
-    fn test_slots_per_interval() {
-        let slots_per_year = 1_262_277_039.0;
-
-        assert_eq!(slots_per_interval(slots_per_year, 1), 2400);
-        assert_eq!(slots_per_interval(slots_per_year, 4), 9600);
-        assert_eq!(slots_per_interval(slots_per_year, 30), 72000);
-        assert_eq!(slots_per_interval(slots_per_year, 0), 0);
-        assert_eq!(slots_per_interval(0.0, 30), 0);
     }
 }
