@@ -23,13 +23,13 @@ solana-keygen new --no-outfile
 ```
 
 {% hint style="warning" %}
-If `--no-outfile` is **not** specified, the default behavior is to write the
+If the `--no-outfile` flag is **omitted**, the default behavior is to write the
 keypair to `~/.config/solana/id.json`
 {% endhint %}
 
 {% hint style="info" %}
 For added security, increase the seed phrase word count using the `--word-count`
-argumment
+argument
 {% endhint %}
 
 For full usage details run:
