@@ -69,7 +69,12 @@ pub fn keypair_from_seed_phrase(
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)
     } else {
-        let mnemonic = Mnemonic::from_phrase(seed_phrase, Language::English)?;
+        let sanitized = seed_phrase
+            .split(" ")
+            .filter(|word| !word.is_empty())
+            .collect::<Vec<&str>>()
+            .join(" ");
+        let mnemonic = Mnemonic::from_phrase(sanitized, Language::English)?;
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
         keypair_from_seed(seed.as_bytes())
