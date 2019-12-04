@@ -713,7 +713,7 @@ The result field will be a JSON object of `current` and `delinquent` accounts, e
 * `nodePubkey` - Node public key, as base-58 encoded string
 * `activatedStake` - the stake, in lamports, delegated to this vote account and active in this epoch
 * `epochVoteAccount` - bool, whether the vote account is staked for this epoch
-* `commission`, an 8-bit integer used as a fraction \(commission/MAX\_U8\) for rewards payout
+* `commission`, percentage (0-100) of rewards payout owed to the vote account
 * `lastVote` - Most recent slot voted on by this vote account
 
 #### Example:

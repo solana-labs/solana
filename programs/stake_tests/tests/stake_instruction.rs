@@ -125,7 +125,7 @@ fn test_stake_account_lifetime() {
             node_pubkey,
             authorized_voter: vote_pubkey,
             authorized_withdrawer: vote_pubkey,
-            commission: std::u8::MAX / 2,
+            commission: 50,
         },
         10,
     ));
