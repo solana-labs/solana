@@ -203,7 +203,7 @@ pub fn create_keyed_is_signer_accounts<'a>(
             is_signer: *is_signer,
             is_writable: false,
             key,
-            account: account,
+            account,
         })
         .collect()
 }
