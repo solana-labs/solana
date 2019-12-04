@@ -8,7 +8,7 @@ use solana_sdk::{
     pubkey::Pubkey, system_program, timing::years_as_slots,
 };
 use solana_stake_program::stake_state::{
-    create_lockup_stake_account, get_stake_rent_exempt_reserve, Authorized, Lockup,
+    create_lockup_stake_account, Authorized, Lockup, StakeState,
 };
 
 #[derive(Debug)]
@@ -52,7 +52,8 @@ pub fn create_and_add_stakes(
 
     let total_lamports = sol_to_lamports(staker_info.sol);
 
-    let staker_rent_reserve = get_stake_rent_exempt_reserve(&genesis_config.rent).max(1);
+    // staker is a system account
+    let staker_rent_reserve = genesis_config.rent.minimum_balance(0).max(1);
     let staker_fees = calculate_staker_fees(genesis_config, 1.0);
 
     let mut stakes_lamports = total_lamports - staker_fees;
@@ -61,6 +62,7 @@ pub fn create_and_add_stakes(
     //  the staker account needs to be rent exempt *and* carry enough
     //  lamports to cover TX fees (delegation) for one year,
     //  and we support one delegation per epoch
+    // a single staker may administer any number of accounts
     genesis_config
         .accounts
         .entry(authorized.staker)
@@ -85,7 +87,7 @@ pub fn create_and_add_stakes(
 
     let mut address_generator = AddressGenerator::new(&authorized.staker, staker_info.name);
 
-    let stake_rent_exempt_reserve = get_stake_rent_exempt_reserve(&genesis_config.rent);
+    let stake_rent_reserve = StakeState::get_rent_exempt_reserve(&genesis_config.rent);
 
     for unlock in unlocks {
         let lamports = unlock.amount(stakes_lamports);
@@ -111,7 +113,7 @@ pub fn create_and_add_stakes(
                 ),
             );
         }
-        if remainder <= stake_rent_exempt_reserve {
+        if remainder <= stake_rent_reserve {
             genesis_config.add_account(
                 address_generator.next(),
                 create_lockup_stake_account(
@@ -171,7 +173,7 @@ mod tests {
             .iter()
             .all(|(_pubkey, account)| account.lamports <= granularity
                 || account.lamports - granularity
-                    <= get_stake_rent_exempt_reserve(&genesis_config.rent)));
+                    <= StakeState::get_rent_exempt_reserve(&genesis_config.rent)));
     }
 
     #[test]
@@ -184,11 +186,12 @@ mod tests {
             ..Rent::default()
         };
 
-        let reserve = get_stake_rent_exempt_reserve(&rent);
+        let reserve = StakeState::get_rent_exempt_reserve(&rent);
+        let staker_reserve = rent.minimum_balance(0);
 
         // verify that a small remainder ends up in the last stake
         let granularity = reserve;
-        let total_lamports = reserve + reserve * 2 + 1;
+        let total_lamports = staker_reserve + reserve * 2 + 1;
         create_and_check_stakes(
             &mut GenesisConfig {
                 rent,
@@ -214,7 +217,7 @@ mod tests {
 
         // huge granularity doesn't blow up
         let granularity = std::u64::MAX;
-        let total_lamports = reserve + reserve * 2 + 1;
+        let total_lamports = staker_reserve + reserve * 2 + 1;
         create_and_check_stakes(
             &mut GenesisConfig {
                 rent,
@@ -240,7 +243,7 @@ mod tests {
 
         // exactly reserve as a remainder, reserve gets folded in
         let granularity = reserve * 3;
-        let total_lamports = reserve + (granularity + reserve) * 2;
+        let total_lamports = staker_reserve + (granularity + reserve) * 2;
         create_and_check_stakes(
             &mut GenesisConfig {
                 rent,
@@ -265,7 +268,7 @@ mod tests {
         );
         // exactly reserve + 1 as a remainder, reserve + 1 gets its own stake
         let granularity = reserve * 3;
-        let total_lamports = reserve + (granularity + reserve + 1) * 2;
+        let total_lamports = staker_reserve + (granularity + reserve + 1) * 2;
         create_and_check_stakes(
             &mut GenesisConfig {
                 rent,
