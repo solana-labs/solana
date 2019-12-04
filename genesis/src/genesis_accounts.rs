@@ -620,7 +620,7 @@ pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[ValidatorInfo {
     node: "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1",
     vote: "7ZdRx2EBYoRuPfyeoNbuHodMUXcAQRcC37MUw3kP6akn",
     node_sol: 500.0,
-    commission: 50,
+    commission: 0,
 }];
 
 fn add_validators(genesis_config: &mut GenesisConfig, validator_infos: &[ValidatorInfo]) -> u64 {
