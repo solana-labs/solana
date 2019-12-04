@@ -49,7 +49,7 @@ pub fn create_genesis_config_with_leader(
         bootstrap_leader_stake_lamports,
     );
 
-    let accounts = vec![
+    let accounts = [
         (
             mint_keypair.pubkey(),
             Account::new(mint_lamports, 0, &system_program::id()),
@@ -66,7 +66,10 @@ pub fn create_genesis_config_with_leader(
             bootstrap_leader_staking_keypair.pubkey(),
             bootstrap_leader_stake_account,
         ),
-    ];
+    ]
+    .iter()
+    .cloned()
+    .collect();
 
     // Bare minimum program set
     let native_instruction_processors = vec![

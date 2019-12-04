@@ -45,12 +45,7 @@ mod tests {
         add_genesis_accounts(&mut genesis_config);
 
         for _i in 0..NUM_REWARDS_POOLS {
-            let id = random_id();
-            assert!(genesis_config
-                .rewards_pools
-                .iter()
-                .position(|x| x.0 == id)
-                .is_some());
+            assert!(genesis_config.rewards_pools.get(&random_id()).is_some())
         }
     }
 }

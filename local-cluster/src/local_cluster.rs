@@ -151,7 +151,10 @@ impl LocalCluster {
         match genesis_config.operating_mode {
             OperatingMode::SoftLaunch => {
                 genesis_config.native_instruction_processors =
-                    solana_genesis_programs::get_programs(genesis_config.operating_mode, 0).unwrap()
+                    solana_genesis_programs::get_programs(genesis_config.operating_mode, 0)
+                        .unwrap()
+                        .into_iter()
+                        .collect()
             }
             // create_genesis_config_with_leader() assumes OperatingMode::Development so do
             // nothing...
@@ -169,18 +172,13 @@ impl LocalCluster {
             .push(solana_storage_program!());
 
         let storage_keypair = Keypair::new();
-        genesis_config.accounts.push((
+        genesis_config.add_account(
             storage_keypair.pubkey(),
             storage_contract::create_validator_storage_account(leader_pubkey, 1),
-        ));
+        );
 
         // Replace staking config
-        genesis_config.accounts = genesis_config
-            .accounts
-            .into_iter()
-            .filter(|(pubkey, _)| *pubkey != stake_config::id())
-            .collect();
-        genesis_config.accounts.push((
+        genesis_config.add_account(
             stake_config::id(),
             stake_config::create_account(
                 1,
@@ -189,7 +187,7 @@ impl LocalCluster {
                     slash_penalty: std::u8::MAX,
                 },
             ),
-        ));
+        );
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
