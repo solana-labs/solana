@@ -168,6 +168,17 @@ impl<'a> From<(&'a Pubkey, &'a mut Account)> for KeyedAccount<'a> {
     }
 }
 
+impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for KeyedAccount<'a> {
+    fn from((key, is_signer, account): (&'a Pubkey, bool, &'a mut Account)) -> Self {
+        KeyedAccount {
+            is_signer,
+            is_writable: true,
+            key,
+            account,
+        }
+    }
+}
+
 impl<'a> From<&'a mut (Pubkey, Account)> for KeyedAccount<'a> {
     fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
         KeyedAccount {
@@ -181,6 +192,20 @@ impl<'a> From<&'a mut (Pubkey, Account)> for KeyedAccount<'a> {
 
 pub fn create_keyed_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
     accounts.iter_mut().map(Into::into).collect()
+}
+
+pub fn create_keyed_is_signer_accounts<'a>(
+    accounts: &'a mut [(&'a Pubkey, bool, &'a mut Account)],
+) -> Vec<KeyedAccount<'a>> {
+    accounts
+        .iter_mut()
+        .map(|(key, is_signer, account)| KeyedAccount {
+            is_signer: *is_signer,
+            is_writable: false,
+            key,
+            account,
+        })
+        .collect()
 }
 
 pub fn create_keyed_readonly_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
