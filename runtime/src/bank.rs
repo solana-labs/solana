@@ -1227,7 +1227,7 @@ impl Bank {
                     .map(|vote_state| (vote_state.node_pubkey, *staked))
                     .filter(|(_pubkey, staked)| *staked != 0)
             })
-            .collect::<HashMap<Pubkey, u64>>();
+            .collect::<Vec<(Pubkey, u64)>>();
 
         node_stakes.iter().for_each(|(pubkey, staked)| {
             let rent_to_be_paid =
