@@ -10,10 +10,11 @@ the correct cluster before voting. There are two major risks if they do not:
 The validator may be fed a snapshot and gossip info for a different (though not
 necessarily malicious) cluster. If that cluster is at slot 100,000 while the
 cluster the validator intended to join is at 10,000, if the validator votes
-once on the wrong cluster, it is locked out of the correct cluster for at least
-90,000 slots. This is because slashing is based on slot numbers, so when the
-validator makes a vote `V` on the wrong cluster's slot 100,000, it is locked
-out of voting on any slot < `100,000 + lockout(V)` on the correct cluster.
+once on the wrong cluster, it must not vote on the correct cluster for at least
+90,000 slots to avoid being slashed. This is because slashing is based on slot
+numbers, so when the validator makes a vote `V` on the wrong cluster's slot
+100,000, it is locked out of voting on any slot < `100,000 + lockout(V)` on the
+correct cluster.
 
 ### Voting Before Catching Up
 
