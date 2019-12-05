@@ -159,7 +159,7 @@ mod tests {
             Hash::default(),
         );
         // the proof is for segment 0, need to move the slot into segment 2
-        let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+        let mut clock_account = Clock::default().create_account(1);
         Clock::to_account(
             &Clock {
                 slot: DEFAULT_SLOTS_PER_SEGMENT * 2,
@@ -186,7 +186,7 @@ mod tests {
         let clock_id = clock::id();
         let mut keyed_accounts = Vec::new();
         let mut user_account = Account::default();
-        let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+        let mut clock_account = Clock::default().create_account(1);
         keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
         keyed_accounts.push(KeyedAccount::new(&clock_id, false, &mut clock_account));
 
@@ -211,7 +211,7 @@ mod tests {
             Hash::default(),
         );
         // move tick height into segment 1
-        let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+        let mut clock_account = Clock::default().create_account(1);
         Clock::to_account(
             &Clock {
                 slot: 16,
@@ -270,7 +270,7 @@ mod tests {
             Hash::default(),
         );
         // move slot into segment 1
-        let mut clock_account = clock::create_account(1, 0, 0, 0, 0);
+        let mut clock_account = Clock::default().create_account(1);
         Clock::to_account(
             &Clock {
                 slot: DEFAULT_SLOTS_PER_SEGMENT,
