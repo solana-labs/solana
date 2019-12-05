@@ -1456,8 +1456,8 @@ impl Blocktree {
         *self.last_root.read().unwrap()
     }
 
+    // find the first available slot in blocktree that has some data in it
     pub fn lowest_slot(&self) -> Slot {
-        // find the first available slot in blocktree that is connected and has some data in it
         for (slot, meta) in self
             .slot_meta_iterator(0)
             .expect("unable to iterate over meta")
@@ -4352,6 +4352,23 @@ pub mod tests {
                 assert_eq!(map[x].1.as_ref().unwrap().fee, x as u64);
             }
             assert_eq!(map[4].1.as_ref(), None);
+        }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_lowest_slot() {
+        let blocktree_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            for i in 0..10 {
+                let slot = i;
+                let (shreds, _) = make_slot_entries(slot, 0, 1);
+                blocktree.insert_shreds(shreds, None, false).unwrap();
+            }
+            assert_eq!(blocktree.lowest_slot(), 1);
+            blocktree.run_purge_batch(0, 5).unwrap();
+            assert_eq!(blocktree.lowest_slot(), 6);
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
