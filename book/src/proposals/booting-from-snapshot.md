@@ -37,8 +37,8 @@ snapshot. With that set, the validator can follow the procedure detailed in the
 
 For the sections below:
 
-Assume an arbitrary tower state `L`, a snapshot root `S`, and a trusted
-bank slot `T` (defined in step 7-1 of the `Boot Procedure` section).
+Assume an arbitrary tower state `L`, a snapshot root `S`, and a trusted bank
+slot `T` (defined in step 7-1 of the `Boot Procedure` section).
 
 Define `L_i` to be: The slot of the ith vote in `L`.
 
@@ -66,8 +66,8 @@ is:
 
     3) Generate snapshot for that root
 
-3) On startup, the validator checks that the current root in tower exists
-in blocktree. If not (there was a crash between 2-1 and 2-2), then rewrite the
+3) On startup, the validator checks that the current root in tower exists in
+blocktree. If not (there was a crash between 2-1 and 2-2), then rewrite the
 root to blocktree.
 
 4) On startup, the validator boots from the snapshot `S`, then replays all
@@ -76,12 +76,12 @@ which are then stored in an output `BankForks`. This is done in
 `blocktree_processor.rs`. The root of this `BankForks` is set to `S`.
 
 5) On startup, the validator calculates the first slot `S_n` from which it is
-not locked out for voting. Every validator persists its tower state and
-must consult this state in order to boot safely and resume from a snapshot
-without being slashed. From this tower state and the ancestry information
-embedded in the snapshot, a validiator can derive which banks, are "safe" (See
-the `Determining Vote Safety From a Snapshot and Tower` section for more
-detals) to vote for.
+not locked out for voting. Every validator persists its tower state and must
+consult this state in order to boot safely and resume from a snapshot without
+being slashed. From this tower state and the ancestry information embedded in
+the snapshot, a validiator can derive which banks, are "safe" (See the
+`Determining Vote Safety From a Snapshot and Tower` section for more detals) to
+vote for.
 
 6) Periodically send canary transactions to the cluster using the validator's
 local recent blockhash.
@@ -148,8 +148,8 @@ slot `S_n` that it can vote on without violating the lockouts of any vote in
 true.
 
 2) `V` and every vote after it needs to expire before the validator can vote on
-any descendant of `S`, so with all the votes `V_i` in tower where `V_i >=
-V`, `S_n = max(V_i + lockout(V_i))`. If no `V` exists, then `S_n = S`.
+any descendant of `S`, so with all the votes `V_i` in tower where `V_i >= V`,
+`S_n = max(V_i + lockout(V_i))`. If no `V` exists, then `S_n = S`.
 
 
 ## Achieving Safety
@@ -251,15 +251,14 @@ all frozen ancestors `>= R`. Furthermore, `BankForks` prunes ancestors in its
 set of `banks` that are `< R'` after setting a new root `R'`, so this invariant
 is always true.
 
-**Lemma 2:** Given a root bank `R` of `BankForks` and some `L_i` in tower,
-if `L_i >= S`, then `L_i >= R`.
+**Lemma 2:** Given a root bank `R` of `BankForks` and some `L_i` in tower, if
+`L_i >= S`, then `L_i >= R`.
 
 **Proof:** When we boot from a snapshot, we set `R == S`, and in this case
 because we are assuming `L_i > S`, then we know `L_i >= R` at bootup. Then when
 we set a new root in BankForks `R'` after booting, we guarantee this only
-happens if the tower root is also set to `R'`. By the construction of
-tower, all votes in the tower must be greater than the tower root, so
-`L_i >= R'`. 
+happens if the tower root is also set to `R'`. By the construction of tower,
+all votes in the tower must be greater than the tower root, so `L_i >= R'`.
 
 For `Case 2` we assumed `L_i` >= `S`, so from Lemma 2 we know `L_i` >= `R`.
 Then from Lemma 1 we know its sufficient to check
