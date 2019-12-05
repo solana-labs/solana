@@ -60,7 +60,9 @@ consistency in `replay_stage` that the order of events when setting a new root
 is:
 
     1) Write the root to tower
+
     2) Write the root to blocktree
+
     3) Generate snapshot for that root
 
 3) On startup, the validator checks that the current root in tower exists
@@ -87,13 +89,50 @@ local recent blockhash.
 2/3 of the cluster's stake roots a bank. This allows the validator to prune its
 state and also calculate leader schedules as it moves across epochs.
 
-   1) Observe a canary transaction in a bank that some threshold of trusted
-   validator stake has voted on. Call this trusted bank `T`.
+   1) Verify threshold commitment from the trusted validators on `S`. See the
+   `Trusted Validator Set` section for details.
 
-   2) The current working bank has slot number `S_current` > `S_n`
+   2) Observe a canary transaction in a bank that some threshold of trusted
+   validator stake has voted on at least once. Call this trusted bank `T`.
+
+   3) The current working bank has slot number `S_current` > `S_n`
 
 8) Start the normal voting process, voting for any slot that satisfies
 `S_current` > `S_n`
+
+
+## Trusted Validator Set
+
+The booting validator needs to have a set of trusted validators that it uses to
+validate the snapshot and that it is caught up.  To guarantee that the booting
+validator connects to the cluster, the set needs to contain some threshold of
+validators that are still participating in consensus. This excludes validators
+that are running but are experiencing some attack (such as an eclipse attack)
+that prevents them from receiving slots, voting, or broadcasting their votes.
+
+### Verifying the Cluster is Building from the Snapshot
+
+The booting validator can confirm that the snapshot is valid and that the
+cluster it intends to join is building off of `S` by verifying the signatures
+of votes for `S`. The validator can calculate the commitment of its trusted
+validators, and at some threshold, such as 2/3 of trusted validators are locked
+out at least 2^31 slots, accept the snapshot.
+
+**Proof:** For the snapshot to be valid, the validator that made the snapshot
+must have rooted `S`, meaning that it must have observed at least 2/3 of stake
+having >=2^31 lockout on `S`. Any validators that are participating in
+consensus will eventually also observe the same lockout on `S`, and will
+therefore bring themselves up to >=2^31 lockout on `S`. Thus with any set of
+trusted validators meeting the conditions above, the booting validator will
+eventually observe the threshold commitment and accept the snapshot.
+
+### Verifying Booting Validator is Caught Up
+
+The booting validator should send canary transactions as described in the `Boot
+Procedure`. When the booting validator observes a canary transaction in a bank,
+and it observes at least one vote for that bank from a threshold (ie 2/3) of
+trusted validators, it can conclude that it has caught up to the trusted
+validators.
 
 
 ## Determining `S_n` From a Snapshot and Tower
