@@ -754,9 +754,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             _ => return Err(InstructionError::InvalidAccountData),
         };
 
-        // verify that lockup has expired or that the withdrawal is going back
-        //   to the custodian
-        if lockup.epoch > clock.epoch && lockup.custodian != *to.unsigned_key() {
+        // verify that lockup has expired or that the withdrawal is signed by
+        //   the custodian
+        if lockup.epoch > clock.epoch && !signers.contains(&lockup.custodian) {
             return Err(StakeError::LockupInForce.into());
         }
 
@@ -1792,20 +1792,20 @@ mod tests {
             Err(StakeError::LockupInForce.into())
         );
 
-        // but we *can* send to the custodian
-        let mut custodian_account = Account::new(1, 0, &system_program::id());
-        let mut custodian_keyed_account =
-            KeyedAccount::new(&custodian, false, &mut custodian_account);
-        assert_eq!(
-            stake_keyed_account.withdraw(
-                total_lamports,
-                &mut custodian_keyed_account,
-                &clock,
-                &StakeHistory::default(),
-                &signers,
-            ),
-            Ok(())
-        );
+        {
+            let mut signers_with_custodian = signers.clone();
+            signers_with_custodian.insert(custodian);
+            assert_eq!(
+                stake_keyed_account.withdraw(
+                    total_lamports,
+                    &mut to_keyed_account,
+                    &clock,
+                    &StakeHistory::default(),
+                    &signers_with_custodian,
+                ),
+                Ok(())
+            );
+        }
         // reset balance
         stake_keyed_account.account.lamports = total_lamports;
 
