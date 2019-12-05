@@ -1147,6 +1147,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         commitment::BlockCommitment,
+        consensus::Tower,
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
@@ -1164,6 +1165,8 @@ pub(crate) mod tests {
         },
     };
     use solana_runtime::genesis_utils::GenesisConfigInfo;
+    use solana_sdk::account::Account;
+    use solana_sdk::rent::Rent;
     use solana_sdk::{
         hash::{hash, Hash},
         instruction::InstructionError,
@@ -1172,11 +1175,244 @@ pub(crate) mod tests {
         system_transaction,
         transaction::TransactionError,
     };
-    use solana_vote_program::vote_state::VoteState;
+    use solana_stake_program::stake_state;
+    use solana_vote_program::vote_state;
+    use solana_vote_program::vote_state::{Vote, VoteState};
     use std::{
         fs::remove_dir_all,
         sync::{Arc, RwLock},
     };
+
+    #[test]
+    fn test_minority_fork_overcommit_attack() {
+        //
+        // Minority     -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
+        // 0 -> 1 -> 2
+        // Majority     -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19
+        //
+
+        fn vote(bank: &Arc<Bank>, pubkey: &Pubkey, slot: Slot) {
+            let mut vote_account = bank.get_account(&pubkey).unwrap();
+            let mut vote_state = VoteState::from(&vote_account).unwrap();
+            vote_state.process_slot_vote_unchecked(slot);
+            vote_state.to(&mut vote_account).unwrap();
+            bank.store_account(&pubkey, &vote_account);
+        }
+
+        const BOOTSTRAP_LEADER: usize = 0;
+        const HONEST_NODE: usize = 1;
+        const MALICIOUS_NODE: usize = 2;
+
+        let neutral_path: Vec<u64> = vec![0, 1, 2];
+        let minority_fork: Vec<u64> = vec![3, 4, 5, 6, 7, 8, 9, 10, 11];
+        let majority_fork: Vec<u64> = vec![12, 13, 14, 15, 16, 17, 18, 19, 20];
+
+        let mut towers = vec![Tower::new_for_tests(8, 0.67), Tower::new_for_tests(8, 0.67)];
+
+        // We are at majority fork
+        for slot in majority_fork.iter() {
+            towers[BOOTSTRAP_LEADER].record_bank_vote(Vote {
+                hash: Hash::default(),
+                slots: vec![*slot],
+            });
+
+            towers[HONEST_NODE].record_bank_vote(Vote {
+                hash: Hash::default(),
+                slots: vec![*slot],
+            });
+        }
+
+        // Bootstrap leader node has: 34% stake, honest and malicious node has: 33% stake
+        let node_stakes: Vec<u64> = vec![34_000_000, 33_000_000, 33_000_000];
+        let node_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
+        let node_voting_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
+        let node_staking_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
+
+        let mut genesis_vote_accounts: Vec<Account> = vec![
+            vote_state::create_account(
+                &node_voting_keypairs[BOOTSTRAP_LEADER].pubkey(),
+                &node_keypairs[BOOTSTRAP_LEADER].pubkey(),
+                0,
+                node_stakes[BOOTSTRAP_LEADER],
+            ),
+            vote_state::create_account(
+                &node_voting_keypairs[HONEST_NODE].pubkey(),
+                &node_keypairs[HONEST_NODE].pubkey(),
+                0,
+                node_stakes[HONEST_NODE],
+            ),
+            vote_state::create_account(
+                &node_voting_keypairs[MALICIOUS_NODE].pubkey(),
+                &node_keypairs[MALICIOUS_NODE].pubkey(),
+                0,
+                node_stakes[MALICIOUS_NODE],
+            ),
+        ];
+
+        let genesis_stake_accounts: Vec<Account> = vec![
+            stake_state::create_account(
+                &node_staking_keypairs[BOOTSTRAP_LEADER].pubkey(),
+                &node_voting_keypairs[BOOTSTRAP_LEADER].pubkey(),
+                &genesis_vote_accounts[BOOTSTRAP_LEADER],
+                &Rent::default(),
+                node_stakes[BOOTSTRAP_LEADER],
+            ),
+            stake_state::create_account(
+                &node_staking_keypairs[HONEST_NODE].pubkey(),
+                &node_voting_keypairs[HONEST_NODE].pubkey(),
+                &genesis_vote_accounts[HONEST_NODE],
+                &Rent::default(),
+                node_stakes[HONEST_NODE],
+            ),
+            stake_state::create_account(
+                &node_staking_keypairs[MALICIOUS_NODE].pubkey(),
+                &node_voting_keypairs[MALICIOUS_NODE].pubkey(),
+                &genesis_vote_accounts[MALICIOUS_NODE],
+                &Rent::default(),
+                node_stakes[MALICIOUS_NODE],
+            ),
+        ];
+
+        let mut genesis_config = create_genesis_config(10_000).genesis_config;
+        genesis_config.accounts.clear();
+
+        for i in BOOTSTRAP_LEADER..=MALICIOUS_NODE {
+            genesis_config.accounts.insert(
+                node_voting_keypairs[i].pubkey(),
+                genesis_vote_accounts[i].clone(),
+            );
+            genesis_config.accounts.insert(
+                node_staking_keypairs[i].pubkey(),
+                genesis_stake_accounts[i].clone(),
+            );
+        }
+
+        let mut bank_forks = BankForks::new(0, Bank::new(&genesis_config));
+
+        let mut fork_progress: HashMap<u64, ForkProgress> = HashMap::new();
+        fork_progress.entry(0).or_insert_with(|| {
+            ForkProgress::new(
+                bank_forks.banks[&0].slot(),
+                bank_forks.banks[&0].last_blockhash(),
+            )
+        });
+
+        for i in neutral_path.iter().skip(1) {
+            let bank = Bank::new_from_parent(
+                &bank_forks.banks[&(i - 1)],
+                &node_keypairs[BOOTSTRAP_LEADER].pubkey(),
+                *i,
+            );
+
+            bank.freeze();
+
+            fork_progress
+                .entry(*i)
+                .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
+
+            bank_forks.insert(bank);
+
+            vote(
+                &bank_forks.banks[&i],
+                &node_voting_keypairs[BOOTSTRAP_LEADER].pubkey(),
+                *i - 1,
+            );
+
+            vote(
+                &bank_forks.banks[&i],
+                &node_voting_keypairs[HONEST_NODE].pubkey(),
+                *i - 1,
+            );
+
+            vote(
+                &bank_forks.banks[&i],
+                &node_voting_keypairs[MALICIOUS_NODE].pubkey(),
+                *i - 1,
+            );
+        }
+
+        let last_neutral_bank = &bank_forks.banks[&2].clone();
+
+        for (index, slot) in minority_fork.iter().enumerate() {
+            let last_sequential_bank = &bank_forks.banks[&(*slot - 1)].clone();
+            let last_bank = if index == 0 {
+                last_neutral_bank
+            } else {
+                last_sequential_bank
+            };
+
+            let bank = Bank::new_from_parent(
+                last_bank,
+                &node_voting_keypairs[MALICIOUS_NODE].pubkey(),
+                *slot,
+            );
+
+            bank.freeze();
+
+            fork_progress
+                .entry(bank.slot())
+                .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
+
+            bank_forks.insert(bank);
+
+            vote(
+                &bank_forks.banks[slot],
+                &node_voting_keypairs[MALICIOUS_NODE].pubkey(),
+                last_bank.slot(),
+            );
+        }
+
+        for (index, slot) in majority_fork.iter().enumerate() {
+            let last_sequential_bank = &bank_forks.banks[&(*slot - 1)].clone();
+            let last_bank = if index == 0 {
+                last_neutral_bank
+            } else {
+                last_sequential_bank
+            };
+
+            let bank = Bank::new_from_parent(
+                last_bank,
+                &node_voting_keypairs[HONEST_NODE].pubkey(),
+                *slot,
+            );
+
+            bank.freeze();
+
+            fork_progress
+                .entry(bank.slot())
+                .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
+
+            bank_forks.insert(bank);
+
+            vote(
+                &bank_forks.banks[slot],
+                &node_voting_keypairs[BOOTSTRAP_LEADER].pubkey(),
+                last_bank.slot(),
+            );
+
+            vote(
+                &bank_forks.banks[slot],
+                &node_voting_keypairs[HONEST_NODE].pubkey(),
+                last_bank.slot(),
+            );
+        }
+
+        let response = ReplayStage::select_fork(
+            &node_keypairs[BOOTSTRAP_LEADER].pubkey(),
+            &bank_forks.ancestors(),
+            &Arc::new(RwLock::new(bank_forks)),
+            &towers[BOOTSTRAP_LEADER],
+            &mut fork_progress,
+        );
+
+        assert!(response.is_some());
+
+        let (bank, stats) = response.unwrap();
+
+        // We switched to minority fork, but we are locked out.
+        assert_eq!(bank.slot(), minority_fork[minority_fork.len() - 1]);
+        assert!(stats.is_locked_out);
+    }
 
     #[test]
     fn test_child_slots_of_same_parent() {
