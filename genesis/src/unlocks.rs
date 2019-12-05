@@ -8,6 +8,7 @@ pub struct UnlockInfo {
     pub cliff_years: f64,
     pub unlocks: usize,
     pub unlock_years: f64,
+    pub custodian: &'static str,
 }
 
 #[derive(Debug, Default, Clone)]

@@ -17,7 +17,6 @@ pub struct StakerInfo {
     pub staker: &'static str,
     pub withdrawer: &'static str,
     pub sol: f64,
-    pub custodian: &'static str,
 }
 
 // lamports required to run staking operations for one year
@@ -44,11 +43,24 @@ pub fn create_and_add_stakes(
     // the largest each stake account should be, in lamports
     granularity: u64,
 ) -> u64 {
+<<<<<<< HEAD
     let authorized = Authorized {
         staker: Pubkey::new(&hex::decode(staker_info.staker).expect("hex")),
         withdrawer: Pubkey::new(&hex::decode(staker_info.withdrawer).expect("hex")),
     };
     let custodian = Pubkey::new(&hex::decode(staker_info.custodian).expect("hex"));
+=======
+    let authorized = Authorized::auto(
+        &staker_info
+            .staker
+            .parse::<Pubkey>()
+            .expect("invalid staker"),
+    );
+    let custodian = unlock_info
+        .custodian
+        .parse::<Pubkey>()
+        .expect("invalid custodian");
+>>>>>>> d8e1a196b... more genesis (#7291)
 
     let total_lamports = sol_to_lamports(staker_info.sol);
 
@@ -202,13 +214,17 @@ mod tests {
                 staker: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
                 withdrawer: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
                 sol: lamports_to_sol(total_lamports),
+<<<<<<< HEAD
                 custodian: "0000000000000000000000000000000000000000000000000000000000000000",
+=======
+>>>>>>> d8e1a196b... more genesis (#7291)
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
                 cliff_years: 0.5,
                 unlocks: 1,
                 unlock_years: 0.5,
+                custodian: "11111111111111111111111111111111",
             },
             total_lamports,
             granularity,
@@ -228,13 +244,17 @@ mod tests {
                 staker: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
                 withdrawer: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
                 sol: lamports_to_sol(total_lamports),
+<<<<<<< HEAD
                 custodian: "0000000000000000000000000000000000000000000000000000000000000000",
+=======
+>>>>>>> d8e1a196b... more genesis (#7291)
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
                 cliff_years: 0.5,
                 unlocks: 1,
                 unlock_years: 0.5,
+                custodian: "11111111111111111111111111111111",
             },
             total_lamports,
             granularity,
@@ -254,13 +274,17 @@ mod tests {
                 staker: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
                 withdrawer: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
                 sol: lamports_to_sol(total_lamports),
+<<<<<<< HEAD
                 custodian: "0000000000000000000000000000000000000000000000000000000000000000",
+=======
+>>>>>>> d8e1a196b... more genesis (#7291)
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
                 cliff_years: 0.5,
                 unlocks: 1,
                 unlock_years: 0.5,
+                custodian: "11111111111111111111111111111111",
             },
             total_lamports,
             granularity,
@@ -279,13 +303,17 @@ mod tests {
                 staker: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
                 withdrawer: "cafebabedeadbeef000000000000000000000000000000000000000000000000",
                 sol: lamports_to_sol(total_lamports),
+<<<<<<< HEAD
                 custodian: "0000000000000000000000000000000000000000000000000000000000000000",
+=======
+>>>>>>> d8e1a196b... more genesis (#7291)
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
                 cliff_years: 0.5,
                 unlocks: 1,
                 unlock_years: 0.5,
+                custodian: "11111111111111111111111111111111",
             },
             total_lamports,
             granularity,
