@@ -16,7 +16,7 @@ The total stake allocated to a Vote account can be calculated by the sum of all 
 
 ## Vote and Stake accounts
 
-The rewards process is split into two on-chain programs. The Vote program solves the problem of making stakes slashable. The Stake account acts as custodian of the rewards pool, and provides passive delegation. The Stake program is responsible for paying out each staker once the staker proves to the Stake program that its delegate has participated in validating the ledger.
+The rewards process is split into two on-chain programs. The Vote program solves the problem of making stakes slashable. The Stake program acts as custodian of the rewards pool and provides for passive delegation. The Stake program is responsible for paying rewards to staker and voter when shown that a staker's delegate has participated in validating the ledger.
 
 ### VoteState
 
@@ -228,4 +228,4 @@ Only lamports in excess of effective+activating stake may be withdrawn at any ti
 
 ### Lock-up
 
-Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as a slot height, i.e. the minimum slot height that must be reached by the network before the stake account balance is available for withdrawal, except to a specified custodian. This information is gathered when the stake account is created.
+Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as an epoch height, i.e. the minimum epoch height that must be reached by the network before the stake account balance is available for withdrawal, unless the transaction is also signed by a specified custodian. This information is gathered when the stake account is created, and stored in the Lockup field of the stake account's state.
