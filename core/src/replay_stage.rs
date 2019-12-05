@@ -1185,6 +1185,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_minority_fork_overcommit_attack() {
+        // Minority was leader for 9 slots consecutively, withheld votes on that
+        // until majority built 8 slots
         //
         // Minority     -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11
         // 0 -> 1 -> 2
@@ -1222,7 +1224,7 @@ pub(crate) mod tests {
             });
         }
 
-        // Bootstrap leader node has: 34% stake, honest and malicious node has: 33% stake
+        // Bootstrap leader node has: 34% stake, honest and malicious node has: 33% stake each
         let node_stakes: Vec<u64> = vec![34_000_000, 33_000_000, 33_000_000];
         let node_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
         let node_voting_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
