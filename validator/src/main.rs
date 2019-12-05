@@ -571,6 +571,12 @@ pub fn main() {
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
     let rpc_port = value_t!(matches, "rpc_port", u16);
 
+    // Canonicalize ledger path to avoid issues with symlink creation
+    let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
+        eprintln!("Unable to access ledger path: {:?}", err);
+        exit(1);
+    });
+
     let mut validator_config = ValidatorConfig::default();
     validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
     validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
