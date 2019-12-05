@@ -303,7 +303,7 @@ mod test {
             Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        let btreeset: BTreeSet<u64> = vec![1, 2, 3, 6, 8].into_iter().collect();
+        let btreeset: BTreeSet<Slot> = vec![1, 2, 3, 6, 8].into_iter().collect();
         v = CrdsValue::new_unsigned(CrdsData::EpochSlots(EpochSlots::new(
             keypair.pubkey(),
             0,

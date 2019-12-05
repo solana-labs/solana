@@ -317,7 +317,7 @@ impl ClusterInfo {
         )
     }
 
-    pub fn push_epoch_slots(&mut self, id: Pubkey, root: Slot, min: Slot, slots: BTreeSet<u64>) {
+    pub fn push_epoch_slots(&mut self, id: Pubkey, root: Slot, min: Slot, slots: BTreeSet<Slot>) {
         let now = timestamp();
         let entry = CrdsValue::new_signed(
             CrdsData::EpochSlots(EpochSlots::new(id, root, min, slots, now)),

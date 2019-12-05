@@ -116,7 +116,7 @@ impl RepairService {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
     ) {
-        let mut epoch_slots: BTreeSet<u64> = BTreeSet::new();
+        let mut epoch_slots: BTreeSet<Slot> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
         let mut current_root = 0;
         if let RepairStrategy::RepairAll {
@@ -301,7 +301,7 @@ impl RepairService {
 
     fn get_completed_slots_past_root(
         blocktree: &Blocktree,
-        slots_in_gossip: &mut BTreeSet<u64>,
+        slots_in_gossip: &mut BTreeSet<Slot>,
         root: Slot,
         epoch_schedule: &EpochSchedule,
     ) {
@@ -325,7 +325,7 @@ impl RepairService {
     fn initialize_epoch_slots(
         id: Pubkey,
         blocktree: &Blocktree,
-        slots_in_gossip: &mut BTreeSet<u64>,
+        slots_in_gossip: &mut BTreeSet<Slot>,
         root: Slot,
         epoch_schedule: &EpochSchedule,
         cluster_info: &RwLock<ClusterInfo>,
@@ -383,7 +383,7 @@ impl RepairService {
         }
     }
 
-    fn retain_slots_greater_than_root(slot_set: &mut BTreeSet<u64>, root: Slot) {
+    fn retain_slots_greater_than_root(slot_set: &mut BTreeSet<Slot>, root: Slot) {
         *slot_set = slot_set
             .range((Excluded(&root), Unbounded))
             .cloned()
