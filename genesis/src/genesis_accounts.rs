@@ -535,13 +535,43 @@ fn add_stakes(
         .sum::<u64>()
 }
 
-pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[ValidatorInfo {
-    name: "aurel@ethereum.ro",
-    node: "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1",
-    vote: "7ZdRx2EBYoRuPfyeoNbuHodMUXcAQRcC37MUw3kP6akn",
-    node_sol: 500.0,
-    commission: 0,
-}];
+pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[
+    ValidatorInfo {
+        name: "01Node",
+        node: "5n8KCdzqtvTnhkvCrFR7errH6ZUp11kL97r2awXkfzFe",
+        vote: "4uYMbY5Ae5ZSRNxQ3RWVyXS9rzW7E3AMZYHuUEotxu6K",
+        node_sol: 500.0,
+        commission: 0,
+    },
+    ValidatorInfo {
+        name: "Bison Trails",
+        node: "7suRNpX7bJsXphHJtBv4ZsLjJZ1dTGeX256pLqJZdEAm",
+        vote: "DfirEZ9Up1xbE7sQji9UwtcRGe5uCcRqQtnaGpha5KNY",
+        node_sol: 500.0,
+        commission: 0,
+    },
+    ValidatorInfo {
+        name: "CyberFund",
+        node: "44e8VyWoyZSE2oYHxMHMedAiHkGJqJgPd3tdt6iKoAFL",
+        vote: "BwwpzEpo1wzgV9N1987ntgNG6jLt3C9532C68pswT7Gp",
+        node_sol: 500.0,
+        commission: 0,
+    },
+    ValidatorInfo {
+        name: "Dokia Capital",
+        node: "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1",
+        vote: "7ZdRx2EBYoRuPfyeoNbuHodMUXcAQRcC37MUw3kP6akn",
+        node_sol: 500.0,
+        commission: 0,
+    },
+    ValidatorInfo {
+        name: "Staking Facilities",
+        node: "pbAxyqHHPMwgEjv8kmjGxysk9rhNtN7q22eAjReq6Hj",
+        vote: "4VZ3pJX19PpuGjoSB1qeN9sVQfrqgLVNg16is37adiFp",
+        node_sol: 500.0,
+        commission: 0,
+    },
+];
 
 fn add_validators(genesis_config: &mut GenesisConfig, validator_infos: &[ValidatorInfo]) -> u64 {
     validator_infos
