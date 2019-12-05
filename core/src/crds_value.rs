@@ -1,5 +1,6 @@
 use crate::contact_info::ContactInfo;
 use bincode::{serialize, serialized_size};
+use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
@@ -63,16 +64,24 @@ pub enum CrdsData {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EpochSlots {
     pub from: Pubkey,
-    pub root: u64,
-    pub slots: BTreeSet<u64>,
+    pub root: Slot,
+    pub lowest: Slot,
+    pub slots: BTreeSet<Slot>,
     pub wallclock: u64,
 }
 
 impl EpochSlots {
-    pub fn new(from: Pubkey, root: u64, slots: BTreeSet<u64>, wallclock: u64) -> Self {
+    pub fn new(
+        from: Pubkey,
+        root: Slot,
+        lowest: Slot,
+        slots: BTreeSet<Slot>,
+        wallclock: u64,
+    ) -> Self {
         Self {
             from,
             root,
+            lowest,
             slots,
             wallclock,
         }
@@ -271,6 +280,7 @@ mod test {
         let v = CrdsValue::new_unsigned(CrdsData::EpochSlots(EpochSlots::new(
             Pubkey::default(),
             0,
+            0,
             BTreeSet::new(),
             0,
         )));
@@ -293,9 +303,10 @@ mod test {
             Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        let btreeset: BTreeSet<u64> = vec![1, 2, 3, 6, 8].into_iter().collect();
+        let btreeset: BTreeSet<Slot> = vec![1, 2, 3, 6, 8].into_iter().collect();
         v = CrdsValue::new_unsigned(CrdsData::EpochSlots(EpochSlots::new(
             keypair.pubkey(),
+            0,
             0,
             btreeset,
             timestamp(),

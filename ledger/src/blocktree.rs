@@ -72,10 +72,10 @@ pub struct Blocktree {
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
-    last_root: Arc<RwLock<u64>>,
+    last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
-    pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
+    pub completed_slots_senders: Vec<SyncSender<Vec<Slot>>>,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -1452,8 +1452,22 @@ impl Blocktree {
         }
     }
 
-    pub fn last_root(&self) -> u64 {
+    pub fn last_root(&self) -> Slot {
         *self.last_root.read().unwrap()
+    }
+
+    // find the first available slot in blocktree that has some data in it
+    pub fn lowest_slot(&self) -> Slot {
+        for (slot, meta) in self
+            .slot_meta_iterator(0)
+            .expect("unable to iterate over meta")
+        {
+            if slot > 0 && meta.received > 0 {
+                return slot;
+            }
+        }
+        // This means blocktree is empty, should never get here aside from right at boot.
+        self.last_root()
     }
 }
 
@@ -1952,7 +1966,7 @@ macro_rules! create_new_tmp_ledger {
     };
 }
 
-pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: u64) -> bool {
+pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: Slot) -> bool {
     if !is_valid_write_to_slot_0(slot, parent_slot, last_root) {
         // Check that the parent_slot < slot
         if parent_slot >= slot {
@@ -4338,6 +4352,23 @@ pub mod tests {
                 assert_eq!(map[x].1.as_ref().unwrap().fee, x as u64);
             }
             assert_eq!(map[4].1.as_ref(), None);
+        }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_lowest_slot() {
+        let blocktree_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            for i in 0..10 {
+                let slot = i;
+                let (shreds, _) = make_slot_entries(slot, 0, 1);
+                blocktree.insert_shreds(shreds, None, false).unwrap();
+            }
+            assert_eq!(blocktree.lowest_slot(), 1);
+            blocktree.run_purge_batch(0, 5).unwrap();
+            assert_eq!(blocktree.lowest_slot(), 6);
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }

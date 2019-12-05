@@ -317,10 +317,10 @@ impl ClusterInfo {
         )
     }
 
-    pub fn push_epoch_slots(&mut self, id: Pubkey, root: u64, slots: BTreeSet<u64>) {
+    pub fn push_epoch_slots(&mut self, id: Pubkey, root: Slot, min: Slot, slots: BTreeSet<Slot>) {
         let now = timestamp();
         let entry = CrdsValue::new_signed(
-            CrdsData::EpochSlots(EpochSlots::new(id, root, slots, now)),
+            CrdsData::EpochSlots(EpochSlots::new(id, root, min, slots, now)),
             &self.keypair,
         );
         self.gossip
@@ -489,13 +489,18 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// all tvu peers with valid gossip addrs
-    fn repair_peers(&self) -> Vec<ContactInfo> {
+    /// all tvu peers with valid gossip addrs that likely have the slot being requested
+    fn repair_peers(&self, slot: Slot) -> Vec<ContactInfo> {
         let me = self.my_data().id;
         ClusterInfo::tvu_peers(self)
             .into_iter()
             .filter(|x| x.id != me)
             .filter(|x| ContactInfo::is_valid_address(&x.gossip))
+            .filter(|x| {
+                self.get_epoch_state_for_node(&x.id, None)
+                    .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
+                    .unwrap_or_else(|| /* fallback to legacy behavior */ true)
+            })
             .collect()
     }
 
@@ -840,9 +845,9 @@ impl ClusterInfo {
     }
 
     pub fn repair_request(&self, repair_request: &RepairType) -> Result<(SocketAddr, Vec<u8>)> {
-        // find a peer that appears to be accepting replication, as indicated
-        //  by a valid tvu port location
-        let valid: Vec<_> = self.repair_peers();
+        // find a peer that appears to be accepting replication and has the desired slot, as indicated
+        // by a valid tvu port location
+        let valid: Vec<_> = self.repair_peers(repair_request.slot());
         if valid.is_empty() {
             return Err(ClusterInfoError::NoPeers.into());
         }
@@ -2555,6 +2560,7 @@ mod tests {
         let value = CrdsValue::new_unsigned(CrdsData::EpochSlots(EpochSlots {
             from: Pubkey::default(),
             root: 0,
+            lowest: 0,
             slots: btree_slots,
             wallclock: 0,
         }));
@@ -2571,6 +2577,7 @@ mod tests {
         let mut value = CrdsValue::new_unsigned(CrdsData::EpochSlots(EpochSlots {
             from: Pubkey::default(),
             root: 0,
+            lowest: 0,
             slots: BTreeSet::new(),
             wallclock: 0,
         }));
@@ -2588,6 +2595,7 @@ mod tests {
             value.data = CrdsData::EpochSlots(EpochSlots {
                 from: Pubkey::default(),
                 root: 0,
+                lowest: 0,
                 slots,
                 wallclock: 0,
             });
@@ -2698,6 +2706,37 @@ mod tests {
         let pulls = cluster_info.new_pull_requests(&stakes);
         assert_eq!(1, pulls.len() as u64);
         assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
+    }
+
+    #[test]
+    fn test_repair_peers() {
+        let node_keypair = Arc::new(Keypair::new());
+        let mut cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            node_keypair,
+        );
+        for i in 0..10 {
+            let mut peer_root = 5;
+            let mut peer_lowest = 0;
+            if i >= 5 {
+                // make these invalid for the upcoming repair request
+                peer_root = 15;
+                peer_lowest = 10;
+            }
+            let other_node_pubkey = Pubkey::new_rand();
+            let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
+            cluster_info.insert_info(other_node.clone());
+            let value = CrdsValue::new_unsigned(CrdsData::EpochSlots(EpochSlots::new(
+                other_node_pubkey,
+                peer_root,
+                peer_lowest,
+                BTreeSet::new(),
+                timestamp(),
+            )));
+            let _ = cluster_info.gossip.crds.insert(value, timestamp());
+        }
+        // only half the visible peers should be eligible to serve this repair
+        assert_eq!(cluster_info.repair_peers(5).len(), 5);
     }
 
     #[test]

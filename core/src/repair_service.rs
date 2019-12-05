@@ -35,14 +35,24 @@ pub enum RepairStrategy {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairType {
-    Orphan(u64),
-    HighestShred(u64, u64),
-    Shred(u64, u64),
+    Orphan(Slot),
+    HighestShred(Slot, u64),
+    Shred(Slot, u64),
+}
+
+impl RepairType {
+    pub fn slot(&self) -> Slot {
+        match self {
+            RepairType::Orphan(slot) => *slot,
+            RepairType::HighestShred(slot, _) => *slot,
+            RepairType::Shred(slot, _) => *slot,
+        }
+    }
 }
 
 pub struct RepairSlotRange {
-    pub start: u64,
-    pub end: u64,
+    pub start: Slot,
+    pub end: Slot,
 }
 
 impl Default for RepairSlotRange {
@@ -106,7 +116,7 @@ impl RepairService {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
     ) {
-        let mut epoch_slots: BTreeSet<u64> = BTreeSet::new();
+        let mut epoch_slots: BTreeSet<Slot> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
         let mut current_root = 0;
         if let RepairStrategy::RepairAll {
@@ -144,9 +154,11 @@ impl RepairService {
                         ..
                     } => {
                         let new_root = blocktree.last_root();
+                        let lowest_slot = blocktree.lowest_slot();
                         Self::update_epoch_slots(
                             id,
                             new_root,
+                            lowest_slot,
                             &mut current_root,
                             &mut epoch_slots,
                             &cluster_info,
@@ -216,7 +228,7 @@ impl RepairService {
 
     fn generate_repairs(
         blocktree: &Blocktree,
-        root: u64,
+        root: Slot,
         max_repairs: usize,
     ) -> Result<Vec<RepairType>> {
         // Slot height and shred indexes for shreds we want to repair
@@ -289,8 +301,8 @@ impl RepairService {
 
     fn get_completed_slots_past_root(
         blocktree: &Blocktree,
-        slots_in_gossip: &mut BTreeSet<u64>,
-        root: u64,
+        slots_in_gossip: &mut BTreeSet<Slot>,
+        root: Slot,
         epoch_schedule: &EpochSchedule,
     ) {
         let last_confirmed_epoch = epoch_schedule.get_leader_schedule_epoch(root);
@@ -313,8 +325,8 @@ impl RepairService {
     fn initialize_epoch_slots(
         id: Pubkey,
         blocktree: &Blocktree,
-        slots_in_gossip: &mut BTreeSet<u64>,
-        root: u64,
+        slots_in_gossip: &mut BTreeSet<Slot>,
+        root: Slot,
         epoch_schedule: &EpochSchedule,
         cluster_info: &RwLock<ClusterInfo>,
     ) {
@@ -324,19 +336,22 @@ impl RepairService {
         // also be updated with the latest root (done in blocktree_processor) and thus
         // will provide a schedule to window_service for any incoming shreds up to the
         // last_confirmed_epoch.
-        cluster_info
-            .write()
-            .unwrap()
-            .push_epoch_slots(id, root, slots_in_gossip.clone());
+        cluster_info.write().unwrap().push_epoch_slots(
+            id,
+            root,
+            blocktree.lowest_slot(),
+            slots_in_gossip.clone(),
+        );
     }
 
     // Update the gossiped structure used for the "Repairmen" repair protocol. See book
     // for details.
     fn update_epoch_slots(
         id: Pubkey,
-        latest_known_root: u64,
-        prev_root: &mut u64,
-        slots_in_gossip: &mut BTreeSet<u64>,
+        latest_known_root: Slot,
+        lowest_slot: Slot,
+        prev_root: &mut Slot,
+        slots_in_gossip: &mut BTreeSet<Slot>,
         cluster_info: &RwLock<ClusterInfo>,
         completed_slots_receiver: &CompletedSlotsReceiver,
     ) {
@@ -362,12 +377,13 @@ impl RepairService {
             cluster_info.write().unwrap().push_epoch_slots(
                 id,
                 latest_known_root,
+                lowest_slot,
                 slots_in_gossip.clone(),
             );
         }
     }
 
-    fn retain_slots_greater_than_root(slot_set: &mut BTreeSet<u64>, root: u64) {
+    fn retain_slots_greater_than_root(slot_set: &mut BTreeSet<Slot>, root: Slot) {
         *slot_set = slot_set
             .range((Excluded(&root), Unbounded))
             .cloned()
@@ -732,6 +748,7 @@ mod test {
                 RepairService::update_epoch_slots(
                     Pubkey::default(),
                     root,
+                    blocktree.lowest_slot(),
                     &mut root.clone(),
                     &mut completed_slots,
                     &cluster_info,
@@ -749,6 +766,7 @@ mod test {
             RepairService::update_epoch_slots(
                 Pubkey::default(),
                 root,
+                0,
                 &mut 0,
                 &mut completed_slots,
                 &cluster_info,
@@ -782,6 +800,7 @@ mod test {
         RepairService::update_epoch_slots(
             my_pubkey.clone(),
             current_root,
+            0,
             &mut current_root.clone(),
             &mut completed_slots,
             &cluster_info,
@@ -812,6 +831,7 @@ mod test {
         RepairService::update_epoch_slots(
             my_pubkey.clone(),
             current_root,
+            0,
             &mut current_root,
             &mut completed_slots,
             &cluster_info,
@@ -830,6 +850,7 @@ mod test {
         RepairService::update_epoch_slots(
             my_pubkey.clone(),
             current_root + 1,
+            0,
             &mut current_root,
             &mut completed_slots,
             &cluster_info,
