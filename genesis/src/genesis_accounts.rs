@@ -477,6 +477,13 @@ pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[
         commission: 0,
     },
     ValidatorInfo {
+        name: "ChorusOne",
+        node: "ChorusXqjLC2NbiStKR6k9WoD7wu6TVTtFG8qCL5XBVa",
+        vote: "ChorusvBuPwukqgDvYfWtEg8j4T1NcMgSTQ4b1UbAwgQ",
+        node_sol: 500.0,
+        commission: 0,
+    },
+    ValidatorInfo {
         name: "CyberFund",
         node: "44e8VyWoyZSE2oYHxMHMedAiHkGJqJgPd3tdt6iKoAFL",
         vote: "BwwpzEpo1wzgV9N1987ntgNG6jLt3C9532C68pswT7Gp",
