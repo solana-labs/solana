@@ -575,7 +575,7 @@ pub fn main() {
     let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
         eprintln!("Unable to access ledger path: {:?}", err);
         exit(1);
-    })
+    });
 
     let mut validator_config = ValidatorConfig::default();
     validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
