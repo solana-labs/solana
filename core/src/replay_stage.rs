@@ -1228,7 +1228,7 @@ pub(crate) mod tests {
         let node_voting_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
         let node_staking_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
 
-        let mut genesis_vote_accounts: Vec<Account> = vec![
+        let genesis_vote_accounts: Vec<Account> = vec![
             vote_state::create_account(
                 &node_voting_keypairs[BOOTSTRAP_LEADER].pubkey(),
                 &node_keypairs[BOOTSTRAP_LEADER].pubkey(),
