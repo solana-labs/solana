@@ -87,7 +87,14 @@ impl SnapshotPackagerService {
 
             // `storage_path` - The file path where the AppendVec itself is located
             // `output_path` - The directory where the AppendVec will be placed in the staging directory.
-            symlink::symlink_dir(storage_path, output_path)?;
+            let storage_path =
+                fs::canonicalize(storage_path).expect("Could not get absolute path for accounts");
+            symlink::symlink_dir(storage_path, &output_path)?;
+            if !output_path.is_file() {
+                return Err(Self::get_io_error(
+                    "Error trying to generate snapshot archive: storage path symlink is invalid",
+                ));
+            }
         }
 
         // Tar the staging directory into the archive at `archive_path`
@@ -185,17 +192,42 @@ mod tests {
     use super::*;
     use solana_ledger::snapshot_utils;
     use solana_runtime::accounts_db::AccountStorageEntry;
-    use std::fs::OpenOptions;
-    use std::io::Write;
+    use std::{
+        fs::{remove_dir_all, OpenOptions},
+        io::Write,
+        path::{Path, PathBuf},
+    };
     use tempfile::TempDir;
+
+    // Create temporary placeholder directory for all test files
+    fn make_tmp_dir_path() -> PathBuf {
+        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        let path = PathBuf::from(format!("{}/tmp/test_package_snapshots", out_dir));
+
+        // whack any possible collision
+        let _ignored = std::fs::remove_dir_all(&path);
+        // whack any possible collision
+        let _ignored = std::fs::remove_file(&path);
+
+        path
+    }
+
+    #[test]
+    fn test_package_snapshots_relative_ledger_path() {
+        let temp_dir = make_tmp_dir_path();
+        create_and_verify_snapshot(&temp_dir);
+        remove_dir_all(temp_dir).expect("should remove tmp dir");
+    }
 
     #[test]
     fn test_package_snapshots() {
-        // Create temporary placeholder directory for all test files
-        let temp_dir = TempDir::new().unwrap();
-        let accounts_dir = temp_dir.path().join("accounts");
-        let snapshots_dir = temp_dir.path().join("snapshots");
-        let snapshot_package_output_path = temp_dir.path().join("snapshots_output");
+        create_and_verify_snapshot(TempDir::new().unwrap().path())
+    }
+
+    fn create_and_verify_snapshot(temp_dir: &Path) {
+        let accounts_dir = temp_dir.join("accounts");
+        let snapshots_dir = temp_dir.join("snapshots");
+        let snapshot_package_output_path = temp_dir.join("snapshots_output");
         fs::create_dir_all(&snapshot_package_output_path).unwrap();
 
         // Create some storage entries
@@ -221,7 +253,7 @@ mod tests {
             .collect();
 
         // Create directory of hard links for snapshots
-        let link_snapshots_dir = tempfile::tempdir_in(temp_dir.path()).unwrap();
+        let link_snapshots_dir = tempfile::tempdir_in(&temp_dir).unwrap();
         for snapshots_path in snapshots_paths {
             let snapshot_file_name = snapshots_path.file_name().unwrap();
             let link_path = link_snapshots_dir.path().join(snapshot_file_name);
