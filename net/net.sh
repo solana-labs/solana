@@ -816,7 +816,7 @@ deploy() {
                                  # have caught up to the bootstrap leader yet
 
   echo "--- Sleeping $clientDelayStart seconds after validators are started before starting clients"
-  sleep $clientDelayStart
+  sleep "$clientDelayStart"
 
   SECONDS=0
   for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do

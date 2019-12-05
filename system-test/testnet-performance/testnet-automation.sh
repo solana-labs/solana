@@ -344,7 +344,7 @@ if [[ "$USE_PUBLIC_IP_ADDRESSES" = "true" ]] ; then
   maybePublicIpAddresses="-P"
 fi
 
-: ${CLIENT_DELAY_START:=0}
+: "${CLIENT_DELAY_START:=0}"
 
 if [[ -z $CHANNEL ]]; then
   execution_step "Downloading tar from build artifacts"
