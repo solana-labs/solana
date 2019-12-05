@@ -1409,7 +1409,7 @@ pub(crate) mod tests {
 
         let (bank, stats) = response.unwrap();
 
-        // We switched to minority fork, but we are locked out.
+        // We want to switch to minority fork, but we are locked out.
         assert_eq!(bank.slot(), minority_fork[minority_fork.len() - 1]);
         assert!(stats.is_locked_out);
     }
