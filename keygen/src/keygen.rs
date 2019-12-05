@@ -12,7 +12,7 @@ use solana_sdk::{
     pubkey::write_pubkey_file,
     signature::{
         keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
-        Keypair, KeypairUtil,
+        Keypair, KeypairUtil, Signature,
     },
 };
 use std::{
@@ -38,6 +38,26 @@ fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
     }
 }
 
+fn get_keypair_from_matches(matches: &ArgMatches) -> Result<Keypair, Box<dyn error::Error>> {
+    let mut path = dirs::home_dir().expect("home directory");
+    let infile = if matches.is_present("infile") {
+        matches.value_of("infile").unwrap()
+    } else {
+        path.extend(&[".config", "solana", "id.json"]);
+        path.to_str().unwrap()
+    };
+
+    if infile == "-" {
+        let mut stdin = std::io::stdin();
+        read_keypair(&mut stdin)
+    } else if infile == ASK_KEYWORD {
+        let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+        keypair_from_seed_phrase("pubkey recovery", skip_validation)
+    } else {
+        read_keypair_file(infile)
+    }
+}
+
 fn output_keypair(
     keypair: &Keypair,
     outfile: &str,
@@ -58,6 +78,24 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .about(crate_description!())
         .version(solana_clap_utils::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(
+            SubCommand::with_name("verify")
+                .about("Verify a keypair can sign and verify a message.")
+                .arg(
+                    Arg::with_name("infile")
+                        .index(1)
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .help("Path to keypair file"),
+                )
+                .arg(
+                    Arg::with_name("pubkey")
+                        .index(2)
+                        .value_name("BASE58_PUBKEY")
+                        .takes_value(true)
+                        .help("Public key"),
+                )
+        )
         .subcommand(
             SubCommand::with_name("new")
                 .about("Generate new keypair file from a passphrase and random seed phrase")
@@ -199,22 +237,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     match matches.subcommand() {
         ("pubkey", Some(matches)) => {
-            let mut path = dirs::home_dir().expect("home directory");
-            let infile = if matches.is_present("infile") {
-                matches.value_of("infile").unwrap()
-            } else {
-                path.extend(&[".config", "solana", "id.json"]);
-                path.to_str().unwrap()
-            };
-            let keypair = if infile == "-" {
-                let mut stdin = std::io::stdin();
-                read_keypair(&mut stdin)?
-            } else if infile == ASK_KEYWORD {
-                let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-                keypair_from_seed_phrase("pubkey recovery", skip_validation)?
-            } else {
-                read_keypair_file(infile)?
-            };
+            let keypair = get_keypair_from_matches(matches)?;
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
@@ -364,6 +387,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 })
                 .collect::<Vec<_>>();
             thread::park();
+        }
+        ("verify", Some(matches)) => {
+            let keypair = get_keypair_from_matches(matches)?;
+            let test_data = b"test";
+            let signature = Signature::new(&keypair.sign(test_data).to_bytes());
+            let pubkey_bs58 = matches.value_of("pubkey").unwrap();
+            let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
+            if signature.verify(&pubkey, test_data) {
+                println!("Verification for public key: {}: Success", pubkey_bs58);
+            } else {
+                println!("Verification for public key: {}: Failed", pubkey_bs58);
+                exit(1);
+            }
         }
         _ => unreachable!(),
     }
