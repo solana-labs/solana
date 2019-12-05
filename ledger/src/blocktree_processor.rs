@@ -27,6 +27,7 @@ use solana_sdk::{
 };
 use std::{
     cell::RefCell,
+    path::PathBuf,
     result,
     sync::Arc,
     time::{Duration, Instant},
@@ -255,7 +256,7 @@ pub struct ProcessOptions {
 pub fn process_blocktree(
     genesis_config: &GenesisConfig,
     blocktree: &Blocktree,
-    account_paths: Option<String>,
+    account_paths: Vec<PathBuf>,
     opts: ProcessOptions,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
     if let Some(num_threads) = opts.override_num_threads {
@@ -664,7 +665,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         assert_eq!(
-            process_blocktree(&genesis_config, &blocktree, None, opts).err(),
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).err(),
             Some(BlocktreeProcessorError::InvalidBlock(
                 BlockError::InvalidTickHashCount
             )),
@@ -705,7 +706,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         assert_eq!(
-            process_blocktree(&genesis_config, &blocktree, None, opts).err(),
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).err(),
             Some(BlocktreeProcessorError::InvalidBlock(
                 BlockError::InvalidTickCount
             )),
@@ -757,7 +758,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         assert_eq!(
-            process_blocktree(&genesis_config, &blocktree, None, opts).err(),
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).err(),
             Some(BlocktreeProcessorError::InvalidBlock(
                 BlockError::TrailingEntry
             )),
@@ -824,7 +825,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (mut _bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
@@ -886,7 +887,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // One fork, other one is ignored b/c not a descendant of the root
 
@@ -960,7 +961,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 2); // There are two forks
         assert_eq!(
@@ -1024,9 +1025,13 @@ pub mod tests {
         blocktree.set_dead_slot(2).unwrap();
         fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 1, slot1_blockhash);
 
-        let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, None, ProcessOptions::default())
-                .unwrap();
+        let (bank_forks, bank_forks_info, _) = process_blocktree(
+            &genesis_config,
+            &blocktree,
+            Vec::new(),
+            ProcessOptions::default(),
+        )
+        .unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 3 });
@@ -1056,7 +1061,7 @@ pub mod tests {
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         // Let last_slot be the number of slots in the first two epochs
-        let epoch_schedule = get_epoch_schedule(&genesis_config, None);
+        let epoch_schedule = get_epoch_schedule(&genesis_config, Vec::new());
         let last_slot = epoch_schedule.get_last_slot_in_epoch(1);
 
         // Create a single chain of slots with all indexes in the range [0, last_slot + 1]
@@ -1083,7 +1088,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // There is one fork
         assert_eq!(
@@ -1231,7 +1236,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks.root(), 0);
@@ -1260,7 +1265,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 0 });
@@ -1278,7 +1283,7 @@ pub mod tests {
             override_num_threads: Some(1),
             ..ProcessOptions::default()
         };
-        process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
+        process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
         PAR_THREAD_POOL.with(|pool| {
             assert_eq!(pool.borrow().current_num_threads(), 1);
         });
@@ -1295,7 +1300,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (_bank_forks, _bank_forks_info, cached_leader_schedule) =
-            process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
+            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
         assert_eq!(cached_leader_schedule.max_schedules(), std::usize::MAX);
     }
 
@@ -1355,7 +1360,7 @@ pub mod tests {
             entry_callback: Some(entry_callback),
             ..ProcessOptions::default()
         };
-        process_blocktree(&genesis_config, &blocktree, None, opts).unwrap();
+        process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
         assert_eq!(*callback_counter.write().unwrap(), 2);
     }
 
@@ -2190,7 +2195,7 @@ pub mod tests {
 
     fn get_epoch_schedule(
         genesis_config: &GenesisConfig,
-        account_paths: Option<String>,
+        account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
         let bank = Bank::new_with_paths(&genesis_config, account_paths);
         bank.epoch_schedule().clone()

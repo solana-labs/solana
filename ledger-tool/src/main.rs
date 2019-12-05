@@ -582,9 +582,9 @@ fn main() {
                 })
             };
             let account_paths = if let Some(account_paths) = matches.value_of("account_paths") {
-                Some(account_paths.to_string())
+                account_paths.split(',').map(PathBuf::from).collect()
             } else {
-                Some(ledger_path.join("accounts").to_str().unwrap().to_string())
+                vec![ledger_path.join("accounts")]
             };
 
             let process_options = blocktree_processor::ProcessOptions {

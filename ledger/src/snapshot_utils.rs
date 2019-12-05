@@ -195,7 +195,7 @@ pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<u64> {
 }
 
 pub fn bank_from_archive<P: AsRef<Path>>(
-    account_paths: String,
+    account_paths: &[PathBuf],
     snapshot_path: &PathBuf,
     snapshot_tar: P,
 ) -> Result<Bank> {
@@ -254,7 +254,7 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
 }
 
 fn rebuild_bank_from_snapshots<P>(
-    local_account_paths: String,
+    local_account_paths: &[PathBuf],
     unpacked_snapshots_dir: &PathBuf,
     append_vecs_path: P,
 ) -> Result<Bank>

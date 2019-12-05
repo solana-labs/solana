@@ -17,7 +17,6 @@ use solana_local_cluster::{
     cluster_tests,
     local_cluster::{ClusterConfig, LocalCluster},
 };
-use solana_runtime::accounts_db::AccountsDB;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{
     client::SyncClient,
@@ -788,7 +787,7 @@ fn test_snapshots_restart_validity() {
         let (new_account_storage_dirs, new_account_storage_paths) =
             generate_account_paths(num_account_paths);
         all_account_storage_dirs.push(new_account_storage_dirs);
-        snapshot_test_config.validator_config.account_paths = Some(new_account_storage_paths);
+        snapshot_test_config.validator_config.account_paths = new_account_storage_paths;
 
         // Restart node
         trace!("Restarting cluster from snapshot");
@@ -1040,15 +1039,14 @@ fn wait_for_next_snapshot<P: AsRef<Path>>(cluster: &LocalCluster, tar: P) {
     }
 }
 
-fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, String) {
+fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<PathBuf>) {
     let account_storage_dirs: Vec<TempDir> = (0..num_account_paths)
         .map(|_| TempDir::new().unwrap())
         .collect();
     let account_storage_paths: Vec<_> = account_storage_dirs
         .iter()
-        .map(|a| a.path().to_str().unwrap().to_string())
+        .map(|a| a.path().to_path_buf())
         .collect();
-    let account_storage_paths = AccountsDB::format_paths(account_storage_paths);
     (account_storage_dirs, account_storage_paths)
 }
 
@@ -1079,7 +1077,7 @@ fn setup_snapshot_validator_config(
     let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_validator_exit = true;
     validator_config.snapshot_config = Some(snapshot_config);
-    validator_config.account_paths = Some(account_storage_paths);
+    validator_config.account_paths = account_storage_paths;
 
     SnapshotValidatorConfig {
         _snapshot_dir: snapshot_dir,
