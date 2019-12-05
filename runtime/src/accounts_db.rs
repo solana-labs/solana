@@ -487,13 +487,21 @@ impl AccountsDB {
                         append_vecs_path.as_ref().join(&append_vec_relative_path);
                     let mut copy_options = CopyOptions::new();
                     copy_options.overwrite = true;
-                    fs_extra::move_items(&vec![&append_vec_abs_path], &local_dir, &copy_options)
-                        .map_err(|e| {
-                            AccountsDB::get_io_error(&format!(
-                                "Unable to move {:?} to {:?}: {}",
-                                append_vec_abs_path, local_dir, e
-                            ))
-                        })?;
+                    let e = fs_extra::move_items(
+                        &vec![&append_vec_abs_path],
+                        &local_dir,
+                        &copy_options,
+                    )
+                    .map_err(|e| {
+                        AccountsDB::get_io_error(&format!(
+                            "Unable to move {:?} to {:?}: {}",
+                            append_vec_abs_path, local_dir, e
+                        ))
+                    });
+                    if e.is_err() {
+                        info!("{:?}", e);
+                        continue;
+                    }
 
                     // Notify the AppendVec of the new file location
                     let local_path = local_dir.join(append_vec_relative_path);
@@ -508,7 +516,13 @@ impl AccountsDB {
             .collect();
 
         let new_storage_map = new_storage_map?;
-        let storage = AccountStorage(new_storage_map);
+        let mut storage = AccountStorage(new_storage_map);
+
+        // discard any slots with no storage entries
+        // this can happen if a non-root slot was serialized
+        // but non-root stores should not be included in the snapshot
+        storage.0.retain(|_slot_id, stores| !stores.is_empty());
+
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
 
@@ -1095,12 +1109,14 @@ impl AccountsDB {
         self.accounts_index.write().unwrap().add_root(slot)
     }
 
-    pub fn get_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {
+    pub fn get_rooted_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {
+        let accounts_index = self.accounts_index.read().unwrap();
         let r_storage = self.storage.read().unwrap();
         r_storage
             .0
             .values()
             .flat_map(|slot_store| slot_store.values().cloned())
+            .filter(|store| accounts_index.is_root(store.slot_id))
             .collect()
     }
 
@@ -2094,7 +2110,7 @@ pub mod tests {
         accounts_db: &AccountsDB,
         output_dir: P,
     ) -> IOResult<()> {
-        let storage_entries = accounts_db.get_storage_entries();
+        let storage_entries = accounts_db.get_rooted_storage_entries();
         for storage in storage_entries {
             let storage_path = storage.get_path();
             let output_path = output_dir.as_ref().join(

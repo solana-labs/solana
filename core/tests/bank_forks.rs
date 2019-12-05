@@ -237,7 +237,7 @@ mod tests {
             let key1 = Keypair::new().pubkey();
             let tx = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
-            bank.freeze();
+            bank.squash();
             bank_forks.insert(bank);
 
             let package_sender = {
