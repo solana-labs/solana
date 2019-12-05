@@ -44,6 +44,7 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
+use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::HashMap,
     io::{BufReader, Cursor, Error as IOError, Read},
@@ -1210,16 +1211,49 @@ impl Bank {
         }
     }
 
+    fn distribute_rent_to_validators(
+        &self,
+        vote_account_hashmap: &HashMap<Pubkey, (u64, Account)>,
+        rent_to_be_distributed: u64,
+    ) {
+        let mut total_staked = 0;
+
+        let node_stakes = vote_account_hashmap
+            .iter()
+            .filter_map(|(_vote_pubkey, (staked, account))| {
+                total_staked += *staked;
+                VoteState::deserialize(&account.data)
+                    .ok()
+                    .map(|vote_state| (vote_state.node_pubkey, *staked))
+                    .filter(|(_pubkey, staked)| *staked != 0)
+            })
+            .collect::<Vec<(Pubkey, u64)>>();
+
+        node_stakes.iter().for_each(|(pubkey, staked)| {
+            let rent_to_be_paid =
+                (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
+            let mut account = self.get_account(pubkey).unwrap_or_default();
+            account.lamports += rent_to_be_paid;
+            self.store_account(pubkey, &account);
+        });
+    }
+
     fn distribute_rent(&self) {
         let total_rent_collected = self.collected_rent.load(Ordering::Relaxed);
 
-        if total_rent_collected != 0 {
-            let burned_portion =
-                (total_rent_collected * u64::from(self.rent_collector.rent.burn_percent)) / 100;
-            let _rent_to_be_distributed = total_rent_collected - burned_portion;
-            // TODO: distribute remaining rent amount to validators
-            // self.capitalization.fetch_sub(burned_portion, Ordering::Relaxed);
+        let (burned_portion, rent_to_be_distributed) = self
+            .rent_collector
+            .rent
+            .calculate_burn(total_rent_collected);
+
+        self.capitalization
+            .fetch_sub(burned_portion, Ordering::Relaxed);
+
+        if rent_to_be_distributed == 0 {
+            return;
         }
+
+        self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
     }
 
     fn collect_rent(&self, res: &[Result<()>], loaded_accounts: &[Result<TransactionLoadResult>]) {
@@ -1680,10 +1714,10 @@ mod tests {
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, KeypairUtil},
-        system_instruction,
+        system_instruction, system_program,
         sysvar::{fees::Fees, rewards::Rewards},
     };
-    use solana_stake_program::stake_state::{Authorized, Delegation, Lockup, Stake};
+    use solana_stake_program::stake_state::{self, Authorized, Delegation, Lockup, Stake};
     use solana_vote_program::{
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
@@ -2052,6 +2086,215 @@ mod tests {
         bank.store_account(&system_program_id, &system_program_account);
 
         bank
+    }
+
+    #[test]
+    fn test_rent_distribution() {
+        let bootstrap_leader_pubkey = Pubkey::new_rand();
+        let bootstrap_leader_stake_lamports = 30;
+        let mut genesis_config = create_genesis_config_with_leader(
+            10,
+            &bootstrap_leader_pubkey,
+            bootstrap_leader_stake_lamports,
+        )
+        .genesis_config;
+
+        genesis_config.epoch_schedule = EpochSchedule::custom(
+            MINIMUM_SLOTS_PER_EPOCH,
+            genesis_config.epoch_schedule.leader_schedule_slot_offset,
+            false,
+        );
+
+        genesis_config.rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 2.0,
+            burn_percent: 10,
+        };
+
+        let rent = Rent::free();
+
+        let validator_1_pubkey = Pubkey::new_rand();
+        let validator_1_stake_lamports = 23;
+        let validator_1_staking_keypair = Keypair::new();
+        let validator_1_voting_keypair = Keypair::new();
+
+        let validator_1_vote_account = vote_state::create_account(
+            &validator_1_voting_keypair.pubkey(),
+            &validator_1_pubkey,
+            0,
+            validator_1_stake_lamports,
+        );
+
+        let validator_1_stake_account = stake_state::create_account(
+            &validator_1_staking_keypair.pubkey(),
+            &validator_1_voting_keypair.pubkey(),
+            &validator_1_vote_account,
+            &rent,
+            validator_1_stake_lamports,
+        );
+
+        genesis_config.accounts.insert(
+            validator_1_pubkey,
+            Account::new(42, 0, &system_program::id()),
+        );
+        genesis_config.accounts.insert(
+            validator_1_staking_keypair.pubkey(),
+            validator_1_stake_account,
+        );
+        genesis_config.accounts.insert(
+            validator_1_voting_keypair.pubkey(),
+            validator_1_vote_account,
+        );
+
+        let validator_2_pubkey = Pubkey::new_rand();
+        let validator_2_stake_lamports = 22;
+        let validator_2_staking_keypair = Keypair::new();
+        let validator_2_voting_keypair = Keypair::new();
+
+        let validator_2_vote_account = vote_state::create_account(
+            &validator_2_voting_keypair.pubkey(),
+            &validator_2_pubkey,
+            0,
+            validator_2_stake_lamports,
+        );
+
+        let validator_2_stake_account = stake_state::create_account(
+            &validator_2_staking_keypair.pubkey(),
+            &validator_2_voting_keypair.pubkey(),
+            &validator_2_vote_account,
+            &rent,
+            validator_2_stake_lamports,
+        );
+
+        genesis_config.accounts.insert(
+            validator_2_pubkey,
+            Account::new(42, 0, &system_program::id()),
+        );
+        genesis_config.accounts.insert(
+            validator_2_staking_keypair.pubkey(),
+            validator_2_stake_account,
+        );
+        genesis_config.accounts.insert(
+            validator_2_voting_keypair.pubkey(),
+            validator_2_vote_account,
+        );
+
+        let validator_3_pubkey = Pubkey::new_rand();
+        let validator_3_stake_lamports = 25;
+        let validator_3_staking_keypair = Keypair::new();
+        let validator_3_voting_keypair = Keypair::new();
+
+        let validator_3_vote_account = vote_state::create_account(
+            &validator_3_voting_keypair.pubkey(),
+            &validator_3_pubkey,
+            0,
+            validator_3_stake_lamports,
+        );
+
+        let validator_3_stake_account = stake_state::create_account(
+            &validator_3_staking_keypair.pubkey(),
+            &validator_3_voting_keypair.pubkey(),
+            &validator_3_vote_account,
+            &rent,
+            validator_3_stake_lamports,
+        );
+
+        genesis_config.accounts.insert(
+            validator_3_pubkey,
+            Account::new(42, 0, &system_program::id()),
+        );
+        genesis_config.accounts.insert(
+            validator_3_staking_keypair.pubkey(),
+            validator_3_stake_account,
+        );
+        genesis_config.accounts.insert(
+            validator_3_voting_keypair.pubkey(),
+            validator_3_vote_account,
+        );
+
+        genesis_config.rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 10.0,
+            burn_percent: 10,
+        };
+
+        let mut bank = Bank::new(&genesis_config);
+        // Enable rent collection
+        bank.rent_collector.epoch = 5;
+        bank.rent_collector.slots_per_year = 192.0;
+
+        let payer = Keypair::new();
+        let payer_account = Account::new(400, 2, &system_program::id());
+        bank.store_account(&payer.pubkey(), &payer_account);
+
+        let payee = Keypair::new();
+        let payee_account = Account::new(70, 1, &system_program::id());
+        bank.store_account(&payee.pubkey(), &payee_account);
+
+        let bootstrap_leader_initial_balance = bank.get_balance(&bootstrap_leader_pubkey);
+
+        let tx = system_transaction::transfer(&payer, &payee.pubkey(), 180, genesis_config.hash());
+
+        let result = bank.process_transaction(&tx);
+        assert_eq!(result, Ok(()));
+
+        let mut total_rent_deducted = 0;
+
+        // 400 - 130(Rent) - 180(Transfer)
+        assert_eq!(bank.get_balance(&payer.pubkey()), 90);
+        total_rent_deducted += 130;
+
+        // 70 - 70(Rent) + 180(Transfer) - 21(Rent)
+        assert_eq!(bank.get_balance(&payee.pubkey()), 159);
+        total_rent_deducted += 70 + 21;
+
+        let previous_capitalization = bank.capitalization.load(Ordering::Relaxed);
+
+        bank.freeze();
+
+        assert_eq!(
+            bank.collected_rent.load(Ordering::Relaxed),
+            total_rent_deducted
+        );
+
+        let burned_portion =
+            total_rent_deducted * u64::from(bank.rent_collector.rent.burn_percent) / 100;
+        let rent_to_be_distributed = total_rent_deducted - burned_portion;
+
+        let bootstrap_leader_portion =
+            ((bootstrap_leader_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
+        assert_eq!(
+            bank.get_balance(&bootstrap_leader_pubkey),
+            bootstrap_leader_portion + bootstrap_leader_initial_balance
+        );
+
+        let validator_1_portion =
+            ((validator_1_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
+        assert_eq!(
+            bank.get_balance(&validator_1_pubkey),
+            validator_1_portion + 42
+        );
+
+        let validator_2_portion =
+            ((validator_2_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
+        assert_eq!(
+            bank.get_balance(&validator_2_pubkey),
+            validator_2_portion + 42
+        );
+
+        let validator_3_portion =
+            ((validator_3_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
+        assert_eq!(
+            bank.get_balance(&validator_3_pubkey),
+            validator_3_portion + 42
+        );
+
+        let current_capitalization = bank.capitalization.load(Ordering::Relaxed);
+
+        assert_eq!(
+            previous_capitalization - current_capitalization,
+            burned_portion
+        );
     }
 
     #[test]
