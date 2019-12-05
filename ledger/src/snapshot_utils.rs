@@ -74,7 +74,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     // Get a reference to all the relevant AccountStorageEntries
     let account_storage_entries: Vec<_> = bank
         .rc
-        .get_storage_entries()
+        .get_rooted_storage_entries()
         .into_iter()
         .filter(|x| x.slot_id() <= bank.slot())
         .collect();

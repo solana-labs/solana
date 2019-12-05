@@ -97,8 +97,8 @@ impl BankRc {
         Ok(())
     }
 
-    pub fn get_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {
-        self.accounts.accounts_db.get_storage_entries()
+    pub fn get_rooted_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {
+        self.accounts.accounts_db.get_rooted_storage_entries()
     }
 
     fn get_io_error(error: &str) -> IOError {
@@ -3879,23 +3879,33 @@ mod tests {
 
     #[test]
     fn test_bank_serialize() {
+        solana_logger::setup();
         let (genesis_config, _) = create_genesis_config(500);
         let bank0 = Arc::new(Bank::new(&genesis_config));
-        let bank = new_from_parent(&bank0);
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank0.squash();
+
+        // Create an account on a non-root fork
+        let key1 = Keypair::new();
+        bank1.deposit(&key1.pubkey(), 5);
+
+        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
 
         // Test new account
-        let key = Keypair::new();
-        bank.deposit(&key.pubkey(), 10);
-        assert_eq!(bank.get_balance(&key.pubkey()), 10);
-
         let key2 = Keypair::new();
-        bank.deposit(&key2.pubkey(), 0);
+        bank2.deposit(&key2.pubkey(), 10);
+        assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
 
-        let len = serialized_size(&bank).unwrap() + serialized_size(&bank.rc).unwrap();
+        let key3 = Keypair::new();
+        bank2.deposit(&key3.pubkey(), 0);
+
+        bank2.squash();
+
+        let len = serialized_size(&bank2).unwrap() + serialized_size(&bank2.rc).unwrap();
         let mut buf = vec![0u8; len as usize];
         let mut writer = Cursor::new(&mut buf[..]);
-        serialize_into(&mut writer, &bank).unwrap();
-        serialize_into(&mut writer, &bank.rc).unwrap();
+        serialize_into(&mut writer, &bank2).unwrap();
+        serialize_into(&mut writer, &bank2.rc).unwrap();
 
         let mut rdr = Cursor::new(&buf[..]);
         let mut dbank: Bank = deserialize_from(&mut rdr).unwrap();
@@ -3903,20 +3913,20 @@ mod tests {
 
         // Create a new set of directories for this bank's accounts
         let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
-        dbank.set_bank_rc(
-            &BankRc::new(dbank_paths.clone(), 0, dbank.slot()),
-            &StatusCacheRc::default(),
-        );
+        let ref_sc = StatusCacheRc::default();
+        ref_sc.status_cache.write().unwrap().add_root(2);
+        dbank.set_bank_rc(&BankRc::new(dbank_paths.clone(), 0, dbank.slot()), &ref_sc);
         // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
         let copied_accounts = TempDir::new().unwrap();
-        copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+        copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
         dbank
             .rc
             .accounts_from_stream(&mut reader, dbank_paths, copied_accounts.path())
             .unwrap();
-        assert_eq!(dbank.get_balance(&key.pubkey()), 10);
-        assert_eq!(dbank.get_balance(&key2.pubkey()), 0);
-        bank.compare_bank(&dbank);
+        assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
+        assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
+        assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
+        bank2.compare_bank(&dbank);
     }
 
     #[test]
