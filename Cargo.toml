@@ -35,7 +35,6 @@ members = [
     "programs/ownable",
     "programs/stake",
     "programs/storage",
-    "programs/storage_tests",
     "programs/vest",
     "programs/vote",
     "archiver",
