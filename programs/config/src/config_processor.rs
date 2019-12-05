@@ -96,10 +96,7 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        config_instruction, config_processor::process_instruction, get_config_data, id, ConfigKeys,
-        ConfigState,
-    };
+    use crate::{config_instruction, get_config_data, id, ConfigKeys, ConfigState};
     use bincode::serialized_size;
     use serde_derive::{Deserialize, Serialize};
     use solana_sdk::{
@@ -473,6 +470,20 @@ mod tests {
         assert_eq!(
             process_instruction(&id(), &mut keyed_accounts, &instruction.data),
             Err(InstructionError::MissingRequiredSignature)
+        );
+    }
+
+    #[test]
+    fn test_config_initialize_no_panic() {
+        let from_pubkey = Pubkey::new_rand();
+        let config_pubkey = Pubkey::new_rand();
+        let instructions =
+            config_instruction::create_account::<MyConfig>(&from_pubkey, &config_pubkey, 1, vec![]);
+        let mut accounts = vec![];
+        let mut keyed_accounts = create_keyed_is_signer_accounts(&mut accounts);
+        assert_eq!(
+            process_instruction(&id(), &mut keyed_accounts, &instructions[1].data),
+            Err(InstructionError::NotEnoughAccountKeys)
         );
     }
 }
