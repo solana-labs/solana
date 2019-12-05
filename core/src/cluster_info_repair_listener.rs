@@ -27,6 +27,7 @@ pub const GOSSIP_DELAY_SLOTS: usize = 2;
 pub const NUM_SLOTS_PER_UPDATE: usize = 2;
 // Time between allowing repair for same slot for same validator
 pub const REPAIR_SAME_SLOT_THRESHOLD: u64 = 5000;
+use solana_sdk::clock::Slot;
 use solana_sdk::timing::timestamp;
 
 // Represents the shreds that a repairman is responsible for repairing in specific slot. More
@@ -76,9 +77,10 @@ impl Iterator for ShredIndexesToRepairIterator {
 
 #[derive(Default)]
 struct RepaireeInfo {
-    last_root: u64,
+    last_root: Slot,
     last_ts: u64,
-    last_repaired_slot_and_ts: (u64, u64),
+    last_repaired_slot_and_ts: (Slot, u64),
+    lowest_slot: Slot,
 }
 
 pub struct ClusterInfoRepairListener {
@@ -132,6 +134,7 @@ impl ClusterInfoRepairListener {
                 return Ok(());
             }
 
+            let lowest_slot = blocktree.lowest_slot();
             let peers = cluster_info.read().unwrap().gossip_peers();
             let mut peers_needing_repairs: HashMap<Pubkey, EpochSlots> = HashMap::new();
 
@@ -144,6 +147,7 @@ impl ClusterInfoRepairListener {
                     cluster_info,
                     peer_infos,
                     &mut my_gossiped_root,
+                    lowest_slot,
                 ) {
                     peers_needing_repairs.insert(peer.id, repairee_epoch_slots);
                 }
@@ -170,7 +174,8 @@ impl ClusterInfoRepairListener {
         peer_pubkey: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         peer_infos: &mut HashMap<Pubkey, RepaireeInfo>,
-        my_gossiped_root: &mut u64,
+        my_gossiped_root: &mut Slot,
+        my_lowest_slot: Slot,
     ) -> Option<EpochSlots> {
         let last_cached_repair_ts = Self::get_last_ts(peer_pubkey, peer_infos);
         let my_root = Self::read_my_gossiped_root(&my_pubkey, cluster_info, my_gossiped_root);
@@ -187,7 +192,12 @@ impl ClusterInfoRepairListener {
                 let last_repair_ts = {
                     // Following logic needs to be fast because it holds the lock
                     // preventing updates on gossip
-                    if Self::should_repair_peer(my_root, peer_epoch_slots.root, NUM_BUFFER_SLOTS) {
+                    if Self::should_repair_peer(
+                        my_root,
+                        my_lowest_slot,
+                        peer_epoch_slots.root,
+                        NUM_BUFFER_SLOTS,
+                    ) {
                         // Clone out EpochSlots structure to avoid holding lock on gossip
                         result = Some(peer_epoch_slots.clone());
                         updated_ts
@@ -199,6 +209,7 @@ impl ClusterInfoRepairListener {
 
                 peer_info.last_ts = last_repair_ts;
                 peer_info.last_root = peer_root;
+                peer_info.lowest_slot = peer_epoch_slots.lowest;
                 result
             } else {
                 None
@@ -213,7 +224,7 @@ impl ClusterInfoRepairListener {
         repairees: &HashMap<Pubkey, EpochSlots>,
         socket: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        my_gossiped_root: &mut u64,
+        my_gossiped_root: &mut Slot,
         epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
         for (repairee_pubkey, repairee_epoch_slots) in repairees {
@@ -274,7 +285,7 @@ impl ClusterInfoRepairListener {
     fn serve_repairs_to_repairee(
         my_pubkey: &Pubkey,
         repairee_pubkey: &Pubkey,
-        my_root: u64,
+        my_root: Slot,
         blocktree: &Blocktree,
         repairee_epoch_slots: &EpochSlots,
         eligible_repairmen: &[&Pubkey],
@@ -283,7 +294,7 @@ impl ClusterInfoRepairListener {
         num_slots_to_repair: usize,
         epoch_schedule: &EpochSchedule,
         last_repaired_slot_and_ts: (u64, u64),
-    ) -> Result<Option<u64>> {
+    ) -> Result<Option<Slot>> {
         let slot_iter = RootedSlotIterator::new(repairee_epoch_slots.root, &blocktree);
         if slot_iter.is_err() {
             info!(
@@ -386,13 +397,13 @@ impl ClusterInfoRepairListener {
     }
 
     fn report_repair_metrics(
-        slot: u64,
+        slot: Slot,
         repairee_id: &Pubkey,
         total_data_shreds_sent: u64,
         total_coding_shreds_sent: u64,
     ) {
         if total_data_shreds_sent > 0 || total_coding_shreds_sent > 0 {
-            datapoint!(
+            datapoint_info!(
                 "repairman_activity",
                 ("slot", slot, i64),
                 ("repairee_id", repairee_id.to_string(), String),
@@ -405,7 +416,7 @@ impl ClusterInfoRepairListener {
     fn shuffle_repairmen(
         eligible_repairmen: &mut Vec<&Pubkey>,
         repairee_pubkey: &Pubkey,
-        repairee_root: u64,
+        repairee_root: Slot,
     ) {
         // Make a seed from pubkey + repairee root
         let mut seed = [0u8; mem::size_of::<Pubkey>()];
@@ -456,7 +467,7 @@ impl ClusterInfoRepairListener {
 
     fn find_eligible_repairmen<'a>(
         my_pubkey: &'a Pubkey,
-        repairee_root: u64,
+        repairee_root: Slot,
         repairman_roots: &'a HashMap<Pubkey, RepaireeInfo>,
         num_buffer_slots: usize,
     ) -> Vec<&'a Pubkey> {
@@ -465,6 +476,7 @@ impl ClusterInfoRepairListener {
             .filter_map(|(repairman_pubkey, repairman_info)| {
                 if Self::should_repair_peer(
                     repairman_info.last_root,
+                    repairman_info.lowest_slot,
                     repairee_root,
                     num_buffer_slots - GOSSIP_DELAY_SLOTS,
                 ) {
@@ -484,7 +496,7 @@ impl ClusterInfoRepairListener {
     fn read_my_gossiped_root(
         my_pubkey: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        old_root: &mut u64,
+        old_root: &mut Slot,
     ) -> u64 {
         let new_root = cluster_info
             .read()
@@ -502,13 +514,16 @@ impl ClusterInfoRepairListener {
     // Decide if a repairman with root == `repairman_root` should send repairs to a
     // potential repairee with root == `repairee_root`
     fn should_repair_peer(
-        repairman_root: u64,
-        repairee_root: u64,
+        repairman_root: Slot,
+        repairman_lowest_slot: Slot,
+        repairee_root: Slot,
         num_buffer_slots: usize,
     ) -> bool {
-        // Check if this potential repairman's root is greater than the repairee root +
-        // num_buffer_slots
-        repairman_root > repairee_root + num_buffer_slots as u64
+        // Check if this potential repairman is likely to have slots needed to repair this repairee
+        // and that its root is greater than the repairee root +  num_buffer_slots
+        // Only need to be able to repair slots that are 1 higher than root
+        repairman_lowest_slot <= repairee_root + 1
+            && repairman_root > repairee_root + num_buffer_slots as u64
     }
 
     fn get_last_ts(pubkey: &Pubkey, peer_infos: &mut HashMap<Pubkey, RepaireeInfo>) -> Option<u64> {
@@ -612,6 +627,7 @@ mod tests {
         cluster_info.write().unwrap().push_epoch_slots(
             peer_pubkey,
             repairee_root,
+            0,
             repairee_slots.clone(),
         );
 
@@ -626,6 +642,7 @@ mod tests {
             &cluster_info,
             &mut peer_info,
             &mut my_gossiped_root,
+            0,
         )
         .is_none());
 
@@ -638,6 +655,7 @@ mod tests {
             &cluster_info,
             &mut peer_info,
             &mut my_gossiped_root,
+            0,
         )
         .is_some());
 
@@ -650,22 +668,26 @@ mod tests {
             &cluster_info,
             &mut peer_info,
             &mut my_gossiped_root,
+            0,
         )
         .is_none());
 
         // Sleep to make sure the timestamp is updated in gossip. Update the gossiped EpochSlots.
         // Now a repair should be sent again
         sleep(Duration::from_millis(10));
-        cluster_info
-            .write()
-            .unwrap()
-            .push_epoch_slots(peer_pubkey, repairee_root, repairee_slots);
+        cluster_info.write().unwrap().push_epoch_slots(
+            peer_pubkey,
+            repairee_root,
+            0,
+            repairee_slots,
+        );
         assert!(ClusterInfoRepairListener::process_potential_repairee(
             &my_pubkey,
             &peer_pubkey,
             &cluster_info,
             &mut peer_info,
             &mut my_gossiped_root,
+            0,
         )
         .is_some());
     }
@@ -695,7 +717,7 @@ mod tests {
         let repairee_root = 0;
         let repairee_slots: BTreeSet<_> = (0..=num_slots).step_by(2).collect();
         let repairee_epoch_slots =
-            EpochSlots::new(mock_repairee.id, repairee_root, repairee_slots, 1);
+            EpochSlots::new(mock_repairee.id, repairee_root, 0, repairee_slots, 1);
         let eligible_repairmen = vec![&my_pubkey];
         let epoch_schedule = EpochSchedule::custom(32, 16, false);
         assert!(ClusterInfoRepairListener::serve_repairs_to_repairee(
@@ -765,7 +787,7 @@ mod tests {
         let repairee_root = 0;
         let repairee_slots: BTreeSet<_> = (0..=num_slots).step_by(2).collect();
         let repairee_epoch_slots =
-            EpochSlots::new(mock_repairee.id, repairee_root, repairee_slots, 1);
+            EpochSlots::new(mock_repairee.id, repairee_root, 0, repairee_slots, 1);
 
         // Mock out some other repairmen such that each repairman is responsible for 1 shred in a slot
         let num_repairmen = entries_per_slot - 1;
@@ -857,8 +879,13 @@ mod tests {
         // already has all the slots for which they have a confirmed leader schedule
         let repairee_root = 0;
         let repairee_slots: BTreeSet<_> = (0..=slots_per_epoch).collect();
-        let repairee_epoch_slots =
-            EpochSlots::new(mock_repairee.id, repairee_root, repairee_slots.clone(), 1);
+        let repairee_epoch_slots = EpochSlots::new(
+            mock_repairee.id,
+            repairee_root,
+            0,
+            repairee_slots.clone(),
+            1,
+        );
 
         ClusterInfoRepairListener::serve_repairs_to_repairee(
             &my_pubkey,
@@ -882,7 +909,7 @@ mod tests {
         // Set the root to stakers_slot_offset, now epoch 2 should be confirmed, so the repairee
         // is now eligible to get slots from epoch 2:
         let repairee_epoch_slots =
-            EpochSlots::new(mock_repairee.id, stakers_slot_offset, repairee_slots, 1);
+            EpochSlots::new(mock_repairee.id, stakers_slot_offset, 0, repairee_slots, 1);
         ClusterInfoRepairListener::serve_repairs_to_repairee(
             &my_pubkey,
             &mock_repairee.id,
@@ -1016,6 +1043,7 @@ mod tests {
         let repairee_root = 5;
         assert!(!ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
+            0,
             repairee_root,
             0,
         ));
@@ -1025,6 +1053,7 @@ mod tests {
         let repairee_root = 5;
         assert!(!ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
+            0,
             repairee_root,
             0,
         ));
@@ -1034,6 +1063,7 @@ mod tests {
         let repairee_root = 5;
         assert!(ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
+            0,
             repairee_root,
             0,
         ));
@@ -1043,6 +1073,7 @@ mod tests {
         let repairee_root = 5;
         assert!(!ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
+            0,
             repairee_root,
             11,
         ));
@@ -1052,6 +1083,17 @@ mod tests {
         let repairee_root = 5;
         assert!(ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
+            0,
+            repairee_root,
+            10,
+        ));
+
+        // If repairee is behind and outside the buffer but behind our lowest slot, we don't repair
+        let repairman_root = 16;
+        let repairee_root = 5;
+        assert!(!ClusterInfoRepairListener::should_repair_peer(
+            repairman_root,
+            repairee_root + 2,
             repairee_root,
             10,
         ));

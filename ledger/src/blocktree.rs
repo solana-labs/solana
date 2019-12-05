@@ -72,10 +72,10 @@ pub struct Blocktree {
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
-    last_root: Arc<RwLock<u64>>,
+    last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
-    pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
+    pub completed_slots_senders: Vec<SyncSender<Vec<Slot>>>,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -1452,8 +1452,22 @@ impl Blocktree {
         }
     }
 
-    pub fn last_root(&self) -> u64 {
+    pub fn last_root(&self) -> Slot {
         *self.last_root.read().unwrap()
+    }
+
+    pub fn lowest_slot(&self) -> Slot {
+        // find the first available slot in blocktree that is connected and has some data in it
+        for (slot, meta) in self
+            .slot_meta_iterator(0)
+            .expect("unable to iterate over meta")
+        {
+            if slot > 0 && meta.received > 0 {
+                return slot;
+            }
+        }
+        // This means blocktree is empty, should never get here aside from right at boot.
+        self.last_root()
     }
 }
 
@@ -1952,7 +1966,7 @@ macro_rules! create_new_tmp_ledger {
     };
 }
 
-pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: u64) -> bool {
+pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: Slot) -> bool {
     if !is_valid_write_to_slot_0(slot, parent_slot, last_root) {
         // Check that the parent_slot < slot
         if parent_slot >= slot {
