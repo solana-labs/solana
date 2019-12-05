@@ -153,9 +153,15 @@ V`, `S_n = max(V_i + lockout(V_i))`. If no `V` exists, then `S_n = S`.
 
 ## Achieving Safety
 
-Define the "Safety Criteria" to be: Given a `BankForks` any descendant of `S`,
-`S_d` that has a bank `B_d` that is present in `BankForks.banks`, and any slot
-`L_i` in tower, the validator is able to determine `is_ancestor(L_i, S_d)`.
+Define the "Safety Criteria" to be:
+
+>If the validator has:
+>
+>  1. a `BankForks`
+>  2. any descendant of `S`, `S_d` that is present in `BankForks.banks`
+>  3. any slot `L_i` in tower
+>
+>the validator is able to determine `is_ancestor(L_i, S_d)`.
 
 Assume the "Safety Criteria" is true, we show we can then achieve the "safety"
 condition:
