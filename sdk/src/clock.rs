@@ -108,6 +108,9 @@ pub struct Clock {
     /// the future Epoch for which the leader schedule has
     ///  most recently been calculated
     pub leader_schedule_epoch: Epoch,
+    /// computed from genesis creation time and network time
+    ///  in slots, drifts!
+    pub unix_timestamp: UnixTimestamp,
 }
 
 #[cfg(test)]

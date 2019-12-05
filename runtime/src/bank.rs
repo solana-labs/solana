@@ -29,7 +29,7 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
-    clock::{get_segment_from_slot, Epoch, Slot, MAX_RECENT_BLOCKHASHES},
+    clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     genesis_config::GenesisConfig,
@@ -180,6 +180,7 @@ pub struct Bank {
     /// Hash of this Bank's parent's state
     parent_hash: Hash,
 
+    /// parent's slot
     parent_slot: Slot,
 
     /// The number of transactions processed without error
@@ -210,6 +211,12 @@ pub struct Bank {
 
     /// The number of ticks in each slot.
     ticks_per_slot: u64,
+
+    /// length of a slot in ns
+    ns_per_slot: u128,
+
+    /// genesis time, used for computed clock
+    genesis_creation_time: UnixTimestamp,
 
     /// The number of slots per year, used for inflation
     slots_per_year: f64,
@@ -342,6 +349,8 @@ impl Bank {
             // TODO: clean this up, soo much special-case copying...
             hashes_per_tick: parent.hashes_per_tick,
             ticks_per_slot: parent.ticks_per_slot,
+            ns_per_slot: parent.ns_per_slot,
+            genesis_creation_time: parent.genesis_creation_time,
             slots_per_segment: parent.slots_per_segment,
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
@@ -464,16 +473,23 @@ impl Bank {
         ancestors
     }
 
+    /// computed unix_timestamp at this slot height
+    pub fn unix_timestamp(&self) -> i64 {
+        self.genesis_creation_time
+            + ((self.slot as u128 * self.ns_per_slot) / 1_000_000_000_000) as i64
+    }
+
     fn update_clock(&self) {
         self.store_account(
             &sysvar::clock::id(),
-            &sysvar::clock::create_account(
-                1,
-                self.slot,
-                get_segment_from_slot(self.slot, self.slots_per_segment),
-                self.epoch_schedule.get_epoch(self.slot),
-                self.epoch_schedule.get_leader_schedule_epoch(self.slot),
-            ),
+            &sysvar::clock::Clock {
+                slot: self.slot,
+                segment: get_segment_from_slot(self.slot, self.slots_per_segment),
+                epoch: self.epoch_schedule.get_epoch(self.slot),
+                leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
+                unix_timestamp: self.unix_timestamp(),
+            }
+            .create_account(1),
         );
     }
 
@@ -704,6 +720,9 @@ impl Bank {
 
         self.hashes_per_tick = genesis_config.poh_config.hashes_per_tick;
         self.ticks_per_slot = genesis_config.ticks_per_slot;
+        self.ns_per_slot = genesis_config.poh_config.target_tick_duration.as_nanos()
+            * genesis_config.ticks_per_slot as u128;
+        self.genesis_creation_time = genesis_config.creation_time;
         self.slots_per_segment = genesis_config.slots_per_segment;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
         self.slots_per_year = years_as_slots(
