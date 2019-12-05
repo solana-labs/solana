@@ -105,11 +105,13 @@ pub enum StakeInstruction {
     Split(u64),
 
     /// Withdraw unstaked lamports from the stake account
-    ///    requires Authorized::withdrawer signature
+    ///    requires Authorized::withdrawer signature.  If withdrawal
+    ///    is before lockup has expired, also requires signature
+    ///    of the lockup custodian.
     ///
     /// Expects 4 Accounts:
     ///    0 - StakeAccount from which to withdraw
-    ///    1 - System account to which the lamports will be transferred,
+    ///    1 - Account to which the lamports will be transferred
     ///    2 - Syscall Account that carries epoch
     ///    3 - StakeHistory sysvar that carries stake warmup/cooldown history
     ///
@@ -256,7 +258,7 @@ pub fn delegate_stake(
 
 pub fn withdraw(
     stake_pubkey: &Pubkey,
-    authorized_pubkey: &Pubkey,
+    withdrawer_pubkey: &Pubkey,
     to_pubkey: &Pubkey,
     lamports: u64,
 ) -> Instruction {
@@ -266,7 +268,27 @@ pub fn withdraw(
         AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(sysvar::stake_history::id(), false),
     ]
-    .with_signer(authorized_pubkey);
+    .with_signer(withdrawer_pubkey);
+
+    Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
+}
+
+pub fn withdraw_early(
+    stake_pubkey: &Pubkey,
+    withdrawer_pubkey: &Pubkey,
+    to_pubkey: &Pubkey,
+    lamports: u64,
+    custodian_pubkey: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new(*to_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(sysvar::stake_history::id(), false),
+    ]
+    .with_signer(withdrawer_pubkey)
+    .with_signer(custodian_pubkey);
+
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
 
