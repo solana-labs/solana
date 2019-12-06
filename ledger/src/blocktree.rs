@@ -359,7 +359,7 @@ impl Blocktree {
     fn try_shred_recovery(
         db: &Database,
         erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
-        index_working_set: &HashMap<u64, IndexMetaWorkingSetEntry>,
+        index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
         prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
     ) -> Vec<Shred> {
@@ -384,8 +384,8 @@ impl Blocktree {
                 );
             };
 
-            let index_meta_entry = index_working_set.get(&slot).expect("Index");
-            let index = &index_meta_entry.index;
+            let index_meta_entry = index_working_set.get_mut(&slot).expect("Index");
+            let index = &mut index_meta_entry.index;
             match erasure_meta.status(&index) {
                 ErasureMetaStatus::CanRecover => {
                     // Find shreds for this erasure set and try recovery
@@ -412,8 +412,17 @@ impl Blocktree {
                     });
                     (set_index..set_index + erasure_meta.config.num_coding() as u64).for_each(
                         |i| {
-                            if let Some(shred) =
-                                prev_inserted_codes.remove(&(slot, i)).or_else(|| {
+                            if let Some(shred) = prev_inserted_codes
+                                .remove(&(slot, i))
+                                .map(|s| {
+                                    // Remove from the index so it doesn't get committed. We know
+                                    // this is safe to do because everything in
+                                    // `prev_inserted_codes` does not yet exist in blocktree
+                                    // (guaranteed by `check_cache_coding_shred`)
+                                    index.coding_mut().set_present(i, false);
+                                    s
+                                })
+                                .or_else(|| {
                                     if index.coding().is_present(i) {
                                         let some_code = code_cf
                                             .get_bytes((slot, i))
@@ -449,8 +458,14 @@ impl Blocktree {
                 ErasureMetaStatus::DataFull => {
                     (set_index..set_index + erasure_meta.config.num_coding() as u64).for_each(
                         |i| {
-                            // Remove saved coding shreds. We don't need these for future recovery
-                            let _ = prev_inserted_codes.remove(&(slot, i));
+                            // Remove saved coding shreds. We don't need these for future recovery.
+                            if prev_inserted_codes.remove(&(slot, i)).is_some() {
+                                // Remove from the index so it doesn't get committed. We know
+                                // this is safe to do because everything in
+                                // `prev_inserted_codes` does not yet exist in blocktree
+                                // (guaranteed by `check_cache_coding_shred`)
+                                index.coding_mut().set_present(i, false);
+                            }
                         },
                     );
                     submit_metrics(false, "complete".into(), 0);
@@ -523,7 +538,7 @@ impl Blocktree {
             let recovered_data = Self::try_shred_recovery(
                 &db,
                 &erasure_metas,
-                &index_working_set,
+                &mut index_working_set,
                 &mut just_inserted_data_shreds,
                 &mut just_inserted_coding_shreds,
             );
@@ -679,6 +694,13 @@ impl Blocktree {
                     erasure_meta.config, erasure_config
                 );
             }
+
+            // Should be safe to modify index_meta here. Two cases
+            // 1) Recovery happens: Then all inserted erasure metas are removed
+            // from just_received_coding_shreds, and nothing wll be committed by
+            // `check_insert_coding_shred`, so the coding index meta will not be
+            // committed
+            index_meta.coding_mut().set_present(shred_index, true);
 
             just_received_coding_shreds
                 .entry((slot, shred_index))
