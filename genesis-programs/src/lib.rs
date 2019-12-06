@@ -1,6 +1,7 @@
 use solana_sdk::{
     clock::Epoch, genesis_config::OperatingMode, inflation::Inflation,
-    move_loader::solana_move_loader_program, pubkey::Pubkey, system_program::solana_system_program,
+    move_loader::solana_move_loader_program, nonce_program::solana_nonce_program, pubkey::Pubkey,
+    system_program::solana_system_program,
 };
 
 #[macro_use]
@@ -58,6 +59,7 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
                     solana_system_program(),
                     solana_bpf_loader_program!(),
                     solana_config_program!(),
+                    solana_nonce_program(),
                     solana_stake_program!(),
                     solana_storage_program!(),
                     solana_vest_program!(),
@@ -73,8 +75,9 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
         }
         OperatingMode::SoftLaunch => {
             if epoch == 0 {
-                // Voting, Staking and System Program only at epoch 0
+                // Nonce, Voting, Staking and System Program only at epoch 0
                 Some(vec![
+                    solana_nonce_program(),
                     solana_stake_program!(),
                     solana_system_program(),
                     solana_vote_program!(),
@@ -124,6 +127,7 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::nonce_program::solana_nonce_program;
     use std::collections::HashSet;
 
     #[test]
@@ -146,7 +150,7 @@ mod tests {
     fn test_development_programs() {
         assert_eq!(
             get_programs(OperatingMode::Development, 0).unwrap().len(),
-            10
+            11
         );
         assert_eq!(get_programs(OperatingMode::Development, 1), None);
     }
@@ -169,6 +173,7 @@ mod tests {
         assert_eq!(
             get_programs(OperatingMode::SoftLaunch, 0),
             Some(vec![
+                solana_nonce_program(),
                 solana_stake_program!(),
                 solana_system_program(),
                 solana_vote_program!(),
