@@ -525,7 +525,7 @@ pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[
         commission: 0,
     },
     ValidatorInfo {
-        name: "CyberFund",
+        name: "P2P.ORG - Secure Non-custodial Staking",
         node: "44e8VyWoyZSE2oYHxMHMedAiHkGJqJgPd3tdt6iKoAFL",
         vote: "BwwpzEpo1wzgV9N1987ntgNG6jLt3C9532C68pswT7Gp",
         node_sol: 500.0,
