@@ -92,7 +92,7 @@ pub fn keypair_from_seed_phrase(
         let _ignored = stdout().flush();
         let mut input = String::new();
         stdin().read_line(&mut input).expect("Unexpected input");
-        if input.to_lowercase().trim() != "y".to_string() {
+        if input.to_lowercase().trim() != "y" {
             println!("Exiting");
             exit(1);
         }
