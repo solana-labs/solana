@@ -164,7 +164,19 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     serialize_into(&mut snapshot_stream, &*bank)?;
     let mut bank_rc_serialize = Measure::start("create snapshot");
     serialize_into(&mut snapshot_stream, &bank.rc)?;
+    let consumed_size = snapshot_stream.seek(std::io::SeekFrom::Current(0))?;
     bank_rc_serialize.stop();
+
+    if consumed_size > MAXIMUM_SNAPSHOT_DATA_FILE_SIZE {
+        let error_message = format!("too large snapshot data file: {:?} has {} bytes, and it's too large to be used to rebuild", snapshot_file_path, consumed_size);
+        return Err(get_io_error(&error_message));
+    }
+    datapoint_info!(
+        "snapshot-bank-file",
+        ("slot", slot, i64),
+        ("size", consumed_size, i64)
+    );
+
     inc_new_counter_info!("bank-rc-serialize-ms", bank_rc_serialize.as_ms() as usize);
 
     info!(
