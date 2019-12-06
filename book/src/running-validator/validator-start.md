@@ -1,5 +1,17 @@
 # Starting a Validator
 
+## Configure Solana CLI
+
+The solana cli includes `get` and `set` configuration commands to automatically
+set the `--url` argument for cli commands. For example:
+
+```bash
+solana set --url http://testnet.solana.com:8899
+```
+
+\(You can always override the set configuration by explicitly passing the
+`--url` argument with a command, eg: `solana --url http://beta.testnet.solana.com:8899 balance`\)
+
 ## Confirm The Testnet Is Reachable
 
 Before attaching a validator node, sanity check that the cluster is accessible
@@ -86,10 +98,10 @@ solana-keygen grind --starts-with e1v1s
 
 Depending on the string requested, it may take days to find a match...
 
-## Wallet Configuration
+## More Solana CLI Configuration
 
-Set solana configuration to use your validator keypair for all following
-commands:
+Now that you have a keypair, set the solana configuration to use your validator
+keypair for all following commands:
 
 ```bash
 solana set --keypair ~/validator-keypair.json
