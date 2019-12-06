@@ -1,6 +1,7 @@
 use crate::blocktree_meta;
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
+use fs_extra::dir::get_size;
 use log::*;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
@@ -484,6 +485,7 @@ impl TypedColumn for columns::ErasureMeta {
 #[derive(Debug, Clone)]
 pub struct Database {
     backend: Arc<Rocks>,
+    path: Arc<Path>,
 }
 
 #[derive(Debug, Clone)]
@@ -504,7 +506,10 @@ impl Database {
     pub fn open(path: &Path) -> Result<Self> {
         let backend = Arc::new(Rocks::open(path)?);
 
-        Ok(Database { backend })
+        Ok(Database {
+            backend,
+            path: Arc::from(path),
+        })
     }
 
     pub fn destroy(path: &Path) -> Result<()> {
@@ -575,6 +580,10 @@ impl Database {
 
     pub fn write(&self, batch: WriteBatch) -> Result<()> {
         self.backend.write(batch.write_batch)
+    }
+
+    pub fn storage_size(&self) -> u64 {
+        get_size(&self.path).expect("failure while reading ledger directory size")
     }
 }
 
