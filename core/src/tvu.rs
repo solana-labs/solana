@@ -163,13 +163,8 @@ impl Tvu {
             my_pubkey: keypair.pubkey(),
             vote_account: *vote_account,
             voting_keypair,
-            blocktree: blocktree.clone(),
-            bank_forks: bank_forks.clone(),
-            cluster_info: cluster_info.clone(),
             exit: exit.clone(),
-            ledger_signal_receiver,
             subscriptions: subscriptions.clone(),
-            poh_recorder: poh_recorder.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
             slot_full_senders: vec![blockstream_slot_sender, ledger_cleanup_slot_sender],
             snapshot_package_sender,
@@ -177,7 +172,14 @@ impl Tvu {
             transaction_status_sender,
         };
 
-        let (replay_stage, root_bank_receiver) = ReplayStage::new(replay_stage_config);
+        let (replay_stage, root_bank_receiver) = ReplayStage::new(
+            replay_stage_config,
+            blocktree.clone(),
+            bank_forks.clone(),
+            cluster_info.clone(),
+            ledger_signal_receiver,
+            poh_recorder.clone(),
+        );
 
         let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
             let blockstream_service = BlockstreamService::new(

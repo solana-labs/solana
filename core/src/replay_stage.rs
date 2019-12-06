@@ -64,17 +64,13 @@ impl Drop for Finalizer {
     }
 }
 
+#[derive(Default)]
 pub struct ReplayStageConfig {
     pub my_pubkey: Pubkey,
     pub vote_account: Pubkey,
     pub voting_keypair: Option<Arc<Keypair>>,
-    pub blocktree: Arc<Blocktree>,
-    pub bank_forks: Arc<RwLock<BankForks>>,
-    pub cluster_info: Arc<RwLock<ClusterInfo>>,
     pub exit: Arc<AtomicBool>,
-    pub ledger_signal_receiver: Receiver<bool>,
     pub subscriptions: Arc<RpcSubscriptions>,
-    pub poh_recorder: Arc<Mutex<PohRecorder>>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
     pub slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
     pub snapshot_package_sender: Option<SnapshotPackageSender>,
@@ -181,18 +177,20 @@ impl ForkProgress {
 
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(config: ReplayStageConfig) -> (Self, Receiver<Vec<Arc<Bank>>>) {
+    pub fn new(
+        config: ReplayStageConfig,
+        blocktree: Arc<Blocktree>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
+        ledger_signal_receiver: Receiver<bool>,
+        poh_recorder: Arc<Mutex<PohRecorder>>,
+    ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
             my_pubkey,
             vote_account,
             voting_keypair,
-            blocktree,
-            bank_forks,
-            cluster_info,
             exit,
-            ledger_signal_receiver,
             subscriptions,
-            poh_recorder,
             leader_schedule_cache,
             slot_full_senders,
             snapshot_package_sender,
