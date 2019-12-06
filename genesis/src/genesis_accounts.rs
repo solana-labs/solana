@@ -13,14 +13,15 @@ const UNLOCKS_BY_FIFTHS_FOR_30_MONTHS: UnlockInfo = UnlockInfo {
     unlock_years: 0.5,
     custodian: "11111111111111111111111111111111",
 };
+
 // 60 month schedule is 1/10th every 6 months for 60 months
-//const UNLOCKS_BY_TENTHS_FOR_60_MONTHS: UnlockInfo = UnlockInfo {
-//    cliff_fraction: 0.1,
-//    cliff_years: 0.5,
-//    unlocks: 9,
-//    unlock_years: 0.5,
-//    custodian: "11111111111111111111111111111111",
-//};
+const UNLOCKS_BY_TENTHS_FOR_60_MONTHS: UnlockInfo = UnlockInfo {
+    cliff_fraction: 0.1,
+    cliff_years: 0.5,
+    unlocks: 9,
+    unlock_years: 0.5,
+    custodian: "11111111111111111111111111111111",
+};
 
 // 1st batch
 const BATCH_ONE_STAKER_INFOS: &[StakerInfo] = &[
@@ -447,6 +448,39 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
     },
 ];
 
+pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
+    StakerInfo {
+        name: "shrill charity",
+        staker: "BzuQQFnu7oNUeok9ZoJezpqu2vZJU7XR1PxVLkk6wwUD",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "legal gate",
+        staker: "FwMbkDZUb78aiMWhZY4BEroAcqmnrXZV77nwrg71C57d",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "cluttered complaint",
+        staker: "4h1rt2ic4AXwG7p3Qqhw57EMDD4c3tLYb5J3QstGA2p5",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "one thanks",
+        staker: "3b7akieYUyCgz3Cwt5sTSErMWjg8NEygD6mbGjhGkduB",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "on buzzer",
+        staker: "GRZwoJGisLTszcxtWpeREJ98EGg8pZewhbtcrikoU7b3",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "last minute",
+        staker: "J51tinoLdmEdUR27LUVymrb2LB3xQo1aSHSgmbSGdj58",
+        sol: 5_000_000.0,
+    },
+];
+
 fn add_stakes(
     genesis_config: &mut GenesisConfig,
     staker_infos: &[StakerInfo],
@@ -540,6 +574,11 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
         genesis_config,
         &BATCH_FOUR_STAKER_INFOS,
         &UNLOCKS_BY_FIFTHS_FOR_30_MONTHS,
+        sol_to_lamports(1_000_000.0),
+    ) + add_stakes(
+        genesis_config,
+        &POOL_STAKER_INFOS,
+        &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
         sol_to_lamports(1_000_000.0),
     ) + add_validators(genesis_config, &VALIDATOR_INFOS)
 }
