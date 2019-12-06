@@ -86,17 +86,19 @@ nodes=(
     --rpc-port 18899"
 )
 
-for i in $(seq 1 $extraNodes); do
-  portStart=$((8100 + i * 50))
-  portEnd=$((portStart + 49))
-  nodes+=(
-    "multinode-demo/validator.sh \
-      --no-restart \
-      --dynamic-port-range $portStart-$portEnd
-      --label dyn$i \
-      --init-complete-file init-complete-node$((2 + i)).log"
-  )
-done
+if [[ extraNodes -gt 0 ]]; then
+  for i in $(seq 1 $extraNodes); do
+    portStart=$((8100 + i * 50))
+    portEnd=$((portStart + 49))
+    nodes+=(
+      "multinode-demo/validator.sh \
+        --no-restart \
+        --dynamic-port-range $portStart-$portEnd
+        --label dyn$i \
+        --init-complete-file init-complete-node$((2 + i)).log"
+    )
+  done
+fi
 numNodes=$((2 + extraNodes))
 
 pids=()
@@ -313,7 +315,7 @@ flag_error() {
 
 if ! $skipSetup; then
   clear_config_dir "$SOLANA_CONFIG_DIR"
-  multinode-demo/setup.sh
+  multinode-demo/setup.sh --hashes-per-tick sleep
 else
   verifyLedger
 fi
@@ -365,7 +367,7 @@ while [[ $iteration -le $iterations ]]; do
   echo "--- Wallet sanity ($iteration)"
   (
     set -x
-    timeout 105s scripts/wallet-sanity.sh --url http://127.0.0.1"$walletRpcPort"
+    timeout 60s scripts/wallet-sanity.sh --url http://127.0.0.1"$walletRpcPort"
   ) || flag_error
 
   iteration=$((iteration + 1))
