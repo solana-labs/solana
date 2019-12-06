@@ -511,6 +511,13 @@ pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[
         commission: 0,
     },
     ValidatorInfo {
+        name: "ChainFlow",
+        node: "2te46rxywMdCNdkvjumiBBPQoVczJFxhxEaxFavQNqe3",
+        vote: "8bRCnytB7bySmqxodNGbZuUAtncKkB8T733DD1Dm9WMb",
+        node_sol: 500.0,
+        commission: 0,
+    },
+    ValidatorInfo {
         name: "ChorusOne",
         node: "ChorusXqjLC2NbiStKR6k9WoD7wu6TVTtFG8qCL5XBVa",
         vote: "ChorusvBuPwukqgDvYfWtEg8j4T1NcMgSTQ4b1UbAwgQ",
