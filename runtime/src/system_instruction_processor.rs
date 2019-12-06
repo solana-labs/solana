@@ -268,7 +268,7 @@ mod tests {
             SystemError::InvalidAccountDataLength.into()
         );
 
-        // Trying to request equal or less data length than permitted will be success
+        // Trying to request equal or less data length than permitted will be successful
         let result = create_system_account(
             &mut KeyedAccount::new(&from_account_key, true, &mut from_account),
             &mut KeyedAccount::new(&to_account_key, true, &mut to_account),
