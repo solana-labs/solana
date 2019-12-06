@@ -3,14 +3,10 @@
 ## Confirm The Testnet Is Reachable
 
 Before attaching a validator node, sanity check that the cluster is accessible
-to your machine by running some simple commands. If any of the commands fail,
-please retry 5-10 minutes later to confirm the testnet is not just restarting
-itself before debugging further.
-
-Fetch the current transaction count over JSON RPC:
+to your machine by fetching the transaction count:
 
 ```bash
-curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://testnet.solana.com:8899
+solana get-transaction-count
 ```
 
 Inspect the network explorer at
@@ -92,11 +88,11 @@ Depending on the string requested, it may take days to find a match...
 
 ## Wallet Configuration
 
-Set solana configuration to use your validator keypair and the stable
-testnet for all following commands:
+Set solana configuration to use your validator keypair for all following
+commands:
 
 ```bash
-solana set --url http://testnet.solana.com:8899 --keypair ~/validator-keypair.json
+solana set --keypair ~/validator-keypair.json
 ```
 
 You should see the following output:

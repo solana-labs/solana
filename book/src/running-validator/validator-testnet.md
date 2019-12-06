@@ -20,9 +20,10 @@ tracks the most stable tagged release.
 You can submit a JSON-RPC request to see the specific version of the cluster.
 
 ```bash
-curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' edge.testnet.solana.com:8899
-{"jsonrpc":"2.0","result":{"solana-core":"0.21.0"},"id":1}
+curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' testnet.solana.com:8899
 ```
+Example result:
+`{"jsonrpc":"2.0","result":{"solana-core":"0.21.0"},"id":1}`
 
 ## Using a Different Testnet
 
@@ -35,15 +36,17 @@ commands in the following pages.
 If you are bootstrapping with `solana-install`, you can specify the release tag
 or named channel to install to match your desired testnet.
 
+Tag:
 ```bash
 curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.21.0/install/solana-install-init.sh | sh -s - 0.21.0
 ```
 
+Channel:
 ```bash
 curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.21.0/install/solana-install-init.sh | sh -s - beta
 ```
 
-Similarly, you can add this argument to the `solana-install` command if you've built the program from source:
+Similarly, you can add a tag or channel argument to the `solana-install` command if you've built the program from source:
 
 ```bash
 solana-install init 0.21.0
@@ -54,33 +57,28 @@ choose the release matching your desired testnet.
 
 ### Validator Commands
 
-The Solana CLI tool points at testnet.solana.com by default. Include a `--url`
-argument to point at a different testnet. For instance:
-
-```bash
-solana --url http://beta.testnet.solana.com:8899 balance
-```
-
 The solana cli includes `get` and `set` configuration commands to automatically
 set the `--url` argument for future cli commands. For example:
 
 ```bash
-solana set --url http://beta.testnet.solana.com:8899
+solana set --url http://testnet.solana.com:8899
 ```
 
-\(You can always override the set configuration by explicitly passing the
-`--url` argument with a command.\)
+You can always override the set configuration by explicitly passing the
+`--url` argument with a command, eg: `solana --url http://beta.testnet.solana.com:8899 balance`
 
 Solana-gossip and solana-validator commands already require an explicit
 `--entrypoint` argument. Simply replace testnet.solana.com in the examples with
 an alternate url to interact with a different testnet. For example:
 
 ```bash
-solana-validator --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config --rpc-port 8899 beta.testnet.solana.com
+solana-validator --identity-keypair ~/validator-keypair.json \
+    --voting-keypair ~/validator-vote-keypair.json --ledger ~/validator-config \
+    --rpc-port 8899 --entrypoint testnet.solana.com --limit-ledger-size
 ```
 
 You can also submit JSON-RPC requests to a different testnet, like:
 
 ```bash
-curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://beta.testnet.solana.com:8899
+curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://testnet.solana.com:8899
 ```
