@@ -2,11 +2,18 @@ use crate::ArgConstant;
 use bip39::{Language, Mnemonic, Seed};
 use clap::values_t;
 use rpassword::prompt_password_stderr;
-use solana_sdk::signature::{
-    keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair,
-    KeypairUtil,
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{
+        keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair,
+        KeypairUtil,
+    },
 };
-use std::error;
+use std::{
+    error,
+    io::{stdin, stdout, Write},
+    process::exit,
+};
 
 // Keyword used to indicate that the user should be asked for a keypair seed phrase
 pub const ASK_KEYWORD: &str = "ASK";
@@ -54,9 +61,12 @@ pub fn prompt_passphrase(prompt: &str) -> Result<String, Box<dyn error::Error>> 
 }
 
 /// Reads user input from stdin to retrieve a seed phrase and passphrase for keypair derivation
+/// Optionally skips validation of seed phrase
+/// Optionally confirms recovered public key
 pub fn keypair_from_seed_phrase(
     keypair_name: &str,
     skip_validation: bool,
+    confirm_pubkey: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
     let seed_phrase = prompt_password_stderr(&format!("[{}] seed phrase: ", keypair_name))?;
     let seed_phrase = seed_phrase.trim();
@@ -65,16 +75,30 @@ pub fn keypair_from_seed_phrase(
         keypair_name,
     );
 
-    if skip_validation {
+    let keypair = if skip_validation {
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
-        keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)
+        keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)?
     } else {
         let sanitized = sanitize_seed_phrase(seed_phrase);
         let mnemonic = Mnemonic::from_phrase(sanitized, Language::English)?;
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
-        keypair_from_seed(seed.as_bytes())
+        keypair_from_seed(seed.as_bytes())?
+    };
+
+    if confirm_pubkey {
+        let pubkey = Pubkey::new(keypair.public.as_ref());
+        print!("Recovered pubkey `{:?}`. Continue? (y/n): ", pubkey);
+        let _ignored = stdout().flush();
+        let mut input = String::new();
+        stdin().read_line(&mut input).expect("Unexpected input");
+        if input.to_lowercase().trim() != "y" {
+            println!("Exiting");
+            exit(1);
+        }
     }
+
+    Ok(keypair)
 }
 
 /// Checks CLI arguments to determine whether a keypair should be:
@@ -104,7 +128,7 @@ pub fn keypair_input(
         }
 
         let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-        keypair_from_seed_phrase(keypair_name, skip_validation)
+        keypair_from_seed_phrase(keypair_name, skip_validation, true)
             .map(|keypair| KeypairWithSource::new(keypair, Source::SeedPhrase))
     } else if let Some(keypair_file) = matches.value_of(keypair_match_name) {
         read_keypair_file(keypair_file).map(|keypair| KeypairWithSource::new(keypair, Source::File))
