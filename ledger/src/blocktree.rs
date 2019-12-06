@@ -2131,10 +2131,12 @@ pub mod tests {
     use crate::{
         entry::{next_entry, next_entry_mut},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        leader_schedule::{FixedSchedule, LeaderSchedule},
         shred::{max_ticks_per_n_shreds, DataShredHeader},
     };
     use itertools::Itertools;
     use rand::{seq::SliceRandom, thread_rng};
+    use solana_runtime::bank::Bank;
     use solana_sdk::{
         hash::{self, Hash},
         instruction::CompiledInstruction,
@@ -4395,6 +4397,49 @@ pub mod tests {
             assert_eq!(blocktree.lowest_slot(), 1);
             blocktree.run_purge_batch(0, 5).unwrap();
             assert_eq!(blocktree.lowest_slot(), 6);
+        }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_recovery() {
+        let slot = 1;
+        let (_, entries) = make_slot_entries_with_transactions(slot, 0, 100);
+        let leader_keypair = Arc::new(Keypair::new());
+        let shredder = Shredder::new(slot, slot - 1, 1.0, leader_keypair.clone(), 0, 0)
+            .expect("Failed in creating shredder");
+        let blocktree_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
+            let genesis_config = create_genesis_config(2).genesis_config;
+            let bank = Arc::new(Bank::new(&genesis_config));
+            let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
+            let fixed_schedule = FixedSchedule {
+                leader_schedule: Arc::new(LeaderSchedule::new_from_schedule(vec![
+                    leader_keypair.pubkey()
+                ])),
+                start_epoch: 0,
+            };
+            leader_schedule_cache.set_fixed_leader_schedule(Some(fixed_schedule));
+            blocktree
+                .insert_shreds(coding_shreds, Some(&Arc::new(leader_schedule_cache)), false)
+                .unwrap();
+            let shred_bufs: Vec<_> = data_shreds
+                .iter()
+                .map(|shred| shred.payload.clone())
+                .collect();
+
+            // Check all the data shreds were recovered
+            for (s, buf) in data_shreds.iter().zip(shred_bufs) {
+                assert_eq!(
+                    blocktree
+                        .get_data_shred(s.slot(), s.index() as u64)
+                        .unwrap()
+                        .unwrap(),
+                    buf
+                );
+            }
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
