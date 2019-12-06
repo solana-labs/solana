@@ -86,17 +86,19 @@ nodes=(
     --rpc-port 18899"
 )
 
-for i in $(seq 1 $extraNodes); do
-  portStart=$((8100 + i * 50))
-  portEnd=$((portStart + 49))
-  nodes+=(
-    "multinode-demo/validator.sh \
-      --no-restart \
-      --dynamic-port-range $portStart-$portEnd
-      --label dyn$i \
-      --init-complete-file init-complete-node$((2 + i)).log"
-  )
-done
+if [[ extraNodes -gt 0 ]]; then
+  for i in $(seq 1 $extraNodes); do
+    portStart=$((8100 + i * 50))
+    portEnd=$((portStart + 49))
+    nodes+=(
+      "multinode-demo/validator.sh \
+        --no-restart \
+        --dynamic-port-range $portStart-$portEnd
+        --label dyn$i \
+        --init-complete-file init-complete-node$((2 + i)).log"
+    )
+  done
+fi
 numNodes=$((2 + extraNodes))
 
 pids=()
