@@ -55,7 +55,7 @@ fn create_system_account(
 
     if data_length > MAX_PERMITTED_DATA_LENGTH {
         debug!(
-            "CreateAccount: requested more space than maximum allowed, space requested {}",
+            "CreateAccount: requested data_length: {} is more than maximum allowed",
             data_length
         );
         return Err(SystemError::InvalidAccountDataLength.into());
