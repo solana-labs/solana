@@ -1780,15 +1780,13 @@ pub mod tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(Vec::new());
-        {
-            let local_paths = daccounts.paths.read().unwrap();
-            let copied_accounts = TempDir::new().unwrap();
-            // Simulate obtaining a copy of the AppendVecs from a tarball
-            copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
-            daccounts
-                .accounts_from_stream(&mut reader, &local_paths, copied_accounts.path())
-                .unwrap();
-        }
+        let local_paths = daccounts.paths.read().unwrap().clone();
+        let copied_accounts = TempDir::new().unwrap();
+        // Simulate obtaining a copy of the AppendVecs from a tarball
+        copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
+        daccounts
+            .accounts_from_stream(&mut reader, &local_paths, copied_accounts.path())
+            .unwrap();
 
         print_count_and_status("daccounts", &daccounts);
 

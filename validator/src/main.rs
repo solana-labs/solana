@@ -597,17 +597,19 @@ pub fn main() {
         vec![ledger_path.join("accounts")]
     };
 
-    // Canonicalize account paths to avoid issues with symlink creation
+    // Create and canonicalize account paths to avoid issues with symlink creation
     validator_config.account_paths = account_paths
         .into_iter()
-        .map(|account_path| match fs::canonicalize(&account_path) {
-            Ok(account_path) => account_path,
-            Err(err) => {
-                eprintln!(
-                    "Unable to access account path: {:?}, err: {:?}",
-                    account_path, err
-                );
-                exit(1);
+        .map(|account_path| {
+            match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
+                Ok(account_path) => account_path,
+                Err(err) => {
+                    eprintln!(
+                        "Unable to access account path: {:?}, err: {:?}",
+                        account_path, err
+                    );
+                    exit(1);
+                }
             }
         })
         .collect();
