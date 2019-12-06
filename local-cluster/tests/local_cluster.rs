@@ -1,3 +1,4 @@
+use assert_matches::assert_matches;
 use log::*;
 use serial_test_derive::serial;
 use solana_client::thin_client::create_client;
@@ -565,11 +566,30 @@ fn test_softlaunch_operating_mode() {
         solana_core::cluster_info::VALIDATOR_PORT_RANGE,
     );
 
-    // Programs that are not available at soft launch
+    // Programs that are available at soft launch epoch 0
+    for program_id in [
+        &solana_sdk::system_program::id(),
+        &solana_vote_program::id(),
+        &solana_stake_program::id(),
+    ]
+    .iter()
+    {
+        assert_matches!(
+            (
+                program_id,
+                client
+                    .get_account_with_commitment(program_id, CommitmentConfig::recent())
+                    .unwrap()
+            ),
+            (_program_id, Some(_))
+        );
+    }
+
+    // Programs that are not available at soft launch epoch 0
     for program_id in [
         &solana_config_program::id(),
         &solana_sdk::bpf_loader::id(),
-        &solana_sdk::system_program::id(),
+        &solana_storage_program::id(),
         &solana_vest_program::id(),
     ]
     .iter()
