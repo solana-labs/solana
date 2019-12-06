@@ -225,13 +225,13 @@ function launchTestnet() {
     # shellcheck disable=SC2086
     net/net.sh start -t "$CHANNEL" \
       "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures \
-      --gpu-mode $startGpuMode
+      --gpu-mode $startGpuMode --client-delay-start $CLIENT_DELAY_START
   else
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
     net/net.sh start -T solana-release*.tar.bz2 \
       "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures \
-      --gpu-mode $startGpuMode
+      --gpu-mode $startGpuMode --client-delay-start $CLIENT_DELAY_START
   fi
 
   execution_step "Wait ${RAMP_UP_TIME} seconds for network throughput to stabilize"
@@ -344,6 +344,8 @@ if [[ "$USE_PUBLIC_IP_ADDRESSES" = "true" ]] ; then
   maybePublicIpAddresses="-P"
 fi
 
+: "${CLIENT_DELAY_START:=0}"
+
 if [[ -z $CHANNEL ]]; then
   execution_step "Downloading tar from build artifacts"
   buildkite-agent artifact download "solana-release*.tar.bz2" .
@@ -367,6 +369,7 @@ TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         VALIDATOR_NODE_MACHINE_TYPE \
                         NUMBER_OF_CLIENT_NODES \
                         CLIENT_OPTIONS \
+                        CLIENT_DELAY_START \
                         TESTNET_ZONES \
                         TEST_DURATION_SECONDS \
                         USE_PUBLIC_IP_ADDRESSES \

@@ -48,6 +48,9 @@ Operate a configured testnet
                                             -c bench-tps=2="--tx_count 25000"
                                         This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                         to the bench-tps client.
+   --client-delay-start
+                                      - Number of seconds to wait after validators have finished starting before starting client programs
+                                        (default: $clientDelayStart)
    -n NUM_VALIDATORS                  - Number of validators to apply command to.
    --gpu-mode GPU_MODE                - Specify GPU mode to launch validators with (default: $gpuMode).
                                         MODE must be one of
@@ -90,7 +93,6 @@ Operate a configured testnet
    --operating-mode development|softlaunch
                                       - Specify whether or not to launch the cluster in "development" mode with all features enabled at epoch 0,
                                         or "softlaunch" mode with some features disabled at epoch 0 (default: development)
-
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -153,6 +155,7 @@ netemPartition=""
 netemConfig=""
 netemConfigFile=""
 netemCommand="add"
+clientDelayStart=0
 
 command=$1
 [[ -n $command ]] || usage
@@ -249,6 +252,9 @@ while [[ -n $1 ]]; do
           exit 1
           ;;
       esac
+      shift 2
+    elif [[ $1 == --client-delay-start ]]; then
+      clientDelayStart=$2
       shift 2
     else
       usage "Unknown long option: $1"
@@ -808,6 +814,9 @@ deploy() {
 
   sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
                                  # have caught up to the bootstrap leader yet
+
+  echo "--- Sleeping $clientDelayStart seconds after validators are started before starting clients"
+  sleep "$clientDelayStart"
 
   SECONDS=0
   for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
