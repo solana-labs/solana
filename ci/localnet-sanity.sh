@@ -313,7 +313,7 @@ flag_error() {
 
 if ! $skipSetup; then
   clear_config_dir "$SOLANA_CONFIG_DIR"
-  multinode-demo/setup.sh
+  multinode-demo/setup.sh --hashes-per-tick sleep
 else
   verifyLedger
 fi
