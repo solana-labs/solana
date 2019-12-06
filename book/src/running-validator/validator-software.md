@@ -8,6 +8,10 @@ machine by running:
 curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.21.0/install/solana-install-init.sh | sh -s - 0.21.0
 ```
 
+If you are connecting to a different testnet, you can replace `0.21.0` with the
+release tag matching the software version of your desired testnet, or replace it
+with the named channel `stable`, `beta`, or `edge`.
+
 The following output indicates a successful update:
 
 ```text
