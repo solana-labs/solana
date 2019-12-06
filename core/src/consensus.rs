@@ -9,7 +9,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use solana_vote_program::vote_state::{
-    Lockout, Vote, VoteState, DEFAULT_TIMESTAMP_SLOTS, MAX_LOCKOUT_HISTORY,
+    Lockout, Vote, VoteState, TIMESTAMP_SLOT_INTERVAL, MAX_LOCKOUT_HISTORY,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -432,7 +432,7 @@ impl Tower {
 
     fn maybe_timestamp(&mut self, current_slot: Slot) -> Option<UnixTimestamp> {
         if self.last_timestamp.0 == 0
-            || self.last_timestamp.0 + DEFAULT_TIMESTAMP_SLOTS <= current_slot
+            || self.last_timestamp.0 + TIMESTAMP_SLOT_INTERVAL <= current_slot
         {
             let timestamp = Utc::now().timestamp();
             self.last_timestamp = (current_slot, timestamp);
@@ -922,7 +922,7 @@ mod test {
     #[test]
     fn test_maybe_timestamp() {
         let mut tower = Tower::default();
-        assert!(tower.maybe_timestamp(DEFAULT_TIMESTAMP_SLOTS).is_some());
+        assert!(tower.maybe_timestamp(TIMESTAMP_SLOT_INTERVAL).is_some());
         let (slot, timestamp) = tower.last_timestamp;
 
         assert_eq!(tower.maybe_timestamp(1), None);
@@ -931,7 +931,7 @@ mod test {
 
         sleep(Duration::from_secs(1));
         assert!(tower
-            .maybe_timestamp(slot + DEFAULT_TIMESTAMP_SLOTS + 1)
+            .maybe_timestamp(slot + TIMESTAMP_SLOT_INTERVAL + 1)
             .is_some());
         assert!(tower.last_timestamp.1 > timestamp);
     }
