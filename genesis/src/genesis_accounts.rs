@@ -451,7 +451,7 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
 pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "shrill charity",
-        staker: "BzuQQFnu7oNUeok9ZoJezpqu2vZJU7XR1PxVLkk6wwUD",
+        staker: "BzuqQFnu7oNUeok9ZoJezpqu2vZJU7XR1PxVLkk6wwUD",
         sol: 5_000_000.0,
     },
     StakerInfo {
