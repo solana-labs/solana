@@ -10,6 +10,7 @@ pub enum SystemError {
     ResultWithNegativeLamports,
     InvalidProgramId,
     InvalidAccountId,
+    InvalidAccountDataLength,
 }
 
 impl<T> DecodeError<T> for SystemError {
