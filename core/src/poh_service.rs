@@ -2,11 +2,13 @@
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::PohRecorder;
 use core_affinity;
+use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
 use solana_sdk::poh_config::PohConfig;
 use solana_sys_tuner;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
+use std::time::Instant;
 
 pub struct PohService {
     tick_producer: JoinHandle<()>,
@@ -87,10 +89,22 @@ impl PohService {
 
     fn tick_producer(poh_recorder: Arc<Mutex<PohRecorder>>, poh_exit: &AtomicBool) {
         let poh = poh_recorder.lock().unwrap().poh.clone();
+        let mut now = Instant::now();
+        let mut num_ticks = 0;
         loop {
             if poh.lock().unwrap().hash(NUM_HASHES_PER_BATCH) {
                 // Lock PohRecorder only for the final hash...
                 poh_recorder.lock().unwrap().tick();
+                num_ticks += 1;
+                if num_ticks >= DEFAULT_TICKS_PER_SLOT * 2 {
+                    datapoint_debug!(
+                        "poh-service",
+                        ("ticks", num_ticks as i64, i64),
+                        ("elapsed_ms", now.elapsed().as_millis() as i64, i64),
+                    );
+                    num_ticks = 0;
+                    now = Instant::now();
+                }
                 if poh_exit.load(Ordering::Relaxed) {
                     break;
                 }
