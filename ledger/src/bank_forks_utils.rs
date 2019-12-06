@@ -7,12 +7,12 @@ use crate::{
 };
 use log::*;
 use solana_sdk::genesis_config::GenesisConfig;
-use std::{fs, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc};
 
 pub fn load(
     genesis_config: &GenesisConfig,
     blocktree: &Blocktree,
-    account_paths: Option<String>,
+    account_paths: Vec<PathBuf>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
 ) -> Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
@@ -30,10 +30,13 @@ pub fn load(
         if tar.exists() {
             info!("Loading snapshot package: {:?}", tar);
             // Fail hard here if snapshot fails to load, don't silently continue
+
+            if account_paths.is_empty() {
+                panic!("Account paths not present when booting from snapshot")
+            }
+
             let deserialized_bank = snapshot_utils::bank_from_archive(
-                account_paths
-                    .clone()
-                    .expect("Account paths not present when booting from snapshot"),
+                &account_paths,
                 &snapshot_config.snapshot_path,
                 &tar,
             )
