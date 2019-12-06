@@ -52,7 +52,7 @@ fn get_keypair_from_matches(matches: &ArgMatches) -> Result<Keypair, Box<dyn err
         read_keypair(&mut stdin)
     } else if infile == ASK_KEYWORD {
         let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-        keypair_from_seed_phrase("pubkey recovery", skip_validation)
+        keypair_from_seed_phrase("pubkey recovery", skip_validation, false)
     } else {
         read_keypair_file(infile)
     }
@@ -306,7 +306,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
 
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            let keypair = keypair_from_seed_phrase("recover", skip_validation)?;
+            let keypair = keypair_from_seed_phrase("recover", skip_validation, true)?;
             output_keypair(&keypair, &outfile, "recovered")?;
         }
         ("grind", Some(matches)) => {
