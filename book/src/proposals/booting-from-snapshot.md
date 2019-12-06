@@ -154,15 +154,10 @@ any descendant of `S`, so with all the votes `V_i` in tower where `V_i >= V`,
 
 ## Achieving Safety
 
-Define the "Safety Criteria" to be:
-
->If the validator has:
->
->  1. a `BankForks`
->  2. any descendant of `S`, `S_d` that is present in `BankForks.banks`
->  3. any slot `L_i` in tower
->
->the validator is able to determine `is_ancestor(L_i, S_d)`.
+Define the "Safety Criteria" to be: If the validator has a `BankForks` and a
+`Tower`, it is able to determine `is_ancestor(L_i, S_d)` where `L_i` is any
+slot in `Tower`, and `S_d` is any descendant of `S` that is also present in
+`BankForks.banks`.
 
 Assume the "Safety Criteria" is true, we show we can then achieve the "safety"
 condition:
