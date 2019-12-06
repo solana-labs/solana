@@ -5,7 +5,7 @@ use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    bank::{deserialize_for_snapshot, Bank},
+    bank::{deserialize_for_snapshot, MAXIMUM_SNAPSHOT_DATA_FILE_SIZE, Bank},
     status_cache::SlotDelta,
 };
 use solana_sdk::{clock::Slot, transaction};
@@ -18,6 +18,7 @@ use std::{
 };
 use tar::Archive;
 use thiserror::Error;
+use std::io::Seek;
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
@@ -275,12 +276,22 @@ where
     // Rebuild the root bank
     info!("Loading from {:?}", &root_paths.snapshot_file_path);
     let file = File::open(&root_paths.snapshot_file_path)?;
+    let file_size = fs::metadata(&root_paths.snapshot_file_path)?.len();
+    if file_size > MAXIMUM_SNAPSHOT_DATA_FILE_SIZE {
+        let error_message = format!("too large snapshot data file: {:?} has {} bytes, and it's too large to rebuild from", root_paths.snapshot_file_path, file_size);
+        return Err(get_io_error(&error_message));
+    }
     let mut stream = BufReader::new(file);
     let bank: Bank = deserialize_for_snapshot(&mut stream)?;
 
     // Rebuild accounts
     bank.rc
         .accounts_from_stream(&mut stream, local_account_paths, append_vecs_path)?;
+    let consumed_size = stream.seek(std::io::SeekFrom::Current(0))?;
+    if file_size != consumed_size {
+        let error_message = format!("invalid snapshot format: {:?} has {} bytes, however consumed {} bytes", root_paths.snapshot_file_path, file_size, consumed_size);
+        return Err(get_io_error(&error_message));
+    }
 
     // Rebuild status cache
     let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
