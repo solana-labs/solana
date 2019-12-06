@@ -1178,6 +1178,7 @@ pub(crate) mod tests {
     use solana_stake_program::stake_state;
     use solana_vote_program::vote_state;
     use solana_vote_program::vote_state::{Vote, VoteState};
+    use std::iter;
     use std::{
         fs::remove_dir_all,
         sync::{Arc, RwLock},
@@ -1205,11 +1206,15 @@ pub(crate) mod tests {
         const HONEST_NODE: usize = 1;
         const MALICIOUS_NODE: usize = 2;
 
-        let neutral_path: Vec<u64> = vec![0, 1, 2];
-        let minority_fork: Vec<u64> = vec![3, 4, 5, 6, 7, 8, 9, 10, 11];
-        let majority_fork: Vec<u64> = vec![12, 13, 14, 15, 16, 17, 18, 19, 20];
+        const THRESHOLD_SIZE: u64 = 8;
 
-        let mut towers = vec![Tower::new_for_tests(8, 0.67), Tower::new_for_tests(8, 0.67)];
+        let neutral_path: Vec<u64> = vec![0, 1, 2];
+        let minority_fork: Vec<u64> = (3..=3 + THRESHOLD_SIZE).collect();
+        let majority_fork: Vec<u64> = (12..12 + THRESHOLD_SIZE).collect();
+
+        let mut towers: Vec<Tower> = iter::repeat_with(|| Tower::new_for_tests(8, 0.67))
+            .take(2)
+            .collect();
 
         // We are at majority fork
         for slot in majority_fork.iter() {
@@ -1226,54 +1231,32 @@ pub(crate) mod tests {
 
         // Bootstrap leader node has: 34% stake, honest and malicious node has: 33% stake each
         let node_stakes: Vec<u64> = vec![34_000_000, 33_000_000, 33_000_000];
-        let node_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
-        let node_voting_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
-        let node_staking_keypairs = vec![Keypair::new(), Keypair::new(), Keypair::new()];
+        let node_keypairs: Vec<Keypair> = iter::repeat_with(Keypair::new).take(3).collect();
+        let node_voting_keypairs: Vec<Keypair> = iter::repeat_with(Keypair::new).take(3).collect();
+        let node_staking_keypairs: Vec<Keypair> = iter::repeat_with(Keypair::new).take(3).collect();
 
-        let genesis_vote_accounts: Vec<Account> = vec![
-            vote_state::create_account(
-                &node_voting_keypairs[BOOTSTRAP_LEADER].pubkey(),
-                &node_keypairs[BOOTSTRAP_LEADER].pubkey(),
-                0,
-                node_stakes[BOOTSTRAP_LEADER],
-            ),
-            vote_state::create_account(
-                &node_voting_keypairs[HONEST_NODE].pubkey(),
-                &node_keypairs[HONEST_NODE].pubkey(),
-                0,
-                node_stakes[HONEST_NODE],
-            ),
-            vote_state::create_account(
-                &node_voting_keypairs[MALICIOUS_NODE].pubkey(),
-                &node_keypairs[MALICIOUS_NODE].pubkey(),
-                0,
-                node_stakes[MALICIOUS_NODE],
-            ),
-        ];
+        let genesis_vote_accounts: Vec<Account> = (BOOTSTRAP_LEADER..=MALICIOUS_NODE)
+            .map(|i| {
+                vote_state::create_account(
+                    &node_voting_keypairs[i].pubkey(),
+                    &node_keypairs[i].pubkey(),
+                    0,
+                    node_stakes[i],
+                )
+            })
+            .collect();
 
-        let genesis_stake_accounts: Vec<Account> = vec![
-            stake_state::create_account(
-                &node_staking_keypairs[BOOTSTRAP_LEADER].pubkey(),
-                &node_voting_keypairs[BOOTSTRAP_LEADER].pubkey(),
-                &genesis_vote_accounts[BOOTSTRAP_LEADER],
-                &Rent::default(),
-                node_stakes[BOOTSTRAP_LEADER],
-            ),
-            stake_state::create_account(
-                &node_staking_keypairs[HONEST_NODE].pubkey(),
-                &node_voting_keypairs[HONEST_NODE].pubkey(),
-                &genesis_vote_accounts[HONEST_NODE],
-                &Rent::default(),
-                node_stakes[HONEST_NODE],
-            ),
-            stake_state::create_account(
-                &node_staking_keypairs[MALICIOUS_NODE].pubkey(),
-                &node_voting_keypairs[MALICIOUS_NODE].pubkey(),
-                &genesis_vote_accounts[MALICIOUS_NODE],
-                &Rent::default(),
-                node_stakes[MALICIOUS_NODE],
-            ),
-        ];
+        let genesis_stake_accounts: Vec<Account> = (BOOTSTRAP_LEADER..=MALICIOUS_NODE)
+            .map(|i| {
+                stake_state::create_account(
+                    &node_staking_keypairs[i].pubkey(),
+                    &node_voting_keypairs[i].pubkey(),
+                    &genesis_vote_accounts[i],
+                    &Rent::default(),
+                    node_stakes[i],
+                )
+            })
+            .collect();
 
         let mut genesis_config = create_genesis_config(10_000).genesis_config;
         genesis_config.accounts.clear();
@@ -1333,7 +1316,7 @@ pub(crate) mod tests {
             bank_forks.banks[&i].freeze();
         }
 
-        let last_neutral_bank = &bank_forks.banks[&2].clone();
+        let last_neutral_bank = &bank_forks.banks[neutral_path.last().unwrap()].clone();
 
         for (index, slot) in minority_fork.iter().enumerate() {
             let last_sequential_bank = &bank_forks.banks[&(*slot - 1)].clone();
@@ -1412,7 +1395,7 @@ pub(crate) mod tests {
         let (bank, stats) = response.unwrap();
 
         // We want to switch to minority fork, but we are locked out.
-        assert_eq!(bank.slot(), minority_fork[minority_fork.len() - 1]);
+        assert_eq!(bank.slot(), minority_fork.last().unwrap().clone());
         assert!(stats.is_locked_out);
     }
 
