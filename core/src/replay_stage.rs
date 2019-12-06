@@ -1306,8 +1306,6 @@ pub(crate) mod tests {
                 *i,
             );
 
-            bank.freeze();
-
             fork_progress
                 .entry(*i)
                 .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
@@ -1331,6 +1329,8 @@ pub(crate) mod tests {
                 &node_voting_keypairs[MALICIOUS_NODE].pubkey(),
                 *i - 1,
             );
+
+            bank_forks.banks[&i].freeze();
         }
 
         let last_neutral_bank = &bank_forks.banks[&2].clone();
@@ -1349,8 +1349,6 @@ pub(crate) mod tests {
                 *slot,
             );
 
-            bank.freeze();
-
             fork_progress
                 .entry(bank.slot())
                 .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
@@ -1362,6 +1360,8 @@ pub(crate) mod tests {
                 &node_voting_keypairs[MALICIOUS_NODE].pubkey(),
                 last_bank.slot(),
             );
+
+            bank_forks.banks[slot].freeze();
         }
 
         for (index, slot) in majority_fork.iter().enumerate() {
@@ -1377,8 +1377,6 @@ pub(crate) mod tests {
                 &node_voting_keypairs[HONEST_NODE].pubkey(),
                 *slot,
             );
-
-            bank.freeze();
 
             fork_progress
                 .entry(bank.slot())
@@ -1397,6 +1395,8 @@ pub(crate) mod tests {
                 &node_voting_keypairs[HONEST_NODE].pubkey(),
                 last_bank.slot(),
             );
+
+            bank_forks.banks[slot].freeze();
         }
 
         let response = ReplayStage::select_fork(
