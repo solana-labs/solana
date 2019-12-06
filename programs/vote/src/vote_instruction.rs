@@ -33,6 +33,9 @@ pub enum VoteError {
 
     #[error("vote has no slots, invalid")]
     EmptySlots,
+
+    #[error("vote timestamp not recent")]
+    TimestampTooOld,
 }
 impl<E> DecodeError<E> for VoteError {
     fn type_of() -> &'static str {

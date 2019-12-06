@@ -38,7 +38,7 @@ pub fn years_as_slots(years: f64, tick_duration: &Duration, ticks_per_slot: u64)
         / ticks_per_slot as f64
 }
 
-/// From slots per year to tick_duration
+/// From slots per year to slot duration
 pub fn slot_duration_from_slots_per_year(slots_per_year: f64) -> Duration {
     // Regarding division by zero potential below: for some reason, if Rust stores an `inf` f64 and
     // then converts it to a u64 on use, it always returns 0, as opposed to std::u64::MAX or any

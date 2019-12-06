@@ -1,8 +1,16 @@
+use chrono::prelude::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_metrics::datapoint_debug;
 use solana_runtime::bank::Bank;
-use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
-use solana_vote_program::vote_state::{Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY};
+use solana_sdk::{
+    account::Account,
+    clock::{Slot, UnixTimestamp},
+    hash::Hash,
+    pubkey::Pubkey,
+};
+use solana_vote_program::vote_state::{
+    BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
+};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -36,6 +44,7 @@ pub struct Tower {
     threshold_size: f64,
     lockouts: VoteState,
     last_vote: Vote,
+    last_timestamp: BlockTimestamp,
 }
 
 impl Tower {
@@ -46,6 +55,7 @@ impl Tower {
             threshold_size: VOTE_THRESHOLD_SIZE,
             lockouts: VoteState::default(),
             last_vote: Vote::default(),
+            last_timestamp: BlockTimestamp::default(),
         };
 
         tower.initialize_lockouts_from_bank_forks(&bank_forks, vote_account_pubkey);
@@ -180,10 +190,7 @@ impl Tower {
         last_bank_slot: Option<Slot>,
     ) -> (Vote, usize) {
         let mut local_vote_state = local_vote_state.clone();
-        let vote = Vote {
-            slots: vec![slot],
-            hash,
-        };
+        let vote = Vote::new(vec![slot], hash);
         local_vote_state.process_vote_unchecked(&vote);
         let slots = if let Some(last_bank_slot) = last_bank_slot {
             local_vote_state
@@ -201,7 +208,7 @@ impl Tower {
             slots,
             local_vote_state.votes
         );
-        (Vote { slots, hash }, local_vote_state.votes.len() - 1)
+        (Vote::new(slots, hash), local_vote_state.votes.len() - 1)
     }
 
     fn last_bank_vote(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
@@ -235,15 +242,19 @@ impl Tower {
     }
 
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
-        let vote = Vote {
-            slots: vec![slot],
-            hash,
-        };
+        let vote = Vote::new(vec![slot], hash);
         self.record_bank_vote(vote)
     }
 
     pub fn last_vote(&self) -> Vote {
         self.last_vote.clone()
+    }
+
+    pub fn last_vote_and_timestamp(&mut self) -> Vote {
+        let mut last_vote = self.last_vote();
+        let current_slot = last_vote.slots.iter().max().unwrap_or(&0);
+        last_vote.timestamp = self.maybe_timestamp(*current_slot);
+        last_vote
     }
 
     pub fn root(&self) -> Option<Slot> {
@@ -418,11 +429,27 @@ impl Tower {
             }
         }
     }
+
+    fn maybe_timestamp(&mut self, current_slot: Slot) -> Option<UnixTimestamp> {
+        if self.last_timestamp.slot == 0
+            || self.last_timestamp.slot + TIMESTAMP_SLOT_INTERVAL <= current_slot
+        {
+            let timestamp = Utc::now().timestamp();
+            self.last_timestamp = BlockTimestamp {
+                slot: current_slot,
+                timestamp,
+            };
+            Some(timestamp)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::{thread::sleep, time::Duration};
 
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, Account))> {
         let mut stakes = vec![];
@@ -791,6 +818,7 @@ mod test {
         let vote = Vote {
             slots: vec![0],
             hash: Hash::default(),
+            timestamp: None,
         };
         local.process_vote_unchecked(&vote);
         assert_eq!(local.votes.len(), 1);
@@ -805,6 +833,7 @@ mod test {
         let vote = Vote {
             slots: vec![0],
             hash: Hash::default(),
+            timestamp: None,
         };
         local.process_vote_unchecked(&vote);
         assert_eq!(local.votes.len(), 1);
@@ -891,5 +920,22 @@ mod test {
     #[test]
     fn test_recent_votes_exact() {
         vote_and_check_recent(5)
+    }
+
+    #[test]
+    fn test_maybe_timestamp() {
+        let mut tower = Tower::default();
+        assert!(tower.maybe_timestamp(TIMESTAMP_SLOT_INTERVAL).is_some());
+        let BlockTimestamp { slot, timestamp } = tower.last_timestamp;
+
+        assert_eq!(tower.maybe_timestamp(1), None);
+        assert_eq!(tower.maybe_timestamp(slot), None);
+        assert_eq!(tower.maybe_timestamp(slot + 1), None);
+
+        sleep(Duration::from_secs(1));
+        assert!(tower
+            .maybe_timestamp(slot + TIMESTAMP_SLOT_INTERVAL + 1)
+            .is_some());
+        assert!(tower.last_timestamp.timestamp > timestamp);
     }
 }

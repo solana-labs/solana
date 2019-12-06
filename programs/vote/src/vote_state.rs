@@ -8,7 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
-    clock::{Epoch, Slot},
+    clock::{Epoch, Slot, UnixTimestamp},
     hash::Hash,
     instruction::InstructionError,
     pubkey::Pubkey,
@@ -26,17 +26,27 @@ pub const INITIAL_LOCKOUT: usize = 2;
 //  smaller numbers makes
 pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
+// Frequency of timestamp Votes In v0.22.0, this is approximately 30min with cluster clock
+// defaults, intended to limit block time drift to < 1hr
+pub const TIMESTAMP_SLOT_INTERVAL: u64 = 4500;
+
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
     /// A stack of votes starting with the oldest vote
     pub slots: Vec<Slot>,
     /// signature of the bank's state at the last slot
     pub hash: Hash,
+    /// processing timestamp of last slot
+    pub timestamp: Option<UnixTimestamp>,
 }
 
 impl Vote {
     pub fn new(slots: Vec<Slot>, hash: Hash) -> Self {
-        Self { slots, hash }
+        Self {
+            slots,
+            hash,
+            timestamp: None,
+        }
     }
 }
 
@@ -84,6 +94,12 @@ pub enum VoteAuthorize {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct BlockTimestamp {
+    pub slot: Slot,
+    pub timestamp: UnixTimestamp,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct VoteState {
     /// the node that votes in this account
     pub node_pubkey: Pubkey,
@@ -109,6 +125,9 @@ pub struct VoteState {
     /// history of how many credits earned by the end of each epoch
     ///  each tuple is (Epoch, credits, prev_credits)
     epoch_credits: Vec<(Epoch, u64, u64)>,
+
+    /// most recent timestamp submitted with a vote
+    pub last_timestamp: BlockTimestamp,
 }
 
 impl VoteState {
@@ -339,6 +358,21 @@ impl VoteState {
             }
         }
     }
+
+    pub fn process_timestamp(
+        &mut self,
+        slot: Slot,
+        timestamp: UnixTimestamp,
+    ) -> Result<(), VoteError> {
+        if (slot < self.last_timestamp.slot || timestamp < self.last_timestamp.timestamp)
+            || ((slot == self.last_timestamp.slot || timestamp == self.last_timestamp.timestamp)
+                && BlockTimestamp { slot, timestamp } != self.last_timestamp)
+        {
+            return Err(VoteError::TimestampTooOld);
+        }
+        self.last_timestamp = BlockTimestamp { slot, timestamp };
+        Ok(())
+    }
 }
 
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
@@ -444,6 +478,14 @@ pub fn process_vote(
     verify_authorized_signer(&vote_state.authorized_voter, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
+    if let Some(timestamp) = vote.timestamp {
+        vote.slots
+            .iter()
+            .max()
+            .ok_or_else(|| VoteError::EmptySlots)
+            .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))
+            .map_err(|err| InstructionError::CustomError(err as u32))?;
+    }
     vote_account.set_state(&vote_state)
 }
 
@@ -1257,6 +1299,50 @@ mod tests {
                 .collect::<Vec<(Epoch, u64, u64)>>()
                 .len(),
             1
+        );
+    }
+
+    #[test]
+    fn test_vote_process_timestamp() {
+        let (slot, timestamp) = (15, 1575412285);
+        let mut vote_state = VoteState::default();
+        vote_state.last_timestamp = BlockTimestamp { slot, timestamp };
+
+        assert_eq!(
+            vote_state.process_timestamp(slot - 1, timestamp + 1),
+            Err(VoteError::TimestampTooOld)
+        );
+        assert_eq!(
+            vote_state.last_timestamp,
+            BlockTimestamp { slot, timestamp }
+        );
+        assert_eq!(
+            vote_state.process_timestamp(slot + 1, timestamp - 1),
+            Err(VoteError::TimestampTooOld)
+        );
+        assert_eq!(
+            vote_state.process_timestamp(slot + 1, timestamp),
+            Err(VoteError::TimestampTooOld)
+        );
+        assert_eq!(
+            vote_state.process_timestamp(slot, timestamp + 1),
+            Err(VoteError::TimestampTooOld)
+        );
+        assert_eq!(vote_state.process_timestamp(slot, timestamp), Ok(()));
+        assert_eq!(
+            vote_state.last_timestamp,
+            BlockTimestamp { slot, timestamp }
+        );
+        assert_eq!(
+            vote_state.process_timestamp(slot + 1, timestamp + 1),
+            Ok(())
+        );
+        assert_eq!(
+            vote_state.last_timestamp,
+            BlockTimestamp {
+                slot: slot + 1,
+                timestamp: timestamp + 1
+            }
         );
     }
 }

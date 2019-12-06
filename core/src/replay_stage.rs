@@ -31,14 +31,14 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_instruction;
 use std::{
-    collections::HashMap,
-    collections::HashSet,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
-    sync::{Arc, Mutex, RwLock},
+    collections::{HashMap, HashSet},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{channel, Receiver, RecvTimeoutError, Sender},
+        Arc, Mutex, RwLock,
+    },
     thread::{self, Builder, JoinHandle},
-    time::Duration,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
@@ -655,8 +655,11 @@ impl ReplayStage {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
 
             // Send our last few votes along with the new one
-            let vote_ix =
-                vote_instruction::vote(&vote_account, &voting_keypair.pubkey(), tower.last_vote());
+            let vote_ix = vote_instruction::vote(
+                &vote_account,
+                &voting_keypair.pubkey(),
+                tower.last_vote_and_timestamp(),
+            );
 
             let mut vote_tx =
                 Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
