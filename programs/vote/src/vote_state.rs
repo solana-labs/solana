@@ -94,6 +94,12 @@ pub enum VoteAuthorize {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct BlockTimestamp {
+    pub slot: Slot,
+    pub timestamp: UnixTimestamp,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct VoteState {
     /// the node that votes in this account
     pub node_pubkey: Pubkey,
@@ -121,7 +127,7 @@ pub struct VoteState {
     epoch_credits: Vec<(Epoch, u64, u64)>,
 
     /// most recent timestamp submitted with a vote
-    pub last_timestamp: (Slot, UnixTimestamp),
+    pub last_timestamp: BlockTimestamp,
 }
 
 impl VoteState {
@@ -358,13 +364,13 @@ impl VoteState {
         slot: Slot,
         timestamp: UnixTimestamp,
     ) -> Result<(), VoteError> {
-        if (slot < self.last_timestamp.0 || timestamp < self.last_timestamp.1)
-            || ((slot == self.last_timestamp.0 || timestamp == self.last_timestamp.1)
-                && (slot, timestamp) != self.last_timestamp)
+        if (slot < self.last_timestamp.slot || timestamp < self.last_timestamp.timestamp)
+            || ((slot == self.last_timestamp.slot || timestamp == self.last_timestamp.timestamp)
+                && BlockTimestamp { slot, timestamp } != self.last_timestamp)
         {
             return Err(VoteError::TimestampTooOld);
         }
-        self.last_timestamp = (slot, timestamp);
+        self.last_timestamp = BlockTimestamp { slot, timestamp };
         Ok(())
     }
 }
@@ -1300,13 +1306,16 @@ mod tests {
     fn test_vote_process_timestamp() {
         let (slot, timestamp) = (15, 1575412285);
         let mut vote_state = VoteState::default();
-        vote_state.last_timestamp = (slot, timestamp);
+        vote_state.last_timestamp = BlockTimestamp { slot, timestamp };
 
         assert_eq!(
             vote_state.process_timestamp(slot - 1, timestamp + 1),
             Err(VoteError::TimestampTooOld)
         );
-        assert_eq!(vote_state.last_timestamp, (slot, timestamp));
+        assert_eq!(
+            vote_state.last_timestamp,
+            BlockTimestamp { slot, timestamp }
+        );
         assert_eq!(
             vote_state.process_timestamp(slot + 1, timestamp - 1),
             Err(VoteError::TimestampTooOld)
@@ -1320,11 +1329,20 @@ mod tests {
             Err(VoteError::TimestampTooOld)
         );
         assert_eq!(vote_state.process_timestamp(slot, timestamp), Ok(()));
-        assert_eq!(vote_state.last_timestamp, (slot, timestamp));
+        assert_eq!(
+            vote_state.last_timestamp,
+            BlockTimestamp { slot, timestamp }
+        );
         assert_eq!(
             vote_state.process_timestamp(slot + 1, timestamp + 1),
             Ok(())
         );
-        assert_eq!(vote_state.last_timestamp, (slot + 1, timestamp + 1));
+        assert_eq!(
+            vote_state.last_timestamp,
+            BlockTimestamp {
+                slot: slot + 1,
+                timestamp: timestamp + 1
+            }
+        );
     }
 }
