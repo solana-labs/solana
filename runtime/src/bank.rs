@@ -47,7 +47,7 @@ use solana_sdk::{
 use std::{
     collections::HashMap,
     io::{BufReader, Cursor, Error as IOError, Read},
-    path::Path,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::{Arc, RwLock, RwLockReadGuard},
 };
@@ -69,8 +69,8 @@ pub struct BankRc {
 }
 
 impl BankRc {
-    pub fn new(account_paths: String, id: AppendVecId, slot: Slot) -> Self {
-        let accounts = Accounts::new(Some(account_paths));
+    pub fn new(account_paths: Vec<PathBuf>, id: AppendVecId, slot: Slot) -> Self {
+        let accounts = Accounts::new(account_paths);
         accounts
             .accounts_db
             .next_id
@@ -85,7 +85,7 @@ impl BankRc {
     pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
         &self,
         mut stream: &mut BufReader<R>,
-        local_paths: String,
+        local_paths: &[PathBuf],
         append_vecs_path: P,
     ) -> std::result::Result<(), IOError> {
         let _len: usize =
@@ -288,10 +288,10 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, None)
+        Self::new_with_paths(&genesis_config, Vec::new())
     }
 
-    pub fn new_with_paths(genesis_config: &GenesisConfig, paths: Option<String>) -> Self {
+    pub fn new_with_paths(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
         bank.rc.accounts = Arc::new(Accounts::new(paths));
@@ -416,7 +416,7 @@ impl Bank {
 
     pub fn create_with_genesis(
         genesis_config: &GenesisConfig,
-        account_paths: String,
+        account_paths: Vec<PathBuf>,
         status_cache_rc: &StatusCacheRc,
         id: AppendVecId,
     ) -> Self {
@@ -3678,7 +3678,7 @@ mod tests {
         copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
         dbank
             .rc
-            .accounts_from_stream(&mut reader, dbank_paths, copied_accounts.path())
+            .accounts_from_stream(&mut reader, &dbank_paths, copied_accounts.path())
             .unwrap();
         assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
         assert_eq!(dbank.get_balance(&key2.pubkey()), 10);

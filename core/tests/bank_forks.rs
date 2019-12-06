@@ -52,7 +52,7 @@ mod tests {
         let genesis_config_info = create_genesis_config(10_000);
         let bank0 = Bank::new_with_paths(
             &genesis_config_info.genesis_config,
-            Some(accounts_dir.path().to_str().unwrap().to_string()),
+            vec![accounts_dir.path().to_path_buf()],
         );
         bank0.freeze();
         let mut bank_forks = BankForks::new(0, bank0);
@@ -73,7 +73,7 @@ mod tests {
         }
     }
 
-    fn restore_from_snapshot(old_bank_forks: &BankForks, account_paths: String) {
+    fn restore_from_snapshot(old_bank_forks: &BankForks, account_paths: Vec<PathBuf>) {
         let (snapshot_path, snapshot_package_output_path) = old_bank_forks
             .snapshot_config
             .as_ref()
@@ -81,7 +81,7 @@ mod tests {
             .unwrap();
 
         let deserialized_bank = snapshot_utils::bank_from_archive(
-            account_paths,
+            &account_paths,
             &old_bank_forks
                 .snapshot_config
                 .as_ref()
@@ -151,10 +151,7 @@ mod tests {
         .unwrap();
         SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
 
-        restore_from_snapshot(
-            bank_forks,
-            accounts_dir.path().to_str().unwrap().to_string(),
-        );
+        restore_from_snapshot(bank_forks, vec![accounts_dir.path().to_path_buf()]);
     }
 
     #[test]

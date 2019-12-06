@@ -307,18 +307,11 @@ impl AccountStorageEntry {
     }
 }
 
-pub fn get_paths_vec(paths: &str) -> Vec<PathBuf> {
-    paths.split(',').map(PathBuf::from).collect()
-}
-
-pub fn get_temp_accounts_paths(count: u32) -> IOResult<(Vec<TempDir>, String)> {
+pub fn get_temp_accounts_paths(count: u32) -> IOResult<(Vec<TempDir>, Vec<PathBuf>)> {
     let temp_dirs: IOResult<Vec<TempDir>> = (0..count).map(|_| TempDir::new()).collect();
     let temp_dirs = temp_dirs?;
-    let paths: Vec<String> = temp_dirs
-        .iter()
-        .map(|t| t.path().to_str().unwrap().to_owned())
-        .collect();
-    Ok((temp_dirs, paths.join(",")))
+    let paths: Vec<PathBuf> = temp_dirs.iter().map(|t| t.path().to_path_buf()).collect();
+    Ok((temp_dirs, paths))
 }
 
 pub struct AccountsDBSerialize<'a> {
@@ -413,10 +406,10 @@ impl Default for AccountsDB {
 }
 
 impl AccountsDB {
-    pub fn new(paths: Option<String>) -> Self {
-        if let Some(paths) = paths {
+    pub fn new(paths: Vec<PathBuf>) -> Self {
+        if !paths.is_empty() {
             Self {
-                paths: RwLock::new(get_paths_vec(&paths)),
+                paths: RwLock::new(paths),
                 temp_paths: None,
                 ..Self::default()
             }
@@ -425,7 +418,7 @@ impl AccountsDB {
             // for testing
             let (temp_dirs, paths) = get_temp_accounts_paths(DEFAULT_NUM_DIRS).unwrap();
             Self {
-                paths: RwLock::new(get_paths_vec(&paths)),
+                paths: RwLock::new(paths),
                 temp_paths: Some(temp_dirs),
                 ..Self::default()
             }
@@ -436,29 +429,21 @@ impl AccountsDB {
     pub fn new_single() -> Self {
         AccountsDB {
             min_num_stores: 0,
-            ..AccountsDB::new(None)
+            ..AccountsDB::new(Vec::new())
         }
     }
     #[cfg(test)]
-    pub fn new_sized(paths: Option<String>, file_size: u64) -> Self {
+    pub fn new_sized(paths: Vec<PathBuf>, file_size: u64) -> Self {
         AccountsDB {
             file_size,
             ..AccountsDB::new(paths)
         }
     }
 
-    pub fn format_paths<P: AsRef<Path>>(paths: Vec<P>) -> String {
-        let paths: Vec<String> = paths
-            .iter()
-            .map(|p| p.as_ref().to_str().unwrap().to_owned())
-            .collect();
-        paths.join(",")
-    }
-
     pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
         &self,
         mut stream: &mut BufReader<R>,
-        local_account_paths: String,
+        local_account_paths: &[PathBuf],
         append_vecs_path: P,
     ) -> Result<(), IOError> {
         let _len: usize =
@@ -467,7 +452,6 @@ impl AccountsDB {
             deserialize_from(&mut stream).map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
 
         // Remap the deserialized AppendVec paths to point to correct local paths
-        let local_account_paths = get_paths_vec(&local_account_paths);
         let new_storage_map: Result<HashMap<Slot, SlotStores>, IOError> = storage
             .0
             .into_iter()
@@ -534,7 +518,7 @@ impl AccountsDB {
             .insert(slot_hash.0, slot_hash.1);
 
         // Process deserialized data, set necessary fields in self
-        *self.paths.write().unwrap() = local_account_paths;
+        *self.paths.write().unwrap() = local_account_paths.to_vec();
         let max_id: usize = *storage
             .0
             .values()
@@ -1214,7 +1198,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_add_root() {
         solana_logger::setup();
-        let db = AccountsDB::new(None);
+        let db = AccountsDB::new(Vec::new());
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
 
@@ -1227,7 +1211,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_latest_ancestor() {
         solana_logger::setup();
-        let db = AccountsDB::new(None);
+        let db = AccountsDB::new(Vec::new());
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
 
@@ -1254,7 +1238,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_latest_ancestor_with_root() {
         solana_logger::setup();
-        let db = AccountsDB::new(None);
+        let db = AccountsDB::new(Vec::new());
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
 
@@ -1274,7 +1258,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_root_one_slot() {
         solana_logger::setup();
-        let db = AccountsDB::new(None);
+        let db = AccountsDB::new(Vec::new());
 
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
@@ -1315,7 +1299,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_add_root_many() {
-        let db = AccountsDB::new(None);
+        let db = AccountsDB::new(Vec::new());
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 0, 100, 0, 0);
@@ -1383,7 +1367,7 @@ pub mod tests {
         let key = Pubkey::default();
 
         // 1 token in the "root", i.e. db zero
-        let db0 = AccountsDB::new(None);
+        let db0 = AccountsDB::new(Vec::new());
         let account0 = Account::new(1, 0, &key);
         db0.store(0, &[(&key, &account0)]);
 
@@ -1492,7 +1476,7 @@ pub mod tests {
     #[test]
     fn test_account_one() {
         let (_accounts_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let db = AccountsDB::new(Some(paths));
+        let db = AccountsDB::new(paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1505,7 +1489,7 @@ pub mod tests {
     #[test]
     fn test_account_many() {
         let (_accounts_dirs, paths) = get_temp_accounts_paths(2).unwrap();
-        let db = AccountsDB::new(Some(paths));
+        let db = AccountsDB::new(paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 0, 100, 0, 0);
         check_accounts(&db, &pubkeys, 0, 100, 1);
@@ -1524,7 +1508,7 @@ pub mod tests {
     fn test_account_grow_many() {
         let (_accounts_dir, paths) = get_temp_accounts_paths(2).unwrap();
         let size = 4096;
-        let accounts = AccountsDB::new_sized(Some(paths), size);
+        let accounts = AccountsDB::new_sized(paths, size);
         let mut keys = vec![];
         for i in 0..9 {
             let key = Pubkey::new_rand();
@@ -1623,7 +1607,7 @@ pub mod tests {
 
     #[test]
     fn test_purge_slot_not_root() {
-        let accounts = AccountsDB::new(None);
+        let accounts = AccountsDB::new(Vec::new());
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1634,7 +1618,7 @@ pub mod tests {
 
     #[test]
     fn test_purge_slot_after_root() {
-        let accounts = AccountsDB::new(None);
+        let accounts = AccountsDB::new(Vec::new());
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1648,7 +1632,7 @@ pub mod tests {
         //This test is pedantic
         //A slot is purged when a non root bank is cleaned up.  If a slot is behind root but it is
         //not root, it means we are retaining dead banks.
-        let accounts = AccountsDB::new(None);
+        let accounts = AccountsDB::new(Vec::new());
         let pubkey = Pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         //store an account
@@ -1811,18 +1795,13 @@ pub mod tests {
 
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
-        let daccounts = AccountsDB::new(None);
-
-        let local_paths = {
-            let paths = daccounts.paths.read().unwrap();
-            AccountsDB::format_paths(paths.to_vec())
-        };
-
+        let daccounts = AccountsDB::new(Vec::new());
+        let local_paths = daccounts.paths.read().unwrap().clone();
         let copied_accounts = TempDir::new().unwrap();
         // Simulate obtaining a copy of the AppendVecs from a tarball
         copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
         daccounts
-            .accounts_from_stream(&mut reader, local_paths, copied_accounts.path())
+            .accounts_from_stream(&mut reader, &local_paths, copied_accounts.path())
             .unwrap();
 
         print_count_and_status("daccounts", &daccounts);
@@ -2023,7 +2002,7 @@ pub mod tests {
         let min_file_bytes = std::mem::size_of::<StoredMeta>()
             + std::mem::size_of::<crate::append_vec::AccountMeta>();
 
-        let db = Arc::new(AccountsDB::new_sized(None, min_file_bytes as u64));
+        let db = Arc::new(AccountsDB::new_sized(Vec::new(), min_file_bytes as u64));
 
         db.add_root(slot_id);
         let thread_hdls: Vec<_> = (0..num_threads)
@@ -2060,7 +2039,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_scan_accounts() {
         solana_logger::setup();
-        let db = AccountsDB::new(None);
+        let db = AccountsDB::new(Vec::new());
         let key = Pubkey::default();
         let key0 = Pubkey::new_rand();
         let account0 = Account::new(1, 0, &key);
@@ -2093,7 +2072,7 @@ pub mod tests {
     #[test]
     fn test_store_large_account() {
         solana_logger::setup();
-        let db = AccountsDB::new(None);
+        let db = AccountsDB::new(Vec::new());
 
         let key = Pubkey::default();
         let data_len = DEFAULT_FILE_SIZE as usize + 7;

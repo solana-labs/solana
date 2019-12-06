@@ -591,12 +591,28 @@ pub fn main() {
         solana_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
             .expect("invalid dynamic_port_range");
 
-    if let Some(account_paths) = matches.value_of("account_paths") {
-        validator_config.account_paths = Some(account_paths.to_string());
+    let account_paths = if let Some(account_paths) = matches.value_of("account_paths") {
+        account_paths.split(',').map(PathBuf::from).collect()
     } else {
-        validator_config.account_paths =
-            Some(ledger_path.join("accounts").to_str().unwrap().to_string());
-    }
+        vec![ledger_path.join("accounts")]
+    };
+
+    // Create and canonicalize account paths to avoid issues with symlink creation
+    validator_config.account_paths = account_paths
+        .into_iter()
+        .map(|account_path| {
+            match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
+                Ok(account_path) => account_path,
+                Err(err) => {
+                    eprintln!(
+                        "Unable to access account path: {:?}, err: {:?}",
+                        account_path, err
+                    );
+                    exit(1);
+                }
+            }
+        })
+        .collect();
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", usize);
     let snapshot_path = ledger_path.clone().join("snapshot");
