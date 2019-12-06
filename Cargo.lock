@@ -3877,6 +3877,7 @@ dependencies = [
  "solana-crate-features 0.22.0",
  "solana-logger 0.22.0",
  "solana-sdk-macro 0.22.0",
+ "thiserror 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "tiny-bip39 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
