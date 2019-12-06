@@ -5,10 +5,11 @@ use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    bank::{deserialize_for_snapshot, MAXIMUM_SNAPSHOT_DATA_FILE_SIZE, Bank},
+    bank::{deserialize_for_snapshot, Bank, MAXIMUM_SNAPSHOT_DATA_FILE_SIZE},
     status_cache::SlotDelta,
 };
 use solana_sdk::{clock::Slot, transaction};
+use std::io::Seek;
 use std::{
     cmp::Ordering,
     fs,
@@ -290,7 +291,10 @@ where
     let file = File::open(&root_paths.snapshot_file_path)?;
     let file_size = fs::metadata(&root_paths.snapshot_file_path)?.len();
     if file_size > MAXIMUM_SNAPSHOT_DATA_FILE_SIZE {
-        let error_message = format!("too large snapshot data file: {:?} has {} bytes, and it's too large to rebuild from", root_paths.snapshot_file_path, file_size);
+        let error_message = format!(
+            "too large snapshot data file: {:?} has {} bytes, and it's too large to rebuild from",
+            root_paths.snapshot_file_path, file_size
+        );
         return Err(get_io_error(&error_message));
     }
     let mut stream = BufReader::new(file);
@@ -301,7 +305,10 @@ where
         .accounts_from_stream(&mut stream, local_account_paths, append_vecs_path)?;
     let consumed_size = stream.seek(std::io::SeekFrom::Current(0))?;
     if file_size != consumed_size {
-        let error_message = format!("invalid snapshot format: {:?} has {} bytes, however consumed {} bytes", root_paths.snapshot_file_path, file_size, consumed_size);
+        let error_message = format!(
+            "invalid snapshot format: {:?} has {} bytes, however consumed {} bytes",
+            root_paths.snapshot_file_path, file_size, consumed_size
+        );
         return Err(get_io_error(&error_message));
     }
 
