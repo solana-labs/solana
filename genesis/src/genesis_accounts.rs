@@ -569,6 +569,115 @@ fn add_validators(genesis_config: &mut GenesisConfig, validator_infos: &[Validat
         .sum::<u64>()
 }
 
+fn add_spare_validators(genesis_config: &mut GenesisConfig) -> u64 {
+    let node_pubkeys = [
+        "id2GQ6YwsjTCCHJ9pJaffC3MEezPscNLjPdGPSfaN46",
+        "id2QqCczwAMoDuG4sVZFjooysAqhs6hzMgGigg2rbMV",
+        "id4PaxnDQwH6mLjrXZ7S56DoLxKLFdkSBmr6vma6sBf",
+        "id7U3WaKEeWgGAyNydEHZFiitkc1bL5VzYmxZXTYfVY",
+        "id7ywnFUjQ27BueJJc1U4inAWEvWpMaBX1fXbBKWz2J",
+        "idB6NCyjMBTfdMuC9yj8vd8iiajNd9Mbk2AXp8a5xHe",
+        "idBpZi4KcCoV5t88BSrnJ98zv9dZkLZQBk54TFyAdaZ",
+        "idCfrfPBhvPWxj1N29n7gbMMejPraDsATyWQPFAXJuZ",
+        "idEfgYfaLCvtWA7attVbBNgnfokJNpjbXpqLuTSPjUp",
+        "idF6btoY9VHbnU5sCYpZ1Bu8yBAL3bKfN2k47ukan3n",
+        "idGi3LekrrcVzvnQiydodwM86eqZSo8mWN59ytxZdH5",
+        "idGxeLFcK36ZQmaF249uPTZZGnRn7FpXoPJR5LKhv1v",
+        "idJ8bnEkJf5CL7FngrM4zm1BHMLT1iMoQnJkL6sbq3B",
+        "idKsePUfNbUALy2qiCEh1gFKgjuLc6p6pekmto9R5Cb",
+        "idLdNwPPV5Zikk3sVANyXzUquXzQzwmWbib6m15WT8t",
+        "idMC8bibeXspJphRNK5HpwK3Lh744fDtksrT2cULH9q",
+        "idMi1g3V87WNYa3SXGLzsHeKNFaJVrryF6on5dU7DA2",
+        "idNFd41HQWr5NmPrZRwFwxXUnR4YqHpGC3CGke2KBRW",
+        "idQwur4HP41cWqDxktp1UeT1PiG6KcTYKEbQeWyQ4BU",
+        "idSM4aD8kSQmRxm12yvzaYES3esUeMiFmJdxaPEVYPT",
+        "idSMbfe8Up3syM8sgn8Ubzd1FYc77KptdMDbufBv3GS",
+        "idSPToD3qXCvFnJiQ5qRHaTQTqh2pFXmXZFZ5XkvYzV",
+        "idSn2FMj47RAWVoCb2pgt8YCnfnfwY2vReQMNSPceMA",
+        "idVXGKsb7F2nFRW51anXiyHPJTFVmnusnHr5zYJaABA",
+        "idVcb8J66gCuAwFjLoKGuuvpxxFnhhfpENhUzR4u7tQ",
+        "idVo6gQWhf1qptvnt1YwD6thehshDfzN9GZajC6nXkC",
+        "idY8iDUV2VeMqeBCRCHgzNPiASXkJKQhDqWMBqH26c9",
+        "idZwgtd3r3MX7kriLRX6q3nuPqtb24ZtthS9L23SR6A",
+        "idbdSGgRFPQdrsz7wtc2Tbx7MaL4xA6r98yuxrtqEyS",
+        "ideNfZLPpeySDZXUnnwmzhaYTh7DX62i2C52icbaEAv",
+        "idgxuQoRvB4nP9jj5HshoYWBTQk13pAisn1d96vEap4",
+        "idh5GBgrpiay2jgERL61YhfgurjvxbAG7RzPTimHahQ",
+        "idjgVqqz9K7qL3eMGApzuoPsZBpUyjd3EDjBwJZPMmF",
+        "idmWehGyjwQKmyw4AKG74srqW32Z8ecMMAzJM4pFami",
+        "idrpuShZXt12i7tGrN2gfYQPD7Xvak4Ai23WkqYeSPt",
+        "idsdFzMbYy9D2YmFm9QmFMi73FsKN4nV7WV8zMUcMEq",
+        "iduRkR7DKVWz34HEPAQXVUhh1tVC9wdwTNXcif4CVdq",
+        "iduwx2nrXM6WmHSF7AtxdV4LbZgEdXN866xYdZDx9wB",
+        "idxVaEn8v3zGTxqJbevTzjJhHdkA5p68ahcXfBqrka8",
+        "idz77S9k24pczEcgB4edV9uQag8ZuzZ3NK3DjxroaLq",
+        "idzabijKtknbbsmXVB65wrb4PaMdgGjpHhGJ9psD4d2",
+        "ide8fez9zNJBJwaESdAo5xtuk9FuWQRVjUjcaXWnm3D",
+    ];
+
+    let vote_pubkeys = [
+        "vt1LGG2pV9hDVSKorVcwRnQLSdFepduiNVwynkQUStL",
+        "vt24vGJHuoverSX5mA2ibuHuJ2JLZqjQZd8PX11d6UL",
+        "vt2W6R7hBSCPEua6YxQ8ocRMkNHtrdsRpYd4cYTonUJ",
+        "vt2cVaESGQNDi7bEZ4PcKpyZu8QefgsLZTsDZKAWY1m",
+        "vt2v2yrw98Ysimde7pPqsLpfYWMNbdiHGioyF5LvMtR",
+        "vt5AnXUoNMTuMXcBf2jFTELDp5RTNNgZB7pwyR5ju74",
+        "vtA5iZY8eEkzuwqB899rvoz87fLL1UCqdFQLonpo8Yq",
+        "vtAJxXc55YtmZyDT3VZv1gHAMe4B5y4rXstD4pbTtMg",
+        "vtBHFdgKyuT9DwGEUyyz6Egczj7Ae7iSAQRaJ3oWVuw",
+        "vtFMV55GAPEwyeehSzujxE9SeY6goHiRVExm8rTU3e9",
+        "vtGN4RNrcviL3sj13gQSp13227ebGfTxJVLYzFbvVoT",
+        "vtGmxDTT5kX9DFDN2ENLAyviZx5tUZShK5PqjZFAcUt",
+        "vtJdFE1feE1egNUYYY13XV4DsVPKK3Y16bTSi4QaDMP",
+        "vtJpR6DcdmHuTQHqqXzPY9D5M6q7Kayw1Qnyjc2s17i",
+        "vtMnzXbg4QvVfDaKS9k3gAWuDzXLa5ihciZgjRjreQ3",
+        "vtQeWJmcnBSciJxHQ2G3a79JWi5UYUReYfxx9GsbvzX",
+        "vtR9U36uMJwRJnT1pPsQeNZT9KE16M5E4zRz6PzqvFJ",
+        "vtTvfuJsYu1VJHVJsh4kyzvu6vSR3fiugxNr9VGFMK9",
+        "vtWt9vvYxNt6SLPJaJ2L4jSCyNjSNpyTSZ4HMQpYv5L",
+        "vtZLhvVTiXKwdwh5mc5jfh9JSMuFaiQ7gp8VwnbyA9e",
+        "vtZS3zch9n4u5ToXJBGdUUkt7iqXJv8yZWmnVkSQrmX",
+        "vtaXTjzBJuswneaW6GGizm5n2VmUBeBH2FoVkyjPfBk",
+        "vtbhFdJagDUdod27WuAwfduoUvEQLJ3CkqyhyuSuU22",
+        "vtdDUSd4gmmgwb35oxeMW2H2ptgEzyPnJt2jqRkNSLU",
+        "vtdtwJAqWEaxoHEc593ia2bYvNdXjUFrt6A3qtJLcSj",
+        "vte2QxwLx4B8E3ndaExZKaTbLvHpr12xvjxEXWkENcb",
+        "vtedxropBTfkRVAeQiMi2bmAmVwKhqq6hUTW3ikZi1t",
+        "vtgTbGjVT4EeMfc43K3ANCzjF2HRpXFAeQ8crfxLwMK",
+        "vtivkBCoKFe7MsoCoiLharA9dHNg9ZaTH376F5kVE9k",
+        "vtjWWWJqBVeuRDFL2z2cwR9rnEK1YUoYzmR9ALEQdz4",
+        "vtmmRiGQzQRo1gUFyj7TTyFrX2oRbDe3cYJ4gxmkMAF",
+        "vtnA4s2T2qikmL5n1UMxfxjyFJFpqxycZFtVepF4F29",
+        "vtnG7CkL5cakMt4wm2eV23rZsWb89bwkVRsiS7Lb3Kt",
+        "vtoGcgxrUYWvi8coDRiEeBDMY1TCJMKL3mZnadjKtjC",
+        "vtppBusuaWNvEU4KUvNXf6wtJB8YcybxA498Zvq3Vf5",
+        "vtqfoB3SuNvJQGGXrnkdLQ6yr6XcAP1weoLX5WaugAb",
+        "vtsFGh8cwM1SEF8W4F6a5zxPk9TNbTWuWJrJre2apQ6",
+        "vtvdwEKJyCBmAG25mrXKCgTY4PtDHLjpTnngBorGBqj",
+        "vtwJMJBWGocQL7ggJ5t8vm1dW3qfHKaYMTRnmRvnK1T",
+        "vtwsS4uDrkoRV5Ed91GJ17XPnRLkRW6ysep695u4CiU",
+        "vtww7Nu3ChKXs9BU2QLuUJXVK8upvWrq8r1QfgAkMg7",
+        "vtyfj9nLUpcneGQhmp5v6Q8Nt7i1cENi6WoFgZEDCwE",
+    ];
+
+    node_pubkeys
+        .iter()
+        .zip(vote_pubkeys.iter())
+        .map(|(node, vote)| {
+            create_and_add_validator(
+                genesis_config,
+                &ValidatorInfo {
+                    name: "elvis",
+                    node,
+                    vote,
+                    node_sol: 500.0,
+                    commission: 0,
+                },
+            )
+        })
+        .sum::<u64>()
+}
+
 pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
     add_stakes(
         genesis_config,
@@ -596,6 +705,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
         &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
         sol_to_lamports(1_000_000.0),
     ) + add_validators(genesis_config, &VALIDATOR_INFOS)
+        + add_spare_validators(genesis_config)
 }
 
 #[cfg(test)]
