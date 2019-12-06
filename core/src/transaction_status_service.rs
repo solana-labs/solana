@@ -2,7 +2,7 @@ use crate::result::{Error, Result};
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use solana_client::rpc_request::RpcTransactionStatus;
 use solana_ledger::{blocktree::Blocktree, blocktree_processor::TransactionStatusBatch};
-use solana_runtime::bank::Bank;
+use solana_runtime::bank::{Bank, HashAgeKind};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -56,7 +56,7 @@ impl TransactionStatusService {
         } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
 
         let slot = bank.slot();
-        for (transaction, status) in transactions.iter().zip(statuses) {
+        for (transaction, (status, _hash_age_kind)) in transactions.iter().zip(statuses) {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
                 let fee_calculator = bank
                     .get_fee_calculator(&transaction.message().recent_blockhash)

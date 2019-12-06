@@ -154,9 +154,15 @@ impl StatusCacheRc {
 
 pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) -> () + Sync + Send>;
 
+pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
-    pub processing_results: Vec<Result<()>>,
+    pub processing_results: Vec<TransactionProcessResult>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum HashAgeKind {
+    Extant,
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
@@ -791,16 +797,17 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        res: &[Result<()>],
+        res: &[TransactionProcessResult],
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
         for (i, tx) in OrderedIterator::new(txs, iteration_order).enumerate() {
-            if Self::can_commit(&res[i]) && !tx.signatures.is_empty() {
+            let (res, _hash_age_kind) = &res[i];
+            if Self::can_commit(res) && !tx.signatures.is_empty() {
                 status_cache.insert(
                     &tx.message().recent_blockhash,
                     &tx.signatures[0],
                     self.slot(),
-                    res[i].clone(),
+                    res.clone(),
                 );
             }
         }
@@ -868,9 +875,9 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        results: Vec<Result<()>>,
+        results: Vec<TransactionProcessResult>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<TransactionLoadResult>> {
+    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
@@ -907,7 +914,7 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<TransactionProcessResult> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
@@ -916,9 +923,9 @@ impl Bank {
                     && !hash_queue.check_hash_age(&tx.message().recent_blockhash, max_age)
                 {
                     error_counters.reserve_blockhash += 1;
-                    Err(TransactionError::BlockhashNotFound)
+                    (Err(TransactionError::BlockhashNotFound), None)
                 } else {
-                    lock_res
+                    (lock_res, Some(HashAgeKind::Extant))
                 }
             })
             .collect()
@@ -927,9 +934,9 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<TransactionProcessResult>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<TransactionProcessResult> {
         let rcache = self.src.status_cache.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
@@ -937,20 +944,25 @@ impl Bank {
                 if tx.signatures.is_empty() {
                     return lock_res;
                 }
-                if lock_res.is_ok()
-                    && rcache
-                        .get_signature_status(
-                            &tx.signatures[0],
-                            &tx.message().recent_blockhash,
-                            &self.ancestors,
-                        )
-                        .is_some()
                 {
-                    error_counters.duplicate_signature += 1;
-                    Err(TransactionError::DuplicateSignature)
-                } else {
-                    lock_res
+                    let (lock_res, hash_age_kind) = &lock_res;
+                    if lock_res.is_ok()
+                        && rcache
+                            .get_signature_status(
+                                &tx.signatures[0],
+                                &tx.message().recent_blockhash,
+                                &self.ancestors,
+                            )
+                            .is_some()
+                    {
+                        error_counters.duplicate_signature += 1;
+                        return (
+                            Err(TransactionError::DuplicateSignature),
+                            hash_age_kind.clone(),
+                        );
+                    }
                 }
+                lock_res
             })
             .collect()
     }
@@ -969,7 +981,7 @@ impl Bank {
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<TransactionProcessResult> {
         let refs_results = self.check_refs(txs, iteration_order, lock_results, &mut error_counters);
         let age_results = self.check_age(
             txs,
@@ -1032,8 +1044,8 @@ impl Bank {
         batch: &TransactionBatch,
         max_age: usize,
     ) -> (
-        Vec<Result<TransactionLoadResult>>,
-        Vec<Result<()>>,
+        Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)>,
+        Vec<TransactionProcessResult>,
         Vec<usize>,
         u64,
         u64,
@@ -1071,15 +1083,18 @@ impl Bank {
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
-        let executed: Vec<Result<()>> = loaded_accounts
+        let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
             .map(|(accs, tx)| match accs {
-                Err(e) => Err(e.clone()),
-                Ok((accounts, loaders, _rents)) => {
+                (Err(e), hash_age_kind) => (Err(e.clone()), hash_age_kind.clone()),
+                (Ok((accounts, loaders, _rents)), hash_age_kind) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
-                    self.message_processor
-                        .process_message(tx.message(), loaders, accounts)
+                    (
+                        self.message_processor
+                            .process_message(tx.message(), loaders, accounts),
+                        hash_age_kind.clone(),
+                    )
                 }
             })
             .collect();
@@ -1094,7 +1109,7 @@ impl Bank {
         );
         let mut tx_count: u64 = 0;
         let mut err_count = 0;
-        for (r, tx) in executed.iter().zip(txs.iter()) {
+        for ((r, _hash_age_kind), tx) in executed.iter().zip(txs.iter()) {
             if r.is_ok() {
                 tx_count += 1;
             } else {
@@ -1127,13 +1142,13 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        executed: &[Result<()>],
+        executed: &[TransactionProcessResult],
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
-            .map(|(tx, res)| {
+            .map(|(tx, (res, _hash_age_kind))| {
                 let fee_calculator = hash_queue
                     .get_fee_calculator(&tx.message().recent_blockhash)
                     .ok_or(TransactionError::BlockhashNotFound)?;
@@ -1166,8 +1181,8 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        loaded_accounts: &mut [Result<TransactionLoadResult>],
-        executed: &[Result<()>],
+        loaded_accounts: &mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
+        executed: &[TransactionProcessResult],
         tx_count: u64,
         signature_count: u64,
     ) -> TransactionResults {
@@ -1182,7 +1197,10 @@ impl Bank {
         inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
-        if executed.iter().any(|res| Self::can_commit(res)) {
+        if executed
+            .iter()
+            .any(|(res, _hash_age_kind)| Self::can_commit(res))
+        {
             self.is_delta.store(true, Ordering::Relaxed);
         }
 
@@ -1256,10 +1274,15 @@ impl Bank {
         self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
     }
 
-    fn collect_rent(&self, res: &[Result<()>], loaded_accounts: &[Result<TransactionLoadResult>]) {
+    fn collect_rent(
+        &self,
+        res: &[TransactionProcessResult],
+        loaded_accounts: &[(Result<TransactionLoadResult>, Option<HashAgeKind>)],
+    ) {
         let mut collected_rent: u64 = 0;
-        for (i, raccs) in loaded_accounts.iter().enumerate() {
-            if res[i].is_err() || raccs.is_err() {
+        for (i, (raccs, _hash_age_kind)) in loaded_accounts.iter().enumerate() {
+            let (res, _hash_age_kind) = &res[i];
+            if res.is_err() || raccs.is_err() {
                 continue;
             }
 
@@ -1543,15 +1566,16 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        res: &[Result<()>],
-        loaded: &[Result<TransactionLoadResult>],
+        res: &[TransactionProcessResult],
+        loaded: &[(Result<TransactionLoadResult>, Option<HashAgeKind>)],
     ) {
-        for (i, (raccs, tx)) in loaded
+        for (i, ((raccs, _load_hash_age_kind), tx)) in loaded
             .iter()
             .zip(OrderedIterator::new(txs, iteration_order))
             .enumerate()
         {
-            if res[i].is_err() || raccs.is_err() {
+            let (res, _res_hash_age_kind) = &res[i];
+            if res.is_err() || raccs.is_err() {
                 continue;
             }
 
@@ -2943,11 +2967,14 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &key.pubkey(), 5, genesis_config.hash());
 
         let results = vec![
-            Ok(()),
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::new_result_with_negative_lamports(),
-            )),
+            (Ok(()), Some(HashAgeKind::Extant)),
+            (
+                Err(TransactionError::InstructionError(
+                    1,
+                    InstructionError::new_result_with_negative_lamports(),
+                )),
+                Some(HashAgeKind::Extant),
+            ),
         ];
         let initial_balance = bank.get_balance(&leader);
 
