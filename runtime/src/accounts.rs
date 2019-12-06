@@ -18,7 +18,7 @@ use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
 use std::io::{BufReader, Error as IOError, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::transaction_utils::OrderedIterator;
@@ -52,7 +52,7 @@ pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
 pub type TransactionLoadResult = (TransactionAccounts, TransactionLoaders, TransactionRent);
 
 impl Accounts {
-    pub fn new(paths: Option<String>) -> Self {
+    pub fn new(paths: Vec<PathBuf>) -> Self {
         let accounts_db = Arc::new(AccountsDB::new(paths));
 
         Accounts {
@@ -76,7 +76,7 @@ impl Accounts {
     pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
         &self,
         stream: &mut BufReader<R>,
-        local_paths: String,
+        local_paths: &[PathBuf],
         append_vecs_path: P,
     ) -> std::result::Result<(), IOError> {
         self.accounts_db
@@ -621,7 +621,7 @@ mod tests {
     ) -> Vec<Result<TransactionLoadResult>> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
-        let accounts = Accounts::new(None);
+        let accounts = Accounts::new(Vec::new());
         for ka in ka.iter() {
             accounts.store_slow(0, &ka.0, &ka.1);
         }
@@ -1052,7 +1052,7 @@ mod tests {
 
     #[test]
     fn test_load_by_program_slot() {
-        let accounts = Accounts::new(None);
+        let accounts = Accounts::new(Vec::new());
 
         // Load accounts owned by various programs into AccountsDB
         let pubkey0 = Pubkey::new_rand();
@@ -1075,7 +1075,7 @@ mod tests {
 
     #[test]
     fn test_accounts_account_not_found() {
-        let accounts = Accounts::new(None);
+        let accounts = Accounts::new(Vec::new());
         let mut error_counters = ErrorCounters::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
 
@@ -1097,14 +1097,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_accounts_empty_hash_internal_state() {
-        let accounts = Accounts::new(None);
+        let accounts = Accounts::new(Vec::new());
         accounts.hash_internal_state(0);
     }
 
     #[test]
     #[should_panic]
     fn test_accounts_empty_account_hash_internal_state() {
-        let accounts = Accounts::new(None);
+        let accounts = Accounts::new(Vec::new());
         accounts.store_slow(0, &Pubkey::default(), &Account::new(1, 0, &sysvar::id()));
         accounts.hash_internal_state(0);
     }
@@ -1126,7 +1126,7 @@ mod tests {
     fn test_accounts_serialize() {
         solana_logger::setup();
         let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-        let accounts = Accounts::new(Some(paths));
+        let accounts = Accounts::new(paths);
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_test_accounts(&accounts, &mut pubkeys, 100, 0);
@@ -1148,9 +1148,9 @@ mod tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
-        let daccounts = Accounts::new(Some(daccounts_paths.clone()));
+        let daccounts = Accounts::new(daccounts_paths.clone());
         assert!(daccounts
-            .accounts_from_stream(&mut reader, daccounts_paths, copied_accounts.path())
+            .accounts_from_stream(&mut reader, &daccounts_paths, copied_accounts.path())
             .is_ok());
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(
@@ -1171,7 +1171,7 @@ mod tests {
         let account2 = Account::new(3, 0, &Pubkey::default());
         let account3 = Account::new(4, 0, &Pubkey::default());
 
-        let accounts = Accounts::new(None);
+        let accounts = Accounts::new(Vec::new());
         accounts.store_slow(0, &keypair0.pubkey(), &account0);
         accounts.store_slow(0, &keypair1.pubkey(), &account1);
         accounts.store_slow(0, &keypair2.pubkey(), &account2);
@@ -1283,7 +1283,7 @@ mod tests {
         let account1 = Account::new(2, 0, &Pubkey::default());
         let account2 = Account::new(3, 0, &Pubkey::default());
 
-        let accounts = Accounts::new(None);
+        let accounts = Accounts::new(Vec::new());
         accounts.store_slow(0, &keypair0.pubkey(), &account0);
         accounts.store_slow(0, &keypair1.pubkey(), &account1);
         accounts.store_slow(0, &keypair2.pubkey(), &account2);
@@ -1404,7 +1404,7 @@ mod tests {
 
         let mut loaded = vec![loaded0, loaded1];
 
-        let accounts = Accounts::new(None);
+        let accounts = Accounts::new(Vec::new());
         {
             let mut readonly_locks = accounts.readonly_locks.write().unwrap();
             let readonly_locks = readonly_locks.as_mut().unwrap();
