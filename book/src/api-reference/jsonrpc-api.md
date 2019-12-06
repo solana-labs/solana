@@ -144,7 +144,7 @@ Returns all information associated with the account of provided Pubkey
 The result value will be an RpcResponse JSON object containing an AccountInfo JSON object.
 
 * `RpcResponse<AccountInfo>`, RpcResponse JSON object with `value` field set to AccountInfo, a JSON object containing:
-* `lamports`, number of lamports assigned to this account, as a signed 64-bit integer
+* `lamports`, number of lamports assigned to this account, as a u64
 * `owner`, array of 32 bytes representing the program this account has been assigned to
 * `data`, array of bytes representing any data associated with the account
 * `executable`, boolean indicating if the account contains a program \(and is strictly read-only\)
@@ -170,7 +170,7 @@ Returns the balance of the account of provided Pubkey
 
 #### Results:
 
-* `RpcResponse<integer>` - RpcResponse JSON object with `value` field set to quantity, as a signed 64-bit integer
+* `RpcResponse<u64>` - RpcResponse JSON object with `value` field set to quantity
 
 #### Example:
 
@@ -399,12 +399,12 @@ Returns minimum balance required to make account rent exempt.
 
 #### Parameters:
 
-* `integer` - account data length, as unsigned integer
+* `u64` - account data length
 * `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `integer` - minimum lamports required in account, as unsigned 64-bit integer
+* `u64` - minimum lamports required in account
 
 #### Example:
 
@@ -427,7 +427,7 @@ Returns the current number of blocks since signature has been confirmed.
 
 #### Results:
 
-* `integer` - count, as unsigned 64-bit integer
+* `u64` - count
 
 #### Example:
 
@@ -453,7 +453,7 @@ Returns all accounts owned by the provided program Pubkey
 The result field will be an array of arrays. Each sub array will contain:
 
 * `string` - the account Pubkey as base-58 encoded string and a JSON object, with the following sub fields:
-* `lamports`, number of lamports assigned to this account, as a signed 64-bit integer
+* `lamports`, number of lamports assigned to this account, as a u64
 * `owner`, array of 32 bytes representing the program this account has been assigned to
 * `data`, array of bytes representing any data associated with the account
 * `executable`, boolean indicating if the account contains a program \(and is strictly read-only\)
@@ -640,7 +640,7 @@ Returns the current Transaction count from the ledger
 
 #### Results:
 
-* `integer` - count, as unsigned 64-bit integer
+* `u64` - count
 
 #### Example:
 
@@ -662,7 +662,7 @@ Returns the current total supply in Lamports
 
 #### Results:
 
-* `integer` - Total supply, as unsigned 64-bit integer
+* `u64` - Total supply
 
 #### Example:
 
@@ -733,7 +733,7 @@ Requests an airdrop of lamports to a Pubkey
 #### Parameters:
 
 * `string` - Pubkey of account to receive lamports, as base-58 encoded string
-* `integer` - lamports, as a signed 64-bit integer
+* `integer` - lamports, as a u64
 * `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash and verifying airdrop success)
 
 #### Results:
