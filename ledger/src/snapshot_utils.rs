@@ -169,7 +169,7 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     bank_rc_serialize.stop();
 
     if consumed_size > MAXIMUM_SNAPSHOT_DATA_FILE_SIZE {
-        let error_message = format!("too large snapshot data file: {:?} has {} bytes, and it's too large to be used to rebuild", snapshot_file_path, consumed_size);
+        let error_message = format!("too large snapshot data file: {:?} has {} bytes, and it's too large to be used to rebuild a bank", snapshot_file_path, consumed_size);
         return Err(get_io_error(&error_message));
     }
     datapoint_info!(
@@ -292,7 +292,7 @@ where
     let file_size = fs::metadata(&root_paths.snapshot_file_path)?.len();
     if file_size > MAXIMUM_SNAPSHOT_DATA_FILE_SIZE {
         let error_message = format!(
-            "too large snapshot data file: {:?} has {} bytes, and it's too large to rebuild from",
+            "too large snapshot data file: {:?} has {} bytes, and it's too large to be rebuilt a bank from",
             root_paths.snapshot_file_path, file_size
         );
         return Err(get_io_error(&error_message));
