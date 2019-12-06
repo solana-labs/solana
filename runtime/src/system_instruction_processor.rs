@@ -248,13 +248,13 @@ mod tests {
     }
 
     #[test]
-    fn test_create_more_than_allowed_space() {
+    fn test_request_more_than_allowed_data_length() {
         let mut from_account = Account::new(100, 0, &system_program::id());
         let from_account_key = Pubkey::new_rand();
         let mut to_account = Account::default();
         let to_account_key = Pubkey::new_rand();
 
-        // Trying to allocate more space than permitted will result in failure
+        // Trying to request more data length than permitted will result in failure
         let result = create_system_account(
             &mut KeyedAccount::new(&from_account_key, true, &mut from_account),
             &mut KeyedAccount::new(&to_account_key, true, &mut to_account),
@@ -268,7 +268,7 @@ mod tests {
             SystemError::InvalidAccountDataLength.into()
         );
 
-        // Trying to allocate equal or less space than permitted will be success
+        // Trying to request equal or less data length than permitted will be success
         let result = create_system_account(
             &mut KeyedAccount::new(&from_account_key, true, &mut from_account),
             &mut KeyedAccount::new(&to_account_key, true, &mut to_account),
