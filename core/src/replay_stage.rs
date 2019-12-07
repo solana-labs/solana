@@ -1224,6 +1224,7 @@ pub(crate) mod tests {
                 tower.record_bank_vote(Vote {
                     hash: Hash::default(),
                     slots: vec![*slot],
+                    timestamp: None,
                 });
             }
         }
@@ -1234,6 +1235,7 @@ pub(crate) mod tests {
                     towers[*voter_index].record_bank_vote(Vote {
                         hash: Hash::default(),
                         slots: vec![*slot],
+                        timestamp: None,
                     });
                 }
             }
