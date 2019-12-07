@@ -2158,11 +2158,7 @@ pub mod tests {
     use std::{iter::FromIterator, time::Duration};
 
     // used for tests only
-    fn make_slot_entries_with_transactions(
-        slot: Slot,
-        parent_slot: Slot,
-        num_entries: u64,
-    ) -> (Vec<Shred>, Vec<Entry>) {
+    fn make_slot_entries_with_transactions(num_entries: u64) -> Vec<Entry> {
         let mut entries: Vec<Entry> = Vec::new();
         for _ in 0..num_entries {
             let transaction = Transaction::new_with_compiled_instructions(
@@ -2176,8 +2172,7 @@ pub mod tests {
             let mut tick = create_ticks(1, 0, Hash::default());
             entries.append(&mut tick);
         }
-        let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true, 0);
-        (shreds, entries)
+        entries
     }
 
     #[test]
@@ -4221,8 +4216,8 @@ pub mod tests {
     #[test]
     fn test_get_confirmed_block() {
         let slot = 0;
-        let (shreds, entries) = make_slot_entries_with_transactions(slot, 0, 100);
-
+        let entries = make_slot_entries_with_transactions(100);
+        let shreds = entries_to_test_shreds(entries.clone(), slot, 0, true, 0);
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blocktree::open(&ledger_path).unwrap();
         ledger.insert_shreds(shreds, None, false).unwrap();
@@ -4449,6 +4444,8 @@ pub mod tests {
         let num_entries = 100;
         let (data_shreds, coding_shreds, leader_schedule_cache) =
             setup_erasure_shreds(slot, 0, num_entries, 1.0);
+        assert!(data_shreds.len() > 3);
+        assert!(coding_shreds.len() > 3);
         let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -4464,14 +4461,7 @@ pub mod tests {
             verify_index_integrity(&blocktree, slot);
             blocktree.purge_slots(0, Some(slot));
 
-            // Test inserting just the codes
-            blocktree
-                .insert_shreds(coding_shreds.clone(), Some(&leader_schedule_cache), false)
-                .unwrap();
-            verify_index_integrity(&blocktree, slot);
-            blocktree.purge_slots(0, Some(slot));
-
-            // Test inserting just the codes
+            // Test inserting just the codes, enough for recovery
             blocktree
                 .insert_shreds(coding_shreds.clone(), Some(&leader_schedule_cache), false)
                 .unwrap();
@@ -4481,7 +4471,7 @@ pub mod tests {
             // Test inserting some codes, but not enough for recovery
             blocktree
                 .insert_shreds(
-                    coding_shreds[..num_entries as usize / 2].to_vec(),
+                    coding_shreds[..coding_shreds.len() - 1].to_vec(),
                     Some(&leader_schedule_cache),
                     false,
                 )
@@ -4489,18 +4479,96 @@ pub mod tests {
             verify_index_integrity(&blocktree, slot);
             blocktree.purge_slots(0, Some(slot));
 
+            // Test inserting just the codes, and some data, enough for recovery
+            let shreds: Vec<_> = data_shreds[..data_shreds.len() - 1]
+                .iter()
+                .cloned()
+                .chain(coding_shreds[..coding_shreds.len() - 1].iter().cloned())
+                .collect();
+            blocktree
+                .insert_shreds(shreds, Some(&leader_schedule_cache), false)
+                .unwrap();
+            verify_index_integrity(&blocktree, slot);
+            blocktree.purge_slots(0, Some(slot));
+
             // Test inserting some codes, and some data, but enough for recovery
-            let shreds: Vec<_> = data_shreds[..num_entries as usize / 2]
+            let shreds: Vec<_> = data_shreds[..data_shreds.len() / 2 - 1]
+                .iter()
+                .cloned()
+                .chain(coding_shreds[..coding_shreds.len() / 2 - 1].iter().cloned())
+                .collect();
+            blocktree
+                .insert_shreds(shreds, Some(&leader_schedule_cache), false)
+                .unwrap();
+            verify_index_integrity(&blocktree, slot);
+            blocktree.purge_slots(0, Some(slot));
+
+            // Test inserting all shreds in 2 rounds, make sure nothing is lost
+            let shreds1: Vec<_> = data_shreds[..data_shreds.len() / 2 - 1]
+                .iter()
+                .cloned()
+                .chain(coding_shreds[..coding_shreds.len() / 2 - 1].iter().cloned())
+                .collect();
+            let shreds2: Vec<_> = data_shreds[data_shreds.len() / 2 - 1..]
+                .iter()
+                .cloned()
+                .chain(coding_shreds[coding_shreds.len() / 2 - 1..].iter().cloned())
+                .collect();
+            blocktree
+                .insert_shreds(shreds1, Some(&leader_schedule_cache), false)
+                .unwrap();
+            blocktree
+                .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
+                .unwrap();
+            verify_index_integrity(&blocktree, slot);
+            blocktree.purge_slots(0, Some(slot));
+
+            // Test not all, but enough data and coding shreds in 2 rounds to trigger recovery,
+            // make sure nothing is lost
+            let shreds1: Vec<_> = data_shreds[..data_shreds.len() / 2 - 1]
+                .iter()
+                .cloned()
+                .chain(coding_shreds[..coding_shreds.len() / 2 - 1].iter().cloned())
+                .collect();
+            let shreds2: Vec<_> = data_shreds[data_shreds.len() / 2 - 1..data_shreds.len() / 2]
                 .iter()
                 .cloned()
                 .chain(
-                    coding_shreds[..num_entries as usize / 2 + 1]
+                    coding_shreds[coding_shreds.len() / 2 - 1..data_shreds.len() / 2]
                         .iter()
                         .cloned(),
                 )
                 .collect();
             blocktree
-                .insert_shreds(shreds, Some(&leader_schedule_cache), false)
+                .insert_shreds(shreds1, Some(&leader_schedule_cache), false)
+                .unwrap();
+            blocktree
+                .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
+                .unwrap();
+            verify_index_integrity(&blocktree, slot);
+            blocktree.purge_slots(0, Some(slot));
+
+            // Test insert shreds in 2 rounds, but not enough to trigger
+            // recovery, make sure nothing is lost
+            let shreds1: Vec<_> = data_shreds[..data_shreds.len() / 2 - 2]
+                .iter()
+                .cloned()
+                .chain(coding_shreds[..coding_shreds.len() / 2 - 2].iter().cloned())
+                .collect();
+            let shreds2: Vec<_> = data_shreds[data_shreds.len() / 2 - 2..data_shreds.len() / 2 - 1]
+                .iter()
+                .cloned()
+                .chain(
+                    coding_shreds[coding_shreds.len() / 2 - 2..coding_shreds.len() / 2 - 1]
+                        .iter()
+                        .cloned(),
+                )
+                .collect();
+            blocktree
+                .insert_shreds(shreds1, Some(&leader_schedule_cache), false)
+                .unwrap();
+            blocktree
+                .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
                 .unwrap();
             verify_index_integrity(&blocktree, slot);
             blocktree.purge_slots(0, Some(slot));
@@ -4514,7 +4582,7 @@ pub mod tests {
         num_entries: u64,
         erasure_rate: f32,
     ) -> (Vec<Shred>, Vec<Shred>, Arc<LeaderScheduleCache>) {
-        let (_, entries) = make_slot_entries_with_transactions(slot, parent_slot, num_entries);
+        let entries = make_slot_entries_with_transactions(num_entries);
         let leader_keypair = Arc::new(Keypair::new());
         let shredder = Shredder::new(
             slot,
