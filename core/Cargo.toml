@@ -40,7 +40,7 @@ rand_chacha = "0.1.1"
 rayon = "1.2.0"
 serde = "1.0.103"
 serde_derive = "1.0.103"
-serde_json = "1.0.42"
+serde_json = "1.0.44"
 solana-budget-program = { path = "../programs/budget", version = "0.22.0" }
 solana-clap-utils = { path = "../clap-utils", version = "0.22.0" }
 solana-chacha-sys = { path = "../chacha-sys", version = "0.22.0" }

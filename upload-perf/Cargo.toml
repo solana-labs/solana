@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 log = "0.4.8"
-serde_json = "1.0.42"
+serde_json = "1.0.44"
 solana-metrics = { path = "../metrics", version = "0.22.0" }
 
 [[bin]]
