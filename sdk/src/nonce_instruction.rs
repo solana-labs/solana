@@ -302,7 +302,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [],
-                &serialize(&NonceInstruction::Nonce).unwrap()
+                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -318,7 +318,7 @@ mod tests {
                     true,
                     &mut Account::default(),
                 ),],
-                &serialize(&NonceInstruction::Nonce).unwrap(),
+                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -338,7 +338,7 @@ mod tests {
                         &mut Account::default(),
                     ),
                 ],
-                &serialize(&NonceInstruction::Nonce).unwrap(),
+                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
