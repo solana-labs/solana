@@ -535,13 +535,6 @@ pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[
         commission: 0,
     },
     ValidatorInfo {
-        name: "P2P.ORG - Secure Non-custodial Staking",
-        node: "44e8VyWoyZSE2oYHxMHMedAiHkGJqJgPd3tdt6iKoAFL",
-        vote: "BwwpzEpo1wzgV9N1987ntgNG6jLt3C9532C68pswT7Gp",
-        node_sol: 500.0,
-        commission: 0,
-    },
-    ValidatorInfo {
         name: "Dokia Capital",
         node: "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1",
         vote: "7ZdRx2EBYoRuPfyeoNbuHodMUXcAQRcC37MUw3kP6akn",
@@ -549,9 +542,23 @@ pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[
         commission: 0,
     },
     ValidatorInfo {
+        name: "P2P.ORG - Secure Non-custodial Staking",
+        node: "44e8VyWoyZSE2oYHxMHMedAiHkGJqJgPd3tdt6iKoAFL",
+        vote: "BwwpzEpo1wzgV9N1987ntgNG6jLt3C9532C68pswT7Gp",
+        node_sol: 500.0,
+        commission: 0,
+    },
+    ValidatorInfo {
         name: "RockX",
         node: "Ez4iUU87ViJLCnmSy1t1Ti3DLoysFXiBseNfnRfoehyY",
         vote: "GUdGALCHQBeqkNc2ZAht3tBXab1N5u9qJC3PAzpL54r7",
+        node_sol: 500.0,
+        commission: 0,
+    },
+    ValidatorInfo {
+        name: "Stake Capital",
+        node: "HavuVVDXXsJqMzPwQ4KcF5kFm2xqjbChhyi1bgGeCQif",
+        vote: "HswPkKj1xoLLmpM8t1vy5Pbi8zYYUs9ZawswvofKsFo1",
         node_sol: 500.0,
         commission: 0,
     },
