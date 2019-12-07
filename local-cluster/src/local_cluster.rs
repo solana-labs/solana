@@ -170,9 +170,11 @@ impl LocalCluster {
                         .into_iter()
                         .collect()
             }
-            // create_genesis_config_with_leader() assumes OperatingMode::Development so do
-            // nothing...
-            OperatingMode::Development => (),
+            OperatingMode::Development => {
+                genesis_config
+                    .native_instruction_processors
+                    .push(solana_storage_program!());
+            }
         }
 
         genesis_config.inflation =
@@ -181,9 +183,6 @@ impl LocalCluster {
         genesis_config
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
-        genesis_config
-            .native_instruction_processors
-            .push(solana_storage_program!());
 
         let storage_keypair = Keypair::new();
         genesis_config.add_account(
