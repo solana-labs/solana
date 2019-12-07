@@ -356,6 +356,16 @@ impl Blocktree {
         Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
     }
 
+    pub fn slot_coding_iterator<'a>(
+        &'a self,
+        slot: Slot,
+    ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + 'a> {
+        let slot_iterator = self
+            .db
+            .iter::<cf::ShredCode>(IteratorMode::From((slot, 0), IteratorDirection::Forward))?;
+        Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
+    }
+
     fn try_shred_recovery(
         db: &Database,
         erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
@@ -4404,26 +4414,13 @@ pub mod tests {
     #[test]
     fn test_recovery() {
         let slot = 1;
-        let (_, entries) = make_slot_entries_with_transactions(slot, 0, 100);
-        let leader_keypair = Arc::new(Keypair::new());
-        let shredder = Shredder::new(slot, slot - 1, 1.0, leader_keypair.clone(), 0, 0)
-            .expect("Failed in creating shredder");
+        let (data_shreds, coding_shreds, leader_schedule_cache) =
+            setup_erasure_shreds(slot, 0, 100, 1.0);
         let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
-            let genesis_config = create_genesis_config(2).genesis_config;
-            let bank = Arc::new(Bank::new(&genesis_config));
-            let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-            let fixed_schedule = FixedSchedule {
-                leader_schedule: Arc::new(LeaderSchedule::new_from_schedule(vec![
-                    leader_keypair.pubkey()
-                ])),
-                start_epoch: 0,
-            };
-            leader_schedule_cache.set_fixed_leader_schedule(Some(fixed_schedule));
             blocktree
-                .insert_shreds(coding_shreds, Some(&Arc::new(leader_schedule_cache)), false)
+                .insert_shreds(coding_shreds, Some(&leader_schedule_cache), false)
                 .unwrap();
             let shred_bufs: Vec<_> = data_shreds
                 .iter()
@@ -4440,7 +4437,136 @@ pub mod tests {
                     buf
                 );
             }
+
+            verify_index_integrity(&blocktree, slot);
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_index_integrity() {
+        let slot = 1;
+        let num_entries = 100;
+        let (data_shreds, coding_shreds, leader_schedule_cache) =
+            setup_erasure_shreds(slot, 0, num_entries, 1.0);
+        let blocktree_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            // Test inserting all the shreds
+            let all_shreds: Vec<_> = data_shreds
+                .iter()
+                .cloned()
+                .chain(coding_shreds.iter().cloned())
+                .collect();
+            blocktree
+                .insert_shreds(all_shreds, Some(&leader_schedule_cache), false)
+                .unwrap();
+            verify_index_integrity(&blocktree, slot);
+            blocktree.purge_slots(0, Some(slot));
+
+            // Test inserting just the codes
+            blocktree
+                .insert_shreds(coding_shreds.clone(), Some(&leader_schedule_cache), false)
+                .unwrap();
+            verify_index_integrity(&blocktree, slot);
+            blocktree.purge_slots(0, Some(slot));
+
+            // Test inserting just the codes
+            blocktree
+                .insert_shreds(coding_shreds.clone(), Some(&leader_schedule_cache), false)
+                .unwrap();
+            verify_index_integrity(&blocktree, slot);
+            blocktree.purge_slots(0, Some(slot));
+
+            // Test inserting some codes, but not enough for recovery
+            blocktree
+                .insert_shreds(
+                    coding_shreds[..num_entries as usize / 2].to_vec(),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
+                .unwrap();
+            verify_index_integrity(&blocktree, slot);
+            blocktree.purge_slots(0, Some(slot));
+
+            // Test inserting some codes, and some data, but enough for recovery
+            let shreds: Vec<_> = data_shreds[..num_entries as usize / 2]
+                .iter()
+                .cloned()
+                .chain(
+                    coding_shreds[..num_entries as usize / 2 + 1]
+                        .iter()
+                        .cloned(),
+                )
+                .collect();
+            blocktree
+                .insert_shreds(shreds, Some(&leader_schedule_cache), false)
+                .unwrap();
+            verify_index_integrity(&blocktree, slot);
+            blocktree.purge_slots(0, Some(slot));
+        }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    fn setup_erasure_shreds(
+        slot: u64,
+        parent_slot: u64,
+        num_entries: u64,
+        erasure_rate: f32,
+    ) -> (Vec<Shred>, Vec<Shred>, Arc<LeaderScheduleCache>) {
+        let (_, entries) = make_slot_entries_with_transactions(slot, parent_slot, num_entries);
+        let leader_keypair = Arc::new(Keypair::new());
+        let shredder = Shredder::new(
+            slot,
+            parent_slot,
+            erasure_rate,
+            leader_keypair.clone(),
+            0,
+            0,
+        )
+        .expect("Failed in creating shredder");
+        let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
+
+        let genesis_config = create_genesis_config(2).genesis_config;
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
+        let fixed_schedule = FixedSchedule {
+            leader_schedule: Arc::new(LeaderSchedule::new_from_schedule(vec![
+                leader_keypair.pubkey()
+            ])),
+            start_epoch: 0,
+        };
+        leader_schedule_cache.set_fixed_leader_schedule(Some(fixed_schedule));
+
+        (data_shreds, coding_shreds, Arc::new(leader_schedule_cache))
+    }
+
+    fn verify_index_integrity(blocktree: &Blocktree, slot: u64) {
+        let index = blocktree.get_index(slot).unwrap().unwrap();
+        // Test the set of data shreds in the index and in the data column
+        // family are the same
+        let data_iter = blocktree.slot_data_iterator(slot).unwrap();
+        let mut num_data = 0;
+        for ((slot, index), _) in data_iter {
+            num_data += 1;
+            assert!(blocktree.get_data_shred(slot, index).unwrap().is_some());
+        }
+
+        // Test the data index doesn't have anything extra
+        let num_data_in_index = index.data().num_data();
+        assert_eq!(num_data_in_index, num_data);
+
+        // Test the set of coding shreds in the index and in the coding column
+        // family are the same
+        let coding_iter = blocktree.slot_coding_iterator(slot).unwrap();
+        let mut num_coding = 0;
+        for ((slot, index), _) in coding_iter {
+            num_coding += 1;
+            assert!(blocktree.get_coding_shred(slot, index).unwrap().is_some());
+        }
+
+        // Test the data index doesn't have anything extra
+        let num_coding_in_index = index.coding().num_coding();
+        assert_eq!(num_coding_in_index, num_coding);
     }
 }
