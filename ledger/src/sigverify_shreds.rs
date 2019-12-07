@@ -14,7 +14,7 @@ use solana_perf::{
     packet::{limited_deserialize, Packet, Packets},
     perf_libs,
     recycler_cache::RecyclerCache,
-    sigverify::{self, TxOffset},
+    sigverify::{self, batch_size, TxOffset},
 };
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::signature::Signature;
@@ -61,7 +61,7 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> O
 
 fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, [u8; 32]>) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
-    let count = sigverify::batch_size(batches);
+    let count = batch_size(batches);
     debug!("CPU SHRED ECDSA for {}", count);
     let rv = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
@@ -69,7 +69,7 @@ fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, [u8; 32]>)
                 .into_par_iter()
                 .map(|p| {
                     p.packets
-                        .iter()
+                        .par_iter()
                         .map(|p| verify_shred_cpu(p, slot_leaders).unwrap_or(0))
                         .collect()
                 })
@@ -207,7 +207,7 @@ pub fn verify_shreds_gpu(
 
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
-    let count = sigverify::batch_size(batches);
+    let count = batch_size(batches);
     let (pubkeys, pubkey_offsets, mut num_packets) =
         slot_key_data_for_gpu(0, batches, slot_leaders, recycler_cache);
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
@@ -322,18 +322,18 @@ fn sign_shred_cpu(
     packet.data[0..sig_end].copy_from_slice(&signature.to_bytes());
 }
 
-fn sign_shreds_cpu(
+pub fn sign_shreds_cpu(
     batches: &mut [Packets],
     slot_leaders_pubkeys: &HashMap<u64, [u8; 32]>,
     slot_leaders_privkeys: &HashMap<u64, [u8; 32]>,
 ) {
     use rayon::prelude::*;
-    let count = sigverify::batch_size(batches);
+    let count = batch_size(batches);
     debug!("CPU SHRED ECDSA for {}", count);
     PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches.par_iter_mut().for_each(|p| {
-                p.packets.iter_mut().for_each(|mut p| {
+                p.packets[..].par_iter_mut().for_each(|mut p| {
                     sign_shred_cpu(&mut p, slot_leaders_pubkeys, slot_leaders_privkeys)
                 });
             });
@@ -373,7 +373,7 @@ pub fn sign_shreds_gpu(
     let api = api.unwrap();
 
     let mut elems = Vec::new();
-    let count = sigverify::batch_size(batches);
+    let count = batch_size(batches);
     let mut offset: usize = 0;
     let mut num_packets = 0;
     let (pubkeys, pubkey_offsets, num_pubkey_packets) =
@@ -415,8 +415,6 @@ pub fn sign_shreds_gpu(
             elems: p.packets.as_ptr(),
             num: p.packets.len() as u32,
         });
-        let mut v = Vec::new();
-        v.resize(p.packets.len(), 0);
         num_packets += p.packets.len();
     }
 
@@ -445,6 +443,12 @@ pub fn sign_shreds_gpu(
     trace!("done sign");
     let mut sizes: Vec<usize> = vec![0];
     sizes.extend(batches.iter().map(|b| b.packets.len()));
+    for i in 0..sizes.len() {
+        if i == 0 {
+            continue;
+        }
+        sizes[i] += sizes[i - 1];
+    }
     PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
             batches
@@ -452,9 +456,8 @@ pub fn sign_shreds_gpu(
                 .enumerate()
                 .for_each(|(batch_ix, batch)| {
                     let num_packets = sizes[batch_ix];
-                    batch
-                        .packets
-                        .iter_mut()
+                    batch.packets[..]
+                        .par_iter_mut()
                         .enumerate()
                         .for_each(|(packet_ix, packet)| {
                             let sig_ix = packet_ix + num_packets;
@@ -478,6 +481,7 @@ pub fn sign_shreds_gpu(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::shred::SIZE_OF_DATA_SHRED_PAYLOAD;
     use crate::shred::{Shred, Shredder};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     #[test]
@@ -612,14 +616,26 @@ pub mod tests {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
-        let mut batch = [Packets::default()];
+        let mut packets = Packets::default();
+        let num_packets = 32;
+        let num_batches = 100;
         let slot = 0xdeadc0de;
+        packets.packets.resize(num_packets, Packet::default());
+        for (i, p) in packets.packets.iter_mut().enumerate() {
+            let shred = Shred::new_from_data(
+                slot,
+                0xc0de,
+                i as u16,
+                Some(&[5; SIZE_OF_DATA_SHRED_PAYLOAD]),
+                true,
+                true,
+                1,
+                2,
+            );
+            shred.copy_to_packet(p);
+        }
+        let mut batch = vec![packets; num_batches];
         let keypair = Keypair::new();
-        let shred =
-            Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true, 0, 0);
-        batch[0].packets.resize(1, Packet::default());
-        batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batch[0].packets[0].meta.size = shred.payload.len();
         let pubkeys = [
             (slot, keypair.pubkey().to_bytes()),
             (std::u64::MAX, [0u8; 32]),
@@ -636,14 +652,14 @@ pub mod tests {
         .collect();
         //unsigned
         let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_cache);
-        assert_eq!(rv, vec![vec![0]]);
+        assert_eq!(rv, vec![vec![0; num_packets]; num_batches]);
         //signed
         sign_shreds_gpu(&mut batch, &pubkeys, &privkeys, &recycler_cache);
         let rv = verify_shreds_cpu(&batch, &pubkeys);
-        assert_eq!(rv, vec![vec![1]]);
+        assert_eq!(rv, vec![vec![1; num_packets]; num_batches]);
 
         let rv = verify_shreds_gpu(&batch, &pubkeys, &recycler_cache);
-        assert_eq!(rv, vec![vec![1]]);
+        assert_eq!(rv, vec![vec![1; num_packets]; num_batches]);
     }
 
     #[test]
