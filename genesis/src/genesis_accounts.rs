@@ -457,27 +457,37 @@ pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "legal gate",
         staker: "FwMbkDZUb78aiMWhZY4BEroAcqmnrXZV77nwrg71C57d",
-        sol: 5_000_000.0,
+        sol: 21_086_641.0,
     },
     StakerInfo {
         name: "cluttered complaint",
         staker: "4h1rt2ic4AXwG7p3Qqhw57EMDD4c3tLYb5J3QstGA2p5",
-        sol: 5_000_000.0,
+        sol: 153_333_633.41,
     },
     StakerInfo {
         name: "one thanks",
         staker: "3b7akieYUyCgz3Cwt5sTSErMWjg8NEygD6mbGjhGkduB",
-        sol: 5_000_000.0,
+        sol: 157_613_284.59,
     },
     StakerInfo {
-        name: "on buzzer",
+        name: "lyrical supermarket",
         staker: "GRZwoJGisLTszcxtWpeREJ98EGg8pZewhbtcrikoU7b3",
         sol: 5_000_000.0,
     },
     StakerInfo {
-        name: "last minute",
+        name: "frequent description",
         staker: "J51tinoLdmEdUR27LUVymrb2LB3xQo1aSHSgmbSGdj58",
+        sol: 57_500_000.0,
+    },
+    StakerInfo {
+        name: "rightful agreement",
+        staker: "DNaKiBwwbbqk1wVoC5AQxWQbuDhvaDVbAtXzsVos9mrc",
         sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "tasty location",
+        staker: "HvXQPXAijjG1vnQs6HXVtUUtFVzi5HNgXV9LGnHvYF85",
+        sol: 15_000_000.0,
     },
 ];
 
