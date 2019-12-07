@@ -1203,9 +1203,9 @@ pub(crate) mod tests {
     }
 
     fn simulate_fork_selection(
-        neutral_fork: ForkInfo,
-        forks: Vec<ForkInfo>,
-        validators: Vec<ValidatorInfo>,
+        neutral_fork: &ForkInfo,
+        forks: &Vec<ForkInfo>,
+        validators: &Vec<ValidatorInfo>,
     ) -> Vec<Option<ForkSelectionResponse>> {
         fn vote(bank: &Arc<Bank>, pubkey: &Pubkey, slot: Slot) {
             let mut vote_account = bank.get_account(&pubkey).unwrap();
@@ -1443,14 +1443,20 @@ pub(crate) mod tests {
             },
         ];
 
-        let resp = simulate_fork_selection(neutral_fork, forks, validators);
+        let resp = simulate_fork_selection(&neutral_fork, &forks, &validators);
         // Both honest nodes are now want to switch to minority fork and are locked out
         assert!(resp[0].is_some());
         assert_eq!(resp[0].as_ref().unwrap().is_locked_out, true);
-        assert_eq!(resp[0].as_ref().unwrap().slot, 11);
+        assert_eq!(
+            resp[0].as_ref().unwrap().slot,
+            forks[0].fork.last().unwrap().clone()
+        );
         assert!(resp[1].is_some());
         assert_eq!(resp[1].as_ref().unwrap().is_locked_out, true);
-        assert_eq!(resp[1].as_ref().unwrap().slot, 11);
+        assert_eq!(
+            resp[1].as_ref().unwrap().slot,
+            forks[0].fork.last().unwrap().clone()
+        );
     }
 
     #[test]
