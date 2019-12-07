@@ -13,19 +13,11 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy)]
-pub struct Meta {
-    rent_exempt_lamports: u64,
-}
+pub struct Meta {}
 
 impl Meta {
-    pub fn new(rent_exempt_lamports: u64) -> Self {
-        Self {
-            rent_exempt_lamports,
-        }
-    }
-
-    pub fn rent_exempt_lamports(self) -> u64 {
-        self.rent_exempt_lamports
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -92,7 +84,7 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
                 if self.account.lamports < min_balance {
                     return Err(InstructionError::InsufficientFunds);
                 }
-                Meta::new(min_balance)
+                Meta::new()
             }
         };
 
@@ -117,14 +109,17 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
                     return Err(InstructionError::InsufficientFunds);
                 }
             }
-            NonceState::Initialized(meta, ref hash) => {
+            NonceState::Initialized(_meta, ref hash) => {
                 if lamports == self.account.lamports {
                     if *hash == recent_blockhashes[0] {
                         return Err(NonceError::NotExpired.into());
                     }
                     self.set_state(&NonceState::Uninitialized)?;
-                } else if lamports + meta.rent_exempt_lamports > self.account.lamports {
-                    return Err(InstructionError::InsufficientFunds);
+                } else {
+                    let min_balance = rent.minimum_balance(self.account.data.len());
+                    if lamports + min_balance > self.account.lamports {
+                        return Err(InstructionError::InsufficientFunds);
+                    }
                 }
             }
         }
@@ -175,18 +170,7 @@ mod test {
 
     #[test]
     fn new_meta() {
-        assert_eq!(
-            Meta::new(0),
-            Meta {
-                rent_exempt_lamports: 0
-            }
-        );
-    }
-
-    #[test]
-    fn meta_rent_exempt_lamports_accessor() {
-        let meta = Meta::new(42);
-        assert_eq!(meta.rent_exempt_lamports(), 42,);
+        assert_eq!(Meta::new(), Meta {});
     }
 
     #[test]
@@ -196,7 +180,7 @@ mod test {
             ..Rent::default()
         };
         let min_lamports = rent.minimum_balance(NonceState::size());
-        let meta = Meta::new(min_lamports);
+        let meta = Meta::new();
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let mut signers = HashSet::new();
             signers.insert(keyed_account.signer_key().unwrap().clone());
@@ -275,7 +259,7 @@ mod test {
             ..Rent::default()
         };
         let min_lamports = rent.minimum_balance(NonceState::size());
-        let meta = Meta::new(min_lamports);
+        let meta = Meta::new();
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
             signers.insert(nonce_account.signer_key().unwrap().clone());
@@ -490,7 +474,7 @@ mod test {
             ..Rent::default()
         };
         let min_lamports = rent.minimum_balance(NonceState::size());
-        let meta = Meta::new(min_lamports);
+        let meta = Meta::new();
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             let mut signers = HashSet::new();
             signers.insert(nonce_keyed.signer_key().unwrap().clone());
