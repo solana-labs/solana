@@ -255,6 +255,10 @@ impl JsonRpcRequestProcessor {
                     last_vote,
                 }
             })
+            .filter(|vote_account_info| {
+                // Remove vote accounts with no delegated stake that have never voted
+                vote_account_info.last_vote != 0 || vote_account_info.activated_stake != 0
+            })
             .partition(|vote_account_info| {
                 if bank.slot() >= MAX_LOCKOUT_HISTORY as u64 {
                     vote_account_info.last_vote > bank.slot() - MAX_LOCKOUT_HISTORY as u64
@@ -1010,13 +1014,14 @@ pub mod tests {
         system_transaction,
         transaction::TransactionError,
     };
+    use solana_vote_program::{vote_instruction, vote_state::VoteInit};
     use std::{
         collections::HashMap,
         sync::atomic::{AtomicBool, Ordering},
         thread,
     };
 
-    const TEST_MINT_LAMPORTS: u64 = 10_000;
+    const TEST_MINT_LAMPORTS: u64 = 1_000_000;
 
     struct RpcHandler {
         io: MetaIoHandler<Meta>,
@@ -1893,5 +1898,58 @@ pub mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_get_vote_accounts() {
+        let RpcHandler {
+            io,
+            meta,
+            bank,
+            alice,
+            ..
+        } = start_rpc_handler_with_tx(&Pubkey::new_rand());
+
+        assert_eq!(bank.vote_accounts().len(), 1);
+
+        // Create a second vote account that has no stake.  It should not be included in the
+        // getVoteAccounts response
+        let vote_keypair = Keypair::new();
+        let instructions = vote_instruction::create_account(
+            &alice.pubkey(),
+            &vote_keypair.pubkey(),
+            &VoteInit {
+                node_pubkey: alice.pubkey(),
+                authorized_voter: vote_keypair.pubkey(),
+                authorized_withdrawer: vote_keypair.pubkey(),
+                commission: 0,
+            },
+            bank.get_minimum_balance_for_rent_exemption(VoteState::size_of()),
+        );
+
+        let transaction = Transaction::new_signed_instructions(
+            &[&alice, &vote_keypair],
+            instructions,
+            bank.last_blockhash(),
+        );
+        bank.process_transaction(&transaction)
+            .expect("process transaction");
+        assert_eq!(bank.vote_accounts().len(), 2);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts"}}"#);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let vote_account_status: RpcVoteAccountStatus =
+            serde_json::from_value(result["result"].clone()).unwrap();
+
+        // The bootstrap leader vote account will be delinquent as it has stake but has never
+        // voted.  The vote account with no stake should not be present.
+        assert!(vote_account_status.current.is_empty());
+        assert_eq!(vote_account_status.delinquent.len(), 1);
+        for vote_account_info in vote_account_status.delinquent {
+            assert_ne!(vote_account_info.activated_stake, 0);
+        }
     }
 }
