@@ -56,6 +56,15 @@ pub enum NonceInstruction {
     /// The `u64` parameter is the lamports to withdraw, which must leave the
     /// account balance above the rent exempt reserve or at zero.
     Withdraw(u64),
+
+    /// `Initialize` drives state of Uninitalized NonceAccount to Initialized,
+    /// setting the nonce value.
+    ///
+    /// Expects 3 Accounts:
+    ///     0 - A NonceAccount in the Uninitialized state
+    ///     1 - RecentBlockHashes sysvar
+    ///     2 - Rent sysvar
+    Initialize,
 }
 
 pub fn create_nonce_account(
@@ -71,8 +80,20 @@ pub fn create_nonce_account(
             NonceState::size() as u64,
             &id(),
         ),
-        nonce(nonce_pubkey),
+        initialize(nonce_pubkey),
     ]
+}
+
+pub fn initialize(nonce_pubkey: &Pubkey) -> Instruction {
+    Instruction::new(
+        id(),
+        &NonceInstruction::Initialize,
+        vec![
+            AccountMeta::new(*nonce_pubkey, true),
+            AccountMeta::new_readonly(recent_blockhashes::id(), false),
+            AccountMeta::new_readonly(rent::id(), false),
+        ],
+    )
 }
 
 pub fn nonce(nonce_pubkey: &Pubkey) -> Instruction {
@@ -113,7 +134,6 @@ pub fn process_instruction(
     match limited_deserialize(data)? {
         NonceInstruction::Nonce => me.nonce(
             &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-            &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             &signers,
         ),
         NonceInstruction::Withdraw(lamports) => {
@@ -126,13 +146,22 @@ pub fn process_instruction(
                 &signers,
             )
         }
+        NonceInstruction::Initialize => me.initialize(
+            &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            &signers,
+        ),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{account::Account, hash::Hash, nonce_state, system_program, sysvar};
+    use crate::{
+        account::Account,
+        hash::{hash, Hash},
+        nonce_state, system_program, sysvar,
+    };
     use bincode::serialize;
 
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
@@ -233,48 +262,41 @@ mod tests {
     }
 
     #[test]
-    fn test_process_nonce_ix_bad_rent_state_fail() {
-        assert_eq!(
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default(),),
-                    KeyedAccount::new(
-                        &sysvar::recent_blockhashes::id(),
-                        false,
-                        &mut sysvar::recent_blockhashes::create_account(1),
-                    ),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
-                ],
-                &serialize(&NonceInstruction::Nonce).unwrap(),
-            ),
-            Err(InstructionError::InvalidArgument),
-        );
-    }
-
-    #[test]
     fn test_process_nonce_ix_ok() {
+        let mut nonce_acc = nonce_state::create_account(1_000_000);
+        super::process_instruction(
+            &Pubkey::default(),
+            &mut [
+                KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc),
+                KeyedAccount::new(
+                    &sysvar::recent_blockhashes::id(),
+                    false,
+                    &mut sysvar::recent_blockhashes::create_account_with_data(
+                        1,
+                        vec![(0u64, &Hash::default()); 32].into_iter(),
+                    ),
+                ),
+                KeyedAccount::new(
+                    &sysvar::rent::id(),
+                    false,
+                    &mut sysvar::rent::create_account(1, &Rent::default()),
+                ),
+            ],
+            &serialize(&NonceInstruction::Initialize).unwrap(),
+        )
+        .unwrap();
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    KeyedAccount::new(
-                        &Pubkey::default(),
-                        true,
-                        &mut nonce_state::create_account(1_000_000),
-                    ),
+                    KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc,),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
                         &mut sysvar::recent_blockhashes::create_account_with_data(
                             1,
-                            vec![(0u64, &Hash::default()); 32].into_iter(),
+                            vec![(0u64, &hash(&serialize(&0).unwrap())); 32].into_iter(),
                         ),
-                    ),
-                    KeyedAccount::new(
-                        &sysvar::rent::id(),
-                        false,
-                        &mut sysvar::rent::create_account(1, &Rent::default()),
                     ),
                 ],
                 &serialize(&NonceInstruction::Nonce).unwrap(),
@@ -332,27 +354,6 @@ mod tests {
                         false,
                         &mut Account::default(),
                     ),
-                ],
-                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
-            ),
-            Err(InstructionError::InvalidArgument),
-        );
-    }
-
-    #[test]
-    fn test_process_withdraw_ix_bad_rent_state_fail() {
-        assert_eq!(
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default(),),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default(),),
-                    KeyedAccount::new(
-                        &sysvar::recent_blockhashes::id(),
-                        false,
-                        &mut Account::default(),
-                    ),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
                 ],
                 &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
             ),

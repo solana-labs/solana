@@ -44,7 +44,6 @@ pub trait NonceAccount {
     fn nonce(
         &mut self,
         recent_blockhashes: &RecentBlockhashes,
-        rent: &Rent,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError>;
     fn withdraw(
@@ -55,13 +54,18 @@ pub trait NonceAccount {
         rent: &Rent,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError>;
+    fn initialize(
+        &mut self,
+        recent_blockhashes: &RecentBlockhashes,
+        rent: &Rent,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError>;
 }
 
 impl<'a> NonceAccount for KeyedAccount<'a> {
     fn nonce(
         &mut self,
         recent_blockhashes: &RecentBlockhashes,
-        rent: &Rent,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
         if recent_blockhashes.is_empty() {
@@ -79,13 +83,7 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
                 }
                 meta
             }
-            NonceState::Uninitialized => {
-                let min_balance = rent.minimum_balance(self.account.data.len());
-                if self.account.lamports < min_balance {
-                    return Err(InstructionError::InsufficientFunds);
-                }
-                Meta::new()
-            }
+            _ => return Err(NonceError::BadAccountState.into()),
         };
 
         self.set_state(&NonceState::Initialized(meta, recent_blockhashes[0]))
@@ -128,6 +126,34 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         to.account.lamports += lamports;
 
         Ok(())
+    }
+
+    fn initialize(
+        &mut self,
+        recent_blockhashes: &RecentBlockhashes,
+        rent: &Rent,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError> {
+        if recent_blockhashes.is_empty() {
+            return Err(NonceError::NoRecentBlockhashes.into());
+        }
+
+        if !signers.contains(self.unsigned_key()) {
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+
+        let meta = match self.state()? {
+            NonceState::Uninitialized => {
+                let min_balance = rent.minimum_balance(self.account.data.len());
+                if self.account.lamports < min_balance {
+                    return Err(InstructionError::InsufficientFunds);
+                }
+                Meta::new()
+            }
+            _ => return Err(NonceError::BadAccountState.into()),
+        };
+
+        self.set_state(&NonceState::Initialized(meta, recent_blockhashes[0]))
     }
 }
 
@@ -189,24 +215,20 @@ mod test {
             assert_eq!(state, NonceState::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(95);
             keyed_account
-                .nonce(&recent_blockhashes, &rent, &signers)
+                .initialize(&recent_blockhashes, &rent, &signers)
                 .unwrap();
             let state: NonceState = keyed_account.state().unwrap();
             let stored = recent_blockhashes[0];
             // First nonce instruction drives state from Uninitialized to Initialized
             assert_eq!(state, NonceState::Initialized(meta, stored));
             let recent_blockhashes = create_test_recent_blockhashes(63);
-            keyed_account
-                .nonce(&recent_blockhashes, &rent, &signers)
-                .unwrap();
+            keyed_account.nonce(&recent_blockhashes, &signers).unwrap();
             let state: NonceState = keyed_account.state().unwrap();
             let stored = recent_blockhashes[0];
             // Second nonce instruction consumes and replaces stored nonce
             assert_eq!(state, NonceState::Initialized(meta, stored));
             let recent_blockhashes = create_test_recent_blockhashes(31);
-            keyed_account
-                .nonce(&recent_blockhashes, &rent, &signers)
-                .unwrap();
+            keyed_account.nonce(&recent_blockhashes, &signers).unwrap();
             let state: NonceState = keyed_account.state().unwrap();
             let stored = recent_blockhashes[0];
             // Third nonce instruction for fun and profit
@@ -238,21 +260,6 @@ mod test {
     }
 
     #[test]
-    fn nonce_inx_uninitialized_account_not_signer_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
-        let min_lamports = rent.minimum_balance(NonceState::size());
-        with_test_keyed_account(min_lamports + 42, false, |nonce_account| {
-            let signers = HashSet::new();
-            let recent_blockhashes = create_test_recent_blockhashes(0);
-            let result = nonce_account.nonce(&recent_blockhashes, &rent, &signers);
-            assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
-        })
-    }
-
-    #[test]
     fn nonce_inx_initialized_account_not_signer_fail() {
         let rent = Rent {
             lamports_per_byte_year: 42,
@@ -266,7 +273,7 @@ mod test {
             let recent_blockhashes = create_test_recent_blockhashes(31);
             let stored = recent_blockhashes[0];
             nonce_account
-                .nonce(&recent_blockhashes, &rent, &signers)
+                .initialize(&recent_blockhashes, &rent, &signers)
                 .unwrap();
             let pubkey = nonce_account.account.owner.clone();
             let mut nonce_account = KeyedAccount::new(&pubkey, false, nonce_account.account);
@@ -274,7 +281,7 @@ mod test {
             assert_eq!(state, NonceState::Initialized(meta, stored));
             let signers = HashSet::new();
             let recent_blockhashes = create_test_recent_blockhashes(0);
-            let result = nonce_account.nonce(&recent_blockhashes, &rent, &signers);
+            let result = nonce_account.nonce(&recent_blockhashes, &signers);
             assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
         })
     }
@@ -289,8 +296,12 @@ mod test {
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let mut signers = HashSet::new();
             signers.insert(keyed_account.signer_key().unwrap().clone());
+            let recent_blockhashes = create_test_recent_blockhashes(0);
+            keyed_account
+                .initialize(&recent_blockhashes, &rent, &signers)
+                .unwrap();
             let recent_blockhashes = RecentBlockhashes::from_iter(vec![].into_iter());
-            let result = keyed_account.nonce(&recent_blockhashes, &rent, &signers);
+            let result = keyed_account.nonce(&recent_blockhashes, &signers);
             assert_eq!(result, Err(NonceError::NoRecentBlockhashes.into()));
         })
     }
@@ -307,26 +318,26 @@ mod test {
             signers.insert(keyed_account.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(63);
             keyed_account
-                .nonce(&recent_blockhashes, &rent, &signers)
+                .initialize(&recent_blockhashes, &rent, &signers)
                 .unwrap();
-            let result = keyed_account.nonce(&recent_blockhashes, &rent, &signers);
+            let result = keyed_account.nonce(&recent_blockhashes, &signers);
             assert_eq!(result, Err(NonceError::NotExpired.into()));
         })
     }
 
     #[test]
-    fn nonce_inx_uninitialized_acc_insuff_funds_fail() {
+    fn nonce_inx_uninitialized_account_fail() {
         let rent = Rent {
             lamports_per_byte_year: 42,
             ..Rent::default()
         };
         let min_lamports = rent.minimum_balance(NonceState::size());
-        with_test_keyed_account(min_lamports - 42, true, |keyed_account| {
+        with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let mut signers = HashSet::new();
             signers.insert(keyed_account.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(63);
-            let result = keyed_account.nonce(&recent_blockhashes, &rent, &signers);
-            assert_eq!(result, Err(InstructionError::InsufficientFunds));
+            let result = keyed_account.nonce(&recent_blockhashes, &signers);
+            assert_eq!(result, Err(NonceError::BadAccountState.into()));
         })
     }
 
@@ -480,7 +491,7 @@ mod test {
             signers.insert(nonce_keyed.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(31);
             nonce_keyed
-                .nonce(&recent_blockhashes, &rent, &signers)
+                .initialize(&recent_blockhashes, &rent, &signers)
                 .unwrap();
             let state: NonceState = nonce_keyed.state().unwrap();
             let stored = recent_blockhashes[0];
@@ -536,7 +547,7 @@ mod test {
             signers.insert(nonce_keyed.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(0);
             nonce_keyed
-                .nonce(&recent_blockhashes, &rent, &signers)
+                .initialize(&recent_blockhashes, &rent, &signers)
                 .unwrap();
             with_test_keyed_account(42, false, |mut to_keyed| {
                 let mut signers = HashSet::new();
@@ -566,7 +577,7 @@ mod test {
             signers.insert(nonce_keyed.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(95);
             nonce_keyed
-                .nonce(&recent_blockhashes, &rent, &signers)
+                .initialize(&recent_blockhashes, &rent, &signers)
                 .unwrap();
             with_test_keyed_account(42, false, |mut to_keyed| {
                 let recent_blockhashes = create_test_recent_blockhashes(63);
@@ -597,7 +608,7 @@ mod test {
             signers.insert(nonce_keyed.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(95);
             nonce_keyed
-                .nonce(&recent_blockhashes, &rent, &signers)
+                .initialize(&recent_blockhashes, &rent, &signers)
                 .unwrap();
             with_test_keyed_account(42, false, |mut to_keyed| {
                 let recent_blockhashes = create_test_recent_blockhashes(63);
@@ -613,6 +624,94 @@ mod test {
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
             })
+        })
+    }
+
+    #[test]
+    fn initialize_inx_ok() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(NonceState::size());
+        with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
+            let state: NonceState = keyed_account.state().unwrap();
+            assert_eq!(state, NonceState::Uninitialized);
+            let mut signers = HashSet::new();
+            signers.insert(keyed_account.signer_key().unwrap().clone());
+            let recent_blockhashes = create_test_recent_blockhashes(0);
+            let stored = recent_blockhashes[0];
+            let result = keyed_account.initialize(&recent_blockhashes, &rent, &signers);
+            assert_eq!(result, Ok(()));
+            let state: NonceState = keyed_account.state().unwrap();
+            assert_eq!(state, NonceState::Initialized(Meta::new(), stored));
+        })
+    }
+
+    #[test]
+    fn initialize_inx_empty_recent_blockhashes_fail() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(NonceState::size());
+        with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
+            let mut signers = HashSet::new();
+            signers.insert(keyed_account.signer_key().unwrap().clone());
+            let recent_blockhashes = RecentBlockhashes::from_iter(vec![].into_iter());
+            let result = keyed_account.initialize(&recent_blockhashes, &rent, &signers);
+            assert_eq!(result, Err(NonceError::NoRecentBlockhashes.into()));
+        })
+    }
+
+    #[test]
+    fn initialize_inx_not_signer_fail() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(NonceState::size());
+        with_test_keyed_account(min_lamports + 42, false, |keyed_account| {
+            let signers = HashSet::new();
+            let recent_blockhashes = create_test_recent_blockhashes(0);
+            let result = keyed_account.initialize(&recent_blockhashes, &rent, &signers);
+            assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
+        })
+    }
+
+    #[test]
+    fn initialize_inx_initialized_account_fail() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(NonceState::size());
+        with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
+            let mut signers = HashSet::new();
+            signers.insert(keyed_account.signer_key().unwrap().clone());
+            let recent_blockhashes = create_test_recent_blockhashes(31);
+            keyed_account
+                .initialize(&recent_blockhashes, &rent, &signers)
+                .unwrap();
+            let recent_blockhashes = create_test_recent_blockhashes(0);
+            let result = keyed_account.initialize(&recent_blockhashes, &rent, &signers);
+            assert_eq!(result, Err(NonceError::BadAccountState.into()));
+        })
+    }
+
+    #[test]
+    fn initialize_inx_uninitialized_acc_insuff_funds_fail() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(NonceState::size());
+        with_test_keyed_account(min_lamports - 42, true, |keyed_account| {
+            let mut signers = HashSet::new();
+            signers.insert(keyed_account.signer_key().unwrap().clone());
+            let recent_blockhashes = create_test_recent_blockhashes(63);
+            let result = keyed_account.initialize(&recent_blockhashes, &rent, &signers);
+            assert_eq!(result, Err(InstructionError::InsufficientFunds));
         })
     }
 }
