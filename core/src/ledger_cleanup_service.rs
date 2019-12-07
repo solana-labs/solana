@@ -2,6 +2,7 @@
 
 use crate::result::{Error, Result};
 use solana_ledger::blocktree::Blocktree;
+use solana_metrics::datapoint_debug;
 use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::pubkey::Pubkey;
 use std::string::ToString;
@@ -55,11 +56,27 @@ impl LedgerCleanupService {
         blocktree: &Arc<Blocktree>,
         max_ledger_slots: u64,
     ) -> Result<()> {
+        let disk_utilization_pre = blocktree.storage_size();
+
         let (slot, _) = slot_full_receiver.recv_timeout(Duration::from_secs(1))?;
         if slot > max_ledger_slots {
             //cleanup
             blocktree.purge_slots(0, Some(slot - max_ledger_slots));
         }
+
+        let disk_utilization_post = blocktree.storage_size();
+
+        datapoint_debug!(
+            "ledger_disk_utilization",
+            ("disk_utilization_pre", disk_utilization_pre as i64, i64),
+            ("disk_utilization_post", disk_utilization_post as i64, i64),
+            (
+                "disk_utilization_delta",
+                (disk_utilization_pre as i64 - disk_utilization_post as i64),
+                i64
+            )
+        );
+
         Ok(())
     }
 
