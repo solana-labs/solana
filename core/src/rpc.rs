@@ -255,6 +255,10 @@ impl JsonRpcRequestProcessor {
                     last_vote,
                 }
             })
+            .filter(|vote_account_info| {
+                // Remove vote accounts that have never voted and also have no stake
+                vote_account_info.last_vote == 0 && vote_account_info.activated_stake == 0
+            })
             .partition(|vote_account_info| {
                 if bank.slot() >= MAX_LOCKOUT_HISTORY as u64 {
                     vote_account_info.last_vote > bank.slot() - MAX_LOCKOUT_HISTORY as u64
