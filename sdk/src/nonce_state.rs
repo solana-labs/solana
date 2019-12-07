@@ -60,6 +60,7 @@ pub trait NonceAccount {
         lamports: u64,
         to: &mut KeyedAccount,
         recent_blockhashes: &RecentBlockhashes,
+        rent: &Rent,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError>;
 }
@@ -103,6 +104,7 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         lamports: u64,
         to: &mut KeyedAccount,
         recent_blockhashes: &RecentBlockhashes,
+        rent: &Rent,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
         if !signers.contains(self.unsigned_key()) {
@@ -235,6 +237,7 @@ mod test {
                         withdraw_lamports,
                         &mut to_keyed,
                         &recent_blockhashes,
+                        &rent,
                         &signers,
                     )
                     .unwrap();
@@ -365,6 +368,7 @@ mod test {
                         withdraw_lamports,
                         &mut to_keyed,
                         &recent_blockhashes,
+                        &rent,
                         &signers,
                     )
                     .unwrap();
@@ -397,6 +401,7 @@ mod test {
                     nonce_keyed.account.lamports,
                     &mut to_keyed,
                     &recent_blockhashes,
+                    &rent,
                     &signers,
                 );
                 assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
@@ -422,6 +427,7 @@ mod test {
                     nonce_keyed.account.lamports + 1,
                     &mut to_keyed,
                     &recent_blockhashes,
+                    &rent,
                     &signers,
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
@@ -449,6 +455,7 @@ mod test {
                         withdraw_lamports,
                         &mut to_keyed,
                         &recent_blockhashes,
+                        &rent,
                         &signers,
                     )
                     .unwrap();
@@ -464,6 +471,7 @@ mod test {
                         withdraw_lamports,
                         &mut to_keyed,
                         &recent_blockhashes,
+                        &rent,
                         &signers,
                     )
                     .unwrap();
@@ -502,6 +510,7 @@ mod test {
                         withdraw_lamports,
                         &mut to_keyed,
                         &recent_blockhashes,
+                        &rent,
                         &signers,
                     )
                     .unwrap();
@@ -519,6 +528,7 @@ mod test {
                         withdraw_lamports,
                         &mut to_keyed,
                         &recent_blockhashes,
+                        &rent,
                         &signers,
                     )
                     .unwrap();
@@ -552,6 +562,7 @@ mod test {
                     withdraw_lamports,
                     &mut to_keyed,
                     &recent_blockhashes,
+                    &rent,
                     &signers,
                 );
                 assert_eq!(result, Err(NonceError::NotExpired.into()));
@@ -582,6 +593,7 @@ mod test {
                     withdraw_lamports,
                     &mut to_keyed,
                     &recent_blockhashes,
+                    &rent,
                     &signers,
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
@@ -612,6 +624,7 @@ mod test {
                     withdraw_lamports,
                     &mut to_keyed,
                     &recent_blockhashes,
+                    &rent,
                     &signers,
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));

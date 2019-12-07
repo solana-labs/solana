@@ -47,10 +47,11 @@ pub enum NonceInstruction {
 
     /// `Withdraw` transfers funds out of the nonce account
     ///
-    /// Expects 3 Accounts:
+    /// Expects 4 Accounts:
     ///     0 - A NonceAccount
     ///     1 - A system account to which the lamports will be transferred
     ///     2 - RecentBlockhashes sysvar
+    ///     3 - Rent sysvar
     ///
     /// The `u64` parameter is the lamports to withdraw, which must leave the
     /// account balance above the rent exempt reserve or at zero.
@@ -102,6 +103,7 @@ pub fn withdraw(nonce_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Ins
             AccountMeta::new(*nonce_pubkey, true),
             AccountMeta::new(*to_pubkey, false),
             AccountMeta::new_readonly(recent_blockhashes::id(), false),
+            AccountMeta::new_readonly(rent::id(), false),
         ],
     )
 }
@@ -128,6 +130,7 @@ pub fn process_instruction(
                 lamports,
                 to,
                 &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
         }
@@ -345,6 +348,27 @@ mod tests {
     }
 
     #[test]
+    fn test_process_withdraw_ix_bad_rent_state_fail() {
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default(),),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default(),),
+                    KeyedAccount::new(
+                        &sysvar::recent_blockhashes::id(),
+                        false,
+                        &mut Account::default(),
+                    ),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
+                ],
+                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
+            ),
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+
+    #[test]
     fn test_process_withdraw_ix_ok() {
         assert_eq!(
             super::process_instruction(
@@ -363,6 +387,11 @@ mod tests {
                             1,
                             vec![(0u64, &Hash::default()); 32].into_iter(),
                         ),
+                    ),
+                    KeyedAccount::new(
+                        &sysvar::rent::id(),
+                        false,
+                        &mut sysvar::rent::create_account(1, &Rent::default())
                     ),
                 ],
                 &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
