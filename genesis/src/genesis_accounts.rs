@@ -462,7 +462,7 @@ pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "legal gate",
         staker: "FwMbkDZUb78aiMWhZY4BEroAcqmnrXZV77nwrg71C57d",
-        sol: 21_086_641.0,
+        sol: 16_086_641.0,
     },
     StakerInfo {
         name: "cluttered complaint",
@@ -472,7 +472,7 @@ pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "one thanks",
         staker: "3b7akieYUyCgz3Cwt5sTSErMWjg8NEygD6mbGjhGkduB",
-        sol: 157_613_284.59 + 16_086_641.0,
+        sol: 178_699_925.59,
     },
     StakerInfo {
         name: "lyrical supermarket",
