@@ -38,10 +38,9 @@ impl<E> DecodeError<E> for NonceError {
 pub enum NonceInstruction {
     /// `Nonce` consumes a stored nonce, replacing it with a successor
     ///
-    /// Expects 2 Accounts:
+    /// Expects 3 Accounts:
     ///     0 - A NonceAccount
-    ///     1 - RecentBlockhashes sysvar carrying a subset of the bank's
-    ///         BlockhashQueue
+    ///     1 - RecentBlockhashes sysvar
     ///     2 - Rent sysvar
     ///
     Nonce,
@@ -51,8 +50,7 @@ pub enum NonceInstruction {
     /// Expects 3 Accounts:
     ///     0 - A NonceAccount
     ///     1 - A system account to which the lamports will be transferred
-    ///     2 - RecentBlockhashes sysvar carrying a subset of the bank's
-    ///         BlockhashQueue
+    ///     2 - RecentBlockhashes sysvar
     ///
     /// The `u64` parameter is the lamports to withdraw, which must leave the
     /// account balance above the rent exempt reserve or at zero.
