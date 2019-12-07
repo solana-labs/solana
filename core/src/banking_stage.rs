@@ -20,7 +20,11 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
 use solana_perf::{cuda_runtime::PinnedVec, perf_libs};
-use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::TransactionBatch};
+use solana_runtime::{
+    accounts_db::ErrorCounters,
+    bank::{Bank, TransactionProcessResult},
+    transaction_batch::TransactionBatch,
+};
 use solana_sdk::{
     clock::{
         Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE,
@@ -443,7 +447,7 @@ impl BankingStage {
     fn record_transactions(
         bank_slot: Slot,
         txs: &[Transaction],
-        results: &[transaction::Result<()>],
+        results: &[TransactionProcessResult],
         poh: &Arc<Mutex<PohRecorder>>,
     ) -> (Result<usize>, Vec<usize>) {
         let mut processed_generation = Measure::start("record::process_generation");
@@ -451,7 +455,7 @@ impl BankingStage {
             .iter()
             .zip(txs.iter())
             .enumerate()
-            .filter_map(|(i, (r, x))| {
+            .filter_map(|(i, ((r, _h), x))| {
                 if Bank::can_commit(r) {
                     Some((x.clone(), i))
                 } else {
@@ -678,13 +682,13 @@ impl BankingStage {
     // This function returns a vector containing index of all valid transactions. A valid
     // transaction has result Ok() as the value
     fn filter_valid_transaction_indexes(
-        valid_txs: &[transaction::Result<()>],
+        valid_txs: &[TransactionProcessResult],
         transaction_indexes: &[usize],
     ) -> Vec<usize> {
         let valid_transactions = valid_txs
             .iter()
             .enumerate()
-            .filter_map(|(index, x)| if x.is_ok() { Some(index) } else { None })
+            .filter_map(|(index, (x, _h))| if x.is_ok() { Some(index) } else { None })
             .collect_vec();
 
         valid_transactions
@@ -1022,6 +1026,7 @@ mod tests {
         entry::{next_entry, Entry, EntrySlice},
         get_tmp_ledger_path,
     };
+    use solana_runtime::bank::HashAgeKind;
     use solana_sdk::{
         instruction::InstructionError,
         signature::{Keypair, KeypairUtil},
@@ -1369,7 +1374,10 @@ mod tests {
                 system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_config.hash()),
             ];
 
-            let mut results = vec![Ok(()), Ok(())];
+            let mut results = vec![
+                (Ok(()), Some(HashAgeKind::Extant)),
+                (Ok(()), Some(HashAgeKind::Extant)),
+            ];
             let _ = BankingStage::record_transactions(
                 bank.slot(),
                 &transactions,
@@ -1380,10 +1388,13 @@ mod tests {
             assert_eq!(entry.transactions.len(), transactions.len());
 
             // InstructionErrors should still be recorded
-            results[0] = Err(TransactionError::InstructionError(
-                1,
-                InstructionError::new_result_with_negative_lamports(),
-            ));
+            results[0] = (
+                Err(TransactionError::InstructionError(
+                    1,
+                    InstructionError::new_result_with_negative_lamports(),
+                )),
+                Some(HashAgeKind::Extant),
+            );
             let (res, retryable) = BankingStage::record_transactions(
                 bank.slot(),
                 &transactions,
@@ -1396,7 +1407,7 @@ mod tests {
             assert_eq!(entry.transactions.len(), transactions.len());
 
             // Other TransactionErrors should not be recorded
-            results[0] = Err(TransactionError::AccountNotFound);
+            results[0] = (Err(TransactionError::AccountNotFound), None);
             let (res, retryable) = BankingStage::record_transactions(
                 bank.slot(),
                 &transactions,
@@ -1559,12 +1570,12 @@ mod tests {
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
                 &vec![
-                    Err(TransactionError::BlockhashNotFound),
-                    Err(TransactionError::BlockhashNotFound),
-                    Ok(()),
-                    Err(TransactionError::BlockhashNotFound),
-                    Ok(()),
-                    Ok(())
+                    (Err(TransactionError::BlockhashNotFound), None),
+                    (Err(TransactionError::BlockhashNotFound), None),
+                    (Ok(()), Some(HashAgeKind::Extant)),
+                    (Err(TransactionError::BlockhashNotFound), None),
+                    (Ok(()), Some(HashAgeKind::Extant)),
+                    (Ok(()), Some(HashAgeKind::Extant)),
                 ],
                 &vec![2, 4, 5, 9, 11, 13]
             ),
@@ -1574,12 +1585,12 @@ mod tests {
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
                 &vec![
-                    Ok(()),
-                    Err(TransactionError::BlockhashNotFound),
-                    Err(TransactionError::BlockhashNotFound),
-                    Ok(()),
-                    Ok(()),
-                    Ok(())
+                    (Ok(()), Some(HashAgeKind::Extant)),
+                    (Err(TransactionError::BlockhashNotFound), None),
+                    (Err(TransactionError::BlockhashNotFound), None),
+                    (Ok(()), Some(HashAgeKind::Extant)),
+                    (Ok(()), Some(HashAgeKind::Extant)),
+                    (Ok(()), Some(HashAgeKind::Extant)),
                 ],
                 &vec![1, 6, 7, 9, 31, 43]
             ),

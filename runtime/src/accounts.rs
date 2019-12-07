@@ -1,6 +1,7 @@
 use crate::accounts_db::{AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters};
 use crate::accounts_index::AccountsIndex;
 use crate::append_vec::StoredAccount;
+use crate::bank::{HashAgeKind, TransactionProcessResult};
 use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use crate::rent_collector::RentCollector;
@@ -224,11 +225,11 @@ impl Accounts {
         ancestors: &HashMap<Slot, usize>,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<TransactionProcessResult>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
-    ) -> Vec<Result<TransactionLoadResult>> {
+    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         //PERF: hold the lock to scan for the references, but not to clone the accounts
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
@@ -236,13 +237,20 @@ impl Accounts {
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
-                (tx, Ok(())) => {
-                    let fee_calculator = hash_queue
-                        .get_fee_calculator(&tx.message().recent_blockhash)
-                        .ok_or(TransactionError::BlockhashNotFound)?;
+                (tx, (Ok(()), hash_age_kind)) => {
+                    let fee_hash = if let Some(HashAgeKind::DurableNonce) = hash_age_kind {
+                        hash_queue.last_hash()
+                    } else {
+                        tx.message().recent_blockhash
+                    };
+                    let fee = if let Some(fee_calculator) = hash_queue.get_fee_calculator(&fee_hash)
+                    {
+                        fee_calculator.calculate_fee(tx.message())
+                    } else {
+                        return (Err(TransactionError::BlockhashNotFound), hash_age_kind);
+                    };
 
-                    let fee = fee_calculator.calculate_fee(tx.message());
-                    let (accounts, rents) = self.load_tx_accounts(
+                    let load_res = self.load_tx_accounts(
                         &storage,
                         ancestors,
                         &accounts_index,
@@ -250,17 +258,27 @@ impl Accounts {
                         fee,
                         error_counters,
                         rent_collector,
-                    )?;
-                    let loaders = Self::load_loaders(
+                    );
+                    let (accounts, rents) = match load_res {
+                        Ok((a, r)) => (a, r),
+                        Err(e) => return (Err(e), hash_age_kind),
+                    };
+
+                    let load_res = Self::load_loaders(
                         &storage,
                         ancestors,
                         &accounts_index,
                         tx,
                         error_counters,
-                    )?;
-                    Ok((accounts, loaders, rents))
+                    );
+                    let loaders = match load_res {
+                        Ok(loaders) => loaders,
+                        Err(e) => return (Err(e), hash_age_kind),
+                    };
+
+                    (Ok((accounts, loaders, rents)), hash_age_kind)
                 }
-                (_, Err(e)) => Err(e),
+                (_, (Err(e), hash_age_kind)) => (Err(e), hash_age_kind),
             })
             .collect()
     }
@@ -520,8 +538,8 @@ impl Accounts {
         slot: Slot,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
-        res: &[Result<()>],
-        loaded: &mut [Result<TransactionLoadResult>],
+        res: &[TransactionProcessResult],
+        loaded: &mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
     ) {
         let accounts_to_store =
@@ -543,17 +561,18 @@ impl Accounts {
         &self,
         txs: &'a [Transaction],
         txs_iteration_order: Option<&'a [usize]>,
-        res: &'a [Result<()>],
-        loaded: &'a mut [Result<TransactionLoadResult>],
+        res: &'a [TransactionProcessResult],
+        loaded: &'a mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
-        for (i, (raccs, tx)) in loaded
+        for (i, ((raccs, _hash_age_kind), tx)) in loaded
             .iter_mut()
             .zip(OrderedIterator::new(txs, txs_iteration_order))
             .enumerate()
         {
-            if res[i].is_err() || raccs.is_err() {
+            let (res, _hash_age_kind) = &res[i];
+            if res.is_err() || raccs.is_err() {
                 continue;
             }
 
@@ -599,6 +618,7 @@ mod tests {
     use super::*;
     use crate::accounts_db::tests::copy_append_vecs;
     use crate::accounts_db::{get_temp_accounts_paths, AccountsDBSerialize};
+    use crate::bank::HashAgeKind;
     use bincode::serialize_into;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
@@ -618,7 +638,7 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<TransactionLoadResult>> {
+    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
         let accounts = Accounts::new(Vec::new());
@@ -632,7 +652,7 @@ mod tests {
             &ancestors,
             &[tx],
             None,
-            vec![Ok(())],
+            vec![(Ok(()), Some(HashAgeKind::Extant))],
             &hash_queue,
             error_counters,
             &rent_collector,
@@ -644,7 +664,7 @@ mod tests {
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<TransactionLoadResult>> {
+    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
@@ -667,7 +687,13 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
+        assert_eq!(
+            loaded_accounts[0],
+            (
+                Err(TransactionError::AccountNotFound),
+                Some(HashAgeKind::Extant)
+            )
+        );
     }
 
     #[test]
@@ -690,7 +716,13 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
+        assert_eq!(
+            loaded_accounts[0],
+            (
+                Err(TransactionError::AccountNotFound),
+                Some(HashAgeKind::Extant)
+            ),
+        );
     }
 
     #[test]
@@ -723,7 +755,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            Err(TransactionError::ProgramAccountNotFound)
+            (
+                Err(TransactionError::ProgramAccountNotFound),
+                Some(HashAgeKind::Extant)
+            )
         );
     }
 
@@ -757,7 +792,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0].clone(),
-            Err(TransactionError::InsufficientFundsForFee)
+            (
+                Err(TransactionError::InsufficientFundsForFee),
+                Some(HashAgeKind::Extant)
+            ),
         );
     }
 
@@ -787,7 +825,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            Err(TransactionError::InvalidAccountForFee)
+            (
+                Err(TransactionError::InvalidAccountForFee),
+                Some(HashAgeKind::Extant)
+            ),
         );
     }
 
@@ -822,13 +863,16 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((transaction_accounts, transaction_loaders, _transaction_rents)) => {
+            (
+                Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
+                _hash_age_kind,
+            ) => {
                 assert_eq!(transaction_accounts.len(), 2);
                 assert_eq!(transaction_accounts[0], accounts[0].1);
                 assert_eq!(transaction_loaders.len(), 1);
                 assert_eq!(transaction_loaders[0].len(), 0);
             }
-            Err(e) => Err(e).unwrap(),
+            (Err(e), _hash_age_kind) => Err(e).unwrap(),
         }
     }
 
@@ -892,7 +936,13 @@ mod tests {
 
         assert_eq!(error_counters.call_chain_too_deep, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(TransactionError::CallChainTooDeep));
+        assert_eq!(
+            loaded_accounts[0],
+            (
+                Err(TransactionError::CallChainTooDeep),
+                Some(HashAgeKind::Extant)
+            )
+        );
     }
 
     #[test]
@@ -925,7 +975,13 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
+        assert_eq!(
+            loaded_accounts[0],
+            (
+                Err(TransactionError::AccountNotFound),
+                Some(HashAgeKind::Extant)
+            )
+        );
     }
 
     #[test]
@@ -957,7 +1013,13 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
+        assert_eq!(
+            loaded_accounts[0],
+            (
+                Err(TransactionError::AccountNotFound),
+                Some(HashAgeKind::Extant)
+            )
+        );
     }
 
     #[test]
@@ -1003,7 +1065,10 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((transaction_accounts, transaction_loaders, _transaction_rents)) => {
+            (
+                Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
+                _hash_age_kind,
+            ) => {
                 assert_eq!(transaction_accounts.len(), 1);
                 assert_eq!(transaction_accounts[0], accounts[0].1);
                 assert_eq!(transaction_loaders.len(), 2);
@@ -1016,7 +1081,7 @@ mod tests {
                     }
                 }
             }
-            Err(e) => Err(e).unwrap(),
+            (Err(e), _hash_age_kind) => Err(e).unwrap(),
         }
     }
 
@@ -1046,7 +1111,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            Err(TransactionError::AccountLoadedTwice)
+            (
+                Err(TransactionError::AccountLoadedTwice),
+                Some(HashAgeKind::Extant)
+            )
         );
     }
 
@@ -1378,7 +1446,10 @@ mod tests {
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
 
-        let loaders = vec![Ok(()), Ok(())];
+        let loaders = vec![
+            (Ok(()), Some(HashAgeKind::Extant)),
+            (Ok(()), Some(HashAgeKind::Extant)),
+        ];
 
         let account0 = Account::new(1, 0, &Pubkey::default());
         let account1 = Account::new(2, 0, &Pubkey::default());
@@ -1387,20 +1458,26 @@ mod tests {
         let transaction_accounts0 = vec![account0, account2.clone()];
         let transaction_loaders0 = vec![];
         let transaction_rent0 = 0;
-        let loaded0 = Ok((
-            transaction_accounts0,
-            transaction_loaders0,
-            transaction_rent0,
-        ));
+        let loaded0 = (
+            Ok((
+                transaction_accounts0,
+                transaction_loaders0,
+                transaction_rent0,
+            )),
+            Some(HashAgeKind::Extant),
+        );
 
         let transaction_accounts1 = vec![account1, account2.clone()];
         let transaction_loaders1 = vec![];
         let transaction_rent1 = 0;
-        let loaded1 = Ok((
-            transaction_accounts1,
-            transaction_loaders1,
-            transaction_rent1,
-        ));
+        let loaded1 = (
+            Ok((
+                transaction_accounts1,
+                transaction_loaders1,
+                transaction_rent1,
+            )),
+            Some(HashAgeKind::Extant),
+        );
 
         let mut loaded = vec![loaded0, loaded1];
 

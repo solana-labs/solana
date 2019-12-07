@@ -7,6 +7,7 @@ use crate::{
     fee_calculator::FeeCalculator,
     hash::{hash, Hash},
     inflation::Inflation,
+    nonce_program::solana_nonce_program,
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent::Rent,
@@ -52,7 +53,7 @@ pub fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
                 faucet_keypair.pubkey(),
                 Account::new(lamports, 0, &system_program::id()),
             )],
-            &[solana_system_program()],
+            &[solana_nonce_program(), solana_system_program()],
         ),
         faucet_keypair,
     )

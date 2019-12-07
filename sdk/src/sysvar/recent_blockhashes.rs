@@ -1,4 +1,9 @@
-use crate::{account::Account, hash::Hash, sysvar::Sysvar};
+use crate::{
+    account::Account,
+    hash::{hash, Hash},
+    sysvar::Sysvar,
+};
+use bincode::serialize;
 use std::collections::BinaryHeap;
 use std::iter::FromIterator;
 use std::ops::Deref;
@@ -67,6 +72,13 @@ where
     let mut account = create_account(lamports);
     update_account(&mut account, recent_blockhash_iter).unwrap();
     account
+}
+
+pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
+    let bhq: Vec<_> = (start..start + (MAX_ENTRIES - 1))
+        .map(|i| hash(&serialize(&i).unwrap()))
+        .collect();
+    RecentBlockhashes::from_iter(bhq.iter())
 }
 
 #[cfg(test)]

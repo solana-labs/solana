@@ -7,6 +7,7 @@ use crate::{
     accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
     blockhash_queue::BlockhashQueue,
     message_processor::{MessageProcessor, ProcessInstruction},
+    nonce_utils,
     rent_collector::RentCollector,
     serde_utils::{
         deserialize_atomicbool, deserialize_atomicu64, serialize_atomicbool, serialize_atomicu64,
@@ -154,9 +155,16 @@ impl StatusCacheRc {
 
 pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank) -> () + Sync + Send>;
 
+pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
-    pub processing_results: Vec<Result<()>>,
+    pub processing_results: Vec<TransactionProcessResult>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum HashAgeKind {
+    Extant,
+    DurableNonce,
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
@@ -791,16 +799,17 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        res: &[Result<()>],
+        res: &[TransactionProcessResult],
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
         for (i, tx) in OrderedIterator::new(txs, iteration_order).enumerate() {
-            if Self::can_commit(&res[i]) && !tx.signatures.is_empty() {
+            let (res, _hash_age_kind) = &res[i];
+            if Self::can_commit(res) && !tx.signatures.is_empty() {
                 status_cache.insert(
                     &tx.message().recent_blockhash,
                     &tx.signatures[0],
                     self.slot(),
-                    res[i].clone(),
+                    res.clone(),
                 );
             }
         }
@@ -868,9 +877,9 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        results: Vec<Result<()>>,
+        results: Vec<TransactionProcessResult>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<TransactionLoadResult>> {
+    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
@@ -907,19 +916,23 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<TransactionProcessResult> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
-                if lock_res.is_ok()
-                    && !hash_queue.check_hash_age(&tx.message().recent_blockhash, max_age)
-                {
-                    error_counters.reserve_blockhash += 1;
-                    Err(TransactionError::BlockhashNotFound)
-                } else {
-                    lock_res
+            .map(|(tx, lock_res)| match lock_res {
+                Ok(()) => {
+                    let message = tx.message();
+                    if hash_queue.check_hash_age(&message.recent_blockhash, max_age) {
+                        (Ok(()), Some(HashAgeKind::Extant))
+                    } else if self.check_tx_durable_nonce(&tx) {
+                        (Ok(()), Some(HashAgeKind::DurableNonce))
+                    } else {
+                        error_counters.reserve_blockhash += 1;
+                        (Err(TransactionError::BlockhashNotFound), None)
+                    }
                 }
+                Err(e) => (Err(e), None),
             })
             .collect()
     }
@@ -927,9 +940,9 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<TransactionProcessResult>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<TransactionProcessResult> {
         let rcache = self.src.status_cache.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
@@ -937,20 +950,25 @@ impl Bank {
                 if tx.signatures.is_empty() {
                     return lock_res;
                 }
-                if lock_res.is_ok()
-                    && rcache
-                        .get_signature_status(
-                            &tx.signatures[0],
-                            &tx.message().recent_blockhash,
-                            &self.ancestors,
-                        )
-                        .is_some()
                 {
-                    error_counters.duplicate_signature += 1;
-                    Err(TransactionError::DuplicateSignature)
-                } else {
-                    lock_res
+                    let (lock_res, hash_age_kind) = &lock_res;
+                    if lock_res.is_ok()
+                        && rcache
+                            .get_signature_status(
+                                &tx.signatures[0],
+                                &tx.message().recent_blockhash,
+                                &self.ancestors,
+                            )
+                            .is_some()
+                    {
+                        error_counters.duplicate_signature += 1;
+                        return (
+                            Err(TransactionError::DuplicateSignature),
+                            hash_age_kind.clone(),
+                        );
+                    }
                 }
+                lock_res
             })
             .collect()
     }
@@ -962,6 +980,18 @@ impl Bank {
             .check_hash_age(hash, max_age)
     }
 
+    pub fn check_tx_durable_nonce(&self, tx: &Transaction) -> bool {
+        nonce_utils::transaction_uses_durable_nonce(&tx)
+            .and_then(|nonce_ix| nonce_utils::get_nonce_pubkey_from_instruction(&nonce_ix, &tx))
+            .and_then(|nonce_pubkey| self.get_account(&nonce_pubkey))
+            .map_or_else(
+                || false,
+                |nonce_account| {
+                    nonce_utils::verify_nonce(&nonce_account, &tx.message().recent_blockhash)
+                },
+            )
+    }
+
     pub fn check_transactions(
         &self,
         txs: &[Transaction],
@@ -969,7 +999,7 @@ impl Bank {
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<TransactionProcessResult> {
         let refs_results = self.check_refs(txs, iteration_order, lock_results, &mut error_counters);
         let age_results = self.check_age(
             txs,
@@ -1032,8 +1062,8 @@ impl Bank {
         batch: &TransactionBatch,
         max_age: usize,
     ) -> (
-        Vec<Result<TransactionLoadResult>>,
-        Vec<Result<()>>,
+        Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)>,
+        Vec<TransactionProcessResult>,
         Vec<usize>,
         u64,
         u64,
@@ -1071,15 +1101,18 @@ impl Bank {
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
-        let executed: Vec<Result<()>> = loaded_accounts
+        let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
             .map(|(accs, tx)| match accs {
-                Err(e) => Err(e.clone()),
-                Ok((accounts, loaders, _rents)) => {
+                (Err(e), hash_age_kind) => (Err(e.clone()), hash_age_kind.clone()),
+                (Ok((accounts, loaders, _rents)), hash_age_kind) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
-                    self.message_processor
-                        .process_message(tx.message(), loaders, accounts)
+                    (
+                        self.message_processor
+                            .process_message(tx.message(), loaders, accounts),
+                        hash_age_kind.clone(),
+                    )
                 }
             })
             .collect();
@@ -1094,7 +1127,7 @@ impl Bank {
         );
         let mut tx_count: u64 = 0;
         let mut err_count = 0;
-        for (r, tx) in executed.iter().zip(txs.iter()) {
+        for ((r, _hash_age_kind), tx) in executed.iter().zip(txs.iter()) {
             if r.is_ok() {
                 tx_count += 1;
             } else {
@@ -1127,17 +1160,22 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        executed: &[Result<()>],
+        executed: &[TransactionProcessResult],
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
-            .map(|(tx, res)| {
-                let fee_calculator = hash_queue
-                    .get_fee_calculator(&tx.message().recent_blockhash)
-                    .ok_or(TransactionError::BlockhashNotFound)?;
-                let fee = fee_calculator.calculate_fee(tx.message());
+            .map(|(tx, (res, hash_age_kind))| {
+                let fee_hash = if let Some(HashAgeKind::DurableNonce) = hash_age_kind {
+                    self.last_blockhash()
+                } else {
+                    tx.message().recent_blockhash
+                };
+                let fee = hash_queue
+                    .get_fee_calculator(&fee_hash)
+                    .ok_or(TransactionError::BlockhashNotFound)?
+                    .calculate_fee(tx.message());
 
                 let message = tx.message();
                 match *res {
@@ -1166,8 +1204,8 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        loaded_accounts: &mut [Result<TransactionLoadResult>],
-        executed: &[Result<()>],
+        loaded_accounts: &mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
+        executed: &[TransactionProcessResult],
         tx_count: u64,
         signature_count: u64,
     ) -> TransactionResults {
@@ -1182,7 +1220,10 @@ impl Bank {
         inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
-        if executed.iter().any(|res| Self::can_commit(res)) {
+        if executed
+            .iter()
+            .any(|(res, _hash_age_kind)| Self::can_commit(res))
+        {
             self.is_delta.store(true, Ordering::Relaxed);
         }
 
@@ -1256,10 +1297,15 @@ impl Bank {
         self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
     }
 
-    fn collect_rent(&self, res: &[Result<()>], loaded_accounts: &[Result<TransactionLoadResult>]) {
+    fn collect_rent(
+        &self,
+        res: &[TransactionProcessResult],
+        loaded_accounts: &[(Result<TransactionLoadResult>, Option<HashAgeKind>)],
+    ) {
         let mut collected_rent: u64 = 0;
-        for (i, raccs) in loaded_accounts.iter().enumerate() {
-            if res[i].is_err() || raccs.is_err() {
+        for (i, (raccs, _hash_age_kind)) in loaded_accounts.iter().enumerate() {
+            let (res, _hash_age_kind) = &res[i];
+            if res.is_err() || raccs.is_err() {
                 continue;
             }
 
@@ -1543,15 +1589,16 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        res: &[Result<()>],
-        loaded: &[Result<TransactionLoadResult>],
+        res: &[TransactionProcessResult],
+        loaded: &[(Result<TransactionLoadResult>, Option<HashAgeKind>)],
     ) {
-        for (i, (raccs, tx)) in loaded
+        for (i, ((raccs, _load_hash_age_kind), tx)) in loaded
             .iter()
             .zip(OrderedIterator::new(txs, iteration_order))
             .enumerate()
         {
-            if res[i].is_err() || raccs.is_err() {
+            let (res, _res_hash_age_kind) = &res[i];
+            if res.is_err() || raccs.is_err() {
                 continue;
             }
 
@@ -1706,11 +1753,13 @@ mod tests {
     use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
         account::KeyedAccount,
+        account_utils::State,
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::create_genesis_config,
         instruction::{Instruction, InstructionError},
         message::{Message, MessageHeader},
+        nonce_instruction, nonce_state,
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, KeypairUtil},
@@ -2943,11 +2992,14 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &key.pubkey(), 5, genesis_config.hash());
 
         let results = vec![
-            Ok(()),
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::new_result_with_negative_lamports(),
-            )),
+            (Ok(()), Some(HashAgeKind::Extant)),
+            (
+                Err(TransactionError::InstructionError(
+                    1,
+                    InstructionError::new_result_with_negative_lamports(),
+                )),
+                Some(HashAgeKind::Extant),
+            ),
         ];
         let initial_balance = bank.get_balance(&leader);
 
@@ -4232,5 +4284,268 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn get_nonce(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
+        bank.get_account(&nonce_pubkey)
+            .and_then(|acc| match acc.state() {
+                Ok(nonce_state::NonceState::Initialized(_meta, hash)) => Some(hash),
+                _ => None,
+            })
+    }
+
+    fn nonce_setup(
+        bank: &mut Arc<Bank>,
+        mint_keypair: &Keypair,
+        custodian_lamports: u64,
+        nonce_lamports: u64,
+    ) -> Result<(Keypair, Keypair)> {
+        let custodian_keypair = Keypair::new();
+        let nonce_keypair = Keypair::new();
+        /* Setup accounts */
+        let mut setup_ixs = vec![system_instruction::transfer(
+            &mint_keypair.pubkey(),
+            &custodian_keypair.pubkey(),
+            custodian_lamports,
+        )];
+        setup_ixs.extend_from_slice(&nonce_instruction::create_nonce_account(
+            &custodian_keypair.pubkey(),
+            &nonce_keypair.pubkey(),
+            nonce_lamports,
+        ));
+        let setup_tx = Transaction::new_signed_instructions(
+            &[mint_keypair, &custodian_keypair, &nonce_keypair],
+            setup_ixs,
+            bank.last_blockhash(),
+        );
+        bank.process_transaction(&setup_tx)?;
+        Ok((custodian_keypair, nonce_keypair))
+    }
+
+    fn setup_nonce_with_bank<F>(
+        supply_lamports: u64,
+        mut genesis_cfg_fn: F,
+        custodian_lamports: u64,
+        nonce_lamports: u64,
+    ) -> Result<(Arc<Bank>, Keypair, Keypair, Keypair)>
+    where
+        F: FnMut(&mut GenesisConfig),
+    {
+        let (mut genesis_config, mint_keypair) = create_genesis_config(supply_lamports);
+        genesis_cfg_fn(&mut genesis_config);
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+
+        let (custodian_keypair, nonce_keypair) =
+            nonce_setup(&mut bank, &mint_keypair, custodian_lamports, nonce_lamports)?;
+        Ok((bank, mint_keypair, custodian_keypair, nonce_keypair))
+    }
+
+    #[test]
+    fn test_check_tx_durable_nonce_ok() {
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+
+        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let tx = Transaction::new_signed_with_payer(
+            vec![
+                nonce_instruction::nonce(&nonce_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            nonce_hash,
+        );
+        assert!(bank.check_tx_durable_nonce(&tx));
+    }
+
+    #[test]
+    fn test_check_tx_durable_nonce_not_durable_nonce_fail() {
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+
+        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let tx = Transaction::new_signed_with_payer(
+            vec![
+                system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
+                nonce_instruction::nonce(&nonce_pubkey),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            nonce_hash,
+        );
+        assert!(!bank.check_tx_durable_nonce(&tx));
+    }
+
+    #[test]
+    fn test_check_tx_durable_nonce_missing_ix_pubkey_fail() {
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+
+        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let mut tx = Transaction::new_signed_with_payer(
+            vec![
+                nonce_instruction::nonce(&nonce_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            nonce_hash,
+        );
+        tx.message.instructions[0].accounts.clear();
+        assert!(!bank.check_tx_durable_nonce(&tx));
+    }
+
+    #[test]
+    fn test_check_tx_durable_nonce_nonce_acc_does_not_exist_fail() {
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+        let missing_keypair = Keypair::new();
+        let missing_pubkey = missing_keypair.pubkey();
+
+        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let tx = Transaction::new_signed_with_payer(
+            vec![
+                nonce_instruction::nonce(&missing_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &missing_keypair],
+            nonce_hash,
+        );
+        assert!(!bank.check_tx_durable_nonce(&tx));
+    }
+
+    #[test]
+    fn test_check_tx_durable_nonce_bad_tx_hash_fail() {
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+
+        let tx = Transaction::new_signed_with_payer(
+            vec![
+                nonce_instruction::nonce(&nonce_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            Hash::default(),
+        );
+        assert!(!bank.check_tx_durable_nonce(&tx));
+    }
+
+    #[test]
+    fn test_durable_nonce_transaction() {
+        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+            10_000_000,
+            |gc| {
+                gc.rent.lamports_per_byte_year;
+            },
+            5_000_000,
+            250_000,
+        )
+        .unwrap();
+        let alice_keypair = Keypair::new();
+        let alice_pubkey = alice_keypair.pubkey();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+
+        assert_eq!(bank.get_balance(&custodian_pubkey), 4_750_000);
+        assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
+
+        /* Grab the hash stored in the nonce account */
+        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+
+        /* Kick nonce hash off the blockhash_queue */
+        for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
+        /* Expect a non-Durable Nonce transfer to fail */
+        assert_eq!(
+            bank.process_transaction(&system_transaction::transfer(
+                &custodian_keypair,
+                &alice_pubkey,
+                100_000,
+                nonce_hash
+            ),),
+            Err(TransactionError::BlockhashNotFound),
+        );
+        /* Check fee not charged */
+        assert_eq!(bank.get_balance(&custodian_pubkey), 4_750_000);
+
+        /* Durable Nonce transfer */
+        let durable_tx = Transaction::new_signed_with_payer(
+            vec![
+                nonce_instruction::nonce(&nonce_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            nonce_hash,
+        );
+        assert_eq!(bank.process_transaction(&durable_tx), Ok(()));
+
+        /* Check balances */
+        assert_eq!(bank.get_balance(&custodian_pubkey), 4_640_000);
+        assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
+        assert_eq!(bank.get_balance(&alice_pubkey), 100_000);
+
+        /* Confirm stored nonce has advanced */
+        let new_nonce = get_nonce(&bank, &nonce_pubkey).unwrap();
+        assert_ne!(nonce_hash, new_nonce);
+
+        /* Durable Nonce re-use fails */
+        let durable_tx = Transaction::new_signed_with_payer(
+            vec![
+                nonce_instruction::nonce(&nonce_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            nonce_hash,
+        );
+        assert_eq!(
+            bank.process_transaction(&durable_tx),
+            Err(TransactionError::BlockhashNotFound)
+        );
+        /* Check fee not charged */
+        assert_eq!(bank.get_balance(&custodian_pubkey), 4_640_000);
+
+        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+
+        /* Kick nonce hash off the blockhash_queue */
+        for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
+        let durable_tx = Transaction::new_signed_with_payer(
+            vec![
+                nonce_instruction::nonce(&nonce_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000_000),
+            ],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            nonce_hash,
+        );
+        assert_eq!(
+            bank.process_transaction(&durable_tx),
+            Err(TransactionError::InstructionError(
+                1,
+                system_instruction::SystemError::ResultWithNegativeLamports.into()
+            ))
+        );
+        /* Check fee charged */
+        assert_eq!(bank.get_balance(&custodian_pubkey), 4_630_000);
     }
 }
