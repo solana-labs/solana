@@ -71,15 +71,7 @@ pub fn create_nonce_account(
             NonceState::size() as u64,
             &id(),
         ),
-        Instruction::new(
-            id(),
-            &NonceInstruction::Nonce,
-            vec![
-                AccountMeta::new(*nonce_pubkey, true),
-                AccountMeta::new_readonly(recent_blockhashes::id(), false),
-                AccountMeta::new_readonly(rent::id(), false),
-            ],
-        ),
+        nonce(nonce_pubkey),
     ]
 }
 
