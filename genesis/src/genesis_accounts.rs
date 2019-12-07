@@ -437,9 +437,40 @@ const UNLOCKS_BY_TENTHS_FOR_60_MONTHS: UnlockInfo = UnlockInfo {
 
 pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
-        name: "deserted window",
-        staker: "XTeBBZextvHkoRqDF8yb4hihjcraKQDwTEXhzjd8fip",
-        sol: 3_655_292.0,
+        name: "impossible pizza",
+        staker: "CDtJpwRSiPRDGeKrvymWQKM7JY9M3hU7iimEKBDxZyoP",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "wretched texture",
+        staker: "HbENu65qjWLEB5TrMouSSWLq9mbtGx2bvfhPjk2FpYek",
+        sol: 225_000.0,
+    },
+    StakerInfo {
+        name: "nutritious examination",
+        staker: "C9CfFpmLDsQsz6wt7MrrZquNB5oS4QkpJkmDAiboVEZZ",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "tidy impression",
+        staker: "6ne6Rbag4FAnop1KNgVdM1SEHnJEysHSWyqvRpFrzaig",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "unbecoming silver",
+        // TODO: staker: "42yapY7Vrs5jqht9TCKsPoyb4vDFYcPfRkqAP85NSAQ", WrongSize
+        staker: "GS7RFm4nrxzYGcPTmu1otzHzZbURWDKuxo2L4AQDvTg2",
+        sol: 28_800.0,
+    },
+    StakerInfo {
+        name: "dramatic treatment",
+        staker: "GTyawCMwt3kMb51AgDtfdp97mDot7jNwc8ifuS9qqANg",
+        sol: 1_205_602.0,
+    },
+    StakerInfo {
+        name: "angry noise",
+        staker: "Fqxs9MhqjKuMq6YwjBG4ktEapuZQ3kj19mpuHLZKtkg9",
+        sol: 5_000_000.0,
     },
     StakerInfo {
         name: "hard cousin",
@@ -447,9 +478,69 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
         sol: 5_000_000.0,
     },
     StakerInfo {
-        name: "service distributions",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 64_353_800.0 - 5_000_000.0 - 3_655_292.0,
+        name: "inexpensive uncle",
+        staker: "E4DLNkmdL34ejA48ApfPDoFVuD9XWAFqi8bXzBGRhKst",
+        sol: 300_000.0,
+    },
+    StakerInfo {
+        name: "lopsided skill",
+        staker: "8cV7zCTF5UMrZakZXiL2Jw5uY3ms2Wz4twzFXEY9Kge2",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "red snake",
+        staker: "JBGnGdLyo7V2z9hz51mnnbyDp9sBACtw5WYH9YRG8n7e",
+        sol: 3_655_292.0,
+    },
+    StakerInfo {
+        name: "hellish money",
+        staker: "CqKdQ57mBj2mKcAbpjWc28Ls7yXzBXboxSTCRWocmUVj",
+        sol: 200_000.0,
+    },
+    StakerInfo {
+        name: "full grape",
+        staker: "2SCJKvh7wWo32PtfUZdVZQ84WnMWoUpF4WTm6ZxcCJ15",
+        sol: 450_000.0,
+    },
+    StakerInfo {
+        name: "nice ghost",
+        staker: "FeumxB3gfzrVQzABBiha8AacKPY3Rf4BTFSh2aZWHqR8",
+        sol: 650_000.0,
+    },
+    StakerInfo {
+        name: "jolly year",
+        staker: "HBwFWNGPVZgkf3yqUKxuAds5aANGWX62LzUFvZVCWLdJ",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "typical initiative",
+        staker: "3JMz3kaDUZEVK2JVjRqwERGMp7LbWbgUjAFBb42qxoHb",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "deserted window",
+        staker: "XTeBBZextvHkoRqDF8yb4hihjcraKQDwTEXhzjd8fip",
+        sol: 3_655_292.0,
+    },
+    StakerInfo {
+        name: "eight nation",
+        staker: "E5bSU5ywqPiz3ije89ef5gaEC7jy81BAc72Zeb9MqeHY",
+        sol: 103_519.0,
+    },
+    StakerInfo {
+        name: "earsplitting meaning",
+        staker: "4ZemkSoE75RFE1SVLnnmHcaNWT4qN8KFrKP2wAYfv8CB",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "alike cheese",
+        staker: "72BGEwYee5txFonmpEarTEKCZVN2UxcSUgdphdhcx3V",
+        sol: 3_880_295.0,
+    },
+    StakerInfo {
+        name: "noisy honey",
+        staker: "DRp1Scyn4yJZQfMAdQew2x8RtvRmsNELN37JTK5Xvzgn",
+        sol: 5_000_000.0,
     },
 ];
 
