@@ -333,14 +333,19 @@ pub fn process_show_nonce_account(
     }
     match nonce_account.state() {
         Ok(NonceState::Uninitialized) => Ok("Nonce account is uninitialized".to_string()),
-        Ok(NonceState::Initialized(meta, hash)) => {
+        Ok(NonceState::Initialized(_, hash)) => {
             println!(
                 "balance: {}",
                 build_balance_message(nonce_account.lamports, use_lamports_unit, true)
             );
             println!(
                 "minimum balance required: {}",
-                build_balance_message(meta.rent_exempt_lamports(), use_lamports_unit, true)
+                build_balance_message(
+                    rpc_client
+                        .get_minimum_balance_for_rent_exemption(std::mem::size_of::<NonceState>())?,
+                    use_lamports_unit,
+                    true
+                )
             );
             println!("nonce: {}", hash);
             Ok(format!("nonce: {}", hash))
