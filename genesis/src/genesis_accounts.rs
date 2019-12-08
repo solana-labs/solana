@@ -542,6 +542,13 @@ pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[
         commission: 0,
     },
     ValidatorInfo {
+        name: "Forbole",
+        node: "Fe5sLQAAT7RBT8mcH1AAGCbExJQcYxcwXvp1GjrGbvxs",
+        vote: "Dr8MkZZuvZVQJFKtjShZYEfg6n93sc1GxevqLnGss7FW",
+        node_sol: 500.0,
+        commission: 0,
+    },
+    ValidatorInfo {
         name: "P2P.ORG - Secure Non-custodial Staking",
         node: "44e8VyWoyZSE2oYHxMHMedAiHkGJqJgPd3tdt6iKoAFL",
         vote: "BwwpzEpo1wzgV9N1987ntgNG6jLt3C9532C68pswT7Gp",
