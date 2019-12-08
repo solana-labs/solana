@@ -3,7 +3,10 @@ use crate::{
     unlocks::UnlockInfo,
     validators::{create_and_add_validator, ValidatorInfo},
 };
-use solana_sdk::{genesis_config::GenesisConfig, native_token::sol_to_lamports};
+use solana_sdk::{
+    genesis_config::GenesisConfig,
+    native_token::{lamports_to_sol, sol_to_lamports},
+};
 
 // 30 month schedule is 1/5th every 6 months for 30 months
 const UNLOCKS_BY_FIFTHS_FOR_30_MONTHS: UnlockInfo = UnlockInfo {
@@ -11,7 +14,7 @@ const UNLOCKS_BY_FIFTHS_FOR_30_MONTHS: UnlockInfo = UnlockInfo {
     cliff_years: 0.5,
     unlocks: 4,
     unlock_years: 0.5,
-    custodian: "11111111111111111111111111111111",
+    custodian: "6LnFgiECFQKUcxNYDvUBMxgjeGQzzy4kgxGhantoxfUe",
 };
 // 60 month schedule is 1/10th every 6 months for 60 months
 //const UNLOCKS_BY_TENTHS_FOR_60_MONTHS: UnlockInfo = UnlockInfo {
@@ -155,11 +158,6 @@ pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
         name: "cluttered complaint",
         staker: "4h1rt2ic4AXwG7p3Qqhw57EMDD4c3tLYb5J3QstGA2p5",
         sol: 153_333_633.41,
-    },
-    StakerInfo {
-        name: "one thanks",
-        staker: "3b7akieYUyCgz3Cwt5sTSErMWjg8NEygD6mbGjhGkduB",
-        sol: 178_699_925.59,
     },
     StakerInfo {
         name: "lyrical supermarket",
@@ -386,8 +384,11 @@ fn add_spare_validators(genesis_config: &mut GenesisConfig) -> u64 {
         .sum::<u64>()
 }
 
-pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
-    add_stakes(
+pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lamports: u64) {
+    // add_stakes() and add_validators() award tokens for rent exemption and
+    //  to cover an initial transfer-free period of the network
+
+    issued_lamports += add_stakes(
         genesis_config,
         &BATCH_FOUR_STAKER_INFOS,
         &UNLOCKS_BY_FIFTHS_FOR_30_MONTHS,
@@ -398,7 +399,19 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
         &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
         sol_to_lamports(1_000_000.0),
     ) + add_validators(genesis_config, &VALIDATOR_INFOS)
-        + add_spare_validators(genesis_config)
+        + add_spare_validators(genesis_config);
+
+    // "one thanks" gets 500_000_000SOL (total) - above distributions
+    create_and_add_stakes(
+        genesis_config,
+        &StakerInfo {
+            name: "one thanks",
+            staker: "3b7akieYUyCgz3Cwt5sTSErMWjg8NEygD6mbGjhGkduB",
+            sol: 500_000_000.0 - lamports_to_sol(issued_lamports),
+        },
+        &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
+        sol_to_lamports(1_000_000.0),
+    );
 }
 
 #[cfg(test)]
@@ -409,24 +422,14 @@ mod tests {
     fn test_add_genesis_accounts() {
         let mut genesis_config = GenesisConfig::default();
 
-        let bootstrap_lamports = genesis_config
-            .accounts
-            .iter()
-            .map(|(_, account)| account.lamports)
-            .sum::<u64>();
-
-        let issued_lamports = add_genesis_accounts(&mut genesis_config);
+        add_genesis_accounts(&mut genesis_config, 0);
 
         let lamports = genesis_config
             .accounts
             .iter()
             .map(|(_, account)| account.lamports)
             .sum::<u64>();
-
-        assert_eq!(issued_lamports, lamports);
-        let num_spare_validators = 42;
-        let rent_fees = 2 * (VALIDATOR_INFOS.len() + num_spare_validators) as u64; // TODO: Need a place to pay rent from.
-        let expected_lamports = 500_000_000_000_000_000 - bootstrap_lamports + rent_fees;
-        assert_eq!(lamports, expected_lamports);
+        // tolerate rounding errors, less than one part in 10M
+        assert!((500_000_000.0 - lamports_to_sol(lamports)).abs() < lamports_to_sol(100));
     }
 }
