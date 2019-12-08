@@ -45,8 +45,8 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
-use solana_vote_program::vote_state::VoteState;
 use solana_stake_program::stake_state::Delegation;
+use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::HashMap,
     io::{BufReader, Cursor, Error as IOError, Read},
