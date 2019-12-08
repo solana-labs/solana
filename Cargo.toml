@@ -32,6 +32,7 @@ members = [
     "programs/exchange",
     "programs/failure",
     "programs/noop",
+    "programs/evm_loader",
     "programs/ownable",
     "programs/stake",
     "programs/storage",

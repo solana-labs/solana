@@ -1,0 +1,21 @@
+[package]
+name = "solana-evm-loader-program"
+version = "0.1.0"
+description = "Solana EVM loader"
+authors = ["Wei Tang <hi@that.world>", "Solana Maintainers <maintainers@solana.com>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+edition = "2018"
+
+[dependencies]
+log = "0.4.8"
+solana-logger = { path = "../../logger", version = "0.22.0" }
+solana-sdk = { path = "../../sdk", version = "0.22.0" }
+evm = { version = "0.14", features = ["with-serde"] }
+bincode = "1.2.0"
+primitive-types = "0.6"
+
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "solana_evm_loader_program"
