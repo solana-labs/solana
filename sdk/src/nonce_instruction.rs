@@ -41,7 +41,6 @@ pub enum NonceInstruction {
     /// Expects 3 Accounts:
     ///     0 - A NonceAccount
     ///     1 - RecentBlockhashes sysvar
-    ///     2 - Rent sysvar
     ///
     Nonce,
 
@@ -103,7 +102,6 @@ pub fn nonce(nonce_pubkey: &Pubkey) -> Instruction {
         vec![
             AccountMeta::new(*nonce_pubkey, true),
             AccountMeta::new_readonly(recent_blockhashes::id(), false),
-            AccountMeta::new_readonly(rent::id(), false),
         ],
     )
 }
