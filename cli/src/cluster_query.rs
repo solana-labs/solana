@@ -591,7 +591,7 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
     println!(
         "{}",
         style(format!(
-            "  {:<44}  {:<44}  {:<11}  {:>10}  {:>11}  {}",
+            "  {:<44}  {:<44}  {}  {}  {}  {}",
             "Identity Pubkey",
             "Vote Account Pubkey",
             "Commission",
@@ -616,7 +616,7 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
             }
         }
         println!(
-            "{} {:<44}  {:<44}  {:>3}%  {:>10}  {:>11}  {:>11}",
+            "{} {:<44}  {:<44}  {:>9}%   {:>8}  {:>10}  {:>12}",
             if delinquent {
                 WARNING.to_string()
             } else {
