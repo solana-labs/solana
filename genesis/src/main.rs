@@ -317,7 +317,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .get_matches();
 
-    let faucet_lamports = value_t!(matches, "faucet_lamports", u64);
+    let faucet_lamports = value_t!(matches, "faucet_lamports", u64).unwrap_or(0);
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
     let bootstrap_leader_stake_lamports =
@@ -438,7 +438,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     if let Some(faucet_pubkey) = faucet_pubkey {
         genesis_config.add_account(
             faucet_pubkey,
-            Account::new(faucet_lamports.unwrap(), 0, &system_program::id()),
+            Account::new(faucet_lamports, 0, &system_program::id()),
         );
     }
 
@@ -458,7 +458,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .map(|(_key, account)| account.lamports)
         .sum::<u64>();
 
-    add_genesis_accounts(&mut genesis_config, issued_lamports);
+    add_genesis_accounts(&mut genesis_config, issued_lamports - faucet_lamports);
 
     create_new_ledger(&ledger_path, &genesis_config)?;
 
