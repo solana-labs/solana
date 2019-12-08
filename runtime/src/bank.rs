@@ -46,6 +46,7 @@ use solana_sdk::{
     transaction::{Result, Transaction, TransactionError},
 };
 use solana_vote_program::vote_state::VoteState;
+use solana_stake_program::stake_state::Delegation;
 use std::{
     collections::HashMap,
     io::{BufReader, Cursor, Error as IOError, Read},
@@ -1628,6 +1629,11 @@ impl Bank {
 
     pub fn storage_accounts(&self) -> StorageAccounts {
         self.storage_accounts.read().unwrap().clone()
+    }
+
+    /// current stake delegations for this bank
+    pub fn stake_delegations(&self) -> HashMap<Pubkey, Delegation> {
+        self.stakes.read().unwrap().stake_delegations().clone()
     }
 
     /// current vote accounts for this bank along with the stake
