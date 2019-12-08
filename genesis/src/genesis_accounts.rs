@@ -275,7 +275,6 @@ fn add_validators(genesis_config: &mut GenesisConfig, validator_infos: &[Validat
         .sum::<u64>()
 }
 
-<<<<<<< HEAD
 fn add_spare_validators(genesis_config: &mut GenesisConfig) -> u64 {
     let node_pubkeys = [
         "id2GQ6YwsjTCCHJ9pJaffC3MEezPscNLjPdGPSfaN46",
@@ -385,15 +384,11 @@ fn add_spare_validators(genesis_config: &mut GenesisConfig) -> u64 {
         .sum::<u64>()
 }
 
-pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
-    add_stakes(
-=======
 pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lamports: u64) {
     // add_stakes() and add_validators() award tokens for rent exemption and
     //  to cover an initial transfer-free period of the network
 
     issued_lamports += add_stakes(
->>>>>>> 0d6fca5ab... 500M SOL (#7361)
         genesis_config,
         &BATCH_FOUR_STAKER_INFOS,
         &UNLOCKS_BY_FIFTHS_FOR_30_MONTHS,
@@ -403,11 +398,8 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
         &POOL_STAKER_INFOS,
         &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
         sol_to_lamports(1_000_000.0),
-<<<<<<< HEAD
     ) + add_validators(genesis_config, &VALIDATOR_INFOS)
-        + add_spare_validators(genesis_config)
-=======
-    ) + add_validators(genesis_config, &VALIDATOR_INFOS);
+        + add_spare_validators(genesis_config);
 
     // "one thanks" gets 500_000_000SOL (total) - above distributions
     create_and_add_stakes(
@@ -420,7 +412,6 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
         &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
         sol_to_lamports(1_000_000.0),
     );
->>>>>>> 0d6fca5ab... 500M SOL (#7361)
 }
 
 #[cfg(test)]
@@ -438,15 +429,7 @@ mod tests {
             .iter()
             .map(|(_, account)| account.lamports)
             .sum::<u64>();
-
-<<<<<<< HEAD
-        assert_eq!(issued_lamports, lamports);
-        let num_spare_validators = 42;
-        let rent_fees = 2 * (VALIDATOR_INFOS.len() + num_spare_validators) as u64; // TODO: Need a place to pay rent from.
-        let expected_lamports = 500_000_000_000_000_000 - bootstrap_lamports + rent_fees;
-        assert_eq!(lamports, expected_lamports);
-=======
-        assert_eq!(500_000_000.0, lamports_to_sol(lamports));
->>>>>>> 0d6fca5ab... 500M SOL (#7361)
+        // tolerate rounding errors, less than one part in 10M
+        assert!((500_000_000.0 - lamports_to_sol(lamports)).abs() < lamports_to_sol(100));
     }
 }
