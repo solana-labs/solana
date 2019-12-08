@@ -44,11 +44,7 @@ members = [
     "runtime",
     "sdk",
     "sdk-c",
-<<<<<<< HEAD
-=======
     "scripts",
-    "sys-tuner",
->>>>>>> 62810d769... Account for all tokens at genesis (#7350)
     "upload-perf",
     "net-utils",
     "fixed-buf",
