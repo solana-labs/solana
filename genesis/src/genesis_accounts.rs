@@ -23,427 +23,111 @@ const UNLOCKS_BY_TENTHS_FOR_60_MONTHS: UnlockInfo = UnlockInfo {
     custodian: "11111111111111111111111111111111",
 };
 
-// 1st batch
-const BATCH_ONE_STAKER_INFOS: &[StakerInfo] = &[
+pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
-        name: "diligent bridge",
-        staker: "BwwM47pLHwUgjJXKQKVNiRfGhtPNWfNLH27na2HJQHhd",
-        sol: 6_250_000.0,
-    },
-    StakerInfo {
-        name: "four wish",
-        staker: "8A6ZEEW2odkqXNjTWHNG6tUk7uj6zCzHueTyEr9pM1tH",
-        sol: 10_000_000.0,
-    },
-    StakerInfo {
-        name: "simple friends",
-        staker: "D89HyaBmr2WmrTehsfkQrY23wCXcDfsFnN9gMfUXHaDd",
-        sol: 1_250_000.0,
-    },
-    StakerInfo {
-        name: "noxious leather",
-        staker: "FwPvDpvUmnco1CSfwXQDTbUbuhG5eP7h2vgCKYKVL7at",
-        sol: 6_250_000.0,
-    },
-    StakerInfo {
-        name: "worthless direction",
-        staker: "4K16iBoC9kAQRT8pUEKeD2h9WEx1zsRgEmJFssXcXmqq",
-        sol: 12_500_000.0,
-    },
-    StakerInfo {
-        name: "historical company",
-        staker: "rmLpENW4V6QNeEhdJJVxo9Xt99oKgNUFZS4Y4375amW",
-        sol: 322_850.0,
-    },
-    StakerInfo {
-        name: "callous money",
-        staker: "5kAztE3XtrpeyGZZxckSUt3ZWojNTmph1QSC9S2682z4",
-        sol: 5_927_155.25,
-    },
-    StakerInfo {
-        name: "outstanding jump",
-        staker: "H6HMVuDR8XCw3EuhLvFG4EciVvGo76Agq1kSBL2ozoDs",
-        sol: 625_000.0,
-    },
-    StakerInfo {
-        name: "feeble toes",
-        staker: "3sfv8tk5ZSDBWbTkFkvFxCvJUyW5yDJUu6VMJcUARQWq",
-        sol: 750_000.0,
-    },
-    StakerInfo {
-        name: "disillusioned deer",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_250_000.0,
-    },
-    StakerInfo {
-        name: "unwritten songs",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_250_000.0,
-    },
-    StakerInfo {
-        name: "overt dime",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 500_000.0,
-    },
-    StakerInfo {
-        name: "slow committee",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 625_000.0,
-    },
-    StakerInfo {
-        name: "curvy twig",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 625_000.0,
-    },
-    StakerInfo {
-        name: "gamy scissors",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 250_000.0,
-    },
-    StakerInfo {
-        name: "mushy key",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_250_000.0,
-    },
-    StakerInfo {
-        name: "marked silver",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 250_000.0,
-    },
-    StakerInfo {
-        name: "free sock",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 625_000.0,
-    },
-    StakerInfo {
-        name: "tremendous meeting",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_250_000.0,
-    },
-    StakerInfo {
-        name: "panoramic cloth",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 625_000.0,
-    },
-    StakerInfo {
-        name: "normal kick",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 2_500_000.0,
-    },
-    StakerInfo {
-        name: "unbecoming observation",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 250_000.0,
-    },
-    StakerInfo {
-        name: "cut beginner",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 250_000.0,
-    },
-    StakerInfo {
-        name: "alcoholic button",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 625_000.0,
-    },
-    StakerInfo {
-        name: "old-fashioned clover",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 750_000.0,
-    },
-    StakerInfo {
-        name: "expensive underwear",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 2_500_000.0,
-    },
-    StakerInfo {
-        name: "like dust",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
+        name: "impossible pizza",
+        staker: "CDtJpwRSiPRDGeKrvymWQKM7JY9M3hU7iimEKBDxZyoP",
         sol: 5_000_000.0,
     },
     StakerInfo {
-        name: "rapid straw",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 5_850_000.0,
+        name: "wretched texture",
+        staker: "HbENu65qjWLEB5TrMouSSWLq9mbtGx2bvfhPjk2FpYek",
+        sol: 225_000.0,
     },
     StakerInfo {
-        name: "windy trousers",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 2_579_350.0,
+        name: "nutritious examination",
+        staker: "C9CfFpmLDsQsz6wt7MrrZquNB5oS4QkpJkmDAiboVEZZ",
+        sol: 5_000_000.0,
     },
     StakerInfo {
-        name: "dramatic veil",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 3_611_110.50,
+        name: "tidy impression",
+        staker: "6ne6Rbag4FAnop1KNgVdM1SEHnJEysHSWyqvRpFrzaig",
+        sol: 5_000_000.0,
     },
     StakerInfo {
-        name: "incandescent skin",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 3_000_000.0,
+        name: "unbecoming silver",
+        // TODO: staker: "42yapY7Vrs5jqht9TCKsPoyb4vDFYcPfRkqAP85NSAQ", WrongSize
+        staker: "GS7RFm4nrxzYGcPTmu1otzHzZbURWDKuxo2L4AQDvTg2",
+        sol: 28_800.0,
     },
     StakerInfo {
-        name: "spiky love",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 3_250_000.0,
-    },
-];
-
-const BATCH_TWO_STAKER_INFOS: &[StakerInfo] = &[
-    // 2nd batch
-    StakerInfo {
-        name: "macabre note",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_000_000.0,
+        name: "dramatic treatment",
+        staker: "GTyawCMwt3kMb51AgDtfdp97mDot7jNwc8ifuS9qqANg",
+        sol: 1_205_602.0,
     },
     StakerInfo {
-        name: "alcoholic letter",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_000_000.0,
+        name: "angry noise",
+        staker: "Fqxs9MhqjKuMq6YwjBG4ktEapuZQ3kj19mpuHLZKtkg9",
+        sol: 5_000_000.0,
     },
     StakerInfo {
-        name: "heady trucks",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_000_000.0,
+        name: "hard cousin",
+        staker: "9MYDzj7QuAX9QAK7da1GhzPB4gA3qbPNWsW3MMSZobru",
+        sol: 5_000_000.0,
     },
     StakerInfo {
-        name: "ten support",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_000_000.0,
-    },
-    StakerInfo {
-        name: "foregoing middle",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 800_000.0,
-    },
-    StakerInfo {
-        name: "ludicrous destruction",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_000_000.0,
-    },
-    StakerInfo {
-        name: "numberless wheel",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_000_000.0,
-    },
-    StakerInfo {
-        name: "short powder",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_000_000.0,
-    },
-    StakerInfo {
-        name: "cut name",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_000_000.0,
-    },
-    StakerInfo {
-        name: "six fly",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_000_000.0,
-    },
-    StakerInfo {
-        name: "mindless pickle",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 100_000.0,
-    },
-    StakerInfo {
-        name: "marked rabbit",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 38_741.36,
-    },
-    StakerInfo {
-        name: "jagged doctor",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 711_258.64,
-    },
-    StakerInfo {
-        name: "truthful pollution",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_587_300.0,
-    },
-    StakerInfo {
-        name: "unkempt activity",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 2_222_220.0,
-    },
-    StakerInfo {
-        name: "ritzy view",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 40_000.0,
-    },
-    StakerInfo {
-        name: "remarkable plant",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
+        name: "inexpensive uncle",
+        staker: "E4DLNkmdL34ejA48ApfPDoFVuD9XWAFqi8bXzBGRhKst",
         sol: 300_000.0,
     },
     StakerInfo {
-        name: "busy value",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 100_000.0,
+        name: "lopsided skill",
+        staker: "8cV7zCTF5UMrZakZXiL2Jw5uY3ms2Wz4twzFXEY9Kge2",
+        sol: 5_000_000.0,
     },
     StakerInfo {
-        name: "imperfect slave",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 222_065.84,
+        name: "red snake",
+        staker: "JBGnGdLyo7V2z9hz51mnnbyDp9sBACtw5WYH9YRG8n7e",
+        sol: 3_655_292.0,
     },
     StakerInfo {
-        name: "uneven drawer",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 400_000.0,
+        name: "hellish money",
+        staker: "CqKdQ57mBj2mKcAbpjWc28Ls7yXzBXboxSTCRWocmUVj",
+        sol: 200_000.0,
     },
     StakerInfo {
-        name: "far behavior",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 4_000_000.0,
+        name: "full grape",
+        staker: "2SCJKvh7wWo32PtfUZdVZQ84WnMWoUpF4WTm6ZxcCJ15",
+        sol: 450_000.0,
     },
     StakerInfo {
-        name: "abaft memory",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 400_000.0,
+        name: "nice ghost",
+        staker: "FeumxB3gfzrVQzABBiha8AacKPY3Rf4BTFSh2aZWHqR8",
+        sol: 650_000.0,
     },
     StakerInfo {
-        name: "poor glove",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 2_000_000.0,
+        name: "jolly year",
+        staker: "HBwFWNGPVZgkf3yqUKxuAds5aANGWX62LzUFvZVCWLdJ",
+        sol: 5_000_000.0,
     },
     StakerInfo {
-        name: "strange iron",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 2_000_000.0,
+        name: "typical initiative",
+        staker: "3JMz3kaDUZEVK2JVjRqwERGMp7LbWbgUjAFBb42qxoHb",
+        sol: 5_000_000.0,
     },
-    StakerInfo {
-        name: "nonstop rail",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_000_000.0,
-    },
-    StakerInfo {
-        name: "milky bait",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 400_000.0,
-    },
-    StakerInfo {
-        name: "wandering start",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_200_000.0,
-    },
-];
-
-pub const BATCH_THREE_STAKER_INFOS: &[StakerInfo] = &[
-    // 3rd batch
-    StakerInfo {
-        name: "dusty dress",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_212_121.21,
-    },
-    StakerInfo {
-        name: "godly bed",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 151_515.15,
-    },
-    StakerInfo {
-        name: "innocent property",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 227_272.73,
-    },
-    StakerInfo {
-        name: "responsible bikes",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 3_030_303.03,
-    },
-    StakerInfo {
-        name: "learned market",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 3_030_303.03,
-    },
-    StakerInfo {
-        name: "jumpy school",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 303_030.30,
-    },
-    StakerInfo {
-        name: "sticky houses",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_515_151.52,
-    },
-    StakerInfo {
-        name: "bustling basketball",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 1_515_152.52,
-    },
-    StakerInfo {
-        name: "ordinary dad",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 606_060.61,
-    },
-    StakerInfo {
-        name: "absurd bat",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 90_909.09,
-    },
-    StakerInfo {
-        name: "cloudy ocean",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 67_945.45,
-    },
-    StakerInfo {
-        name: "black-and-white fold",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 757_575.76,
-    },
-    StakerInfo {
-        name: "stale part",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 45_454.55,
-    },
-    StakerInfo {
-        name: "available health",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 2_797_575.76,
-    },
-    StakerInfo {
-        name: "afraid visitor",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 481_818.18,
-    },
-    StakerInfo {
-        name: "arrogant front",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 151_515.15,
-    },
-    StakerInfo {
-        name: "juvenile zinc",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 151_515.15,
-    },
-    StakerInfo {
-        name: "disturbed box",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 303_030.30,
-    },
-    StakerInfo {
-        name: "disagreeable skate",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 454_545.45,
-    },
-    StakerInfo {
-        name: "miscreant sidewalk",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 75_757.58,
-    },
-    StakerInfo {
-        name: "shy play",
-        staker: "P1aceHo1derPubkey11111111111111111111111111",
-        sol: 303_030.30,
-    },
-];
-
-pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "deserted window",
         staker: "XTeBBZextvHkoRqDF8yb4hihjcraKQDwTEXhzjd8fip",
         sol: 3_655_292.0,
     },
     StakerInfo {
-        name: "hard cousin",
-        staker: "9MYDzj7QuAX9QAK7da1GhzPB4gA3qbPNWsW3MMSZobru",
+        name: "eight nation",
+        staker: "E5bSU5ywqPiz3ije89ef5gaEC7jy81BAc72Zeb9MqeHY",
+        sol: 103_519.0,
+    },
+    StakerInfo {
+        name: "earsplitting meaning",
+        staker: "4ZemkSoE75RFE1SVLnnmHcaNWT4qN8KFrKP2wAYfv8CB",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "alike cheese",
+        staker: "72BGEwYee5txFonmpEarTEKCZVN2UxcSUgdphdhcx3V",
+        sol: 3_880_295.0,
+    },
+    StakerInfo {
+        name: "noisy honey",
+        staker: "DRp1Scyn4yJZQfMAdQew2x8RtvRmsNELN37JTK5Xvzgn",
         sol: 5_000_000.0,
     },
 ];
@@ -457,7 +141,7 @@ pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "legal gate",
         staker: "FwMbkDZUb78aiMWhZY4BEroAcqmnrXZV77nwrg71C57d",
-        sol: 21_086_641.0,
+        sol: 16_086_641.0,
     },
     StakerInfo {
         name: "cluttered complaint",
@@ -467,7 +151,7 @@ pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "one thanks",
         staker: "3b7akieYUyCgz3Cwt5sTSErMWjg8NEygD6mbGjhGkduB",
-        sol: 157_613_284.59,
+        sol: 178_699_925.59,
     },
     StakerInfo {
         name: "lyrical supermarket",
@@ -588,21 +272,6 @@ fn add_validators(genesis_config: &mut GenesisConfig, validator_infos: &[Validat
 pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
     add_stakes(
         genesis_config,
-        &BATCH_ONE_STAKER_INFOS,
-        &UNLOCKS_BY_FIFTHS_FOR_30_MONTHS,
-        sol_to_lamports(1_000_000.0),
-    ) + add_stakes(
-        genesis_config,
-        &BATCH_TWO_STAKER_INFOS,
-        &UNLOCKS_BY_FIFTHS_FOR_30_MONTHS,
-        sol_to_lamports(1_000_000.0),
-    ) + add_stakes(
-        genesis_config,
-        &BATCH_THREE_STAKER_INFOS,
-        &UNLOCKS_BY_FIFTHS_FOR_30_MONTHS,
-        sol_to_lamports(1_000_000.0),
-    ) + add_stakes(
-        genesis_config,
         &BATCH_FOUR_STAKER_INFOS,
         &UNLOCKS_BY_FIFTHS_FOR_30_MONTHS,
         sol_to_lamports(1_000_000.0),
@@ -622,6 +291,12 @@ mod tests {
     fn test_add_genesis_accounts() {
         let mut genesis_config = GenesisConfig::default();
 
+        let bootstrap_lamports = genesis_config
+            .accounts
+            .iter()
+            .map(|(_, account)| account.lamports)
+            .sum::<u64>();
+
         let issued_lamports = add_genesis_accounts(&mut genesis_config);
 
         let lamports = genesis_config
@@ -631,5 +306,10 @@ mod tests {
             .sum::<u64>();
 
         assert_eq!(issued_lamports, lamports);
+        let validator_reserves = 42 * 500 * 1_000_000_000;
+        let rent_fees = 20; // TODO: Need a place to pay rent from.
+        let expected_lamports =
+            500_000_000_000_000_000 - bootstrap_lamports - validator_reserves + rent_fees;
+        assert_eq!(lamports, expected_lamports);
     }
 }

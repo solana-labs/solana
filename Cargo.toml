@@ -41,6 +41,7 @@ members = [
     "runtime",
     "sdk",
     "sdk-c",
+    "scripts",
     "sys-tuner",
     "upload-perf",
     "net-utils",
