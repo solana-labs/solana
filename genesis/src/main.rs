@@ -164,7 +164,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .arg(
             Arg::with_name("bootstrap_vote_pubkey_file")
-                .short("s")
                 .long("bootstrap-vote-pubkey")
                 .value_name("BOOTSTRAP VOTE PUBKEY")
                 .takes_value(true)
@@ -173,12 +172,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .arg(
             Arg::with_name("bootstrap_stake_pubkey_file")
-                .short("k")
                 .long("bootstrap-stake-pubkey")
                 .value_name("BOOTSTRAP STAKE PUBKEY")
                 .takes_value(true)
                 .required(true)
                 .help("Path to file containing the bootstrap leader's staking pubkey"),
+        )
+        .arg(
+            Arg::with_name("bootstrap_stake_authorized_pubkey_file")
+                .long("bootstrap-stake-authorized-pubkey")
+                .value_name("BOOTSTRAP STAKE AUTHORIZED PUBKEY")
+                .takes_value(true)
+                .help("Path to file containing the pubkey authorized to manage the bootstrap leader's stake [default: --bootstrap-leader-pubkey]"),
         )
         .arg(
             Arg::with_name("bootstrap_storage_pubkey_file")
@@ -326,6 +331,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_pubkey = required_pubkey(&matches, "bootstrap_leader_pubkey_file")?;
     let bootstrap_vote_pubkey = required_pubkey(&matches, "bootstrap_vote_pubkey_file")?;
     let bootstrap_stake_pubkey = required_pubkey(&matches, "bootstrap_stake_pubkey_file")?;
+    let bootstrap_stake_authorized_pubkey =
+        pubkey_of(&matches, "bootstrap_stake_authorized_pubkey_file");
     let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
     let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
@@ -339,7 +346,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
 
     let bootstrap_leader_stake_account = stake_state::create_account(
-        &bootstrap_leader_pubkey,
+        bootstrap_stake_authorized_pubkey
+            .as_ref()
+            .unwrap_or(&bootstrap_leader_pubkey),
         &bootstrap_vote_pubkey,
         &bootstrap_leader_vote_account,
         &rent,
@@ -457,7 +466,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     create_new_ledger(&ledger_path, &genesis_config)?;
 
     println!(
-        "Genesis mode: {:?} hashes per tick: {:?} slots_per_epoch: {} capitalization: {}SOL in {} accounts",
+        "Genesis hash: {}\nOperating mode: {:?}\nHashes per tick: {:?}\nSlots per epoch: {}\nCapitalization: {} SOL in {} accounts",
+        genesis_config.hash(),
         operating_mode,
         genesis_config.poh_config.hashes_per_tick,
         slots_per_epoch,
