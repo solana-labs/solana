@@ -424,10 +424,9 @@ mod tests {
             .sum::<u64>();
 
         assert_eq!(issued_lamports, lamports);
-        let validator_reserves = 42 * 500 * 1_000_000_000;
-        let rent_fees = 20; // TODO: Need a place to pay rent from.
-        let expected_lamports =
-            500_000_000_000_000_000 - bootstrap_lamports - validator_reserves + rent_fees;
+        let num_spare_validators = 42;
+        let rent_fees = 2 * (VALIDATOR_INFOS.len() + num_spare_validators) as u64; // TODO: Need a place to pay rent from.
+        let expected_lamports = 500_000_000_000_000_000 - bootstrap_lamports + rent_fees;
         assert_eq!(lamports, expected_lamports);
     }
 }
