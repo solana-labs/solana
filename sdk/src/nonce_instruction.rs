@@ -360,6 +360,34 @@ mod tests {
     }
 
     #[test]
+    fn test_process_withdraw_ix_bad_rent_state_fail() {
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(
+                        &Pubkey::default(),
+                        true,
+                        &mut nonce_state::create_account(1_000_000),
+                    ),
+                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default(),),
+                    KeyedAccount::new(
+                        &sysvar::recent_blockhashes::id(),
+                        false,
+                        &mut sysvar::recent_blockhashes::create_account_with_data(
+                            1,
+                            vec![(0u64, &Hash::default()); 32].into_iter(),
+                        ),
+                    ),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
+                ],
+                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
+            ),
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+
+    #[test]
     fn test_process_withdraw_ix_ok() {
         assert_eq!(
             super::process_instruction(
@@ -386,6 +414,123 @@ mod tests {
                     ),
                 ],
                 &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
+            ),
+            Ok(()),
+        );
+    }
+
+    #[test]
+    fn test_process_initialize_ix_invalid_acc_data_fail() {
+        assert_eq!(
+            process_instruction(&initialize(&Pubkey::default())),
+            Err(InstructionError::InvalidAccountData),
+        );
+    }
+
+    #[test]
+    fn test_process_initialize_ix_no_keyed_accs_fail() {
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [],
+                &serialize(&NonceInstruction::Initialize).unwrap(),
+            ),
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+    }
+
+    #[test]
+    fn test_process_initialize_ix_only_nonce_acc_fail() {
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [KeyedAccount::new(
+                    &Pubkey::default(),
+                    true,
+                    &mut nonce_state::create_account(1_000_000),
+                ),],
+                &serialize(&NonceInstruction::Initialize).unwrap(),
+            ),
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+    }
+
+    #[test]
+    fn test_process_initialize_bad_recent_blockhash_state_fail() {
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(
+                        &Pubkey::default(),
+                        true,
+                        &mut nonce_state::create_account(1_000_000),
+                    ),
+                    KeyedAccount::new(
+                        &sysvar::recent_blockhashes::id(),
+                        false,
+                        &mut Account::default(),
+                    ),
+                ],
+                &serialize(&NonceInstruction::Initialize).unwrap(),
+            ),
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+
+    #[test]
+    fn test_process_initialize_ix_bad_rent_state_fail() {
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(
+                        &Pubkey::default(),
+                        true,
+                        &mut nonce_state::create_account(1_000_000),
+                    ),
+                    KeyedAccount::new(
+                        &sysvar::recent_blockhashes::id(),
+                        false,
+                        &mut sysvar::recent_blockhashes::create_account_with_data(
+                            1,
+                            vec![(0u64, &Hash::default()); 32].into_iter(),
+                        ),
+                    ),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
+                ],
+                &serialize(&NonceInstruction::Initialize).unwrap(),
+            ),
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+
+    #[test]
+    fn test_process_initialize_ix_ok() {
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(
+                        &Pubkey::default(),
+                        true,
+                        &mut nonce_state::create_account(1_000_000),
+                    ),
+                    KeyedAccount::new(
+                        &sysvar::recent_blockhashes::id(),
+                        false,
+                        &mut sysvar::recent_blockhashes::create_account_with_data(
+                            1,
+                            vec![(0u64, &Hash::default()); 32].into_iter(),
+                        ),
+                    ),
+                    KeyedAccount::new(
+                        &sysvar::rent::id(),
+                        false,
+                        &mut sysvar::rent::create_account(1, &Rent::default())
+                    ),
+                ],
+                &serialize(&NonceInstruction::Initialize).unwrap(),
             ),
             Ok(()),
         );
