@@ -84,7 +84,7 @@ pub fn create_nonce_account(
     ]
 }
 
-pub fn initialize(nonce_pubkey: &Pubkey) -> Instruction {
+fn initialize(nonce_pubkey: &Pubkey) -> Instruction {
     Instruction::new(
         id(),
         &NonceInstruction::Initialize,
