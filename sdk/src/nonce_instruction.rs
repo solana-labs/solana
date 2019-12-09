@@ -147,7 +147,6 @@ pub fn process_instruction(
         NonceInstruction::Initialize => me.initialize(
             &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-            &signers,
         ),
     }
 }
