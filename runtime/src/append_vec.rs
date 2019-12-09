@@ -143,7 +143,7 @@ impl AppendVec {
         }
     }
 
-    pub fn new_dummy_map(current_len: usize) -> Self {
+    pub fn new_empty_map(current_len: usize) -> Self {
         let map = MmapMut::map_anon(1).expect("failed to map the data file");
 
         AppendVec {
@@ -151,7 +151,7 @@ impl AppendVec {
             map,
             append_offset: Mutex::new(current_len),
             current_len: AtomicUsize::new(current_len),
-            file_size: current_len as u64,
+            file_size: 0, // will be willed set_file()
         }
     }
 
@@ -207,10 +207,20 @@ impl AppendVec {
             .create(false)
             .open(&path)?;
 
-        AppendVec::sanitize_mmap_size(std::fs::metadata(&path)?.len() as usize)?;
+        // this AppendVec must not hold actual file;
+        assert_eq!(self.file_size, 0);
+
+        let current_len = self.current_len.load(Ordering::Relaxed);
+        assert_eq!(current_len, *self.append_offset.lock().unwrap());
+
+        let file_size = std::fs::metadata(&path)?.len();
+        assert!(current_len <= file_size as usize);
+
+        AppendVec::sanitize_mmap_size(file_size as usize)?;
 
         let map = unsafe { MmapMut::map_mut(&data)? };
 
+        self.file_size = file_size;
         self.path = path.as_ref().to_path_buf();
         self.map = map;
         Ok(())
@@ -437,8 +447,6 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
     }
 
     #[allow(clippy::mutex_atomic)]
-    // Note this does not initialize a valid Mmap in the AppendVec, needs to be done
-    // externally
     fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
     where
         E: serde::de::Error,
@@ -446,7 +454,9 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         use serde::de::Error;
         let mut rd = Cursor::new(&data[..]);
         let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
-        Ok(AppendVec::new_dummy_map(current_len))
+        // Note this does not initialize a valid Mmap in the AppendVec, needs to be done
+        // externally
+        Ok(AppendVec::new_empty_map(current_len))
     }
 }
 
@@ -486,7 +496,7 @@ pub mod tests {
     fn test_append_set_file_bad_size() {
         let file = get_append_vec_path("test_append_too_bad_size");
         let path = &file.path;
-        let mut av = AppendVec::new_dummy_map(0);
+        let mut av = AppendVec::new_empty_map(0);
 
         let _data = OpenOptions::new()
             .read(true)
