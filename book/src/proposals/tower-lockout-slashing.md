@@ -17,16 +17,19 @@ The first `N - new votes`, must match the VoteState after running
 the tower consensus algorithm with the new votes.
 
 
-N should be large enough to enforce a lockout that spans a full
-epoch.  2^22 * 400ms is roughly 20 days, so 22 is a good choice for
-N.
+2^N slots should be large enough to enforce a lockout that spans a
+full epoch.  2^22 * 400ms is roughly 20 days, so 22 is a good choice
+for N.
 
 * vote 0: 0
 * vote 1: 0, 1
 * vote 2: 0, 1, 2
 
+One epoch is the practical slashable range, due to the fact that
+stakes can change delegation one epoch.
 
 ## Proof that Validator violated a Lockout
+
 Given two votes A and B to determine whether they are slashable,
 the protocol is:
 
@@ -56,6 +59,8 @@ oldest vote.
 
 5 from vote B is applied to vote A.  If the result doesn't match
 vote B, then a lockout has been violated.
+
+Bank can ignore proofs of slashing that are older than 2 epochs.
 
 ##  Accidental Slashing
 
@@ -105,3 +110,30 @@ single block have their slashing rate double.
 
 * Multiple block lockout results in slashing the validator as well
 as loss of rewards for the epoch.
+
+## VoteCRDS
+
+The expected range for slashing is 1 epoch. Validators should store
+any observed votes into a separate database.  This database needs
+to be shared between all the validators in the network.  VoteCRDS
+is a process that stores and shares the database of slashable votes
+between all the nodes in the network.
+
+* VoteCRDS, a new CRDS table with Vote as the only structure.
+
+* Last 2 epochs of votes are maintained in the CRDS.
+
+* LazyPull is the only algorithm that is run over the CRDS.
+
+* VoteCRDS runs on its own unique port.
+
+Votes from banking state, replay stage, gossip should be actively
+submitted into the VoteCRDS.
+
+The same VoteCRDS should be used for all instances of the cluster.
+
+## Vote Monitor
+
+The vote monitor can run outside of the regular validator process
+and listen only to the VoteCRDS.  This process should scan all the
+votes to find potentially slashable votes.
