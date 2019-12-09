@@ -477,9 +477,7 @@ mod test {
             let mut signers = HashSet::new();
             signers.insert(nonce_keyed.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(31);
-            nonce_keyed
-                .initialize(&recent_blockhashes, &rent)
-                .unwrap();
+            nonce_keyed.initialize(&recent_blockhashes, &rent).unwrap();
             let state: NonceState = nonce_keyed.state().unwrap();
             let stored = recent_blockhashes[0];
             assert_eq!(state, NonceState::Initialized(meta, stored));
@@ -529,9 +527,7 @@ mod test {
         let min_lamports = rent.minimum_balance(NonceState::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             let recent_blockhashes = create_test_recent_blockhashes(0);
-            nonce_keyed
-                .initialize(&recent_blockhashes, &rent)
-                .unwrap();
+            nonce_keyed.initialize(&recent_blockhashes, &rent).unwrap();
             with_test_keyed_account(42, false, |mut to_keyed| {
                 let mut signers = HashSet::new();
                 signers.insert(nonce_keyed.signer_key().unwrap().clone());
@@ -557,9 +553,7 @@ mod test {
         let min_lamports = rent.minimum_balance(NonceState::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             let recent_blockhashes = create_test_recent_blockhashes(95);
-            nonce_keyed
-                .initialize(&recent_blockhashes, &rent)
-                .unwrap();
+            nonce_keyed.initialize(&recent_blockhashes, &rent).unwrap();
             with_test_keyed_account(42, false, |mut to_keyed| {
                 let recent_blockhashes = create_test_recent_blockhashes(63);
                 let mut signers = HashSet::new();
@@ -586,9 +580,7 @@ mod test {
         let min_lamports = rent.minimum_balance(NonceState::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             let recent_blockhashes = create_test_recent_blockhashes(95);
-            nonce_keyed
-                .initialize(&recent_blockhashes, &rent)
-                .unwrap();
+            nonce_keyed.initialize(&recent_blockhashes, &rent).unwrap();
             with_test_keyed_account(42, false, |mut to_keyed| {
                 let recent_blockhashes = create_test_recent_blockhashes(63);
                 let mut signers = HashSet::new();
