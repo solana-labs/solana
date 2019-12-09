@@ -143,6 +143,7 @@ impl AppendVec {
         }
     }
 
+    #[allow(clippy::mutex_atomic)]
     pub fn new_empty_map(current_len: usize) -> Self {
         let map = MmapMut::map_anon(1).expect("failed to map the data file");
 
@@ -157,9 +158,15 @@ impl AppendVec {
 
     fn sanitize_mmap_size(size: usize) -> io::Result<()> {
         if size == 0 {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, format!("too small file size {} for AppendVec", size)))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("too small file size {} for AppendVec", size),
+            ))
         } else if size > MAXIMUM_APPEND_VEC_FILE_SIZE {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, format!("too large file size {} for AppendVec", size)))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("too large file size {} for AppendVec", size),
+            ))
         } else {
             Ok(())
         }
@@ -446,7 +453,6 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         formatter.write_str("Expecting AppendVec")
     }
 
-    #[allow(clippy::mutex_atomic)]
     fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
     where
         E: serde::de::Error,
