@@ -15,8 +15,6 @@ use solana_sdk::{clock::Slot, signature::Signature};
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
 
-// A good value for this is the number of cores on the machine
-const TOTAL_THREADS: i32 = 8;
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 
 // Column family for metadata about a leader slot
@@ -717,8 +715,7 @@ fn get_db_options() -> Options {
     let mut options = Options::default();
     options.create_if_missing(true);
     options.create_missing_column_families(true);
-    options.increase_parallelism(TOTAL_THREADS);
-    options.set_max_background_flushes(4);
-    options.set_max_background_compactions(4);
+    // A good value for this is the number of cores on the machine
+    options.increase_parallelism(sys_info::cpu_num().unwrap() as i32);
     options
 }
