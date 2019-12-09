@@ -97,6 +97,10 @@ impl Index {
 }
 
 impl CodingIndex {
+    pub fn num_coding(&self) -> usize {
+        self.index.len()
+    }
+
     pub fn present_in_bounds(&self, bounds: impl RangeBounds<u64>) -> usize {
         self.index.range(bounds).count()
     }
@@ -121,6 +125,10 @@ impl CodingIndex {
 }
 
 impl DataIndex {
+    pub fn num_data(&self) -> usize {
+        self.index.len()
+    }
+
     pub fn present_in_bounds(&self, bounds: impl RangeBounds<u64>) -> usize {
         self.index.range(bounds).count()
     }
