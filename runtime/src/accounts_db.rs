@@ -603,14 +603,26 @@ impl AccountsDB {
 
         // Recalculate reclaims with new purge set
         let mut reclaims = Vec::new();
+        let mut dead_keys = Vec::new();
         for pubkey in purges.keys() {
-            reclaims.extend(accounts_index.purge(&pubkey));
+            let (new_reclaims, is_empty) = accounts_index.purge(&pubkey);
+            if is_empty {
+                dead_keys.push(*pubkey);
+            }
+            reclaims.extend(new_reclaims);
         }
 
         let last_root = accounts_index.last_root;
 
         drop(accounts_index);
         drop(storage);
+
+        if !dead_keys.is_empty() {
+            let mut accounts_index = self.accounts_index.write().unwrap();
+            for key in &dead_keys {
+                accounts_index.account_maps.remove(key);
+            }
+        }
 
         self.handle_reclaims(&reclaims, last_root);
     }
@@ -1916,19 +1928,13 @@ pub mod tests {
         print_accounts("post_purge", &accounts);
 
         // Make sure the index is for pubkey cleared
-        assert_eq!(
-            accounts
-                .accounts_index
-                .read()
-                .unwrap()
-                .account_maps
-                .get(&pubkey)
-                .unwrap()
-                .read()
-                .unwrap()
-                .len(),
-            0
-        );
+        assert!(accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .account_maps
+            .get(&pubkey)
+            .is_none());
 
         // slot 1 & 2 should not have any stores
         assert_no_stores(&accounts, 1);
