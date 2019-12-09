@@ -98,7 +98,7 @@ impl AppendVec {
             }
         }
 
-        AppendVec::sanitize_mmap_size(size);
+        AppendVec::sanitize_mmap_size(size).unwrap();
 
         let mut data = OpenOptions::new()
             .read(true)
@@ -155,11 +155,13 @@ impl AppendVec {
         }
     }
 
-    fn sanitize_mmap_size(size: usize) {
+    fn sanitize_mmap_size(size: usize) -> io::Result<()> {
         if size == 0 {
-            panic!(format!("too small file size {} for AppendVec", size));
+            Err(std::io::Error::new(std::io::ErrorKind::Other, format!("too small file size {} for AppendVec", size)))
         } else if size > MAXIMUM_APPEND_VEC_FILE_SIZE {
-            panic!(format!("too large file size {} for AppendVec", size));
+            Err(std::io::Error::new(std::io::ErrorKind::Other, format!("too large file size {} for AppendVec", size)))
+        } else {
+            Ok(())
         }
     }
 
@@ -205,7 +207,7 @@ impl AppendVec {
             .create(false)
             .open(&path)?;
 
-        AppendVec::sanitize_mmap_size(std::fs::metadata(&path)?.len() as usize);
+        AppendVec::sanitize_mmap_size(std::fs::metadata(&path)?.len() as usize)?;
 
         let map = unsafe { MmapMut::map_mut(&data)? };
 
@@ -499,18 +501,18 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "too small file size 0 for AppendVec")]
     fn test_append_vec_sanitize_mmap_file_size_too_small() {
-        AppendVec::sanitize_mmap_size(0);
+        AppendVec::sanitize_mmap_size(0).unwrap();
     }
 
     #[test]
     fn test_append_vec_sanitize_mmap_file_size_maximum() {
-        AppendVec::sanitize_mmap_size(16 * 1024 * 1024 * 1024);
+        AppendVec::sanitize_mmap_size(16 * 1024 * 1024 * 1024).unwrap();
     }
 
     #[test]
     #[should_panic(expected = "too large file size 17179869185 for AppendVec")]
     fn test_append_vec_sanitize_mmap_file_size_too_large() {
-        AppendVec::sanitize_mmap_size(16 * 1024 * 1024 * 1024 + 1);
+        AppendVec::sanitize_mmap_size(16 * 1024 * 1024 * 1024 + 1).unwrap();
     }
 
     #[test]
