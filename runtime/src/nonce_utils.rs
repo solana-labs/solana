@@ -161,7 +161,7 @@ mod tests {
             assert_eq!(state, NonceState::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
             nonce_account
-                .initialize(&recent_blockhashes, &Rent::default(), &signers)
+                .initialize(&recent_blockhashes, &Rent::free())
                 .unwrap();
             assert!(verify_nonce(&nonce_account.account, &recent_blockhashes[0]));
         });
@@ -184,7 +184,7 @@ mod tests {
             assert_eq!(state, NonceState::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
             nonce_account
-                .initialize(&recent_blockhashes, &Rent::default(), &signers)
+                .initialize(&recent_blockhashes, &Rent::free())
                 .unwrap();
             assert!(!verify_nonce(
                 &nonce_account.account,
