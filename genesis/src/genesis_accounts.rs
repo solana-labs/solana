@@ -413,10 +413,6 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
         &FOUNDATION_STAKER_INFOS,
         &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
         sol_to_lamports(1_000_000.0),
-<<<<<<< HEAD
-    ) + add_validators(genesis_config, &VALIDATOR_INFOS)
-        + add_spare_validators(genesis_config);
-=======
     ) + add_stakes(
         genesis_config,
         &GRANTS_STAKER_INFOS,
@@ -427,8 +423,8 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
         &COMMUNITY_STAKER_INFOS,
         &UNLOCKS_ALL_DAY_ZERO,
         sol_to_lamports(1_000_000.0),
-    ) + add_validators(genesis_config, &VALIDATOR_INFOS);
->>>>>>> 32d6d811c... no lockups for community (#7366)
+    ) + add_validators(genesis_config, &VALIDATOR_INFOS)
+        + add_spare_validators(genesis_config);
 
     // "one thanks" (community pool) gets 500_000_000SOL (total) - above distributions
     create_and_add_stakes(
