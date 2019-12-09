@@ -23,4 +23,4 @@ ed25519-dalek = "1.0.0-pre.1"
 sha2 = "0.8.0"
 
 [build-dependencies]
-cbindgen = "0.11.0"
+cbindgen = "0.11.1"
