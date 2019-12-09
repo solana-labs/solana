@@ -1,4 +1,8 @@
-use crate::{blocktree::Blocktree, leader_schedule::LeaderSchedule, leader_schedule_utils};
+use crate::{
+    blocktree::Blocktree,
+    leader_schedule::{FixedSchedule, LeaderSchedule},
+    leader_schedule_utils,
+};
 use log::*;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -28,6 +32,7 @@ pub struct LeaderScheduleCache {
     epoch_schedule: EpochSchedule,
     max_epoch: RwLock<Epoch>,
     max_schedules: CacheCapacity,
+    fixed_schedule: Option<Arc<FixedSchedule>>,
 }
 
 impl LeaderScheduleCache {
@@ -41,6 +46,7 @@ impl LeaderScheduleCache {
             epoch_schedule,
             max_epoch: RwLock::new(0),
             max_schedules: CacheCapacity::default(),
+            fixed_schedule: None,
         };
 
         // This sets the root and calculates the schedule at leader_schedule_epoch(root)
@@ -153,8 +159,17 @@ impl LeaderScheduleCache {
         first_slot.map(|slot| (slot, last_slot))
     }
 
+    pub fn set_fixed_leader_schedule(&mut self, fixed_schedule: Option<FixedSchedule>) {
+        self.fixed_schedule = fixed_schedule.map(Arc::new);
+    }
+
     fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<Pubkey> {
         let (epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(slot);
+        if let Some(ref fixed_schedule) = self.fixed_schedule {
+            if epoch >= fixed_schedule.start_epoch {
+                return Some(fixed_schedule.leader_schedule[slot_index]);
+            }
+        }
         self.cached_schedules
             .read()
             .unwrap()
@@ -191,6 +206,11 @@ impl LeaderScheduleCache {
         epoch: Epoch,
         bank: &Bank,
     ) -> Option<Arc<LeaderSchedule>> {
+        if let Some(ref fixed_schedule) = self.fixed_schedule {
+            if epoch >= fixed_schedule.start_epoch {
+                return Some(fixed_schedule.leader_schedule.clone());
+            }
+        }
         let epoch_schedule = self.cached_schedules.read().unwrap().0.get(&epoch).cloned();
 
         if epoch_schedule.is_some() {

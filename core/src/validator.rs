@@ -26,6 +26,7 @@ use solana_ledger::{
     blocktree::{Blocktree, CompletedSlotsReceiver},
     blocktree_processor::{self, BankForksInfo},
     create_new_tmp_ledger,
+    leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_metrics::datapoint_info;
@@ -65,6 +66,7 @@ pub struct ValidatorConfig {
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub partition_cfg: Option<PartitionCfg>,
+    pub fixed_leader_schedule: Option<FixedSchedule>,
 }
 
 impl Default for ValidatorConfig {
@@ -83,6 +85,7 @@ impl Default for ValidatorConfig {
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             partition_cfg: None,
+            fixed_leader_schedule: None,
         }
     }
 }
@@ -182,6 +185,7 @@ impl Validator {
             config.snapshot_config.clone(),
             poh_verify,
             config.dev_halt_at_slot,
+            config.fixed_leader_schedule.clone(),
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
@@ -469,6 +473,7 @@ pub fn new_banks_from_blocktree(
     snapshot_config: Option<SnapshotConfig>,
     poh_verify: bool,
     dev_halt_at_slot: Option<Slot>,
+    fixed_leader_schedule: Option<FixedSchedule>,
 ) -> (
     Hash,
     BankForks,
@@ -506,7 +511,7 @@ pub fn new_banks_from_blocktree(
         ..blocktree_processor::ProcessOptions::default()
     };
 
-    let (mut bank_forks, bank_forks_info, leader_schedule_cache) = bank_forks_utils::load(
+    let (mut bank_forks, bank_forks_info, mut leader_schedule_cache) = bank_forks_utils::load(
         &genesis_config,
         &blocktree,
         account_paths,
@@ -517,6 +522,8 @@ pub fn new_banks_from_blocktree(
         error!("Failed to load ledger: {:?}", err);
         std::process::exit(1);
     });
+
+    leader_schedule_cache.set_fixed_leader_schedule(fixed_leader_schedule);
 
     bank_forks.set_snapshot_config(snapshot_config);
 
