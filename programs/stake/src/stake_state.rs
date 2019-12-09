@@ -1393,7 +1393,7 @@ mod tests {
                 &Lockup::default(),
                 &Rent {
                     lamports_per_byte_year: 42,
-                    ..Rent::default()
+                    ..Rent::free()
                 },
             ),
             Err(InstructionError::InsufficientFunds)
@@ -1407,7 +1407,7 @@ mod tests {
                     epoch: 1,
                     custodian
                 },
-                &Rent::default(),
+                &Rent::free(),
             ),
             Ok(())
         );
@@ -1431,7 +1431,7 @@ mod tests {
             stake_keyed_account.initialize(
                 &Authorized::default(),
                 &Lockup::default(),
-                &Rent::default()
+                &Rent::free()
             ),
             Err(InstructionError::InvalidAccountData)
         );
@@ -1559,7 +1559,7 @@ mod tests {
                     epoch: 0,
                     custodian,
                 },
-                &Rent::default(),
+                &Rent::free(),
             )
             .unwrap();
 

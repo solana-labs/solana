@@ -276,7 +276,7 @@ mod tests {
                 KeyedAccount::new(
                     &sysvar::rent::id(),
                     false,
-                    &mut sysvar::rent::create_account(1, &Rent::default()),
+                    &mut sysvar::rent::create_account(1, &Rent::free()),
                 ),
             ],
             &serialize(&NonceInstruction::Initialize).unwrap(),

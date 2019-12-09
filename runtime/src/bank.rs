@@ -4390,6 +4390,7 @@ mod tests {
         F: FnMut(&mut GenesisConfig),
     {
         let (mut genesis_config, mint_keypair) = create_genesis_config(supply_lamports);
+        genesis_config.rent.lamports_per_byte_year = 0;
         genesis_cfg_fn(&mut genesis_config);
         let mut bank = Arc::new(Bank::new(&genesis_config));
 

@@ -258,8 +258,9 @@ mod tests {
         let rent_key = rent::id();
         let mut file = File::open("test_elfs/noop.so").expect("file open failed");
         let mut elf = Vec::new();
+        let rent = rent::Rent::default();
         file.read_to_end(&mut elf).unwrap();
-        let mut program_account = Account::new(1, 0, &program_id);
+        let mut program_account = Account::new(rent.minimum_balance(elf.len()), 0, &program_id);
         program_account.data = elf;
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
         let ix_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
@@ -270,7 +271,7 @@ mod tests {
             process_instruction(&program_id, &mut vec![], &ix_data)
         );
 
-        let mut rent_account = rent::create_account(1, &rent::Rent::default());
+        let mut rent_account = rent::create_account(1, &rent);
         keyed_accounts.push(KeyedAccount::new(&rent_key, false, &mut rent_account));
 
         // Case: Not signed
