@@ -637,8 +637,6 @@ fn process_balance(
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let pubkey = pubkey.unwrap_or(config.keypair.pubkey());
-    let string = solana_stake_program::id().to_string();
-    println!("{:}", string);
     let balance = rpc_client.retry_get_balance(&pubkey, 5)?;
     match balance {
         Some(lamports) => Ok(build_balance_message(lamports, use_lamports_unit, true)),
