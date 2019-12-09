@@ -343,11 +343,15 @@ impl RpcClient {
                 send_retries - 1
             };
             if send_retries == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Transaction {:?} failed: {:?}", signature_str, status),
-                )
-                .into());
+                if let Some(err) = status {
+                    return Err(err.unwrap_err().into());
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Transaction {:?} failed: {:?}", signature_str, status),
+                    )
+                    .into());
+                }
             }
         }
     }
