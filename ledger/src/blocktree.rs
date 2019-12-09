@@ -893,19 +893,10 @@ impl Blocktree {
         // Parent for slot meta should have been set by this point
         assert!(!is_orphan(slot_meta));
 
-        let data_cf = self.db.column::<cf::ShredData>();
-
-        let check_data_cf = |slot, index| {
-            data_cf
-                .get_bytes((slot, index))
-                .map(|opt| opt.is_some())
-                .unwrap_or(false)
-        };
-
         let new_consumed = if slot_meta.consumed == index {
             let mut current_index = index + 1;
 
-            while data_index.is_present(current_index) || check_data_cf(slot, current_index) {
+            while data_index.is_present(current_index) {
                 current_index += 1;
             }
             current_index
