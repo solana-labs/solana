@@ -10,6 +10,44 @@ written to disk by unencrypted memory swaps. It is the user's responsibility to
 protect against this scenario.
 {% endhint %}
 
+## Checking Account Balance
+
+All that is needed to check an account balance is the public key of an account.
+To retrieve public keys securely from a paper wallet, follow the
+[Public Key Derivation](keypair#public-key-derivation) instructions on an
+[air gapped computer](https://en.wikipedia.org/wiki/Air_gap_\(networking\)).
+Public keys can then be typed manually or transferred via a USB stick into a
+networked machine.
+
+Next, configure the `solana` CLI tool to connect to a particular cluster:
+
+```bash
+solana set --url <CLUSTER URL> # (i.e. http://testnet.solana.com:8899)
+```
+
+Finally, to check the balance, run the following command:
+
+```bash
+solana balance <PUBKEY>
+```
+
+In order to check a list of public keys quickly, append public keys to a file
+like so:
+
+`public_keys.txt`
+```bash
+7hTw3XhprjT2DkVxVixtig9eZwHTZ2rksTSYN7Jh5niZ
+9ufAiSyboCZmmEsoStgLYQfnx9KfqP1ZtDK8Wr1j8SJV
+# ...
+```
+
+And run the following command:
+```bash
+while read PUBLIC_KEY;
+do echo "$PUBLIC_KEY: $(solana balance "$PUBLIC_KEY" | tail -n1)";
+done < public_keys.txt
+```
+
 ## Running a Validator
 
 In order to run a validator, you will need to specify an "identity keypair"
