@@ -231,6 +231,7 @@ pub enum BlocktreeProcessorError {
     FailedToLoadMeta,
     InvalidBlock(BlockError),
     InvalidTransaction,
+    NoValidForksFound,
 }
 
 impl From<BlockError> for BlocktreeProcessorError {
@@ -314,6 +315,9 @@ pub fn process_blocktree_from_root(
                 opts,
             )?;
             let (banks, bank_forks_info): (Vec<_>, Vec<_>) = fork_info.into_iter().unzip();
+            if banks.is_empty() {
+                return Err(BlocktreeProcessorError::NoValidForksFound);
+            }
             let bank_forks = BankForks::new_from_banks(&banks, rooted_path);
             (bank_forks, bank_forks_info, leader_schedule_cache)
         } else {
@@ -511,7 +515,10 @@ fn process_pending_slots(
             BlocktreeProcessorError::FailedToLoadEntries
         })?;
 
-        verify_and_process_slot_entries(&bank, &entries, last_entry_hash, opts)?;
+        if let Err(err) = verify_and_process_slot_entries(&bank, &entries, last_entry_hash, opts) {
+            warn!("slot {} failed to verify: {:?}", slot, err);
+            continue;
+        }
 
         bank.freeze(); // all banks handled by this routine are created from complete slots
 
@@ -644,8 +651,8 @@ pub mod tests {
         let parent_slot = 0;
         let slot = 1;
         let entries = create_ticks(ticks_per_slot, hashes_per_tick - 1, blockhash);
-        blocktree
-            .write_entries(
+        assert_matches!(
+            blocktree.write_entries(
                 slot,
                 0,
                 0,
@@ -655,18 +662,22 @@ pub mod tests {
                 &Arc::new(Keypair::new()),
                 entries,
                 0,
-            )
-            .expect("Expected to write shredded entries to blocktree");
+            ),
+            Ok(_)
+        );
 
-        let opts = ProcessOptions {
-            poh_verify: true,
-            ..ProcessOptions::default()
-        };
         assert_eq!(
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).err(),
-            Some(BlocktreeProcessorError::InvalidBlock(
-                BlockError::InvalidTickHashCount
-            )),
+            process_blocktree(
+                &genesis_config,
+                &blocktree,
+                Vec::new(),
+                ProcessOptions {
+                    poh_verify: true,
+                    ..ProcessOptions::default()
+                }
+            )
+            .err(),
+            Some(BlocktreeProcessorError::NoValidForksFound)
         );
     }
 
@@ -685,8 +696,8 @@ pub mod tests {
         let parent_slot = 0;
         let slot = 1;
         let entries = create_ticks(ticks_per_slot - 1, 0, blockhash);
-        blocktree
-            .write_entries(
+        assert_matches!(
+            blocktree.write_entries(
                 slot,
                 0,
                 0,
@@ -696,19 +707,42 @@ pub mod tests {
                 &Arc::new(Keypair::new()),
                 entries,
                 0,
-            )
-            .expect("Expected to write shredded entries to blocktree");
-
-        let opts = ProcessOptions {
-            poh_verify: true,
-            ..ProcessOptions::default()
-        };
-        assert_eq!(
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).err(),
-            Some(BlocktreeProcessorError::InvalidBlock(
-                BlockError::InvalidTickCount
-            )),
+            ),
+            Ok(_)
         );
+
+        // No valid forks in blocktree, expect a failure
+        assert_eq!(
+            process_blocktree(
+                &genesis_config,
+                &blocktree,
+                Vec::new(),
+                ProcessOptions {
+                    poh_verify: true,
+                    ..ProcessOptions::default()
+                }
+            )
+            .err(),
+            Some(BlocktreeProcessorError::NoValidForksFound)
+        );
+
+        // Write slot 2 fully
+        let _last_slot2_entry_hash =
+            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 0, blockhash);
+
+        let (_bank_forks, bank_forks_info, _) = process_blocktree(
+            &genesis_config,
+            &blocktree,
+            Vec::new(),
+            ProcessOptions {
+                poh_verify: true,
+                ..ProcessOptions::default()
+            },
+        )
+        .unwrap();
+
+        // One valid fork, one bad fork.  process_blocktree() should only return the valid fork
+        assert_eq!(bank_forks_info, vec![BankForksInfo { bank_slot: 2 }]);
     }
 
     #[test]
@@ -737,8 +771,8 @@ pub mod tests {
         // per slot.
         let parent_slot = 0;
         let slot = 1;
-        blocktree
-            .write_entries(
+        assert_matches!(
+            blocktree.write_entries(
                 slot,
                 0,
                 0,
@@ -748,8 +782,9 @@ pub mod tests {
                 &Arc::new(Keypair::new()),
                 entries,
                 0,
-            )
-            .expect("Expected to write shredded entries to blocktree");
+            ),
+            Ok(_)
+        );
 
         let opts = ProcessOptions {
             poh_verify: true,
@@ -757,9 +792,7 @@ pub mod tests {
         };
         assert_eq!(
             process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).err(),
-            Some(BlocktreeProcessorError::InvalidBlock(
-                BlockError::TrailingEntry
-            )),
+            Some(BlocktreeProcessorError::NoValidForksFound)
         );
     }
 
@@ -800,8 +833,8 @@ pub mod tests {
             // throw away last one
             entries.pop();
 
-            blocktree
-                .write_entries(
+            assert_matches!(
+                blocktree.write_entries(
                     slot,
                     0,
                     0,
@@ -811,8 +844,9 @@ pub mod tests {
                     &Arc::new(Keypair::new()),
                     entries,
                     0,
-                )
-                .expect("Expected to write shredded entries to blocktree");
+                ),
+                Ok(_)
+            );
         }
 
         // slot 2, points at slot 1
