@@ -63,6 +63,10 @@ explicitly skip seed phrase validation.
 solana-keygen pubkey ASK --skip-seed-phrase-validation
 ```
 
+{% hint style="info" %}
+Copy the derived public key to a USB stick for easy usage on networked computers
+{% endhint %}
+
 For full usage details run:
 
 ```bash
