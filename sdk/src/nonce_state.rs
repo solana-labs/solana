@@ -111,7 +111,6 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
                     if *hash == recent_blockhashes[0] {
                         return Err(NonceError::NotExpired.into());
                     }
-                    self.set_state(&NonceState::Uninitialized)?;
                 } else {
                     let min_balance = rent.minimum_balance(self.account.data.len());
                     if lamports + min_balance > self.account.lamports {
@@ -241,10 +240,6 @@ mod test {
                         &signers,
                     )
                     .unwrap();
-                let state: NonceState = keyed_account.state().unwrap();
-                // Withdraw instruction...
-                // Deinitializes NonceAccount state
-                assert_eq!(state, NonceState::Uninitialized);
                 // Empties NonceAccount balance
                 assert_eq!(keyed_account.account.lamports, expect_nonce_lamports);
                 // NonceAccount balance goes to `to`
@@ -519,8 +514,6 @@ mod test {
                         &signers,
                     )
                     .unwrap();
-                let state: NonceState = nonce_keyed.state().unwrap();
-                assert_eq!(state, NonceState::Uninitialized);
                 assert_eq!(nonce_keyed.account.lamports, nonce_expect_lamports);
                 assert_eq!(to_keyed.account.lamports, to_expect_lamports);
             })
