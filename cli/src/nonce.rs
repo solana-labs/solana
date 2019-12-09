@@ -7,6 +7,7 @@ use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     account_utils::State,
+    hash::Hash,
     nonce_instruction::{create_nonce_account, nonce, withdraw, NonceError},
     nonce_program,
     nonce_state::NonceState,
@@ -40,6 +41,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_amount)
                         .help("The amount to load the nonce account with (default unit SOL)"),
                 )
                 .arg(
@@ -49,6 +51,19 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .possible_values(&["SOL", "lamports"])
                         .help("Specify unit to use for request"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("get-nonce")
+                .about("Get the current nonce value")
+                .arg(
+                    Arg::with_name("nonce_account_pubkey")
+                        .index(1)
+                        .value_name("NONCE ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Address of the nonce account to display"),
                 ),
         )
         .subcommand(
@@ -65,8 +80,8 @@ impl NonceSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("get-nonce")
-                .about("Get the current nonce value")
+            SubCommand::with_name("show-nonce-account")
+                .about("Show the contents of a nonce account")
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
@@ -75,6 +90,12 @@ impl NonceSubCommands for App<'_, '_> {
                         .required(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Address of the nonce account to display"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
@@ -104,6 +125,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_amount)
                         .help("The amount to withdraw from the nonce account (default unit SOL)"),
                 )
                 .arg(
@@ -115,46 +137,18 @@ impl NonceSubCommands for App<'_, '_> {
                         .help("Specify unit to use for request"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("show-nonce-account")
-                .about("Show the contents of a nonce account")
-                .arg(
-                    Arg::with_name("nonce_account_pubkey")
-                        .index(1)
-                        .value_name("NONCE ACCOUNT")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Address of the nonce account to display"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
-                ),
-        )
     }
 }
 
 pub fn parse_nonce_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
-    let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
+    let lamports = amount_of(matches, "amount", "unit").unwrap();
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateNonceAccount {
             nonce_account: nonce_account.into(),
             lamports,
         },
-        require_keypair: true,
-    })
-}
-
-pub fn parse_new_nonce(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
-
-    Ok(CliCommandInfo {
-        command: CliCommand::NewNonce(nonce_account.into()),
         require_keypair: true,
     })
 }
@@ -168,19 +162,11 @@ pub fn parse_get_nonce(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
     })
 }
 
-pub fn parse_withdraw_from_nonce_account(
-    matches: &ArgMatches<'_>,
-) -> Result<CliCommandInfo, CliError> {
+pub fn parse_new_nonce(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
-    let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
-    let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
 
     Ok(CliCommandInfo {
-        command: CliCommand::WithdrawFromNonceAccount {
-            nonce_account: nonce_account.into(),
-            destination_account_pubkey,
-            lamports,
-        },
+        command: CliCommand::NewNonce(nonce_account.into()),
         require_keypair: true,
     })
 }
@@ -195,6 +181,23 @@ pub fn parse_show_nonce_account(matches: &ArgMatches<'_>) -> Result<CliCommandIn
             use_lamports_unit,
         },
         require_keypair: false,
+    })
+}
+
+pub fn parse_withdraw_from_nonce_account(
+    matches: &ArgMatches<'_>,
+) -> Result<CliCommandInfo, CliError> {
+    let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
+    let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
+    let lamports = amount_of(matches, "amount", "unit").unwrap();
+
+    Ok(CliCommandInfo {
+        command: CliCommand::WithdrawFromNonceAccount {
+            nonce_account: nonce_account.into(),
+            destination_account_pubkey,
+            lamports,
+        },
+        require_keypair: true,
     })
 }
 
@@ -218,8 +221,7 @@ pub fn process_create_nonce_account(
         .into());
     }
 
-    let minimum_balance =
-        rpc_client.get_minimum_balance_for_rent_exemption(std::mem::size_of::<NonceState>())?;
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(NonceState::size())?;
     if lamports < minimum_balance {
         return Err(CliError::BadParameter(format!(
             "need at least {} lamports for nonce account to be rent exempt, provided lamports: {}",
@@ -240,6 +242,25 @@ pub fn process_create_nonce_account(
     let result =
         rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, nonce_account]);
     log_instruction_custom_error::<SystemError>(result)
+}
+
+pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) -> ProcessResult {
+    let nonce_account = rpc_client.get_account(nonce_account_pubkey)?;
+    if nonce_account.owner != nonce_program::id() {
+        return Err(CliError::RpcRequestError(
+            format!("{:?} is not a nonce account", nonce_account_pubkey).to_string(),
+        )
+        .into());
+    }
+    match nonce_account.state() {
+        Ok(NonceState::Uninitialized) => Ok("Nonce account is uninitialized".to_string()),
+        Ok(NonceState::Initialized(_, hash)) => Ok(format!("{:?}", hash)),
+        Err(err) => Err(CliError::RpcRequestError(format!(
+            "Account data could not be deserialized to nonce state: {:?}",
+            err
+        ))
+        .into()),
+    }
 }
 
 pub fn process_new_nonce(
@@ -274,7 +295,11 @@ pub fn process_new_nonce(
     log_instruction_custom_error::<SystemError>(result)
 }
 
-pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) -> ProcessResult {
+pub fn process_show_nonce_account(
+    rpc_client: &RpcClient,
+    nonce_account_pubkey: &Pubkey,
+    use_lamports_unit: bool,
+) -> ProcessResult {
     let nonce_account = rpc_client.get_account(nonce_account_pubkey)?;
     if nonce_account.owner != nonce_program::id() {
         return Err(CliError::RpcRequestError(
@@ -282,9 +307,28 @@ pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) 
         )
         .into());
     }
+    let print_account = |hash: Option<Hash>| {
+        println!(
+            "balance: {}",
+            build_balance_message(nonce_account.lamports, use_lamports_unit, true)
+        );
+        println!(
+            "minimum balance required: {}",
+            build_balance_message(
+                rpc_client.get_minimum_balance_for_rent_exemption(NonceState::size())?,
+                use_lamports_unit,
+                true
+            )
+        );
+        match hash {
+            Some(hash) => println!("nonce: {}", hash),
+            None => println!("nonce: uninitialized"),
+        }
+        Ok("".to_string())
+    };
     match nonce_account.state() {
-        Ok(NonceState::Uninitialized) => Ok("Nonce account is uninitialized".to_string()),
-        Ok(NonceState::Initialized(_, hash)) => Ok(format!("{:?}", hash)),
+        Ok(NonceState::Uninitialized) => print_account(None),
+        Ok(NonceState::Initialized(_, hash)) => print_account(Some(hash)),
         Err(err) => Err(CliError::RpcRequestError(format!(
             "Account data could not be deserialized to nonce state: {:?}",
             err
@@ -317,45 +361,6 @@ pub fn process_withdraw_from_nonce_account(
     let result =
         rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, nonce_account]);
     log_instruction_custom_error::<NonceError>(result)
-}
-
-pub fn process_show_nonce_account(
-    rpc_client: &RpcClient,
-    nonce_account_pubkey: &Pubkey,
-    use_lamports_unit: bool,
-) -> ProcessResult {
-    let nonce_account = rpc_client.get_account(nonce_account_pubkey)?;
-    if nonce_account.owner != nonce_program::id() {
-        return Err(CliError::RpcRequestError(
-            format!("{:?} is not a nonce account", nonce_account_pubkey).to_string(),
-        )
-        .into());
-    }
-    match nonce_account.state() {
-        Ok(NonceState::Uninitialized) => Ok("Nonce account is uninitialized".to_string()),
-        Ok(NonceState::Initialized(_, hash)) => {
-            println!(
-                "balance: {}",
-                build_balance_message(nonce_account.lamports, use_lamports_unit, true)
-            );
-            println!(
-                "minimum balance required: {}",
-                build_balance_message(
-                    rpc_client
-                        .get_minimum_balance_for_rent_exemption(std::mem::size_of::<NonceState>())?,
-                    use_lamports_unit,
-                    true
-                )
-            );
-            println!("nonce: {}", hash);
-            Ok(format!("nonce: {}", hash))
-        }
-        Err(err) => Err(CliError::RpcRequestError(format!(
-            "Account data could not be deserialized to nonce state: {:?}",
-            err
-        ))
-        .into()),
-    }
 }
 
 #[cfg(test)]
@@ -398,6 +403,20 @@ mod tests {
             }
         );
 
+        // Test GetNonce Subcommand
+        let test_get_nonce = test_commands.clone().get_matches_from(vec![
+            "test",
+            "get-nonce",
+            &nonce_account_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_get_nonce).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::GetNonce(nonce_account_keypair.pubkey(),),
+                require_keypair: false
+            }
+        );
+
         // Test NewNonce SubCommand
         let test_new_nonce =
             test_commands
@@ -411,16 +430,19 @@ mod tests {
             }
         );
 
-        // Test GetNonce Subcommand
-        let test_get_nonce = test_commands.clone().get_matches_from(vec![
+        // Test ShowNonceAccount Subcommand
+        let test_show_nonce_account = test_commands.clone().get_matches_from(vec![
             "test",
-            "get-nonce",
+            "show-nonce-account",
             &nonce_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_get_nonce).unwrap(),
+            parse_command(&test_show_nonce_account).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetNonce(nonce_account_keypair.pubkey(),),
+                command: CliCommand::ShowNonceAccount {
+                    nonce_account_pubkey: nonce_account_keypair.pubkey(),
+                    use_lamports_unit: false,
+                },
                 require_keypair: false
             }
         );
@@ -446,20 +468,23 @@ mod tests {
             }
         );
 
-        // Test ShowNonceAccount Subcommand
-        let test_show_nonce_account = test_commands.clone().get_matches_from(vec![
+        let test_withdraw_from_nonce_account = test_commands.clone().get_matches_from(vec![
             "test",
-            "show-nonce-account",
+            "withdraw-from-nonce-account",
+            &keypair_file,
             &nonce_account_string,
+            "42",
+            "SOL",
         ]);
         assert_eq!(
-            parse_command(&test_show_nonce_account).unwrap(),
+            parse_command(&test_withdraw_from_nonce_account).unwrap(),
             CliCommandInfo {
-                command: CliCommand::ShowNonceAccount {
-                    nonce_account_pubkey: nonce_account_keypair.pubkey(),
-                    use_lamports_unit: false,
+                command: CliCommand::WithdrawFromNonceAccount {
+                    nonce_account: read_keypair_file(&keypair_file).unwrap().into(),
+                    destination_account_pubkey: nonce_account_pubkey,
+                    lamports: 42000000000
                 },
-                require_keypair: false
+                require_keypair: true
             }
         );
     }

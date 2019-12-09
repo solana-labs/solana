@@ -89,6 +89,7 @@ mod tests {
                     .multiple(true),
             )
             .arg(Arg::with_name("single").takes_value(true).long("single"))
+            .arg(Arg::with_name("unit").takes_value(true).long("unit"))
     }
 
     fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
@@ -207,5 +208,19 @@ mod tests {
             pubkeys_sigs_of(&matches, "multiple"),
             Some(vec![(key1, sig1), (key2, sig2)])
         );
+    }
+
+    #[test]
+    fn test_amount_of() {
+        let matches = app()
+            .clone()
+            .get_matches_from(vec!["test", "--single", "50", "--unit", "lamports"]);
+        assert_eq!(amount_of(&matches, "single", "unit"), Some(50));
+        let matches = app()
+            .clone()
+            .get_matches_from(vec!["test", "--single", "50", "--unit", "SOL"]);
+        assert_eq!(amount_of(&matches, "single", "unit"), Some(50000000000));
+        assert_eq!(amount_of(&matches, "multiple", "unit"), None);
+        assert_eq!(amount_of(&matches, "multiple", "unit"), None);
     }
 }
