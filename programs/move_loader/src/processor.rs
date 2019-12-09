@@ -463,7 +463,7 @@ mod tests {
         let sender_address = AccountAddress::default();
         let mut script = LibraAccount::create_script(&sender_address, code, vec![]);
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::default());
+        let mut rent_account = rent::create_account(1, &Rent::free());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -509,7 +509,7 @@ mod tests {
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::default());
+        let mut rent_account = rent::create_account(1, &Rent::free());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -547,7 +547,7 @@ mod tests {
         ";
         let mut module = LibraAccount::create_module(code, vec![]);
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::default());
+        let mut rent_account = rent::create_account(1, &Rent::free());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&module.key, true, &mut module.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -572,7 +572,7 @@ mod tests {
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::default());
+        let mut rent_account = rent::create_account(1, &Rent::free());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -650,7 +650,7 @@ mod tests {
         let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::default());
+        let mut rent_account = rent::create_account(1, &Rent::free());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -711,7 +711,7 @@ mod tests {
         let mut module = LibraAccount::create_module(&code, vec![]);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::default());
+        let mut rent_account = rent::create_account(1, &Rent::free());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&module.key, true, &mut module.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -735,7 +735,7 @@ mod tests {
                 import 0x0.LibraAccount;
                 import 0x0.LibraCoin;
                 import 0x{}.M;
-                
+
                 main(payee: address) {{
                     let amount: u64;
                     amount = M.universal_truth();
@@ -750,7 +750,7 @@ mod tests {
         let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::default());
+        let mut rent_account = rent::create_account(1, &Rent::free());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -803,7 +803,7 @@ mod tests {
         let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::default());
+        let mut rent_account = rent::create_account(1, &Rent::free());
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
