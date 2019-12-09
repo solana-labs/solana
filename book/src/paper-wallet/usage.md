@@ -19,6 +19,12 @@ To retrieve public keys securely from a paper wallet, follow the
 Public keys can then be typed manually or transferred via a USB stick into a
 networked machine.
 
+Next, configure the `solana` CLI tool to connect to a particular cluster:
+
+```bash
+solana set --url <CLUSTER URL> # (i.e. http://testnet.solana.com)
+```
+
 Finally, to check the balance, run the following command:
 
 ```bash
