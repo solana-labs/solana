@@ -178,6 +178,10 @@ impl Stakes {
         &self.vote_accounts
     }
 
+    pub fn stake_delegations(&self) -> &HashMap<Pubkey, Delegation> {
+        &self.stake_delegations
+    }
+
     pub fn highest_staked_node(&self) -> Option<Pubkey> {
         self.vote_accounts
             .iter()
