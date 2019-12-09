@@ -26,6 +26,15 @@ const UNLOCKS_BY_TENTHS_FOR_60_MONTHS: UnlockInfo = UnlockInfo {
     custodian: "11111111111111111111111111111111",
 };
 
+// no lockups
+const UNLOCKS_ALL_DAY_ZERO: UnlockInfo = UnlockInfo {
+    cliff_fraction: 1.0,
+    cliff_years: 0.0,
+    unlocks: 0,
+    unlock_years: 0.0,
+    custodian: "11111111111111111111111111111111",
+};
+
 pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "impossible pizza",
@@ -135,7 +144,33 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
     },
 ];
 
-pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
+pub const FOUNDATION_STAKER_INFOS: &[StakerInfo] = &[
+    StakerInfo {
+        name: "lyrical supermarket",
+        staker: "GRZwoJGisLTszcxtWpeREJ98EGg8pZewhbtcrikoU7b3",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "frequent description",
+        staker: "J51tinoLdmEdUR27LUVymrb2LB3xQo1aSHSgmbSGdj58",
+        sol: 57_500_000.0,
+    },
+];
+
+pub const GRANTS_STAKER_INFOS: &[StakerInfo] = &[
+    StakerInfo {
+        name: "rightful agreement",
+        staker: "DNaKiBwwbbqk1wVoC5AQxWQbuDhvaDVbAtXzsVos9mrc",
+        sol: 5_000_000.0,
+    },
+    StakerInfo {
+        name: "tasty location",
+        staker: "HvXQPXAijjG1vnQs6HXVtUUtFVzi5HNgXV9LGnHvYF85",
+        sol: 15_000_000.0,
+    },
+];
+
+pub const COMMUNITY_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "shrill charity",
         staker: "BzuqQFnu7oNUeok9ZoJezpqu2vZJU7XR1PxVLkk6wwUD",
@@ -150,26 +185,6 @@ pub const POOL_STAKER_INFOS: &[StakerInfo] = &[
         name: "cluttered complaint",
         staker: "4h1rt2ic4AXwG7p3Qqhw57EMDD4c3tLYb5J3QstGA2p5",
         sol: 153_333_633.41,
-    },
-    StakerInfo {
-        name: "lyrical supermarket",
-        staker: "GRZwoJGisLTszcxtWpeREJ98EGg8pZewhbtcrikoU7b3",
-        sol: 5_000_000.0,
-    },
-    StakerInfo {
-        name: "frequent description",
-        staker: "J51tinoLdmEdUR27LUVymrb2LB3xQo1aSHSgmbSGdj58",
-        sol: 57_500_000.0,
-    },
-    StakerInfo {
-        name: "rightful agreement",
-        staker: "DNaKiBwwbbqk1wVoC5AQxWQbuDhvaDVbAtXzsVos9mrc",
-        sol: 5_000_000.0,
-    },
-    StakerInfo {
-        name: "tasty location",
-        staker: "HvXQPXAijjG1vnQs6HXVtUUtFVzi5HNgXV9LGnHvYF85",
-        sol: 15_000_000.0,
     },
 ];
 
@@ -278,12 +293,22 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
         sol_to_lamports(1_000_000.0),
     ) + add_stakes(
         genesis_config,
-        &POOL_STAKER_INFOS,
+        &FOUNDATION_STAKER_INFOS,
         &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
+        sol_to_lamports(1_000_000.0),
+    ) + add_stakes(
+        genesis_config,
+        &GRANTS_STAKER_INFOS,
+        &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
+        sol_to_lamports(1_000_000.0),
+    ) + add_stakes(
+        genesis_config,
+        &COMMUNITY_STAKER_INFOS,
+        &UNLOCKS_ALL_DAY_ZERO,
         sol_to_lamports(1_000_000.0),
     ) + add_validators(genesis_config, &VALIDATOR_INFOS);
 
-    // "one thanks" gets 500_000_000SOL (total) - above distributions
+    // "one thanks" (community pool) gets 500_000_000SOL (total) - above distributions
     create_and_add_stakes(
         genesis_config,
         &StakerInfo {
@@ -291,7 +316,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
             staker: "3b7akieYUyCgz3Cwt5sTSErMWjg8NEygD6mbGjhGkduB",
             sol: 500_000_000.0 - lamports_to_sol(issued_lamports),
         },
-        &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
+        &UNLOCKS_ALL_DAY_ZERO,
         sol_to_lamports(1_000_000.0),
     );
 }
