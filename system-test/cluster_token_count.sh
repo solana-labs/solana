@@ -13,6 +13,8 @@ TOTAL_ALLOWED_SOL=500000000 # 500 million
 STAKE_PROGRAM_PUBKEY=Stake11111111111111111111111111111111111111
 SYSTEM_PROGRAM_PUBKEY=11111111111111111111111111111111
 VOTE_PROGRAM_PUBKEY=Vote111111111111111111111111111111111111111
+STORAGE_PROGRAM_PUBKEY=Storage111111111111111111111111111111111111
+CONFIG_PROGRAM_PUBKEY=Config1111111111111111111111111111111111111
 
 tokenCapitalizationSol=
 tokenCapitalizationLamports=
@@ -20,10 +22,19 @@ tokenCapitalizationLamports=
 stakeAccountBalanceTotalSol=
 systemAccountBalanceTotalSol=
 voteAccountBalanceTotalSol=
+storageAccountBalanceTotalSol=
+configAccountBalanceTotalSol=
 
 stakeAccountBalanceTotalLamports=
 systemAccountBalanceTotalLamports=
 voteAccountBalanceTotalLamports=
+storageAccountBalanceTotalLamports=
+configAccountBalanceTotalLamports=
+
+function get_cluster_version {
+  clusterVersion="$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' $url | jq '.result | ."solana-core" ')"
+  echo Cluster software version: $clusterVersion
+}
 
 function get_token_capitalization {
   quiet="$1"
@@ -88,6 +99,14 @@ function get_program_account_balance_totals {
       voteAccountBalanceTotalSol=$totalAccountBalancesSol
       voteAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
+    STORAGE)
+      storageAccountBalanceTotalSol=$totalAccountBalancesSol
+      storageAccountBalanceTotalLamports=$totalAccountBalancesLamports
+      ;;
+    CONFIG)
+      configAccountBalanceTotalSol=$totalAccountBalancesSol
+      configAccountBalanceTotalLamports=$totalAccountBalancesLamports
+      ;;
     *)
       echo "Unknown program: $PROGRAM_NAME"
       exit 1
@@ -110,7 +129,7 @@ function create_account_data_csv {
 
 function test_sum_account_balances_capitalization {
   printf "\n--- Testing Token Capitalization vs Account Balances ---\n"
-  grandTotalAccountBalancesSol=$((systemAccountBalanceTotalSol + stakeAccountBalanceTotalSol + voteAccountBalanceTotalSol))
+  grandTotalAccountBalancesSol=$((systemAccountBalanceTotalSol + stakeAccountBalanceTotalSol + voteAccountBalanceTotalSol + storageAccountBalanceTotalSol + configAccountBalanceTotalSol))
   printf "Total SOL in Token Capitalization: %'.f\n" "$tokenCapitalizationSol"
   printf "Total SOL in all Account Balances: %'.f\n" "$grandTotalAccountBalancesSol"
 
@@ -118,7 +137,7 @@ function test_sum_account_balances_capitalization {
     printf "ERROR: Difference between Capitalization and Account Balance Sum is %'.f SOL\n\n" "$((tokenCapitalizationSol - grandTotalAccountBalancesSol))"
   fi
 
-  grandTotalAccountBalancesLamports=$((systemAccountBalanceTotalLamports + stakeAccountBalanceTotalLamports + voteAccountBalanceTotalLamports))
+  grandTotalAccountBalancesLamports=$((systemAccountBalanceTotalLamports + stakeAccountBalanceTotalLamports + voteAccountBalanceTotalLamports + storageAccountBalanceTotalLamports + configAccountBalanceTotalLamports))
   printf "Total Lamports in Token Capitalization: %'.f\n" "$tokenCapitalizationLamports"
   printf "Total Lamports in all Account Balances: %'.f\n" "$grandTotalAccountBalancesLamports"
 
@@ -128,24 +147,27 @@ function test_sum_account_balances_capitalization {
 
 }
 
-# TODO: token capitalization(). Why? Is it larger than all accounts in genesis_accounts (minus bootstrap tokens)?
-# TODO: sum of all genesis_accounts, including placeholder keys. Why? Is it 500MM - bootstrap_tokens?
-# TODO: sum of all genesis_accounts, excluding placeholder keys. Why? To sniff out placeholder keys. All placeholders should go away today.
-
 echo "--- Querying RPC URL: $url ---"
+get_cluster_version
 
 query_program_account_data STAKE $STAKE_PROGRAM_PUBKEY
 query_program_account_data SYSTEM $SYSTEM_PROGRAM_PUBKEY
 query_program_account_data VOTE $VOTE_PROGRAM_PUBKEY
+query_program_account_data STORAGE $STORAGE_PROGRAM_PUBKEY
+query_program_account_data CONFIG $CONFIG_PROGRAM_PUBKEY
 
 create_account_data_csv STAKE
 create_account_data_csv SYSTEM
 create_account_data_csv VOTE
+create_account_data_csv STORAGE
+create_account_data_csv CONFIG
 
 get_token_capitalization #quiet
 
 get_program_account_balance_totals STAKE #quiet
 get_program_account_balance_totals SYSTEM #quiet
 get_program_account_balance_totals VOTE #quiet
+get_program_account_balance_totals STORAGE #quiet
+get_program_account_balance_totals CONFIG #quiet
 
 test_sum_account_balances_capitalization
