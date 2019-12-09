@@ -21,6 +21,8 @@ macro_rules! align_up {
     };
 }
 
+const MAXIMUM_APPEND_VEC_FILE_SIZE: usize = 16 * 1024 * 1024 * 1024; // 16 GiB
+
 /// Meta contains enough context to recover the index from storage itself
 #[derive(Clone, PartialEq, Debug)]
 pub struct StoredMeta {
@@ -96,6 +98,8 @@ impl AppendVec {
             }
         }
 
+        AppendVec::sanitize_mmap_size(size);
+
         let mut data = OpenOptions::new()
             .read(true)
             .write(true)
@@ -123,6 +127,7 @@ impl AppendVec {
         data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
         data.write_all(&[0]).unwrap();
         data.seek(SeekFrom::Start(0)).unwrap();
+        //data.set_len(size as u64);
         data.flush().unwrap();
         //UNSAFE: Required to create a Mmap
         let map = unsafe { MmapMut::map_mut(&data).expect("failed to map the data file") };
@@ -135,6 +140,26 @@ impl AppendVec {
             append_offset: Mutex::new(0),
             current_len: AtomicUsize::new(0),
             file_size: size as u64,
+        }
+    }
+
+    pub fn new_dummy_map(current_len: usize) -> Self {
+        let map = MmapMut::map_anon(1).expect("failed to map the data file");
+
+        AppendVec {
+            path: PathBuf::from(String::default()),
+            map,
+            append_offset: Mutex::new(current_len),
+            current_len: AtomicUsize::new(current_len),
+            file_size: current_len as u64,
+        }
+    }
+
+    fn sanitize_mmap_size(size: usize) {
+        if size == 0 {
+            panic!(format!("too small file size {} for AppendVec", size));
+        } else if size > MAXIMUM_APPEND_VEC_FILE_SIZE {
+            panic!(format!("too large file size {} for AppendVec", size));
         }
     }
 
@@ -174,14 +199,17 @@ impl AppendVec {
 
     #[allow(clippy::mutex_atomic)]
     pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
-        self.path = path.as_ref().to_path_buf();
         let data = OpenOptions::new()
             .read(true)
             .write(true)
             .create(false)
             .open(&path)?;
 
+        AppendVec::sanitize_mmap_size(std::fs::metadata(&path)?.len() as usize);
+
         let map = unsafe { MmapMut::map_mut(&data)? };
+
+        self.path = path.as_ref().to_path_buf();
         self.map = map;
         Ok(())
     }
@@ -416,14 +444,7 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         use serde::de::Error;
         let mut rd = Cursor::new(&data[..]);
         let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let map = MmapMut::map_anon(1).map_err(|e| Error::custom(e.to_string()))?;
-        Ok(AppendVec {
-            path: PathBuf::from(String::default()),
-            map,
-            append_offset: Mutex::new(current_len),
-            current_len: AtomicUsize::new(current_len),
-            file_size: current_len as u64,
-        })
+        Ok(AppendVec::new_dummy_map(current_len))
     }
 }
 
@@ -449,6 +470,47 @@ pub mod tests {
         fn append_account_test(&self, data: &(StoredMeta, Account)) -> Option<usize> {
             self.append_account(data.0.clone(), &data.1, Hash::default())
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "too small file size 0 for AppendVec")]
+    fn test_append_vec_new_bad_size() {
+        let path = get_append_vec_path("test_append_too_bad_size");
+        let _av = AppendVec::new(&path.path, true, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "too small file size 0 for AppendVec")]
+    fn test_append_set_file_bad_size() {
+        let file = get_append_vec_path("test_append_too_bad_size");
+        let path = &file.path;
+        let mut av = AppendVec::new_dummy_map(0);
+
+        let _data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)
+            .expect("create a test file for mmap");
+
+        av.set_file(path).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "too small file size 0 for AppendVec")]
+    fn test_append_vec_sanitize_mmap_file_size_too_small() {
+        AppendVec::sanitize_mmap_size(0);
+    }
+
+    #[test]
+    fn test_append_vec_sanitize_mmap_file_size_maximum() {
+        AppendVec::sanitize_mmap_size(16 * 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    #[should_panic(expected = "too large file size 17179869185 for AppendVec")]
+    fn test_append_vec_sanitize_mmap_file_size_too_large() {
+        AppendVec::sanitize_mmap_size(16 * 1024 * 1024 * 1024 + 1);
     }
 
     #[test]
