@@ -355,11 +355,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
-    let bootstrap_leader_lamports = rent_exempt_check(
-        &matches,
-        "bootstrap_leader_lamports",
-        VoteState::get_rent_exempt_reserve(&rent),
-    )?;
+    let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
+
     let bootstrap_leader_stake_lamports = rent_exempt_check(
         &matches,
         "bootstrap_leader_stake_lamports",
@@ -374,8 +371,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
     let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
-    let bootstrap_leader_vote_account =
-        vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
+    let bootstrap_leader_vote_account = vote_state::create_account(
+        &bootstrap_vote_pubkey,
+        &bootstrap_leader_pubkey,
+        0,
+        VoteState::get_rent_exempt_reserve(&rent).max(1),
+    );
 
     let bootstrap_leader_stake_account = stake_state::create_account(
         bootstrap_stake_authorized_pubkey

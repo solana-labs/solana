@@ -163,14 +163,20 @@ pub fn process_create_storage_account(
             "storage_account_pubkey".to_string(),
         ),
     )?;
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    use solana_storage_program::storage_contract::STORAGE_ACCOUNT_SPACE;
+    let required_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(STORAGE_ACCOUNT_SPACE as usize)?
+        .max(1);
+
     let ixs = storage_instruction::create_storage_account(
         &config.keypair.pubkey(),
         &account_owner,
         &storage_account_pubkey,
-        1,
+        required_balance,
         account_type,
     );
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+
     let mut tx = Transaction::new_signed_instructions(
         &[&config.keypair, &storage_account],
         ixs,
