@@ -588,9 +588,13 @@ mod tests {
         );
 
         assert_eq!(
-            assign_account_to_program(
-                &mut KeyedAccount::new(&from, true, &mut from_account),
-                &new_program_owner,
+            process_instruction(
+                &Pubkey::default(),
+                &mut [KeyedAccount::new(&from, true, &mut from_account)],
+                &bincode::serialize(&SystemInstruction::Assign {
+                    program_id: new_program_owner
+                })
+                .unwrap()
             ),
             Ok(())
         );
