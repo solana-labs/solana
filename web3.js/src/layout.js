@@ -43,5 +43,25 @@ export const rustString = (property: string = 'string') => {
     return _encode(data, buffer, offset);
   };
 
+  rsl.alloc = str => {
+    return (
+      BufferLayout.u32().span +
+      BufferLayout.u32().span +
+      Buffer.from(str, 'utf8').length
+    );
+  };
+
   return rsl;
 };
+
+export function getAlloc(type: Object, fields: Object): number {
+  let alloc = 0;
+  type.layout.fields.forEach(item => {
+    if (item.span >= 0) {
+      alloc += item.span;
+    } else if (typeof item.alloc === 'function') {
+      alloc += item.alloc(fields[item.property]);
+    }
+  });
+  return alloc;
+}
