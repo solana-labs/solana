@@ -725,7 +725,7 @@ pub fn process_show_stake_history(
     println!(
         "{}",
         style(format!(
-            "  {:<5}  {:>15}  {:>16}  {:>18}",
+            "  {:<5}  {:>20}  {:>20}  {:>20}",
             "Epoch", "Effective Stake", "Activating Stake", "Deactivating Stake",
         ))
         .bold()
@@ -733,7 +733,7 @@ pub fn process_show_stake_history(
 
     for (epoch, entry) in stake_history.deref() {
         println!(
-            "  {:>5}  {:>15}  {:>16}  {:>18} {}",
+            "  {:>5}  {:>20}  {:>20}  {:>20} {}",
             epoch,
             build_balance_message(entry.effective, use_lamports_unit, false),
             build_balance_message(entry.activating, use_lamports_unit, false),
