@@ -28,13 +28,6 @@ gpuMode="${19:-auto}"
 GEOLOCATION_API_KEY="${20}"
 set +x
 
-# Use a very large stake (relative to the default multinode-demo/ stake of 42)
-# for the testnet validators setup by net/.  This make it less likely that
-# low-staked ephemeral validator a random user may attach to testnet will cause
-# trouble
-#
-# Ref: https://github.com/solana-labs/solana/issues/3798
-stake=${internalNodesStakeLamports:=424243}
 
 missing() {
   echo "Error: $1 not specified"
@@ -220,9 +213,9 @@ EOF
         genesisOptions+=" --primordial-accounts-file config/client-accounts.yml"
       fi
 
-      args=(
-        --bootstrap-leader-stake-lamports "$stake"
-      )
+      if [[ -n $internalNodesStakeLamports ]]; then
+          args+=(--bootstrap-leader-stake-lamports "$internalNodesStakesLamports")
+      fi
       if [[ -n $internalNodesLamports ]]; then
         args+=(--bootstrap-leader-lamports "$internalNodesLamports")
       fi
@@ -387,7 +380,6 @@ EOF
 
       args=(
         --url http://"$entrypointIp":8899
-        "$stake"
       )
       if [[ $airdropsEnabled != true ]]; then
         args+=(--no-airdrop)

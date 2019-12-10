@@ -35,7 +35,7 @@ EOF
 
 args=()
 airdrops_enabled=1
-node_lamports=500000000000 # 500 SOL: number of lamports to airdrop the node for transaction fees (ignored if airdrops_enabled=0)
+node_lamports=500000000000 # 500 SOL: number of lamports to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
 label=
 identity_keypair_path=
 voting_keypair_path=
