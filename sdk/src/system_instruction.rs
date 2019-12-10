@@ -160,6 +160,26 @@ mod tests {
         );
         assert!(create_address_with_seed(
             &Pubkey::new_rand(),
+            "\
+             \u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\
+             ",
+            &Pubkey::new_rand()
+        )
+        .is_ok());
+        // utf-8 abuse ;)
+        assert_eq!(
+            create_address_with_seed(
+                &Pubkey::new_rand(),
+                "\
+                 x\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\
+                 ",
+                &Pubkey::new_rand()
+            ),
+            Err(SystemError::MaxSeedLengthExceeded)
+        );
+
+        assert!(create_address_with_seed(
+            &Pubkey::new_rand(),
             std::str::from_utf8(&[0; MAX_ADDRESS_SEED_LEN]).unwrap(),
             &Pubkey::new_rand(),
         )
