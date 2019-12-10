@@ -50,6 +50,25 @@ test('assign', () => {
   // TODO: Validate transaction contents more
 });
 
+test('createAccountWithSeed', () => {
+  const from = new Account();
+  const newAccount = new Account();
+  let transaction;
+
+  transaction = SystemProgram.createAccountWithSeed(
+    from.publicKey,
+    newAccount.publicKey,
+    'hi there',
+    123,
+    BudgetProgram.space,
+    BudgetProgram.programId,
+  );
+
+  expect(transaction.keys).toHaveLength(2);
+  expect(transaction.programId).toEqual(SystemProgram.programId);
+  // TODO: Validate transaction contents more
+});
+
 test('SystemInstruction create', () => {
   const from = new Account();
   const to = new Account();
@@ -101,6 +120,30 @@ test('SystemInstruction assign', () => {
   expect(systemInstruction.fromPublicKey).toBeNull();
   expect(systemInstruction.toPublicKey).toBeNull();
   expect(systemInstruction.amount).toBeNull();
+  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
+});
+
+test('SystemInstruction createWithSeed', () => {
+  const from = new Account();
+  const to = new Account();
+  const program = new Account();
+  const amount = 42;
+  const space = 100;
+  const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
+  const create = SystemProgram.createAccountWithSeed(
+    from.publicKey,
+    to.publicKey,
+    'hi there',
+    amount,
+    space,
+    program.publicKey,
+  );
+  const transaction = new Transaction({recentBlockhash}).add(create);
+
+  const systemInstruction = SystemInstruction.from(transaction.instructions[0]);
+  expect(systemInstruction.fromPublicKey).toEqual(from.publicKey);
+  expect(systemInstruction.toPublicKey).toEqual(to.publicKey);
+  expect(systemInstruction.amount).toEqual(amount);
   expect(systemInstruction.programId).toEqual(SystemProgram.programId);
 });
 

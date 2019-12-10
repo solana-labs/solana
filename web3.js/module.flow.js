@@ -220,6 +220,14 @@ declare module '@solana/web3.js' {
       amount: number,
     ): Transaction;
     static assign(from: PublicKey, programId: PublicKey): Transaction;
+    static createAccountWithSeed(
+      from: PublicKey,
+      newAccount: PublicKey,
+      seed: string,
+      lamports: number,
+      space: number,
+      programId: PublicKey,
+    ): Transaction;
   }
 
   // === src/validator-info.js ===

@@ -66,6 +66,7 @@ export class SystemInstruction extends TransactionInstruction {
   get fromPublicKey(): PublicKey | null {
     if (
       this.type == SystemInstructionLayout.Create ||
+      this.type == SystemInstructionLayout.CreateWithSeed ||
       this.type == SystemInstructionLayout.Transfer
     ) {
       return this.keys[0].pubkey;
@@ -80,6 +81,7 @@ export class SystemInstruction extends TransactionInstruction {
   get toPublicKey(): PublicKey | null {
     if (
       this.type == SystemInstructionLayout.Create ||
+      this.type == SystemInstructionLayout.CreateWithSeed ||
       this.type == SystemInstructionLayout.Transfer
     ) {
       return this.keys[1].pubkey;
@@ -95,7 +97,10 @@ export class SystemInstruction extends TransactionInstruction {
     const data = this.type.layout.decode(this.data);
     if (this.type == SystemInstructionLayout.Transfer) {
       return data.amount;
-    } else if (this.type == SystemInstructionLayout.Create) {
+    } else if (
+      this.type == SystemInstructionLayout.Create ||
+      this.type == SystemInstructionLayout.CreateWithSeed
+    ) {
       return data.lamports;
     }
     return null;
@@ -139,13 +144,25 @@ const SystemInstructionLayout = Object.freeze({
       BufferLayout.ns64('amount'),
     ]),
   },
+  CreateWithSeed: {
+    index: 3,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.rustString('seed'),
+      BufferLayout.ns64('lamports'),
+      BufferLayout.ns64('space'),
+      Layout.publicKey('programId'),
+    ]),
+  },
 });
 
 /**
  * Populate a buffer of instruction data using the SystemInstructionType
  */
 function encodeData(type: SystemInstructionType, fields: Object): Buffer {
-  const data = Buffer.alloc(type.layout.span);
+  const allocLength =
+    type.layout.span >= 0 ? type.layout.span : Layout.getAlloc(type, fields);
+  const data = Buffer.alloc(allocLength);
   const layoutFields = Object.assign({instruction: type.index}, fields);
   type.layout.encode(layoutFields, data);
   return data;
@@ -217,6 +234,36 @@ export class SystemProgram {
 
     return new Transaction().add({
       keys: [{pubkey: from, isSigner: true, isWritable: true}],
+      programId: SystemProgram.programId,
+      data,
+    });
+  }
+
+  /**
+   * Generate a Transaction that creates a new account at
+   *   an address generated with `from`, a seed, and programId
+   */
+  static createAccountWithSeed(
+    from: PublicKey,
+    newAccount: PublicKey,
+    seed: string,
+    lamports: number,
+    space: number,
+    programId: PublicKey,
+  ): Transaction {
+    const type = SystemInstructionLayout.CreateWithSeed;
+    const data = encodeData(type, {
+      seed,
+      lamports,
+      space,
+      programId: programId.toBuffer(),
+    });
+
+    return new Transaction().add({
+      keys: [
+        {pubkey: from, isSigner: true, isWritable: true},
+        {pubkey: newAccount, isSigner: false, isWritable: true},
+      ],
       programId: SystemProgram.programId,
       data,
     });
