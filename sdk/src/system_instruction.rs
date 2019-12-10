@@ -134,10 +134,6 @@ pub fn create_address_with_seed(
         return Err(SystemError::MaxSeedLengthExceeded);
     }
 
-    if seed.chars().any(|c| !c.is_ascii()) {
-        return Err(SystemError::InvalidSeed);
-    }
-
     Ok(Pubkey::new(
         hashv(&[from_pubkey.as_ref(), seed.as_ref(), program_id.as_ref()]).as_ref(),
     ))
@@ -153,10 +149,7 @@ mod tests {
 
     #[test]
     fn test_create_address_with_seed() {
-        assert_eq!(
-            create_address_with_seed(&Pubkey::new_rand(), "\u{128}", &Pubkey::new_rand()),
-            Err(SystemError::InvalidSeed)
-        );
+        assert!(create_address_with_seed(&Pubkey::new_rand(), "☉", &Pubkey::new_rand()).is_ok());
         assert_eq!(
             create_address_with_seed(
                 &Pubkey::new_rand(),
