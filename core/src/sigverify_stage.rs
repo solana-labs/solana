@@ -11,7 +11,7 @@ use crate::sigverify;
 use crate::streamer::{self, PacketReceiver};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_measure::measure::Measure;
-use solana_metrics::{datapoint_debug, inc_new_counter_info};
+use solana_metrics::datapoint_debug;
 use solana_perf::perf_libs;
 use solana_sdk::timing;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
