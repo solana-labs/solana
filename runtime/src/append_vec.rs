@@ -187,9 +187,7 @@ impl AppendVec {
     }
 
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
-        let len = self.len();
-
-        if len < offset + size {
+        if offset + size > self.len() {
             return None;
         }
         let data = &self.map[offset..offset + size];
