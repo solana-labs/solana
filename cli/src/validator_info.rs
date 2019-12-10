@@ -347,7 +347,12 @@ pub fn process_set_validator_info(
     // Submit transaction
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new(&signers, message, recent_blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &signers)?;
 
     println!("Success! Validator info published at: {:?}", info_pubkey);

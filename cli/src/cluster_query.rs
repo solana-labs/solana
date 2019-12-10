@@ -419,7 +419,12 @@ pub fn process_ping(
 
         let transaction =
             system_transaction::transfer(&config.keypair, &to, lamports, recent_blockhash);
-        check_account_for_fee(rpc_client, config, &fee_calculator, &transaction.message)?;
+        check_account_for_fee(
+            rpc_client,
+            &config.keypair.pubkey(),
+            &fee_calculator,
+            &transaction.message,
+        )?;
 
         match rpc_client.send_transaction(&transaction) {
             Ok(signature) => {
