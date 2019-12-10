@@ -406,7 +406,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             } else {
                 None
             };
-            let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
+            let lamports = required_lamports_from(matches, "amount", "unit")?;
             let use_lamports_unit = matches.value_of("unit").is_some()
                 && matches.value_of("unit").unwrap() == "lamports";
             Ok(CliCommandInfo {
@@ -447,7 +447,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             }
         },
         ("pay", Some(matches)) => {
-            let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
+            let lamports = required_lamports_from(matches, "amount", "unit")?;
             let to = pubkey_of(&matches, "to").unwrap();
             let timestamp = if matches.is_present("timestamp") {
                 // Parse input for serde_json
@@ -1449,6 +1449,22 @@ where
     }
 }
 
+// If clap arg `name` is_required, and specifies an amount of either lamports or SOL, the only way
+// `amount_of()` can return None is if `name` is an f64 and `unit`== "lamports". This method
+// catches that case and converts it to an Error.
+pub(crate) fn required_lamports_from(
+    matches: &ArgMatches<'_>,
+    name: &str,
+    unit: &str,
+) -> Result<u64, CliError> {
+    amount_of(matches, name, unit).ok_or_else(|| {
+        CliError::BadParameter(format!(
+            "Lamports cannot be fractional: {}",
+            matches.value_of("amount").unwrap()
+        ))
+    })
+}
+
 pub(crate) fn build_balance_message(
     lamports: u64,
     use_lamports_unit: bool,
@@ -1516,6 +1532,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(1)
                         .value_name("AMOUNT")
                         .takes_value(true)
+                        .validator(is_amount)
                         .required(true)
                         .help("The airdrop amount to request (default unit SOL)"),
                 )
@@ -1588,6 +1605,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(2)
                         .value_name("AMOUNT")
                         .takes_value(true)
+                        .validator(is_amount)
                         .required(true)
                         .help("The amount to send (default unit SOL)"),
                 )
@@ -1757,14 +1775,6 @@ mod tests {
         let _ignored = std::fs::remove_file(&path);
 
         path
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_bad_amount() {
-        let test_commands = app("test", "desc", "version");
-        let test_bad_airdrop = test_commands.get_matches_from(vec!["test", "airdrop", "notint"]);
-        let _ignored = parse_command(&test_bad_airdrop).unwrap();
     }
 
     #[test]

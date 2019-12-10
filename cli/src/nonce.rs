@@ -1,6 +1,7 @@
 use crate::cli::{
     build_balance_message, check_account_for_fee, check_unique_pubkeys,
-    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+    log_instruction_custom_error, required_lamports_from, CliCommand, CliCommandInfo, CliConfig,
+    CliError, ProcessResult,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
@@ -142,7 +143,7 @@ impl NonceSubCommands for App<'_, '_> {
 
 pub fn parse_nonce_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
-    let lamports = amount_of(matches, "amount", "unit").unwrap();
+    let lamports = required_lamports_from(matches, "amount", "unit")?;
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateNonceAccount {
@@ -189,7 +190,7 @@ pub fn parse_withdraw_from_nonce_account(
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
-    let lamports = amount_of(matches, "amount", "unit").unwrap();
+    let lamports = required_lamports_from(matches, "amount", "unit")?;
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawFromNonceAccount {

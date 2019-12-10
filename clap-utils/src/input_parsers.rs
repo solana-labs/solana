@@ -216,11 +216,18 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "--single", "50", "--unit", "lamports"]);
         assert_eq!(amount_of(&matches, "single", "unit"), Some(50));
+        assert_eq!(amount_of(&matches, "multiple", "unit"), None);
         let matches = app()
             .clone()
             .get_matches_from(vec!["test", "--single", "50", "--unit", "SOL"]);
         assert_eq!(amount_of(&matches, "single", "unit"), Some(50000000000));
-        assert_eq!(amount_of(&matches, "multiple", "unit"), None);
-        assert_eq!(amount_of(&matches, "multiple", "unit"), None);
+        let matches = app()
+            .clone()
+            .get_matches_from(vec!["test", "--single", "1.5", "--unit", "SOL"]);
+        assert_eq!(amount_of(&matches, "single", "unit"), Some(1500000000));
+        let matches = app()
+            .clone()
+            .get_matches_from(vec!["test", "--single", "1.5", "--unit", "lamports"]);
+        assert_eq!(amount_of(&matches, "single", "unit"), None);
     }
 }

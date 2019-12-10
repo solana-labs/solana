@@ -127,6 +127,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .value_name("NUMBER")
                         .takes_value(true)
                         .default_value("1")
+                        .validator(is_amount)
                         .help("Number of lamports to transfer for each transaction"),
                 )
                 .arg(
