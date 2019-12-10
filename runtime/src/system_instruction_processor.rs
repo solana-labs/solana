@@ -7,11 +7,14 @@ use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
 use solana_sdk::sysvar;
 
+// 10 MB
+const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
+
 fn create_system_account(
     from: &mut KeyedAccount,
     to: &mut KeyedAccount,
     lamports: u64,
-    space: u64,
+    data_length: u64,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
     // if lamports == 0, the from account isn't touched
@@ -50,10 +53,18 @@ fn create_system_account(
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
 
+    if data_length > MAX_PERMITTED_DATA_LENGTH {
+        debug!(
+            "CreateAccount: requested data_length: {} is more than maximum allowed",
+            data_length
+        );
+        return Err(SystemError::InvalidAccountDataLength.into());
+    }
+
     assign_account_to_program(to, program_id)?;
     from.account.lamports -= lamports;
     to.account.lamports += lamports;
-    to.account.data = vec![0; space as usize];
+    to.account.data = vec![0; data_length as usize];
     to.account.executable = false;
     Ok(())
 }
@@ -234,6 +245,40 @@ mod tests {
         let from_lamports = from_account.lamports;
         assert_eq!(from_lamports, 100);
         assert_eq!(to_account, unchanged_account);
+    }
+
+    #[test]
+    fn test_request_more_than_allowed_data_length() {
+        let mut from_account = Account::new(100, 0, &system_program::id());
+        let from_account_key = Pubkey::new_rand();
+        let mut to_account = Account::default();
+        let to_account_key = Pubkey::new_rand();
+
+        // Trying to request more data length than permitted will result in failure
+        let result = create_system_account(
+            &mut KeyedAccount::new(&from_account_key, true, &mut from_account),
+            &mut KeyedAccount::new(&to_account_key, true, &mut to_account),
+            50,
+            MAX_PERMITTED_DATA_LENGTH + 1,
+            &system_program::id(),
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            result.err().unwrap(),
+            SystemError::InvalidAccountDataLength.into()
+        );
+
+        // Trying to request equal or less data length than permitted will be successful
+        let result = create_system_account(
+            &mut KeyedAccount::new(&from_account_key, true, &mut from_account),
+            &mut KeyedAccount::new(&to_account_key, true, &mut to_account),
+            50,
+            MAX_PERMITTED_DATA_LENGTH,
+            &system_program::id(),
+        );
+        assert!(result.is_ok());
+        assert_eq!(to_account.lamports, 50);
+        assert_eq!(to_account.data.len() as u64, MAX_PERMITTED_DATA_LENGTH);
     }
 
     #[test]
