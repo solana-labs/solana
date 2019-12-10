@@ -1283,10 +1283,10 @@ impl Bank {
         let node_stakes_and_rent = node_stakes
             .iter()
             .map(|(pubkey, staked)| {
-                let rent_in_initial_round =
+                let rent_share =
                     (((*staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
-                rent_distributed_in_initial_round += rent_in_initial_round;
-                (*pubkey, *staked, rent_in_initial_round)
+                rent_distributed_in_initial_round += rent_share;
+                (*pubkey, *staked, rent_share)
             })
             .collect::<Vec<(Pubkey, u64, u64)>>();
 
@@ -1296,12 +1296,12 @@ impl Bank {
 
         node_stakes_and_rent
             .iter()
-            .for_each(|(pubkey, _staked, rent)| {
+            .for_each(|(pubkey, _staked, rent_share)| {
                 let rent_to_be_paid = if leftover_lamports > 0 {
                     leftover_lamports -= 1;
-                    *rent + 1
+                    *rent_share + 1
                 } else {
-                    *rent
+                    *rent_share
                 };
                 let mut account = self.get_account(pubkey).unwrap_or_default();
                 account.lamports += rent_to_be_paid;
