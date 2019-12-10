@@ -11,7 +11,7 @@ use crate::sigverify;
 use crate::streamer::{self, PacketReceiver};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_measure::measure::Measure;
-use solana_metrics::{datapoint_debug, inc_new_counter_info};
+use solana_metrics::datapoint_debug;
 use solana_perf::perf_libs;
 use solana_sdk::timing;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -65,7 +65,6 @@ impl SigVerifyStage {
                 RECV_BATCH_MAX_CPU
             },
         )?;
-        inc_new_counter_info!("sigverify_stage-packets_received", len);
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
         let batch_len = batch.len();
@@ -77,7 +76,6 @@ impl SigVerifyStage {
         );
 
         let verified_batch = verifier.verify_batch(batch);
-        inc_new_counter_info!("sigverify_stage-verified_packets_send", len);
 
         for v in verified_batch {
             if sendr.send(vec![v]).is_err() {
@@ -87,10 +85,6 @@ impl SigVerifyStage {
 
         verify_batch_time.stop();
 
-        inc_new_counter_info!(
-            "sigverify_stage-time_ms",
-            (verify_batch_time.as_ms() + recv_time) as usize
-        );
         debug!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} id: {} verified: {} v/s {}",
             timing::timestamp(),
@@ -103,9 +97,10 @@ impl SigVerifyStage {
 
         datapoint_debug!(
             "sigverify_stage-total_verify_time",
-            ("batch_len", batch_len, i64),
-            ("len", len, i64),
-            ("total_time_ms", verify_batch_time.as_ms(), i64)
+            ("num_batches", batch_len, i64),
+            ("num_packets", len, i64),
+            ("verify_time_ms", verify_batch_time.as_ms(), i64),
+            ("recv_time", recv_time, i64),
         );
 
         Ok(())
