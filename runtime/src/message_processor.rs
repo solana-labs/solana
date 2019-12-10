@@ -3,6 +3,7 @@ use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
 use solana_sdk::account::{create_keyed_readonly_accounts, Account, KeyedAccount};
 use solana_sdk::clock::Epoch;
+use solana_sdk::hash::hash;
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -134,7 +135,7 @@ pub fn verify_account_changes(
 
     if need_account_data_checked(&pre.owner, program_id, pre.is_writable) {
         match &pre.data {
-            Some(data) if *data == post.data => (),
+            Some(data) if hash(data) == hash(&post.data) => (),
             _ => {
                 if !pre.is_writable {
                     return Err(InstructionError::ReadonlyDataModified);
