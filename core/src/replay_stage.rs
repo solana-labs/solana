@@ -1147,6 +1147,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         commitment::BlockCommitment,
+        consensus::Tower,
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
@@ -1164,6 +1165,8 @@ pub(crate) mod tests {
         },
     };
     use solana_runtime::genesis_utils::GenesisConfigInfo;
+    use solana_sdk::account::Account;
+    use solana_sdk::rent::Rent;
     use solana_sdk::{
         hash::{hash, Hash},
         instruction::InstructionError,
@@ -1172,11 +1175,291 @@ pub(crate) mod tests {
         system_transaction,
         transaction::TransactionError,
     };
-    use solana_vote_program::vote_state::VoteState;
+    use solana_stake_program::stake_state;
+    use solana_vote_program::vote_state;
+    use solana_vote_program::vote_state::{Vote, VoteState};
+    use std::iter;
     use std::{
         fs::remove_dir_all,
         sync::{Arc, RwLock},
     };
+
+    struct ForkInfo {
+        leader: usize,
+        fork: Vec<Slot>,
+        voters: Vec<usize>,
+    }
+
+    struct ValidatorInfo {
+        stake: u64,
+        keypair: Keypair,
+        voting_keypair: Keypair,
+        staking_keypair: Keypair,
+    }
+
+    struct ForkSelectionResponse {
+        slot: u64,
+        is_locked_out: bool,
+    }
+
+    fn simulate_fork_selection(
+        neutral_fork: &ForkInfo,
+        forks: &Vec<ForkInfo>,
+        validators: &Vec<ValidatorInfo>,
+    ) -> Vec<Option<ForkSelectionResponse>> {
+        fn vote(bank: &Arc<Bank>, pubkey: &Pubkey, slot: Slot) {
+            let mut vote_account = bank.get_account(&pubkey).unwrap();
+            let mut vote_state = VoteState::from(&vote_account).unwrap();
+            vote_state.process_slot_vote_unchecked(slot);
+            vote_state.to(&mut vote_account).unwrap();
+            bank.store_account(&pubkey, &vote_account);
+        }
+
+        let mut towers: Vec<Tower> = iter::repeat_with(|| Tower::new_for_tests(8, 0.67))
+            .take(validators.len())
+            .collect();
+
+        for slot in &neutral_fork.fork {
+            for tower in towers.iter_mut() {
+                tower.record_bank_vote(Vote {
+                    hash: Hash::default(),
+                    slots: vec![*slot],
+                    timestamp: None,
+                });
+            }
+        }
+
+        for fork_info in forks.iter() {
+            for slot in fork_info.fork.iter() {
+                for voter_index in fork_info.voters.iter() {
+                    towers[*voter_index].record_bank_vote(Vote {
+                        hash: Hash::default(),
+                        slots: vec![*slot],
+                        timestamp: None,
+                    });
+                }
+            }
+        }
+
+        let genesis_vote_accounts: Vec<Account> = validators
+            .iter()
+            .map(|validator| {
+                vote_state::create_account(
+                    &validator.voting_keypair.pubkey(),
+                    &validator.keypair.pubkey(),
+                    0,
+                    validator.stake,
+                )
+            })
+            .collect();
+
+        let genesis_stake_accounts: Vec<Account> = validators
+            .iter()
+            .enumerate()
+            .map(|(i, validator)| {
+                stake_state::create_account(
+                    &validator.staking_keypair.pubkey(),
+                    &validator.voting_keypair.pubkey(),
+                    &genesis_vote_accounts[i],
+                    &Rent::default(),
+                    validator.stake,
+                )
+            })
+            .collect();
+
+        let mut genesis_config = create_genesis_config(10_000).genesis_config;
+        genesis_config.accounts.clear();
+
+        for i in 0..validators.len() {
+            genesis_config.accounts.insert(
+                validators[i].voting_keypair.pubkey(),
+                genesis_vote_accounts[i].clone(),
+            );
+            genesis_config.accounts.insert(
+                validators[i].staking_keypair.pubkey(),
+                genesis_stake_accounts[i].clone(),
+            );
+        }
+
+        let mut bank_forks = BankForks::new(neutral_fork.fork[0], Bank::new(&genesis_config));
+
+        let mut fork_progresses: Vec<HashMap<u64, ForkProgress>> = iter::repeat_with(HashMap::new)
+            .take(validators.len())
+            .collect();
+
+        for fork_progress in fork_progresses.iter_mut() {
+            fork_progress
+                .entry(neutral_fork.fork[0])
+                .or_insert_with(|| {
+                    ForkProgress::new(
+                        bank_forks.banks[&0].slot(),
+                        bank_forks.banks[&0].last_blockhash(),
+                    )
+                });
+        }
+
+        for index in 1..neutral_fork.fork.len() {
+            let bank = Bank::new_from_parent(
+                &bank_forks.banks[&neutral_fork.fork[index - 1]].clone(),
+                &validators[neutral_fork.leader].keypair.pubkey(),
+                neutral_fork.fork[index],
+            );
+
+            bank_forks.insert(bank);
+
+            for validator in validators.iter() {
+                vote(
+                    &bank_forks.banks[&neutral_fork.fork[index]].clone(),
+                    &validator.voting_keypair.pubkey(),
+                    neutral_fork.fork[index - 1],
+                );
+            }
+
+            bank_forks.banks[&neutral_fork.fork[index]].freeze();
+
+            for fork_progress in fork_progresses.iter_mut() {
+                fork_progress
+                    .entry(bank_forks.banks[&neutral_fork.fork[index]].slot())
+                    .or_insert_with(|| {
+                        ForkProgress::new(
+                            bank_forks.banks[&neutral_fork.fork[index]].slot(),
+                            bank_forks.banks[&neutral_fork.fork[index]].last_blockhash(),
+                        )
+                    });
+            }
+        }
+
+        let last_neutral_bank = &bank_forks.banks[neutral_fork.fork.last().unwrap()].clone();
+
+        for fork_info in forks.iter() {
+            for index in 0..fork_info.fork.len() {
+                let last_bank: &Arc<Bank>;
+                let last_bank_in_fork: Arc<Bank>;
+
+                if index == 0 {
+                    last_bank = &last_neutral_bank;
+                } else {
+                    last_bank_in_fork = bank_forks.banks[&fork_info.fork[index - 1]].clone();
+                    last_bank = &last_bank_in_fork;
+                }
+
+                let bank = Bank::new_from_parent(
+                    last_bank,
+                    &validators[fork_info.leader].keypair.pubkey(),
+                    fork_info.fork[index],
+                );
+
+                bank_forks.insert(bank);
+
+                for voter_index in fork_info.voters.iter() {
+                    vote(
+                        &bank_forks.banks[&fork_info.fork[index]].clone(),
+                        &validators[*voter_index].voting_keypair.pubkey(),
+                        last_bank.slot(),
+                    );
+                }
+
+                bank_forks.banks[&fork_info.fork[index]].freeze();
+
+                for fork_progress in fork_progresses.iter_mut() {
+                    fork_progress
+                        .entry(bank_forks.banks[&fork_info.fork[index]].slot())
+                        .or_insert_with(|| {
+                            ForkProgress::new(
+                                bank_forks.banks[&fork_info.fork[index]].slot(),
+                                bank_forks.banks[&fork_info.fork[index]].last_blockhash(),
+                            )
+                        });
+                }
+            }
+        }
+
+        let bank_fork_ancestors = bank_forks.ancestors();
+        let wrapped_bank_fork = Arc::new(RwLock::new(bank_forks));
+
+        (0..validators.len())
+            .map(|i| {
+                let response = ReplayStage::select_fork(
+                    &validators[i].keypair.pubkey(),
+                    &bank_fork_ancestors,
+                    &wrapped_bank_fork,
+                    &towers[i],
+                    &mut fork_progresses[i],
+                );
+
+                if response.is_none() {
+                    None
+                } else {
+                    let (_bank, stats) = response.unwrap();
+
+                    Some(ForkSelectionResponse {
+                        slot: stats.slot,
+                        is_locked_out: stats.is_locked_out,
+                    })
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_minority_fork_overcommit_attack() {
+        let neutral_fork = ForkInfo {
+            leader: 0,
+            fork: vec![0, 1, 2],
+            voters: vec![],
+        };
+
+        let forks: Vec<ForkInfo> = vec![
+            // Minority fork
+            ForkInfo {
+                leader: 2,
+                fork: (3..=3 + 8).collect(),
+                voters: vec![2],
+            },
+            ForkInfo {
+                leader: 1,
+                fork: (12..12 + 8).collect(),
+                voters: vec![0, 1],
+            },
+        ];
+
+        let validators: Vec<ValidatorInfo> = vec![
+            ValidatorInfo {
+                stake: 34_000_000,
+                keypair: Keypair::new(),
+                voting_keypair: Keypair::new(),
+                staking_keypair: Keypair::new(),
+            },
+            ValidatorInfo {
+                stake: 33_000_000,
+                keypair: Keypair::new(),
+                voting_keypair: Keypair::new(),
+                staking_keypair: Keypair::new(),
+            },
+            // Malicious Node
+            ValidatorInfo {
+                stake: 33_000_000,
+                keypair: Keypair::new(),
+                voting_keypair: Keypair::new(),
+                staking_keypair: Keypair::new(),
+            },
+        ];
+
+        let resp = simulate_fork_selection(&neutral_fork, &forks, &validators);
+        // Both honest nodes are now want to switch to minority fork and are locked out
+        assert!(resp[0].is_some());
+        assert_eq!(resp[0].as_ref().unwrap().is_locked_out, true);
+        assert_eq!(
+            resp[0].as_ref().unwrap().slot,
+            forks[0].fork.last().unwrap().clone()
+        );
+        assert!(resp[1].is_some());
+        assert_eq!(resp[1].as_ref().unwrap().is_locked_out, true);
+        assert_eq!(
+            resp[1].as_ref().unwrap().slot,
+            forks[0].fork.last().unwrap().clone()
+        );
+    }
 
     #[test]
     fn test_child_slots_of_same_parent() {
