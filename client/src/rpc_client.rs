@@ -343,11 +343,15 @@ impl RpcClient {
                 send_retries - 1
             };
             if send_retries == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Transaction {:?} failed: {:?}", signature_str, status),
-                )
-                .into());
+                if let Some(err) = status {
+                    return Err(err.unwrap_err().into());
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Transaction {:?} failed: {:?}", signature_str, status),
+                    )
+                    .into());
+                }
             }
         }
     }
@@ -1014,11 +1018,13 @@ pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
 mod tests {
     use super::*;
     use crate::mock_rpc_client_request::{PUBKEY, SIGNATURE};
+    use assert_matches::assert_matches;
     use jsonrpc_core::{Error, IoHandler, Params};
     use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
     use serde_json::Number;
     use solana_logger;
     use solana_sdk::{
+        instruction::InstructionError,
         signature::{Keypair, KeypairUtil},
         system_transaction,
         transaction::TransactionError,
@@ -1188,9 +1194,21 @@ mod tests {
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
         assert!(result.is_err());
 
-        let rpc_client = RpcClient::new_mock("fails".to_string());
+        let rpc_client = RpcClient::new_mock("instruction_error".to_string());
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
-        assert!(result.is_err());
+        assert_matches!(
+            result.unwrap_err(),
+            ClientError::TransactionError(TransactionError::InstructionError(
+                0,
+                InstructionError::UninitializedAccount
+            ))
+        );
+
+        let rpc_client = RpcClient::new_mock("sig_not_found".to_string());
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
+        if let ClientError::Io(err) = result.unwrap_err() {
+            assert_eq!(err.kind(), io::ErrorKind::Other);
+        }
     }
 
     #[test]

@@ -7,6 +7,7 @@ use serde_json::{Number, Value};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
+    instruction::InstructionError,
     transaction::{self, TransactionError},
 };
 
@@ -64,6 +65,11 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
             RpcRequest::GetSignatureStatus => {
                 let response: Option<transaction::Result<()>> = if self.url == "account_in_use" {
                     Some(Err(TransactionError::AccountInUse))
+                } else if self.url == "instruction_error" {
+                    Some(Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::UninitializedAccount,
+                    )))
                 } else if self.url == "sig_not_found" {
                     None
                 } else {
