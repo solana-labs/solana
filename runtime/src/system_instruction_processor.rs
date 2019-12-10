@@ -19,14 +19,14 @@ fn create_account_with_seed(
     data_length: u64,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    // from is the source of the derived address, the caller must have
+    // `from` is the source of the derived address, the caller must have
     //  signed, even if no lamports will be transferred
     if from.signer_key().is_none() {
         debug!("CreateAccountWithSeed: from must sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    // re-derive the address, must match to
+    // re-derive the address, must match `to`
     let address = create_address_with_seed(from.unsigned_key(), seed, program_id)?;
 
     if to.unsigned_key() != &address {
@@ -49,7 +49,7 @@ fn create_account(
     data_length: u64,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    // if lamports == 0, the from account isn't touched
+    // if lamports == 0, the `from` account isn't touched
     if lamports != 0 && from.signer_key().is_none() {
         debug!("CreateAccount: from must sign");
         return Err(InstructionError::MissingRequiredSignature);
@@ -70,7 +70,7 @@ fn finish_create_account(
     data_length: u64,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    // if it looks like the to account is already in use, bail
+    // if it looks like the `to` account is already in use, bail
     if to.account.lamports != 0
         || !to.account.data.is_empty()
         || !system_program::check_id(&to.account.owner)

@@ -49,6 +49,13 @@ pub enum SystemInstruction {
         space: u64,
         program_id: Pubkey,
     },
+    /// Assign account to a program
+    /// * Transaction::keys[0] - account to assign
+    Assign { program_id: Pubkey },
+    /// Transfer lamports
+    /// * Transaction::keys[0] - source
+    /// * Transaction::keys[1] - destination
+    Transfer { lamports: u64 },
     /// Create a new account at an address derived from
     ///    the from account and a seed
     /// * Transaction::keys[0] - source
@@ -63,13 +70,6 @@ pub enum SystemInstruction {
         space: u64,
         program_id: Pubkey,
     },
-    /// Assign account to a program
-    /// * Transaction::keys[0] - account to assign
-    Assign { program_id: Pubkey },
-    /// Transfer lamports
-    /// * Transaction::keys[0] - source
-    /// * Transaction::keys[1] - destination
-    Transfer { lamports: u64 },
 }
 
 pub fn create_account(
