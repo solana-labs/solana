@@ -129,46 +129,39 @@ mod tests {
         );
     }
 
-    // uncomment me and make my eprintlns macros
-    //    #[test]
-    //    fn test_rent_model() {
-    //        use crate::timing::*;
-    //
-    //        const SECONDS_PER_YEAR: f64 = (365.25 * 24.0 * 60.0 * 60.0);
-    //        const SLOTS_PER_YEAR: f64 =
-    //            SECONDS_PER_YEAR / (DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICKS_PER_SECOND as f64);
-    //
-    //        let rent = Rent::default();
-    //
-    //        eprintln();
-    //        // lamports charged per byte per slot at $1/MByear, rent per slot is zero
-    //        eprintln(
-    //            "{} lamports per byte-slot, rent.due(): {}",
-    //            (1.0 / SLOTS_PER_YEAR) * DEFAULT_LAMPORTS_PER_BYTE_YEAR as f64,
-    //            rent.due(0, 1, 1.0 / SLOTS_PER_YEAR).0,
-    //        );
-    //        // lamports charged per byte per _epoch_ starts to have some significant digits
-    //        eprintln(
-    //            "{} lamports per byte-epoch, rent.due(): {}",
-    //            (1.0 / SLOTS_PER_YEAR)
-    //                * (DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_SLOTS_PER_EPOCH) as f64,
-    //            rent.due(
-    //                0,
-    //                1,
-    //                (1.0 / SLOTS_PER_YEAR) * DEFAULT_SLOTS_PER_EPOCH as f64
-    //            )
-    //            .0,
-    //        );
-    //        // have a look at what a large-ish sysvar would cost, were it a real account...
-    //        eprintln(
-    //            "stake_history: {}kB == {} lamports per epoch",
-    //            crate::sysvar::stake_history::StakeHistory::size_of() / 1024,
-    //            rent.due(
-    //                0,
-    //                crate::sysvar::stake_history::StakeHistory::size_of(),
-    //                (1.0 / SLOTS_PER_YEAR) * DEFAULT_SLOTS_PER_EPOCH as f64
-    //            )
-    //            .0,
-    //        );
-    //    }
+    #[ignore]
+    #[test]
+    #[should_panic]
+    fn show_rent_model() {
+        use crate::{clock::*, sysvar::Sysvar, timing::*};
+
+        const SLOTS_PER_YEAR: f64 =
+            SECONDS_PER_YEAR / (DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICKS_PER_SECOND as f64);
+
+        let rent = Rent::default();
+        panic!(
+            "\n\n\
+             ==================================================\n\
+             empty account, no data:\n\
+             \t{} lamports per epoch, {} lamports to be rent_exempt\n\n\
+             stake_history, which is {}kB of data:\n\
+             \t{} lamports per epoch, {} lamports to be rent_exempt\n\
+             ==================================================\n\n",
+            rent.due(
+                0,
+                0,
+                (1.0 / SLOTS_PER_YEAR) * DEFAULT_SLOTS_PER_EPOCH as f64,
+            )
+            .0,
+            rent.minimum_balance(0),
+            crate::sysvar::stake_history::StakeHistory::size_of() / 1024,
+            rent.due(
+                0,
+                crate::sysvar::stake_history::StakeHistory::size_of(),
+                (1.0 / SLOTS_PER_YEAR) * DEFAULT_SLOTS_PER_EPOCH as f64,
+            )
+            .0,
+            rent.minimum_balance(crate::sysvar::stake_history::StakeHistory::size_of()),
+        );
+    }
 }
