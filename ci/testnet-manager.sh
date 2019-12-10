@@ -487,7 +487,7 @@ deploy() {
       fi
 
       if [[ -z $INTERNAL_NODES_LAMPORTS ]]; then
-        maybeInternalNodesLamports="--internal-nodes-lamports 2000000000" # 2 SOL
+        maybeInternalNodesLamports="--internal-nodes-lamports 500000000000" # 500 SOL
       elif [[ $INTERNAL_NODES_LAMPORTS == skip ]]; then
         maybeInternalNodesLamports=""
       else

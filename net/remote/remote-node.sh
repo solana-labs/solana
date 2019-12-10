@@ -28,7 +28,6 @@ gpuMode="${19:-auto}"
 GEOLOCATION_API_KEY="${20}"
 set +x
 
-
 missing() {
   echo "Error: $1 not specified"
   exit 1
@@ -214,7 +213,7 @@ EOF
       fi
 
       if [[ -n $internalNodesStakeLamports ]]; then
-          args+=(--bootstrap-leader-stake-lamports "$internalNodesStakesLamports")
+        args+=(--bootstrap-leader-stake-lamports "$internalNodesStakesLamports")
       fi
       if [[ -n $internalNodesLamports ]]; then
         args+=(--bootstrap-leader-lamports "$internalNodesLamports")
@@ -388,7 +387,7 @@ EOF
         args+=(--keypair config/validator-identity.json)
       fi
 
-      multinode-demo/delegate-stake.sh "${args[@]}"
+      multinode-demo/delegate-stake.sh "${args[@]}" "$internalNodesStakeLamports"
     fi
 
     if [[ $skipSetup != true ]]; then
