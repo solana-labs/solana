@@ -41,7 +41,9 @@ fn recv_loop(
                 }
                 recv_count += len;
                 call_count += 1;
-                channel.send(msgs)?;
+                if len > 0 {
+                    channel.send(msgs)?;
+                }
                 break;
             }
         }
@@ -55,9 +57,9 @@ fn recv_loop(
             );
             recv_count = 0;
             call_count = 0;
-            now = Instant::now();
             num_max_received = 0;
         }
+        now = Instant::now();
     }
 }
 
