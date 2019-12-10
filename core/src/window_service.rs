@@ -262,19 +262,17 @@ impl WindowService {
         let exit = exit.clone();
         let blocktree = blocktree.clone();
         let leader_schedule_cache = leader_schedule_cache.clone();
+        let mut handle_timeout = || {};
+        let handle_error = || {
+            inc_new_counter_error!("solana-window-insert-error", 1, 1);
+        };
         Builder::new()
             .name("solana-window-insert".to_string())
             .spawn(move || loop {
                 if let Err(e) =
                     run_insert(&exit, &insert_receiver, &blocktree, &leader_schedule_cache)
                 {
-                    if Self::should_exit_on_error(
-                        e,
-                        || {},
-                        || {
-                            inc_new_counter_error!("solana-window-insert-error", 1, 1);
-                        },
-                    ) {
+                    if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                         break;
                     }
                 }
@@ -305,16 +303,26 @@ impl WindowService {
             .spawn(move || {
                 let _exit = Finalizer::new(exit.clone());
                 trace!("{}: RECV_WINDOW started", id);
-                let mut now = Instant::now();
                 let thread_pool = rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
                     .build()
                     .unwrap();
+                let mut now = Instant::now();
+                let handle_error = || {
+                    inc_new_counter_error!("solana-window-error", 1, 1);
+                };
+
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
 
+                    let mut handle_timeout = || {
+                        if now.elapsed() > Duration::from_secs(30) {
+                            warn!("Window does not seem to be receiving data. Ensure port configuration is correct...");
+                            now = Instant::now();
+                        }
+                    };
                     if let Err(e) = recv_window(
                         &blocktree,
                         &insert_sender,
@@ -333,12 +341,7 @@ impl WindowService {
                         },
                         &thread_pool,
                     ) {
-                        if Self::should_exit_on_error(e, || {if now.elapsed() > Duration::from_secs(30) {
-                            warn!("Window does not seem to be receiving data. Ensure port configuration is correct...");
-                            now = Instant::now();
-                        }}, || {
-                            inc_new_counter_error!("solana-window-error", 1, 1);
-                        }) {
+                        if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;
                         }
                     } else {
@@ -349,7 +352,7 @@ impl WindowService {
             .unwrap()
     }
 
-    fn should_exit_on_error<F, H>(e: Error, mut handle_timeout: F, handle_error: H) -> bool
+    fn should_exit_on_error<F, H>(e: Error, handle_timeout: &mut F, handle_error: &H) -> bool
     where
         F: FnMut() -> (),
         H: Fn() -> (),
