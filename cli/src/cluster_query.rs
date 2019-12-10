@@ -360,11 +360,7 @@ pub fn process_get_epoch_info(
     );
     println_name_value(
         "Time remaining in current epoch:",
-        &format!(
-            "{} minutes, {} seconds",
-            remaining_time_in_epoch.as_secs() / 60,
-            remaining_time_in_epoch.as_secs() % 60
-        ),
+        &humantime::format_duration(remaining_time_in_epoch).to_string(),
     );
     Ok("".to_string())
 }
