@@ -1259,8 +1259,9 @@ impl Bank {
         rent_to_be_distributed: u64,
     ) {
         let mut total_staked = 0;
+        let mut rent_distributed_in_initial_round = 0;
 
-        let node_stakes = vote_account_hashmap
+        let mut node_stakes = vote_account_hashmap
             .iter()
             .filter_map(|(_vote_pubkey, (staked, account))| {
                 total_staked += *staked;
@@ -1271,13 +1272,41 @@ impl Bank {
             })
             .collect::<Vec<(Pubkey, u64)>>();
 
-        node_stakes.iter().for_each(|(pubkey, staked)| {
-            let rent_to_be_paid =
-                (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
-            let mut account = self.get_account(pubkey).unwrap_or_default();
-            account.lamports += rent_to_be_paid;
-            self.store_account(pubkey, &account);
-        });
+        // Sort first by stake and then by pubkey for determinism
+        node_stakes.sort_by(
+            |(pubkey1, staked1), (pubkey2, staked2)| match staked2.cmp(staked1) {
+                std::cmp::Ordering::Equal => pubkey2.cmp(pubkey1),
+                other => other,
+            },
+        );
+
+        let node_stakes_and_rent = node_stakes
+            .iter()
+            .map(|(pubkey, staked)| {
+                let rent_in_initial_round =
+                    (((*staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
+                rent_distributed_in_initial_round += rent_in_initial_round;
+                (*pubkey, *staked, rent_in_initial_round)
+            })
+            .collect::<Vec<(Pubkey, u64, u64)>>();
+
+        // Leftover lamports after fraction calculation, will be paid to validators starting from highest stake
+        // holder
+        let mut leftover_lamports = rent_to_be_distributed - rent_distributed_in_initial_round;
+
+        node_stakes_and_rent
+            .iter()
+            .for_each(|(pubkey, _staked, rent)| {
+                let rent_to_be_paid = if leftover_lamports > 0 {
+                    leftover_lamports -= 1;
+                    *rent + 1
+                } else {
+                    *rent
+                };
+                let mut account = self.get_account(pubkey).unwrap_or_default();
+                account.lamports += rent_to_be_paid;
+                self.store_account(pubkey, &account);
+            });
     }
 
     fn distribute_rent(&self) {
@@ -2321,19 +2350,20 @@ mod tests {
         let rent_to_be_distributed = total_rent_deducted - burned_portion;
 
         let bootstrap_leader_portion =
-            ((bootstrap_leader_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
+            ((bootstrap_leader_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64 + 1; // Leftover lamport
         assert_eq!(
             bank.get_balance(&bootstrap_leader_pubkey),
             bootstrap_leader_portion + bootstrap_leader_initial_balance
         );
 
         let validator_1_portion =
-            ((validator_1_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
+            ((validator_1_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64 + 1;
         assert_eq!(
             bank.get_balance(&validator_1_pubkey),
             validator_1_portion + 42
         );
 
+        // No leftover lamport for you, as you have smallest of stake
         let validator_2_portion =
             ((validator_2_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
         assert_eq!(
@@ -2342,7 +2372,7 @@ mod tests {
         );
 
         let validator_3_portion =
-            ((validator_3_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64;
+            ((validator_3_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64 + 1;
         assert_eq!(
             bank.get_balance(&validator_3_pubkey),
             validator_3_portion + 42
