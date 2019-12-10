@@ -83,16 +83,20 @@ is not accepting old votes because the blockhash has expired, it
 is safe for the validator to retry with a new blockhash, or wait
 for 2^N slots until all the pending votes have expired.
 
+Before transmitting the vote to the network, validators should store
+the pending votes in persistent storage.
+ 
 If a validator is restarted and cannot recover the previous votes
 from persistent storage, the validator should wait for 2^N slots
 before resuming voting.  This would allow any pending votes to
 expire before new votes are generated.
 
-Before transmitting the vote to the network, validators should store
-the pending votes in persistent storage.
-
 * For this parameter, N should be on the order of the threshold
 that validators use to observe a supermajority.
+
+VoteState for each validator should maintain a queue of
+`last_slashed_slots`, to guard against being slashed twice for the
+same offense.
 
 ## Variable Slashing Percentage
 
