@@ -1,7 +1,8 @@
 use crate::cli::{
     build_balance_message, check_account_for_fee, check_unique_pubkeys,
-    get_blockhash_fee_calculator, log_instruction_custom_error, replace_signatures, return_signers,
-    CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+    get_blockhash_fee_calculator, log_instruction_custom_error, replace_signatures,
+    required_lamports_from, return_signers, CliCommand, CliCommandInfo, CliConfig, CliError,
+    ProcessResult,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use console::style;
@@ -51,6 +52,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("AMOUNT")
                         .takes_value(true)
+                        .validator(is_amount)
                         .required(true)
                         .help("The amount of send to the vote account (default unit SOL)")
                 )
@@ -251,6 +253,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(3)
                         .value_name("AMOUNT")
                         .takes_value(true)
+                        .validator(is_amount)
                         .required(true)
                         .help("The amount to withdraw from the stake account (default unit SOL)")
                 )
@@ -323,7 +326,7 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
     let staker = pubkey_of(matches, "authorized_staker");
     let withdrawer = pubkey_of(matches, "authorized_withdrawer");
-    let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
+    let lamports = required_lamports_from(matches, "amount", "unit")?;
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
@@ -407,7 +410,7 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
 pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
-    let lamports = amount_of(matches, "amount", "unit").expect("Invalid amount");
+    let lamports = required_lamports_from(matches, "amount", "unit")?;
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawStake(
