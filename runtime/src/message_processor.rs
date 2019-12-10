@@ -135,7 +135,7 @@ pub fn verify_account_changes(
 
     if need_account_data_checked(&pre.owner, program_id, pre.is_writable) {
         match &pre.data {
-            Some(data) if hash(data) == hash(&post.data) => (),
+            Some(data) if *data == post.data => (),
             _ => {
                 if !pre.is_writable {
                     return Err(InstructionError::ReadonlyDataModified);
