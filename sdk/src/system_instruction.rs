@@ -1,3 +1,4 @@
+use crate::hash::hashv;
 use crate::instruction::{AccountMeta, Instruction};
 use crate::instruction_processor_utils::DecodeError;
 use crate::pubkey::Pubkey;
@@ -11,6 +12,9 @@ pub enum SystemError {
     InvalidProgramId,
     InvalidAccountId,
     InvalidAccountDataLength,
+    InvalidSeed,
+    MaxSeedLengthExceeded,
+    AddressWithSeedMismatch,
 }
 
 impl<T> DecodeError<T> for SystemError {
@@ -26,6 +30,12 @@ impl std::fmt::Display for SystemError {
 }
 impl std::error::Error for SystemError {}
 
+/// maximum length of derived address seed
+pub const MAX_ADDRESS_SEED_LEN: usize = 32;
+
+/// maximum permitted size of data: 10 MB
+pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SystemInstruction {
     /// Create a new account
@@ -35,6 +45,20 @@ pub enum SystemInstruction {
     /// * space - memory to allocate if greater then zero
     /// * program_id - the program id of the new account
     CreateAccount {
+        lamports: u64,
+        space: u64,
+        program_id: Pubkey,
+    },
+    /// Create a new account at an address derived from
+    ///    the from account and a seed
+    /// * Transaction::keys[0] - source
+    /// * Transaction::keys[1] - new account key
+    /// * seed - string of ascii chars, no longer than MAX_ADDRESS_SEED_LEN
+    /// * lamports - number of lamports to transfer to the new account
+    /// * space - memory to allocate if greater then zero
+    /// * program_id - the program id of the new account
+    CreateAccountWithSeed {
+        seed: String,
         lamports: u64,
         space: u64,
         program_id: Pubkey,
@@ -101,12 +125,65 @@ pub fn transfer_many(from_pubkey: &Pubkey, to_lamports: &[(Pubkey, u64)]) -> Vec
         .collect()
 }
 
+pub fn create_address_with_seed(
+    from_pubkey: &Pubkey,
+    seed: &str,
+    program_id: &Pubkey,
+) -> Result<Pubkey, SystemError> {
+    if seed.len() > MAX_ADDRESS_SEED_LEN {
+        return Err(SystemError::MaxSeedLengthExceeded);
+    }
+
+    if seed.chars().any(|c| !c.is_ascii()) {
+        return Err(SystemError::InvalidSeed);
+    }
+
+    Ok(Pubkey::new(
+        hashv(&[from_pubkey.as_ref(), seed.as_ref(), program_id.as_ref()]).as_ref(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn get_keys(instruction: &Instruction) -> Vec<Pubkey> {
         instruction.accounts.iter().map(|x| x.pubkey).collect()
+    }
+
+    #[test]
+    fn test_create_address_with_seed() {
+        assert_eq!(
+            create_address_with_seed(&Pubkey::new_rand(), "\u{128}", &Pubkey::new_rand()),
+            Err(SystemError::InvalidSeed)
+        );
+        assert_eq!(
+            create_address_with_seed(
+                &Pubkey::new_rand(),
+                std::str::from_utf8(&[127; MAX_ADDRESS_SEED_LEN + 1]).unwrap(),
+                &Pubkey::new_rand()
+            ),
+            Err(SystemError::MaxSeedLengthExceeded)
+        );
+        assert!(create_address_with_seed(
+            &Pubkey::new_rand(),
+            std::str::from_utf8(&[0; MAX_ADDRESS_SEED_LEN]).unwrap(),
+            &Pubkey::new_rand(),
+        )
+        .is_ok());
+
+        assert!(create_address_with_seed(&Pubkey::new_rand(), "", &Pubkey::new_rand(),).is_ok());
+
+        assert_eq!(
+            create_address_with_seed(
+                &Pubkey::default(),
+                "limber chicken: 4/45",
+                &Pubkey::default(),
+            ),
+            Ok("9h1HyLCW5dZnBVap8C5egQ9Z6pHyjsh5MNy83iPqqRuq"
+                .parse()
+                .unwrap())
+        );
     }
 
     #[test]
