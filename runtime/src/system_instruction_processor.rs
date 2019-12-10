@@ -7,8 +7,8 @@ use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
 use solana_sdk::sysvar;
 
-// 512 Kilobytes (To accommodate eBPF programs)
-const MAX_PERMITTED_DATA_LENGTH: u64 = 512 * 1024;
+// 10 MB
+const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
 fn create_system_account(
     from: &mut KeyedAccount,
