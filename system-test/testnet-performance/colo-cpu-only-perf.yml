@@ -10,7 +10,7 @@ steps:
       TEST_DURATION_SECONDS: 600
       NUMBER_OF_VALIDATOR_NODES: 4
       NUMBER_OF_CLIENT_NODES: 2
-      CLIENT_OPTIONS: "bench-tps=2=--tx_count 15000 --thread-batch-sleep-ms 250"
+      CLIENT_OPTIONS: "bench-tps=2=--tx_count 20000 --thread-batch-sleep-ms 250"
       ADDITIONAL_FLAGS: ""
     agents:
       - "queue=colo-deploy"
