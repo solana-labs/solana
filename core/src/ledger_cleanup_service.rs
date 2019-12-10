@@ -66,16 +66,20 @@ impl LedgerCleanupService {
 
         let disk_utilization_post = blocktree.storage_size();
 
-        datapoint_debug!(
-            "ledger_disk_utilization",
-            ("disk_utilization_pre", disk_utilization_pre as i64, i64),
-            ("disk_utilization_post", disk_utilization_post as i64, i64),
-            (
-                "disk_utilization_delta",
-                (disk_utilization_pre as i64 - disk_utilization_post as i64),
-                i64
-            )
-        );
+        if let (Some(disk_utilization_pre), Some(disk_utilization_post)) =
+            (disk_utilization_pre, disk_utilization_post)
+        {
+            datapoint_debug!(
+                "ledger_disk_utilization",
+                ("disk_utilization_pre", disk_utilization_pre as i64, i64),
+                ("disk_utilization_post", disk_utilization_post as i64, i64),
+                (
+                    "disk_utilization_delta",
+                    (disk_utilization_pre as i64 - disk_utilization_post as i64),
+                    i64
+                )
+            );
+        }
 
         Ok(())
     }

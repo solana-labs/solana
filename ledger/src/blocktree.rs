@@ -1493,7 +1493,7 @@ impl Blocktree {
         self.last_root()
     }
 
-    pub fn storage_size(&self) -> u64 {
+    pub fn storage_size(&self) -> Option<u64> {
         self.db.storage_size()
     }
 }
