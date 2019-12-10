@@ -118,3 +118,10 @@ pub fn is_valid_percentage(percentage: String) -> Result<(), String> {
             }
         })
 }
+
+pub fn is_amount(amount: String) -> Result<(), String> {
+    amount
+        .parse::<u64>()
+        .map(|_| ())
+        .map_err(|e| format!("{:?}", e))
+}
