@@ -95,7 +95,24 @@ elif channel == 'stable':
                                                 'text': 'testnet-perf',
                                                 'value': 'testnet-perf'}],
                                    'query': 'testnet,testnet-perf',
-                                   'type': 'custom'}]
+                                   'type': 'custom'},
+                                   {'allValue': ".*",
+                                    'datasource': '$datasource',
+                                    'hide': 0,
+                                    'includeAll': True,
+                                    'label': 'HostID',
+                                    'multi': False,
+                                    'name': 'hostid',
+                                    'options': [],
+                                    'query': 'SELECT DISTINCT(\"id\") FROM \"$testnet\".\"autogen\".\"validator-new\" ',
+                                    'refresh': 2,
+                                    'regex': '',
+                                    'sort': 1,
+                                    'tagValuesQuery': '',
+                                    'tags': [],
+                                    'tagsQuery': '',
+                                    'type': 'query',
+                                    'useTags': False}]
 else:
     # Non-stable dashboard only allows the user to select between all testnet
     # databases
