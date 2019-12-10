@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-bincode = "1.2.0"
+bincode = "1.2.1"
 bs58 = "0.3.0"
 clap = "2.32.0"
 env_logger = "0.7.1"

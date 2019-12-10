@@ -9,7 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-bincode = "1.2.0"
+bincode = "1.2.1"
 clap = "2.33.0"
 serde = "1.0.103"
 serde_derive = "1.0.103"

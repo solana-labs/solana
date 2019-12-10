@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 rand = "0.6.5"
 dlopen = "0.1.8"
-bincode = "1.2.0"
+bincode = "1.2.1"
 rayon = "1.2.0"
 serde = "1.0.103"
 serde_derive = "1.0.103"
