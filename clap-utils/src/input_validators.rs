@@ -120,8 +120,12 @@ pub fn is_valid_percentage(percentage: String) -> Result<(), String> {
 }
 
 pub fn is_amount(amount: String) -> Result<(), String> {
-    amount
-        .parse::<u64>()
-        .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
+    if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Unable to parse input amount as integer or float, provided: {}",
+            amount
+        ))
+    }
 }
