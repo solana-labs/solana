@@ -14,7 +14,7 @@ protect against this scenario.
 
 All that is needed to check an account balance is the public key of an account.
 To retrieve public keys securely from a paper wallet, follow the
-[Public Key Derivation](keypair#public-key-derivation) instructions on an
+[Public Key Derivation](keypair.md#public-key-derivation) instructions on an
 [air gapped computer](https://en.wikipedia.org/wiki/Air_gap_\(networking\)).
 Public keys can then be typed manually or transferred via a USB stick into a
 networked machine.
