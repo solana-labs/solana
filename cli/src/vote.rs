@@ -266,7 +266,12 @@ pub fn process_create_vote_account(
         ixs,
         recent_blockhash,
     );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, vote_account]);
     log_instruction_custom_error::<SystemError>(result)
 }
@@ -296,7 +301,12 @@ pub fn process_vote_authorize(
         &[&config.keypair],
         recent_blockhash,
     );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<VoteError>(result)
 }

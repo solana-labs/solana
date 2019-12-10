@@ -344,6 +344,7 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let sign_only = matches.is_present("sign_only");
     let signers = pubkeys_sigs_of(&matches, "signer");
     let blockhash = value_of(matches, "blockhash");
+    let require_keypair = signers.is_none();
 
     Ok(CliCommandInfo {
         command: CliCommand::DelegateStake {
@@ -354,7 +355,7 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
             signers,
             blockhash,
         },
-        require_keypair: !sign_only,
+        require_keypair,
     })
 }
 
@@ -378,6 +379,7 @@ pub fn parse_stake_authorize(
 pub fn parse_redeem_vote_credits(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+
     Ok(CliCommandInfo {
         command: CliCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey),
         require_keypair: true,
@@ -389,6 +391,8 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
     let sign_only = matches.is_present("sign_only");
     let signers = pubkeys_sigs_of(&matches, "signer");
     let blockhash = value_of(matches, "blockhash");
+    let require_keypair = signers.is_none();
+
     Ok(CliCommandInfo {
         command: CliCommand::DeactivateStake {
             stake_account_pubkey,
@@ -396,7 +400,7 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
             signers,
             blockhash,
         },
-        require_keypair: !sign_only,
+        require_keypair,
     })
 }
 
@@ -489,7 +493,12 @@ pub fn process_create_stake_account(
         &[&config.keypair, stake_account],
         recent_blockhash,
     );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result =
         rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, stake_account]);
     log_instruction_custom_error::<SystemError>(result)
@@ -520,7 +529,12 @@ pub fn process_stake_authorize(
         &[&config.keypair],
         recent_blockhash,
     );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<StakeError>(result)
 }
@@ -551,7 +565,12 @@ pub fn process_deactivate_stake_account(
     if sign_only {
         return_signers(&tx)
     } else {
-        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+        check_account_for_fee(
+            rpc_client,
+            &tx.message.account_keys[0],
+            &fee_calculator,
+            &tx.message,
+        )?;
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         log_instruction_custom_error::<StakeError>(result)
     }
@@ -579,7 +598,12 @@ pub fn process_withdraw_stake(
         &[&config.keypair],
         recent_blockhash,
     );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<StakeError>(result)
 }
@@ -601,7 +625,12 @@ pub fn process_redeem_vote_credits(
         &[&config.keypair],
         recent_blockhash,
     );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<StakeError>(result)
 }
@@ -791,7 +820,12 @@ pub fn process_delegate_stake(
     if sign_only {
         return_signers(&tx)
     } else {
-        check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+        check_account_for_fee(
+            rpc_client,
+            &tx.message.account_keys[0],
+            &fee_calculator,
+            &tx.message,
+        )?;
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         log_instruction_custom_error::<StakeError>(result)
     }
@@ -1008,7 +1042,7 @@ mod tests {
                     signers: None,
                     blockhash: None
                 },
-                require_keypair: false
+                require_keypair: true
             }
         );
 
@@ -1035,7 +1069,7 @@ mod tests {
                     signers: Some(vec![(key1, sig1)]),
                     blockhash: None
                 },
-                require_keypair: true
+                require_keypair: false
             }
         );
 
@@ -1064,7 +1098,7 @@ mod tests {
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
                     blockhash: None
                 },
-                require_keypair: true
+                require_keypair: false
             }
         );
 
@@ -1143,7 +1177,7 @@ mod tests {
                     signers: None,
                     blockhash: None
                 },
-                require_keypair: false
+                require_keypair: true
             }
         );
 
@@ -1167,7 +1201,7 @@ mod tests {
                     signers: Some(vec![(key1, sig1)]),
                     blockhash: None
                 },
-                require_keypair: true
+                require_keypair: false
             }
         );
 
@@ -1193,7 +1227,7 @@ mod tests {
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
                     blockhash: None
                 },
-                require_keypair: true
+                require_keypair: false
             }
         );
     }

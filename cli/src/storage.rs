@@ -182,7 +182,12 @@ pub fn process_create_storage_account(
         ixs,
         recent_blockhash,
     );
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result =
         rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, &storage_account]);
     log_instruction_custom_error::<SystemError>(result)
@@ -202,7 +207,12 @@ pub fn process_claim_storage_reward(
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
 
     let mut tx = Transaction::new(&signers, message, recent_blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &signers)?;
     Ok(signature_str.to_string())
 }

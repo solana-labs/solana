@@ -512,20 +512,20 @@ pub type ProcessResult = Result<String, Box<dyn std::error::Error>>;
 
 pub fn check_account_for_fee(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    account_pubkey: &Pubkey,
     fee_calculator: &FeeCalculator,
     message: &Message,
 ) -> Result<(), Box<dyn error::Error>> {
-    check_account_for_multiple_fees(rpc_client, config, fee_calculator, &[message])
+    check_account_for_multiple_fees(rpc_client, account_pubkey, fee_calculator, &[message])
 }
 
 fn check_account_for_multiple_fees(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    account_pubkey: &Pubkey,
     fee_calculator: &FeeCalculator,
     messages: &[&Message],
 ) -> Result<(), Box<dyn error::Error>> {
-    let balance = rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)?;
+    let balance = rpc_client.retry_get_balance(account_pubkey, 5)?;
     if let Some(lamports) = balance {
         if lamports
             >= messages
@@ -744,7 +744,12 @@ fn process_deploy(
     let mut finalize_tx = Transaction::new(&signers, message, blockhash);
     messages.push(&finalize_tx.message);
 
-    check_account_for_multiple_fees(rpc_client, config, &fee_calculator, &messages)?;
+    check_account_for_multiple_fees(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &messages,
+    )?;
 
     trace!("Creating program account");
     let result = rpc_client.send_and_confirm_transaction(&mut create_account_tx, &signers);
@@ -804,7 +809,12 @@ fn process_pay(
         if sign_only {
             return_signers(&tx)
         } else {
-            check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+            check_account_for_fee(
+                rpc_client,
+                &config.keypair.pubkey(),
+                &fee_calculator,
+                &tx.message,
+            )?;
             let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
             log_instruction_custom_error::<SystemError>(result)
         }
@@ -838,7 +848,12 @@ fn process_pay(
         if sign_only {
             return_signers(&tx)
         } else {
-            check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+            check_account_for_fee(
+                rpc_client,
+                &config.keypair.pubkey(),
+                &fee_calculator,
+                &tx.message,
+            )?;
             let result = rpc_client
                 .send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
             let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
@@ -883,7 +898,12 @@ fn process_pay(
         } else {
             let result = rpc_client
                 .send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
-            check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+            check_account_for_fee(
+                rpc_client,
+                &config.keypair.pubkey(),
+                &fee_calculator,
+                &tx.message,
+            )?;
             let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
             Ok(json!({
@@ -905,7 +925,12 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
         &config.keypair.pubkey(),
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<BudgetError>(result)
 }
@@ -921,7 +946,12 @@ fn process_time_elapsed(
 
     let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<BudgetError>(result)
 }
@@ -936,7 +966,12 @@ fn process_witness(
 
     let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    check_account_for_fee(rpc_client, config, &fee_calculator, &tx.message)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<BudgetError>(result)
 }
