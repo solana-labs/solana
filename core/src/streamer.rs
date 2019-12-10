@@ -102,7 +102,6 @@ pub fn recv_batch(recvr: &PacketReceiver, max_batch: usize) -> Result<(Vec<Packe
         trace!("got more msgs");
         len += more.packets.len();
         batch.push(more);
-
         if len > max_batch {
             break;
         }
