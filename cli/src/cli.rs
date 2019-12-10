@@ -1778,14 +1778,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_bad_amount() {
-        let test_commands = app("test", "desc", "version");
-        let test_bad_airdrop = test_commands.get_matches_from(vec!["test", "airdrop", "notint"]);
-        let _ignored = parse_command(&test_bad_airdrop).unwrap();
-    }
-
-    #[test]
     fn test_cli_parse_command() {
         let test_commands = app("test", "desc", "version");
 
