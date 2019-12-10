@@ -6,6 +6,16 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
+args=()
+airdrops_enabled=1
+node_lamports=500000000000 # 500 SOL: number of lamports to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
+label=
+identity_keypair_path=
+voting_keypair_path=
+no_restart=0
+gossip_entrypoint=
+ledger_dir=
+
 usage() {
   if [[ -n $1 ]]; then
     echo "$*"
@@ -23,7 +33,7 @@ OPTIONS:
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --label LABEL             - Append the given label to the configuration files, useful when running
                               multiple validators in the same workspace
-  --node-lamports LAMPORTS  - Number of lamports this node has been funded from the genesis config
+  --node-lamports LAMPORTS  - Number of lamports this node has been funded from the genesis config (default: $node_lamports)
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
   --no-restart              - do not restart the node if it exits
@@ -32,16 +42,6 @@ OPTIONS:
 EOF
   exit 1
 }
-
-args=()
-airdrops_enabled=1
-node_lamports=500000000000 # 500 SOL: number of lamports to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
-label=
-identity_keypair_path=
-voting_keypair_path=
-no_restart=0
-gossip_entrypoint=
-ledger_dir=
 
 positional_args=()
 while [[ -n $1 ]]; do
