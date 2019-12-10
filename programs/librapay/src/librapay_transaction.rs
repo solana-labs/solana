@@ -156,7 +156,8 @@ mod tests {
     use std::sync::Arc;
 
     fn create_bank(lamports: u64) -> (Arc<Bank>, Keypair, Keypair, Pubkey, Pubkey) {
-        let (genesis_config, mint) = create_genesis_config(lamports);
+        let (mut genesis_config, mint) = create_genesis_config(lamports);
+        genesis_config.rent.lamports_per_byte_year = 0;
         let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(
             solana_sdk::move_loader::id(),

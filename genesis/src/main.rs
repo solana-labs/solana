@@ -19,9 +19,9 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil},
     system_program, timing,
 };
-use solana_stake_program::stake_state;
+use solana_stake_program::stake_state::{self, StakeState};
 use solana_storage_program::storage_contract;
-use solana_vote_program::vote_state;
+use solana_vote_program::vote_state::{self, VoteState};
 use std::{
     collections::{BTreeMap, HashMap},
     error,
@@ -98,26 +98,34 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
 
 #[allow(clippy::cognitive_complexity)]
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let default_bootstrap_leader_lamports = &sol_to_lamports(500.0).to_string();
-    let default_bootstrap_leader_stake_lamports = &sol_to_lamports(0.5).to_string();
     let default_target_lamports_per_signature = &FeeCalculator::default()
         .target_lamports_per_signature
         .to_string();
     let default_target_signatures_per_slot = &FeeCalculator::default()
         .target_signatures_per_slot
         .to_string();
+
+    let rent = Rent::default();
     let (
         default_lamports_per_byte_year,
         default_rent_exemption_threshold,
         default_rent_burn_percentage,
     ) = {
-        let rent = Rent::default();
         (
             &rent.lamports_per_byte_year.to_string(),
             &rent.exemption_threshold.to_string(),
             &rent.burn_percent.to_string(),
         )
     };
+    // vote account
+    let default_bootstrap_leader_lamports = &sol_to_lamports(500.0)
+        .max(VoteState::get_rent_exempt_reserve(&rent))
+        .to_string();
+    // stake account
+    let default_bootstrap_leader_stake_lamports = &sol_to_lamports(0.5)
+        .max(StakeState::get_rent_exempt_reserve(&rent))
+        .to_string();
+
     let default_target_tick_duration =
         timing::duration_as_us(&PohConfig::default().target_tick_duration);
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
@@ -324,9 +332,36 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let faucet_lamports = value_t!(matches, "faucet_lamports", u64).unwrap_or(0);
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
+
+    let rent = Rent {
+        lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
+        exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
+        burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
+    };
+
+    fn rent_exempt_check(matches: &ArgMatches<'_>, name: &str, exempt: u64) -> io::Result<u64> {
+        let lamports = value_t_or_exit!(matches, name, u64);
+
+        if lamports < exempt {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "error: insufficient {}: {} for rent exemption, requires {}",
+                    name, lamports, exempt
+                ),
+            ))
+        } else {
+            Ok(lamports)
+        }
+    }
+
     let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
-    let bootstrap_leader_stake_lamports =
-        value_t_or_exit!(matches, "bootstrap_leader_stake_lamports", u64);
+
+    let bootstrap_leader_stake_lamports = rent_exempt_check(
+        &matches,
+        "bootstrap_leader_stake_lamports",
+        StakeState::get_rent_exempt_reserve(&rent),
+    )?;
 
     let bootstrap_leader_pubkey = required_pubkey(&matches, "bootstrap_leader_pubkey_file")?;
     let bootstrap_vote_pubkey = required_pubkey(&matches, "bootstrap_vote_pubkey_file")?;
@@ -336,14 +371,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
     let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
-    let rent = Rent {
-        lamports_per_byte_year: value_t_or_exit!(matches, "lamports_per_byte_year", u64),
-        exemption_threshold: value_t_or_exit!(matches, "rent_exemption_threshold", f64),
-        burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
-    };
-
-    let bootstrap_leader_vote_account =
-        vote_state::create_account(&bootstrap_vote_pubkey, &bootstrap_leader_pubkey, 0, 1);
+    let bootstrap_leader_vote_account = vote_state::create_account(
+        &bootstrap_vote_pubkey,
+        &bootstrap_leader_pubkey,
+        0,
+        VoteState::get_rent_exempt_reserve(&rent).max(1),
+    );
 
     let bootstrap_leader_stake_account = stake_state::create_account(
         bootstrap_stake_authorized_pubkey

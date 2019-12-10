@@ -243,13 +243,11 @@ pub fn process_create_vote_account(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
         (&vote_account_pubkey, "vote_account_pubkey".to_string()),
     )?;
-    let required_balance =
-        rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
-    let lamports = if required_balance > 0 {
-        required_balance
-    } else {
-        1
-    };
+
+    let required_balance = dbg!(rpc_client
+        .get_minimum_balance_for_rent_exemption(VoteState::size_of())?
+        .max(1));
+
     let vote_init = VoteInit {
         node_pubkey: *node_pubkey,
         authorized_voter: authorized_voter.unwrap_or(vote_account_pubkey),
@@ -260,7 +258,7 @@ pub fn process_create_vote_account(
         &config.keypair.pubkey(),
         &vote_account_pubkey,
         &vote_init,
-        lamports,
+        required_balance,
     );
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_instructions(

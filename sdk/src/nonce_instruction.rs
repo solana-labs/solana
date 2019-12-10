@@ -172,7 +172,7 @@ mod tests {
                         vec![(0u64, &Hash::default()); 32].into_iter(),
                     )
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    sysvar::rent::create_account(1, &Rent::default())
+                    sysvar::rent::create_account(1, &Rent::free())
                 } else {
                     Account::default()
                 }
@@ -276,7 +276,7 @@ mod tests {
                 KeyedAccount::new(
                     &sysvar::rent::id(),
                     false,
-                    &mut sysvar::rent::create_account(1, &Rent::default()),
+                    &mut sysvar::rent::create_account(1, &Rent::free()),
                 ),
             ],
             &serialize(&NonceInstruction::Initialize).unwrap(),
@@ -409,7 +409,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rent::id(),
                         false,
-                        &mut sysvar::rent::create_account(1, &Rent::default())
+                        &mut sysvar::rent::create_account(1, &Rent::free())
                     ),
                 ],
                 &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
@@ -526,7 +526,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rent::id(),
                         false,
-                        &mut sysvar::rent::create_account(1, &Rent::default())
+                        &mut sysvar::rent::create_account(1, &Rent::free())
                     ),
                 ],
                 &serialize(&NonceInstruction::Initialize).unwrap(),

@@ -95,7 +95,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_store_and_recover() {
-        let (genesis_config, mint_keypair) = create_genesis_config(1000);
+        let (mut genesis_config, mint_keypair) = create_genesis_config(1000);
+        genesis_config.rent.lamports_per_byte_year = 0;
         let mint_pubkey = mint_keypair.pubkey();
         let archiver_keypair = Keypair::new();
         let archiver_pubkey = archiver_keypair.pubkey();

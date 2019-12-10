@@ -18,7 +18,7 @@ pub struct Rent {
 ///  $1 per SOL
 ///  $0.01 per megabyte day
 ///  $3.65 per megabyte year
-pub const DEFAULT_LAMPORTS_PER_BYTE_YEAR: u64 = 0; //1_000_000_000 / 100 * 365 / (1024 * 1024);
+pub const DEFAULT_LAMPORTS_PER_BYTE_YEAR: u64 = 1_000_000_000 / 100 * 365 / (1024 * 1024);
 
 /// default amount of time (in years) the balance has to include rent for
 pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;

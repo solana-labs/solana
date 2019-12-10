@@ -210,7 +210,7 @@ mod tests {
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
                     sysvar::slot_hashes::create_account(1, &[])
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    Rent::default().create_account(1)
+                    Rent::free().create_account(1)
                 } else {
                     Account::default()
                 }
