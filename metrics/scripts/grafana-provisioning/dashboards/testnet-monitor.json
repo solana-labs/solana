@@ -4538,7 +4538,7 @@
         "x": 0,
         "y": 50
       },
-      "id": 68,
+      "id": 38,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -4621,7 +4621,7 @@
         "x": 0,
         "y": 55
       },
-      "id": 38,
+      "id": 39,
       "panels": [],
       "title": "Bench Exchange",
       "type": "row"
@@ -4639,7 +4639,7 @@
         "x": 0,
         "y": 56
       },
-      "id": 39,
+      "id": 40,
       "legend": {
         "avg": false,
         "current": false,
@@ -4790,7 +4790,7 @@
         "x": 12,
         "y": 56
       },
-      "id": 40,
+      "id": 41,
       "legend": {
         "avg": false,
         "current": false,
@@ -4973,7 +4973,7 @@
         "x": 0,
         "y": 61
       },
-      "id": 41,
+      "id": 42,
       "panels": [],
       "title": "Validator Streamer",
       "type": "row"
@@ -4991,7 +4991,7 @@
         "x": 0,
         "y": 62
       },
-      "id": 42,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5076,45 +5076,6 @@
           "query": "SELECT mean(\"shredding_time\") AS \"shredding_time\" FROM \"$testnet\".\"autogen\".\"broadcast-bank-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT mean(\"clone_and_seed\") AS \"clone_and_seed\" FROM \"$testnet\".\"autogen\".\"broadcast-bank-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "C",
           "resultFormat": "time_series",
           "select": [
             [
@@ -5248,6 +5209,45 @@
             ]
           ],
           "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"insertion_time\") AS \"insertion_time\" FROM \"$testnet\".\"autogen\".\"broadcast-bank-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "D",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
         }
       ],
       "thresholds": [],
@@ -5310,7 +5310,7 @@
         "x": 8,
         "y": 62
       },
-      "id": 43,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5668,7 +5668,7 @@
         "x": 16,
         "y": 62
       },
-      "id": 44,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5980,7 +5980,7 @@
         "x": 0,
         "y": 68
       },
-      "id": 45,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6636,7 +6636,7 @@
         "x": 16,
         "y": 68
       },
-      "id": 47,
+      "id": 48,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6757,7 +6757,7 @@
         "x": 16,
         "y": 73
       },
-      "id": 48,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6913,7 +6913,7 @@
         "x": 0,
         "y": 74
       },
-      "id": 49,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7069,7 +7069,7 @@
         "x": 8,
         "y": 74
       },
-      "id": 50,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7184,7 +7184,7 @@
         "x": 16,
         "y": 78
       },
-      "id": 51,
+      "id": 52,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7388,7 +7388,7 @@
         "x": 0,
         "y": 79
       },
-      "id": 52,
+      "id": 53,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7690,7 +7690,7 @@
         "x": 8,
         "y": 79
       },
-      "id": 53,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7838,7 +7838,7 @@
         "x": 0,
         "y": 84
       },
-      "id": 54,
+      "id": 55,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -7861,7 +7861,7 @@
         "x": 0,
         "y": 85
       },
-      "id": 55,
+      "id": 56,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8021,7 +8021,7 @@
         "x": 8,
         "y": 85
       },
-      "id": 56,
+      "id": 57,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8181,7 +8181,7 @@
         "x": 16,
         "y": 85
       },
-      "id": 57,
+      "id": 58,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8366,7 +8366,7 @@
         "x": 0,
         "y": 90
       },
-      "id": 58,
+      "id": 59,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -8385,7 +8385,7 @@
         "x": 0,
         "y": 91
       },
-      "id": 59,
+      "id": 60,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8618,7 +8618,7 @@
         "x": 12,
         "y": 91
       },
-      "id": 60,
+      "id": 61,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8771,7 +8771,7 @@
         "x": 0,
         "y": 96
       },
-      "id": 61,
+      "id": 62,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -8789,7 +8789,7 @@
         "x": 0,
         "y": 97
       },
-      "id": 62,
+      "id": 63,
       "legend": {
         "avg": false,
         "current": false,
@@ -8830,7 +8830,83 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT max(\"total_time_ms\") AS \"max\" FROM \"$testnet\".\"autogen\".\"sigverify_stage-total_verify_time\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n\n",
+          "query": "SELECT mean(\"num_packets\") AS \"num_packets\" FROM \"$testnet\".\"autogen\".\"sigverify_stage-total_verify_time\" WHERE $timeFilter GROUP BY time(500ms) FILL(0)\n\n",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"verify_time_ms\") AS \"verify_time\" FROM \"$testnet\".\"autogen\".\"sigverify_stage-total_verify_time\" WHERE $timeFilter GROUP BY time(500ms) FILL(0)\n\n",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"recv_time\") AS \"recv_time\" FROM \"$testnet\".\"autogen\".\"sigverify_stage-total_verify_time\" WHERE $timeFilter GROUP BY time(500ms) FILL(0)\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -8910,7 +8986,7 @@
         "x": 12,
         "y": 97
       },
-      "id": 63,
+      "id": 64,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9059,7 +9135,7 @@
         "x": 0,
         "y": 102
       },
-      "id": 64,
+      "id": 65,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -9077,7 +9153,7 @@
         "x": 0,
         "y": 103
       },
-      "id": 65,
+      "id": 66,
       "legend": {
         "avg": false,
         "current": false,
@@ -9269,7 +9345,7 @@
         "x": 8,
         "y": 103
       },
-      "id": 66,
+      "id": 67,
       "legend": {
         "avg": false,
         "current": false,
@@ -9461,7 +9537,7 @@
         "x": 16,
         "y": 103
       },
-      "id": 67,
+      "id": 68,
       "legend": {
         "avg": false,
         "current": false,
@@ -9650,7 +9726,7 @@
         "x": 0,
         "y": 109
       },
-      "id": 74,
+      "id": 69,
       "panels": [],
       "title": "Resources",
       "type": "row"
@@ -9905,6 +9981,7 @@
       {
         "allValue": ".*",
         "current": {
+          "selected": false,
           "text": "testnet",
           "value": "testnet"
         },
