@@ -34,7 +34,7 @@ use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
-use solana_sdk::clock::Slot;
+use solana_sdk::clock::{Epoch, Slot};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar;
@@ -191,6 +191,8 @@ pub struct AccountStorageEntry {
     ///  any accounts in it
     /// status corresponding to the storage, lets us know that
     ///  the append_vec, once maxed out, then emptied, can be reclaimed
+    /// Currently serialized count isn't used at all. Rather, we recalculate it
+    /// when deserializing.
     count_and_status: RwLock<(usize, AccountStorageStatus)>,
 }
 
@@ -808,16 +810,32 @@ impl AccountsDB {
         Self::hash_account_data(
             slot,
             account.account_meta.lamports,
+            account.account_meta.executable,
+            account.account_meta.rent_epoch,
             account.data,
             &account.meta.pubkey,
         )
     }
 
     pub fn hash_account(slot: Slot, account: &Account, pubkey: &Pubkey) -> Hash {
-        Self::hash_account_data(slot, account.lamports, &account.data, pubkey)
+        Self::hash_account_data(
+            slot,
+            account.lamports,
+            account.executable,
+            account.rent_epoch,
+            &account.data,
+            pubkey,
+        )
     }
 
-    pub fn hash_account_data(slot: Slot, lamports: u64, data: &[u8], pubkey: &Pubkey) -> Hash {
+    pub fn hash_account_data(
+        slot: Slot,
+        lamports: u64,
+        executable: bool,
+        rent_epoch: Epoch,
+        data: &[u8],
+        pubkey: &Pubkey,
+    ) -> Hash {
         if lamports == 0 {
             return Hash::default();
         }
@@ -831,7 +849,16 @@ impl AccountsDB {
         LittleEndian::write_u64(&mut buf[..], slot);
         hasher.hash(&buf);
 
+        LittleEndian::write_u64(&mut buf[..], rent_epoch);
+        hasher.hash(&buf);
+
         hasher.hash(&data);
+
+        if executable {
+            hasher.hash(&[1u8; 1]);
+        } else {
+            hasher.hash(&[0u8; 1]);
+        }
 
         hasher.hash(&pubkey.as_ref());
 
@@ -1189,10 +1216,12 @@ impl AccountsDB {
 pub mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
+    use crate::append_vec::AccountMeta;
     use bincode::serialize_into;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
     use std::fs;
+    use std::str::FromStr;
     use tempfile::TempDir;
 
     #[test]
@@ -2102,5 +2131,57 @@ pub mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_hash_stored_account() {
+        // This test uses some UNSAFE trick to detect most of account's field
+        // addition and deletion without changing the hash code
+
+        const ACCOUNT_DATA_LEN: usize = 3;
+        // the type of InputTuple elements must not contain references;
+        // they should be simple scalars or data blobs
+        type InputTuple = (
+            Slot,
+            StoredMeta,
+            AccountMeta,
+            [u8; ACCOUNT_DATA_LEN],
+            usize, // for StoredAccount::offset
+            Hash,
+        );
+        const INPUT_LEN: usize = std::mem::size_of::<InputTuple>();
+        type InputBlob = [u8; INPUT_LEN];
+        let mut blob: InputBlob = [0u8; INPUT_LEN];
+
+        // spray memory with decreasing counts so that, data layout can be detected.
+        for (i, byte) in blob.iter_mut().enumerate() {
+            *byte = (INPUT_LEN - i) as u8;
+        }
+
+        //UNSAFE: forcibly cast the special byte pattern to actual account fields.
+        let (slot, meta, account_meta, data, offset, hash): InputTuple =
+            unsafe { std::mem::transmute::<InputBlob, InputTuple>(blob) };
+
+        let stored_account = StoredAccount {
+            meta: &meta,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            hash: &hash,
+        };
+        let account = stored_account.clone_account();
+        let expected_account_hash =
+            Hash::from_str("GGTsxvxwnMsNfN6yYbBVQaRgvbVLfxeWnGXNyB8iXDyE").unwrap();
+
+        assert_eq!(
+            AccountsDB::hash_stored_account(slot, &stored_account),
+            expected_account_hash,
+            "StoredAccount's data layout might be changed; update hashing if needed."
+        );
+        assert_eq!(
+            AccountsDB::hash_account(slot, &account, &stored_account.meta.pubkey),
+            expected_account_hash,
+            "Account-based hashing must be consistent with StoredAccount-based one."
+        );
     }
 }
