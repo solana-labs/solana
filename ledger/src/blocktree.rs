@@ -1499,9 +1499,7 @@ impl Blocktree {
         self.last_root()
     }
 
-    // return the approximate size in bytes of the storage directory, or `None` if an error occurs
-    // while reading the directory (directory not found, file deleted, etc)
-    pub fn storage_size(&self) -> Option<u64> {
+    pub fn storage_size(&self) -> Result<u64> {
         self.db.storage_size()
     }
 }
