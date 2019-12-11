@@ -2,8 +2,6 @@
 import {
   Account,
   Connection,
-  BpfLoader,
-  Loader,
   SystemProgram,
   sendAndConfirmTransaction,
   SOL_LAMPORTS,
@@ -846,13 +844,16 @@ test('account change notification', async () => {
     mockCallback,
   );
 
+  const balanceNeeded = await connection.getMinimumBalanceForRentExemption(0);
+
   await connection.requestAirdrop(owner.publicKey, SOL_LAMPORTS);
   try {
-    await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
-      1,
-      2,
-      3,
-    ]);
+    let transaction = SystemProgram.transfer(
+      owner.publicKey,
+      programAccount.publicKey,
+      balanceNeeded,
+    );
+    await sendAndConfirmTransaction(connection, transaction, owner);
   } catch (err) {
     await connection.removeAccountChangeListener(subscriptionId);
     throw err;
@@ -875,8 +876,8 @@ test('account change notification', async () => {
 
   await connection.removeAccountChangeListener(subscriptionId);
 
-  expect(mockCallback.mock.calls[0][0].lamports).toBe(1);
-  expect(mockCallback.mock.calls[0][0].owner).toEqual(BpfLoader.programId);
+  expect(mockCallback.mock.calls[0][0].lamports).toBe(balanceNeeded);
+  expect(mockCallback.mock.calls[0][0].owner).toEqual(SystemProgram.programId);
 });
 
 test('program account change notification', async () => {
@@ -891,27 +892,32 @@ test('program account change notification', async () => {
 
   // const mockCallback = jest.fn();
 
+  const balanceNeeded = await connection.getMinimumBalanceForRentExemption(0);
+
   let notified = false;
   const subscriptionId = connection.onProgramAccountChange(
-    BpfLoader.programId,
+    SystemProgram.programId,
     keyedAccountInfo => {
       if (keyedAccountInfo.accountId !== programAccount.publicKey.toString()) {
         //console.log('Ignoring another account', keyedAccountInfo);
         return;
       }
-      expect(keyedAccountInfo.accountInfo.lamports).toBe(1);
-      expect(keyedAccountInfo.accountInfo.owner).toEqual(BpfLoader.programId);
+      expect(keyedAccountInfo.accountInfo.lamports).toBe(balanceNeeded);
+      expect(keyedAccountInfo.accountInfo.owner).toEqual(
+        SystemProgram.programId,
+      );
       notified = true;
     },
   );
 
   await connection.requestAirdrop(owner.publicKey, SOL_LAMPORTS);
   try {
-    await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
-      1,
-      2,
-      3,
-    ]);
+    let transaction = SystemProgram.transfer(
+      owner.publicKey,
+      programAccount.publicKey,
+      balanceNeeded,
+    );
+    await sendAndConfirmTransaction(connection, transaction, owner);
   } catch (err) {
     await connection.removeProgramAccountChangeListener(subscriptionId);
     throw err;
