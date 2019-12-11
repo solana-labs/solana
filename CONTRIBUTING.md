@@ -36,12 +36,87 @@ library, consider developing it in a separate git repository. When it is ready t
 integrated, the Solana maintainers will work with you to decide on a path forward. Smaller
 libraries may be copied in whereas very large ones may be pulled in with a package manager.
 
+Getting Pull Requests Merged
+---
+
+There is no single person assigned to watching GitHub PR queue and ushering you through
+the process. Typically, you will ask the person that wrote a component to review
+wrote a component will review changes to it. You can find the author using `git blame`
+or asking on Discord. When working to get your PR merged, it's most important to
+understand that changing the code is your priority and not necessarily a priority
+of the person you need an approval from. Also, while you may interact the most with
+the component author, you should aim to be inclusive of others. Providing a detailed
+problem description is the most effective means of engaging both the component
+author and other potentially interested parties.
+
+### What should be in my PR description?
+
+Reviewing code is hard work and generally involves an attempt to guess the author's
+intent at various levels. Please assume reviewer time is scarce and do what you can
+to make your PR as consumable as possible. Inspired by techniques for writing good
+whitepapers, the guidance here aims to maximize reviewer engagement.
+
+Assume the reviewer will spend no more than a few seconds reading the PR title. If
+it doesn't describe a noteworthy change, don't expect the reviewer to click to see
+more.
+
+Next, like the abstract of a whitepaper, the reviewer will spend ~30 seconds reading
+the PR problem description. If what is described there doesn't look more important
+than competing issues, don't expect the reviewer to read on.
+
+Next, the reviewer will read the proposed changes. At this point, the reviewer needs
+to be convinced the proposed changes are a *good* solution to the problem described
+above.  If the proposed changes, not the code changes, generates discussion, consider
+closing the PR and returning with a design proposal instead.
+
+Finally, once the reviewer understands the problem and agrees with the approach to
+solving it, the reviewer will view the code changes. At this point, the reviewer is
+simply looking to see if the implementation actually implements what was proposed
+and if that implementation is maintainable. When a concise, readable test for each
+new code path is present, the reviewer can safely ignore the details of its
+implementation. When those tests are missing, expect to either lose engagement or
+get a pile of review comments as the reviewer attempts to consider every ambiguity
+in your implementation.
+
+### The PR Title
+
+The PR title should contain a brief summary of the change, from the perspective of the
+user. Examples of good titles:
+
+* Add rent to accounts
+* Fix out-of-memory error in validator
+* Clean up `process_message()` in runtime
+
+The conventions here are all the same as a good git commit title:
+
+* First word capitalized and in the imperative mood, not past tense ("add", not "added")
+* No trailing period
+* What was done, whom it was done to, and in what context
+
+### The PR Problem Statement
+
+The git repo implements a product with various features. The problem statement should
+describe how the product is missing a feature, how a feature is incomplete, or how the
+implementation of a feature is somehow undesirable. If an issue being fixed already
+describes the problem, go ahead and copy-paste it. As mentioned above, reviewer time
+is scarce. Given a queue of PRs to review, the reviewer may ignore PRs that expect
+them to click through links to see if the PR warrants attention.
+
+### The Proposed Changes
+
+Typically the content under the "Proposed changes" section will be a bulleted list
+of steps taken to solve the problem. Oftentimes, the list is identical to the subject
+lines of the git commits contained in the PR. It's especially generous (and not
+expected) to rebase or reword commits such that each change matches the logical
+flow in your PR description.
+
 ### When will my PR be reviewed?
 
 PRs are typically reviewed and merged in under 7 days. If your PR has been open for longer,
 it's a strong indicator that the reviewers aren't confident the change meets the quality
 standards of the codebase. You might consider closing it and coming back with smaller PRs
-and longer descriptions detailing what problem it solves and how it solves it.
+and longer descriptions detailing what problem it solves and how it solves it. Old PRs
+will be marked stale and then closed automatically 7 days later.
 
 Draft Pull Requests
 ---
