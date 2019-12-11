@@ -32,7 +32,10 @@ test('load BPF C program', async () => {
   const fees =
     feeCalculator.lamportsPerSignature *
     (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);
-  const from = await newAccountWithLamports(connection, fees);
+  const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
+    data.length,
+  );
+  const from = await newAccountWithLamports(connection, fees + balanceNeeded);
 
   const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
@@ -57,7 +60,10 @@ test('load BPF Rust program', async () => {
   const fees =
     feeCalculator.lamportsPerSignature *
     (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);
-  const from = await newAccountWithLamports(connection, fees);
+  const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
+    data.length,
+  );
+  const from = await newAccountWithLamports(connection, fees + balanceNeeded);
 
   const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
