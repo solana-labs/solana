@@ -10,12 +10,15 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_merkle_tree::MerkleTree;
 use solana_metrics::*;
+use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::perf_libs;
+use solana_perf::recycler::Recycler;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::cell::RefCell;
+use std::cmp;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -150,10 +153,16 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction
 
 pub struct EntryVerifyState {
     thread_h: Option<JoinHandle<u64>>,
-    hashes: Option<Arc<Mutex<Vec<Hash>>>>,
+    hashes: Option<Arc<Mutex<PinnedVec<Hash>>>>,
     verified: bool,
     tx_hashes: Vec<Option<Hash>>,
     start_time_ms: u64,
+}
+
+#[derive(Default, Clone)]
+pub struct VerifyRecyclers {
+    hash_recycler: Recycler<PinnedVec<Hash>>,
+    tick_count_recycler: Recycler<PinnedVec<u64>>,
 }
 
 impl EntryVerifyState {
@@ -175,9 +184,9 @@ impl EntryVerifyState {
                         .zip(entries)
                         .all(|((hash, tx_hash), answer)| {
                             if answer.num_hashes == 0 {
-                                hash == answer.hash
+                                *hash == answer.hash
                             } else {
-                                let mut poh = Poh::new(hash, None);
+                                let mut poh = Poh::new(*hash, None);
                                 if let Some(mixin) = tx_hash {
                                     poh.record(*mixin).unwrap().hash == answer.hash
                                 } else {
@@ -187,6 +196,7 @@ impl EntryVerifyState {
                         })
                 })
             });
+
             verify_check_time.stop();
             inc_new_counter_warn!(
                 "entry_verify-duration",
@@ -203,7 +213,7 @@ impl EntryVerifyState {
 pub trait EntrySlice {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify_cpu(&self, start_hash: &Hash) -> EntryVerifyState;
-    fn start_verify(&self, start_hash: &Hash) -> EntryVerifyState;
+    fn start_verify(&self, start_hash: &Hash, recyclers: VerifyRecyclers) -> EntryVerifyState;
     fn verify(&self, start_hash: &Hash) -> bool;
     /// Checks that each entry tick has the correct number of hashes. Entry slices do not
     /// necessarily end in a tick, so `tick_hash_count` is used to carry over the hash count
@@ -215,7 +225,8 @@ pub trait EntrySlice {
 
 impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
-        self.start_verify(start_hash).finish_verify(self)
+        self.start_verify(start_hash, VerifyRecyclers::default())
+            .finish_verify(self)
     }
     fn verify_cpu(&self, start_hash: &Hash) -> EntryVerifyState {
         let now = Instant::now();
@@ -254,7 +265,7 @@ impl EntrySlice for [Entry] {
         }
     }
 
-    fn start_verify(&self, start_hash: &Hash) -> EntryVerifyState {
+    fn start_verify(&self, start_hash: &Hash, recyclers: VerifyRecyclers) -> EntryVerifyState {
         let api = perf_libs::api();
         if api.is_none() {
             return self.verify_cpu(start_hash);
@@ -277,13 +288,21 @@ impl EntrySlice for [Entry] {
             .take(self.len())
             .collect();
 
-        let num_hashes_vec: Vec<u64> = self
-            .iter()
-            .map(|entry| entry.num_hashes.saturating_sub(1))
-            .collect();
+        let mut hashes_pinned = recyclers.hash_recycler.allocate("poh_verify_hash");
+        hashes_pinned.set_pinnable();
+        hashes_pinned.resize(hashes.len(), Hash::default());
+        hashes_pinned.copy_from_slice(&hashes);
+
+        let mut num_hashes_vec = recyclers
+            .tick_count_recycler
+            .allocate("poh_verify_num_hashes");
+        num_hashes_vec.reserve_and_pin(cmp::max(1, self.len()));
+        for entry in self {
+            num_hashes_vec.push(entry.num_hashes.saturating_sub(1));
+        }
 
         let length = self.len();
-        let hashes = Arc::new(Mutex::new(hashes));
+        let hashes = Arc::new(Mutex::new(hashes_pinned));
         let hashes_clone = hashes.clone();
 
         let gpu_verify_thread = thread::spawn(move || {

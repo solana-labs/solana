@@ -14,7 +14,7 @@ use solana_ledger::{
     block_error::BlockError,
     blocktree::{Blocktree, BlocktreeError},
     blocktree_processor::{self, TransactionStatusSender},
-    entry::{Entry, EntrySlice},
+    entry::{Entry, EntrySlice, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::SnapshotPackageSender,
 };
@@ -210,6 +210,7 @@ impl ReplayStage {
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
+                let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
                 let mut progress = HashMap::new();
                 // Initialize progress map with any root banks
@@ -258,6 +259,7 @@ impl ReplayStage {
                         &mut progress,
                         &slot_full_senders,
                         transaction_status_sender.clone(),
+                        &verify_recyclers,
                     );
                     datapoint_debug!(
                         "replay_stage-memory",
@@ -541,6 +543,7 @@ impl ReplayStage {
         blocktree: &Blocktree,
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<TransactionStatusSender>,
+        verify_recyclers: &VerifyRecyclers,
     ) -> (Result<()>, usize) {
         let mut tx_count = 0;
         let now = Instant::now();
@@ -569,6 +572,7 @@ impl ReplayStage {
                 num_shreds,
                 slot_full,
                 transaction_status_sender,
+                verify_recyclers,
             )
         });
 
@@ -719,6 +723,7 @@ impl ReplayStage {
         progress: &mut HashMap<u64, ForkProgress>,
         slot_full_senders: &[Sender<(u64, Pubkey)>],
         transaction_status_sender: Option<TransactionStatusSender>,
+        verify_recyclers: &VerifyRecyclers,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -746,6 +751,7 @@ impl ReplayStage {
                     &blocktree,
                     bank_progress,
                     transaction_status_sender.clone(),
+                    verify_recyclers,
                 );
                 tx_count += replay_tx_count;
                 if Self::is_replay_result_fatal(&replay_result) {
@@ -960,6 +966,7 @@ impl ReplayStage {
         num_shreds: usize,
         slot_full: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
+        verify_recyclers: &VerifyRecyclers,
     ) -> Result<()> {
         let result = Self::verify_and_process_entries(
             &bank,
@@ -968,6 +975,7 @@ impl ReplayStage {
             bank_progress.num_shreds,
             bank_progress,
             transaction_status_sender,
+            verify_recyclers,
         );
         bank_progress.num_shreds += num_shreds;
         bank_progress.num_entries += entries.len();
@@ -1020,6 +1028,7 @@ impl ReplayStage {
         shred_index: usize,
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<TransactionStatusSender>,
+        recyclers: &VerifyRecyclers,
     ) -> Result<()> {
         let last_entry = &bank_progress.last_entry;
         let tick_hash_count = &mut bank_progress.tick_hash_count;
@@ -1051,7 +1060,7 @@ impl ReplayStage {
 
         datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
         let mut verify_total = Measure::start("verify_and_process_entries");
-        let mut entry_state = entries.start_verify(last_entry);
+        let mut entry_state = entries.start_verify(last_entry, recyclers.clone());
 
         let mut replay_elapsed = Measure::start("replay_elapsed");
         let res =
@@ -1749,6 +1758,7 @@ pub(crate) mod tests {
                 &blocktree,
                 &mut bank0_progress,
                 None,
+                &VerifyRecyclers::default(),
             );
 
             // Check that the erroring bank was marked as dead in the progress map
