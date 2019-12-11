@@ -19,6 +19,7 @@ pub mod native_token;
 pub mod nonce_instruction;
 pub mod nonce_program;
 pub mod nonce_state;
+pub mod packet;
 pub mod poh_config;
 pub mod pubkey;
 pub mod rent;
@@ -67,8 +68,6 @@ pub mod client;
 pub mod commitment_config;
 #[cfg(not(feature = "program"))]
 pub mod genesis_config;
-#[cfg(not(feature = "program"))]
-pub mod packet;
 #[cfg(not(feature = "program"))]
 pub mod signature;
 #[cfg(not(feature = "program"))]
