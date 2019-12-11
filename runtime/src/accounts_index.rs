@@ -41,11 +41,13 @@ impl<T: Clone> AccountsIndex<T> {
         self.get_rooted_entries(&list)
     }
 
-    pub fn purge(&self, pubkey: &Pubkey) -> Vec<(Slot, T)> {
+    // filter any rooted entries and return them along with a bool that indicates
+    // if this account has no more entries.
+    pub fn purge(&self, pubkey: &Pubkey) -> (Vec<(Slot, T)>, bool) {
         let mut list = self.account_maps.get(&pubkey).unwrap().write().unwrap();
         let reclaims = self.get_rooted_entries(&list);
         list.retain(|(slot, _)| !self.is_root(*slot));
-        reclaims
+        (reclaims, list.is_empty())
     }
 
     // find the latest slot and T in a list for a given ancestor
@@ -133,7 +135,6 @@ impl<T: Clone> AccountsIndex<T> {
                     .cloned(),
             );
             slot_vec.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
-
             None
         } else {
             Some(account_info)
@@ -381,5 +382,26 @@ mod tests {
         });
         assert_eq!(num, 1);
         assert!(found_key);
+    }
+
+    #[test]
+    fn test_purge() {
+        let key = Keypair::new();
+        let mut index = AccountsIndex::<u64>::default();
+        let mut gc = Vec::new();
+        assert_eq!(Some(12), index.update(1, &key.pubkey(), 12, &mut gc));
+
+        index.insert(1, &key.pubkey(), 12, &mut gc);
+
+        assert_eq!(None, index.update(1, &key.pubkey(), 10, &mut gc));
+
+        let purges = index.purge(&key.pubkey());
+        assert_eq!(purges, (vec![], false));
+        index.add_root(1);
+
+        let purges = index.purge(&key.pubkey());
+        assert_eq!(purges, (vec![(1, 10)], true));
+
+        assert_eq!(None, index.update(1, &key.pubkey(), 9, &mut gc));
     }
 }
