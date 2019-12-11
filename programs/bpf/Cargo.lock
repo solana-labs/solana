@@ -102,10 +102,9 @@ dependencies = [
 
 [[package]]
 name = "bincode"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "autocfg 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1587,7 +1586,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "solana-bpf-loader-program"
 version = "0.22.0"
 dependencies = [
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1601,7 +1600,7 @@ dependencies = [
 name = "solana-bpf-programs"
 version = "0.22.0"
 dependencies = [
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "elf 0.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-bpf-loader-program 0.22.0",
@@ -1724,7 +1723,7 @@ dependencies = [
 name = "solana-config-program"
 version = "0.22.0"
 dependencies = [
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1796,7 +1795,7 @@ dependencies = [
 name = "solana-runtime"
 version = "0.22.0"
 dependencies = [
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bv 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1830,7 +1829,7 @@ name = "solana-sdk"
 version = "0.22.0"
 dependencies = [
  "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "ed25519-dalek 1.0.0-pre.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1874,7 +1873,7 @@ dependencies = [
 name = "solana-stake-program"
 version = "0.22.0"
 dependencies = [
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1893,7 +1892,7 @@ dependencies = [
 name = "solana-storage-program"
 version = "0.22.0"
 dependencies = [
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1908,7 +1907,7 @@ dependencies = [
 name = "solana-vote-program"
 version = "0.22.0"
 dependencies = [
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2613,7 +2612,7 @@ dependencies = [
 "checksum backtrace 0.3.37 (registry+https://github.com/rust-lang/crates.io-index)" = "5180c5a20655b14a819b652fd2378fa5f1697b6c9ddad3e695c2f9cedf6df4e2"
 "checksum backtrace-sys 0.1.31 (registry+https://github.com/rust-lang/crates.io-index)" = "82a830b4ef2d1124a711c71d263c5abdc710ef8e907bd508c88be475cebc422b"
 "checksum base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0b25d992356d2eb0ed82172f5248873db5560c4721f564b13cb5193bda5e668e"
-"checksum bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b8ab639324e3ee8774d296864fbc0dbbb256cf1a41c490b94cba90c082915f92"
+"checksum bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "5753e2a71534719bf3f4e57006c3a4f0d2c672a4b676eec84161f763eca87dbf"
 "checksum bit-vec 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "02b4ff8b16e6076c3e14220b39fbc1fabb6737522281a388998046859400895f"
 "checksum bit-vec 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f59bbe95d4e52a6398ec21238d31577f2b28a9d86807f06ca59d191d8440d0bb"
 "checksum bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3d155346769a6855b86399e9bc3814ab343cd3d62c7e985113d46a0ec3c281fd"

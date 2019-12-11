@@ -79,7 +79,7 @@ if [[ ! -f llvm-native-$machine-$version.md ]]; then
 fi
 
 # Install Rust-BPF
-version=v0.1.8
+version=v0.2.0
 if [[ ! -f rust-bpf-$machine-$version.md ]]; then
   (
     filename=solana-rust-bpf-$machine.tar.bz2
@@ -115,7 +115,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
 fi
 
 # Install Rust-BPF Sysroot sources
-version=v0.11
+version=v0.12
 if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   (
     set -ex
@@ -129,25 +129,6 @@ if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
     rm -rf rust-bpf-sysroot
-    exit 1
-  fi
-fi
-
-# Install custom Hashbrown crate needed by Rust-BPF Sysroot
-version=v0.1
-if [[ ! -f hashbrown-$version.md ]]; then
-  (
-    set -ex
-    rm -rf hashbrown*
-    rm -rf xargo
-    cmd="git clone --recursive --single-branch --branch $version https://github.com/solana-labs/hashbrown.git"
-    $cmd
-
-    echo "$cmd" > hashbrown-$version.md
-  )
-  exitcode=$?
-  if [[ $exitcode -ne 0 ]]; then
-    rm -rf hashbrown
     exit 1
   fi
 fi
