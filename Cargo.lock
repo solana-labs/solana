@@ -3571,12 +3571,8 @@ dependencies = [
 name = "solana-ledger"
 version = "0.21.3"
 dependencies = [
-<<<<<<< HEAD
- "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
-=======
  "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
->>>>>>> 1d0ba0d1f... Add special handling for snapshot root slot in get_confirmed_block (#7430)
+ "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bzip2 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
