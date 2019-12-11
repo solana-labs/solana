@@ -64,6 +64,11 @@ pub trait NonceAccount {
         recent_blockhashes: &RecentBlockhashes,
         rent: &Rent,
     ) -> Result<(), InstructionError>;
+    fn authorize(
+        &mut self,
+        nonce_authority: &Pubkey,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError>;
 }
 
 impl<'a> NonceAccount for KeyedAccount<'a> {
@@ -154,6 +159,22 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         };
 
         self.set_state(&NonceState::Initialized(meta, recent_blockhashes[0]))
+    }
+
+    fn authorize(
+        &mut self,
+        nonce_authority: &Pubkey,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError> {
+        match self.state()? {
+            NonceState::Initialized(meta, nonce) => {
+                if !signers.contains(&meta.nonce_authority) {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+                self.set_state(&NonceState::Initialized(Meta::new(nonce_authority), nonce))
+            }
+            _ => Err(NonceError::BadAccountState.into()),
+        }
     }
 }
 
@@ -740,6 +761,66 @@ mod test {
             let authorized = keyed_account.unsigned_key().clone();
             let result = keyed_account.initialize(&authorized, &recent_blockhashes, &rent);
             assert_eq!(result, Err(InstructionError::InsufficientFunds));
+        })
+    }
+
+    #[test]
+    fn authorize_inx_ok() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(NonceState::size());
+        with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
+            let mut signers = HashSet::new();
+            signers.insert(nonce_account.signer_key().unwrap().clone());
+            let recent_blockhashes = create_test_recent_blockhashes(31);
+            let stored = recent_blockhashes[0];
+            let authorized = nonce_account.unsigned_key().clone();
+            nonce_account
+                .initialize(&authorized, &recent_blockhashes, &rent)
+                .unwrap();
+            let authorized = &Pubkey::default().clone();
+            let meta = Meta::new(&authorized);
+            let result = nonce_account.authorize(&Pubkey::default(), &signers);
+            assert_eq!(result, Ok(()));
+            let state: NonceState = nonce_account.state().unwrap();
+            assert_eq!(state, NonceState::Initialized(meta, stored));
+        })
+    }
+
+    #[test]
+    fn authorize_inx_uninitialized_state_fail() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(NonceState::size());
+        with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
+            let mut signers = HashSet::new();
+            signers.insert(nonce_account.signer_key().unwrap().clone());
+            let result = nonce_account.authorize(&Pubkey::default(), &signers);
+            assert_eq!(result, Err(NonceError::BadAccountState.into()));
+        })
+    }
+
+    #[test]
+    fn authorize_inx_bad_authority_fail() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(NonceState::size());
+        with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
+            let mut signers = HashSet::new();
+            signers.insert(nonce_account.signer_key().unwrap().clone());
+            let recent_blockhashes = create_test_recent_blockhashes(31);
+            let authorized = &Pubkey::default().clone();
+            nonce_account
+                .initialize(&authorized, &recent_blockhashes, &rent)
+                .unwrap();
+            let result = nonce_account.authorize(&Pubkey::default(), &signers);
+            assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
         })
     }
 }

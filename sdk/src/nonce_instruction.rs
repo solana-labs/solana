@@ -67,6 +67,15 @@ pub enum NonceInstruction {
     /// The `Pubkey` parameter specifies the entity authorized to execute nonce
     /// instruction on the account
     Initialize(Pubkey),
+
+    /// `Authorize` changes the entity authorized to execute nonce instructions
+    /// on the account
+    ///
+    /// Expects 1 Account:
+    ///     0 - A NonceAccount
+    ///
+    /// The `Pubkey` parameter identifies the entity to authorize
+    Authorize(Pubkey),
 }
 
 pub fn create_nonce_account(
@@ -124,6 +133,19 @@ pub fn withdraw(
     Instruction::new(id(), &NonceInstruction::Withdraw(lamports), account_metas)
 }
 
+pub fn authorize(
+    nonce_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    new_authority: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*nonce_pubkey, false)].with_signer(authorized_pubkey);
+    Instruction::new(
+        id(),
+        &NonceInstruction::Authorize(*new_authority),
+        account_metas,
+    )
+}
+
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
@@ -154,6 +176,7 @@ pub fn process_instruction(
             &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
+        NonceInstruction::Authorize(nonce_authority) => me.authorize(&nonce_authority, &signers),
     }
 }
 
@@ -545,6 +568,52 @@ mod tests {
                 &serialize(&NonceInstruction::Initialize(Pubkey::default())).unwrap(),
             ),
             Ok(()),
+        );
+    }
+
+    #[test]
+    fn test_process_authorize_ix_ok() {
+        let mut nonce_acc = nonce_state::create_account(1_000_000);
+        super::process_instruction(
+            &Pubkey::default(),
+            &mut [
+                KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc),
+                KeyedAccount::new(
+                    &sysvar::recent_blockhashes::id(),
+                    false,
+                    &mut sysvar::recent_blockhashes::create_account_with_data(
+                        1,
+                        vec![(0u64, &Hash::default()); 32].into_iter(),
+                    ),
+                ),
+                KeyedAccount::new(
+                    &sysvar::rent::id(),
+                    false,
+                    &mut sysvar::rent::create_account(1, &Rent::free()),
+                ),
+            ],
+            &serialize(&NonceInstruction::Initialize(Pubkey::default())).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc,),],
+                &serialize(&NonceInstruction::Authorize(Pubkey::default(),)).unwrap(),
+            ),
+            Ok(()),
+        );
+    }
+
+    #[test]
+    fn test_process_authorize_bad_account_data_fail() {
+        assert_eq!(
+            process_instruction(&authorize(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+            )),
+            Err(InstructionError::InvalidAccountData),
         );
     }
 
