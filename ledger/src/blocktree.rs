@@ -2143,11 +2143,13 @@ pub mod tests {
         leader_schedule::{FixedSchedule, LeaderSchedule},
         shred::{max_ticks_per_n_shreds, DataShredHeader},
     };
+    use assert_matches::assert_matches;
+    use bincode::serialize;
     use itertools::Itertools;
     use rand::{seq::SliceRandom, thread_rng};
     use solana_runtime::bank::Bank;
     use solana_sdk::{
-        hash::{self, Hash},
+        hash::{self, hash, Hash},
         instruction::CompiledInstruction,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
@@ -2159,7 +2161,7 @@ pub mod tests {
     // used for tests only
     fn make_slot_entries_with_transactions(num_entries: u64) -> Vec<Entry> {
         let mut entries: Vec<Entry> = Vec::new();
-        for _ in 0..num_entries {
+        for x in 0..num_entries {
             let transaction = Transaction::new_with_compiled_instructions(
                 &[&Keypair::new()],
                 &[Pubkey::new_rand()],
@@ -2168,7 +2170,7 @@ pub mod tests {
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             );
             entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
-            let mut tick = create_ticks(1, 0, Hash::default());
+            let mut tick = create_ticks(1, 0, hash(&serialize(&x).unwrap()));
             entries.append(&mut tick);
         }
         entries
@@ -4214,13 +4216,22 @@ pub mod tests {
 
     #[test]
     fn test_get_confirmed_block() {
-        let slot = 0;
+        let slot = 10;
         let entries = make_slot_entries_with_transactions(100);
-        let shreds = entries_to_test_shreds(entries.clone(), slot, 0, true, 0);
+        let blockhash = get_last_hash(entries.iter()).unwrap();
+        let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
+        let more_shreds = entries_to_test_shreds(entries.clone(), slot + 1, slot, true, 0);
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blocktree::open(&ledger_path).unwrap();
         ledger.insert_shreds(shreds, None, false).unwrap();
-        ledger.set_roots(&[0]).unwrap();
+        ledger.insert_shreds(more_shreds, None, false).unwrap();
+        ledger.set_roots(&[slot - 1, slot, slot + 1]).unwrap();
+
+        let mut parent_meta = SlotMeta::default();
+        parent_meta.parent_slot = std::u64::MAX;
+        ledger
+            .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
+            .unwrap();
 
         let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatus>)> = entries
             .iter()
@@ -4239,6 +4250,16 @@ pub mod tests {
                         },
                     )
                     .unwrap();
+                ledger
+                    .transaction_status_cf
+                    .put(
+                        (slot + 1, signature),
+                        &RpcTransactionStatus {
+                            status: Ok(()),
+                            fee: 42,
+                        },
+                    )
+                    .unwrap();
                 (
                     transaction,
                     Some(RpcTransactionStatus {
@@ -4249,17 +4270,33 @@ pub mod tests {
             })
             .collect();
 
-        let confirmed_block = ledger.get_confirmed_block(0).unwrap();
+        // Even if marked as root, a slot that is empty of entries should return an error
+        let confirmed_block_err = ledger.get_confirmed_block(slot - 1).unwrap_err();
+        assert_matches!(confirmed_block_err, BlocktreeError::SlotNotRooted);
+
+        let confirmed_block = ledger.get_confirmed_block(slot).unwrap();
+        assert_eq!(confirmed_block.transactions.len(), 100);
+
+        let mut expected_block = RpcConfirmedBlock::default();
+        expected_block.transactions = expected_transactions.clone();
+        expected_block.parent_slot = slot - 1;
+        expected_block.blockhash = blockhash;
+        // The previous_blockhash of `expected_block` is default because its parent slot is a
+        // root, but empty of entries. This is special handling for snapshot root slots.
+        assert_eq!(confirmed_block, expected_block);
+
+        let confirmed_block = ledger.get_confirmed_block(slot + 1).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
         let mut expected_block = RpcConfirmedBlock::default();
         expected_block.transactions = expected_transactions;
-        // The blockhash and previous_blockhash of `expected_block` are default only because
-        // `make_slot_entries_with_transactions` sets all entry hashes to default
+        expected_block.parent_slot = slot;
+        expected_block.previous_blockhash = blockhash;
+        expected_block.blockhash = blockhash;
         assert_eq!(confirmed_block, expected_block);
 
-        let not_root = ledger.get_confirmed_block(1);
-        assert!(not_root.is_err());
+        let not_root = ledger.get_confirmed_block(slot + 2).unwrap_err();
+        assert_matches!(not_root, BlocktreeError::SlotNotRooted);
 
         drop(ledger);
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");

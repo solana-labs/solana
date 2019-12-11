@@ -31,7 +31,7 @@ pub struct RpcConfirmedBlock {
     pub transactions: Vec<(Transaction, Option<RpcTransactionStatus>)>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RpcTransactionStatus {
     pub status: Result<()>,
     pub fee: u64,

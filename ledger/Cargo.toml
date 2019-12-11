@@ -55,6 +55,7 @@ default-features = false
 features = ["lz4"]
 
 [dev-dependencies]
+assert_matches = "1.3.0"
 matches = "0.1.6"
 solana-budget-program = { path = "../programs/budget", version = "0.22.0" }
 
