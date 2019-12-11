@@ -16,7 +16,7 @@ if [[ ! -f "${SOLANA_LOCK_FILE}" ]]; then
   {
     echo "export SOLANA_LOCK_USER=${SOLANA_USER}"
     echo "export SOLANA_LOCK_INSTANCENAME=${INSTANCE_NAME}"
-    echo "[[ -v SSH_TTY -a -f \"${HOME}/.solana-motd\" ]] && cat \"${HOME}/.solana-motd\" 1>&2"
+    echo "[[ -v SSH_TTY && -f \"${HOME}/.solana-motd\" ]] && cat \"${HOME}/.solana-motd\" 1>&2"
   } >&9
   exec 9>&-
   cat > /solana-scratch/id_ecdsa <<EOF
