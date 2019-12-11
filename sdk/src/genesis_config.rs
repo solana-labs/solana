@@ -31,17 +31,27 @@ pub enum OperatingMode {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GenesisConfig {
+    /// when the network (bootstrap leader) was started relative to the UNIX Epoch
     pub creation_time: UnixTimestamp,
+    /// initial accounts
     pub accounts: BTreeMap<Pubkey, Account>,
+    /// built-in programs
     pub native_instruction_processors: Vec<(String, Pubkey)>,
+    /// accounts for network rewards, these do not count towards capitalization
     pub rewards_pools: BTreeMap<Pubkey, Account>,
     pub ticks_per_slot: u64,
     pub slots_per_segment: u64,
+    /// network speed configuration
     pub poh_config: PohConfig,
+    /// transaction fee config
     pub fee_calculator: FeeCalculator,
+    /// rent config
     pub rent: Rent,
+    /// inflation config
     pub inflation: Inflation,
+    /// how slots map to epochs
     pub epoch_schedule: EpochSchedule,
+    /// network runlevel
     pub operating_mode: OperatingMode,
 }
 
