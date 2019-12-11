@@ -580,6 +580,8 @@ impl Database {
         self.backend.write(batch.write_batch)
     }
 
+    // return the approximate size in bytes of the storage directory, or `None` if an error occurs
+    // while reading the directory (directory not found, file deleted, etc)
     pub fn storage_size(&self) -> Option<u64> {
         get_size(&self.path).ok()
     }
