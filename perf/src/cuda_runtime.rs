@@ -6,12 +6,13 @@
 //    cannot be paged to disk. The cuda driver provides these interfaces to pin and unpin memory.
 
 use crate::perf_libs;
-use crate::recycler::Reset;
+use crate::recycler::{RecyclerX, Reset};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use rayon::prelude::*;
 use std::ops::{Index, IndexMut};
 use std::slice::SliceIndex;
+use std::sync::{Arc, Weak};
 
 use std::os::raw::c_int;
 
@@ -57,29 +58,33 @@ pub fn unpin<T>(_mem: *mut T) {
 // page-pinned. Controlled by flags in case user only wants
 // to pin in certain circumstances.
 #[derive(Debug)]
-pub struct PinnedVec<T> {
+pub struct PinnedVec<T: Default + Clone + Sized> {
     x: Vec<T>,
     pinned: bool,
     pinnable: bool,
+    recycler: Option<Weak<RecyclerX<PinnedVec<T>>>>,
 }
 
-impl<T: Default + Clone> Reset for PinnedVec<T> {
+impl<T: Default + Clone + Sized> Reset for PinnedVec<T> {
     fn reset(&mut self) {
         self.resize(0, T::default());
     }
-
     fn warm(&mut self, size_hint: usize) {
         self.set_pinnable();
         self.resize(size_hint, T::default());
     }
+    fn set_recycler(&mut self, recycler: Weak<RecyclerX<Self>>) {
+        self.recycler = Some(recycler);
+    }
 }
 
-impl<T: Clone> Default for PinnedVec<T> {
+impl<T: Clone + Default + Sized> Default for PinnedVec<T> {
     fn default() -> Self {
         Self {
             x: Vec::new(),
             pinned: false,
             pinnable: false,
+            recycler: None,
         }
     }
 }
@@ -88,7 +93,7 @@ pub struct PinnedIter<'a, T>(std::slice::Iter<'a, T>);
 
 pub struct PinnedIterMut<'a, T>(std::slice::IterMut<'a, T>);
 
-impl<'a, T> Iterator for PinnedIter<'a, T> {
+impl<'a, T: Clone + Default + Sized> Iterator for PinnedIter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -96,7 +101,7 @@ impl<'a, T> Iterator for PinnedIter<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for PinnedIterMut<'a, T> {
+impl<'a, T: Clone + Default + Sized> Iterator for PinnedIterMut<'a, T> {
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -104,7 +109,7 @@ impl<'a, T> Iterator for PinnedIterMut<'a, T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut PinnedVec<T> {
+impl<'a, T: Clone + Default + Sized> IntoIterator for &'a mut PinnedVec<T> {
     type Item = &'a T;
     type IntoIter = PinnedIter<'a, T>;
 
@@ -113,7 +118,7 @@ impl<'a, T> IntoIterator for &'a mut PinnedVec<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a PinnedVec<T> {
+impl<'a, T: Clone + Default + Sized> IntoIterator for &'a PinnedVec<T> {
     type Item = &'a T;
     type IntoIter = PinnedIter<'a, T>;
 
@@ -122,7 +127,7 @@ impl<'a, T> IntoIterator for &'a PinnedVec<T> {
     }
 }
 
-impl<T, I: SliceIndex<[T]>> Index<I> for PinnedVec<T> {
+impl<T: Clone + Default + Sized, I: SliceIndex<[T]>> Index<I> for PinnedVec<T> {
     type Output = I::Output;
 
     #[inline]
@@ -131,14 +136,14 @@ impl<T, I: SliceIndex<[T]>> Index<I> for PinnedVec<T> {
     }
 }
 
-impl<T, I: SliceIndex<[T]>> IndexMut<I> for PinnedVec<T> {
+impl<T: Clone + Default + Sized, I: SliceIndex<[T]>> IndexMut<I> for PinnedVec<T> {
     #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         &mut self.x[index]
     }
 }
 
-impl<T> PinnedVec<T> {
+impl<T: Clone + Default + Sized> PinnedVec<T> {
     pub fn iter(&self) -> PinnedIter<T> {
         PinnedIter(self.x.iter())
     }
@@ -148,7 +153,7 @@ impl<T> PinnedVec<T> {
     }
 }
 
-impl<'a, T: Send + Sync> IntoParallelIterator for &'a PinnedVec<T> {
+impl<'a, T: Clone + Send + Sync + Default + Sized> IntoParallelIterator for &'a PinnedVec<T> {
     type Iter = rayon::slice::Iter<'a, T>;
     type Item = &'a T;
     fn into_par_iter(self) -> Self::Iter {
@@ -156,7 +161,7 @@ impl<'a, T: Send + Sync> IntoParallelIterator for &'a PinnedVec<T> {
     }
 }
 
-impl<T: Clone> PinnedVec<T> {
+impl<T: Clone + Default + Sized> PinnedVec<T> {
     pub fn reserve_and_pin(&mut self, size: usize) {
         if self.x.capacity() < size {
             if self.pinned {
@@ -181,6 +186,7 @@ impl<T: Clone> PinnedVec<T> {
             x: source,
             pinned: false,
             pinnable: false,
+            recycler: None,
         }
     }
 
@@ -190,6 +196,7 @@ impl<T: Clone> PinnedVec<T> {
             x,
             pinned: false,
             pinnable: false,
+            recycler: None,
         }
     }
 
@@ -272,9 +279,13 @@ impl<T: Clone> PinnedVec<T> {
             self.pinned = true;
         }
     }
+    fn recycler_ref(&self) -> Option<Arc<RecyclerX<Self>>> {
+        let r = self.recycler.as_ref()?;
+        r.upgrade()
+    }
 }
 
-impl<T: Clone> Clone for PinnedVec<T> {
+impl<T: Clone + Default + Sized> Clone for PinnedVec<T> {
     fn clone(&self) -> Self {
         let mut x = self.x.clone();
         let pinned = if self.pinned {
@@ -293,12 +304,18 @@ impl<T: Clone> Clone for PinnedVec<T> {
             x,
             pinned,
             pinnable: self.pinnable,
+            recycler: self.recycler.clone(),
         }
     }
 }
 
-impl<T> Drop for PinnedVec<T> {
+impl<T: Sized + Default + Clone> Drop for PinnedVec<T> {
     fn drop(&mut self) {
+        if let Some(strong) = self.recycler_ref() {
+            let mut vec = PinnedVec::default();
+            std::mem::swap(&mut vec, self);
+            strong.recycle(vec);
+        }
         if self.pinned {
             unpin(self.x.as_mut_ptr());
         }

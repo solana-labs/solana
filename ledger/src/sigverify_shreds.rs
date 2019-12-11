@@ -267,12 +267,6 @@ pub fn verify_shreds_gpu(
     sigverify::copy_return_values(&v_sig_lens, &out, &mut rvs);
 
     inc_new_counter_debug!("ed25519_shred_verify_gpu", count);
-    recycler_cache.buffer().recycle(out);
-    recycler_cache.buffer().recycle(pubkeys);
-    recycler_cache.offsets().recycle(signature_offsets);
-    recycler_cache.offsets().recycle(pubkey_offsets);
-    recycler_cache.offsets().recycle(msg_sizes);
-    recycler_cache.offsets().recycle(msg_start_offsets);
     rvs
 }
 
@@ -467,12 +461,6 @@ pub fn sign_shreds_gpu(
         });
     });
     inc_new_counter_debug!("ed25519_shred_sign_gpu", count);
-    recycler_cache.buffer().recycle(signatures_out);
-    recycler_cache.buffer().recycle(pubkeys);
-    recycler_cache.offsets().recycle(signature_offsets);
-    recycler_cache.offsets().recycle(pubkey_offsets);
-    recycler_cache.offsets().recycle(msg_sizes);
-    recycler_cache.offsets().recycle(msg_start_offsets);
 }
 
 #[cfg(test)]

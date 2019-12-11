@@ -365,11 +365,6 @@ pub fn ed25519_verify(
     trace!("done verify");
     copy_return_values(&sig_lens, &out, &mut rvs);
     inc_new_counter_debug!("ed25519_verify_gpu", count);
-    recycler_out.recycle(out);
-    recycler.recycle(signature_offsets);
-    recycler.recycle(pubkey_offsets);
-    recycler.recycle(msg_sizes);
-    recycler.recycle(msg_start_offsets);
     rvs
 }
 

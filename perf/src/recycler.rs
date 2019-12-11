@@ -1,7 +1,7 @@
 use rand::{thread_rng, Rng};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 #[derive(Debug, Default)]
 struct RecyclerStats {
@@ -11,31 +11,26 @@ struct RecyclerStats {
     max_gc: AtomicUsize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Default)]
 pub struct Recycler<T> {
-    gc: Arc<Mutex<Vec<T>>>,
-    stats: Arc<RecyclerStats>,
+    recycler: Arc<RecyclerX<T>>,
+}
+
+#[derive(Debug)]
+pub struct RecyclerX<T> {
+    gc: Mutex<Vec<T>>,
+    stats: RecyclerStats,
     id: usize,
 }
 
-impl<T: Default> Default for Recycler<T> {
-    fn default() -> Recycler<T> {
+impl<T: Default> Default for RecyclerX<T> {
+    fn default() -> RecyclerX<T> {
         let id = thread_rng().gen_range(0, 1000);
         trace!("new recycler..{}", id);
-        Recycler {
-            gc: Arc::new(Mutex::new(vec![])),
-            stats: Arc::new(RecyclerStats::default()),
+        RecyclerX {
+            gc: Mutex::new(vec![]),
+            stats: RecyclerStats::default(),
             id,
-        }
-    }
-}
-
-impl<T: Default> Clone for Recycler<T> {
-    fn clone(&self) -> Recycler<T> {
-        Recycler {
-            gc: self.gc.clone(),
-            stats: self.stats.clone(),
-            id: self.id,
         }
     }
 }
@@ -43,6 +38,9 @@ impl<T: Default> Clone for Recycler<T> {
 pub trait Reset {
     fn reset(&mut self);
     fn warm(&mut self, size_hint: usize);
+    fn set_recycler(&mut self, recycler: Weak<RecyclerX<Self>>)
+    where
+        Self: std::marker::Sized;
 }
 
 lazy_static! {
@@ -57,7 +55,7 @@ fn warm_recyclers() -> bool {
     WARM_RECYCLERS.load(Ordering::Relaxed)
 }
 
-impl<T: Default + Reset> Recycler<T> {
+impl<T: Default + Reset + Sized> Recycler<T> {
     pub fn warmed(num: usize, size_hint: usize) -> Self {
         let new = Self::default();
         if warm_recyclers() {
@@ -68,37 +66,44 @@ impl<T: Default + Reset> Recycler<T> {
                     item
                 })
                 .collect();
-            warmed_items.into_iter().for_each(|i| new.recycle(i));
+            warmed_items
+                .into_iter()
+                .for_each(|i| new.recycler.recycle(i));
         }
         new
     }
 
     pub fn allocate(&self, name: &'static str) -> T {
         let new = self
+            .recycler
             .gc
             .lock()
             .expect("recycler lock in pb fn allocate")
             .pop();
 
         if let Some(mut x) = new {
-            self.stats.reuse.fetch_add(1, Ordering::Relaxed);
+            self.recycler.stats.reuse.fetch_add(1, Ordering::Relaxed);
             x.reset();
             return x;
         }
 
-        let total = self.stats.total.fetch_add(1, Ordering::Relaxed);
+        let total = self.recycler.stats.total.fetch_add(1, Ordering::Relaxed);
         trace!(
             "allocating new: total {} {:?} id: {} reuse: {} max_gc: {}",
             total,
             name,
-            self.id,
-            self.stats.reuse.load(Ordering::Relaxed),
-            self.stats.max_gc.load(Ordering::Relaxed),
+            self.recycler.id,
+            self.recycler.stats.reuse.load(Ordering::Relaxed),
+            self.recycler.stats.max_gc.load(Ordering::Relaxed),
         );
 
-        T::default()
+        let mut t = T::default();
+        t.set_recycler(Arc::downgrade(&self.recycler));
+        t
     }
+}
 
+impl<T: Default + Reset> RecyclerX<T> {
     pub fn recycle(&self, x: T) {
         let len = {
             let mut gc = self.gc.lock().expect("recycler lock in pub fn recycle");
@@ -135,6 +140,7 @@ mod tests {
             *self = 10;
         }
         fn warm(&mut self, _size_hint: usize) {}
+        fn set_recycler(&mut self, _recycler: Weak<RecyclerX<Self>>) {}
     }
 
     #[test]
@@ -144,10 +150,10 @@ mod tests {
         assert_eq!(y, 0);
         y = 20;
         let recycler2 = recycler.clone();
-        recycler2.recycle(y);
-        assert_eq!(recycler.gc.lock().unwrap().len(), 1);
+        recycler2.recycler.recycle(y);
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 1);
         let z = recycler.allocate("test_recycler2");
         assert_eq!(z, 10);
-        assert_eq!(recycler.gc.lock().unwrap().len(), 0);
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 0);
     }
 }
