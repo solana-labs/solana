@@ -1182,24 +1182,30 @@ impl Blocktree {
                 .expect("Rooted slot must exist in SlotMeta");
 
             let slot_entries = self.get_slot_entries(slot, 0, None)?;
-            let slot_transaction_iterator = slot_entries
-                .iter()
-                .cloned()
-                .flat_map(|entry| entry.transactions);
-            let parent_slot_entries = self.get_slot_entries(slot_meta.parent_slot, 0, None)?;
+            if !slot_entries.is_empty() {
+                let slot_transaction_iterator = slot_entries
+                    .iter()
+                    .cloned()
+                    .flat_map(|entry| entry.transactions);
+                let parent_slot_entries = self.get_slot_entries(slot_meta.parent_slot, 0, None)?;
+                let previous_blockhash = if !parent_slot_entries.is_empty() {
+                    get_last_hash(parent_slot_entries.iter()).unwrap()
+                } else {
+                    Hash::default()
+                };
 
-            let block = RpcConfirmedBlock {
-                previous_blockhash: get_last_hash(parent_slot_entries.iter())
-                    .expect("Rooted parent slot must have blockhash"),
-                blockhash: get_last_hash(slot_entries.iter())
-                    .expect("Rooted slot must have blockhash"),
-                parent_slot: slot_meta.parent_slot,
-                transactions: self.map_transactions_to_statuses(slot, slot_transaction_iterator),
-            };
-            Ok(block)
-        } else {
-            Err(BlocktreeError::SlotNotRooted)
+                let block = RpcConfirmedBlock {
+                    previous_blockhash,
+                    blockhash: get_last_hash(slot_entries.iter())
+                        .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot)),
+                    parent_slot: slot_meta.parent_slot,
+                    transactions: self
+                        .map_transactions_to_statuses(slot, slot_transaction_iterator),
+                };
+                return Ok(block);
+            }
         }
+        Err(BlocktreeError::SlotNotRooted)
     }
 
     fn map_transactions_to_statuses<'a>(
