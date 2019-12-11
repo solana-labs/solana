@@ -37,6 +37,7 @@ export RUSTFLAGS="
 # Setup xargo
 export XARGO_HOME="$bpf_sdk/dependencies/xargo"
 export XARGO_RUST_SRC="$bpf_sdk/dependencies/rust-bpf-sysroot/src"
+export RUST_COMPILER_RT_ROOT="$bpf_sdk/dependencies/rust-bpf-sysroot/src/compiler-rt"
 
 cd "$1"
 xargo build --target bpfel-unknown-unknown --release
