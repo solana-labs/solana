@@ -63,6 +63,7 @@ fn test_multi_fec_block_coding() {
             MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
             MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
             shred_start_index,
+            shred_start_index,
             slot,
         )
         .unwrap();

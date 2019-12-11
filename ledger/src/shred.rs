@@ -29,7 +29,7 @@ use thiserror::Error;
 /// Constants are used over lazy_static for performance reasons.
 pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 79;
 pub const SIZE_OF_DATA_SHRED_HEADER: usize = 3;
-pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
+pub const SIZE_OF_CODING_SHRED_HEADER: usize = 10;
 pub const SIZE_OF_SIGNATURE: usize = 64;
 pub const SIZE_OF_DATA_SHRED_IGNORED_TAIL: usize =
     SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
@@ -99,6 +99,7 @@ pub struct DataShredHeader {
 /// The coding shred header has FEC information
 #[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug)]
 pub struct CodingShredHeader {
+    pub fec_set_index: u32,
     pub num_data_shreds: u16,
     pub num_coding_shreds: u16,
     pub position: u16,
@@ -541,6 +542,7 @@ impl Shredder {
     pub fn new_coding_shred_header(
         slot: Slot,
         index: u32,
+        fec_set_index: u32,
         num_data: usize,
         num_code: usize,
         position: usize,
@@ -556,6 +558,7 @@ impl Shredder {
         (
             header,
             CodingShredHeader {
+                fec_set_index,
                 num_data_shreds: num_data as u16,
                 num_coding_shreds: num_code as u16,
                 position: position as u16,
@@ -592,6 +595,7 @@ impl Shredder {
                 let (header, coding_header) = Self::new_coding_shred_header(
                     slot,
                     start_index + i as u32,
+                    start_index,
                     num_data,
                     num_coding,
                     i,
@@ -622,6 +626,7 @@ impl Shredder {
                     let (common_header, coding_header) = Self::new_coding_shred_header(
                         slot,
                         start_index + i as u32,
+                        start_index,
                         num_data,
                         num_coding,
                         i,
@@ -679,6 +684,7 @@ impl Shredder {
         num_data: usize,
         num_coding: usize,
         first_index: usize,
+        first_code_index: usize,
         slot: Slot,
     ) -> std::result::Result<Vec<Shred>, reed_solomon_erasure::Error> {
         let mut recovered_data = vec![];
@@ -691,7 +697,8 @@ impl Shredder {
             let mut shred_bufs: Vec<Vec<u8>> = shreds
                 .into_iter()
                 .flat_map(|shred| {
-                    let index = Self::get_shred_index(&shred, num_data);
+                    let index =
+                        Self::get_shred_index(&shred, num_data, first_index, first_code_index);
                     let mut blocks = Self::fill_in_missing_shreds(
                         num_data,
                         num_coding,
@@ -789,11 +796,16 @@ impl Shredder {
         Ok(Self::reassemble_payload(num_data, data_shred_bufs))
     }
 
-    fn get_shred_index(shred: &Shred, num_data: usize) -> usize {
+    fn get_shred_index(
+        shred: &Shred,
+        num_data: usize,
+        first_data_index: usize,
+        first_code_index: usize,
+    ) -> usize {
         if shred.is_data() {
             shred.index() as usize
         } else {
-            shred.index() as usize + num_data
+            shred.index() as usize + num_data + first_data_index - first_code_index
         }
     }
 
@@ -1168,6 +1180,7 @@ pub mod tests {
                 num_data_shreds,
                 num_data_shreds,
                 0,
+                0,
                 slot
             ),
             Err(reed_solomon_erasure::Error::TooFewShardsPresent)
@@ -1178,6 +1191,7 @@ pub mod tests {
             data_shreds[..].to_vec(),
             num_data_shreds,
             num_data_shreds,
+            0,
             0,
             slot,
         )
@@ -1195,6 +1209,7 @@ pub mod tests {
             shred_info.clone(),
             num_data_shreds,
             num_data_shreds,
+            0,
             0,
             slot,
         )
@@ -1242,6 +1257,7 @@ pub mod tests {
             shred_info.clone(),
             num_data_shreds,
             num_data_shreds,
+            0,
             0,
             slot,
         )
@@ -1315,6 +1331,7 @@ pub mod tests {
             num_data_shreds,
             num_data_shreds,
             25,
+            25,
             slot,
         )
         .unwrap();
@@ -1346,6 +1363,7 @@ pub mod tests {
             num_data_shreds,
             num_data_shreds,
             25,
+            25,
             slot + 1,
         )
         .unwrap();
@@ -1358,6 +1376,7 @@ pub mod tests {
                 num_data_shreds,
                 num_data_shreds,
                 15,
+                15,
                 slot,
             ),
             Err(reed_solomon_erasure::Error::TooFewShardsPresent)
@@ -1365,7 +1384,7 @@ pub mod tests {
 
         // Test8: Try recovery/reassembly with incorrect index. Hint: does not recover any shreds
         assert_matches!(
-            Shredder::try_recovery(shred_info, num_data_shreds, num_data_shreds, 35, slot,),
+            Shredder::try_recovery(shred_info, num_data_shreds, num_data_shreds, 35, 35, slot,),
             Err(reed_solomon_erasure::Error::TooFewShardsPresent)
         );
     }
