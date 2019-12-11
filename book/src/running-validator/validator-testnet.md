@@ -1,19 +1,32 @@
 # Choosing a Testnet
 
-As noted in the overview, solana currently maintains several testnets, each
-featuring a validator that can serve as the entrypoint to the cluster for your
-validator.
+Solana maintains several testnets, each featuring a Solana-owned validator
+that serves as an entrypoint to the cluster.
 
 Current testnet entrypoints:
 
-* Stable, testnet.solana.com
-* Beta, beta.testnet.solana.com
-* Edge, edge.testnet.solana.com
+* Stable: testnet.solana.com
+* Beta: beta.testnet.solana.com
+* Edge: edge.testnet.solana.com
 
-Prior to mainnet, the testnets may be running different versions of solana
-software, which may feature breaking changes. Generally, the edge testnet tracks
-the tip of master, beta tracks the latest tagged minor release, and stable
-tracks the most stable tagged release.
+Application developers should target the Stable testnet. Key differences
+between the Stable testnet and what will be mainnet:
+
+* Stable testnet tokens are not real
+* Stable testnet includes a token faucet for application testing
+* Stable testnet validators are permitted to reset the ledger, though it
+  is discouraged and will be announced via Discord beforehand
+* Stable testnet is typically one version newer than mainnet
+* Stable testnet may be maintained by different validators than mainnet
+
+The Beta testnet is a permissioned testnet controlled by the Solana team.
+The testnet is used to showcase and stabalize new features before they are
+marked Stable. Application developers are free to target the Beta testnet,
+but should expect instability and periodic ledger resets.
+
+The Edge testnet is intended for Solana protocol developers, not application
+developers. It tracks the tip of the master branch, not any release. Regarding
+stability, all that can be said is that CI automation was successful.
 
 ### Get Testnet Version
 
