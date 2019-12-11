@@ -294,7 +294,7 @@ version = "0.22.0"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2705,7 +2705,7 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.9.22"
+version = "0.9.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3263,7 +3263,7 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty-hex 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3298,7 +3298,7 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3353,7 +3353,7 @@ dependencies = [
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand_chacha 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3405,7 +3405,7 @@ dependencies = [
  "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand_chacha 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex-syntax 0.6.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 0.15.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3532,7 +3532,7 @@ dependencies = [
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_yaml 0.8.11 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3717,7 +3717,7 @@ dependencies = [
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test_derive 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk 0.22.0",
@@ -4020,7 +4020,7 @@ dependencies = [
  "gag 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "indicatif 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reqwest 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-clap-utils 0.22.0",
  "solana-client 0.22.0",
@@ -5760,7 +5760,7 @@ dependencies = [
 "checksum remove_dir_all 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4a83fa3702a688b9359eccba92d153ac33fd2e8462f9e0e3fdf155239ea7792e"
 "checksum rental 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)" = "01916ebd9fc2e81978a5dc9542a2fa47f5bb2ca3402e14c7cc42d6e3c5123e1f"
 "checksum rental-impl 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)" = "82260d54cf2cbe9608df161f7e7c98e81fae702aa13af9e4d5d39dc2ffb25ab6"
-"checksum reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)" = "2c2064233e442ce85c77231ebd67d9eca395207dec2127fe0bbedde4bd29a650"
+"checksum reqwest 0.9.24 (registry+https://github.com/rust-lang/crates.io-index)" = "f88643aea3c1343c804950d7bf983bd2067f5ab59db6d613a08e05572f2714ab"
 "checksum rgb 0.8.13 (registry+https://github.com/rust-lang/crates.io-index)" = "4f089652ca87f5a82a62935ec6172a534066c7b97be003cc8f702ee9a7a59c92"
 "checksum ring 0.16.7 (registry+https://github.com/rust-lang/crates.io-index)" = "796ae8317a07b04dffb1983bdc7045ccd02f741f0b411704f07fd35dbf99f757"
 "checksum rocksdb 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)" = "12069b106981c6103d3eab7dd1c86751482d0779a520b7c14954c8b586c1e643"
