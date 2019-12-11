@@ -580,8 +580,8 @@ impl Database {
         self.backend.write(batch.write_batch)
     }
 
-    pub fn storage_size(&self) -> u64 {
-        get_size(&self.path).expect("failure while reading ledger directory size")
+    pub fn storage_size(&self) -> Option<u64> {
+        get_size(&self.path).ok()
     }
 }
 
