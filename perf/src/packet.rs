@@ -109,15 +109,6 @@ mod tests {
     use solana_sdk::system_transaction;
 
     #[test]
-    fn test_packets_reset() {
-        let mut packets = Packets::default();
-        packets.packets.resize(10, Packet::default());
-        assert_eq!(packets.packets.len(), 10);
-        packets.reset();
-        assert_eq!(packets.packets.len(), 0);
-    }
-
-    #[test]
     fn test_to_packets() {
         let keypair = Keypair::new();
         let hash = Hash::new(&[1; 32]);

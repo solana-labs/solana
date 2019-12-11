@@ -140,19 +140,20 @@ mod tests {
             *self = 10;
         }
         fn warm(&mut self, _size_hint: usize) {}
+        fn set_recycler(&mut self, _recycler: Weak<RecyclerX<Self>>) {}
     }
 
     #[test]
     fn test_recycler() {
-        let recycler = RecyclerX::default();
+        let recycler = Recycler::default();
         let mut y: u64 = recycler.allocate("test_recycler1");
         assert_eq!(y, 0);
         y = 20;
         let recycler2 = recycler.clone();
-        recycler2.recycle(y);
-        assert_eq!(recycler.gc.lock().unwrap().len(), 1);
+        recycler2.recycler.recycle(y);
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 1);
         let z = recycler.allocate("test_recycler2");
         assert_eq!(z, 10);
-        assert_eq!(recycler.gc.lock().unwrap().len(), 0);
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 0);
     }
 }
