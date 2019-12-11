@@ -460,14 +460,6 @@ deploy() {
         maybeGpu=(-G "${ENABLE_GPU}")
       fi
 
-      if [[ -z $HASHES_PER_TICK ]]; then
-        maybeHashesPerTick="--hashes-per-tick auto"
-      elif [[ $HASHES_PER_TICK == skip ]]; then
-        maybeHashesPerTick=""
-      else
-        maybeHashesPerTick="--hashes-per-tick ${HASHES_PER_TICK}"
-      fi
-
       if [[ -z $DISABLE_AIRDROPS ]]; then
         DISABLE_AIRDROPS="true"
       fi
@@ -476,22 +468,6 @@ deploy() {
         maybeDisableAirdrops="--no-airdrop"
       else
         maybeDisableAirdrops=""
-      fi
-
-      if [[ -z $INTERNAL_NODES_STAKE_LAMPORTS ]]; then
-        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports 1000000000" # 1 SOL
-      elif [[ $INTERNAL_NODES_STAKE_LAMPORTS == skip ]]; then
-        maybeInternalNodesStakeLamports=""
-      else
-        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports ${INTERNAL_NODES_STAKE_LAMPORTS}"
-      fi
-
-      if [[ -z $INTERNAL_NODES_LAMPORTS ]]; then
-        maybeInternalNodesLamports="--internal-nodes-lamports 500000000000" # 500 SOL
-      elif [[ $INTERNAL_NODES_LAMPORTS == skip ]]; then
-        maybeInternalNodesLamports=""
-      else
-        maybeInternalNodesLamports="--internal-nodes-lamports ${INTERNAL_NODES_LAMPORTS}"
       fi
 
       EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
@@ -527,14 +503,11 @@ deploy() {
         --idle-clients \
         -P -u \
         -a tds-solana-com --letsencrypt tds.solana.com \
-        ${maybeHashesPerTick} \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
         ${maybeDelete:+-D} \
         ${maybeDisableAirdrops} \
-        ${maybeInternalNodesStakeLamports} \
-        ${maybeInternalNodesLamports} \
         ${maybeExternalAccountsFile} \
         --target-lamports-per-signature 0 \
         --slots-per-epoch 4096 \
