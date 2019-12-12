@@ -99,7 +99,6 @@ pub struct RpcVoteAccountInfo {
 
     /// History of how many credits earned by the end of each epoch
     ///   each tuple is (Epoch, credits, prev_credits)
-    #[serde(default)]
     pub epoch_credits: Vec<(Epoch, u64, u64)>,
 
     /// Most recent slot voted on by this vote account (0 if no votes exist)
