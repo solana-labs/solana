@@ -190,7 +190,16 @@ pub enum CliCommand {
         aggregate: bool,
         span: Option<u64>,
     },
-    VoteAuthorize(Pubkey, Pubkey, VoteAuthorize),
+    VoteAuthorize {
+        vote_account_pubkey: Pubkey,
+        new_authorized_pubkey: Pubkey,
+        vote_authorize: VoteAuthorize,
+    },
+    VoteUpdateValidator {
+        vote_account_pubkey: Pubkey,
+        new_identity_pubkey: Pubkey,
+        authorized_voter: KeypairEq,
+    },
     // Wallet Commands
     Address,
     Airdrop {
@@ -371,6 +380,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         },
         // Vote Commands
         ("create-vote-account", Some(matches)) => parse_vote_create_account(matches),
+        ("vote-update-validator", Some(matches)) => parse_vote_update_validator(matches),
         ("vote-authorize-voter", Some(matches)) => {
             parse_vote_authorize(matches, VoteAuthorize::Voter)
         }
@@ -1265,15 +1275,28 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &vote_account_pubkey,
             *use_lamports_unit,
         ),
-        CliCommand::VoteAuthorize(vote_account_pubkey, new_authorized_pubkey, vote_authorize) => {
-            process_vote_authorize(
-                &rpc_client,
-                config,
-                &vote_account_pubkey,
-                &new_authorized_pubkey,
-                *vote_authorize,
-            )
-        }
+        CliCommand::VoteAuthorize {
+            vote_account_pubkey,
+            new_authorized_pubkey,
+            vote_authorize,
+        } => process_vote_authorize(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            &new_authorized_pubkey,
+            *vote_authorize,
+        ),
+        CliCommand::VoteUpdateValidator {
+            vote_account_pubkey,
+            new_identity_pubkey,
+            authorized_voter,
+        } => process_vote_update_validator(
+            &rpc_client,
+            config,
+            &vote_account_pubkey,
+            &new_identity_pubkey,
+            authorized_voter,
+        ),
         CliCommand::Uptime {
             pubkey: vote_account_pubkey,
             aggregate,
@@ -2254,8 +2277,20 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let new_authorized_pubkey = Pubkey::new_rand();
-        config.command =
-            CliCommand::VoteAuthorize(bob_pubkey, new_authorized_pubkey, VoteAuthorize::Voter);
+        config.command = CliCommand::VoteAuthorize {
+            vote_account_pubkey: bob_pubkey,
+            new_authorized_pubkey,
+            vote_authorize: VoteAuthorize::Voter,
+        };
+        let signature = process_command(&config);
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+
+        let new_identity_pubkey = Pubkey::new_rand();
+        config.command = CliCommand::VoteUpdateValidator {
+            vote_account_pubkey: bob_pubkey,
+            new_identity_pubkey,
+            authorized_voter: Keypair::new().into(),
+        };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -2438,7 +2473,18 @@ mod tests {
         };
         assert!(process_command(&config).is_err());
 
-        config.command = CliCommand::VoteAuthorize(bob_pubkey, bob_pubkey, VoteAuthorize::Voter);
+        config.command = CliCommand::VoteAuthorize {
+            vote_account_pubkey: bob_pubkey,
+            new_authorized_pubkey: bob_pubkey,
+            vote_authorize: VoteAuthorize::Voter,
+        };
+        assert!(process_command(&config).is_err());
+
+        config.command = CliCommand::VoteUpdateValidator {
+            vote_account_pubkey: bob_pubkey,
+            new_identity_pubkey: bob_pubkey,
+            authorized_voter: Keypair::new().into(),
+        };
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::GetSlot {

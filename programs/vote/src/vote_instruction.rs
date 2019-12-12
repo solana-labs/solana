@@ -58,7 +58,7 @@ pub enum VoteInstruction {
     /// Withdraw some amount of funds
     Withdraw(u64),
 
-    /// Update the vote account's node id
+    /// Update the vote account's validator identity (node id)
     UpdateNode(Pubkey),
 }
 

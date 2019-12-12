@@ -71,6 +71,37 @@ impl VoteSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("vote-update-validator")
+                .about("Update the vote account's validator identity")
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Vote account to update"),
+                )
+                .arg(
+                    Arg::with_name("new_identity_pubkey")
+                        .index(2)
+                        .value_name("NEW VALIDATOR IDENTITY PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("New validator that will vote with this account"),
+                )
+                .arg(
+                    Arg::with_name("authorized_voter")
+                        .index(3)
+                        .value_name("AUTHORIZED VOTER KEYPAIR")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_keypair)
+                        .help("Authorized voter keypair"),
+                )
+        )
+        .subcommand(
             SubCommand::with_name("vote-authorize-voter")
                 .about("Authorize a new vote signing keypair for the given vote account")
                 .arg(
@@ -188,11 +219,26 @@ pub fn parse_vote_authorize(
     let new_authorized_pubkey = pubkey_of(matches, "new_authorized_pubkey").unwrap();
 
     Ok(CliCommandInfo {
-        command: CliCommand::VoteAuthorize(
+        command: CliCommand::VoteAuthorize {
             vote_account_pubkey,
             new_authorized_pubkey,
             vote_authorize,
-        ),
+        },
+        require_keypair: true,
+    })
+}
+
+pub fn parse_vote_update_validator(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+    let new_identity_pubkey = pubkey_of(matches, "new_identity_pubkey").unwrap();
+    let authorized_voter = keypair_of(matches, "authorized_voter").unwrap();
+
+    Ok(CliCommandInfo {
+        command: CliCommand::VoteUpdateValidator {
+            vote_account_pubkey,
+            new_identity_pubkey,
+            authorized_voter: authorized_voter.into(),
+        },
         require_keypair: true,
     })
 }
@@ -303,6 +349,40 @@ pub fn process_vote_authorize(
         ixs,
         Some(&config.keypair.pubkey()),
         &[&config.keypair],
+        recent_blockhash,
+    );
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    log_instruction_custom_error::<VoteError>(result)
+}
+
+pub fn process_vote_update_validator(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    vote_account_pubkey: &Pubkey,
+    new_identity_pubkey: &Pubkey,
+    authorized_voter: &Keypair,
+) -> ProcessResult {
+    check_unique_pubkeys(
+        (vote_account_pubkey, "vote_account_pubkey".to_string()),
+        (new_identity_pubkey, "new_identity_pubkey".to_string()),
+    )?;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let ixs = vec![vote_instruction::update_node(
+        vote_account_pubkey,
+        &authorized_voter.pubkey(),
+        new_identity_pubkey,
+    )];
+
+    let mut tx = Transaction::new_signed_with_payer(
+        ixs,
+        Some(&config.keypair.pubkey()),
+        &[&config.keypair, authorized_voter],
         recent_blockhash,
     );
     check_account_for_fee(
@@ -460,17 +540,24 @@ mod tests {
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
         let pubkey_string = pubkey.to_string();
+        let keypair2 = Keypair::new();
+        let pubkey2 = keypair2.pubkey();
+        let pubkey2_string = pubkey2.to_string();
 
         let test_authorize_voter = test_commands.clone().get_matches_from(vec![
             "test",
             "vote-authorize-voter",
             &pubkey_string,
-            &pubkey_string,
+            &pubkey2_string,
         ]);
         assert_eq!(
             parse_command(&test_authorize_voter).unwrap(),
             CliCommandInfo {
-                command: CliCommand::VoteAuthorize(pubkey, pubkey, VoteAuthorize::Voter),
+                command: CliCommand::VoteAuthorize {
+                    vote_account_pubkey: pubkey,
+                    new_authorized_pubkey: pubkey2,
+                    vote_authorize: VoteAuthorize::Voter
+                },
                 require_keypair: true
             }
         );
@@ -576,6 +663,27 @@ mod tests {
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),
                     commission: 0
+                },
+                require_keypair: true
+            }
+        );
+
+        let test_update_validator = test_commands.clone().get_matches_from(vec![
+            "test",
+            "vote-update-validator",
+            &pubkey_string,
+            &pubkey2_string,
+            &keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_update_validator).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::VoteUpdateValidator {
+                    vote_account_pubkey: pubkey,
+                    new_identity_pubkey: pubkey2,
+                    authorized_voter: solana_sdk::signature::read_keypair_file(&keypair_file)
+                        .unwrap()
+                        .into(),
                 },
                 require_keypair: true
             }
