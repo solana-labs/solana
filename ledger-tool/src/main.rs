@@ -1,10 +1,15 @@
 use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg, SubCommand,
 };
+use histogram;
+use serde_json::json;
+use solana_ledger::blocktree_db::Database;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
     blocktree::Blocktree,
+    blocktree_db,
+    blocktree_db::Column,
     blocktree_processor,
     rooted_slot_iterator::RootedSlotIterator,
 };
@@ -389,6 +394,94 @@ fn graph_forks(
     dot.join("\n")
 }
 
+fn analyze_column<T: solana_ledger::blocktree_db::Column>(
+    db: &Database,
+    name: &str,
+    key_size: usize,
+) -> Result<(), String> {
+    let mut key_tot: u64 = 0;
+    let mut val_hist = histogram::Histogram::new();
+    let mut val_tot: u64 = 0;
+    let mut row_hist = histogram::Histogram::new();
+    let a = key_size as u64;
+    for (_x, y) in db.iter::<T>(blocktree_db::IteratorMode::Start).unwrap() {
+        let b = y.len() as u64;
+        key_tot += a;
+        val_hist.increment(b).unwrap();
+        val_tot += b;
+        row_hist.increment(a + b).unwrap();
+    }
+
+    let json_result = if val_hist.entries() > 0 {
+        json!({
+            "column":name,
+            "entries":val_hist.entries(),
+            "key_stats":{
+                "max":a,
+                "total_bytes":key_tot,
+            },
+            "val_stats":{
+                "p50":val_hist.percentile(50.0).unwrap(),
+                "p90":val_hist.percentile(90.0).unwrap(),
+                "p99":val_hist.percentile(99.0).unwrap(),
+                "p999":val_hist.percentile(99.9).unwrap(),
+                "min":val_hist.minimum().unwrap(),
+                "max":val_hist.maximum().unwrap(),
+                "stddev":val_hist.stddev().unwrap(),
+                "total_bytes":val_tot,
+            },
+            "row_stats":{
+                "p50":row_hist.percentile(50.0).unwrap(),
+                "p90":row_hist.percentile(90.0).unwrap(),
+                "p99":row_hist.percentile(99.0).unwrap(),
+                "p999":row_hist.percentile(99.9).unwrap(),
+                "min":row_hist.minimum().unwrap(),
+                "max":row_hist.maximum().unwrap(),
+                "stddev":row_hist.stddev().unwrap(),
+                "total_bytes":key_tot + val_tot,
+            },
+        })
+    } else {
+        json!({
+        "column":name,
+        "entries":val_hist.entries(),
+        "key_stats":{
+            "max":a,
+            "total_bytes":0,
+        },
+        "val_stats":{
+            "total_bytes":0,
+        },
+        "row_stats":{
+            "total_bytes":0,
+        },
+        })
+    };
+
+    println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+
+    Ok(())
+}
+
+fn analyze_storage(blocktree: &Database) -> Result<(), String> {
+    use blocktree_db::columns::*;
+    analyze_column::<SlotMeta>(blocktree, "SlotMeta", SlotMeta::key_size())?;
+    analyze_column::<Orphans>(blocktree, "Orphans", Orphans::key_size())?;
+    analyze_column::<DeadSlots>(blocktree, "DeadSlots", DeadSlots::key_size())?;
+    analyze_column::<ErasureMeta>(blocktree, "ErasureMeta", ErasureMeta::key_size())?;
+    analyze_column::<Root>(blocktree, "Root", Root::key_size())?;
+    analyze_column::<Index>(blocktree, "Index", Index::key_size())?;
+    analyze_column::<ShredData>(blocktree, "ShredData", ShredData::key_size())?;
+    analyze_column::<ShredCode>(blocktree, "ShredCode", ShredCode::key_size())?;
+    analyze_column::<TransactionStatus>(
+        blocktree,
+        "TransactionStatus",
+        TransactionStatus::key_size(),
+    )?;
+
+    Ok(())
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
@@ -526,6 +619,10 @@ fn main() {
                     .required(false)
                     .help("Number of roots in the output"),
             )
+        )
+        .subcommand(
+            SubCommand::with_name("analyze-storage")
+                .about("Output statistics in JSON format about all column families in the ledger rocksDB")
         )
         .get_matches();
 
@@ -738,6 +835,15 @@ fn main() {
                         println!("Ledger only contains some data for slot {:?}", first);
                     }
                 }
+            }
+            Err(err) => {
+                eprintln!("Unable to read the Ledger: {:?}", err);
+                exit(1);
+            }
+        },
+        ("analyze-storage", _) => match analyze_storage(&blocktree.db()) {
+            Ok(()) => {
+                println!("Ok.");
             }
             Err(err) => {
                 eprintln!("Unable to read the Ledger: {:?}", err);
