@@ -81,8 +81,8 @@ With a FEC rate: `16:4`
 
 With FEC rate of `16:16`
 * `G = 12800`
-* `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775,  trials = 64, failures = i) = 0.0.21.3`
-* `B = (1 - 0.0.21.3) ^ (12800 / 32) = 0.42583`
+* `S = SUM of i=0 -> 32 for binomial(prob_failure = 0.2775,  trials = 64, failures = i) = 0.0.21.4`
+* `B = (1 - 0.0.21.4) ^ (12800 / 32) = 0.42583`
 
 With FEC rate of `32:32`
 * `G = 12800`
