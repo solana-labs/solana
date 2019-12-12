@@ -27,9 +27,9 @@ use thiserror::Error;
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
-pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 79;
+pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
 pub const SIZE_OF_DATA_SHRED_HEADER: usize = 3;
-pub const SIZE_OF_CODING_SHRED_HEADER: usize = 10;
+pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 pub const SIZE_OF_SIGNATURE: usize = 64;
 pub const SIZE_OF_DATA_SHRED_IGNORED_TAIL: usize =
     SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
@@ -87,6 +87,7 @@ pub struct ShredCommonHeader {
     pub slot: Slot,
     pub index: u32,
     pub version: u16,
+    pub fec_set_index: u32,
 }
 
 /// The data shred header has parent offset and flags
@@ -99,7 +100,6 @@ pub struct DataShredHeader {
 /// The coding shred header has FEC information
 #[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug)]
 pub struct CodingShredHeader {
-    pub fec_set_index: u32,
     pub num_data_shreds: u16,
     pub num_coding_shreds: u16,
     pub position: u16,
@@ -154,12 +154,14 @@ impl Shred {
         is_last_in_slot: bool,
         reference_tick: u8,
         version: u16,
+        fec_set_index: u32,
     ) -> Self {
         let mut payload = vec![0; PACKET_DATA_SIZE];
         let common_header = ShredCommonHeader {
             slot,
             index,
             version,
+            fec_set_index,
             ..ShredCommonHeader::default()
         };
 
@@ -461,6 +463,11 @@ impl Shredder {
                     .map(|(i, shred_data)| {
                         let shred_index = next_shred_index + i as u32;
 
+                        // Each FEC block has maximum MAX_DATA_SHREDS_PER_FEC_BLOCK shreds
+                        // "FEC set index" is the index of first data shred in that FEC block
+                        let fec_set_index =
+                            shred_index - (i % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize) as u32;
+
                         let (is_last_data, is_last_in_slot) = {
                             if shred_index == last_shred_index {
                                 (true, is_last_in_slot)
@@ -478,6 +485,7 @@ impl Shredder {
                             is_last_in_slot,
                             self.reference_tick,
                             self.version,
+                            fec_set_index,
                         );
 
                         Shredder::sign_shred(&self.keypair, &mut shred);
@@ -553,12 +561,12 @@ impl Shredder {
             index,
             slot,
             version,
+            fec_set_index,
             ..ShredCommonHeader::default()
         };
         (
             header,
             CodingShredHeader {
-                fec_set_index,
                 num_data_shreds: num_data as u16,
                 num_coding_shreds: num_code as u16,
                 position: position as u16,
@@ -1437,5 +1445,43 @@ pub mod tests {
         ];
         let version = Shred::version_from_hash(&Hash::new(&hash));
         assert_eq!(version, 0x5a5a);
+    }
+
+    #[test]
+    fn test_shred_fec_set_index() {
+        let keypair = Arc::new(Keypair::new());
+        let hash = hash(Hash::default().as_ref());
+        let version = Shred::version_from_hash(&hash);
+        assert_ne!(version, 0);
+        let shredder =
+            Shredder::new(0, 0, 0.5, keypair, 0, version).expect("Failed in creating shredder");
+
+        let entries: Vec<_> = (0..500)
+            .map(|_| {
+                let keypair0 = Keypair::new();
+                let keypair1 = Keypair::new();
+                let tx0 =
+                    system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+                Entry::new(&Hash::default(), 1, vec![tx0])
+            })
+            .collect();
+
+        let start_index = 0x12;
+        let (data_shreds, coding_shreds, _next_index) =
+            shredder.entries_to_shreds(&entries, true, start_index);
+
+        let max_per_block = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
+        data_shreds.iter().enumerate().for_each(|(i, s)| {
+            let expected_fec_set_index = start_index + ((i / max_per_block) * max_per_block) as u32;
+            assert_eq!(s.common_header.fec_set_index, expected_fec_set_index);
+        });
+
+        coding_shreds.iter().enumerate().for_each(|(i, s)| {
+            // There'll be half the number of coding shreds, as FEC rate is 0.5
+            // So multiply i with 2
+            let expected_fec_set_index =
+                start_index + ((i * 2 / max_per_block) * max_per_block) as u32;
+            assert_eq!(s.common_header.fec_set_index, expected_fec_set_index);
+        });
     }
 }

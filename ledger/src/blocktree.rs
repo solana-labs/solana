@@ -689,7 +689,7 @@ impl Blocktree {
         if is_trusted
             || Blocktree::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root)
         {
-            let set_index = u64::from(shred.coding_header.fec_set_index);
+            let set_index = u64::from(shred.common_header.fec_set_index);
             let erasure_config = ErasureConfig::new(
                 shred.coding_header.num_data_shreds as usize,
                 shred.coding_header.num_coding_shreds as usize,
@@ -3541,7 +3541,17 @@ pub mod tests {
         let gap: u64 = 10;
         let shreds: Vec<_> = (0..64)
             .map(|i| {
-                Shred::new_from_data(slot, (i * gap) as u32, 0, None, false, false, i as u8, 0)
+                Shred::new_from_data(
+                    slot,
+                    (i * gap) as u32,
+                    0,
+                    None,
+                    false,
+                    false,
+                    i as u8,
+                    0,
+                    (i * gap) as u32,
+                )
             })
             .collect();
         blocktree.insert_shreds(shreds, None, false).unwrap();
@@ -4156,6 +4166,7 @@ pub mod tests {
                 true,
                 0,
                 0,
+                next_shred_index as u32,
             )];
 
             // With the corruption, nothing should be returned, even though an

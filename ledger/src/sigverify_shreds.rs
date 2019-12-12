@@ -456,8 +456,17 @@ pub mod tests {
         solana_logger::setup();
         let mut packet = Packet::default();
         let slot = 0xdeadc0de;
-        let mut shred =
-            Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true, 0, 0);
+        let mut shred = Shred::new_from_data(
+            slot,
+            0xc0de,
+            0xdead,
+            Some(&[1, 2, 3, 4]),
+            true,
+            true,
+            0,
+            0,
+            0xc0de,
+        );
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
@@ -490,8 +499,17 @@ pub mod tests {
         solana_logger::setup();
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
-        let mut shred =
-            Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true, 0, 0);
+        let mut shred = Shred::new_from_data(
+            slot,
+            0xc0de,
+            0xdead,
+            Some(&[1, 2, 3, 4]),
+            true,
+            true,
+            0,
+            0,
+            0xc0de,
+        );
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
         batch[0].packets.resize(1, Packet::default());
@@ -533,8 +551,17 @@ pub mod tests {
 
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
-        let mut shred =
-            Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true, 0, 0);
+        let mut shred = Shred::new_from_data(
+            slot,
+            0xc0de,
+            0xdead,
+            Some(&[1, 2, 3, 4]),
+            true,
+            true,
+            0,
+            0,
+            0xc0de,
+        );
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
         batch[0].packets.resize(1, Packet::default());
@@ -598,6 +625,7 @@ pub mod tests {
                 true,
                 1,
                 2,
+                0xc0de,
             );
             shred.copy_to_packet(p);
         }
@@ -631,8 +659,17 @@ pub mod tests {
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
         let keypair = Keypair::new();
-        let shred =
-            Shred::new_from_data(slot, 0xc0de, 0xdead, Some(&[1, 2, 3, 4]), true, true, 0, 0);
+        let shred = Shred::new_from_data(
+            slot,
+            0xc0de,
+            0xdead,
+            Some(&[1, 2, 3, 4]),
+            true,
+            true,
+            0,
+            0,
+            0xc0de,
+        );
         batch[0].packets.resize(1, Packet::default());
         batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batch[0].packets[0].meta.size = shred.payload.len();
