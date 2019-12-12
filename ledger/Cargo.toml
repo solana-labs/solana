@@ -62,3 +62,6 @@ solana-budget-program = { path = "../programs/budget", version = "0.22.0" }
 [lib]
 crate-type = ["lib"]
 name = "solana_ledger"
+
+[[bench]]
+name = "sigverify_shreds"
