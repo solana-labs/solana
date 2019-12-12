@@ -196,7 +196,7 @@ pub struct AccountStorageEntry {
 
 impl AccountStorageEntry {
     pub fn new(path: &Path, slot_id: Slot, id: usize, file_size: u64) -> Self {
-        let tail = AppendVec::new_relative_path(slot_id, id);
+        let tail = AppendVec::new_relative_path(id);
         let path = Path::new(path).join(&tail);
         let accounts = AppendVec::new(&path, true, file_size as usize);
 
@@ -206,6 +206,12 @@ impl AccountStorageEntry {
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
         }
+    }
+
+    pub fn reset(&mut self, slot_id: Slot) {
+        *self.count_and_status.write().unwrap() = (0, AccountStorageStatus::Available);
+        self.slot_id = slot_id;
+        self.accounts.reset();
     }
 
     pub fn set_status(&self, mut status: AccountStorageStatus) {
@@ -357,6 +363,9 @@ pub struct AccountsDB {
     /// Account storage
     pub storage: RwLock<AccountStorage>,
 
+    /// Currently dead storage to be re-used
+    storage_gc: RwLock<Vec<Arc<AccountStorageEntry>>>,
+
     /// distribute the accounts across storage lists
     pub next_id: AtomicUsize,
 
@@ -390,6 +399,7 @@ impl Default for AccountsDB {
         AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),
             storage: RwLock::new(AccountStorage(HashMap::new())),
+            storage_gc: RwLock::new(Vec::new()),
             next_id: AtomicUsize::new(0),
             write_version: AtomicUsize::new(0),
             paths: RwLock::new(vec![]),
@@ -465,8 +475,7 @@ impl AccountsDB {
 
                     // Move the corresponding AppendVec from the snapshot into the directory pointed
                     // at by `local_dir`
-                    let append_vec_relative_path =
-                        AppendVec::new_relative_path(slot_id, storage_entry.id);
+                    let append_vec_relative_path = AppendVec::new_relative_path(storage_entry.id);
                     let append_vec_abs_path =
                         append_vecs_path.as_ref().join(&append_vec_relative_path);
                     let mut copy_options = CopyOptions::new();
@@ -745,8 +754,8 @@ impl AccountsDB {
 
     fn find_storage_candidate(&self, slot_id: Slot) -> Arc<AccountStorageEntry> {
         let mut create_extra = false;
+        // try to use an existing non-full store
         let stores = self.storage.read().unwrap();
-
         if let Some(slot_stores) = stores.0.get(&slot_id) {
             if !slot_stores.is_empty() {
                 if slot_stores.len() <= self.min_num_stores {
@@ -783,6 +792,29 @@ impl AccountsDB {
 
         drop(stores);
 
+        {
+            // First try to re-use from gc
+            let mut storage_gc = self.storage_gc.write().unwrap();
+            let mut store_idx = storage_gc.len();
+            for (i, mut store) in storage_gc.iter_mut().enumerate() {
+                if let Some(storew) = Arc::get_mut(&mut store) {
+                    storew.reset(slot_id);
+                    store_idx = i;
+                    break;
+                }
+            }
+            if store_idx < storage_gc.len() {
+                let store = storage_gc.remove(store_idx);
+                drop(storage_gc);
+
+                let mut stores = self.storage.write().unwrap();
+                let slot_storage = stores.0.entry(slot_id).or_insert_with(HashMap::new);
+                slot_storage.insert(store.id, store.clone());
+                return store;
+            }
+        }
+
+        // If that fails, then create a new one.
         let store = self.create_and_insert_store(slot_id, self.file_size);
         store.try_available();
         store
@@ -812,7 +844,12 @@ impl AccountsDB {
         //add_root should be called first
         let is_root = self.accounts_index.read().unwrap().is_root(slot);
         if !is_root {
-            self.storage.write().unwrap().0.remove(&slot);
+            if let Some(dead_stores) = self.storage.write().unwrap().0.remove(&slot) {
+                self.storage_gc
+                    .write()
+                    .unwrap()
+                    .extend(dead_stores.values().cloned());
+            }
         }
     }
 
@@ -1966,6 +2003,50 @@ pub mod tests {
         // slot 1 & 2 should not have any stores
         assert_no_stores(&accounts, 1);
         assert_no_stores(&accounts, 2);
+    }
+
+    #[test]
+    fn test_accounts_db_serialize_reuse_store() {
+        solana_logger::setup();
+
+        let some_lamport = 223;
+        let zero_lamport = 0;
+        let no_data = 0;
+        let owner = Account::default().owner;
+
+        let account = Account::new(some_lamport, no_data, &owner);
+        let pubkey = Pubkey::new_rand();
+        let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
+
+        let accounts = AccountsDB::new_single();
+
+        let mut current_slot = 1;
+        accounts.store(current_slot, &[(&pubkey, &account)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey, &zero_lamport_account)]);
+
+        accounts.add_root(current_slot);
+
+        assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
+
+        print_accounts("accounts", &accounts);
+
+        purge_zero_lamport_accounts(&accounts, current_slot);
+
+        // Store an account to a new slot which should re-use the slot 0 stores
+        // which is freed when purge_zero_lamport_accounts happens.
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey, &account)]);
+        accounts.add_root(current_slot);
+
+        print_accounts("accounts_post_purge", &accounts);
+        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+
+        print_accounts("reconstructed", &accounts);
+
+        assert_load_account(&accounts, current_slot, pubkey, some_lamport);
     }
 
     #[test]

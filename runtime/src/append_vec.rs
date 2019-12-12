@@ -172,8 +172,8 @@ impl AppendVec {
         append_vec_path.as_ref().file_name().map(PathBuf::from)
     }
 
-    pub fn new_relative_path(fork_id: u64, id: usize) -> PathBuf {
-        PathBuf::from(&format!("{}.{}", fork_id, id))
+    pub fn new_relative_path(id: usize) -> PathBuf {
+        PathBuf::from(&format!("{}", id))
     }
 
     #[allow(clippy::mutex_atomic)]
@@ -516,7 +516,7 @@ pub mod tests {
 
     #[test]
     fn test_relative_path() {
-        let relative_path = AppendVec::new_relative_path(0, 2);
+        let relative_path = AppendVec::new_relative_path(2);
         let full_path = Path::new("/tmp").join(&relative_path);
         assert_eq!(
             relative_path,
