@@ -38,9 +38,9 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("Vote account keypair to fund"),
                 )
                 .arg(
-                    Arg::with_name("node_pubkey")
+                    Arg::with_name("identity_pubkey")
                         .index(2)
-                        .value_name("VALIDATOR PUBKEY")
+                        .value_name("VALIDATOR IDENTITY PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -163,7 +163,7 @@ impl VoteSubCommands for App<'_, '_> {
 
 pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let vote_account = keypair_of(matches, "vote_account").unwrap();
-    let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
+    let identity_pubkey = pubkey_of(matches, "identity_pubkey").unwrap();
     let commission = value_of(&matches, "commission").unwrap_or(0);
     let authorized_voter = pubkey_of(matches, "authorized_voter");
     let authorized_withdrawer = pubkey_of(matches, "authorized_withdrawer");
@@ -171,7 +171,7 @@ pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandI
     Ok(CliCommandInfo {
         command: CliCommand::CreateVoteAccount {
             vote_account: vote_account.into(),
-            node_pubkey,
+            node_pubkey: identity_pubkey,
             authorized_voter,
             authorized_withdrawer,
             commission,
@@ -233,7 +233,7 @@ pub fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     vote_account: &Keypair,
-    node_pubkey: &Pubkey,
+    identity_pubkey: &Pubkey,
     authorized_voter: &Option<Pubkey>,
     authorized_withdrawer: &Option<Pubkey>,
     commission: u8,
@@ -241,7 +241,7 @@ pub fn process_create_vote_account(
     let vote_account_pubkey = vote_account.pubkey();
     check_unique_pubkeys(
         (&vote_account_pubkey, "vote_account_pubkey".to_string()),
-        (&node_pubkey, "node_pubkey".to_string()),
+        (&identity_pubkey, "identity_pubkey".to_string()),
     )?;
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
@@ -253,7 +253,7 @@ pub fn process_create_vote_account(
         .max(1));
 
     let vote_init = VoteInit {
-        node_pubkey: *node_pubkey,
+        node_pubkey: *identity_pubkey,
         authorized_voter: authorized_voter.unwrap_or(vote_account_pubkey),
         authorized_withdrawer: authorized_withdrawer.unwrap_or(config.keypair.pubkey()),
         commission,
@@ -350,7 +350,7 @@ pub fn process_show_vote_account(
         "account balance: {}",
         build_balance_message(vote_account.lamports, use_lamports_unit, true)
     );
-    println!("node id: {}", vote_state.node_pubkey);
+    println!("validator identity: {}", vote_state.node_pubkey);
     println!("authorized voter: {}", vote_state.authorized_voter);
     println!(
         "authorized withdrawer: {}",
@@ -399,10 +399,10 @@ pub fn process_uptime(
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
 
-    println!("Node id: {}", vote_state.node_pubkey);
-    println!("Authorized voter: {}", vote_state.authorized_voter);
+    println!("validator identity: {}", vote_state.node_pubkey);
+    println!("authorized voter: {}", vote_state.authorized_voter);
     if !vote_state.votes.is_empty() {
-        println!("Uptime:");
+        println!("uptime:");
 
         let epoch_credits: Vec<(u64, u64, u64)> = if let Some(x) = span {
             vote_state
