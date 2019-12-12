@@ -1,23 +1,55 @@
 use log::*;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::{limited_deserialize, next_keyed_account};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_instruction::{SystemError, SystemInstruction};
-use solana_sdk::system_program;
-use solana_sdk::sysvar;
 
-// 10 MB
-const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
+use solana_sdk::{
+    account::KeyedAccount,
+    instruction::InstructionError,
+    instruction_processor_utils::{limited_deserialize, next_keyed_account},
+    pubkey::Pubkey,
+    system_instruction::{
+        create_address_with_seed, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
+    },
+    system_program, sysvar,
+};
 
-fn create_system_account(
+fn create_account_with_seed(
+    from: &mut KeyedAccount,
+    to: &mut KeyedAccount,
+    seed: &str,
+    lamports: u64,
+    data_length: u64,
+    program_id: &Pubkey,
+) -> Result<(), InstructionError> {
+    // `from` is the source of the derived address, the caller must have
+    //  signed, even if no lamports will be transferred
+    if from.signer_key().is_none() {
+        debug!("CreateAccountWithSeed: from must sign");
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
+    // re-derive the address, must match `to`
+    let address = create_address_with_seed(from.unsigned_key(), seed, program_id)?;
+
+    if to.unsigned_key() != &address {
+        debug!(
+            "CreateAccountWithSeed: invalid argument; generated {} does not match to {}",
+            address,
+            to.unsigned_key()
+        );
+        return Err(SystemError::AddressWithSeedMismatch.into());
+    }
+
+    // all of finish_create_account's rules apply
+    finish_create_account(from, to, lamports, data_length, program_id)
+}
+
+fn create_account(
     from: &mut KeyedAccount,
     to: &mut KeyedAccount,
     lamports: u64,
     data_length: u64,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    // if lamports == 0, the from account isn't touched
+    // if lamports == 0, the `from` account isn't touched
     if lamports != 0 && from.signer_key().is_none() {
         debug!("CreateAccount: from must sign");
         return Err(InstructionError::MissingRequiredSignature);
@@ -28,7 +60,17 @@ fn create_system_account(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    // if it looks like the to account is already in use, bail
+    finish_create_account(from, to, lamports, data_length, program_id)
+}
+
+fn finish_create_account(
+    from: &mut KeyedAccount,
+    to: &mut KeyedAccount,
+    lamports: u64,
+    data_length: u64,
+    program_id: &Pubkey,
+) -> Result<(), InstructionError> {
+    // if it looks like the `to` account is already in use, bail
     if to.account.lamports != 0
         || !to.account.data.is_empty()
         || !system_program::check_id(&to.account.owner)
@@ -61,11 +103,18 @@ fn create_system_account(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    assign_account_to_program(to, program_id)?;
+    // guard against sysvars being assigned
+    if sysvar::check_id(&program_id) {
+        debug!("Assign: program id {} invalid", program_id);
+        return Err(SystemError::InvalidProgramId.into());
+    }
+    to.account.owner = *program_id;
+
     from.account.lamports -= lamports;
     to.account.lamports += lamports;
     to.account.data = vec![0; data_length as usize];
     to.account.executable = false;
+
     Ok(())
 }
 
@@ -134,7 +183,17 @@ pub fn process_instruction(
         } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
-            create_system_account(from, to, lamports, space, &program_id)
+            create_account(from, to, lamports, space, &program_id)
+        }
+        SystemInstruction::CreateAccountWithSeed {
+            seed,
+            lamports,
+            space,
+            program_id,
+        } => {
+            let from = next_keyed_account(keyed_accounts_iter)?;
+            let to = next_keyed_account(keyed_accounts_iter)?;
+            create_account_with_seed(from, to, &seed, lamports, space, &program_id)
         }
         SystemInstruction::Assign { program_id } => {
             let account = next_keyed_account(keyed_accounts_iter)?;
@@ -163,38 +222,120 @@ mod tests {
     use solana_sdk::transaction::TransactionError;
 
     #[test]
-    fn test_create_system_account() {
+    fn test_create_account() {
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &system_program::id());
-
         let to = Pubkey::new_rand();
+        let mut from_account = Account::new(100, 0, &system_program::id());
         let mut to_account = Account::new(0, 0, &Pubkey::default());
 
         assert_eq!(
-            create_system_account(
+            process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&from, true, &mut from_account),
+                    KeyedAccount::new(&to, true, &mut to_account)
+                ],
+                &bincode::serialize(&SystemInstruction::CreateAccount {
+                    lamports: 50,
+                    space: 2,
+                    program_id: new_program_owner
+                })
+                .unwrap()
+            ),
+            Ok(())
+        );
+        assert_eq!(from_account.lamports, 50);
+        assert_eq!(to_account.lamports, 50);
+        assert_eq!(to_account.owner, new_program_owner);
+        assert_eq!(to_account.data, [0, 0]);
+    }
+
+    #[test]
+    fn test_create_account_with_seed() {
+        let new_program_owner = Pubkey::new(&[9; 32]);
+        let from = Pubkey::new_rand();
+        let seed = "shiny pepper";
+        let to = create_address_with_seed(&from, seed, &new_program_owner).unwrap();
+
+        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut to_account = Account::new(0, 0, &Pubkey::default());
+
+        assert_eq!(
+            process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&from, true, &mut from_account),
+                    KeyedAccount::new(&to, false, &mut to_account)
+                ],
+                &bincode::serialize(&SystemInstruction::CreateAccountWithSeed {
+                    seed: seed.to_string(),
+                    lamports: 50,
+                    space: 2,
+                    program_id: new_program_owner
+                })
+                .unwrap()
+            ),
+            Ok(())
+        );
+        assert_eq!(from_account.lamports, 50);
+        assert_eq!(to_account.lamports, 50);
+        assert_eq!(to_account.owner, new_program_owner);
+        assert_eq!(to_account.data, [0, 0]);
+    }
+
+    #[test]
+    fn test_create_account_with_seed_mismatch() {
+        let new_program_owner = Pubkey::new(&[9; 32]);
+        let from = Pubkey::new_rand();
+        let seed = "dull boy";
+        let to = Pubkey::new_rand();
+
+        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut to_account = Account::new(0, 0, &Pubkey::default());
+
+        assert_eq!(
+            create_account_with_seed(
                 &mut KeyedAccount::new(&from, true, &mut from_account),
-                &mut KeyedAccount::new(&to, true, &mut to_account),
+                &mut KeyedAccount::new(&to, false, &mut to_account),
+                seed,
                 50,
                 2,
                 &new_program_owner,
             ),
-            Ok(())
+            Err(SystemError::AddressWithSeedMismatch.into())
         );
+        assert_eq!(from_account.lamports, 100);
+        assert_eq!(to_account, Account::default());
+    }
+    #[test]
+    fn test_create_account_with_seed_missing_sig() {
+        let new_program_owner = Pubkey::new(&[9; 32]);
+        let from = Pubkey::new_rand();
+        let seed = "dull boy";
+        let to = create_address_with_seed(&from, seed, &new_program_owner).unwrap();
 
-        let from_lamports = from_account.lamports;
-        let to_lamports = to_account.lamports;
-        let to_owner = to_account.owner;
-        let to_data = to_account.data.clone();
-        assert_eq!(from_lamports, 50);
-        assert_eq!(to_lamports, 50);
-        assert_eq!(to_owner, new_program_owner);
-        assert_eq!(to_data, [0, 0]);
+        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut to_account = Account::new(0, 0, &Pubkey::default());
+
+        assert_eq!(
+            create_account_with_seed(
+                &mut KeyedAccount::new(&from, false, &mut from_account),
+                &mut KeyedAccount::new(&to, false, &mut to_account),
+                seed,
+                50,
+                2,
+                &new_program_owner,
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+        assert_eq!(from_account.lamports, 100);
+        assert_eq!(to_account, Account::default());
     }
 
     #[test]
     fn test_create_with_zero_lamports() {
-        // Attempt to create account with zero lamports
+        // create account with zero lamports tranferred
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &Pubkey::new_rand()); // not from system account
@@ -203,7 +344,7 @@ mod tests {
         let mut to_account = Account::new(0, 0, &Pubkey::default());
 
         assert_eq!(
-            create_system_account(
+            create_account(
                 &mut KeyedAccount::new(&from, false, &mut from_account), // no signer
                 &mut KeyedAccount::new(&to, true, &mut to_account),
                 0,
@@ -234,7 +375,7 @@ mod tests {
         let mut to_account = Account::new(0, 0, &Pubkey::default());
         let unchanged_account = to_account.clone();
 
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
             &mut KeyedAccount::new(&to, true, &mut to_account),
             150,
@@ -255,7 +396,7 @@ mod tests {
         let to_account_key = Pubkey::new_rand();
 
         // Trying to request more data length than permitted will result in failure
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from_account_key, true, &mut from_account),
             &mut KeyedAccount::new(&to_account_key, true, &mut to_account),
             50,
@@ -269,7 +410,7 @@ mod tests {
         );
 
         // Trying to request equal or less data length than permitted will be successful
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from_account_key, true, &mut from_account),
             &mut KeyedAccount::new(&to_account_key, true, &mut to_account),
             50,
@@ -293,7 +434,7 @@ mod tests {
         let mut owned_account = Account::new(0, 0, &original_program_owner);
         let unchanged_account = owned_account.clone();
 
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
             &mut KeyedAccount::new(&owned_key, true, &mut owned_account),
             50,
@@ -308,7 +449,7 @@ mod tests {
 
         let mut owned_account = Account::new(10, 0, &Pubkey::default());
         let unchanged_account = owned_account.clone();
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
             &mut KeyedAccount::new(&owned_key, true, &mut owned_account),
             50,
@@ -333,7 +474,7 @@ mod tests {
         let unchanged_account = owned_account.clone();
 
         // Haven't signed from account
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from, false, &mut from_account),
             &mut KeyedAccount::new(&owned_key, true, &mut owned_account),
             50,
@@ -345,7 +486,7 @@ mod tests {
         assert_eq!(owned_account, unchanged_account);
 
         // Haven't signed to account
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
             &mut KeyedAccount::new(&owned_key, false, &mut owned_account),
             50,
@@ -357,7 +498,7 @@ mod tests {
         assert_eq!(owned_account, unchanged_account);
 
         // support creation/assignment with zero lamports (ephemeral account)
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from, false, &mut from_account),
             &mut KeyedAccount::new(&owned_key, true, &mut owned_account),
             0,
@@ -379,7 +520,7 @@ mod tests {
         let mut to_account = Account::default();
 
         // fail to create a sysvar::id() owned account
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
             &mut KeyedAccount::new(&to, true, &mut to_account),
             50,
@@ -392,7 +533,7 @@ mod tests {
         let mut to_account = Account::default();
 
         // fail to create an account with a sysvar id
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
             &mut KeyedAccount::new(&to, true, &mut to_account),
             50,
@@ -419,7 +560,7 @@ mod tests {
         };
         let unchanged_account = populated_account.clone();
 
-        let result = create_system_account(
+        let result = create_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
             &mut KeyedAccount::new(&populated_key, true, &mut populated_account),
             50,
@@ -447,9 +588,13 @@ mod tests {
         );
 
         assert_eq!(
-            assign_account_to_program(
-                &mut KeyedAccount::new(&from, true, &mut from_account),
-                &new_program_owner,
+            process_instruction(
+                &Pubkey::default(),
+                &mut [KeyedAccount::new(&from, true, &mut from_account)],
+                &bincode::serialize(&SystemInstruction::Assign {
+                    program_id: new_program_owner
+                })
+                .unwrap()
             ),
             Ok(())
         );
