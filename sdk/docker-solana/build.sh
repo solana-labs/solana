@@ -19,6 +19,9 @@ rm -rf usr/
 cp -f ../../run.sh usr/bin/solana-run.sh
 
 docker build -t solanalabs/solana:"$CHANNEL" .
+if [[ -n "$CI_TAG" ]]; then
+  docker tag solanalabs/solana:"$CHANNEL" solanalabs/solana:"$CI_TAG"
+fi
 
 maybeEcho=
 if [[ -z $CI ]]; then
@@ -33,3 +36,6 @@ else
   )
 fi
 $maybeEcho docker push solanalabs/solana:"$CHANNEL"
+if [[ -n "$CI_TAG" ]]; then
+  $maybeEcho docker push solanalabs/solana:"$CI_TAG"
+fi
