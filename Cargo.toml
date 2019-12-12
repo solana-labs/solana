@@ -51,6 +51,7 @@ members = [
     "vote-signer",
     "cli",
     "rayon-threadlimit",
+    "watchtower",
 ]
 
 exclude = [
