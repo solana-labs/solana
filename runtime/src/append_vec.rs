@@ -71,6 +71,17 @@ impl<'a> StoredAccount<'a> {
             hash: *self.hash,
         }
     }
+
+    fn sanitize(&self) -> bool {
+        // Sanitize executable
+        // Use extra references to avoid value silently cramped to 1 (=true) and 0 (=false)
+        // Yes, this really hannpens; see test_set_file_crafted_executable
+        let executable_bool: &bool = &self.account_meta.executable;
+        // UNSAFE: Force to interpret mmap-backed bool as u8 to ensure higher 7-bits are cleared correctly.
+        let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
+
+        executable_byte & !1 == 0
+    }
 }
 
 #[derive(Debug)]
@@ -188,15 +199,39 @@ impl AppendVec {
 
         let map = unsafe { MmapMut::map_mut(&data)? };
         self.map = map;
+
+        if !self.sanitize_layout_and_length() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "incorrect layout/length",
+            ));
+        }
+
         Ok(())
     }
 
+    fn sanitize_layout_and_length(&self) -> bool {
+        let mut offset = 0;
+
+        while let Some((account, next_offset)) = self.get_account(offset) {
+            if !account.sanitize() {
+                return false;
+            }
+            offset = next_offset;
+        }
+        let aligned_current_len = align_to_8byte!(self.current_len.load(Ordering::Relaxed));
+
+        offset == aligned_current_len
+    }
+
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
-        if offset + size > self.len() {
+        let (next, overflow) = offset.overflowing_add(size);
+        if overflow || next > self.len() {
             return None;
         }
-        let data = &self.map[offset..offset + size];
-        let next = align_to_8byte!(offset + size);
+        let data = &self.map[offset..next];
+        let next = align_to_8byte!(next);
+
         Some((
             //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
             //The lifetime of this slice is tied to &self, since it points to self.map memory
@@ -435,6 +470,7 @@ impl<'de> Deserialize<'de> for AppendVec {
 pub mod tests {
     use super::test_utils::*;
     use super::*;
+    use assert_matches::assert_matches;
     use log::*;
     use rand::{thread_rng, Rng};
     use solana_sdk::timing::duration_as_ms;
@@ -515,5 +551,147 @@ pub mod tests {
             relative_path,
             AppendVec::get_relative_path(full_path).unwrap()
         );
+    }
+
+    #[test]
+    fn test_set_file_empty_data() {
+        let file = get_append_vec_path("test_set_file_empty_data");
+        let path = &file.path;
+        let mut av = AppendVec::new(&path, true, 1024 * 1024);
+
+        assert_eq!(av.accounts(0).len(), 0);
+
+        let result = av.set_file(path);
+        assert_matches!(result, Ok(_));
+    }
+
+    #[test]
+    fn test_set_file_crafted_data_len() {
+        let file = get_append_vec_path("test_set_file_crafted_data_len");
+        let path = &file.path;
+        let mut av = AppendVec::new(&path, true, 1024 * 1024);
+
+        let crafted_data_len = 1;
+
+        av.append_account_test(&create_test_account(10)).unwrap();
+
+        let accounts = av.accounts(0);
+        let account = accounts.first().unwrap();
+        {
+            let data_len: &u64 = &account.meta.data_len;
+            #[allow(mutable_transmutes)]
+            // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
+            let data_len: &mut u64 = unsafe { &mut *(data_len as *const u64 as *mut u64) };
+            *data_len = crafted_data_len;
+        }
+        assert_eq!(account.meta.data_len, crafted_data_len);
+
+        // Reload accoutns and observe crafted_data_len
+        let accounts = av.accounts(0);
+        let account = accounts.first().unwrap();
+        assert_eq!(account.meta.data_len, crafted_data_len);
+
+        av.flush().unwrap();
+        let result = av.set_file(path);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
+    }
+
+    #[test]
+    fn test_set_file_too_large_data_len() {
+        let file = get_append_vec_path("test_set_file_too_large_data_len");
+        let path = &file.path;
+        let mut av = AppendVec::new(&path, true, 1024 * 1024);
+
+        let too_large_data_len = u64::max_value();
+        av.append_account_test(&create_test_account(10)).unwrap();
+
+        let accounts = av.accounts(0);
+        let account = accounts.first().unwrap();
+
+        {
+            let data_len: &u64 = &account.meta.data_len;
+            #[allow(mutable_transmutes)]
+            // UNSAFE: cast away &(= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
+            let data_len: &mut u64 = unsafe { &mut *(data_len as *const u64 as *mut u64) };
+            *data_len = too_large_data_len;
+        }
+
+        assert_eq!(account.meta.data_len, too_large_data_len);
+        let accounts = av.accounts(0);
+        assert_matches!(accounts.first(), None);
+
+        av.flush().unwrap();
+        let result = av.set_file(path);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
+    }
+
+    #[test]
+    fn test_set_file_crafted_executable() {
+        let file = get_append_vec_path("test_set_file_crafted_executable");
+        let path = &file.path;
+        let mut av = AppendVec::new(&path, true, 1024 * 1024);
+        av.append_account_test(&create_test_account(10)).unwrap();
+        {
+            let mut executable_account = create_test_account(10);
+            executable_account.1.executable = true;
+            av.append_account_test(&executable_account).unwrap();
+        }
+
+        // reload accounts
+        let accounts = av.accounts(0);
+        let account = &accounts[0];
+
+        // ensure false is 0u8 and true is 1u8 actually
+        {
+            let executable_bool: &bool = &account.account_meta.executable;
+            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+            let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
+            assert_eq!(*executable_byte, 0);
+
+            let executable_bool: &bool = &accounts[1].account_meta.executable;
+            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+            let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
+            assert_eq!(*executable_byte, 1);
+        }
+
+        let crafted_executable = u8::max_value() - 1;
+
+        {
+            let executable_ref: &bool = &account.account_meta.executable;
+            #[allow(mutable_transmutes)]
+            // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
+            let executable_byte: &mut u8 =
+                unsafe { &mut *(executable_ref as *const bool as *mut u8) };
+            *executable_byte = crafted_executable;
+        }
+
+        // reload crafted accounts
+        let accounts = av.accounts(0);
+        let account = accounts.first().unwrap();
+
+        // we can observe crafted value by ref
+        {
+            let executable_bool: &bool = &account.account_meta.executable;
+            // we can not use assert_eq!...
+            // *executable_bool is true but its actual memory value is crafted_executable, not 1
+            assert!(*executable_bool != true);
+            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+            let executable_byte: &u8 =
+                unsafe { std::mem::transmute::<&bool, &u8>(executable_bool) };
+            assert_eq!(*executable_byte, crafted_executable);
+        }
+
+        // we can NOT observe crafted value by value
+        {
+            let executable_bool: bool = account.account_meta.executable;
+            assert_eq!(executable_bool, false);
+            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+            let executable_byte: u8 = unsafe { std::mem::transmute::<bool, u8>(executable_bool) };
+            assert_eq!(executable_byte, 0); // Wow, not crafted_executable!
+        }
+
+        av.flush().unwrap();
+        let result = av.set_file(path);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
     }
 }
