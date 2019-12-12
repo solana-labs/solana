@@ -475,8 +475,7 @@ impl Bank {
 
     /// computed unix_timestamp at this slot height
     pub fn unix_timestamp(&self) -> i64 {
-        self.genesis_creation_time
-            + ((self.slot as u128 * self.ns_per_slot) / 1_000_000_000_000) as i64
+        self.genesis_creation_time + ((self.slot as u128 * self.ns_per_slot) / 1_000_000_000) as i64
     }
 
     fn update_clock(&self) {
@@ -1701,6 +1700,7 @@ mod tests {
         signature::{Keypair, KeypairUtil},
         system_instruction,
         sysvar::{fees::Fees, rewards::Rewards},
+        timing::duration_as_s,
     };
     use solana_stake_program::stake_state::{Authorized, Delegation, Lockup, Stake};
     use solana_vote_program::{
@@ -1709,6 +1709,23 @@ mod tests {
     };
     use std::{io::Cursor, result, time::Duration};
     use tempfile::TempDir;
+
+    #[test]
+    fn test_bank_unix_timestamp() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+
+        assert_eq!(genesis_config.creation_time, bank.unix_timestamp());
+        let slots_per_sec = 1.0
+            / (duration_as_s(&genesis_config.poh_config.target_tick_duration)
+                * genesis_config.ticks_per_slot as f32);
+
+        for _i in 0..slots_per_sec as usize + 1 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
+        assert!(bank.unix_timestamp() - genesis_config.creation_time >= 1);
+    }
 
     #[test]
     fn test_bank_new() {
