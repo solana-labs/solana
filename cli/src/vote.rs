@@ -248,9 +248,9 @@ pub fn process_create_vote_account(
         (&vote_account_pubkey, "vote_account_pubkey".to_string()),
     )?;
 
-    let required_balance = dbg!(rpc_client
+    let required_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(VoteState::size_of())?
-        .max(1));
+        .max(1);
 
     let vote_init = VoteInit {
         node_pubkey: *identity_pubkey,
