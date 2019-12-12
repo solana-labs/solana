@@ -30,18 +30,15 @@ Operate a local testnet
  down     - Stop the cluster
  logs     - Display cluster logging
 
-
  logs-specific options:
-   -f     - Follow log output
+   -f    - Follow log output
 
  update-specific options:
-   edge   - Update the "edge" channel image
-   beta   - Update the "beta" channel imae
+   <tag> - Optional Docker image tag to use
 
  up-specific options:
-   edge   - Start the "edge" channel image
-   beta   - Start the "beta" channel image
-   -n     - Optional Docker network to join
+   <tag> - Optional Docker image tag to use
+   -n    - Optional Docker network to join
 
    Default channel: $channel
 
