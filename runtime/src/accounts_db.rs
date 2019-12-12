@@ -191,8 +191,6 @@ pub struct AccountStorageEntry {
     ///  any accounts in it
     /// status corresponding to the storage, lets us know that
     ///  the append_vec, once maxed out, then emptied, can be reclaimed
-    /// Currently serialized count isn't used at all. Rather, we recalculate it
-    /// when deserializing.
     count_and_status: RwLock<(usize, AccountStorageStatus)>,
 }
 
