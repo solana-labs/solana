@@ -2,7 +2,7 @@
 
 ## Problem
 
-Inter-chain applications are not new to the digital asset ecosystem; in fact, even the smaller centralized exchanges still categorically dwarf all single chain dapps put together in terms of users and volume. They command massive valuations and have spent years effectively optimizing their core products for a broad range of end users. However, their basic operations center around mechanisms that require their users to unilaterally trust them, typically with little to no recourse or protection from accidental loss. This has led to the broader digital asset ecosystem being fractured along network lines because interoperability solutions typically:
+Inter-chain applications are not new to the digital asset ecosystem; in fact, even the smaller centralized exchanges still categorically dwarf all single chain applications put together in terms of users and volume. They command massive valuations and have spent years effectively optimizing their core products for a broad range of end users. However, their basic operations center around mechanisms that require their users to unilaterally trust them, typically with little to no recourse or protection from accidental loss. This has led to the broader digital asset ecosystem being fractured along network lines because interoperability solutions typically:
 
 * Are technically complex to fully implement
 * Create unstable network scale incentive structures
@@ -14,7 +14,7 @@ Simple Payment Verification \(SPV\) is a generic term for a range of different m
 
 Traditionally the process of assembling and validating these proofs is carried out off chain by nodes, wallets, or other clients, but it also offers a potential mechanism for inter-chain state verification. However, by moving the capability to validate SPV proofs on-chain as a smart contract while leveraging the archival properties inherent to the blockchain, it is possible to construct a system for programmatically detecting and verifying transactions on other networks without the involvement of any type of trusted oracle or complex multi-stage consensus mechanism. This concept is broadly generalisable to any network with an SPV mechanism and can even be operated bilaterally on other smart contract platforms, opening up the possibility of cheap, fast, inter-chain transfer of value without relying on collateral, hashlocks, or trusted intermediaries.
 
-Opting to take advantage of well established and developmentally stable mechanisms already common to all major blockchains allows SPV based interoperability solutions to be dramatically simpler than orchestrated multi-stage approaches. As part of this, they dispense with the need for widely agreed upon cross chain communication standards and the large multi-party organizations that write them in favor of a set of discrete contract-based services that can be easily utilized by caller contracts through a common abstraction format. This will set the groundwork for a broad range of dapps and contracts able to interoperate across the variegated and every growing platform ecosystem.
+Opting to take advantage of well established and developmentally stable mechanisms already common to all major blockchains allows SPV based interoperability solutions to be dramatically simpler than orchestrated multi-stage approaches. As part of this, they dispense with the need for widely agreed upon cross chain communication standards and the large multi-party organizations that write them in favor of a set of discrete contract-based services that can be easily utilized by caller contracts through a common abstraction format. This will set the groundwork for a broad range of applications and contracts able to interoperate across the variegated and every growing platform ecosystem.
 
 ## Terminology
 
@@ -78,7 +78,7 @@ A proof of the presence of a given transaction in the blockchain in question. Pr
 
 ### Client
 
-The originator of a request for a transaction proof. Clients will most often be other contracts as parts of dapps or specific financial products like loans, swaps, escrow, etc. The client in any given verification process cycle initially submits a ClientRequest which communicates the parameters and fee and if successfully validated, results in the creation of a Proof Request account by the SPV program. The Client may also submit a CancelRequest referencing an active Proof Request in order to denote it as invalid for purposes of proof submission.
+The originator of a request for a transaction proof. Clients will most often be other contracts as parts of applications or specific financial products like loans, swaps, escrow, etc. The client in any given verification process cycle initially submits a ClientRequest which communicates the parameters and fee and if successfully validated, results in the creation of a Proof Request account by the SPV program. The Client may also submit a CancelRequest referencing an active Proof Request in order to denote it as invalid for purposes of proof submission.
 
 ### Prover
 

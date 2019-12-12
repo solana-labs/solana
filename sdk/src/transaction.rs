@@ -478,7 +478,7 @@ mod tests {
     }
 
     /// Detect binary changes in the serialized transaction data, which could have a downstream
-    /// affect on SDKs and DApps
+    /// affect on SDKs and applications
     #[test]
     fn test_sdk_serialize() {
         assert_eq!(
