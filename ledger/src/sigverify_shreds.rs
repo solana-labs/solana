@@ -13,7 +13,7 @@ use solana_perf::{
     packet::{batch_size, limited_deserialize, Packet, Packets},
     perf_libs,
     recycler_cache::RecyclerCache,
-    sigverify::{self, batch_size, TxOffset},
+    sigverify::{self, TxOffset},
 };
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::pubkey::Pubkey;
