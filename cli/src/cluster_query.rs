@@ -262,6 +262,20 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
+/// Aggregate epoch credit stats and return (total credits, total slots, total epochs)
+pub fn aggregate_epoch_credits(
+    epoch_credits: &[(Epoch, u64, u64)],
+    epoch_schedule: &EpochSchedule,
+) -> (u64, u64, u64) {
+    epoch_credits
+        .iter()
+        .fold((0, 0, 0), |acc, (epoch, credits, prev_credits)| {
+            let credits_earned = credits - prev_credits;
+            let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
+            (acc.0 + credits_earned, acc.1 + slots_in_epoch, acc.2 + 1)
+        })
+}
+
 pub fn process_catchup(rpc_client: &RpcClient, node_pubkey: &Pubkey) -> ProcessResult {
     let cluster_nodes = rpc_client.get_cluster_nodes()?;
 
@@ -623,16 +637,10 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
         }
 
         fn uptime(epoch_credits: Vec<(Epoch, u64, u64)>, epoch_schedule: &EpochSchedule) -> String {
-            let (total_credits_earned, total_slots): (u64, u64) =
-                epoch_credits
-                    .into_iter()
-                    .fold((0, 0), |acc, (epoch, credits, prev_credits)| {
-                        let credits_earned = credits - prev_credits;
-                        let slots_in_epoch = epoch_schedule.get_slots_in_epoch(epoch);
-                        (acc.0 + credits_earned, acc.1 + slots_in_epoch)
-                    });
+            let (total_credits, total_slots, _) =
+                aggregate_epoch_credits(&epoch_credits, &epoch_schedule);
             if total_slots > 0 {
-                let total_uptime = 100_f64 * total_credits_earned as f64 / total_slots as f64;
+                let total_uptime = 100_f64 * total_credits as f64 / total_slots as f64;
                 format!("{:.2}%", total_uptime)
             } else {
                 "-".into()

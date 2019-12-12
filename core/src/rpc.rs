@@ -251,7 +251,7 @@ impl JsonRpcRequestProcessor {
                     activated_stake: *activated_stake,
                     commission: vote_state.commission,
                     root_slot: vote_state.root_slot.unwrap_or(0),
-                    epoch_credits: vote_state.epoch_credits().cloned().collect(),
+                    epoch_credits: vote_state.epoch_credits().clone(),
                     epoch_vote_account,
                     last_vote,
                 }
