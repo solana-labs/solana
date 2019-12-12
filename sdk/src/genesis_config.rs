@@ -2,7 +2,7 @@
 
 use crate::{
     account::Account,
-    clock::{DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
+    clock::{UnixTimestamp, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     hash::{hash, Hash},
@@ -21,6 +21,7 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -31,16 +32,27 @@ pub enum OperatingMode {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GenesisConfig {
+    /// when the network (bootstrap leader) was started relative to the UNIX Epoch
+    pub creation_time: UnixTimestamp,
+    /// initial accounts
     pub accounts: BTreeMap<Pubkey, Account>,
+    /// built-in programs
     pub native_instruction_processors: Vec<(String, Pubkey)>,
+    /// accounts for network rewards, these do not count towards capitalization
     pub rewards_pools: BTreeMap<Pubkey, Account>,
     pub ticks_per_slot: u64,
     pub slots_per_segment: u64,
+    /// network speed configuration
     pub poh_config: PohConfig,
+    /// transaction fee config
     pub fee_calculator: FeeCalculator,
+    /// rent config
     pub rent: Rent,
+    /// inflation config
     pub inflation: Inflation,
+    /// how slots map to epochs
     pub epoch_schedule: EpochSchedule,
+    /// network runlevel
     pub operating_mode: OperatingMode,
 }
 
@@ -62,6 +74,10 @@ pub fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
 impl Default for GenesisConfig {
     fn default() -> Self {
         Self {
+            creation_time: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as UnixTimestamp,
             accounts: BTreeMap::default(),
             native_instruction_processors: Vec::default(),
             rewards_pools: BTreeMap::default(),

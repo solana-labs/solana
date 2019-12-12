@@ -1,8 +1,8 @@
 //! A command-line executable for generating the chain's genesis config.
 
+use chrono::DateTime;
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
-use solana_clap_utils::input_parsers::pubkey_of;
-use solana_clap_utils::input_validators::is_valid_percentage;
+use solana_clap_utils::{input_parsers::pubkey_of, input_validators::is_valid_percentage};
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
 use solana_ledger::{blocktree::create_new_ledger, poh::compute_hashes_per_tick};
 use solana_sdk::{
@@ -134,6 +134,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_clap_utils::version!())
+        .arg(
+            Arg::with_name("creation_time")
+                .long("creation-time")
+                .value_name("RFC3339 DATE TIME")
+                .takes_value(true)
+                .help("Time when the bootrap leader will start, defaults to current system time"),
+        )
         .arg(
             Arg::with_name("bootstrap_leader_pubkey_file")
                 .short("b")
@@ -476,6 +483,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         operating_mode,
         ..GenesisConfig::default()
     };
+
+    if let Some(creation_time) = matches.value_of("creation_time") {
+        genesis_config.creation_time = DateTime::parse_from_rfc3339(creation_time)?.timestamp();
+    }
 
     if let Some(faucet_pubkey) = faucet_pubkey {
         genesis_config.add_account(
