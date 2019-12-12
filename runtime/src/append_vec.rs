@@ -22,6 +22,8 @@ macro_rules! align_up {
 }
 
 /// Meta contains enough context to recover the index from storage itself
+/// This struct will be backed by mmaped and snapshotted data files.
+/// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Clone, PartialEq, Debug)]
 pub struct StoredMeta {
     /// global write version
@@ -31,6 +33,8 @@ pub struct StoredMeta {
     pub data_len: u64,
 }
 
+/// This struct will be backed by mmaped and snapshotted data files.
+/// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct AccountMeta {
     /// lamports in the account
@@ -187,9 +191,7 @@ impl AppendVec {
     }
 
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
-        let len = self.len();
-
-        if len < offset + size {
+        if offset + size > self.len() {
             return None;
         }
         let data = &self.map[offset..offset + size];
