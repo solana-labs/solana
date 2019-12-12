@@ -97,6 +97,10 @@ pub struct RpcVoteAccountInfo {
     /// Whether this account is staked for the current epoch
     pub epoch_vote_account: bool,
 
+    /// History of how many credits earned by the end of each epoch
+    ///   each tuple is (Epoch, credits, prev_credits)
+    pub epoch_credits: Vec<(Epoch, u64, u64)>,
+
     /// Most recent slot voted on by this vote account (0 if no votes exist)
     pub last_vote: u64,
 
