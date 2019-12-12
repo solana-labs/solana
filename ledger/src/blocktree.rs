@@ -11,6 +11,7 @@ use crate::{
     entry::{create_ticks, Entry},
     erasure::ErasureConfig,
     leader_schedule_cache::LeaderScheduleCache,
+    rooted_slot_iterator::RootedSlotIterator,
     shred::{Shred, Shredder},
 };
 use bincode::deserialize;
@@ -29,10 +30,13 @@ use solana_sdk::{
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
     genesis_config::GenesisConfig,
     hash::Hash,
+    instruction_processor_utils::limited_deserialize,
+    pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
     timing::{duration_as_ms, timestamp},
     transaction::Transaction,
 };
+use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     cell::RefCell,
     cmp,
@@ -58,6 +62,7 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
+const TIMESTAMP_SLOT_RANGE: usize = 5;
 
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 
@@ -1201,6 +1206,40 @@ impl Blocktree {
         }
     }
 
+    fn get_timestamp_slots(&self, slot: Slot, timestamp_interval: u64) -> Vec<Slot> {
+        if self.is_root(slot) {
+            if let Ok(iter) = RootedSlotIterator::new(0, &self) {
+                let slots: Vec<Slot> = iter
+                    .map(|(slot, _)| slot)
+                    .filter(|&iter_slot| iter_slot <= slot)
+                    .collect();
+
+                if slots.len() < TIMESTAMP_SLOT_RANGE {
+                    return slots;
+                }
+
+                let recent_timestamp_slot_position = slots
+                    .iter()
+                    .position(|&x| x >= slot - (slot % timestamp_interval))
+                    .unwrap();
+
+                let filtered_iter = if slots.len() - TIMESTAMP_SLOT_RANGE
+                    >= recent_timestamp_slot_position
+                {
+                    slots.iter().skip(recent_timestamp_slot_position)
+                } else {
+                    let earlier_timestamp_slot_position = slots
+                        .iter()
+                        .position(|&x| x >= slot - (slot % timestamp_interval) - timestamp_interval)
+                        .unwrap();
+                    slots.iter().skip(earlier_timestamp_slot_position)
+                };
+                return filtered_iter.take(TIMESTAMP_SLOT_RANGE).cloned().collect();
+            }
+        }
+        vec![]
+    }
+
     pub fn get_confirmed_block(&self, slot: Slot) -> Result<RpcConfirmedBlock> {
         if self.is_root(slot) {
             let slot_meta_cf = self.db.column::<cf::SlotMeta>();
@@ -1259,6 +1298,33 @@ impl Blocktree {
         status: &RpcTransactionStatus,
     ) -> Result<()> {
         self.transaction_status_cf.put(index, status)
+    }
+
+    fn get_block_timestamps(&self, slot: Slot) -> Result<Vec<(Pubkey, UnixTimestamp)>> {
+        let slot_entries = self.get_slot_entries(slot, 0, None)?;
+        Ok(slot_entries
+            .iter()
+            .cloned()
+            .flat_map(|entry| entry.transactions)
+            .flat_map(|transaction| {
+                let mut timestamps: Vec<(Pubkey, UnixTimestamp)> = Vec::new();
+                for instruction in transaction.message.instructions {
+                    let program_id = instruction.program_id(&transaction.message.account_keys);
+                    if program_id == &solana_vote_program::id() {
+                        if let Ok(VoteInstruction::Vote(vote)) =
+                            limited_deserialize(&instruction.data)
+                        {
+                            if let Some(timestamp) = vote.timestamp {
+                                let vote_pubkey = transaction.message.account_keys
+                                    [instruction.accounts[0] as usize];
+                                timestamps.push((vote_pubkey, timestamp));
+                            }
+                        }
+                    }
+                }
+                timestamps
+            })
+            .collect())
     }
 
     /// Returns the entry vector for the slot starting with `shred_start_index`
@@ -2163,6 +2229,7 @@ fn adjust_ulimit_nofile() {
 pub mod tests {
     use super::*;
     use crate::{
+        blocktree_processor::fill_blocktree_slot_with_ticks,
         entry::{next_entry, next_entry_mut},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule::{FixedSchedule, LeaderSchedule},
@@ -2181,6 +2248,7 @@ pub mod tests {
         signature::Signature,
         transaction::TransactionError,
     };
+    use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::{iter::FromIterator, time::Duration};
 
     // used for tests only
@@ -4253,6 +4321,98 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_timestamp_slots() {
+        let ticks_per_slot = 5;
+        // Smaller interval than TIMESTAMP_SLOT_INTERVAL for convenience of building blocktree
+        let timestamp_interval = 7;
+        /*
+            Build a blocktree with < TIMESTAMP_SLOT_RANGE roots
+        */
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        blocktree.set_roots(&[0]).unwrap();
+        let mut last_entry_hash = Hash::default();
+        for slot in 0..=3 {
+            let parent = {
+                if slot == 0 {
+                    0
+                } else {
+                    slot - 1
+                }
+            };
+            last_entry_hash = fill_blocktree_slot_with_ticks(
+                &blocktree,
+                ticks_per_slot,
+                slot,
+                parent,
+                last_entry_hash,
+            );
+        }
+        blocktree.set_roots(&[1, 2, 3]).unwrap();
+
+        assert_eq!(
+            blocktree.get_timestamp_slots(2, timestamp_interval),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            blocktree.get_timestamp_slots(3, timestamp_interval),
+            vec![0, 1, 2, 3]
+        );
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+
+        /*
+            Build a blocktree in the ledger with the following rooted slots:
+            [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 14, 15, 16, 17]
+
+        */
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        blocktree.set_roots(&[0]).unwrap();
+        let desired_roots = vec![1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19];
+        let mut last_entry_hash = Hash::default();
+        for (i, slot) in desired_roots.iter().enumerate() {
+            let parent = {
+                if i == 0 {
+                    0
+                } else {
+                    desired_roots[i - 1]
+                }
+            };
+            last_entry_hash = fill_blocktree_slot_with_ticks(
+                &blocktree,
+                ticks_per_slot,
+                *slot,
+                parent,
+                last_entry_hash,
+            );
+        }
+        blocktree.set_roots(&desired_roots).unwrap();
+
+        assert_eq!(
+            blocktree.get_timestamp_slots(2, timestamp_interval),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            blocktree.get_timestamp_slots(8, timestamp_interval),
+            vec![0, 1, 2, 3, 4]
+        );
+        assert_eq!(
+            blocktree.get_timestamp_slots(13, timestamp_interval),
+            vec![8, 9, 10, 11, 12]
+        );
+        assert_eq!(
+            blocktree.get_timestamp_slots(18, timestamp_interval),
+            vec![8, 9, 10, 11, 12]
+        );
+        assert_eq!(
+            blocktree.get_timestamp_slots(19, timestamp_interval),
+            vec![14, 16, 17, 18, 19]
+        );
+    }
+
+    #[test]
     fn test_get_confirmed_block() {
         let slot = 10;
         let entries = make_slot_entries_with_transactions(100);
@@ -4341,7 +4501,52 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_persist_transaction_status() {
+    fn test_get_block_timestamps() {
+        let vote_keypairs: Vec<Keypair> = (0..6).map(|_| Keypair::new()).collect();
+        let base_timestamp = 1576183541;
+        let mut expected_timestamps: Vec<(Pubkey, UnixTimestamp)> = Vec::new();
+
+        // Populate slot 1 with vote transactions, some of which have timestamps
+        let mut vote_entries: Vec<Entry> = Vec::new();
+        for (i, keypair) in vote_keypairs.iter().enumerate() {
+            let timestamp = if i % 2 == 0 {
+                let unique_timestamp = base_timestamp + i as i64;
+                expected_timestamps.push((keypair.pubkey(), unique_timestamp));
+                Some(unique_timestamp)
+            } else {
+                None
+            };
+            let vote = Vote {
+                slots: vec![1],
+                hash: Hash::default(),
+                timestamp,
+            };
+            let vote_ix = vote_instruction::vote(&keypair.pubkey(), &keypair.pubkey(), vote);
+
+            let vote_tx =
+                Transaction::new_signed_instructions(&[keypair], vec![vote_ix], Hash::default());
+
+            vote_entries.push(next_entry_mut(&mut Hash::default(), 0, vec![vote_tx]));
+            let mut tick = create_ticks(1, 0, hash(&serialize(&i).unwrap()));
+            vote_entries.append(&mut tick);
+        }
+        let shreds = entries_to_test_shreds(vote_entries.clone(), 1, 0, true, 0);
+        let ledger_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        blocktree.insert_shreds(shreds, None, false).unwrap();
+        // Populate slot 2 with ticks only
+        fill_blocktree_slot_with_ticks(&blocktree, 6, 2, 1, Hash::default());
+        blocktree.set_roots(&[0, 1, 2]).unwrap();
+
+        assert_eq!(
+            blocktree.get_block_timestamps(1).unwrap(),
+            expected_timestamps
+        );
+        assert_eq!(blocktree.get_block_timestamps(2).unwrap(), vec![]);
+    }
+
+    #[test]
+    fn test_persist_transaction_status() {
         let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
