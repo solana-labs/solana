@@ -66,7 +66,7 @@ impl LedgerCleanupService {
 
         let disk_utilization_post = blocktree.storage_size();
 
-        if let (Some(disk_utilization_pre), Some(disk_utilization_post)) =
+        if let (Ok(disk_utilization_pre), Ok(disk_utilization_post)) =
             (disk_utilization_pre, disk_utilization_post)
         {
             datapoint_debug!(

@@ -1,7 +1,7 @@
 use crate::blocktree_meta;
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
-use fs_extra::dir::get_size;
+use fs_extra;
 use log::*;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
@@ -43,6 +43,7 @@ pub enum BlocktreeError {
     SlotNotRooted,
     IO(#[from] std::io::Error),
     Serialize(#[from] Box<bincode::ErrorKind>),
+    FsExtraError(#[from] fs_extra::error::Error),
 }
 pub(crate) type Result<T> = std::result::Result<T, BlocktreeError>;
 
@@ -580,10 +581,8 @@ impl Database {
         self.backend.write(batch.write_batch)
     }
 
-    // return the approximate size in bytes of the storage directory, or `None` if an error occurs
-    // while reading the directory (directory not found, file deleted, etc)
-    pub fn storage_size(&self) -> Option<u64> {
-        get_size(&self.path).ok()
+    pub fn storage_size(&self) -> Result<u64> {
+        Ok(fs_extra::dir::get_size(&self.path)?)
     }
 }
 
