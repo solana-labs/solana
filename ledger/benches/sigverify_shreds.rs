@@ -45,7 +45,6 @@ fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
     for _ in 0..100 {
         sign_shreds_gpu(&keypair, &pinned_keypair, &mut batch, &recycler_cache);
     }
-    //unsigned
     bencher.iter(|| {
         sign_shreds_gpu(&keypair, &pinned_keypair, &mut batch, &recycler_cache);
     })
@@ -71,7 +70,6 @@ fn bench_sigverify_shreds_sign_cpu(bencher: &mut Bencher) {
     }
     let mut batch = vec![packets; NUM_BATCHES];
     let keypair = Keypair::new();
-    //unsigned
     bencher.iter(|| {
         sign_shreds_cpu(&keypair, &mut batch);
     })
