@@ -13,11 +13,12 @@ use std::{
     sync::Mutex,
 };
 
-//Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+//Data placement should be aligned at the next boundary. Without alignment accessing the memory may
 //crash on some architectures.
-macro_rules! align_up {
-    ($addr: expr, $align: expr) => {
-        ($addr + ($align - 1)) & !($align - 1)
+const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
+macro_rules! align_to_8byte {
+    ($addr: expr) => {
+        ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
     };
 }
 
@@ -195,9 +196,7 @@ impl AppendVec {
             return None;
         }
         let data = &self.map[offset..offset + size];
-        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-        //crash on some architectures.
-        let next = align_up!(offset + size, mem::size_of::<u64>());
+        let next = align_to_8byte!(offset + size);
         Some((
             //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
             //The lifetime of this slice is tied to &self, since it points to self.map memory
@@ -207,9 +206,7 @@ impl AppendVec {
     }
 
     fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
-        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-        //crash on some architectures.
-        let pos = align_up!(*offset as usize, mem::size_of::<u64>());
+        let pos = align_to_8byte!(*offset);
         let data = &self.map[pos..(pos + len)];
         //UNSAFE: This mut append is safe because only 1 thread can append at a time
         //Mutex<append_offset> guarantees exclusive write access to the memory occupied in
@@ -224,9 +221,7 @@ impl AppendVec {
     fn append_ptrs_locked(&self, offset: &mut usize, vals: &[(*const u8, usize)]) -> Option<usize> {
         let mut end = *offset;
         for val in vals {
-            //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-            //crash on some architectures.
-            end = align_up!(end, mem::size_of::<u64>());
+            end = align_to_8byte!(end);
             end += val.1;
         }
 
@@ -234,9 +229,7 @@ impl AppendVec {
             return None;
         }
 
-        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-        //crash on some architectures.
-        let pos = align_up!(*offset, mem::size_of::<u64>());
+        let pos = align_to_8byte!(*offset);
         for val in vals {
             self.append_ptr(offset, val.0, val.1)
         }
