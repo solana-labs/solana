@@ -62,8 +62,6 @@ update)
   if [[ -n $1 ]]; then
     channel="$1"
   fi
-  [[ $channel = edge || $channel = beta ]] || usage "Invalid channel: $channel"
-
   (
     set -x
     docker pull solanalabs/solana:"$channel"
@@ -75,14 +73,9 @@ up)
       [[ -n $2 ]] || usage "Invalid $1 argument"
       network="$2"
       shift 2
-    elif [[ $1 = edge ]]; then
-      channel=edge
-      shift 1
-    elif [[ $1 = beta ]]; then
-      channel=beta
-      shift 1
     else
-      usage "Unknown argument: $1"
+      channel=$1
+      shift 1
     fi
   done
 
