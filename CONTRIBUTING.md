@@ -2,7 +2,7 @@ Solana Coding Guidelines
 ===
 
 The goal of these guidelines is to improve developer productivity by allowing developers to
-jump any file in the codebase and not need to adapt to inconsistencies in how the code is
+jump into any file in the codebase and not need to adapt to inconsistencies in how the code is
 written. The codebase should appear as if it had been authored by a single developer. If you
 don't agree with a convention, submit a PR patching this document and let's discuss! Once
 the PR is accepted, *all* code should be updated as soon as possible to reflect the new
@@ -15,9 +15,26 @@ Small, frequent PRs are much preferred to large, infrequent ones. A large PR is 
 to review, can block others from making progress, and can quickly get its author into
 "rebase hell". A large PR oftentimes arises when one change requires another, which requires
 another, and then another. When you notice those dependencies, put the fix into a commit of
-its own, then checkout a new branch, and cherrypick it. Open a PR to start the review
-process and then jump back to your original branch to keep making progress. Once the commit
-is merged, you can use git-rebase to purge it from your original branch.
+its own, then checkout a new branch, and cherry-pick it.
+
+```bash
+$ git commit -am "Fix foo, needed by bar"
+$ git checkout master
+$ git checkout -b fix-foo
+$ git cherry-pick fix-bar
+$ git push --set-upstream origin fix-foo
+```
+
+Open a PR to start the review process and then jump back to your original branch to keep
+making progress. Consider rebasing to make your fix the first commit:
+
+```bash
+$ git checkout fix-bar
+$ git rebase -i master
+<Move fix-foo to top>
+```
+
+Once the commit is merged, rebase the original branch to purge the cherry-picked commit:
 
 ```bash
 $ git pull --rebase upstream master
@@ -39,15 +56,28 @@ libraries may be copied in whereas very large ones may be pulled in with a packa
 Getting Pull Requests Merged
 ---
 
-There is no single person assigned to watching GitHub PR queue and ushering you through
-the process. Typically, you will ask the person that wrote a component to review
-wrote a component will review changes to it. You can find the author using `git blame`
-or asking on Discord. When working to get your PR merged, it's most important to
-understand that changing the code is your priority and not necessarily a priority
-of the person you need an approval from. Also, while you may interact the most with
-the component author, you should aim to be inclusive of others. Providing a detailed
-problem description is the most effective means of engaging both the component
-author and other potentially interested parties.
+There is no single person assigned to watching GitHub PR queue and ushering you
+through the process. Typically, you will ask the person that wrote a component to
+review changes to it. You can find the author using `git blame` or asking on Discord.
+When working to get your PR merged, it's most important to understand that changing
+the code is your priority and not necessarily a priority of the person you need an
+approval from. Also, while you may interact the most with the component author,
+you should aim to be inclusive of others. Providing a detailed problem description
+is the most effective means of engaging both the component author and other
+potentially interested parties.
+
+Consider opening all PRs as Draft Pull Requests first. Using a draft PR allows
+you to kickstart the CI automation, which typically takes between 10 and 30 minutes
+to execute. Use that time to write a detailed problem description. Once the
+description is written and CI succeeds, click the "Ready to Review" button and
+add reviewers. Adding reviewers before CI succeeds is a fast path to losing
+reviewer engagement. Not only will they be notified and see the PR is not yet
+ready for them, they will also be bombarded them with additional notifications
+each time you push a commit to get past CI or until they "mute" the PR. Once
+muted, you'll need to reach out over some other medium, such as Discord, to
+request they have another look. When you use draft PRs, no notifications are
+sent when you push commits and edit the PR description. Use draft PRs liberally.
+Don't bug the humans until you have gotten past the bots.
 
 ### What should be in my PR description?
 
@@ -117,6 +147,23 @@ it's a strong indicator that the reviewers aren't confident the change meets the
 standards of the codebase. You might consider closing it and coming back with smaller PRs
 and longer descriptions detailing what problem it solves and how it solves it. Old PRs
 will be marked stale and then closed automatically 7 days later.
+
+### How to manage review feedback?
+
+After a reviewer provides feedback, you can quickly say "acknowledged, will fix" using
+a thumb's up emoji. If your confident your fix is exactly as prescribed, add a reply
+"Fixed in COMMIT\_HASH" and mark the comment as resolved. If you're not sure, reply
+"Is this what you had in mind? COMMIT\_HASH" and if so, the reviewer will reply and
+mark the conversation as resolved. Marking conversations as resolved is an excellent
+way to engage more reviewers. Leaving conversations open may imply the PR is not yet
+ready for additional review.
+
+### When will my PR be re-reviewed?
+
+Recall that once your PR is opened, a notification is sent every time you push a
+commit.  After a reviewer adds feedback, they won't be checking on the status of
+that feedback after every new commit. Instead, directly mention the reviewer when
+you feel your PR is ready for another pass.
 
 Draft Pull Requests
 ---
