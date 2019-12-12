@@ -11,6 +11,7 @@ use rayon::{
 };
 use serde::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
+use solana_perf::packet::Packet;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     clock::Slot,
@@ -135,6 +136,12 @@ impl Shred {
         bincode::serialize_into(&mut buf[*index..*index + size], obj)?;
         *index += size;
         Ok(())
+    }
+
+    pub fn copy_to_packet(&self, packet: &mut Packet) {
+        let len = self.payload.len();
+        packet.data[..len].copy_from_slice(&self.payload[..]);
+        packet.meta.size = len;
     }
 
     pub fn new_from_data(
