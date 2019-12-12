@@ -181,6 +181,13 @@ impl<T: Clone + Default + Sized> PinnedVec<T> {
         self.pinnable = true;
     }
 
+    pub fn copy_from_slice(&mut self, data: &[T])
+    where
+        T: Copy,
+    {
+        self.x.copy_from_slice(data);
+    }
+
     pub fn from_vec(source: Vec<T>) -> Self {
         Self {
             x: source,
