@@ -75,7 +75,7 @@ fn bench_deshredder(bencher: &mut Bencher) {
 fn bench_deserialize_hdr(bencher: &mut Bencher) {
     let data = vec![0; SIZE_OF_DATA_SHRED_PAYLOAD];
 
-    let shred = Shred::new_from_data(2, 1, 1, Some(&data), true, true, 0, 0);
+    let shred = Shred::new_from_data(2, 1, 1, Some(&data), true, true, 0, 0, 1);
 
     bencher.iter(|| {
         let payload = shred.payload.clone();
