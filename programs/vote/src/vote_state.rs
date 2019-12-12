@@ -334,8 +334,8 @@ impl VoteState {
     /// Each tuple of (Epoch, u64, u64) is read as (epoch, credits, prev_credits), where
     ///   credits for each epoch is credits - prev_credits; while redundant this makes
     ///   calculating rewards over partial epochs nice and simple
-    pub fn epoch_credits(&self) -> impl Iterator<Item = &(Epoch, u64, u64)> {
-        self.epoch_credits.iter()
+    pub fn epoch_credits(&self) -> &Vec<(Epoch, u64, u64)> {
+        &self.epoch_credits
     }
 
     fn pop_expired_votes(&mut self, slot: Slot) {
@@ -1236,13 +1236,7 @@ mod tests {
         let mut vote_state = VoteState::default();
 
         assert_eq!(vote_state.credits(), 0);
-        assert_eq!(
-            vote_state
-                .epoch_credits()
-                .cloned()
-                .collect::<Vec<(Epoch, u64, u64)>>(),
-            vec![]
-        );
+        assert_eq!(vote_state.epoch_credits().clone(), vec![]);
 
         let mut expected = vec![];
         let mut credits = 0;
@@ -1260,46 +1254,19 @@ mod tests {
         }
 
         assert_eq!(vote_state.credits(), credits);
-        assert_eq!(
-            vote_state
-                .epoch_credits()
-                .cloned()
-                .collect::<Vec<(Epoch, u64, u64)>>(),
-            expected
-        );
+        assert_eq!(vote_state.epoch_credits().clone(), expected);
     }
 
     #[test]
     fn test_vote_state_epoch0_no_credits() {
         let mut vote_state = VoteState::default();
 
-        assert_eq!(
-            vote_state
-                .epoch_credits()
-                .cloned()
-                .collect::<Vec<(Epoch, u64, u64)>>()
-                .len(),
-            0
-        );
+        assert_eq!(vote_state.epoch_credits().len(), 0);
         vote_state.increment_credits(1);
-        assert_eq!(
-            vote_state
-                .epoch_credits()
-                .cloned()
-                .collect::<Vec<(Epoch, u64, u64)>>()
-                .len(),
-            0
-        );
+        assert_eq!(vote_state.epoch_credits().len(), 0);
 
         vote_state.increment_credits(2);
-        assert_eq!(
-            vote_state
-                .epoch_credits()
-                .cloned()
-                .collect::<Vec<(Epoch, u64, u64)>>()
-                .len(),
-            1
-        );
+        assert_eq!(vote_state.epoch_credits().len(), 1);
     }
 
     #[test]

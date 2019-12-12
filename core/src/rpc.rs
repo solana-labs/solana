@@ -251,6 +251,7 @@ impl JsonRpcRequestProcessor {
                     activated_stake: *activated_stake,
                     commission: vote_state.commission,
                     root_slot: vote_state.root_slot.unwrap_or(0),
+                    epoch_credits: vote_state.epoch_credits().clone(),
                     epoch_vote_account,
                     last_vote,
                 }
@@ -1014,7 +1015,10 @@ pub mod tests {
         system_transaction,
         transaction::TransactionError,
     };
-    use solana_vote_program::{vote_instruction, vote_state::VoteInit};
+    use solana_vote_program::{
+        vote_instruction,
+        vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
+    };
     use std::{
         collections::HashMap,
         sync::atomic::{AtomicBool, Ordering},
@@ -1022,20 +1026,23 @@ pub mod tests {
     };
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000;
+    const TEST_SLOTS_PER_EPOCH: u64 = 50;
 
     struct RpcHandler {
         io: MetaIoHandler<Meta>,
         meta: Meta,
         bank: Arc<Bank>,
+        bank_forks: Arc<RwLock<BankForks>>,
         blockhash: Hash,
         alice: Keypair,
         leader_pubkey: Pubkey,
+        leader_vote_keypair: Keypair,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         confirmed_block_signatures: Vec<Signature>,
     }
 
     fn start_rpc_handler_with_tx(pubkey: &Pubkey) -> RpcHandler {
-        let (bank_forks, alice) = new_bank_forks();
+        let (bank_forks, alice, leader_vote_keypair) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
 
         let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
@@ -1077,7 +1084,7 @@ pub mod tests {
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
-            bank_forks,
+            bank_forks.clone(),
             block_commitment_cache.clone(),
             blocktree,
             StorageState::default(),
@@ -1107,9 +1114,11 @@ pub mod tests {
             io,
             meta,
             bank,
+            bank_forks,
             blockhash,
             alice,
             leader_pubkey,
+            leader_vote_keypair,
             block_commitment_cache,
             confirmed_block_signatures,
         }
@@ -1120,7 +1129,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let (bank_forks, alice) = new_bank_forks();
+        let (bank_forks, alice, _) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
@@ -1630,20 +1639,23 @@ pub mod tests {
         );
     }
 
-    fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair) {
+    fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair, Keypair) {
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,
-            ..
+            voting_keypair,
         } = create_genesis_config(TEST_MINT_LAMPORTS);
 
         genesis_config.rent.lamports_per_byte_year = 50;
         genesis_config.rent.exemption_threshold = 2.0;
+        genesis_config.epoch_schedule =
+            EpochSchedule::custom(TEST_SLOTS_PER_EPOCH, TEST_SLOTS_PER_EPOCH, false);
 
         let bank = Bank::new(&genesis_config);
         (
             Arc::new(RwLock::new(BankForks::new(bank.slot(), bank))),
             mint_keypair,
+            voting_keypair,
         )
     }
 
@@ -1905,8 +1917,10 @@ pub mod tests {
         let RpcHandler {
             io,
             meta,
-            bank,
+            mut bank,
+            bank_forks,
             alice,
+            leader_vote_keypair,
             ..
         } = start_rpc_handler_with_tx(&Pubkey::new_rand());
 
@@ -1936,7 +1950,42 @@ pub mod tests {
             .expect("process transaction");
         assert_eq!(bank.vote_accounts().len(), 2);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts"}}"#);
+        // Advance bank to the next epoch
+        for _ in 0..TEST_SLOTS_PER_EPOCH {
+            bank.freeze();
+
+            let instruction = vote_instruction::vote(
+                &leader_vote_keypair.pubkey(),
+                &leader_vote_keypair.pubkey(),
+                Vote {
+                    slots: vec![bank.slot()],
+                    hash: bank.hash(),
+                    timestamp: None,
+                },
+            );
+
+            bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
+                &bank,
+                &Pubkey::default(),
+                bank.slot() + 1,
+            ));
+
+            let transaction = Transaction::new_signed_with_payer(
+                vec![instruction],
+                Some(&alice.pubkey()),
+                &[&alice, &leader_vote_keypair],
+                bank.last_blockhash(),
+            );
+
+            bank.process_transaction(&transaction)
+                .expect("process transaction");
+        }
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts","params":{}}}"#,
+            json!([CommitmentConfig::recent()])
+        );
+
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -1944,12 +1993,19 @@ pub mod tests {
         let vote_account_status: RpcVoteAccountStatus =
             serde_json::from_value(result["result"].clone()).unwrap();
 
-        // The bootstrap leader vote account will be delinquent as it has stake but has never
-        // voted.  The vote account with no stake should not be present.
-        assert!(vote_account_status.current.is_empty());
-        assert_eq!(vote_account_status.delinquent.len(), 1);
-        for vote_account_info in vote_account_status.delinquent {
-            assert_ne!(vote_account_info.activated_stake, 0);
-        }
+        // The vote account with no stake should not be present.
+        assert!(vote_account_status.delinquent.is_empty());
+
+        // The leader vote account should be active and have voting history.
+        assert_eq!(vote_account_status.current.len(), 1);
+        let leader_info = &vote_account_status.current[0];
+        assert_eq!(
+            leader_info.vote_pubkey,
+            leader_vote_keypair.pubkey().to_string()
+        );
+        assert_ne!(leader_info.activated_stake, 0);
+        // Subtract one because the last vote always carries over to the next epoch
+        let expected_credits = TEST_SLOTS_PER_EPOCH - MAX_LOCKOUT_HISTORY as u64 - 1;
+        assert_eq!(leader_info.epoch_credits, vec![(0, expected_credits, 0)]);
     }
 }

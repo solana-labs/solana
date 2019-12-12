@@ -13,6 +13,7 @@ use solana_client::{rpc_client::RpcClient, rpc_request::RpcVoteAccountInfo};
 use solana_sdk::{
     clock::{self, Slot},
     commitment_config::CommitmentConfig,
+    epoch_schedule::{Epoch, EpochSchedule},
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
@@ -259,6 +260,20 @@ fn new_spinner_progress_bar() -> ProgressBar {
         .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
     progress_bar.enable_steady_tick(100);
     progress_bar
+}
+
+/// Aggregate epoch credit stats and return (total credits, total slots, total epochs)
+pub fn aggregate_epoch_credits(
+    epoch_credits: &[(Epoch, u64, u64)],
+    epoch_schedule: &EpochSchedule,
+) -> (u64, u64, u64) {
+    epoch_credits
+        .iter()
+        .fold((0, 0, 0), |acc, (epoch, credits, prev_credits)| {
+            let credits_earned = credits - prev_credits;
+            let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
+            (acc.0 + credits_earned, acc.1 + slots_in_epoch, acc.2 + 1)
+        })
 }
 
 pub fn process_catchup(rpc_client: &RpcClient, node_pubkey: &Pubkey) -> ProcessResult {
@@ -551,6 +566,7 @@ pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
 }
 
 pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) -> ProcessResult {
+    let epoch_schedule = rpc_client.get_epoch_schedule()?;
     let vote_accounts = rpc_client.get_vote_accounts()?;
     let total_active_stake = vote_accounts
         .current
@@ -593,19 +609,21 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
     println!(
         "{}",
         style(format!(
-            "  {:<44}  {:<44}  {}  {}  {}  {}",
+            "  {:<44}  {:<44}  {}  {}  {}  {:>7}  {}",
             "Identity Pubkey",
             "Vote Account Pubkey",
             "Commission",
             "Last Vote",
             "Root Block",
+            "Uptime",
             "Active Stake",
         ))
         .bold()
     );
 
     fn print_vote_account(
-        vote_account: &RpcVoteAccountInfo,
+        vote_account: RpcVoteAccountInfo,
+        epoch_schedule: &EpochSchedule,
         total_active_stake: f64,
         use_lamports_unit: bool,
         delinquent: bool,
@@ -617,8 +635,20 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
                 format!("{}", v)
             }
         }
+
+        fn uptime(epoch_credits: Vec<(Epoch, u64, u64)>, epoch_schedule: &EpochSchedule) -> String {
+            let (total_credits, total_slots, _) =
+                aggregate_epoch_credits(&epoch_credits, &epoch_schedule);
+            if total_slots > 0 {
+                let total_uptime = 100_f64 * total_credits as f64 / total_slots as f64;
+                format!("{:.2}%", total_uptime)
+            } else {
+                "-".into()
+            }
+        }
+
         println!(
-            "{} {:<44}  {:<44}  {:>9}%   {:>8}  {:>10}  {:>12}",
+            "{} {:<44}  {:<44}  {:>9}%   {:>8}  {:>10}  {:>7}  {}",
             if delinquent {
                 WARNING.to_string()
             } else {
@@ -629,6 +659,7 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
             vote_account.commission,
             non_zero_or_dash(vote_account.last_vote),
             non_zero_or_dash(vote_account.root_slot),
+            uptime(vote_account.epoch_credits, epoch_schedule),
             if vote_account.activated_stake > 0 {
                 format!(
                     "{} ({:.2}%)",
@@ -641,11 +672,23 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
         );
     }
 
-    for vote_account in vote_accounts.current.iter() {
-        print_vote_account(vote_account, total_active_stake, use_lamports_unit, false);
+    for vote_account in vote_accounts.current.into_iter() {
+        print_vote_account(
+            vote_account,
+            &epoch_schedule,
+            total_active_stake,
+            use_lamports_unit,
+            false,
+        );
     }
-    for vote_account in vote_accounts.delinquent.iter() {
-        print_vote_account(vote_account, total_active_stake, use_lamports_unit, true);
+    for vote_account in vote_accounts.delinquent.into_iter() {
+        print_vote_account(
+            vote_account,
+            &epoch_schedule,
+            total_active_stake,
+            use_lamports_unit,
+            true,
+        );
     }
 
     Ok("".to_string())

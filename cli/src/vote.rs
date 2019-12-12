@@ -1,6 +1,10 @@
-use crate::cli::{
-    build_balance_message, check_account_for_fee, check_unique_pubkeys,
-    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+use crate::{
+    cli::{
+        build_balance_message, check_account_for_fee, check_unique_pubkeys,
+        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+        ProcessResult,
+    },
+    cluster_query::aggregate_epoch_credits,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
@@ -400,33 +404,37 @@ pub fn process_uptime(
     if !vote_state.votes.is_empty() {
         println!("Uptime:");
 
-        let epoch_credits_vec: Vec<(u64, u64, u64)> = vote_state.epoch_credits().copied().collect();
-
-        let epoch_credits = if let Some(x) = span {
-            epoch_credits_vec.iter().rev().take(x as usize)
+        let epoch_credits: Vec<(u64, u64, u64)> = if let Some(x) = span {
+            vote_state
+                .epoch_credits()
+                .iter()
+                .rev()
+                .take(x as usize)
+                .cloned()
+                .collect()
         } else {
-            epoch_credits_vec.iter().rev().take(epoch_credits_vec.len())
+            vote_state.epoch_credits().iter().rev().cloned().collect()
         };
 
         if aggregate {
-            let (credits_earned, slots_in_epoch, epochs): (u64, u64, u64) =
-                epoch_credits.fold((0, 0, 0), |acc, (epoch, credits, prev_credits)| {
-                    let credits_earned = credits - prev_credits;
-                    let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
-                    (acc.0 + credits_earned, acc.1 + slots_in_epoch, acc.2 + 1)
-                });
-            let total_uptime = credits_earned as f64 / slots_in_epoch as f64;
-            println!("{:.2}% over {} epochs", total_uptime * 100_f64, epochs,);
+            let (total_credits, total_slots, epochs) =
+                aggregate_epoch_credits(&epoch_credits, &epoch_schedule);
+            if total_slots > 0 {
+                let total_uptime = 100_f64 * total_credits as f64 / total_slots as f64;
+                println!("{:.2}% over {} epochs", total_uptime, epochs);
+            } else {
+                println!("Insufficient voting history available");
+            }
         } else {
             for (epoch, credits, prev_credits) in epoch_credits {
                 let credits_earned = credits - prev_credits;
-                let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
+                let slots_in_epoch = epoch_schedule.get_slots_in_epoch(epoch);
                 let uptime = credits_earned as f64 / slots_in_epoch as f64;
                 println!("- epoch: {} {:.2}% uptime", epoch, uptime * 100_f64,);
             }
         }
         if let Some(x) = span {
-            if x > epoch_credits_vec.len() as u64 {
+            if x > vote_state.epoch_credits().len() as u64 {
                 println!("(span longer than available epochs)");
             }
         }
