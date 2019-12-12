@@ -1,7 +1,7 @@
 ## Problem
 
 Inter-chain applications are not new to the digital asset ecosystem; in fact, even
-the smaller centralized exchanges still categorically dwarf all single chain dapps
+the smaller centralized exchanges still categorically dwarf all single chain applications
 put together in terms of users and volume. They command massive valuations and
 have spent years effectively optimizing their core products for a broad range of
 end users. However, their basic operations center around mechanisms that require
@@ -43,7 +43,7 @@ this, they dispense with the need for widely agreed upon cross chain communicati
 standards and the large multi-party organizations that write them in favor of a
 set of discrete contract-based services that can be easily utilized by caller
 contracts through a common abstraction format. This will set the groundwork for
-a broad range of dapps and contracts able to interoperate across the variegated
+a broad range of applications and contracts able to interoperate across the variegated
 and every growing platform ecosystem.
 
 ## Terminology
