@@ -11,6 +11,8 @@ homepage = "https://solana.com/"
 [dependencies]
 clap = "2.33.0"
 log = "0.4.8"
+reqwest = { version = "0.9.24", default-features = false, features = ["rustls-tls"] }
+serde_json = "1.0"
 solana-clap-utils = { path = "../clap-utils", version = "0.22.0" }
 solana-client = { path = "../client", version = "0.22.0" }
 solana-logger = { path = "../logger", version = "0.22.0" }
