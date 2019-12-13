@@ -323,6 +323,7 @@ pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [Packets]) {
 
 pub fn sign_shreds_gpu_pinned_keypair(keypair: &Keypair, cache: &RecyclerCache) -> PinnedVec<u8> {
     let mut vec = cache.buffer().allocate("pinned_keypair");
+    vec.set_pinnable();
     let pubkey = keypair.pubkey().to_bytes();
     let secret = keypair.secret.to_bytes();
     let mut hasher = Sha512::default();
@@ -361,9 +362,11 @@ pub fn sign_shreds_gpu(
 
     //should be zero
     let mut pubkey_offsets = recycler_cache.offsets().allocate("pubkey offsets");
+    pubkey_offsets.set_pinnable();
     pubkey_offsets.resize(count, 0);
 
     let mut secret_offsets = recycler_cache.offsets().allocate("secret_offsets");
+    secret_offsets.set_pinnable();
     secret_offsets.resize(count, pubkey_size as u32);
 
     trace!("offset: {}", offset);
