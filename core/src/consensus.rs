@@ -22,6 +22,7 @@ use std::{
 };
 
 pub const TOWER_SNAPSHOT_NAME: &str = "tower";
+const TOWER_TEMP_SNAPSHOT_NAME: &str = "tower.tmp";
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
@@ -475,9 +476,13 @@ impl Tower {
     pub fn save_to_file(&self, path: &PathBuf) -> Result<()> {
         let timer = Instant::now();
         fs::create_dir_all(path)?;
-        let mut snapshot_file = File::create(path.join(TOWER_SNAPSHOT_NAME))?;
-        snapshot_file.write_all(&bincode::serialize(self).expect("tower serialize failed"))?;
+        let mut snapshot_file = File::create(path.join(TOWER_TEMP_SNAPSHOT_NAME))?;
+        bincode::serialize_into(&mut snapshot_file, self)?;
         snapshot_file.flush()?;
+        fs::rename(
+            path.join(TOWER_TEMP_SNAPSHOT_NAME),
+            path.join(TOWER_SNAPSHOT_NAME),
+        )?;
         let snapshot_time = timer.elapsed().as_millis() as usize;
         inc_new_counter_info!("tower_snapshot_duration_ms", snapshot_time);
         Ok(())
