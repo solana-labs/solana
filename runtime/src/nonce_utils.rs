@@ -61,7 +61,7 @@ mod tests {
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
             vec![
-                nonce_instruction::nonce(&nonce_pubkey),
+                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
             ],
             Hash::default(),
@@ -99,7 +99,7 @@ mod tests {
             &[&from_keypair, &nonce_keypair],
             vec![
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
-                nonce_instruction::nonce(&nonce_pubkey),
+                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
             ],
             Hash::default(),
         );
@@ -115,7 +115,7 @@ mod tests {
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
             vec![
-                nonce_instruction::withdraw(&nonce_pubkey, &from_pubkey, 42),
+                nonce_instruction::withdraw(&nonce_pubkey, &nonce_pubkey, &from_pubkey, 42),
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
             ],
             Hash::default(),
@@ -160,8 +160,9 @@ mod tests {
             // New is in Uninitialzed state
             assert_eq!(state, NonceState::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
+            let authorized = nonce_account.unsigned_key().clone();
             nonce_account
-                .initialize(&recent_blockhashes, &Rent::free())
+                .initialize(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
             assert!(verify_nonce(&nonce_account.account, &recent_blockhashes[0]));
         });
@@ -183,8 +184,9 @@ mod tests {
             // New is in Uninitialzed state
             assert_eq!(state, NonceState::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
+            let authorized = nonce_account.unsigned_key().clone();
             nonce_account
-                .initialize(&recent_blockhashes, &Rent::free())
+                .initialize(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
             assert!(!verify_nonce(
                 &nonce_account.account,
