@@ -15,7 +15,6 @@ use crate::{
     shred::{Shred, Shredder},
 };
 use bincode::deserialize;
-use chrono::{offset::TimeZone, Duration as ChronoDuration, Utc};
 use log::*;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
@@ -26,6 +25,7 @@ use solana_client::rpc_request::{RpcConfirmedBlock, RpcTransactionStatus};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
     genesis_config::GenesisConfig,
@@ -33,15 +33,14 @@ use solana_sdk::{
     instruction_processor_utils::limited_deserialize,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
-    timing::{duration_as_ms, timestamp},
+    timing::timestamp,
     transaction::Transaction,
 };
-use solana_vote_program::vote_instruction::VoteInstruction;
+use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
 use std::{
     cell::RefCell,
     cmp,
     collections::HashMap,
-    convert::TryFrom,
     fs,
     path::{Path, PathBuf},
     rc::Rc,
@@ -1190,17 +1189,39 @@ impl Blocktree {
     // The `get_block_time` method is not fully implemented (depends on validator timestamp
     // transactions). It currently returns Some(`slot` * DEFAULT_MS_PER_SLOT) offset from 0 for all
     // transactions, and None for any values that would overflow any step.
-    pub fn get_block_time(&self, slot: Slot, slot_duration: Duration) -> Option<UnixTimestamp> {
-        let ms_per_slot = duration_as_ms(&slot_duration);
-        let (offset_millis, overflow) = slot.overflowing_mul(ms_per_slot);
-        if !overflow {
-            i64::try_from(offset_millis)
-                .ok()
-                .and_then(|millis| {
-                    let median_datetime = Utc.timestamp(0, 0);
-                    median_datetime.checked_add_signed(ChronoDuration::milliseconds(millis))
-                })
-                .map(|dt| dt.timestamp())
+    pub fn get_block_time(
+        &self,
+        slot: Slot,
+        slot_duration: Duration,
+        bank: &Bank,
+    ) -> Option<UnixTimestamp> {
+        let epoch = bank.epoch_schedule().get_epoch(slot);
+        let stakes = HashMap::new();
+        let stakes = bank.epoch_vote_accounts(epoch).unwrap_or(&stakes);
+        let mut total_stake = 0;
+        let stake_weighted_timestamps_sum: u64 = self
+            .get_timestamp_slots(slot, TIMESTAMP_SLOT_INTERVAL)
+            .iter()
+            .flat_map(|timestamp_slot| {
+                let offset = (slot - timestamp_slot) as u32 * slot_duration;
+                if let Ok(timestamps) = self.get_block_timestamps(*timestamp_slot) {
+                    timestamps
+                        .iter()
+                        .filter_map(|(vote_pubkey, timestamp)| {
+                            stakes.get(vote_pubkey).map(|(stake, _account)| {
+                                total_stake += stake;
+                                (*timestamp as u64 + offset.as_secs()) * stake
+                            })
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                }
+            })
+            .sum();
+        if total_stake > 0 {
+            let mean_timestamp: u64 = stake_weighted_timestamps_sum / total_stake;
+            Some(mean_timestamp as i64)
         } else {
             None
         }

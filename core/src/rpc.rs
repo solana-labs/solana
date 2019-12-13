@@ -323,7 +323,9 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(None);
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
 
-        Ok(self.blocktree.get_block_time(slot, slot_duration))
+        Ok(self
+            .blocktree
+            .get_block_time(slot, slot_duration, &bank.clone()))
     }
 }
 
