@@ -362,7 +362,7 @@ mod test {
     }
 
     #[test]
-    fn nonce_inx_independent_noncer_ok() {
+    fn nonce_inx_independent_nonce_authority_ok() {
         let rent = Rent {
             lamports_per_byte_year: 42,
             ..Rent::default()

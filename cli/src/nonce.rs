@@ -24,7 +24,7 @@ pub trait NonceSubCommands {
 
 fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name("nonce_authority")
-        .long("authorized-noncer")
+        .long("nonce-authority")
         .takes_value(true)
         .value_name("KEYPAIR")
         .validator(is_keypair_or_ask_keyword)
@@ -64,7 +64,7 @@ impl NonceSubCommands for App<'_, '_> {
                 )
                 .arg(
                     Arg::with_name("nonce_authority")
-                        .long("authorized-noncer")
+                        .long("nonce-authority")
                         .takes_value(true)
                         .value_name("BASE58_PUBKEY")
                         .validator(is_pubkey_or_keypair)
@@ -461,7 +461,7 @@ mod tests {
             }
         );
 
-        // Test CreateNonceAccount SubCommand with authorized noncer
+        // Test CreateNonceAccount SubCommand with authority
         let (authority_keypair_file, mut tmp_file2) = make_tmp_file();
         let nonce_authority_keypair = Keypair::new();
         write_keypair(&nonce_authority_keypair, tmp_file2.as_file_mut()).unwrap();
@@ -471,7 +471,7 @@ mod tests {
             &keypair_file,
             "50",
             "lamports",
-            "--authorized-noncer",
+            "--nonce-authority",
             &authority_keypair_file,
         ]);
         assert_eq!(
@@ -522,7 +522,7 @@ mod tests {
             "test",
             "new-nonce",
             &keypair_file,
-            "--authorized-noncer",
+            "--nonce-authority",
             &authority_keypair_file,
         ]);
         let nonce_account = read_keypair_file(&keypair_file).unwrap();
@@ -605,7 +605,7 @@ mod tests {
             &nonce_account_string,
             "42",
             "lamports",
-            "--authorized-noncer",
+            "--nonce-authority",
             &authority_keypair_file,
         ]);
         assert_eq!(
