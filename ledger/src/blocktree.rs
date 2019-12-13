@@ -3864,6 +3864,7 @@ pub mod tests {
                     DataShredHeader::default(),
                     coding.clone(),
                 );
+                coding_shred.common_header.fec_set_index = std::u32::MAX - 1;
                 coding_shred.coding_header.num_coding_shreds = 3;
                 coding_shred.common_header.index = std::u32::MAX - 1;
                 coding_shred.coding_header.position = 0;
