@@ -151,7 +151,7 @@ will be marked stale and then closed automatically 7 days later.
 ### How to manage review feedback?
 
 After a reviewer provides feedback, you can quickly say "acknowledged, will fix" using
-a thumb's up emoji. If your confident your fix is exactly as prescribed, add a reply
+a thumb's up emoji. If you're confident your fix is exactly as prescribed, add a reply
 "Fixed in COMMIT\_HASH" and mark the comment as resolved. If you're not sure, reply
 "Is this what you had in mind? COMMIT\_HASH" and if so, the reviewer will reply and
 mark the conversation as resolved. Marking conversations as resolved is an excellent
@@ -198,7 +198,7 @@ Rust coding conventions
   is to lowercase the type name, putting an underscore before each capital letter. Variable names
   should *not* be abbreviated unless being used as closure arguments and the brevity improves
   readability. When a function has multiple instances of the same type, qualify each with a
-  prefix and underscore (i.e. alice_keypair) or a numeric suffix (i.e. tx0).
+  prefix and underscore (i.e. alice\_keypair) or a numeric suffix (i.e. tx0).
 
 * For function and method names, use `<verb>_<subject>`. For unit tests, that verb should
   always be `test` and for benchmarks the verb should always be `bench`. Avoid namespacing
