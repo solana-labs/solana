@@ -27,7 +27,7 @@ use thiserror::Error;
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
-pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 79;
+pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
 pub const SIZE_OF_DATA_SHRED_HEADER: usize = 3;
 pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 pub const SIZE_OF_SIGNATURE: usize = 64;
@@ -87,6 +87,7 @@ pub struct ShredCommonHeader {
     pub slot: Slot,
     pub index: u32,
     pub version: u16,
+    pub fec_set_index: u32,
 }
 
 /// The data shred header has parent offset and flags
@@ -153,12 +154,14 @@ impl Shred {
         is_last_in_slot: bool,
         reference_tick: u8,
         version: u16,
+        fec_set_index: u32,
     ) -> Self {
         let mut payload = vec![0; PACKET_DATA_SIZE];
         let common_header = ShredCommonHeader {
             slot,
             index,
             version,
+            fec_set_index,
             ..ShredCommonHeader::default()
         };
 
@@ -460,6 +463,11 @@ impl Shredder {
                     .map(|(i, shred_data)| {
                         let shred_index = next_shred_index + i as u32;
 
+                        // Each FEC block has maximum MAX_DATA_SHREDS_PER_FEC_BLOCK shreds
+                        // "FEC set index" is the index of first data shred in that FEC block
+                        let fec_set_index =
+                            shred_index - (i % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize) as u32;
+
                         let (is_last_data, is_last_in_slot) = {
                             if shred_index == last_shred_index {
                                 (true, is_last_in_slot)
@@ -477,6 +485,7 @@ impl Shredder {
                             is_last_in_slot,
                             self.reference_tick,
                             self.version,
+                            fec_set_index,
                         );
 
                         Shredder::sign_shred(&self.keypair, &mut shred);
@@ -541,6 +550,7 @@ impl Shredder {
     pub fn new_coding_shred_header(
         slot: Slot,
         index: u32,
+        fec_set_index: u32,
         num_data: usize,
         num_code: usize,
         position: usize,
@@ -551,6 +561,7 @@ impl Shredder {
             index,
             slot,
             version,
+            fec_set_index,
             ..ShredCommonHeader::default()
         };
         (
@@ -592,6 +603,7 @@ impl Shredder {
                 let (header, coding_header) = Self::new_coding_shred_header(
                     slot,
                     start_index + i as u32,
+                    start_index,
                     num_data,
                     num_coding,
                     i,
@@ -622,6 +634,7 @@ impl Shredder {
                     let (common_header, coding_header) = Self::new_coding_shred_header(
                         slot,
                         start_index + i as u32,
+                        start_index,
                         num_data,
                         num_coding,
                         i,
@@ -679,6 +692,7 @@ impl Shredder {
         num_data: usize,
         num_coding: usize,
         first_index: usize,
+        first_code_index: usize,
         slot: Slot,
     ) -> std::result::Result<Vec<Shred>, reed_solomon_erasure::Error> {
         let mut recovered_data = vec![];
@@ -691,7 +705,8 @@ impl Shredder {
             let mut shred_bufs: Vec<Vec<u8>> = shreds
                 .into_iter()
                 .flat_map(|shred| {
-                    let index = Self::get_shred_index(&shred, num_data);
+                    let index =
+                        Self::get_shred_index(&shred, num_data, first_index, first_code_index);
                     let mut blocks = Self::fill_in_missing_shreds(
                         num_data,
                         num_coding,
@@ -789,11 +804,16 @@ impl Shredder {
         Ok(Self::reassemble_payload(num_data, data_shred_bufs))
     }
 
-    fn get_shred_index(shred: &Shred, num_data: usize) -> usize {
+    fn get_shred_index(
+        shred: &Shred,
+        num_data: usize,
+        first_data_index: usize,
+        first_code_index: usize,
+    ) -> usize {
         if shred.is_data() {
             shred.index() as usize
         } else {
-            shred.index() as usize + num_data
+            shred.index() as usize + num_data + first_data_index - first_code_index
         }
     }
 
@@ -1168,6 +1188,7 @@ pub mod tests {
                 num_data_shreds,
                 num_data_shreds,
                 0,
+                0,
                 slot
             ),
             Err(reed_solomon_erasure::Error::TooFewShardsPresent)
@@ -1178,6 +1199,7 @@ pub mod tests {
             data_shreds[..].to_vec(),
             num_data_shreds,
             num_data_shreds,
+            0,
             0,
             slot,
         )
@@ -1195,6 +1217,7 @@ pub mod tests {
             shred_info.clone(),
             num_data_shreds,
             num_data_shreds,
+            0,
             0,
             slot,
         )
@@ -1242,6 +1265,7 @@ pub mod tests {
             shred_info.clone(),
             num_data_shreds,
             num_data_shreds,
+            0,
             0,
             slot,
         )
@@ -1315,6 +1339,7 @@ pub mod tests {
             num_data_shreds,
             num_data_shreds,
             25,
+            25,
             slot,
         )
         .unwrap();
@@ -1346,6 +1371,7 @@ pub mod tests {
             num_data_shreds,
             num_data_shreds,
             25,
+            25,
             slot + 1,
         )
         .unwrap();
@@ -1358,6 +1384,7 @@ pub mod tests {
                 num_data_shreds,
                 num_data_shreds,
                 15,
+                15,
                 slot,
             ),
             Err(reed_solomon_erasure::Error::TooFewShardsPresent)
@@ -1365,7 +1392,7 @@ pub mod tests {
 
         // Test8: Try recovery/reassembly with incorrect index. Hint: does not recover any shreds
         assert_matches!(
-            Shredder::try_recovery(shred_info, num_data_shreds, num_data_shreds, 35, slot,),
+            Shredder::try_recovery(shred_info, num_data_shreds, num_data_shreds, 35, 35, slot,),
             Err(reed_solomon_erasure::Error::TooFewShardsPresent)
         );
     }
@@ -1418,5 +1445,43 @@ pub mod tests {
         ];
         let version = Shred::version_from_hash(&Hash::new(&hash));
         assert_eq!(version, 0x5a5a);
+    }
+
+    #[test]
+    fn test_shred_fec_set_index() {
+        let keypair = Arc::new(Keypair::new());
+        let hash = hash(Hash::default().as_ref());
+        let version = Shred::version_from_hash(&hash);
+        assert_ne!(version, 0);
+        let shredder =
+            Shredder::new(0, 0, 0.5, keypair, 0, version).expect("Failed in creating shredder");
+
+        let entries: Vec<_> = (0..500)
+            .map(|_| {
+                let keypair0 = Keypair::new();
+                let keypair1 = Keypair::new();
+                let tx0 =
+                    system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+                Entry::new(&Hash::default(), 1, vec![tx0])
+            })
+            .collect();
+
+        let start_index = 0x12;
+        let (data_shreds, coding_shreds, _next_index) =
+            shredder.entries_to_shreds(&entries, true, start_index);
+
+        let max_per_block = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
+        data_shreds.iter().enumerate().for_each(|(i, s)| {
+            let expected_fec_set_index = start_index + ((i / max_per_block) * max_per_block) as u32;
+            assert_eq!(s.common_header.fec_set_index, expected_fec_set_index);
+        });
+
+        coding_shreds.iter().enumerate().for_each(|(i, s)| {
+            // There'll be half the number of coding shreds, as FEC rate is 0.5
+            // So multiply i with 2
+            let expected_fec_set_index =
+                start_index + ((i * 2 / max_per_block) * max_per_block) as u32;
+            assert_eq!(s.common_header.fec_set_index, expected_fec_set_index);
+        });
     }
 }

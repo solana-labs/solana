@@ -391,7 +391,11 @@ impl Blocktree {
                     "blocktree-erasure",
                     ("slot", slot as i64, i64),
                     ("start_index", set_index as i64, i64),
-                    ("end_index", erasure_meta.end_indexes().0 as i64, i64),
+                    (
+                        "end_index",
+                        (erasure_meta.set_index + erasure_meta.config.num_data() as u64) as i64,
+                        i64
+                    ),
                     ("recovery_attempted", attempted, bool),
                     ("recovery_status", status, String),
                     ("recovered", recovered as i64, i64),
@@ -424,8 +428,10 @@ impl Blocktree {
                             }
                         }
                     });
-                    (set_index..set_index + erasure_meta.config.num_coding() as u64).for_each(
-                        |i| {
+                    (erasure_meta.first_coding_index
+                        ..erasure_meta.first_coding_index
+                            + erasure_meta.config.num_coding() as u64)
+                        .for_each(|i| {
                             if let Some(shred) = prev_inserted_codes
                                 .remove(&(slot, i))
                                 .map(|s| {
@@ -454,13 +460,13 @@ impl Blocktree {
                             {
                                 available_shreds.push(shred);
                             }
-                        },
-                    );
+                        });
                     if let Ok(mut result) = Shredder::try_recovery(
                         available_shreds,
                         erasure_meta.config.num_data(),
                         erasure_meta.config.num_coding(),
                         set_index as usize,
+                        erasure_meta.first_coding_index as usize,
                         slot,
                     ) {
                         submit_metrics(true, "complete".into(), result.len());
@@ -687,17 +693,21 @@ impl Blocktree {
         if is_trusted
             || Blocktree::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root)
         {
-            let set_index = shred_index - u64::from(shred.coding_header.position);
+            let set_index = u64::from(shred.common_header.fec_set_index);
             let erasure_config = ErasureConfig::new(
                 shred.coding_header.num_data_shreds as usize,
                 shred.coding_header.num_coding_shreds as usize,
             );
 
             let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
+                let first_coding_index =
+                    u64::from(shred.index()) - u64::from(shred.coding_header.position);
                 self.erasure_meta_cf
                     .get((slot, set_index))
                     .expect("Expect database get to succeed")
-                    .unwrap_or_else(|| ErasureMeta::new(set_index, &erasure_config))
+                    .unwrap_or_else(|| {
+                        ErasureMeta::new(set_index, first_coding_index, &erasure_config)
+                    })
             });
 
             if erasure_config != erasure_meta.config {
@@ -3535,7 +3545,17 @@ pub mod tests {
         let gap: u64 = 10;
         let shreds: Vec<_> = (0..64)
             .map(|i| {
-                Shred::new_from_data(slot, (i * gap) as u32, 0, None, false, false, i as u8, 0)
+                Shred::new_from_data(
+                    slot,
+                    (i * gap) as u32,
+                    0,
+                    None,
+                    false,
+                    false,
+                    i as u8,
+                    0,
+                    (i * gap) as u32,
+                )
             })
             .collect();
         blocktree.insert_shreds(shreds, None, false).unwrap();
@@ -3726,7 +3746,8 @@ pub mod tests {
             let last_root = RwLock::new(0);
 
             let slot = 1;
-            let (mut shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 10, 0);
+            let (mut shred, coding) =
+                Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 10, 0);
             let coding_shred = Shred::new_empty_from_header(
                 shred.clone(),
                 DataShredHeader::default(),
@@ -4149,6 +4170,7 @@ pub mod tests {
                 true,
                 0,
                 0,
+                next_shred_index as u32,
             )];
 
             // With the corruption, nothing should be returned, even though an

@@ -59,6 +59,8 @@ pub struct CodingIndex {
 pub struct ErasureMeta {
     /// Which erasure set in the slot this is
     pub set_index: u64,
+    /// First coding index in the FEC set
+    pub first_coding_index: u64,
     /// Size of shards in this erasure set
     pub size: usize,
     /// Erasure configuration for this erasure set
@@ -200,9 +202,10 @@ impl SlotMeta {
 }
 
 impl ErasureMeta {
-    pub fn new(set_index: u64, config: &ErasureConfig) -> ErasureMeta {
+    pub fn new(set_index: u64, first_coding_index: u64, config: &ErasureConfig) -> ErasureMeta {
         ErasureMeta {
             set_index,
+            first_coding_index,
             size: 0,
             config: *config,
         }
@@ -211,11 +214,12 @@ impl ErasureMeta {
     pub fn status(&self, index: &Index) -> ErasureMetaStatus {
         use ErasureMetaStatus::*;
 
-        let start_idx = self.start_index();
-        let (data_end_idx, coding_end_idx) = self.end_indexes();
-
-        let num_coding = index.coding().present_in_bounds(start_idx..coding_end_idx);
-        let num_data = index.data().present_in_bounds(start_idx..data_end_idx);
+        let num_coding = index.coding().present_in_bounds(
+            self.first_coding_index..self.first_coding_index + self.config.num_coding() as u64,
+        );
+        let num_data = index
+            .data()
+            .present_in_bounds(self.set_index..self.set_index + self.config.num_data() as u64);
 
         let (data_missing, coding_missing) = (
             self.config.num_data() - num_data,
@@ -240,23 +244,6 @@ impl ErasureMeta {
     pub fn size(&self) -> usize {
         self.size
     }
-
-    pub fn set_index_for(index: u64, num_data: usize) -> u64 {
-        index / num_data as u64
-    }
-
-    pub fn start_index(&self) -> u64 {
-        self.set_index
-    }
-
-    /// returns a tuple of (data_end, coding_end)
-    pub fn end_indexes(&self) -> (u64, u64) {
-        let start = self.start_index();
-        (
-            start + self.config.num_data() as u64,
-            start + self.config.num_coding() as u64,
-        )
-    }
 }
 
 #[cfg(test)]
@@ -272,7 +259,7 @@ mod test {
         let set_index = 0;
         let erasure_config = ErasureConfig::default();
 
-        let mut e_meta = ErasureMeta::new(set_index, &erasure_config);
+        let mut e_meta = ErasureMeta::new(set_index, set_index, &erasure_config);
         let mut rng = thread_rng();
         let mut index = Index::new(0);
         e_meta.size = 1;

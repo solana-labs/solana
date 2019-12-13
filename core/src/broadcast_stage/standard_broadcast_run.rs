@@ -66,6 +66,7 @@ impl StandardBroadcastRun {
                         true,
                         max_ticks_in_slot & SHRED_TICK_REFERENCE_MASK,
                         self.shred_version,
+                        last_unfinished_slot.next_shred_index,
                     ))
                 } else {
                     None
