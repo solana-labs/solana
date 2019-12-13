@@ -103,11 +103,12 @@ pub fn authorize(
 }
 
 pub fn update_node(
-    vote_pubkey: &Pubkey,       // vote account
-    authorized_pubkey: &Pubkey, // currently authorized
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*vote_pubkey, false)].with_signer(authorized_pubkey);
+    let account_metas =
+        vec![AccountMeta::new(*vote_pubkey, false)].with_signer(authorized_voter_pubkey);
 
     Instruction::new(
         id(),
