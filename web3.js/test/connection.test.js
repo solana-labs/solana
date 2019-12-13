@@ -844,7 +844,10 @@ test('account change notification', async () => {
     mockCallback,
   );
 
-  const balanceNeeded = await connection.getMinimumBalanceForRentExemption(0);
+  const balanceNeeded = Math.max(
+    await connection.getMinimumBalanceForRentExemption(0),
+    1,
+  );
 
   await connection.requestAirdrop(owner.publicKey, SOL_LAMPORTS);
   try {
