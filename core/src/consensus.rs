@@ -1,3 +1,4 @@
+use crate::result::Result;
 use chrono::prelude::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_metrics::datapoint_debug;
@@ -13,9 +14,14 @@ use solana_vote_program::vote_state::{
 };
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    fs::{self, File},
+    io::{self, BufReader, Write},
+    path::PathBuf,
+    sync::{Arc, RwLock},
+    time::Instant,
 };
 
+pub const TOWER_SNAPSHOT_NAME: &str = "tower";
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
@@ -465,6 +471,56 @@ impl Tower {
             None
         }
     }
+
+    pub fn save_to_file(&self, path: &PathBuf) -> Result<()> {
+        let timer = Instant::now();
+        fs::create_dir_all(path)?;
+        let mut snapshot_file = File::create(path.join(TOWER_SNAPSHOT_NAME))?;
+        snapshot_file.write_all(&bincode::serialize(self).expect("tower serialize failed"))?;
+        snapshot_file.flush()?;
+        let snapshot_time = timer.elapsed().as_millis() as usize;
+        inc_new_counter_info!("tower_snapshot_duration_ms", snapshot_time);
+        Ok(())
+    }
+
+    pub fn reload_from_file(
+        path: &PathBuf,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) -> Self {
+        info!("Looking for Tower snapshot at {:?}", path);
+        // try to reload tower from disk, otherwise reconstruct one
+        let tower = File::open(path.join(TOWER_SNAPSHOT_NAME)).and_then(|tower_file| {
+            let mut stream = BufReader::new(tower_file);
+            let tower: bincode::Result<Tower> = bincode::deserialize_from(&mut stream);
+            tower.map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))
+        });
+        // check that the tower actually belongs to this node
+        match tower {
+            Ok(tower) => {
+                if &tower.node_pubkey != my_pubkey {
+                    error!(
+                        "Wrong tower state found. My pubkey {:?} but found tower for {:?}",
+                        my_pubkey, tower.node_pubkey
+                    );
+                    Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
+                } else {
+                    info!("Restoring tower from saved state.");
+                    tower
+                }
+            }
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    error!(
+                        "Error: {:?} Unable to restore tower, generating a new one from from bank forks",
+                        e
+                    );
+                }
+                Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -486,9 +542,15 @@ pub mod test {
         transaction::Transaction,
     };
     use solana_vote_program::{vote_instruction, vote_state::Vote};
-    use std::collections::{HashMap, VecDeque};
-    use std::sync::RwLock;
-    use std::{thread::sleep, time::Duration};
+    use std::{
+        collections::{HashMap, VecDeque},
+        fs::{remove_file, OpenOptions},
+        io::{Read, Seek, SeekFrom},
+        sync::RwLock,
+        thread::sleep,
+        time::Duration,
+    };
+    use tempfile::TempDir;
     use trees::{tr, Node, Tree};
 
     pub(crate) struct VoteSimulator<'a> {
@@ -1424,5 +1486,89 @@ pub mod test {
             .maybe_timestamp(slot + TIMESTAMP_SLOT_INTERVAL + 1)
             .is_some());
         assert!(tower.last_timestamp.timestamp > timestamp);
+    }
+
+    fn run_test_load_tower_snapshot<F, G>(
+        modify_original: F,
+        modify_serialized: G,
+        expect_original: bool,
+    ) where
+        F: Fn(&mut Tower, &Pubkey) -> (),
+        G: Fn(&PathBuf) -> (),
+    {
+        let dir = TempDir::new().unwrap();
+        // Use values that will not match the default derived from BankFroks
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        let my_keypair = Keypair::new();
+        modify_original(&mut tower, &my_keypair.pubkey());
+        let vote_keypair = Keypair::new();
+        let genesis_config = GenesisConfig::default();
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+
+        tower.save_to_file(&dir.path().to_path_buf()).unwrap();
+        modify_serialized(&dir.path().to_path_buf());
+        let loaded = Tower::reload_from_file(
+            &dir.path().to_path_buf(),
+            &my_keypair.pubkey(),
+            &vote_keypair.pubkey(),
+            &bank_forks,
+        );
+
+        if expect_original {
+            assert_eq!(loaded, tower);
+        } else {
+            let default = Tower::new(
+                &my_keypair.pubkey(),
+                &vote_keypair.pubkey(),
+                &bank_forks.read().unwrap(),
+            );
+            assert_eq!(loaded, default)
+        }
+    }
+
+    #[test]
+    fn test_load_tower_snapshot_good() {
+        run_test_load_tower_snapshot(|tower, pubkey| tower.node_pubkey = *pubkey, |_| (), true)
+    }
+
+    #[test]
+    fn test_load_tower_snapshot_wrong_owner() {
+        run_test_load_tower_snapshot(
+            |tower, _| tower.node_pubkey = Keypair::new().pubkey(),
+            |_| (),
+            false,
+        )
+    }
+
+    #[test]
+    fn test_load_tower_snapshot_deser_failure() {
+        run_test_load_tower_snapshot(
+            |tower, pubkey| tower.node_pubkey = *pubkey,
+            |path| {
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(path.join(TOWER_SNAPSHOT_NAME))
+                    .unwrap();
+                let mut buf = [0u8];
+                assert_eq!(file.read(&mut buf).unwrap(), 1);
+                buf[0] = buf[0] + 1;
+                assert_eq!(file.seek(SeekFrom::Start(0)).unwrap(), 0);
+                assert_eq!(file.write(&buf).unwrap(), 1);
+            },
+            false,
+        )
+    }
+
+    #[test]
+    fn test_load_tower_snapshot_missing() {
+        run_test_load_tower_snapshot(
+            |tower, pubkey| tower.node_pubkey = *pubkey,
+            |path| {
+                remove_file(path.join(TOWER_SNAPSHOT_NAME)).unwrap();
+            },
+            false,
+        )
     }
 }
