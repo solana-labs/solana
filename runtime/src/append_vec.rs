@@ -676,8 +676,7 @@ pub mod tests {
             // *executable_bool is true but its actual memory value is crafted_executable, not 1
             assert!(*executable_bool != true);
             // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-            let executable_byte: &u8 =
-                unsafe { std::mem::transmute::<&bool, &u8>(executable_bool) };
+            let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
             assert_eq!(*executable_byte, crafted_executable);
         }
 
