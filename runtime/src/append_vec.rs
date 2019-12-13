@@ -213,6 +213,11 @@ impl AppendVec {
     fn sanitize_layout_and_length(&self) -> bool {
         let mut offset = 0;
 
+        // This discards allocated accounts immediately after check at each loop iteration.
+        //
+        // This code should not reuse AppendVec.accounts() method as the current form or
+        // extend it to be reused here because it would allow attackers to accumulate
+        // some measurable amount of memory needlessly.
         while let Some((account, next_offset)) = self.get_account(offset) {
             if !account.sanitize() {
                 return false;
