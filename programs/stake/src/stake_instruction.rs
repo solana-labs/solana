@@ -81,7 +81,6 @@ pub enum StakeInstruction {
     DelegateStake,
 
     /// Redeem credits in the stake account
-    ///    requires Authorized::staker signature
     ///
     /// Expects 5 Accounts:
     ///    0 - StakeAccount to be updated with rewards
