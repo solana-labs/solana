@@ -711,8 +711,15 @@ fn get_cf_options() -> Options {
     // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
     options.set_max_write_buffer_number(8);
     options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
-    options.set_target_file_size_base(MAX_WRITE_BUFFER_SIZE / 10);
-    options.set_max_bytes_for_level_base(MAX_WRITE_BUFFER_SIZE);
+    let file_num_compaction_trigger = 4;
+    // Recommend that this be around the size of level 0. Level 0 estimated size in stable state is
+    // write_buffer_size * min_write_buffer_number_to_merge * level0_file_num_compaction_trigger
+    // Source: https://docs.rs/rocksdb/0.6.0/rocksdb/struct.Options.html#method.set_level_zero_file_num_compaction_trigger
+    let total_size_base = MAX_WRITE_BUFFER_SIZE * file_num_compaction_trigger;
+    let file_size_base = total_size_base / 10;
+    options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
+    options.set_max_bytes_for_level_base(total_size_base);
+    options.set_target_file_size_base(file_size_base);
     options
 }
 
