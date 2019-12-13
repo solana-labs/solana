@@ -16,7 +16,7 @@ use std::{
 //Data placement should be aligned at the next boundary. Without alignment accessing the memory may
 //crash on some architectures.
 const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
-macro_rules! align_to_8byte {
+macro_rules! u64_align {
     ($addr: expr) => {
         ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
     };
@@ -219,7 +219,7 @@ impl AppendVec {
             }
             offset = next_offset;
         }
-        let aligned_current_len = align_to_8byte!(self.current_len.load(Ordering::Relaxed));
+        let aligned_current_len = u64_align!(self.current_len.load(Ordering::Relaxed));
 
         offset == aligned_current_len
     }
@@ -230,7 +230,7 @@ impl AppendVec {
             return None;
         }
         let data = &self.map[offset..next];
-        let next = align_to_8byte!(next);
+        let next = u64_align!(next);
 
         Some((
             //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
@@ -241,7 +241,7 @@ impl AppendVec {
     }
 
     fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
-        let pos = align_to_8byte!(*offset);
+        let pos = u64_align!(*offset);
         let data = &self.map[pos..(pos + len)];
         //UNSAFE: This mut append is safe because only 1 thread can append at a time
         //Mutex<append_offset> guarantees exclusive write access to the memory occupied in
@@ -256,7 +256,7 @@ impl AppendVec {
     fn append_ptrs_locked(&self, offset: &mut usize, vals: &[(*const u8, usize)]) -> Option<usize> {
         let mut end = *offset;
         for val in vals {
-            end = align_to_8byte!(end);
+            end = u64_align!(end);
             end += val.1;
         }
 
@@ -264,7 +264,7 @@ impl AppendVec {
             return None;
         }
 
-        let pos = align_to_8byte!(*offset);
+        let pos = u64_align!(*offset);
         for val in vals {
             self.append_ptr(offset, val.0, val.1)
         }
