@@ -25,8 +25,8 @@ use solana_client::rpc_request::{RpcConfirmedBlock, RpcTransactionStatus};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::bank::Bank;
 use solana_sdk::{
+    account::Account,
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
     genesis_config::GenesisConfig,
     hash::Hash,
@@ -1186,18 +1186,12 @@ impl Blocktree {
         }
     }
 
-    // The `get_block_time` method is not fully implemented (depends on validator timestamp
-    // transactions). It currently returns Some(`slot` * DEFAULT_MS_PER_SLOT) offset from 0 for all
-    // transactions, and None for any values that would overflow any step.
     pub fn get_block_time(
         &self,
         slot: Slot,
         slot_duration: Duration,
-        bank: &Bank,
+        stakes: &HashMap<Pubkey, (u64, Account)>,
     ) -> Option<UnixTimestamp> {
-        let epoch = bank.epoch_schedule().get_epoch(slot);
-        let stakes = HashMap::new();
-        let stakes = bank.epoch_vote_accounts(epoch).unwrap_or(&stakes);
         let mut total_stake = 0;
         let stake_weighted_timestamps_sum: u64 = self
             .get_timestamp_slots(slot, TIMESTAMP_SLOT_INTERVAL)
@@ -4564,6 +4558,35 @@ pub mod tests {
             expected_timestamps
         );
         assert_eq!(blocktree.get_block_timestamps(2).unwrap(), vec![]);
+
+        // Build epoch vote_accounts HashMap to test stake-weighted block time
+        blocktree.set_roots(&[3, 8]).unwrap();
+        let mut stakes = HashMap::new();
+        for (i, keypair) in vote_keypairs.iter().enumerate() {
+            stakes.insert(keypair.pubkey(), (1 + i as u64, Account::default()));
+        }
+        let slot_duration = Duration::from_millis(400);
+        let block_time_slot_3 = blocktree.get_block_time(3, slot_duration.clone(), &stakes);
+
+        let mut total_stake = 0;
+        let mut expected_time: u64 = (0..6)
+            .map(|x| {
+                if x % 2 == 0 {
+                    total_stake += 1 + x;
+                    (base_timestamp as u64 + x) * (1 + x)
+                } else {
+                    0
+                }
+            })
+            .sum();
+        expected_time /= total_stake;
+        assert_eq!(block_time_slot_3.unwrap() as u64, expected_time);
+        assert_eq!(
+            blocktree
+                .get_block_time(8, slot_duration.clone(), &stakes)
+                .unwrap() as u64,
+            expected_time + 2 // At 400ms block duration, 5 slots == 2sec
+        );
     }
 
     #[test]
