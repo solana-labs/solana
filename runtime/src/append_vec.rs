@@ -678,7 +678,7 @@ pub mod tests {
         {
             let executable_bool: &bool = &account.account_meta.executable;
             // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
-            // *executable_bool is falsy but its actual memory value is crafted_executable, not 0 (=false)
+            // assert_eq! thinks *exeutable_bool is equal to false but the if condition thinks it's not, contradictly.
             assert_eq!(*executable_bool, false);
             if *executable_bool == false {
                 panic!("This didn't occur if this test passed.");
