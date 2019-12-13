@@ -482,6 +482,39 @@ pub mod tests {
         }
     }
 
+    impl<'a> StoredAccount<'a> {
+        fn set_data_len_unsafe(&self, new_data_len: u64) {
+            let data_len: &u64 = &self.meta.data_len;
+            #[allow(mutable_transmutes)]
+            // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
+            let data_len: &mut u64 = unsafe { &mut *(data_len as *const u64 as *mut u64) };
+            *data_len = new_data_len;
+        }
+
+        fn ref_executable_byte(&self) -> &u8 {
+            let executable_bool: &bool = &self.account_meta.executable;
+            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+            let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
+            executable_byte
+        }
+
+        fn get_executable_byte(&self) -> u8 {
+            let executable_bool: bool = self.account_meta.executable;
+            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+            let executable_byte: u8 = unsafe { std::mem::transmute::<bool, u8>(executable_bool) };
+            executable_byte
+        }
+
+        fn set_exeutable_as_byte(&self, new_executable_byte: u8) {
+            let executable_ref: &bool = &self.account_meta.executable;
+            #[allow(mutable_transmutes)]
+            // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
+            let executable_byte: &mut u8 =
+                unsafe { &mut *(executable_ref as *const bool as *mut u8) };
+            *executable_byte = new_executable_byte;
+        }
+    }
+
     #[test]
     fn test_append_vec_one() {
         let path = get_append_vec_path("test_append");
@@ -577,13 +610,7 @@ pub mod tests {
 
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
-        {
-            let data_len: &u64 = &account.meta.data_len;
-            #[allow(mutable_transmutes)]
-            // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
-            let data_len: &mut u64 = unsafe { &mut *(data_len as *const u64 as *mut u64) };
-            *data_len = crafted_data_len;
-        }
+        account.set_data_len_unsafe(crafted_data_len);
         assert_eq!(account.meta.data_len, crafted_data_len);
 
         // Reload accoutns and observe crafted_data_len
@@ -607,16 +634,10 @@ pub mod tests {
 
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
-
-        {
-            let data_len: &u64 = &account.meta.data_len;
-            #[allow(mutable_transmutes)]
-            // UNSAFE: cast away &(= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
-            let data_len: &mut u64 = unsafe { &mut *(data_len as *const u64 as *mut u64) };
-            *data_len = too_large_data_len;
-        }
-
+        account.set_data_len_unsafe(too_large_data_len);
         assert_eq!(account.meta.data_len, too_large_data_len);
+
+        // Reload accounts and observe no account with bad offset
         let accounts = av.accounts(0);
         assert_matches!(accounts.first(), None);
 
@@ -639,31 +660,15 @@ pub mod tests {
 
         // reload accounts
         let accounts = av.accounts(0);
-        let account = &accounts[0];
 
         // ensure false is 0u8 and true is 1u8 actually
-        {
-            let executable_bool: &bool = &account.account_meta.executable;
-            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-            let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
-            assert_eq!(*executable_byte, 0);
+        assert_eq!(*accounts[0].ref_executable_byte(), 0);
+        assert_eq!(*accounts[1].ref_executable_byte(), 1);
 
-            let executable_bool: &bool = &accounts[1].account_meta.executable;
-            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-            let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
-            assert_eq!(*executable_byte, 1);
-        }
-
+        let account = &accounts[0];
         let crafted_executable = u8::max_value() - 1;
 
-        {
-            let executable_ref: &bool = &account.account_meta.executable;
-            #[allow(mutable_transmutes)]
-            // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
-            let executable_byte: &mut u8 =
-                unsafe { &mut *(executable_ref as *const bool as *mut u8) };
-            *executable_byte = crafted_executable;
-        }
+        account.set_exeutable_as_byte(crafted_executable);
 
         // reload crafted accounts
         let accounts = av.accounts(0);
@@ -673,20 +678,16 @@ pub mod tests {
         {
             let executable_bool: &bool = &account.account_meta.executable;
             // we can not use assert_eq!...
-            // *executable_bool is true but its actual memory value is crafted_executable, not 1
+            // *executable_bool is true but its actual memory value is crafted_executable, not 1 (=true)
             assert!(*executable_bool != true);
-            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-            let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
-            assert_eq!(*executable_byte, crafted_executable);
+            assert_eq!(*account.ref_executable_byte(), crafted_executable);
         }
 
         // we can NOT observe crafted value by value
         {
             let executable_bool: bool = account.account_meta.executable;
             assert_eq!(executable_bool, false);
-            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-            let executable_byte: u8 = unsafe { std::mem::transmute::<bool, u8>(executable_bool) };
-            assert_eq!(executable_byte, 0); // Wow, not crafted_executable!
+            assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
         }
 
         av.flush().unwrap();
