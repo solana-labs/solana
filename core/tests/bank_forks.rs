@@ -25,15 +25,7 @@ mod tests {
         system_transaction,
         transaction::Result as TransactionResult,
     };
-    use std::{
-        fs,
-        fs::File,
-        io::{BufWriter, Write},
-        path::PathBuf,
-        sync::atomic::AtomicBool,
-        sync::mpsc::channel,
-        sync::Arc,
-    };
+    use std::{fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc};
     use tempfile::TempDir;
 
     struct SnapshotTestConfig {
@@ -318,12 +310,18 @@ mod tests {
         // before we compare, stick an empty status_cache in this dir so that the package comparision works
         // This is needed since the status_cache is added by the packager and is not collected from
         // the source dir for snapshots
-        let slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
-        let dummy_status_cache =
-            File::create(saved_snapshots_dir.path().join("status_cache")).unwrap();
-        let mut status_cache_stream = BufWriter::new(dummy_status_cache);
-        serialize_into(&mut status_cache_stream, &slot_deltas).unwrap();
-        status_cache_stream.flush().unwrap();
+        let dummy_slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
+        snapshot_utils::serialize_snapshot_data_file(
+            &saved_snapshots_dir
+                .path()
+                .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME),
+            solana_runtime::bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
+            |stream| {
+                serialize_into(stream, &dummy_slot_deltas)?;
+                Ok(())
+            },
+        )
+        .unwrap();
 
         snapshot_utils::verify_snapshot_tar(
             saved_tar,

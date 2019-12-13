@@ -5,21 +5,21 @@ use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    bank::{deserialize_for_snapshot, Bank, MAXIMUM_SNAPSHOT_DATA_FILE_SIZE},
+    bank::{deserialize_for_snapshot, Bank, MAX_SNAPSHOT_DATA_FILE_SIZE},
     status_cache::SlotDelta,
 };
+use solana_sdk::transaction::Result as TransactionResult;
 use solana_sdk::{clock::Slot, transaction};
-use std::io::Seek;
 use std::{
     cmp::Ordering,
     fs,
     fs::File,
-    io::{BufReader, BufWriter, Error as IOError, ErrorKind},
+    io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
 use tar::Archive;
+use tempfile::TempDir;
 use thiserror::Error;
-use std::io::Seek;
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
@@ -106,6 +106,35 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     Ok(package)
 }
 
+pub fn serialize_status_cache(
+    slot_deltas: &[SlotDelta<TransactionResult<()>>],
+    snapshot_links: &TempDir,
+) -> Result<()> {
+    // the status cache is stored as snapshot_path/status_cache
+    let snapshot_status_cache_file_path =
+        snapshot_links.path().join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
+
+    let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
+    let consumed_size = serialize_snapshot_data_file(
+        &snapshot_status_cache_file_path,
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
+        |stream| {
+            serialize_into(stream, slot_deltas)?;
+            Ok(())
+        },
+    )?;
+    status_cache_serialize.stop();
+
+    datapoint_info!("snapshot-status-cache-file", ("size", consumed_size, i64));
+
+    inc_new_counter_info!(
+        "serialize-status-cache-ms",
+        status_cache_serialize.as_ms() as usize
+    );
+
+    Ok(())
+}
+
 pub fn get_snapshot_paths<P: AsRef<Path>>(snapshot_path: P) -> Vec<SlotSnapshotPaths>
 where
     P: std::fmt::Debug,
@@ -143,6 +172,66 @@ where
     }
 }
 
+pub fn serialize_snapshot_data_file<F>(
+    data_file_path: &Path,
+    maximum_file_size: u64,
+    mut serializer: F,
+) -> Result<u64>
+where
+    F: FnMut(&mut BufWriter<File>) -> Result<()>,
+{
+    let data_file = File::create(data_file_path)?;
+    let mut data_file_stream = BufWriter::new(data_file);
+    serializer(&mut data_file_stream)?;
+    data_file_stream.flush()?;
+
+    let consumed_size = data_file_stream.seek(SeekFrom::Current(0))?;
+    if consumed_size > maximum_file_size {
+        let error_message = format!(
+            "too large snapshot data file to serialize: {:?} has {} bytes",
+            data_file_path, consumed_size
+        );
+        return Err(get_io_error(&error_message));
+    }
+    Ok(consumed_size)
+}
+
+pub fn deserialize_snapshot_data_file<F, T>(
+    data_file_path: &Path,
+    maximum_file_size: u64,
+    mut deserializer: F,
+) -> Result<T>
+where
+    F: FnMut(&mut BufReader<File>) -> Result<T>,
+{
+    let file_size = fs::metadata(&data_file_path)?.len();
+
+    if file_size > maximum_file_size {
+        let error_message = format!(
+            "too large snapshot data file to deserialize: {:?} has {} bytes",
+            data_file_path, file_size
+        );
+        return Err(get_io_error(&error_message));
+    }
+
+    let data_file = File::open(data_file_path)?;
+    let mut data_file_stream = BufReader::new(data_file);
+
+    let ret = deserializer(&mut data_file_stream)?;
+
+    let consumed_size = data_file_stream.seek(SeekFrom::Current(0))?;
+
+    if file_size != consumed_size {
+        let error_message = format!(
+            "invalid snapshot data file: {:?} has {} bytes, however consumed {} bytes to deserialize",
+            data_file_path, file_size, consumed_size
+        );
+        return Err(get_io_error(&error_message));
+    }
+
+    Ok(ret)
+}
+
 pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
     bank.purge_zero_lamport_accounts();
     let slot = bank.slot();
@@ -158,20 +247,17 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
         snapshot_file_path,
     );
 
-    let snapshot_file = File::create(&snapshot_file_path)?;
-    // snapshot writer
-    let mut snapshot_stream = BufWriter::new(snapshot_file);
     // Create the snapshot
-    serialize_into(&mut snapshot_stream, &*bank)?;
     let mut bank_rc_serialize = Measure::start("create snapshot");
-    serialize_into(&mut snapshot_stream, &bank.rc)?;
-    let consumed_size = snapshot_stream.seek(std::io::SeekFrom::Current(0))?;
+    let consumed_size =
+        serialize_snapshot_data_file(&snapshot_file_path, MAX_SNAPSHOT_DATA_FILE_SIZE, |stream| {
+            serialize_into(stream.by_ref(), &*bank)?;
+            // move Measure::start here?
+            serialize_into(stream.by_ref(), &bank.rc)?;
+            Ok(())
+        })?;
     bank_rc_serialize.stop();
 
-    if consumed_size > MAXIMUM_SNAPSHOT_DATA_FILE_SIZE {
-        let error_message = format!("too large snapshot data file: {:?} has {} bytes, and it's too large to be used to rebuild a bank", snapshot_file_path, consumed_size);
-        return Err(get_io_error(&error_message));
-    }
     datapoint_info!(
         "snapshot-bank-file",
         ("slot", slot, i64),
@@ -197,7 +283,7 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<(
     Ok(())
 }
 
-pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<u64> {
+pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<Slot> {
     let tempdir = tempfile::TempDir::new()?;
     untar_snapshot_in(&snapshot_tar, &tempdir)?;
     let unpacked_snapshots_dir = tempdir.path().join(TAR_SNAPSHOTS_DIR);
@@ -205,9 +291,11 @@ pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<u64> {
     let last_root_paths = snapshot_paths
         .last()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
-    let file = File::open(&last_root_paths.snapshot_file_path)?;
-    let mut stream = BufReader::new(file);
-    let bank: Bank = deserialize_for_snapshot(&mut stream)?;
+    let bank = deserialize_snapshot_data_file(
+        &last_root_paths.snapshot_file_path,
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
+        |stream| Ok(deserialize_for_snapshot::<_, Bank>(stream)?),
+    )?;
     Ok(bank.slot())
 }
 
@@ -286,38 +374,35 @@ where
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
 
-    // Rebuild the root bank
     info!("Loading from {:?}", &root_paths.snapshot_file_path);
-    let file = File::open(&root_paths.snapshot_file_path)?;
-    let file_size = fs::metadata(&root_paths.snapshot_file_path)?.len();
-    if file_size > MAXIMUM_SNAPSHOT_DATA_FILE_SIZE {
-        let error_message = format!(
-            "too large snapshot data file: {:?} has {} bytes, and it's too large to be rebuilt a bank from",
-            root_paths.snapshot_file_path, file_size
-        );
-        return Err(get_io_error(&error_message));
-    }
-    let mut stream = BufReader::new(file);
-    let bank: Bank = deserialize_for_snapshot(&mut stream)?;
+    let bank = deserialize_snapshot_data_file(
+        &root_paths.snapshot_file_path,
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
+        |stream| {
+            // Rebuild the root bank
+            let bank: Bank = deserialize_for_snapshot(stream.by_ref())?;
+            // Rebuild accounts
+            bank.rc.accounts_from_stream(
+                stream.by_ref(),
+                local_account_paths,
+                &append_vecs_path,
+            )?;
+            Ok(bank)
+        },
+    )?;
 
-    // Rebuild accounts
-    bank.rc
-        .accounts_from_stream(&mut stream, local_account_paths, append_vecs_path)?;
-    let consumed_size = stream.seek(std::io::SeekFrom::Current(0))?;
-    if file_size != consumed_size {
-        let error_message = format!(
-            "invalid snapshot format: {:?} has {} bytes, however consumed {} bytes",
-            root_paths.snapshot_file_path, file_size, consumed_size
-        );
-        return Err(get_io_error(&error_message));
-    }
-
-    // Rebuild status cache
     let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
-    let status_cache = File::open(status_cache_path)?;
-    let mut stream = BufReader::new(status_cache);
-    let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
-        deserialize_for_snapshot(&mut stream).unwrap_or_default();
+    let slot_deltas = deserialize_snapshot_data_file(
+        &status_cache_path,
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
+        |stream| {
+            // Rebuild status cache
+            let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
+                deserialize_for_snapshot(stream).unwrap_or_default();
+
+            Ok(slot_deltas)
+        },
+    )?;
 
     bank.src.append(&slot_deltas);
 
@@ -354,4 +439,117 @@ where
     // Check the account entries are the same
     let unpacked_accounts = unpack_dir.join(&TAR_ACCOUNTS_DIR);
     assert!(!dir_diff::is_different(&storages_to_verify, unpacked_accounts).unwrap());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bincode::{deserialize_from, serialize_into};
+    use matches::assert_matches;
+    use std::mem::size_of;
+
+    #[test]
+    fn test_serialize_snapshot_data_file_under_limit() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let expected_consumed_size = size_of::<u32>() as u64;
+        let consumed_size = serialize_snapshot_data_file(
+            &temp_dir.path().join("data-file"),
+            expected_consumed_size,
+            |stream| {
+                serialize_into(stream, &2323_u32)?;
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(consumed_size, expected_consumed_size);
+    }
+
+    #[test]
+    fn test_serialize_snapshot_data_file_over_limit() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let expected_consumed_size = size_of::<u32>() as u64;
+        let result = serialize_snapshot_data_file(
+            &temp_dir.path().join("data-file"),
+            expected_consumed_size - 1,
+            |stream| {
+                serialize_into(stream, &2323_u32)?;
+                Ok(())
+            },
+        );
+        assert_matches!(result, Err(SnapshotError::IO(ref message)) if message.to_string().starts_with("too large snapshot data file to serialize"));
+    }
+
+    #[test]
+    fn test_deserialize_snapshot_data_file_under_limit() {
+        let expected_data = 2323_u32;
+        let expected_consumed_size = size_of::<u32>() as u64;
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        serialize_snapshot_data_file(
+            &temp_dir.path().join("data-file"),
+            expected_consumed_size,
+            |stream| {
+                serialize_into(stream, &expected_data)?;
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        let actual_data = deserialize_snapshot_data_file(
+            &temp_dir.path().join("data-file"),
+            expected_consumed_size,
+            |stream| Ok(deserialize_from::<_, u32>(stream)?),
+        )
+        .unwrap();
+        assert_eq!(actual_data, expected_data);
+    }
+
+    #[test]
+    fn test_deserialize_snapshot_data_file_over_limit() {
+        let expected_data = 2323_u32;
+        let expected_consumed_size = size_of::<u32>() as u64;
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        serialize_snapshot_data_file(
+            &temp_dir.path().join("data-file"),
+            expected_consumed_size,
+            |stream| {
+                serialize_into(stream, &expected_data)?;
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        let result = deserialize_snapshot_data_file(
+            &temp_dir.path().join("data-file"),
+            expected_consumed_size - 1,
+            |stream| Ok(deserialize_from::<_, u32>(stream)?),
+        );
+        assert_matches!(result, Err(SnapshotError::IO(ref message)) if message.to_string().starts_with("too large snapshot data file to deserialize"));
+    }
+
+    #[test]
+    fn test_deserialize_snapshot_data_file_extra_data() {
+        let expected_data = 2323_u32;
+        let expected_consumed_size = size_of::<u32>() as u64;
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        serialize_snapshot_data_file(
+            &temp_dir.path().join("data-file"),
+            expected_consumed_size * 2,
+            |stream| {
+                serialize_into(stream.by_ref(), &expected_data)?;
+                serialize_into(stream.by_ref(), &expected_data)?;
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        let result = deserialize_snapshot_data_file(
+            &temp_dir.path().join("data-file"),
+            expected_consumed_size * 2,
+            |stream| Ok(deserialize_from::<_, u32>(stream)?),
+        );
+        assert_matches!(result, Err(SnapshotError::IO(ref message)) if message.to_string().starts_with("invalid snapshot data file"));
+    }
 }

@@ -59,7 +59,7 @@ use std::{
 };
 
 pub const SECONDS_PER_YEAR: f64 = (365.25 * 24.0 * 60.0 * 60.0);
-pub const MAXIMUM_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
+pub const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
@@ -1869,15 +1869,18 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
 }
 
 // This protects from memory exhaustion.
-// Because we're are about to restore full process state from file,
-// allow use of memory as much as possible.
-// But set a hard-limit with ample of head rooms.
+// Because we're are about to restore full process state from file, allow use
+// of memory as much as possible. But set a hard-limit with ample of head rooms.
+// This is an extra protection for possible bincode bugs in addition to
+// deserialize_snapshot_data_file
 pub fn deserialize_for_snapshot<R, T>(reader: R) -> bincode::Result<T>
 where
     R: Read,
     T: serde::de::DeserializeOwned,
 {
-    bincode::config().limit(MAXIMUM_SNAPSHOT_DATA_FILE_SIZE).deserialize_from(reader)
+    bincode::config()
+        .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+        .deserialize_from(reader)
 }
 
 #[cfg(test)]
