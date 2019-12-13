@@ -75,6 +75,8 @@ pub enum NonceInstruction {
     ///     0 - A NonceAccount
     ///
     /// The `Pubkey` parameter identifies the entity to authorize
+    ///
+    /// The current authority must sign a transaction executing this instruction
     Authorize(Pubkey),
 }
 
