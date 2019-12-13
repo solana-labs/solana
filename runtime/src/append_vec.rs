@@ -75,7 +75,7 @@ impl<'a> StoredAccount<'a> {
     fn sanitize(&self) -> bool {
         // Sanitize executable
         // Use extra references to avoid value silently cramped to 1 (=true) and 0 (=false)
-        // Yes, this really hannpens; see test_set_file_crafted_executable
+        // Yes, this really happens; see test_set_file_crafted_executable
         let executable_bool: &bool = &self.account_meta.executable;
         // UNSAFE: Force to interpret mmap-backed bool as u8 to ensure higher 7-bits are cleared correctly.
         let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
