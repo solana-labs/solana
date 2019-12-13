@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{account::Account, clock::Epoch, hash::Hash, pubkey::Pubkey};
 use std::{
     fmt,
-    fs::{create_dir_all, remove_file, OpenOptions},
+    fs::{remove_file, OpenOptions},
     io,
     io::{Cursor, Seek, SeekFrom, Write},
     mem,
@@ -95,9 +95,6 @@ impl AppendVec {
     pub fn new(file: &Path, create: bool, size: usize) -> Self {
         if create {
             let _ignored = remove_file(file);
-            if let Some(parent) = file.parent() {
-                create_dir_all(parent).expect("Create directory failed");
-            }
         }
 
         let mut data = OpenOptions::new()

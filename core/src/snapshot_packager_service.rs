@@ -230,6 +230,7 @@ mod tests {
         let snapshot_package_output_path = temp_dir.join("snapshots_output");
         fs::create_dir_all(&snapshot_package_output_path).unwrap();
 
+        fs::create_dir_all(&accounts_dir).unwrap();
         // Create some storage entries
         let storage_entries: Vec<_> = (0..5)
             .map(|i| Arc::new(AccountStorageEntry::new(&accounts_dir, 0, i, 10)))
