@@ -94,6 +94,31 @@ pub fn create_account(
     )
 }
 
+pub fn create_account_with_seed(
+    from_pubkey: &Pubkey,
+    to_pubkey: &Pubkey,
+    seed: &str,
+    lamports: u64,
+    space: u64,
+    program_id: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*from_pubkey, true),
+        AccountMeta::new(*to_pubkey, false),
+    ];
+
+    Instruction::new(
+        system_program::id(),
+        &SystemInstruction::CreateAccountWithSeed {
+            seed: seed.to_string(),
+            lamports,
+            space,
+            program_id: *program_id,
+        },
+        account_metas,
+    )
+}
+
 pub fn assign(from_pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
     let account_metas = vec![AccountMeta::new(*from_pubkey, true)];
     Instruction::new(

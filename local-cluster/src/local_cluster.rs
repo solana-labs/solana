@@ -26,7 +26,7 @@ use solana_sdk::{
 };
 use solana_stake_program::{
     config as stake_config, stake_instruction,
-    stake_state::{Authorized as StakeAuthorized, StakeState},
+    stake_state::{Authorized, Lockup, StakeState},
 };
 use solana_storage_program::{
     storage_contract,
@@ -522,11 +522,12 @@ impl LocalCluster {
 
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref(), &stake_account_keypair],
-                stake_instruction::create_stake_account_and_delegate_stake(
+                stake_instruction::create_account_and_delegate_stake(
                     &from_account.pubkey(),
                     &stake_account_pubkey,
                     &vote_account_pubkey,
-                    &StakeAuthorized::auto(&stake_account_pubkey),
+                    &Authorized::auto(&stake_account_pubkey),
+                    &Lockup::default(),
                     amount,
                 ),
                 client

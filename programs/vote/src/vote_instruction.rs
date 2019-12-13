@@ -87,6 +87,26 @@ pub fn create_account(
     vec![create_ix, init_ix]
 }
 
+pub fn create_account_with_seed(
+    from_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+    seed: &str,
+    vote_init: &VoteInit,
+    lamports: u64,
+) -> Vec<Instruction> {
+    let space = VoteState::size_of() as u64;
+    let create_ix = system_instruction::create_account_with_seed(
+        from_pubkey,
+        vote_pubkey,
+        seed,
+        lamports,
+        space,
+        &id(),
+    );
+    let init_ix = initialize_account(vote_pubkey, vote_init);
+    vec![create_ix, init_ix]
+}
+
 pub fn authorize(
     vote_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey, // currently authorized
