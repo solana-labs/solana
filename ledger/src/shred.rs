@@ -1130,9 +1130,6 @@ pub mod tests {
 
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
 
-        // Must have created an equal number of coding and data shreds
-        assert_eq!(data_shreds.len(), coding_shreds.len());
-
         for (i, s) in data_shreds.iter().enumerate() {
             verify_test_data_shred(
                 s,
@@ -1177,10 +1174,10 @@ pub mod tests {
 
         let serialized_entries = bincode::serialize(&entries).unwrap();
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
+        let num_coding_shreds = coding_shreds.len();
 
         // We should have 10 shreds now, an equal number of coding shreds
         assert_eq!(data_shreds.len(), num_data_shreds);
-        assert_eq!(coding_shreds.len(), num_data_shreds);
 
         let all_shreds = data_shreds
             .iter()
@@ -1193,7 +1190,7 @@ pub mod tests {
             Shredder::try_recovery(
                 data_shreds[..data_shreds.len() - 1].to_vec(),
                 num_data_shreds,
-                num_data_shreds,
+                num_coding_shreds,
                 0,
                 0,
                 slot
@@ -1205,7 +1202,7 @@ pub mod tests {
         let recovered_data = Shredder::try_recovery(
             data_shreds[..].to_vec(),
             num_data_shreds,
-            num_data_shreds,
+            num_coding_shreds,
             0,
             0,
             slot,
@@ -1223,7 +1220,7 @@ pub mod tests {
         let mut recovered_data = Shredder::try_recovery(
             shred_info.clone(),
             num_data_shreds,
-            num_data_shreds,
+            num_coding_shreds,
             0,
             0,
             slot,
@@ -1271,7 +1268,7 @@ pub mod tests {
         let recovered_data = Shredder::try_recovery(
             shred_info.clone(),
             num_data_shreds,
-            num_data_shreds,
+            num_coding_shreds,
             0,
             0,
             slot,
@@ -1324,10 +1321,9 @@ pub mod tests {
         // and 2 missing coding shreds. Hint: should work
         let serialized_entries = bincode::serialize(&entries).unwrap();
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 25);
-
-        // We should have 10 shreds now, an equal number of coding shreds
+        let num_coding_shreds = coding_shreds.len();
+        // We should have 10 shreds now
         assert_eq!(data_shreds.len(), num_data_shreds);
-        assert_eq!(coding_shreds.len(), num_data_shreds);
 
         let all_shreds = data_shreds
             .iter()
@@ -1344,7 +1340,7 @@ pub mod tests {
         let recovered_data = Shredder::try_recovery(
             shred_info.clone(),
             num_data_shreds,
-            num_data_shreds,
+            num_coding_shreds,
             25,
             25,
             slot,
@@ -1376,7 +1372,7 @@ pub mod tests {
         let recovered_data = Shredder::try_recovery(
             shred_info.clone(),
             num_data_shreds,
-            num_data_shreds,
+            num_coding_shreds,
             25,
             25,
             slot + 1,
@@ -1389,7 +1385,7 @@ pub mod tests {
             Shredder::try_recovery(
                 shred_info.clone(),
                 num_data_shreds,
-                num_data_shreds,
+                num_coding_shreds,
                 15,
                 15,
                 slot,
@@ -1399,7 +1395,7 @@ pub mod tests {
 
         // Test8: Try recovery/reassembly with incorrect index. Hint: does not recover any shreds
         assert_matches!(
-            Shredder::try_recovery(shred_info, num_data_shreds, num_data_shreds, 35, 35, slot,),
+            Shredder::try_recovery(shred_info, num_data_shreds, num_coding_shreds, 35, 35, slot,),
             Err(reed_solomon_erasure::Error::TooFewShardsPresent)
         );
     }
