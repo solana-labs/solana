@@ -641,7 +641,7 @@ pub fn parse_create_address_with_seed(
 ) -> Result<CliCommandInfo, CliError> {
     let from_pubkey = pubkey_of(matches, "from");
 
-    let require_keypair = !from_pubkey.is_some();
+    let require_keypair = from_pubkey.is_none();
 
     let program_id = match matches.value_of("program_id").unwrap() {
         "STAKE" => solana_stake_program::id(),
