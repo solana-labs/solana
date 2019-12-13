@@ -1,5 +1,8 @@
 //! A command-line executable for monitoring the health of a cluster
 
+mod notifier;
+
+use crate::notifier::Notifier;
 use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
 use log::*;
 use solana_clap_utils::input_validators::is_url;
@@ -38,6 +41,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let rpc_client = RpcClient::new(json_rpc_url.to_string());
 
+    let notifier = Notifier::new();
     let mut last_transaction_count = 0;
     loop {
         let ok = rpc_client
@@ -111,6 +115,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 });
 
         datapoint_info!("watchtower-sanity", ("ok", ok, bool));
+        if !ok {
+            notifier.send("solana-watchtower sanity failure");
+        }
         sleep(interval);
     }
 }
