@@ -677,9 +677,12 @@ pub mod tests {
         // we can observe crafted value by ref
         {
             let executable_bool: &bool = &account.account_meta.executable;
-            // we can not use assert_eq!...
-            // *executable_bool is true but its actual memory value is crafted_executable, not 1 (=true)
-            assert!(*executable_bool != true);
+            // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
+            // *executable_bool is falsy but its actual memory value is crafted_executable, not 0 (=false)
+            assert_eq!(*executable_bool, false);
+            if *executable_bool == false {
+                panic!("This didn't occur if this test passed.");
+            }
             assert_eq!(*account.ref_executable_byte(), crafted_executable);
         }
 
