@@ -4,6 +4,7 @@ use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 
+#[derive(Clone)]
 pub(super) struct BroadcastFakeShredsRun {
     last_blockhash: Hash,
     partition: usize,
@@ -81,15 +82,16 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             self.last_blockhash = Hash::default();
         }
 
+        let data_shreds = Arc::new(data_shreds);
         blocktree_sender.send(data_shreds.clone());
 
         // 3) Start broadcast step
         //some indicates fake shreds
-        socket_sender.send((Some(HashMap::new()), fake_data_shreds));
-        socket_sender.send((Some(HashMap::new()), fake_coding_shreds));
+        socket_sender.send((Some(Arc::new(HashMap::new())), Arc::new(fake_data_shreds)));
+        socket_sender.send((Some(Arc::new(HashMap::new())), Arc::new(fake_coding_shreds)));
         //none indicates real shreds
         socket_sender.send((None, data_shreds));
-        socket_sender.send((None, coding_shreds));
+        socket_sender.send((None, Arc::new(coding_shreds)));
 
         Ok(())
     }
@@ -99,7 +101,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {
-        for (stakes, data_shreds) in receiver.iter() {
+        for (stakes, data_shreds) in receiver.lock().unwrap().iter() {
             let peers = cluster_info.read().unwrap().tvu_peers();
             peers.iter().enumerate().for_each(|(i, peer)| {
                 if i <= self.partition && stakes.is_some() {
@@ -114,15 +116,17 @@ impl BroadcastRun for BroadcastFakeShredsRun {
                 }
             });
         }
+        Ok(())
     }
     fn record(
         &self,
         receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
-        for data_shreds in receiver.iter() {
-            blocktree.insert_shreds(data_shreds, None, true)?;
+        for data_shreds in receiver.lock().unwrap().iter() {
+            blocktree.insert_shreds(data_shreds.to_vec(), None, true)?;
         }
+        Ok(())
     }
 }
 

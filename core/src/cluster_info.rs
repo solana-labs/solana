@@ -518,7 +518,7 @@ impl ClusterInfo {
 
     fn sorted_stakes_with_index<S: std::hash::BuildHasher>(
         peers: &[ContactInfo],
-        stakes: Option<&HashMap<Pubkey, u64, S>>,
+        stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
     ) -> Vec<(u64, usize)> {
         let stakes_and_index: Vec<_> = peers
             .iter()
@@ -555,7 +555,7 @@ impl ClusterInfo {
     // Return sorted_retransmit_peers(including self) and their stakes
     pub fn sorted_retransmit_peers_and_stakes(
         &self,
-        stakes: Option<&HashMap<Pubkey, u64>>,
+        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
         let mut peers = self.retransmit_peers();
         // insert "self" into this list for the layer and neighborhood computation
@@ -729,7 +729,7 @@ impl ClusterInfo {
 
     fn sorted_tvu_peers_and_stakes(
         &self,
-        stakes: Option<&HashMap<Pubkey, u64>>,
+        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
         let mut peers = self.tvu_peers();
         peers.dedup();
@@ -744,7 +744,7 @@ impl ClusterInfo {
         s: &UdpSocket,
         shreds: Vec<Vec<u8>>,
         seeds: &[[u8; 32]],
-        stakes: Option<&HashMap<Pubkey, u64>>,
+        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     ) -> Result<()> {
         let (peers, peers_and_stakes) = self.sorted_tvu_peers_and_stakes(stakes);
         let broadcast_len = peers_and_stakes.len();

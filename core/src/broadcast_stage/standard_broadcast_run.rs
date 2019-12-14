@@ -29,8 +29,9 @@ impl BroadcastStats {
     }
 }
 
+#[derive(Clone)]
 pub(super) struct StandardBroadcastRun {
-    stats: RwLock<BroadcastStats>,
+    stats: Arc<RwLock<BroadcastStats>>,
     unfinished_slot: Option<UnfinishedSlotInfo>,
     current_slot_and_parent: Option<(u64, u64)>,
     slot_broadcast_start: Option<Instant>,
@@ -41,7 +42,7 @@ pub(super) struct StandardBroadcastRun {
 impl StandardBroadcastRun {
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
         Self {
-            stats: RwLock::new(BroadcastStats::default()),
+            stats: Arc::new(RwLock::new(BroadcastStats::default())),
             unfinished_slot: None,
             current_slot_and_parent: None,
             slot_broadcast_start: None,
@@ -128,7 +129,7 @@ impl StandardBroadcastRun {
         &mut self,
         blocktree: &Arc<Blocktree>,
         socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
-        blocktree_sender: &Receiver<Arc<Vec<Shred>>>,
+        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
         receive_results: ReceiveResults,
     ) -> Result<()> {
         let mut receive_elapsed = receive_results.time_elapsed;
@@ -168,7 +169,10 @@ impl StandardBroadcastRun {
 
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
-        socket_sender.send((stakes, data_shreds.clone()));
+        let stakes = stakes.map(|s| Arc::new(s));
+        let data_shreds = Arc::new(data_shreds);
+        socket_sender.send((stakes.clone(), data_shreds.clone()));
+        let coding_shreds = Arc::new(coding_shreds);
         socket_sender.send((stakes, coding_shreds));
         blocktree_sender.send(data_shreds);
         self.update_broadcast_stats(BroadcastStats {
@@ -189,7 +193,7 @@ impl StandardBroadcastRun {
         // Insert shreds into blocktree
         let insert_shreds_start = Instant::now();
         blocktree
-            .insert_shreds(shreds.clone(), None, true)
+            .insert_shreds(shreds.to_vec(), None, true)
             .expect("Failed to insert shreds in blocktree");
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
         self.update_broadcast_stats(BroadcastStats {
@@ -231,7 +235,7 @@ impl StandardBroadcastRun {
     }
 
     fn update_broadcast_stats(&self, stats: BroadcastStats) {
-        let wstats = self.stats.write().unlock();
+        let wstats = self.stats.write().unwrap();
         wstats.receive_elapsed += stats.receive_elapsed;
         wstats.shredding_elapsed += stats.shredding_elapsed;
         wstats.insert_shreds_elapsed += stats.insert_shreds_elapsed;
@@ -245,10 +249,10 @@ impl StandardBroadcastRun {
         datapoint_info!(
             "broadcast-bank-stats",
             ("slot", self.unfinished_slot.unwrap().slot as i64, i64),
-            ("shredding_time", self.stats.shredding_elapsed as i64, i64),
+            ("shredding_time", stats.shredding_elapsed as i64, i64),
             (
                 "insertion_time",
-                self.stats.insert_shreds_elapsed as i64,
+                stats.insert_shreds_elapsed as i64,
                 i64
             ),
             ("broadcast_time", stats.broadcast_elapsed as i64, i64),
@@ -265,7 +269,8 @@ impl StandardBroadcastRun {
                 i64
             ),
         );
-        self.stats.write().lock().reset();
+        drop(stats);
+        self.stats.write().unwrap().reset();
     }
 }
 
@@ -287,15 +292,15 @@ impl BroadcastRun for StandardBroadcastRun {
         sock: &UdpSocket,
     ) -> Result<()> {
         let (stakes, shreds) = receiver.lock().unwrap().recv()?;
-        self.broadcast(cluster_info, sock, stakes, shreds);
+        self.broadcast(sock, cluster_info, stakes, shreds)
     }
     fn record(
         &self,
         receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
-        let (stakes, shreds) = receiver.lock().unwrap().recv()?;
-        self.insert(blocktree, shreds);
+        let shreds = receiver.lock().unwrap().recv()?;
+        self.insert(blocktree, shreds)
     }
 }
 

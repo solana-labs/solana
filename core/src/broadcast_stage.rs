@@ -178,12 +178,13 @@ impl BroadcastStage {
         receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
-        broadcast_stage_run: impl BroadcastRun + Send + 'static,
+        broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit = exit_sender.clone();
         let (socket_sender, socket_receiver) = channel();
         let (blocktree_sender, blocktree_receiver) = channel();
+        let bs_run = broadcast_stage_run.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -193,19 +194,20 @@ impl BroadcastStage {
                     &receiver,
                     &socket_sender,
                     &blocktree_sender,
-                    broadcast_stage_run,
+                    bs_run,
                 )
             })
             .unwrap();
         let mut thread_hdls = vec![thread_hdl];
-        let exit = exit_sender.clone();
         let socket_receiver = Arc::new(Mutex::new(socket_receiver));
         for _ in 0..NUM_THREADS {
             let socket_receiver = socket_receiver.clone();
+            let bs_transmit = broadcast_stage_run.clone();
+            let cluster_info = cluster_info.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-transmit".to_string())
                 .spawn(move || loop {
-                    let res = broadcast_stage_run.transmit(&socket_receiver, &cluster_info, &sock);
+                    let res = bs_transmit.transmit(&socket_receiver, &cluster_info, &sock);
                     let res = Self::handle_error(res);
                     if res.is_some() {
                         return res.unwrap();
@@ -217,10 +219,12 @@ impl BroadcastStage {
         let blocktree_receiver = Arc::new(Mutex::new(blocktree_receiver));
         for _ in 0..NUM_THREADS {
             let blocktree_receiver = blocktree_receiver.clone();
+            let bs_record = broadcast_stage_run.clone();
+            let blocktree = blocktree.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-record".to_string())
                 .spawn(move || loop {
-                    let res = broadcast_stage_run.record(&blocktree_receiver, &blocktree);
+                    let res = bs_record.record(&blocktree_receiver, &blocktree);
                     let res = Self::handle_error(res);
                     if res.is_some() {
                         return res.unwrap();

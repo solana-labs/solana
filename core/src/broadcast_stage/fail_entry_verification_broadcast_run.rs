@@ -3,6 +3,7 @@ use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 
+#[derive(Clone)]
 pub(super) struct FailEntryVerificationBroadcastRun {
     shred_version: u16,
     keypair: Arc<Keypair>,
@@ -60,23 +61,15 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             next_shred_index,
         );
 
-        let all_shreds = data_shreds
-            .iter()
-            .cloned()
-            .chain(coding_shreds.iter().cloned())
-            .collect::<Vec<_>>();
-        blocktree_sender.send(all_shreds)?;
+        let data_shreds = Arc::new(data_shreds);
+        blocktree_sender.send(data_shreds.clone());
         // 3) Start broadcast step
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        let all_shred_bufs: Vec<Vec<u8>> = data_shreds
-            .into_iter()
-            .chain(coding_shreds.into_iter())
-            .map(|s| s.payload)
-            .collect();
-
-        socket_sender.send((stakes, all_shred_bufs))?;
+        let stakes = stakes.map(|s| Arc::new(s));
+        socket_sender.send((stakes, data_shreds))?;
+        socket_sender.send((stakes, Arc::new(coding_shreds)))?;
         Ok(())
     }
     fn transmit(
@@ -85,13 +78,17 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {
-        let (stakes, shreds) = receiver.recv()?;
+        let (stakes, shreds) = receiver.lock().unwrap().recv()?;
         let all_seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
         // Broadcast data
+        let all_shred_bufs: Vec<Vec<u8>> = shreds
+            .into_iter()
+            .map(|s| s.payload)
+            .collect();
         cluster_info
             .read()
             .unwrap()
-            .broadcast_shreds(sock, shreds, &all_seeds, stakes.as_ref())?;
+            .broadcast_shreds(sock, all_shred_bufs, &all_seeds, stakes)?;
         Ok(())
     }
     fn record(
@@ -99,9 +96,10 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
-        let all_shreds = receiver.recv()?;
+        let all_shreds = receiver.lock().unwrap().recv()?;
         blocktree
-            .insert_shreds(all_shreds, None, true)
+            .insert_shreds(all_shreds.to_vec(), None, true)
             .expect("Failed to insert shreds in blocktree");
+        Ok(())
     }
 }
