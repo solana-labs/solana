@@ -1703,7 +1703,7 @@ pub struct Sockets {
     pub tvu_forwards: Vec<UdpSocket>,
     pub tpu: Vec<UdpSocket>,
     pub tpu_forwards: Vec<UdpSocket>,
-    pub broadcast: UdpSocket,
+    pub broadcast: Vec<UdpSocket>,
     pub repair: UdpSocket,
     pub retransmit_sockets: Vec<UdpSocket>,
     pub storage: Option<UdpSocket>,
@@ -1728,7 +1728,7 @@ impl Node {
         let empty = "0.0.0.0:0".parse().unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
 
-        let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         let info = ContactInfo::new(
             pubkey,
@@ -1774,7 +1774,7 @@ impl Node {
         let rpc_pubsub_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_pubsub_port);
 
-        let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
         let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let storage = UdpSocket::bind("0.0.0.0:0").unwrap();
         let info = ContactInfo::new(
@@ -1845,7 +1845,7 @@ impl Node {
             multi_bind_in_range(port_range, 8).expect("retransmit multi_bind");
 
         let (repair_port, repair) = Self::bind(port_range);
-        let (_, broadcast) = Self::bind(port_range);
+        let (_, broadcast) = multi_bind_in_range(port_range, 4).expect("broadcast multi_bind");
 
         let info = ContactInfo::new(
             pubkey,

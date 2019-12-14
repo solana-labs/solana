@@ -18,12 +18,12 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
+pub const NUM_INSERT_THREADS: usize = 2;
+
 mod broadcast_fake_shreds_run;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
-
-pub const NUM_THREADS: u32 = 2;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -40,7 +40,7 @@ pub enum BroadcastStageType {
 impl BroadcastStageType {
     pub fn new_broadcast_stage(
         &self,
-        sock: UdpSocket,
+        sock: Vec<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
@@ -173,14 +173,14 @@ impl BroadcastStage {
     /// completing the cycle.
     #[allow(clippy::too_many_arguments)]
     fn new(
-        sock: UdpSocket,
+        socks: Vec<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
     ) -> Self {
-        let blocktree = blocktree.clone();
+        let btree = blocktree.clone();
         let exit = exit_sender.clone();
         let (socket_sender, socket_receiver) = channel();
         let (blocktree_sender, blocktree_receiver) = channel();
@@ -190,7 +190,7 @@ impl BroadcastStage {
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit);
                 Self::run(
-                    &blocktree,
+                    &btree,
                     &receiver,
                     &socket_sender,
                     &blocktree_sender,
@@ -200,7 +200,7 @@ impl BroadcastStage {
             .unwrap();
         let mut thread_hdls = vec![thread_hdl];
         let socket_receiver = Arc::new(Mutex::new(socket_receiver));
-        for _ in 0..NUM_THREADS {
+        for sock in socks.into_iter() {
             let socket_receiver = socket_receiver.clone();
             let bs_transmit = broadcast_stage_run.clone();
             let cluster_info = cluster_info.clone();
@@ -217,14 +217,14 @@ impl BroadcastStage {
             thread_hdls.push(t);
         }
         let blocktree_receiver = Arc::new(Mutex::new(blocktree_receiver));
-        for _ in 0..NUM_THREADS {
+        for _ in 0..NUM_INSERT_THREADS {
             let blocktree_receiver = blocktree_receiver.clone();
             let bs_record = broadcast_stage_run.clone();
-            let blocktree = blocktree.clone();
+            let btree = blocktree.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-record".to_string())
                 .spawn(move || loop {
-                    let res = bs_record.record(&blocktree_receiver, &blocktree);
+                    let res = bs_record.record(&blocktree_receiver, &btree);
                     let res = Self::handle_error(res);
                     if res.is_some() {
                         return res.unwrap();
