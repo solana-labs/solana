@@ -1222,37 +1222,36 @@ impl Blocktree {
     }
 
     fn get_timestamp_slots(&self, slot: Slot, timestamp_interval: u64) -> Vec<Slot> {
-        if self.is_root(slot) {
-            if let Ok(iter) = RootedSlotIterator::new(0, &self) {
-                let slots: Vec<Slot> = iter
-                    .map(|(slot, _)| slot)
-                    .filter(|&iter_slot| iter_slot <= slot)
-                    .collect();
-
-                if slots.len() < TIMESTAMP_SLOT_RANGE {
-                    return slots;
-                }
-
-                let recent_timestamp_slot_position = slots
-                    .iter()
-                    .position(|&x| x >= slot - (slot % timestamp_interval))
-                    .unwrap();
-
-                let filtered_iter = if slots.len() - TIMESTAMP_SLOT_RANGE
-                    >= recent_timestamp_slot_position
-                {
-                    slots.iter().skip(recent_timestamp_slot_position)
-                } else {
-                    let earlier_timestamp_slot_position = slots
-                        .iter()
-                        .position(|&x| x >= slot - (slot % timestamp_interval) - timestamp_interval)
-                        .unwrap();
-                    slots.iter().skip(earlier_timestamp_slot_position)
-                };
-                return filtered_iter.take(TIMESTAMP_SLOT_RANGE).cloned().collect();
-            }
+        let rooted_slots = RootedSlotIterator::new(0, &self);
+        if !self.is_root(slot) || rooted_slots.is_err() {
+            return vec![];
         }
-        vec![]
+        let slots: Vec<Slot> = rooted_slots
+            .unwrap()
+            .map(|(iter_slot, _)| iter_slot)
+            .filter(|&iter_slot| iter_slot <= slot)
+            .collect();
+
+        if slots.len() < TIMESTAMP_SLOT_RANGE {
+            return slots;
+        }
+
+        let recent_timestamp_slot_position = slots
+            .iter()
+            .position(|&x| x >= slot - (slot % timestamp_interval))
+            .unwrap();
+
+        let filtered_iter = if slots.len() - TIMESTAMP_SLOT_RANGE >= recent_timestamp_slot_position
+        {
+            slots.iter().skip(recent_timestamp_slot_position)
+        } else {
+            let earlier_timestamp_slot_position = slots
+                .iter()
+                .position(|&x| x >= slot - (slot % timestamp_interval) - timestamp_interval)
+                .unwrap();
+            slots.iter().skip(earlier_timestamp_slot_position)
+        };
+        filtered_iter.take(TIMESTAMP_SLOT_RANGE).cloned().collect()
     }
 
     pub fn get_confirmed_block(&self, slot: Slot) -> Result<RpcConfirmedBlock> {
