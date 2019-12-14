@@ -47,9 +47,9 @@ impl BroadcastStageType {
         blocktree: &Arc<Blocktree>,
         shred_version: u16,
     ) -> BroadcastStage {
+        let keypair = cluster_info.read().unwrap().keypair.clone();
         match self {
             BroadcastStageType::Standard => {
-                let keypair = cluster_info.read().unwrap().keypair.clone();
                 BroadcastStage::new(
                     sock,
                     cluster_info,
@@ -66,7 +66,7 @@ impl BroadcastStageType {
                 receiver,
                 exit_sender,
                 blocktree,
-                FailEntryVerificationBroadcastRun::new(shred_version),
+                FailEntryVerificationBroadcastRun::new(keypair, shred_version),
             ),
 
             BroadcastStageType::BroadcastFakeShreds => BroadcastStage::new(
@@ -75,7 +75,7 @@ impl BroadcastStageType {
                 receiver,
                 exit_sender,
                 blocktree,
-                BroadcastFakeShredsRun::new(0, shred_version),
+                BroadcastFakeShredsRun::new(keypair, 0, shred_version),
             ),
         }
     }
@@ -87,7 +87,7 @@ trait BroadcastRun {
         blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
-        blocktree_sender: &Receiver<Arc<Vec<Shred>>>,
+        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()>;
     fn transmit(
         &self,
@@ -127,14 +127,14 @@ pub struct BroadcastStage {
 impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn run(
-        sock: &UdpSocket,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntry>,
         blocktree: &Arc<Blocktree>,
+        receiver: &Receiver<WorkingBankEntry>,
+        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
-            if let Err(e) = broadcast_stage_run.run(&cluster_info, receiver, sock, blocktree) {
+            if let Err(e) = broadcast_stage_run.run(blocktree, receiver, socket_sender, blocktree_sender) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
                         return BroadcastStageReturnType::ChannelDisconnected;

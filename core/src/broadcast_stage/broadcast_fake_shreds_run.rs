@@ -12,8 +12,7 @@ pub(super) struct BroadcastFakeShredsRun {
 }
 
 impl BroadcastFakeShredsRun {
-    //let keypair = &cluster_info.read().unwrap().keypair.clone();
-    pub(super) fn new(keypair: Keypair, partition: usize, shred_version: u16) -> Self {
+    pub(super) fn new(keypair: Arc<Keypair>, partition: usize, shred_version: u16) -> Self {
         Self {
             last_blockhash: Hash::default(),
             partition,
@@ -29,7 +28,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
-        blocktree_sender: &Receiver<Arc<Vec<Shred>>>,
+        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;

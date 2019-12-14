@@ -282,7 +282,7 @@ impl BroadcastRun for StandardBroadcastRun {
     }
     fn transmit(
         &self,
-        receiver: &Receiver<Arc<Vec<Shred>>>,
+        receiver: &Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {

@@ -1,25 +1,29 @@
 use super::*;
+use solana_sdk::signature::Keypair;
 use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 
 pub(super) struct FailEntryVerificationBroadcastRun {
     shred_version: u16,
+    keypair: Arc<Keypair>,
 }
 
 impl FailEntryVerificationBroadcastRun {
-    pub(super) fn new(shred_version: u16) -> Self {
-        Self { shred_version }
+    //let keypair = cluster_info.read().unwrap().keypair.clone();
+    pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
+        Self { shred_version, keypair }
     }
 }
 
 impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntry>,
-        sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
+        receiver: &Receiver<WorkingBankEntry>,
+        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
+
         // 1) Pull entries from banking stage
         let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
@@ -32,7 +36,6 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             last_entry.hash = Hash::default();
         }
 
-        let keypair = cluster_info.read().unwrap().keypair.clone();
         let next_shred_index = blocktree
             .meta(bank.slot())
             .expect("Database error")
@@ -43,7 +46,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             bank.slot(),
             bank.parent().unwrap().slot(),
             RECOMMENDED_FEC_RATE,
-            keypair.clone(),
+            self.keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
             self.shred_version,
         )
@@ -60,11 +63,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             .cloned()
             .chain(coding_shreds.iter().cloned())
             .collect::<Vec<_>>();
-        let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
-        blocktree
-            .insert_shreds(all_shreds, None, true)
-            .expect("Failed to insert shreds in blocktree");
-
+        blocktree_sender.send(all_shreds)?;
         // 3) Start broadcast step
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
@@ -75,14 +74,36 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             .map(|s| s.payload)
             .collect();
 
+        socket_sender.send((stakes, all_shred_bufs))?;
+        Ok(())
+    }
+    fn transmit(
+        &self,
+        receiver: &Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        sock: &UdpSocket,
+    ) -> Result<()> {
+        let (stakes, shreds) = receiver.recv()?;
+        let all_seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
         // Broadcast data
         cluster_info.read().unwrap().broadcast_shreds(
             sock,
-            all_shred_bufs,
+            shreds,
             &all_seeds,
             stakes.as_ref(),
         )?;
-
         Ok(())
+    }
+    fn record(
+        &self,
+        receiver: &Receiver<Arc<Vec<Shred>>>,
+        blocktree: &Arc<Blocktree>,
+    ) -> Result<()> {
+        let all_shreds = receiver.recv()?;
+        blocktree
+            .insert_shreds(all_shreds, None, true)
+            .expect("Failed to insert shreds in blocktree");
+
+
     }
 }
