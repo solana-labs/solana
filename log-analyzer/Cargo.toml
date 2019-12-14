@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-log-analyzer"
 description = "The solana cluster network analysis tool"
-version = "0.21.4"
+version = "0.21.5"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -17,8 +17,8 @@ semver = "0.9.0"
 serde = "1.0.102"
 serde_derive = "1.0.102"
 serde_json = "1.0.41"
-solana-clap-utils = { path = "../clap-utils", version = "0.21.4" }
-solana-logger = { path = "../logger", version = "0.21.4" }
+solana-clap-utils = { path = "../clap-utils", version = "0.21.5" }
+solana-logger = { path = "../logger", version = "0.21.5" }
 
 [[bin]]
 name = "solana-log-analyzer"
