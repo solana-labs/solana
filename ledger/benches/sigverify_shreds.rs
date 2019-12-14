@@ -34,6 +34,7 @@ fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
             true,
             1,
             2,
+            0,
         );
         shred.copy_to_packet(p);
     }
@@ -65,6 +66,7 @@ fn bench_sigverify_shreds_sign_cpu(bencher: &mut Bencher) {
             true,
             1,
             2,
+            0,
         );
         shred.copy_to_packet(p);
     }
