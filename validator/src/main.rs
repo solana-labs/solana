@@ -761,11 +761,11 @@ pub fn main() {
     };
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
-        let udp_sockets = [
-            &node.sockets.gossip,
-            &node.sockets.broadcast,
-            &node.sockets.repair,
-        ];
+        let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
+        node.sockets
+            .broadcast
+            .iter()
+            .for_each(|s| udp_sockets.push(s));
 
         let mut tcp_listeners: Vec<(_, _)> = tcp_ports
             .iter()
