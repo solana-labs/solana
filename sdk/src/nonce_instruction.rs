@@ -42,6 +42,7 @@ pub enum NonceInstruction {
     ///     0 - A NonceAccount
     ///     1 - RecentBlockhashes sysvar
     ///
+    /// The current authority must sign a transaction executing this instrucion
     Nonce,
 
     /// `Withdraw` transfers funds out of the nonce account
@@ -54,6 +55,8 @@ pub enum NonceInstruction {
     ///
     /// The `u64` parameter is the lamports to withdraw, which must leave the
     /// account balance above the rent exempt reserve or at zero.
+    ///
+    /// The current authority must sign a transaction executing this instruction
     Withdraw(u64),
 
     /// `Initialize` drives state of Uninitalized NonceAccount to Initialized,
@@ -66,6 +69,9 @@ pub enum NonceInstruction {
     ///
     /// The `Pubkey` parameter specifies the entity authorized to execute nonce
     /// instruction on the account
+    ///
+    /// No signatures are required to execute this instruction, enabling derived
+    /// nonce account addresses
     Initialize(Pubkey),
 
     /// `Authorize` changes the entity authorized to execute nonce instructions
