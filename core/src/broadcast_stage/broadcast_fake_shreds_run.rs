@@ -1,8 +1,8 @@
 use super::*;
 use solana_ledger::entry::Entry;
-use solana_sdk::signature::Keypair;
 use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
+use solana_sdk::signature::Keypair;
 
 pub(super) struct BroadcastFakeShredsRun {
     last_blockhash: Hash,
@@ -95,7 +95,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     }
     fn transmit(
         &self,
-        receiver: &Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        receiver: &Arc<Mutex<Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {
@@ -104,31 +104,26 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             peers.iter().enumerate().for_each(|(i, peer)| {
                 if i <= self.partition && stakes.is_some() {
                     // Send fake shreds to the first N peers
-                    data_shreds
-                        .iter()
-                        .for_each(|b| {
-                            sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
-                        });
+                    data_shreds.iter().for_each(|b| {
+                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                    });
                 } else if i > self.partition && stakes.is_none() {
-                    data_shreds
-                        .iter()
-                        .for_each(|b| {
-                            sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
-                        });
+                    data_shreds.iter().for_each(|b| {
+                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                    });
                 }
             });
         }
     }
     fn record(
         &self,
-        receiver: &Receiver<Arc<Vec<Shred>>>,
+        receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         for data_shreds in receiver.iter() {
             blocktree.insert_shreds(data_shreds, None, true)?;
         }
     }
-
 }
 
 #[cfg(test)]

@@ -275,26 +275,26 @@ impl BroadcastRun for StandardBroadcastRun {
         blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
-        blocktree_sender: &Receiver<Arc<Vec<Shred>>>,
+        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         self.process_receive_results(blocktree, socket_sender, blocktree_sender, receive_results)
     }
     fn transmit(
         &self,
-        receiver: &Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        receiver: &Arc<Mutex<Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {
-        let (stakes, shreds) = receiver.recv()?;
+        let (stakes, shreds) = receiver.lock().unwrap().recv()?;
         self.broadcast(cluster_info, sock, stakes, shreds);
     }
     fn record(
         &self,
-        receiver: &Receiver<Arc<Vec<Shred>>>,
+        receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
-        let (stakes, shreds) = receiver.recv()?;
+        let (stakes, shreds) = receiver.lock().unwrap().recv()?;
         self.insert(blocktree, shreds);
     }
 }

@@ -1,7 +1,7 @@
 use super::*;
-use solana_sdk::signature::Keypair;
 use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
+use solana_sdk::signature::Keypair;
 
 pub(super) struct FailEntryVerificationBroadcastRun {
     shred_version: u16,
@@ -11,7 +11,10 @@ pub(super) struct FailEntryVerificationBroadcastRun {
 impl FailEntryVerificationBroadcastRun {
     //let keypair = cluster_info.read().unwrap().keypair.clone();
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
-        Self { shred_version, keypair }
+        Self {
+            shred_version,
+            keypair,
+        }
     }
 }
 
@@ -23,7 +26,6 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
         blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
-
         // 1) Pull entries from banking stage
         let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
@@ -79,31 +81,27 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     }
     fn transmit(
         &self,
-        receiver: &Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        receiver: &Arc<Mutex<Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {
         let (stakes, shreds) = receiver.recv()?;
         let all_seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
         // Broadcast data
-        cluster_info.read().unwrap().broadcast_shreds(
-            sock,
-            shreds,
-            &all_seeds,
-            stakes.as_ref(),
-        )?;
+        cluster_info
+            .read()
+            .unwrap()
+            .broadcast_shreds(sock, shreds, &all_seeds, stakes.as_ref())?;
         Ok(())
     }
     fn record(
         &self,
-        receiver: &Receiver<Arc<Vec<Shred>>>,
+        receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         let all_shreds = receiver.recv()?;
         blocktree
             .insert_shreds(all_shreds, None, true)
             .expect("Failed to insert shreds in blocktree");
-
-
     }
 }

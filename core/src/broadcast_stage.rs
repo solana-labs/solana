@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
@@ -23,7 +23,7 @@ pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
 
-pub const NUM_THREADS: u32 = 10;
+pub const NUM_THREADS: u32 = 2;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -49,16 +49,14 @@ impl BroadcastStageType {
     ) -> BroadcastStage {
         let keypair = cluster_info.read().unwrap().keypair.clone();
         match self {
-            BroadcastStageType::Standard => {
-                BroadcastStage::new(
-                    sock,
-                    cluster_info,
-                    receiver,
-                    exit_sender,
-                    blocktree,
-                    StandardBroadcastRun::new(keypair, shred_version),
-                )
-            }
+            BroadcastStageType::Standard => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                exit_sender,
+                blocktree,
+                StandardBroadcastRun::new(keypair, shred_version),
+            ),
 
             BroadcastStageType::FailEntryVerification => BroadcastStage::new(
                 sock,
@@ -91,13 +89,13 @@ trait BroadcastRun {
     ) -> Result<()>;
     fn transmit(
         &self,
-        receiver: &Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        receiver: &Arc<Mutex<Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()>;
     fn record(
         &self,
-        receiver: &Receiver<Arc<Vec<Shred>>>,
+        receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()>;
 }
@@ -121,7 +119,7 @@ impl Drop for Finalizer {
 }
 
 pub struct BroadcastStage {
-    thread_hdl: JoinHandle<BroadcastStageReturnType>,
+    thread_hdls: Vec<JoinHandle<BroadcastStageReturnType>>,
 }
 
 impl BroadcastStage {
@@ -134,20 +132,28 @@ impl BroadcastStage {
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
-            if let Err(e) = broadcast_stage_run.run(blocktree, receiver, socket_sender, blocktree_sender) {
-                match e {
-                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
-                        return BroadcastStageReturnType::ChannelDisconnected;
-                    }
-                    Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
-                    _ => {
-                        inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
-                        error!("broadcaster error: {:?}", e);
-                    }
+            let res = broadcast_stage_run.run(blocktree, receiver, socket_sender, blocktree_sender);
+            let res = Self::handle_error(res);
+            if res.is_some() {
+                return res.unwrap();
+            }
+        }
+    }
+    fn handle_error(r: Result<()>) -> Option<BroadcastStageReturnType> {
+        if let Err(e) = r {
+            match e {
+                Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
+                    return Some(BroadcastStageReturnType::ChannelDisconnected);
+                }
+                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
+                _ => {
+                    inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
+                    error!("broadcaster error: {:?}", e);
                 }
             }
         }
+        None
     }
 
     /// Service to broadcast messages from the leader to layer 1 nodes.
@@ -176,39 +182,53 @@ impl BroadcastStage {
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit = exit_sender.clone();
-        let (transmit_sender, transmit_receiver) = channel();
-        let (record_sender, record_receiver) = channel();
+        let (socket_sender, socket_receiver) = channel();
+        let (blocktree_sender, blocktree_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit);
                 Self::run(
-                    &transmit_sender,
-                    &cluster_info,
+                    &blocktree,
                     &receiver,
-                    &record_sender,
+                    &socket_sender,
+                    &blocktree_sender,
                     broadcast_stage_run,
                 )
             })
             .unwrap();
         let mut thread_hdls = vec![thread_hdl];
         let exit = exit_sender.clone();
+        let socket_receiver = Arc::new(Mutex::new(socket_receiver));
         for _ in 0..NUM_THREADS {
+            let socket_receiver = socket_receiver.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-transmit".to_string())
                 .spawn(move || loop {
-                    broadcast_stage_run.transmit()?;
+                    let res = broadcast_stage_run.transmit(&socket_receiver, &cluster_info, &sock);
+                    let res = Self::handle_error(res);
+                    if res.is_some() {
+                        return res.unwrap();
+                    }
                 })
                 .unwrap();
-            thread_hdls.append(t);
+            thread_hdls.push(t);
         }
-        let t = Builder::new()
-            .name("solana-broadcaster-record".to_string())
-            .spawn(move || loop {
-                broadcast_stage_run.record()?;
-            })
-            .unwrap();
-        thread_hdls.append(t);
+        let blocktree_receiver = Arc::new(Mutex::new(blocktree_receiver));
+        for _ in 0..NUM_THREADS {
+            let blocktree_receiver = blocktree_receiver.clone();
+            let t = Builder::new()
+                .name("solana-broadcaster-record".to_string())
+                .spawn(move || loop {
+                    let res = broadcast_stage_run.record(&blocktree_receiver, &blocktree);
+                    let res = Self::handle_error(res);
+                    if res.is_some() {
+                        return res.unwrap();
+                    }
+                })
+                .unwrap();
+            thread_hdls.push(t);
+        }
 
         Self { thread_hdls }
     }
@@ -217,6 +237,7 @@ impl BroadcastStage {
         for thread_hdl in self.thread_hdls.into_iter() {
             thread_hdl.join();
         }
+        return Ok(BroadcastStageReturnType::ChannelDisconnected);
     }
 }
 
