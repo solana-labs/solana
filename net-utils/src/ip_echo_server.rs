@@ -15,8 +15,8 @@ pub type IpEchoServer = Runtime;
 
 #[derive(Serialize, Deserialize, Default)]
 pub(crate) struct IpEchoServerMessage {
-    tcp_ports: [u16; 4], // Fixed size list of ports to avoid vec serde
-    udp_ports: [u16; 4], // Fixed size list of ports to avoid vec serde
+    tcp_ports: [u16; 8], // Fixed size list of ports to avoid vec serde
+    udp_ports: [u16; 8], // Fixed size list of ports to avoid vec serde
 }
 
 impl IpEchoServerMessage {
