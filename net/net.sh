@@ -893,8 +893,8 @@ stopNode() {
         rm -f solana/netem.cfg
       fi
       solana/scripts/net-shaper.sh force_cleanup
-      for pattern in node solana- remote-; do
-        pkill -9 \$pattern
+      for pattern in solana- remote- iftop validator client node; do
+        pkill -9 -f \$pattern
       done
     "
   ) >> "$logFile" 2>&1 &
