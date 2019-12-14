@@ -13,7 +13,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
@@ -79,17 +79,18 @@ impl BroadcastStageType {
     }
 }
 
+type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
 trait BroadcastRun {
     fn run(
         &mut self,
         blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        socket_sender: &Sender<TransmitShreds>,
         blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()>;
     fn transmit(
         &self,
-        receiver: &Arc<Mutex<Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>>>,
+        receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()>;
@@ -127,22 +128,24 @@ impl BroadcastStage {
     fn run(
         blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        socket_sender: &Sender<TransmitShreds>,
         blocktree_sender: &Sender<Arc<Vec<Shred>>>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
             let res = broadcast_stage_run.run(blocktree, receiver, socket_sender, blocktree_sender);
             let res = Self::handle_error(res);
-            if res.is_some() {
-                return res.unwrap();
+            if let Some(res) = res {
+                return res;
             }
         }
     }
     fn handle_error(r: Result<()>) -> Option<BroadcastStageReturnType> {
         if let Err(e) = r {
             match e {
-                Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
+                Error::RecvTimeoutError(RecvTimeoutError::Disconnected)
+                | Error::SendError
+                | Error::RecvError(RecvError) => {
                     return Some(BroadcastStageReturnType::ChannelDisconnected);
                 }
                 Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -203,8 +206,8 @@ impl BroadcastStage {
                 .spawn(move || loop {
                     let res = bs_transmit.transmit(&socket_receiver, &cluster_info, &sock);
                     let res = Self::handle_error(res);
-                    if res.is_some() {
-                        return res.unwrap();
+                    if let Some(res) = res {
+                        return res;
                     }
                 })
                 .unwrap();
@@ -220,8 +223,8 @@ impl BroadcastStage {
                 .spawn(move || loop {
                     let res = bs_record.record(&blocktree_receiver, &btree);
                     let res = Self::handle_error(res);
-                    if res.is_some() {
-                        return res.unwrap();
+                    if let Some(res) = res {
+                        return res;
                     }
                 })
                 .unwrap();
@@ -235,7 +238,7 @@ impl BroadcastStage {
         for thread_hdl in self.thread_hdls.into_iter() {
             let _ = thread_hdl.join();
         }
-        return Ok(BroadcastStageReturnType::ChannelDisconnected);
+        Ok(BroadcastStageReturnType::ChannelDisconnected)
     }
 }
 

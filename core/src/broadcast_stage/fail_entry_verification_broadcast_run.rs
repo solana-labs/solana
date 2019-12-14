@@ -24,7 +24,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         &mut self,
         blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        socket_sender: &Sender<TransmitShreds>,
         blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
@@ -67,14 +67,14 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        let stakes = stakes.map(|s| Arc::new(s));
+        let stakes = stakes.map(Arc::new);
         socket_sender.send((stakes.clone(), data_shreds))?;
         socket_sender.send((stakes, Arc::new(coding_shreds)))?;
         Ok(())
     }
     fn transmit(
         &self,
-        receiver: &Arc<Mutex<Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>>>,
+        receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {

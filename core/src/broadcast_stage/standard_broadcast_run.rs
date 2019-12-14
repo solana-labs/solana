@@ -128,7 +128,7 @@ impl StandardBroadcastRun {
     fn process_receive_results(
         &mut self,
         blocktree: &Arc<Blocktree>,
-        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        socket_sender: &Sender<TransmitShreds>,
         blocktree_sender: &Sender<Arc<Vec<Shred>>>,
         receive_results: ReceiveResults,
     ) -> Result<()> {
@@ -169,7 +169,7 @@ impl StandardBroadcastRun {
 
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
-        let stakes = stakes.map(|s| Arc::new(s));
+        let stakes = stakes.map(Arc::new);
         let data_shreds = Arc::new(data_shreds);
         socket_sender.send((stakes.clone(), data_shreds.clone()))?;
         let coding_shreds = Arc::new(coding_shreds);
@@ -275,7 +275,7 @@ impl BroadcastRun for StandardBroadcastRun {
         &mut self,
         blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        socket_sender: &Sender<TransmitShreds>,
         blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
@@ -283,7 +283,7 @@ impl BroadcastRun for StandardBroadcastRun {
     }
     fn transmit(
         &self,
-        receiver: &Arc<Mutex<Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>>>,
+        receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {

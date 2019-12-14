@@ -28,7 +28,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         &mut self,
         blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        socket_sender: &Sender<TransmitShreds>,
         blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
@@ -97,7 +97,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     }
     fn transmit(
         &self,
-        receiver: &Arc<Mutex<Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>>>,
+        receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {
