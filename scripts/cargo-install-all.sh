@@ -83,6 +83,7 @@ BINS=(
   solana-net-shaper
   solana-archiver
   solana-validator
+  solana-watchtower
 )
 
 #XXX: Ensure `solana-genesis` is built LAST!
