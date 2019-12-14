@@ -526,7 +526,11 @@ impl ClusterInfo {
             .map(|(i, c)| {
                 // For stake weighted shuffle a valid weight is atleast 1. Weight 0 is
                 // assumed to be missing entry. So let's make sure stake weights are atleast 1
-                let stake = 1.max(stakes.map_or(1, |stakes| *stakes.get(&c.id).unwrap_or(&1)));
+                let stake = 1.max(
+                    stakes
+                        .as_ref()
+                        .map_or(1, |stakes| *stakes.get(&c.id).unwrap_or(&1)),
+                );
                 (stake, i)
             })
             .sorted_by(|(l_stake, l_info), (r_stake, r_info)| {

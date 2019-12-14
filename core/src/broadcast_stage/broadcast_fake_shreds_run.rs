@@ -83,15 +83,15 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         }
 
         let data_shreds = Arc::new(data_shreds);
-        blocktree_sender.send(data_shreds.clone());
+        blocktree_sender.send(data_shreds.clone())?;
 
         // 3) Start broadcast step
         //some indicates fake shreds
-        socket_sender.send((Some(Arc::new(HashMap::new())), Arc::new(fake_data_shreds)));
-        socket_sender.send((Some(Arc::new(HashMap::new())), Arc::new(fake_coding_shreds)));
+        socket_sender.send((Some(Arc::new(HashMap::new())), Arc::new(fake_data_shreds)))?;
+        socket_sender.send((Some(Arc::new(HashMap::new())), Arc::new(fake_coding_shreds)))?;
         //none indicates real shreds
-        socket_sender.send((None, data_shreds));
-        socket_sender.send((None, Arc::new(coding_shreds)));
+        socket_sender.send((None, data_shreds))?;
+        socket_sender.send((None, Arc::new(coding_shreds)))?;
 
         Ok(())
     }

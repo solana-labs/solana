@@ -62,13 +62,13 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         );
 
         let data_shreds = Arc::new(data_shreds);
-        blocktree_sender.send(data_shreds.clone());
+        blocktree_sender.send(data_shreds.clone())?;
         // 3) Start broadcast step
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
         let stakes = stakes.map(|s| Arc::new(s));
-        socket_sender.send((stakes, data_shreds))?;
+        socket_sender.send((stakes.clone(), data_shreds))?;
         socket_sender.send((stakes, Arc::new(coding_shreds)))?;
         Ok(())
     }
@@ -81,10 +81,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let (stakes, shreds) = receiver.lock().unwrap().recv()?;
         let all_seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
         // Broadcast data
-        let all_shred_bufs: Vec<Vec<u8>> = shreds
-            .into_iter()
-            .map(|s| s.payload)
-            .collect();
+        let all_shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
         cluster_info
             .read()
             .unwrap()

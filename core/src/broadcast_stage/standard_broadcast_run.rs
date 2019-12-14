@@ -171,10 +171,10 @@ impl StandardBroadcastRun {
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
         let stakes = stakes.map(|s| Arc::new(s));
         let data_shreds = Arc::new(data_shreds);
-        socket_sender.send((stakes.clone(), data_shreds.clone()));
+        socket_sender.send((stakes.clone(), data_shreds.clone()))?;
         let coding_shreds = Arc::new(coding_shreds);
-        socket_sender.send((stakes, coding_shreds));
-        blocktree_sender.send(data_shreds);
+        socket_sender.send((stakes, coding_shreds))?;
+        blocktree_sender.send(data_shreds)?;
         self.update_broadcast_stats(BroadcastStats {
             shredding_elapsed: duration_as_us(&to_shreds_elapsed),
             receive_elapsed: duration_as_us(&receive_elapsed),
@@ -216,7 +216,7 @@ impl StandardBroadcastRun {
 
         // Broadcast the shreds
         let broadcast_start = Instant::now();
-        let shred_bufs: Vec<Vec<u8>> = shreds.into_iter().map(|s| s.payload).collect();
+        let shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
         trace!("Broadcasting {:?} shreds", shred_bufs.len());
 
         cluster_info
@@ -235,7 +235,7 @@ impl StandardBroadcastRun {
     }
 
     fn update_broadcast_stats(&self, stats: BroadcastStats) {
-        let wstats = self.stats.write().unwrap();
+        let mut wstats = self.stats.write().unwrap();
         wstats.receive_elapsed += stats.receive_elapsed;
         wstats.shredding_elapsed += stats.shredding_elapsed;
         wstats.insert_shreds_elapsed += stats.insert_shreds_elapsed;
@@ -250,11 +250,7 @@ impl StandardBroadcastRun {
             "broadcast-bank-stats",
             ("slot", self.unfinished_slot.unwrap().slot as i64, i64),
             ("shredding_time", stats.shredding_elapsed as i64, i64),
-            (
-                "insertion_time",
-                stats.insert_shreds_elapsed as i64,
-                i64
-            ),
+            ("insertion_time", stats.insert_shreds_elapsed as i64, i64),
             ("broadcast_time", stats.broadcast_elapsed as i64, i64),
             ("receive_time", stats.receive_elapsed as i64, i64),
             ("seed", stats.seed_elapsed as i64, i64),

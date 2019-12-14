@@ -189,13 +189,7 @@ impl BroadcastStage {
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit);
-                Self::run(
-                    &btree,
-                    &receiver,
-                    &socket_sender,
-                    &blocktree_sender,
-                    bs_run,
-                )
+                Self::run(&btree, &receiver, &socket_sender, &blocktree_sender, bs_run)
             })
             .unwrap();
         let mut thread_hdls = vec![thread_hdl];
@@ -239,7 +233,7 @@ impl BroadcastStage {
 
     pub fn join(self) -> thread::Result<BroadcastStageReturnType> {
         for thread_hdl in self.thread_hdls.into_iter() {
-            thread_hdl.join();
+            let _ = thread_hdl.join();
         }
         return Ok(BroadcastStageReturnType::ChannelDisconnected);
     }
