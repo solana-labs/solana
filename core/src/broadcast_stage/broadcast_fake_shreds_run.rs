@@ -1,5 +1,6 @@
 use super::*;
 use solana_ledger::entry::Entry;
+use solana_sdk::signature::Keypair;
 use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
 
@@ -7,14 +8,17 @@ pub(super) struct BroadcastFakeShredsRun {
     last_blockhash: Hash,
     partition: usize,
     shred_version: u16,
+    keypair: Arc<Keypair>,
 }
 
 impl BroadcastFakeShredsRun {
-    pub(super) fn new(partition: usize, shred_version: u16) -> Self {
+    //let keypair = &cluster_info.read().unwrap().keypair.clone();
+    pub(super) fn new(keypair: Keypair, partition: usize, shred_version: u16) -> Self {
         Self {
             last_blockhash: Hash::default(),
             partition,
             shred_version,
+            keypair,
         }
     }
 }
@@ -22,17 +26,16 @@ impl BroadcastFakeShredsRun {
 impl BroadcastRun for BroadcastFakeShredsRun {
     fn run(
         &mut self,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntry>,
-        sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
+        receiver: &Receiver<WorkingBankEntry>,
+        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        blocktree_sender: &Receiver<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 
-        let keypair = &cluster_info.read().unwrap().keypair.clone();
         let next_shred_index = blocktree
             .meta(bank.slot())
             .expect("Database error")
@@ -45,7 +48,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             bank.slot(),
             bank.parent().unwrap().slot(),
             RECOMMENDED_FEC_RATE,
-            keypair.clone(),
+            self.keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
             self.shred_version,
         )
@@ -79,31 +82,54 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             self.last_blockhash = Hash::default();
         }
 
-        blocktree.insert_shreds(data_shreds.clone(), None, true)?;
+        blocktree_sender.send(data_shreds.clone());
 
         // 3) Start broadcast step
-        let peers = cluster_info.read().unwrap().tvu_peers();
-        peers.iter().enumerate().for_each(|(i, peer)| {
-            if i <= self.partition {
-                // Send fake shreds to the first N peers
-                fake_data_shreds
-                    .iter()
-                    .chain(fake_coding_shreds.iter())
-                    .for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
-                    });
-            } else {
-                data_shreds
-                    .iter()
-                    .chain(coding_shreds.iter())
-                    .for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
-                    });
-            }
-        });
+        //some indicates fake shreds
+        socket_sender.send((Some(HashMap::new()), fake_data_shreds));
+        socket_sender.send((Some(HashMap::new()), fake_coding_shreds));
+        //none indicates real shreds
+        socket_sender.send((None, data_shreds));
+        socket_sender.send((None, coding_shreds));
 
         Ok(())
     }
+    fn transmit(
+        &self,
+        receiver: &Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        sock: &UdpSocket,
+    ) -> Result<()> {
+        for (stakes, data_shreds) in receiver.iter() {
+            let peers = cluster_info.read().unwrap().tvu_peers();
+            peers.iter().enumerate().for_each(|(i, peer)| {
+                if i <= self.partition && stakes.is_some() {
+                    // Send fake shreds to the first N peers
+                    data_shreds
+                        .iter()
+                        .for_each(|b| {
+                            sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                        });
+                } else if i > self.partition && stakes.is_none() {
+                    data_shreds
+                        .iter()
+                        .for_each(|b| {
+                            sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                        });
+                }
+            });
+        }
+    }
+    fn record(
+        &self,
+        receiver: &Receiver<Arc<Vec<Shred>>>,
+        blocktree: &Arc<Blocktree>,
+    ) -> Result<()> {
+        for data_shreds in receiver.iter() {
+            blocktree.insert_shreds(data_shreds, None, true)?;
+        }
+    }
+
 }
 
 #[cfg(test)]

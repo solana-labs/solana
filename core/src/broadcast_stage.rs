@@ -6,11 +6,14 @@ use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::{Error, Result};
 use solana_ledger::blocktree::Blocktree;
+use solana_ledger::shred::Shred;
 use solana_ledger::staking_utils;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
@@ -81,9 +84,20 @@ impl BroadcastStageType {
 trait BroadcastRun {
     fn run(
         &mut self,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
+        socket_sender: &Sender<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        blocktree_sender: &Receiver<Arc<Vec<Shred>>>,
+    ) -> Result<()>;
+    fn transmit(
+        &self,
+        receiver: &Receiver<(Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>)>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
+    ) -> Result<()>;
+    fn record(
+        &self,
+        receiver: &Receiver<Arc<Vec<Shred>>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()>;
 }
@@ -161,26 +175,48 @@ impl BroadcastStage {
         broadcast_stage_run: impl BroadcastRun + Send + 'static,
     ) -> Self {
         let blocktree = blocktree.clone();
-        let exit_sender = exit_sender.clone();
+        let exit = exit_sender.clone();
+        let (transmit_sender, transmit_receiver) = channel();
+        let (record_sender, record_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
-                let _finalizer = Finalizer::new(exit_sender);
+                let _finalizer = Finalizer::new(exit);
                 Self::run(
-                    &sock,
+                    &transmit_sender,
                     &cluster_info,
                     &receiver,
-                    &blocktree,
+                    &record_sender,
                     broadcast_stage_run,
                 )
             })
             .unwrap();
+        let mut thread_hdls = vec![thread_hdl];
+        let exit = exit_sender.clone();
+        for _ in 0..NUM_THREADS {
+            let t = Builder::new()
+                .name("solana-broadcaster-transmit".to_string())
+                .spawn(move || loop {
+                    broadcast_stage_run.transmit()?;
+                })
+                .unwrap();
+            thread_hdls.append(t);
+        }
+        let t = Builder::new()
+            .name("solana-broadcaster-record".to_string())
+            .spawn(move || loop {
+                broadcast_stage_run.record()?;
+            })
+            .unwrap();
+        thread_hdls.append(t);
 
-        Self { thread_hdl }
+        Self { thread_hdls }
     }
 
     pub fn join(self) -> thread::Result<BroadcastStageReturnType> {
-        self.thread_hdl.join()
+        for thread_hdl in self.thread_hdls.into_iter() {
+            thread_hdl.join();
+        }
     }
 }
 
