@@ -482,7 +482,7 @@ pub fn process_create_stake_account(
     };
     println!("{:?}", authorized);
 
-    let ixs = stake_instruction::create_stake_account_with_lockup(
+    let ixs = stake_instruction::create_account(
         &config.keypair.pubkey(),
         &stake_account_pubkey,
         &authorized,

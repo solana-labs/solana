@@ -32,7 +32,7 @@ use solana_sdk::{
     native_token::lamports_to_sol,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
-    system_instruction::SystemError,
+    system_instruction::{create_address_with_seed, SystemError, MAX_ADDRESS_SEED_LEN},
     system_transaction,
     transaction::{Transaction, TransactionError},
 };
@@ -80,6 +80,11 @@ pub enum CliCommand {
         node_pubkey: Pubkey,
     },
     ClusterVersion,
+    CreateAddressWithSeed {
+        from_pubkey: Option<Pubkey>,
+        seed: String,
+        program_id: Pubkey,
+    },
     Fees,
     GetBlockTime {
         slot: Slot,
@@ -312,6 +317,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             command: CliCommand::ClusterVersion,
             require_keypair: false,
         }),
+        ("create-address-with-seed", Some(matches)) => parse_create_address_with_seed(matches),
         ("fees", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::Fees,
             require_keypair: false,
@@ -417,8 +423,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
                 None
             };
             let lamports = required_lamports_from(matches, "amount", "unit")?;
-            let use_lamports_unit = matches.value_of("unit").is_some()
-                && matches.value_of("unit").unwrap() == "lamports";
+            let use_lamports_unit = matches.value_of("unit") == Some("lamports");
             Ok(CliCommandInfo {
                 command: CliCommand::Airdrop {
                     drone_host,
@@ -629,6 +634,51 @@ pub fn replace_signatures(tx: &mut Transaction, signers: &[(Pubkey, Signature)])
         )
     })?;
     Ok("".to_string())
+}
+
+pub fn parse_create_address_with_seed(
+    matches: &ArgMatches<'_>,
+) -> Result<CliCommandInfo, CliError> {
+    let from_pubkey = pubkey_of(matches, "from");
+
+    let require_keypair = from_pubkey.is_none();
+
+    let program_id = match matches.value_of("program_id").unwrap() {
+        "STAKE" => solana_stake_program::id(),
+        "VOTE" => solana_vote_program::id(),
+        "STORAGE" => solana_storage_program::id(),
+        "NONCE" => solana_sdk::nonce_program::id(),
+        _ => pubkey_of(matches, "program_id").unwrap(),
+    };
+
+    let seed = matches.value_of("seed").unwrap().to_string();
+
+    if seed.len() > MAX_ADDRESS_SEED_LEN {
+        return Err(CliError::BadParameter(
+            "Address seed must not be longer than 32 bytes".to_string(),
+        ));
+    }
+
+    Ok(CliCommandInfo {
+        command: CliCommand::CreateAddressWithSeed {
+            from_pubkey,
+            seed,
+            program_id,
+        },
+        require_keypair,
+    })
+}
+
+fn process_create_address_with_seed(
+    config: &CliConfig,
+    from_pubkey: Option<&Pubkey>,
+    seed: &str,
+    program_id: &Pubkey,
+) -> ProcessResult {
+    let config_pubkey = config.keypair.pubkey();
+    let from_pubkey = from_pubkey.unwrap_or(&config_pubkey);
+    let address = create_address_with_seed(from_pubkey, seed, program_id)?;
+    Ok(address.to_string())
 }
 
 fn process_airdrop(
@@ -1039,6 +1089,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Return software version of solana-cli and cluster entrypoint node
         CliCommand::Catchup { node_pubkey } => process_catchup(&rpc_client, node_pubkey),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
+        CliCommand::CreateAddressWithSeed {
+            from_pubkey,
+            seed,
+            program_id,
+        } => process_create_address_with_seed(config, from_pubkey.as_ref(), &seed, &program_id),
         CliCommand::Fees => process_fees(&rpc_client),
         CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, *slot),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
@@ -1518,18 +1573,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .subcommand(SubCommand::with_name("address").about("Get your public key"))
         .cluster_query_subcommands()
         .nonce_subcommands()
-        .subcommand(
-            SubCommand::with_name("deploy")
-                .about("Deploy a program")
-                .arg(
-                    Arg::with_name("program_location")
-                        .index(1)
-                        .value_name("PATH TO BPF PROGRAM")
-                        .takes_value(true)
-                        .required(true)
-                        .help("/path/to/program.o"),
-                ),
-        )
         .stake_subcommands()
         .storage_subcommands()
         .subcommand(
@@ -1609,6 +1652,50 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(true)
                         .help("The transaction signature to confirm"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("create-address-with-seed")
+                .about("Generate a dervied account address with a seed")
+                .arg(
+                    Arg::with_name("seed")
+                        .index(1)
+                        .value_name("SEED_STRING")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The seed.  Must not take more than 32 bytes to encode as utf-8"),
+                )
+                .arg(
+                    Arg::with_name("program_id")
+                        .index(2)
+                        .value_name("PROGRAM_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .help(
+                            "The program_id that the address will ultimately be used for, \n\
+                             or one of STAKE, VOTE, NONCE, and STORAGE keywords",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("from")
+                        .long("from")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(false)
+                        .validator(is_pubkey_or_keypair)
+                        .help("From (base) key, defaults to client keypair."),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("deploy")
+                .about("Deploy a program")
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(1)
+                        .value_name("PATH TO BPF PROGRAM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/program.o"),
                 ),
         )
         .subcommand(
@@ -1910,6 +1997,53 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
         assert!(parse_command(&test_bad_signature).is_err());
+
+        // Test CreateAddressWithSeed
+        let from_pubkey = Some(Pubkey::new_rand());
+        let from_str = from_pubkey.unwrap().to_string();
+        for (name, program_id) in &[
+            ("STAKE", solana_stake_program::id()),
+            ("VOTE", solana_vote_program::id()),
+            ("NONCE", solana_sdk::nonce_program::id()),
+            ("STORAGE", solana_storage_program::id()),
+        ] {
+            let test_create_address_with_seed = test_commands.clone().get_matches_from(vec![
+                "test",
+                "create-address-with-seed",
+                "seed",
+                name,
+                "--from",
+                &from_str,
+            ]);
+            assert_eq!(
+                parse_command(&test_create_address_with_seed).unwrap(),
+                CliCommandInfo {
+                    command: CliCommand::CreateAddressWithSeed {
+                        from_pubkey,
+                        seed: "seed".to_string(),
+                        program_id: *program_id
+                    },
+                    require_keypair: false
+                }
+            );
+        }
+        let test_create_address_with_seed = test_commands.clone().get_matches_from(vec![
+            "test",
+            "create-address-with-seed",
+            "seed",
+            "STAKE",
+        ]);
+        assert_eq!(
+            parse_command(&test_create_address_with_seed).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::CreateAddressWithSeed {
+                    from_pubkey: None,
+                    seed: "seed".to_string(),
+                    program_id: solana_stake_program::id(),
+                },
+                require_keypair: true
+            }
+        );
 
         // Test Deploy Subcommand
         let test_deploy =

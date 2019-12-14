@@ -115,7 +115,7 @@ pub(crate) mod tests {
     };
     use solana_stake_program::{
         stake_instruction,
-        stake_state::{Authorized, Delegation, Stake},
+        stake_state::{Authorized, Delegation, Lockup, Stake},
     };
     use solana_vote_program::{vote_instruction, vote_state::VoteInit};
     use std::sync::Arc;
@@ -168,11 +168,12 @@ pub(crate) mod tests {
         process_instructions(
             bank,
             &[from_account, &stake_account_keypair],
-            stake_instruction::create_stake_account_and_delegate_stake(
+            stake_instruction::create_account_and_delegate_stake(
                 &from_account.pubkey(),
                 &stake_account_pubkey,
                 &vote_pubkey,
                 &Authorized::auto(&stake_account_pubkey),
+                &Lockup::default(),
                 amount,
             ),
         );

@@ -135,11 +135,12 @@ fn test_stake_account_lifetime() {
 
     let authorized = stake_state::Authorized::auto(&stake_pubkey);
     // Create stake account and delegate to vote account
-    let message = Message::new(stake_instruction::create_stake_account_and_delegate_stake(
+    let message = Message::new(stake_instruction::create_account_and_delegate_stake(
         &mint_pubkey,
         &stake_pubkey,
         &vote_pubkey,
         &authorized,
+        &stake_state::Lockup::default(),
         1_000_000,
     ));
     bank_client

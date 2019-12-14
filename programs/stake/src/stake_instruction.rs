@@ -139,7 +139,28 @@ pub fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Locku
     )
 }
 
-pub fn create_stake_account_with_lockup(
+pub fn create_account_with_seed(
+    from_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
+    seed: &str,
+    authorized: &Authorized,
+    lockup: &Lockup,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account_with_seed(
+            from_pubkey,
+            stake_pubkey,
+            seed,
+            lamports,
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
+        ),
+        initialize(stake_pubkey, authorized, lockup),
+    ]
+}
+
+pub fn create_account(
     from_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
     authorized: &Authorized,
@@ -183,29 +204,15 @@ pub fn split(
     ]
 }
 
-pub fn create_stake_account(
-    from_pubkey: &Pubkey,
-    stake_pubkey: &Pubkey,
-    authorized: &Authorized,
-    lamports: u64,
-) -> Vec<Instruction> {
-    create_stake_account_with_lockup(
-        from_pubkey,
-        stake_pubkey,
-        authorized,
-        &Lockup::default(),
-        lamports,
-    )
-}
-
-pub fn create_stake_account_and_delegate_stake(
+pub fn create_account_and_delegate_stake(
     from_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
     authorized: &Authorized,
+    lockup: &Lockup,
     lamports: u64,
 ) -> Vec<Instruction> {
-    let mut instructions = create_stake_account(from_pubkey, stake_pubkey, authorized, lamports);
+    let mut instructions = create_account(from_pubkey, stake_pubkey, authorized, lockup, lamports);
     instructions.push(delegate_stake(
         stake_pubkey,
         &authorized.staker,

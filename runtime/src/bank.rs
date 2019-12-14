@@ -3991,11 +3991,12 @@ mod tests {
         );
 
         let stake_keypair = Keypair::new();
-        instructions.extend(stake_instruction::create_stake_account_and_delegate_stake(
+        instructions.extend(stake_instruction::create_account_and_delegate_stake(
             &mint_keypair.pubkey(),
             &stake_keypair.pubkey(),
             &vote_keypair.pubkey(),
             &Authorized::auto(&stake_keypair.pubkey()),
+            &Lockup::default(),
             10,
         ));
 
