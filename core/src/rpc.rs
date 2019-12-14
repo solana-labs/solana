@@ -256,10 +256,6 @@ impl JsonRpcRequestProcessor {
                     last_vote,
                 }
             })
-            .filter(|vote_account_info| {
-                // Remove vote accounts with no delegated stake that have never voted
-                vote_account_info.last_vote != 0 || vote_account_info.activated_stake != 0
-            })
             .partition(|vote_account_info| {
                 if bank.slot() >= MAX_LOCKOUT_HISTORY as u64 {
                     vote_account_info.last_vote > bank.slot() - MAX_LOCKOUT_HISTORY as u64
@@ -267,9 +263,15 @@ impl JsonRpcRequestProcessor {
                     vote_account_info.last_vote > 0
                 }
             });
+
+        let delinquent_staked_vote_accounts = delinquent_vote_accounts
+            .into_iter()
+            .filter(|vote_account_info| vote_account_info.activated_stake > 0)
+            .collect::<Vec<_>>();
+
         Ok(RpcVoteAccountStatus {
             current: current_vote_accounts,
-            delinquent: delinquent_vote_accounts,
+            delinquent: delinquent_staked_vote_accounts,
         })
     }
 
@@ -1926,23 +1928,22 @@ pub mod tests {
 
         assert_eq!(bank.vote_accounts().len(), 1);
 
-        // Create a second vote account that has no stake.  It should not be included in the
-        // getVoteAccounts response
-        let vote_keypair = Keypair::new();
+        // Create a vote account with no stake.
+        let alice_vote_keypair = Keypair::new();
         let instructions = vote_instruction::create_account(
             &alice.pubkey(),
-            &vote_keypair.pubkey(),
+            &alice_vote_keypair.pubkey(),
             &VoteInit {
                 node_pubkey: alice.pubkey(),
-                authorized_voter: vote_keypair.pubkey(),
-                authorized_withdrawer: vote_keypair.pubkey(),
+                authorized_voter: alice_vote_keypair.pubkey(),
+                authorized_withdrawer: alice_vote_keypair.pubkey(),
                 commission: 0,
             },
             bank.get_minimum_balance_for_rent_exemption(VoteState::size_of()),
         );
 
         let transaction = Transaction::new_signed_instructions(
-            &[&alice, &vote_keypair],
+            &[&alice, &alice_vote_keypair],
             instructions,
             bank.last_blockhash(),
         );
@@ -1950,19 +1951,49 @@ pub mod tests {
             .expect("process transaction");
         assert_eq!(bank.vote_accounts().len(), 2);
 
+        // Check getVoteAccounts: the bootstrap leader vote account will be delinquent as it has
+        // stake but has never voted, and the vote account with no stake should not be present.
+        {
+            let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts"}}"#);
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+
+            let vote_account_status: RpcVoteAccountStatus =
+                serde_json::from_value(result["result"].clone()).unwrap();
+
+            assert!(vote_account_status.current.is_empty());
+            assert_eq!(vote_account_status.delinquent.len(), 1);
+            for vote_account_info in vote_account_status.delinquent {
+                assert_ne!(vote_account_info.activated_stake, 0);
+            }
+        }
+
         // Advance bank to the next epoch
         for _ in 0..TEST_SLOTS_PER_EPOCH {
             bank.freeze();
 
-            let instruction = vote_instruction::vote(
-                &leader_vote_keypair.pubkey(),
-                &leader_vote_keypair.pubkey(),
-                Vote {
-                    slots: vec![bank.slot()],
-                    hash: bank.hash(),
-                    timestamp: None,
-                },
-            );
+            // Votes
+            let instructions = vec![
+                vote_instruction::vote(
+                    &leader_vote_keypair.pubkey(),
+                    &leader_vote_keypair.pubkey(),
+                    Vote {
+                        slots: vec![bank.slot()],
+                        hash: bank.hash(),
+                        timestamp: None,
+                    },
+                ),
+                vote_instruction::vote(
+                    &alice_vote_keypair.pubkey(),
+                    &alice_vote_keypair.pubkey(),
+                    Vote {
+                        slots: vec![bank.slot()],
+                        hash: bank.hash(),
+                        timestamp: None,
+                    },
+                ),
+            ];
 
             bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
                 &bank,
@@ -1971,9 +2002,9 @@ pub mod tests {
             ));
 
             let transaction = Transaction::new_signed_with_payer(
-                vec![instruction],
+                instructions,
                 Some(&alice.pubkey()),
-                &[&alice, &leader_vote_keypair],
+                &[&alice, &leader_vote_keypair, &alice_vote_keypair],
                 bank.last_blockhash(),
             );
 
@@ -1996,16 +2027,50 @@ pub mod tests {
         // The vote account with no stake should not be present.
         assert!(vote_account_status.delinquent.is_empty());
 
-        // The leader vote account should be active and have voting history.
-        assert_eq!(vote_account_status.current.len(), 1);
-        let leader_info = &vote_account_status.current[0];
-        assert_eq!(
-            leader_info.vote_pubkey,
-            leader_vote_keypair.pubkey().to_string()
-        );
+        // Both accounts should be active and have voting history.
+        assert_eq!(vote_account_status.current.len(), 2);
+        //let leader_info = &vote_account_status.current[0];
+        let leader_info = vote_account_status
+            .current
+            .iter()
+            .find(|x| x.vote_pubkey == leader_vote_keypair.pubkey().to_string())
+            .unwrap();
         assert_ne!(leader_info.activated_stake, 0);
         // Subtract one because the last vote always carries over to the next epoch
         let expected_credits = TEST_SLOTS_PER_EPOCH - MAX_LOCKOUT_HISTORY as u64 - 1;
         assert_eq!(leader_info.epoch_credits, vec![(0, expected_credits, 0)]);
+
+        // Advance bank with no voting
+        bank.freeze();
+        bank_forks.write().unwrap().insert(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            bank.slot() + TEST_SLOTS_PER_EPOCH,
+        ));
+
+        // The leader vote account should now be delinquent, and the other vote account disappears
+        // because it's inactive with no stake
+        {
+            let req = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts","params":{}}}"#,
+                json!([CommitmentConfig::recent()])
+            );
+
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+
+            let vote_account_status: RpcVoteAccountStatus =
+                serde_json::from_value(result["result"].clone()).unwrap();
+
+            assert!(vote_account_status.current.is_empty());
+            assert_eq!(vote_account_status.delinquent.len(), 1);
+            for vote_account_info in vote_account_status.delinquent {
+                assert_eq!(
+                    vote_account_info.vote_pubkey,
+                    leader_vote_keypair.pubkey().to_string()
+                );
+            }
+        }
     }
 }
