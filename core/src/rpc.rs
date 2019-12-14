@@ -33,6 +33,7 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
+    collections::HashMap,
     net::{SocketAddr, UdpSocket},
     sync::{Arc, RwLock},
     thread::sleep,
@@ -313,19 +314,19 @@ impl JsonRpcRequestProcessor {
         Ok(self.blocktree.get_confirmed_block(slot).ok())
     }
 
-    // The `get_block_time` method is not fully implemented. It currently returns `slot` *
-    // DEFAULT_MS_PER_SLOT offset from 0 for all requests, and null for any values that would
-    // overflow.
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
-        // This calculation currently assumes that bank.ticks_per_slot and bank.slots_per_year will
-        // remain unchanged after genesis. If these values will be variable in the future, those
-        // timing parameters will need to be stored persistently, and this calculation will likely
-        // need to be moved upstream into blocktree. Also, an explicit commitment level will need
-        // to be set.
+        // This calculation currently assumes that bank.slots_per_year will remain unchanged after
+        // genesis (ie. that this bank's slot_per_year will be applicable to any rooted slot being
+        // queried). If these values will be variable in the future, those timing parameters will
+        // need to be stored persistently, and the slot_duration calculation will likely need to be
+        // moved upstream into blocktree. Also, an explicit commitment level will need to be set.
         let bank = self.bank(None);
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
+        let epoch = bank.epoch_schedule().get_epoch(slot);
+        let stakes = HashMap::new();
+        let stakes = bank.epoch_vote_accounts(epoch).unwrap_or(&stakes);
 
-        Ok(self.blocktree.get_block_time(slot, slot_duration))
+        Ok(self.blocktree.get_block_time(slot, slot_duration, stakes))
     }
 }
 
@@ -1008,7 +1009,9 @@ pub mod tests {
         replay_stage::tests::create_test_transactions_and_populate_blocktree,
     };
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
-    use solana_ledger::get_tmp_ledger_path;
+    use solana_ledger::{
+        blocktree::entries_to_test_shreds, entry::next_entry_mut, get_tmp_ledger_path,
+    };
     use solana_sdk::{
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
@@ -1044,6 +1047,14 @@ pub mod tests {
     }
 
     fn start_rpc_handler_with_tx(pubkey: &Pubkey) -> RpcHandler {
+        start_rpc_handler_with_tx_and_blocktree(pubkey, vec![1], 0)
+    }
+
+    fn start_rpc_handler_with_tx_and_blocktree(
+        pubkey: &Pubkey,
+        blocktree_roots: Vec<Slot>,
+        default_timestamp: i64,
+    ) -> RpcHandler {
         let (bank_forks, alice, leader_vote_keypair) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
 
@@ -1072,6 +1083,32 @@ pub mod tests {
             bank.clone(),
             blocktree.clone(),
         );
+
+        // Add timestamp vote to blocktree
+        let vote = Vote {
+            slots: vec![1],
+            hash: Hash::default(),
+            timestamp: Some(default_timestamp),
+        };
+        let vote_ix = vote_instruction::vote(
+            &leader_vote_keypair.pubkey(),
+            &leader_vote_keypair.pubkey(),
+            vote,
+        );
+        let vote_tx = Transaction::new_signed_instructions(
+            &[&leader_vote_keypair],
+            vec![vote_ix],
+            Hash::default(),
+        );
+        let shreds = entries_to_test_shreds(
+            vec![next_entry_mut(&mut Hash::default(), 0, vec![vote_tx])],
+            1,
+            0,
+            true,
+            0,
+        );
+        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blocktree.set_roots(&blocktree_roots).unwrap();
 
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
@@ -1864,11 +1901,29 @@ pub mod tests {
     #[test]
     fn test_get_block_time() {
         let bob_pubkey = Pubkey::new_rand();
-        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let base_timestamp = 1576183541;
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx_and_blocktree(
+            &bob_pubkey,
+            vec![1, 2, 3, 4, 5, 6, 7],
+            base_timestamp,
+        );
 
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
 
-        let slot = 100;
+        let slot = 2;
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockTime","params":[{}]}}"#,
+            slot
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#, base_timestamp);
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        let slot = 7;
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockTime","params":[{}]}}"#,
             slot
@@ -1876,7 +1931,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = format!(
             r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#,
-            (slot * slot_duration).as_secs()
+            base_timestamp + (5 * slot_duration).as_secs() as i64
         );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -1885,22 +1940,6 @@ pub mod tests {
         assert_eq!(expected, result);
 
         let slot = 12345;
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockTime","params":[{}]}}"#,
-            slot
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let expected = format!(
-            r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#,
-            (slot * slot_duration).as_secs()
-        );
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
-
-        let slot = 123450000000000000u64;
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockTime","params":[{}]}}"#,
             slot
