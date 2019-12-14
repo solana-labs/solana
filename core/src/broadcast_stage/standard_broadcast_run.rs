@@ -83,25 +83,12 @@ impl StandardBroadcastRun {
 
         last_unfinished_slot_shred
     }
-
-    fn entries_to_shreds(
-        &mut self,
+    fn init_shredder(
+        &self,
         blocktree: &Blocktree,
-        entries: &[Entry],
-        is_slot_end: bool,
         reference_tick: u8,
-    ) -> (Vec<Shred>, Vec<Shred>) {
+    ) -> (Shredder, u32) {
         let (slot, parent_slot) = self.current_slot_and_parent.unwrap();
-        let shredder = Shredder::new(
-            slot,
-            parent_slot,
-            RECOMMENDED_FEC_RATE,
-            self.keypair.clone(),
-            reference_tick,
-            self.shred_version,
-        )
-        .expect("Expected to create a new shredder");
-
         let next_shred_index = self
             .unfinished_slot
             .map(|s| s.next_shred_index)
@@ -112,17 +99,34 @@ impl StandardBroadcastRun {
                     .map(|meta| meta.consumed)
                     .unwrap_or(0) as u32
             });
-
-        let (data_shreds, coding_shreds, new_next_shred_index) =
-            shredder.entries_to_shreds(entries, is_slot_end, next_shred_index);
+        (Shredder::new(
+            slot,
+            parent_slot,
+            RECOMMENDED_FEC_RATE,
+            self.keypair.clone(),
+            reference_tick,
+            self.shred_version,
+        )
+        .expect("Expected to create a new shredder"),
+        next_shred_index)
+    }
+    fn entries_to_data_shreds(
+        &mut self,
+        shredder: &Shredder,
+        next_shred_index: u32,
+        entries: &[Entry],
+        is_slot_end: bool,
+    ) -> Vec<Shred> {
+        let (data_shreds, new_next_shred_index) =
+            shredder.entries_to_data_shreds(entries, is_slot_end, next_shred_index);
 
         self.unfinished_slot = Some(UnfinishedSlotInfo {
             next_shred_index: new_next_shred_index,
-            slot,
-            parent: parent_slot,
+            slot: shredder.slot,
+            parent: shredder.parent_slot,
         });
 
-        (data_shreds, coding_shreds)
+        data_shreds
     }
 
     fn process_receive_results(
@@ -156,12 +160,18 @@ impl StandardBroadcastRun {
             self.check_for_interrupted_slot(bank.ticks_per_slot() as u8);
 
         // 2) Convert entries to shreds and coding shreds
-        let (mut data_shreds, coding_shreds) = self.entries_to_shreds(
+
+        let (shredder, next_shred_index) = self.init_shredder(
             blocktree,
-            &receive_results.entries,
-            last_tick_height == bank.max_tick_height(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
         );
+        let mut data_shreds = self.entries_to_data_shreds(
+            &shredder,
+            next_shred_index,
+            &receive_results.entries,
+            last_tick_height == bank.max_tick_height(),
+        );
+        let last_data_shred = data_shreds.len();
         if let Some(last_shred) = last_unfinished_slot_shred {
             data_shreds.push(last_shred);
         }
@@ -172,9 +182,10 @@ impl StandardBroadcastRun {
         let stakes = stakes.map(Arc::new);
         let data_shreds = Arc::new(data_shreds);
         socket_sender.send((stakes.clone(), data_shreds.clone()))?;
+        blocktree_sender.send(data_shreds.clone())?;
+        let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..last_data_shred]);
         let coding_shreds = Arc::new(coding_shreds);
         socket_sender.send((stakes, coding_shreds))?;
-        blocktree_sender.send(data_shreds)?;
         self.update_broadcast_stats(BroadcastStats {
             shredding_elapsed: duration_as_us(&to_shreds_elapsed),
             receive_elapsed: duration_as_us(&receive_elapsed),

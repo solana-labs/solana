@@ -402,8 +402,8 @@ impl Shred {
 
 #[derive(Debug)]
 pub struct Shredder {
-    slot: Slot,
-    parent_slot: Slot,
+    pub slot: Slot,
+    pub parent_slot: Slot,
     version: u16,
     fec_rate: f32,
     keypair: Arc<Keypair>,
