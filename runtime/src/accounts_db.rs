@@ -407,7 +407,7 @@ impl Default for AccountsDB {
 
 impl AccountsDB {
     pub fn new(paths: Vec<PathBuf>) -> Self {
-        if !paths.is_empty() {
+        let new = if !paths.is_empty() {
             Self {
                 paths: RwLock::new(paths),
                 temp_paths: None,
@@ -422,7 +422,14 @@ impl AccountsDB {
                 temp_paths: Some(temp_dirs),
                 ..Self::default()
             }
+        };
+        {
+            let paths = new.paths.read().unwrap();
+            for path in paths.iter() {
+                std::fs::create_dir_all(path).expect("Create directory failed.");
+            }
         }
+        new
     }
 
     #[cfg(test)]
