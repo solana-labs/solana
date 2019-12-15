@@ -762,7 +762,9 @@ pub fn main() {
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
         let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
-        node.sockets.broadcast.first().map(|s| udp_sockets.push(s));
+        if let Some(s) = node.sockets.broadcast.first() {
+            udp_sockets.push(s)
+        }
 
         let mut tcp_listeners: Vec<(_, _)> = tcp_ports
             .iter()
