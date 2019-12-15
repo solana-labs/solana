@@ -436,6 +436,7 @@ impl Shredder {
             })
         }
     }
+
     pub fn entries_to_shreds(
         &self,
         entries: &[Entry],
@@ -445,7 +446,7 @@ impl Shredder {
         let (data_shreds, last_shred_index) =
             self.entries_to_data_shreds(entries, is_last_in_slot, next_shred_index);
         let coding_shreds = self.data_shreds_to_coding_shreds(&data_shreds);
-        (data_shreds, coding_shreds, last_shred_index + 1)
+        (data_shreds, coding_shreds, last_shred_index)
     }
 
     pub fn entries_to_data_shreds(
