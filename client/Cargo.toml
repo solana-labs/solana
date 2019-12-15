@@ -12,7 +12,7 @@ edition = "2018"
 bincode = "1.2.1"
 bs58 = "0.3.0"
 jsonrpc-core = "14.0.5"
-log = "0.4.8"
+log = "0.4.9"
 rand = "0.6.5"
 rayon = "1.2.0"
 reqwest = { version = "0.9.24", default-features = false, features = ["rustls-tls"] }
