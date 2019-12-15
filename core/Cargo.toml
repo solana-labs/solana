@@ -80,7 +80,7 @@ jemalloc-ctl = "0.3.2"
 hex-literal = "0.2.1"
 matches = "0.1.6"
 reqwest = { version = "0.9.24", default-features = false, features = ["rustls-tls"] }
-serial_test = "0.3.1"
+serial_test = "0.3.2"
 serial_test_derive = "0.3.1"
 
 [[bench]]
