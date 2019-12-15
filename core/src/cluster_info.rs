@@ -2662,7 +2662,8 @@ mod tests {
         cluster_info.insert_info(contact_info);
         stakes.insert(id3, 10);
 
-        let (peers, peers_and_stakes) = cluster_info.sorted_tvu_peers_and_stakes(Some(&stakes));
+        let stakes = Arc::new(stakes);
+        let (peers, peers_and_stakes) = cluster_info.sorted_tvu_peers_and_stakes(Some(stakes));
         assert_eq!(peers.len(), 2);
         assert_eq!(peers[0].id, id);
         assert_eq!(peers[1].id, id2);

@@ -442,8 +442,9 @@ impl Shredder {
         is_last_in_slot: bool,
         next_shred_index: u32,
     ) -> (Vec<Shred>, Vec<Shred>, u32) {
-    let (data_shreds, last_shred_index) = self.entries_to_data_shreds(entries, is_last_in_slot, next_shred_index);
-    let coding_shreds = self.data_shreds_to_coding_shreds(&data_shreds); 
+        let (data_shreds, last_shred_index) =
+            self.entries_to_data_shreds(entries, is_last_in_slot, next_shred_index);
+        let coding_shreds = self.data_shreds_to_coding_shreds(&data_shreds);
         (data_shreds, coding_shreds, last_shred_index + 1)
     }
 
@@ -515,7 +516,7 @@ impl Shredder {
         (data_shreds, last_shred_index + 1)
     }
 
-    pub fn  data_shreds_to_coding_shreds(&self, data_shreds: &[Shred]) -> Vec<Shred> {
+    pub fn data_shreds_to_coding_shreds(&self, data_shreds: &[Shred]) -> Vec<Shred> {
         let now = Instant::now();
         // 2) Generate coding shreds
         let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {

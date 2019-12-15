@@ -83,11 +83,7 @@ impl StandardBroadcastRun {
 
         last_unfinished_slot_shred
     }
-    fn init_shredder(
-        &self,
-        blocktree: &Blocktree,
-        reference_tick: u8,
-    ) -> (Shredder, u32) {
+    fn init_shredder(&self, blocktree: &Blocktree, reference_tick: u8) -> (Shredder, u32) {
         let (slot, parent_slot) = self.current_slot_and_parent.unwrap();
         let next_shred_index = self
             .unfinished_slot
@@ -99,16 +95,18 @@ impl StandardBroadcastRun {
                     .map(|meta| meta.consumed)
                     .unwrap_or(0) as u32
             });
-        (Shredder::new(
-            slot,
-            parent_slot,
-            RECOMMENDED_FEC_RATE,
-            self.keypair.clone(),
-            reference_tick,
-            self.shred_version,
+        (
+            Shredder::new(
+                slot,
+                parent_slot,
+                RECOMMENDED_FEC_RATE,
+                self.keypair.clone(),
+                reference_tick,
+                self.shred_version,
+            )
+            .expect("Expected to create a new shredder"),
+            next_shred_index,
         )
-        .expect("Expected to create a new shredder"),
-        next_shred_index)
     }
     fn entries_to_data_shreds(
         &mut self,
@@ -127,6 +125,27 @@ impl StandardBroadcastRun {
         });
 
         data_shreds
+    }
+
+    #[cfg(test)]
+    fn test_process_receive_results(
+        &mut self,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        sock: &UdpSocket,
+        blocktree: &Arc<Blocktree>,
+        receive_results: ReceiveResults,
+    ) -> Result<()> {
+        let (bsend, brecv) = channel();
+        let (ssend, srecv) = channel();
+        self.process_receive_results(&blocktree, &ssend, &bsend, receive_results)?;
+        let srecv = Arc::new(Mutex::new(srecv));
+        let brecv = Arc::new(Mutex::new(brecv));
+        //data
+        let _ = self.transmit(&srecv, cluster_info, sock);
+        //coding
+        let _ = self.transmit(&srecv, cluster_info, sock);
+        let _ = self.record(&brecv, blocktree);
+        Ok(())
     }
 
     fn process_receive_results(
@@ -415,7 +434,7 @@ mod test {
         // Step 1: Make an incomplete transmission for slot 0
         let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair.clone(), 0);
         standard_broadcast_run
-            .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
+            .test_process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
         assert_eq!(unfinished_slot.next_shred_index as u64, num_shreds_per_slot);
@@ -424,7 +443,11 @@ mod test {
         // Make sure the slot is not complete
         assert!(!blocktree.is_full(0));
         // Modify the stats, should reset later
-        standard_broadcast_run.stats.receive_elapsed = 10;
+        standard_broadcast_run
+            .stats
+            .write()
+            .unwrap()
+            .receive_elapsed = 10;
 
         // Try to fetch ticks from blocktree, nothing should break
         assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), ticks0);
@@ -450,7 +473,7 @@ mod test {
             last_tick_height: (ticks1.len() - 1) as u64,
         };
         standard_broadcast_run
-            .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
+            .test_process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
 
@@ -461,7 +484,10 @@ mod test {
         assert_eq!(unfinished_slot.parent, 0);
 
         // Check that the stats were reset as well
-        assert_eq!(standard_broadcast_run.stats.receive_elapsed, 0);
+        assert_eq!(
+            standard_broadcast_run.stats.read().unwrap().receive_elapsed,
+            0
+        );
 
         // Try to fetch the incomplete ticks from blocktree, should succeed
         assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), ticks0);
@@ -491,7 +517,7 @@ mod test {
 
         let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair, 0);
         standard_broadcast_run
-            .process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
+            .test_process_receive_results(&cluster_info, &socket, &blocktree, receive_results)
             .unwrap();
         assert!(standard_broadcast_run.unfinished_slot.is_none())
     }

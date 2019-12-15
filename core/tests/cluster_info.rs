@@ -75,7 +75,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.clone());
 
     // setup staked nodes
-    let mut staked_nodes = HashMap::new();
+    let mut staked_nodes = Arc::new(HashMap::new());
 
     // setup accounts for all nodes (leader has 0 bal)
     let (s, r) = channel();
