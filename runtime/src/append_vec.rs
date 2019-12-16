@@ -73,14 +73,17 @@ impl<'a> StoredAccount<'a> {
     }
 
     fn sanitize(&self) -> bool {
-        // Sanitize executable
+        // Sanitize executable to ensure higher 7-bits are cleared correctly.
+        self.ref_executable_byte() & !1 == 0
+    }
+
+    fn ref_executable_byte(&self) -> &u8 {
         // Use extra references to avoid value silently clamped to 1 (=true) and 0 (=false)
         // Yes, this really happens; see test_set_file_crafted_executable
         let executable_bool: &bool = &self.account_meta.executable;
-        // UNSAFE: Force to interpret mmap-backed bool as u8 to ensure higher 7-bits are cleared correctly.
+        // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
         let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
-
-        executable_byte & !1 == 0
+        executable_byte
     }
 }
 
@@ -494,13 +497,6 @@ pub mod tests {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
             let data_len: &mut u64 = unsafe { &mut *(data_len as *const u64 as *mut u64) };
             *data_len = new_data_len;
-        }
-
-        fn ref_executable_byte(&self) -> &u8 {
-            let executable_bool: &bool = &self.account_meta.executable;
-            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-            let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
-            executable_byte
         }
 
         fn get_executable_byte(&self) -> u8 {
