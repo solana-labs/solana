@@ -184,6 +184,8 @@ mod tests {
     use solana_ledger::snapshot_utils;
     use solana_runtime::accounts_db::AccountStorageEntry;
     use solana_runtime::status_cache::SlotDelta;
+    use solana_runtime::bank::MAX_SNAPSHOT_DATA_FILE_SIZE;
+    use solana_ledger::snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME;
     use solana_sdk::transaction::Result as TransactionResult;
     use std::{
         fs::{remove_dir_all, OpenOptions},
@@ -272,8 +274,8 @@ mod tests {
         // the source dir for snapshots
         let dummy_slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
         snapshot_utils::serialize_snapshot_data_file(
-            &snapshots_dir.join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME),
-            solana_runtime::bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
+            &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
+            MAX_SNAPSHOT_DATA_FILE_SIZE,
             |stream| {
                 serialize_into(stream, &dummy_slot_deltas)?;
                 Ok(())

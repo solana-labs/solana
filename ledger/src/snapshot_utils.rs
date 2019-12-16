@@ -252,7 +252,6 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     let consumed_size =
         serialize_snapshot_data_file(&snapshot_file_path, MAX_SNAPSHOT_DATA_FILE_SIZE, |stream| {
             serialize_into(stream.by_ref(), &*bank)?;
-            // move Measure::start here?
             serialize_into(stream.by_ref(), &bank.rc)?;
             Ok(())
         })?;
