@@ -2279,7 +2279,6 @@ pub mod tests {
         transaction::TransactionError,
     };
     use solana_vote_program::{vote_instruction, vote_state::Vote};
-    use std::time::Instant;
     use std::{iter::FromIterator, time::Duration};
 
     // used for tests only
