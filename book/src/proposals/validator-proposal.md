@@ -12,7 +12,7 @@ The fundamental difference between the pipelines is when the PoH is present. In 
 
 We unwrap the many abstraction layers and build a single pipeline that can toggle leader mode on whenever the validator's ID shows up in the leader schedule.
 
-![Validator block diagram](../.gitbook/assets/validator-proposal-1.svg)
+![Validator block diagram](../.gitbook/assets/validator-proposal.svg)
 
 ## Notable changes
 
@@ -33,4 +33,3 @@ We unwrap the many abstraction layers and build a single pipeline that can toggl
 
 * New MulticastStage absorbs retransmit part of RetransmitStage
 * MulticastStage downstream of Blockstore
-

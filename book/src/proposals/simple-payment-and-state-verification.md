@@ -30,7 +30,7 @@ A payment receipt is a data structure that contains a Merkle Path from a transac
 
 An Entry-Merkle is a Merkle Root including all transactions in the entry, sorted by signature.
 
-![Block Merkle Diagram](../.gitbook/assets/spv-block-merkle%20%282%29.svg)
+![Block Merkle Diagram](../.gitbook/assets/spv-block-merkle.svg)
 
 A Block-Merkle is a Merkle root of all the Entry-Merkles sequenced in the block. Transaction status is necessary for the receipt because the state receipt is constructed for the block. Two transactions over the same state can appear in the block, and therefore, there is no way to infer from just the state whether a transaction that is committed to the ledger has succeeded or failed in modifying the intended state. It may not be necessary to encode the full status code, but a single status bit to indicate the transaction's success.
 
@@ -48,7 +48,7 @@ At the end of the block, A and B are in the exact same starting state, and any s
 
 The Bank-Merkle is computed from the Merkle Tree of the new state changes, along with the Previous Bank-Merkle, and the Block-Merkle.
 
-![Bank Merkle Diagram](../.gitbook/assets/spv-bank-merkle-3.svg)
+![Bank Merkle Diagram](../.gitbook/assets/spv-bank-merkle.svg)
 
 A state receipt contains only the state changes occurring in the block. A direct Merkle Path to the current Bank-Merkle guarantees the state value at that bank hash, but it cannot be used to generate a “current” receipt to the latest state if the state modification occurred in some previous block. There is no guarantee that the path provided by the validator is the latest one available out of all the previous Bank-Merkles.
 
@@ -107,4 +107,3 @@ For example:
 * Computed fee rates
 
 These values should have an entry in the Bank-Merkle. They should live under known accounts, and therefore have an exact address in the Merkle Path.
-
