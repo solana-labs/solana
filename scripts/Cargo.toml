@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 csv = "1.1"
-serde = { version = "1.0.103", features = ["derive"] }
+serde = { version = "1.0.104", features = ["derive"] }
 
 [[bin]]
 name = "solana-csv-to-validator-infos"
