@@ -4,6 +4,10 @@ count is advancing, new blockhashes are available, and no validators are
 delinquent.  Results are reported as InfluxDB metrics, with an optional
 Slack/Discord push notification on sanity failure.
 
+If you only care about the health of one specific validator, the
+`--validator-identity` command-line argument can be used to restrict failure
+notifications to issues only affecting that validator.
+
 ### Metrics
 #### `watchtower-sanity`
 On every iteration this data point will be emitted indicating the overall result
