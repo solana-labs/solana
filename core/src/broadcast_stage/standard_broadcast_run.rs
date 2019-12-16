@@ -200,8 +200,16 @@ impl StandardBroadcastRun {
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
         let stakes = stakes.map(Arc::new);
         let data_shreds = Arc::new(data_shreds);
-        socket_sender.send((stakes.clone(), data_shreds.clone()))?;
-        blocktree_sender.send(data_shreds.clone())?;
+        //Insert the first shred so blocktree stores that the leader started this block
+        //This must be done before the blocks are sent out over the wire.
+        let first_shred = data_shreds.first().map(|s| s.index() == 0).unwrap_or(false);
+        if first_shred {
+            self.insert(blocktree, data_shreds.clone())?;
+            socket_sender.send((stakes.clone(), data_shreds.clone()))?;
+        } else {
+            socket_sender.send((stakes.clone(), data_shreds.clone()))?;
+            blocktree_sender.send(data_shreds.clone())?;
+        }
         let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..last_data_shred]);
         let coding_shreds = Arc::new(coding_shreds);
         socket_sender.send((stakes, coding_shreds))?;
