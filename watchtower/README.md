@@ -18,3 +18,20 @@ the following fields:
 * `test`: name of the sanity test that failed
 * `err`: exact sanity failure message
 
+<<<<<<< HEAD
+=======
+
+### Sanity failure push notification
+To receive a Slack, Discord and/or Telgram notification on sanity failure,
+define environment variables before running `solana-watchtower`:
+```
+export SLACK_WEBHOOK=...
+export DISCORD_WEBHOOK=...
+```
+
+Telgram requires the following two variables:
+```
+export TELEGRAM_BOT_TOKEN=...
+export TELEGRAM_CHAT_ID=...
+```
+>>>>>>> f33703aef... Add Telegram notification support
