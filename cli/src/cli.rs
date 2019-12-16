@@ -801,7 +801,7 @@ fn process_deploy(
         &config.keypair,
         &program_id,
         blockhash,
-        minimum_balance,
+        minimum_balance.max(1),
         program_data.len() as u64,
         &bpf_loader::id(),
     );
