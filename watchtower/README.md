@@ -21,9 +21,15 @@ the following fields:
 
 
 ### Sanity failure push notification
-To receive a Slack and/or Discord notification on sanity failure, define one or
-both of these environment variables before running `solana-watchtower`:
+To receive a Slack, Discord and/or Telgram notification on sanity failure,
+define environment variables before running `solana-watchtower`:
 ```
 export SLACK_WEBHOOK=...
 export DISCORD_WEBHOOK=...
+```
+
+Telgram requires the following two variables:
+```
+export TELEGRAM_BOT_TOKEN=...
+export TELEGRAM_CHAT_ID=...
 ```
