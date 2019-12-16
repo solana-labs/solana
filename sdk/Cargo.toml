@@ -33,7 +33,7 @@ generic-array = { version = "0.13.2", default-features = false, features = ["ser
 hex = "0.4.0"
 hmac = "0.7.0"
 itertools = { version = "0.8.2" }
-log = { version = "0.4.8" }
+log = { version = "0.4.10" }
 memmap = { version = "0.6.2", optional = true }
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
