@@ -667,12 +667,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
                     // verify enough lamports for rent in new stake with the split
                     if split.account.lamports + lamports < meta.rent_exempt_reserve
-                        // verify enough lamports left in previous stake
-                        || lamports + meta.rent_exempt_reserve > self.account.lamports
+                     // verify enough lamports left in previous stake and not full withdrawal
+                        || (lamports + meta.rent_exempt_reserve > self.account.lamports && lamports != self.account.lamports)
                     {
                         return Err(InstructionError::InsufficientFunds);
                     }
-
                     // split the stake, subtract rent_exempt_balance unless
                     //  the destination account already has those lamports
                     //  in place.
@@ -694,7 +693,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     // enough lamports for rent in new stake
                     if lamports < meta.rent_exempt_reserve
                     // verify enough lamports left in previous stake
-                        || lamports + meta.rent_exempt_reserve > self.account.lamports
+                        || (lamports + meta.rent_exempt_reserve > self.account.lamports && lamports != self.account.lamports)
                     {
                         return Err(InstructionError::InsufficientFunds);
                     }
@@ -2313,7 +2312,10 @@ mod tests {
         // test splitting both an Initialized stake and a Staked stake
         for state in &[
             StakeState::Initialized(meta),
-            StakeState::Stake(meta, Stake::just_stake(stake_lamports)),
+            StakeState::Stake(
+                meta,
+                Stake::just_stake(stake_lamports - rent_exempt_reserve),
+            ),
         ] {
             let mut stake_account = Account::new_data_with_space(
                 stake_lamports,
@@ -2383,10 +2385,6 @@ mod tests {
                         }
                     ))
                 );
-                //                assert_eq!(
-                //                    stake_keyed_account.state(),
-                //                    Ok(StakeState::Stake(*meta, Stake { stake: 0, ..*stake }))
-                //                );
                 assert_eq!(stake_keyed_account.account.lamports, rent_exempt_reserve);
                 assert_eq!(
                     split_stake_keyed_account.account.lamports,
@@ -2480,6 +2478,103 @@ mod tests {
                             Stake {
                                 delegation: Delegation {
                                     stake: stake_lamports / 2,
+                                    ..stake.delegation
+                                },
+                                ..*stake
+                            }
+                        )),
+                        stake_keyed_account.state()
+                    );
+                }
+                _ => unreachable!(),
+            }
+
+            // reset
+            stake_keyed_account.account.lamports = stake_lamports;
+        }
+    }
+
+    #[test]
+    fn test_split_100_percent_of_source() {
+        let stake_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+        let rent_exempt_reserve = 10;
+
+        let split_stake_pubkey = Pubkey::new_rand();
+        let signers = vec![stake_pubkey].into_iter().collect();
+
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_pubkey),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+
+        // test splitting both an Initialized stake and a Staked stake
+        for state in &[
+            StakeState::Initialized(meta),
+            StakeState::Stake(
+                meta,
+                Stake::just_stake(stake_lamports - rent_exempt_reserve),
+            ),
+        ] {
+            let mut split_stake_account = Account::new_data_with_space(
+                0,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("stake_account");
+
+            let mut split_stake_keyed_account =
+                KeyedAccount::new(&split_stake_pubkey, true, &mut split_stake_account);
+
+            let mut stake_account = Account::new_data_with_space(
+                stake_lamports,
+                state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("stake_account");
+            let mut stake_keyed_account =
+                KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
+
+            // split 100% over to dest
+            assert_eq!(
+                stake_keyed_account.split(stake_lamports, &mut split_stake_keyed_account, &signers),
+                Ok(())
+            );
+
+            // no lamport leakage
+            assert_eq!(
+                stake_keyed_account.account.lamports + split_stake_keyed_account.account.lamports,
+                stake_lamports
+            );
+
+            match state {
+                StakeState::Initialized(_) => {
+                    assert_eq!(Ok(*state), split_stake_keyed_account.state());
+                    assert_eq!(Ok(*state), stake_keyed_account.state());
+                }
+                StakeState::Stake(meta, stake) => {
+                    assert_eq!(
+                        Ok(StakeState::Stake(
+                            *meta,
+                            Stake {
+                                delegation: Delegation {
+                                    stake: stake_lamports - rent_exempt_reserve,
+                                    ..stake.delegation
+                                },
+                                ..*stake
+                            }
+                        )),
+                        split_stake_keyed_account.state()
+                    );
+                    assert_eq!(
+                        Ok(StakeState::Stake(
+                            *meta,
+                            Stake {
+                                delegation: Delegation {
+                                    stake: 0,
                                     ..stake.delegation
                                 },
                                 ..*stake
