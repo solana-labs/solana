@@ -221,6 +221,31 @@ pub fn create_account_and_delegate_stake(
     instructions
 }
 
+pub fn create_account_with_seed_and_delegate_stake(
+    from_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
+    seed: &str,
+    vote_pubkey: &Pubkey,
+    authorized: &Authorized,
+    lockup: &Lockup,
+    lamports: u64,
+) -> Vec<Instruction> {
+    let mut instructions = create_account_with_seed(
+        from_pubkey,
+        stake_pubkey,
+        seed,
+        authorized,
+        lockup,
+        lamports,
+    );
+    instructions.push(delegate_stake(
+        stake_pubkey,
+        &authorized.staker,
+        vote_pubkey,
+    ));
+    instructions
+}
+
 pub fn authorize(
     stake_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
