@@ -510,7 +510,7 @@ pub mod tests {
             executable_byte
         }
 
-        fn set_exeutable_as_byte(&self, new_executable_byte: u8) {
+        fn set_executable_as_byte(&self, new_executable_byte: u8) {
             let executable_ref: &bool = &self.account_meta.executable;
             #[allow(mutable_transmutes)]
             // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
@@ -673,7 +673,7 @@ pub mod tests {
         let account = &accounts[0];
         let crafted_executable = u8::max_value() - 1;
 
-        account.set_exeutable_as_byte(crafted_executable);
+        account.set_executable_as_byte(crafted_executable);
 
         // reload crafted accounts
         let accounts = av.accounts(0);
