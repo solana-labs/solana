@@ -287,6 +287,8 @@ pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<Slot> {
     let tempdir = tempfile::TempDir::new()?;
     untar_snapshot_in(&snapshot_tar, &tempdir)?;
     let unpacked_snapshots_dir = tempdir.path().join(TAR_SNAPSHOTS_DIR);
+    let local_account_paths = vec![tempdir.path().join("account_dummy")];
+    let unpacked_accounts_dir = tempdir.path().join(TAR_ACCOUNTS_DIR);
     let snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
     let last_root_paths = snapshot_paths
         .last()
@@ -294,7 +296,15 @@ pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<Slot> {
     let bank = deserialize_snapshot_data_file(
         &last_root_paths.snapshot_file_path,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
-        |stream| Ok(deserialize_for_snapshot::<_, Bank>(stream)?),
+        |stream| {
+            let bank: Bank = deserialize_for_snapshot(stream.by_ref())?;
+            bank.rc.accounts_from_stream(
+                stream.by_ref(),
+                &local_account_paths,
+                &unpacked_accounts_dir,
+            )?;
+            Ok(bank)
+        },
     )?;
     Ok(bank.slot())
 }
