@@ -181,11 +181,11 @@ impl SnapshotPackagerService {
 mod tests {
     use super::*;
     use bincode::serialize_into;
-    use solana_ledger::snapshot_utils;
-    use solana_runtime::accounts_db::AccountStorageEntry;
-    use solana_runtime::status_cache::SlotDelta;
-    use solana_runtime::bank::MAX_SNAPSHOT_DATA_FILE_SIZE;
-    use solana_ledger::snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME;
+    use solana_ledger::snapshot_utils::{self, SNAPSHOT_STATUS_CACHE_FILE_NAME};
+    use solana_runtime::{
+        accounts_db::AccountStorageEntry, bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
+        status_cache::SlotDelta,
+    };
     use solana_sdk::transaction::Result as TransactionResult;
     use std::{
         fs::{remove_dir_all, OpenOptions},
