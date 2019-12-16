@@ -1506,7 +1506,12 @@ impl Bank {
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Slot)> {
         let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
-        self.rc.accounts.load_slow(&just_self, pubkey)
+        if let Some((account, slot)) = self.rc.accounts.load_slow(&just_self, pubkey) {
+            if slot == self.slot() {
+                return Some((account, slot));
+            }
+        }
+        None
     }
 
     pub fn transaction_count(&self) -> u64 {
