@@ -197,11 +197,11 @@ impl Validator {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         // The version used by shreds, derived from genesis
         let shred_version = Shred::version_from_hash(&genesis_hash);
-        let mut max_ledger_slots = None;
-        if config.limit_ledger_size {
-            max_ledger_slots =
-                Some(DEFAULT_MAX_LEDGER_EPOCHS * bank.epoch_schedule().slots_per_epoch);
-        }
+        let max_ledger_slots = if config.limit_ledger_size {
+            Some(DEFAULT_MAX_LEDGER_EPOCHS * bank.epoch_schedule().slots_per_epoch)
+        } else {
+            None
+        };
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
