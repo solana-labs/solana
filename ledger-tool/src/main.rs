@@ -463,23 +463,53 @@ fn analyze_column<T: solana_ledger::blocktree_db::Column>(
     Ok(())
 }
 
-fn analyze_storage(blocktree: &Database) -> Result<(), String> {
+fn analyze_storage(database: &Database) -> Result<(), String> {
     use blocktree_db::columns::*;
-    analyze_column::<SlotMeta>(blocktree, "SlotMeta", SlotMeta::key_size())?;
-    analyze_column::<Orphans>(blocktree, "Orphans", Orphans::key_size())?;
-    analyze_column::<DeadSlots>(blocktree, "DeadSlots", DeadSlots::key_size())?;
-    analyze_column::<ErasureMeta>(blocktree, "ErasureMeta", ErasureMeta::key_size())?;
-    analyze_column::<Root>(blocktree, "Root", Root::key_size())?;
-    analyze_column::<Index>(blocktree, "Index", Index::key_size())?;
-    analyze_column::<ShredData>(blocktree, "ShredData", ShredData::key_size())?;
-    analyze_column::<ShredCode>(blocktree, "ShredCode", ShredCode::key_size())?;
+    analyze_column::<SlotMeta>(database, "SlotMeta", SlotMeta::key_size())?;
+    analyze_column::<Orphans>(database, "Orphans", Orphans::key_size())?;
+    analyze_column::<DeadSlots>(database, "DeadSlots", DeadSlots::key_size())?;
+    analyze_column::<ErasureMeta>(database, "ErasureMeta", ErasureMeta::key_size())?;
+    analyze_column::<Root>(database, "Root", Root::key_size())?;
+    analyze_column::<Index>(database, "Index", Index::key_size())?;
+    analyze_column::<ShredData>(database, "ShredData", ShredData::key_size())?;
+    analyze_column::<ShredCode>(database, "ShredCode", ShredCode::key_size())?;
     analyze_column::<TransactionStatus>(
-        blocktree,
+        database,
         "TransactionStatus",
         TransactionStatus::key_size(),
     )?;
 
     Ok(())
+}
+
+fn open_genesis_config(ledger_path: &Path) -> GenesisConfig {
+    GenesisConfig::load(&ledger_path).unwrap_or_else(|err| {
+        eprintln!(
+            "Failed to open ledger genesis_config at {:?}: {}",
+            ledger_path, err
+        );
+        exit(1);
+    })
+}
+
+fn open_blocktree(ledger_path: &Path) -> Blocktree {
+    match Blocktree::open(ledger_path) {
+        Ok(blocktree) => blocktree,
+        Err(err) => {
+            eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
+            exit(1);
+        }
+    }
+}
+
+fn open_database(ledger_path: &Path) -> Database {
+    match Database::open(&ledger_path.join("rocksdb")) {
+        Ok(database) => database,
+        Err(err) => {
+            eprintln!("Unable to read the Ledger rocksdb: {:?}", err);
+            exit(1);
+        }
+    }
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -628,40 +658,36 @@ fn main() {
 
     let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger", String));
 
-    let genesis_config = GenesisConfig::load(&ledger_path).unwrap_or_else(|err| {
-        eprintln!(
-            "Failed to open ledger genesis_config at {:?}: {}",
-            ledger_path, err
-        );
-        exit(1);
-    });
-
-    let blocktree = match Blocktree::open(&ledger_path) {
-        Ok(blocktree) => blocktree,
-        Err(err) => {
-            eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
-            exit(1);
-        }
-    };
-
     match matches.subcommand() {
         ("print", Some(args_matches)) => {
             let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
-            output_ledger(blocktree, starting_slot, LedgerOutputMethod::Print);
+            output_ledger(
+                open_blocktree(&ledger_path),
+                starting_slot,
+                LedgerOutputMethod::Print,
+            );
         }
         ("print-genesis-hash", Some(_args_matches)) => {
-            println!("{}", genesis_config.hash());
+            println!("{}", open_genesis_config(&ledger_path).hash());
         }
         ("print-slot", Some(args_matches)) => {
             let slots = values_t_or_exit!(args_matches, "slots", Slot);
             for slot in slots {
                 println!("Slot {}", slot);
-                output_slot(&blocktree, slot, &LedgerOutputMethod::Print);
+                output_slot(
+                    &open_blocktree(&ledger_path),
+                    slot,
+                    &LedgerOutputMethod::Print,
+                );
             }
         }
         ("json", Some(args_matches)) => {
             let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
-            output_ledger(blocktree, starting_slot, LedgerOutputMethod::Json);
+            output_ledger(
+                open_blocktree(&ledger_path),
+                starting_slot,
+                LedgerOutputMethod::Json,
+            );
         }
         ("verify", Some(arg_matches)) => {
             println!("Verifying ledger...");
@@ -691,8 +717,8 @@ fn main() {
             };
 
             match bank_forks_utils::load(
-                &genesis_config,
-                &blocktree,
+                &open_genesis_config(&ledger_path),
+                &open_blocktree(&ledger_path),
                 account_paths,
                 snapshot_config.as_ref(),
                 process_options,
@@ -731,6 +757,7 @@ fn main() {
         }
         ("prune", Some(args_matches)) => {
             if let Some(prune_file_path) = args_matches.value_of("slot_list") {
+                let blocktree = open_blocktree(&ledger_path);
                 let prune_file = File::open(prune_file_path.to_string()).unwrap();
                 let slot_hashes: BTreeMap<u64, String> =
                     serde_yaml::from_reader(prune_file).unwrap();
@@ -766,6 +793,7 @@ fn main() {
             }
         }
         ("list-roots", Some(args_matches)) => {
+            let blocktree = open_blocktree(&ledger_path);
             let max_height = if let Some(height) = args_matches.value_of("max_height") {
                 usize::from_str(height).expect("Maximum height must be a number")
             } else {
@@ -817,7 +845,7 @@ fn main() {
                     }
                 });
         }
-        ("bounds", _) => match blocktree.slot_meta_iterator(0) {
+        ("bounds", _) => match open_blocktree(&ledger_path).slot_meta_iterator(0) {
             Ok(metas) => {
                 println!("Collecting Ledger information...");
                 let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
@@ -841,7 +869,7 @@ fn main() {
                 exit(1);
             }
         },
-        ("analyze-storage", _) => match analyze_storage(&blocktree.db()) {
+        ("analyze-storage", _) => match analyze_storage(&open_database(&ledger_path)) {
             Ok(()) => {
                 println!("Ok.");
             }
