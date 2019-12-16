@@ -10,7 +10,6 @@ pub(super) struct FailEntryVerificationBroadcastRun {
 }
 
 impl FailEntryVerificationBroadcastRun {
-    //let keypair = cluster_info.read().unwrap().keypair.clone();
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
         Self {
             shred_version,
