@@ -40,7 +40,7 @@ num-traits = { version = "0.2" }
 pbkdf2 = { version = "0.3.0", default-features = false }
 rand = { version = "0.6.5", optional = true }
 rand_chacha = { version = "0.1.1", optional = true }
-serde = "1.0.103"
+serde = "1.0.104"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
 serde_json = { version = "1.0.44", optional = true }

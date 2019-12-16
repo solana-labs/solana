@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.2.1"
-serde = "1.0.103"
+serde = "1.0.104"
 
 [lib]
 name = "solana_fixed_buf"
