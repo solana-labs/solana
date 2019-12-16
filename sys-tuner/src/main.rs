@@ -145,7 +145,6 @@ fn main() {
             #[cfg(target_os = "linux")]
             {
                 tune_kernel_udp_buffers();
-                tune_poh_service_priority(peer_uid);
             }
         }
     }
