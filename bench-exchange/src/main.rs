@@ -16,7 +16,7 @@ fn main() {
 
     let cli::Config {
         entrypoint_addr,
-        drone_addr,
+        faucet_addr,
         identity,
         threads,
         num_nodes,
@@ -73,7 +73,7 @@ fn main() {
             const NUM_SIGNERS: u64 = 2;
             airdrop_lamports(
                 &client,
-                &drone_addr,
+                &faucet_addr,
                 &config.identity,
                 fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
             );

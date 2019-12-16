@@ -7,8 +7,8 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
-use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_program::{exchange_instruction, exchange_state::*, id};
+use solana_faucet::faucet::request_airdrop_transaction;
 use solana_genesis::Base64Account;
 use solana_metrics::datapoint_info;
 use solana_sdk::{
@@ -968,7 +968,7 @@ fn generate_keypairs(num: u64) -> Vec<Keypair> {
     rnd.gen_n_keypairs(num)
 }
 
-pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypair, amount: u64) {
+pub fn airdrop_lamports(client: &dyn Client, faucet_addr: &SocketAddr, id: &Keypair, amount: u64) {
     let balance = client.get_balance_with_commitment(&id.pubkey(), CommitmentConfig::recent());
     let balance = balance.unwrap_or(0);
     if balance >= amount {
@@ -980,7 +980,7 @@ pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypa
     info!(
         "Airdropping {:?} lamports from {} for {}",
         amount_to_drop,
-        drone_addr,
+        faucet_addr,
         id.pubkey(),
     );
 
@@ -989,7 +989,7 @@ pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypa
         let (blockhash, _fee_calculator) = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .expect("Failed to get blockhash");
-        match request_airdrop_transaction(&drone_addr, &id.pubkey(), amount_to_drop, blockhash) {
+        match request_airdrop_transaction(&faucet_addr, &id.pubkey(), amount_to_drop, blockhash) {
             Ok(transaction) => {
                 let signature = client.async_send_transaction(transaction).unwrap();
 
@@ -1013,7 +1013,7 @@ pub fn airdrop_lamports(client: &dyn Client, drone_addr: &SocketAddr, id: &Keypa
             Err(err) => {
                 panic!(
                     "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                    err, drone_addr, amount
+                    err, faucet_addr, amount
                 );
             }
         };

@@ -27,7 +27,7 @@ solana-clap-utils = { path = "../clap-utils", version = "0.22.0" }
 solana-core = { path = "../core", version = "0.22.0" }
 solana-genesis = { path = "../genesis", version = "0.22.0" }
 solana-client = { path = "../client", version = "0.22.0" }
-solana-drone = { path = "../drone", version = "0.22.0" }
+solana-faucet = { path = "../faucet", version = "0.22.0" }
 solana-exchange-program = { path = "../programs/exchange", version = "0.22.0" }
 solana-logger = { path = "../logger", version = "0.22.0" }
 solana-metrics = { path = "../metrics", version = "0.22.0" }

@@ -16,9 +16,9 @@ use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
-use solana_drone::drone::request_airdrop_transaction;
+use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
-use solana_drone::drone_mock::request_airdrop_transaction;
+use solana_faucet::faucet_mock::request_airdrop_transaction;
 use solana_sdk::{
     bpf_loader,
     clock::Slot,
@@ -208,8 +208,8 @@ pub enum CliCommand {
     // Wallet Commands
     Address,
     Airdrop {
-        drone_host: Option<IpAddr>,
-        drone_port: u16,
+        faucet_host: Option<IpAddr>,
+        faucet_port: u16,
         lamports: u64,
         use_lamports_unit: bool,
     },
@@ -401,21 +401,21 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             require_keypair: true,
         }),
         ("airdrop", Some(matches)) => {
-            let drone_port = matches
-                .value_of("drone_port")
+            let faucet_port = matches
+                .value_of("faucet_port")
                 .unwrap()
                 .parse()
                 .or_else(|err| {
                     Err(CliError::BadParameter(format!(
-                        "Invalid drone port: {:?}",
+                        "Invalid faucet port: {:?}",
                         err
                     )))
                 })?;
 
-            let drone_host = if let Some(drone_host) = matches.value_of("drone_host") {
-                Some(solana_net_utils::parse_host(drone_host).or_else(|err| {
+            let faucet_host = if let Some(faucet_host) = matches.value_of("faucet_host") {
+                Some(solana_net_utils::parse_host(faucet_host).or_else(|err| {
                     Err(CliError::BadParameter(format!(
-                        "Invalid drone host: {:?}",
+                        "Invalid faucet host: {:?}",
                         err
                     )))
                 })?)
@@ -426,8 +426,8 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             let use_lamports_unit = matches.value_of("unit") == Some("lamports");
             Ok(CliCommandInfo {
                 command: CliCommand::Airdrop {
-                    drone_host,
-                    drone_port,
+                    faucet_host,
+                    faucet_port,
                     lamports,
                     use_lamports_unit,
                 },
@@ -684,14 +684,14 @@ fn process_create_address_with_seed(
 fn process_airdrop(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    drone_addr: &SocketAddr,
+    faucet_addr: &SocketAddr,
     lamports: u64,
     use_lamports_unit: bool,
 ) -> ProcessResult {
     println!(
         "Requesting airdrop of {} from {}",
         build_balance_message(lamports, use_lamports_unit, true),
-        drone_addr
+        faucet_addr
     );
     let previous_balance = match rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)? {
         Some(lamports) => lamports,
@@ -703,7 +703,7 @@ fn process_airdrop(
         }
     };
 
-    request_and_confirm_airdrop(&rpc_client, drone_addr, &config.keypair.pubkey(), lamports)?;
+    request_and_confirm_airdrop(&rpc_client, faucet_addr, &config.keypair.pubkey(), lamports)?;
 
     let current_balance = rpc_client
         .retry_get_balance(&config.keypair.pubkey(), 5)?
@@ -1362,31 +1362,31 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Get address of this client
         CliCommand::Address => unreachable!(),
-        // Request an airdrop from Solana Drone;
+        // Request an airdrop from Solana Faucet;
         CliCommand::Airdrop {
-            drone_host,
-            drone_port,
+            faucet_host,
+            faucet_port,
             lamports,
             use_lamports_unit,
         } => {
-            let drone_addr = SocketAddr::new(
-                drone_host.unwrap_or_else(|| {
-                    let drone_host = url::Url::parse(&config.json_rpc_url)
+            let faucet_addr = SocketAddr::new(
+                faucet_host.unwrap_or_else(|| {
+                    let faucet_host = url::Url::parse(&config.json_rpc_url)
                         .unwrap()
                         .host()
                         .unwrap()
                         .to_string();
-                    solana_net_utils::parse_host(&drone_host).unwrap_or_else(|err| {
-                        panic!("Unable to resolve {}: {}", drone_host, err);
+                    solana_net_utils::parse_host(&faucet_host).unwrap_or_else(|err| {
+                        panic!("Unable to resolve {}: {}", faucet_host, err);
                     })
                 }),
-                *drone_port,
+                *faucet_port,
             );
 
             process_airdrop(
                 &rpc_client,
                 config,
-                &drone_addr,
+                &faucet_addr,
                 *lamports,
                 *use_lamports_unit,
             )
@@ -1446,18 +1446,18 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
 // Quick and dirty Keypair that assumes the client will do retries but not update the
 // blockhash. If the client updates the blockhash, the signature will be invalid.
-struct DroneKeypair {
+struct FaucetKeypair {
     transaction: Transaction,
 }
 
-impl DroneKeypair {
+impl FaucetKeypair {
     fn new_keypair(
-        drone_addr: &SocketAddr,
+        faucet_addr: &SocketAddr,
         to_pubkey: &Pubkey,
         lamports: u64,
         blockhash: Hash,
     ) -> Result<Self, Box<dyn error::Error>> {
-        let transaction = request_airdrop_transaction(drone_addr, to_pubkey, lamports, blockhash)?;
+        let transaction = request_airdrop_transaction(faucet_addr, to_pubkey, lamports, blockhash)?;
         Ok(Self { transaction })
     }
 
@@ -1466,7 +1466,7 @@ impl DroneKeypair {
     }
 }
 
-impl KeypairUtil for DroneKeypair {
+impl KeypairUtil for FaucetKeypair {
     fn new() -> Self {
         unimplemented!();
     }
@@ -1483,7 +1483,7 @@ impl KeypairUtil for DroneKeypair {
 
 pub fn request_and_confirm_airdrop(
     rpc_client: &RpcClient,
-    drone_addr: &SocketAddr,
+    faucet_addr: &SocketAddr,
     to_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
@@ -1491,7 +1491,7 @@ pub fn request_and_confirm_airdrop(
     let keypair = {
         let mut retries = 5;
         loop {
-            let result = DroneKeypair::new_keypair(drone_addr, to_pubkey, lamports, blockhash);
+            let result = FaucetKeypair::new_keypair(faucet_addr, to_pubkey, lamports, blockhash);
             if result.is_ok() || retries == 0 {
                 break result;
             }
@@ -1579,19 +1579,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("airdrop")
                 .about("Request lamports")
                 .arg(
-                    Arg::with_name("drone_host")
-                        .long("drone-host")
+                    Arg::with_name("faucet_host")
+                        .long("faucet-host")
                         .value_name("HOST")
                         .takes_value(true)
-                        .help("Drone host to use [default: the --url host]"),
+                        .help("Faucet host to use [default: the --url host]"),
                 )
                 .arg(
-                    Arg::with_name("drone_port")
-                        .long("drone-port")
+                    Arg::with_name("faucet_port")
+                        .long("faucet-port")
                         .value_name("PORT")
                         .takes_value(true)
-                        .default_value(solana_drone::drone::DRONE_PORT_STR)
-                        .help("Drone port to use"),
+                        .default_value(solana_faucet::faucet::FAUCET_PORT_STR)
+                        .help("Faucet port to use"),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -1907,8 +1907,8 @@ mod tests {
             parse_command(&test_airdrop).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Airdrop {
-                    drone_host: None,
-                    drone_port: solana_drone::drone::DRONE_PORT,
+                    faucet_host: None,
+                    faucet_port: solana_faucet::faucet::FAUCET_PORT,
                     lamports: 50,
                     use_lamports_unit: true,
                 },
@@ -2545,8 +2545,8 @@ mod tests {
 
         // Need airdrop cases
         config.command = CliCommand::Airdrop {
-            drone_host: None,
-            drone_port: 1234,
+            faucet_host: None,
+            faucet_port: 1234,
             lamports: 50,
             use_lamports_unit: true,
         };
@@ -2584,8 +2584,8 @@ mod tests {
         config.rpc_client = Some(RpcClient::new_mock("fails".to_string()));
 
         config.command = CliCommand::Airdrop {
-            drone_host: None,
-            drone_port: 1234,
+            faucet_host: None,
+            faucet_port: 1234,
             lamports: 50,
             use_lamports_unit: true,
         };

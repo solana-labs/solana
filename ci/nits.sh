@@ -19,7 +19,7 @@ declare prints=(
 # Parts of the tree that are expected to be print free
 declare print_free_tree=(
   'core/src'
-  'drone/src'
+  'faucet/src'
   'metrics/src'
   'net-utils/src'
   'runtime/src'

@@ -73,7 +73,7 @@ BINS=(
   solana
   solana-bench-exchange
   solana-bench-tps
-  solana-drone
+  solana-faucet
   solana-gossip
   solana-install
   solana-install-init

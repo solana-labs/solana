@@ -1006,7 +1006,7 @@ logs)
         "$ipAddress":solana/"$log".log "$netLogDir"/remote-"$log"-"$ipAddress".log
     ) || echo "failed to fetch log"
   }
-  fetchRemoteLog "${validatorIpList[0]}" drone
+  fetchRemoteLog "${validatorIpList[0]}" faucet
   for ipAddress in "${validatorIpList[@]}"; do
     fetchRemoteLog "$ipAddress" validator
   done

@@ -1,7 +1,7 @@
 [package]
-name = "solana-drone"
+name = "solana-faucet"
 version = "0.22.0"
-description = "Solana Drone"
+description = "Solana Faucet"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -28,8 +28,8 @@ tokio-codec = "0.1"
 
 [lib]
 crate-type = ["lib"]
-name = "solana_drone"
+name = "solana_faucet"
 
 [[bin]]
-name = "solana-drone"
-path = "src/bin/drone.rs"
+name = "solana-faucet"
+path = "src/bin/faucet.rs"

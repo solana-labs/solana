@@ -51,7 +51,7 @@ else
 fi
 
 solana_bench_tps=$(solana_program bench-tps)
-solana_drone=$(solana_program drone)
+solana_faucet=$(solana_program faucet)
 solana_validator=$(solana_program validator)
 solana_validator_cuda="$solana_validator --cuda"
 solana_genesis=$(solana_program genesis)

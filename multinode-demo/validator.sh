@@ -109,7 +109,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --enable-rpc-exit ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --rpc-drone-address ]]; then
+    elif [[ $1 = --rpc-faucet-address ]]; then
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --vote-signer-address ]]; then
@@ -194,7 +194,7 @@ else
   fi
 fi
 
-drone_address="${gossip_entrypoint%:*}":9900
+faucet_address="${gossip_entrypoint%:*}":9900
 
 : "${identity_keypair_path:=$ledger_dir/identity-keypair.json}"
 : "${voting_keypair_path:=$ledger_dir/vote-keypair.json}"
@@ -202,7 +202,7 @@ drone_address="${gossip_entrypoint%:*}":9900
 
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
-  default_arg --rpc-drone-address "$drone_address"
+  default_arg --rpc-faucet-address "$faucet_address"
 fi
 
 default_arg --identity-keypair "$identity_keypair_path"

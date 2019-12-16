@@ -1,13 +1,17 @@
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction;
-use solana_sdk::transaction::Transaction;
-use std::io::{Error, ErrorKind};
-use std::net::SocketAddr;
+use solana_sdk::{
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    system_transaction,
+    transaction::Transaction,
+};
+use std::{
+    io::{Error, ErrorKind},
+    net::SocketAddr,
+};
 
 pub fn request_airdrop_transaction(
-    _drone_addr: &SocketAddr,
+    _faucet_addr: &SocketAddr,
     _id: &Pubkey,
     lamports: u64,
     _blockhash: Hash,

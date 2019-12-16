@@ -15,7 +15,7 @@ use solana_client::rpc_request::{
     Response, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcResponseContext, RpcVersionInfo,
     RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
-use solana_drone::drone::request_airdrop_transaction;
+use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -50,14 +50,14 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
     pub enable_validator_exit: bool, // Enable the 'validatorExit' command
-    pub drone_addr: Option<SocketAddr>,
+    pub faucet_addr: Option<SocketAddr>,
 }
 
 impl Default for JsonRpcConfig {
     fn default() -> Self {
         Self {
             enable_validator_exit: false,
-            drone_addr: None,
+            faucet_addr: None,
         }
     }
 }
@@ -817,12 +817,12 @@ impl RpcSol for RpcSolImpl {
             &commitment
         );
 
-        let drone_addr = meta
+        let faucet_addr = meta
             .request_processor
             .read()
             .unwrap()
             .config
-            .drone_addr
+            .faucet_addr
             .ok_or_else(Error::invalid_request)?;
         let pubkey = verify_pubkey(pubkey_str)?;
 
@@ -833,11 +833,11 @@ impl RpcSol for RpcSolImpl {
             .bank(commitment.clone())
             .confirmed_last_blockhash()
             .0;
-        let transaction = request_airdrop_transaction(&drone_addr, &pubkey, lamports, blockhash)
+        let transaction = request_airdrop_transaction(&faucet_addr, &pubkey, lamports, blockhash)
             .map_err(|err| {
-                info!("request_airdrop_transaction failed: {:?}", err);
-                Error::internal_error()
-            })?;
+            info!("request_airdrop_transaction failed: {:?}", err);
+            Error::internal_error()
+        })?;
 
         let data = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);
@@ -1586,7 +1586,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        // Expect internal error because no drone is available
+        // Expect internal error because no faucet is available
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"requestAirdrop","params":["{}", 50]}}"#,
             bob_pubkey

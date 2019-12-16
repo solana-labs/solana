@@ -1,5 +1,5 @@
 use clap::{crate_description, crate_name, App, Arg, ArgMatches};
-use solana_drone::drone::DRONE_PORT;
+use solana_faucet::faucet::FAUCET_PORT;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
 use std::{net::SocketAddr, process::exit, time::Duration};
@@ -9,7 +9,7 @@ const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::SOL_LAMP
 /// Holds the configuration for a single run of the benchmark
 pub struct Config {
     pub entrypoint_addr: SocketAddr,
-    pub drone_addr: SocketAddr,
+    pub faucet_addr: SocketAddr,
     pub id: Keypair,
     pub threads: usize,
     pub num_nodes: usize,
@@ -30,7 +30,7 @@ impl Default for Config {
     fn default() -> Config {
         Config {
             entrypoint_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
-            drone_addr: SocketAddr::from(([127, 0, 0, 1], DRONE_PORT)),
+            faucet_addr: SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT)),
             id: Keypair::new(),
             threads: 4,
             num_nodes: 1,
@@ -62,12 +62,12 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Rendezvous with the cluster at this entry point; defaults to 127.0.0.1:8001"),
         )
         .arg(
-            Arg::with_name("drone")
+            Arg::with_name("faucet")
                 .short("d")
-                .long("drone")
+                .long("faucet")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("Location of the drone; defaults to entrypoint:DRONE_PORT"),
+                .help("Location of the faucet; defaults to entrypoint:FAUCET_PORT"),
         )
         .arg(
             Arg::with_name("identity")
@@ -180,9 +180,9 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
         });
     }
 
-    if let Some(addr) = matches.value_of("drone") {
-        args.drone_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse drone address: {}", e);
+    if let Some(addr) = matches.value_of("faucet") {
+        args.faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
+            eprintln!("failed to parse faucet address: {}", e);
             exit(1)
         });
     }

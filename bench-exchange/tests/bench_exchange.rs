@@ -2,10 +2,10 @@ use log::*;
 use solana_bench_exchange::bench::{airdrop_lamports, do_bench_exchange, Config};
 use solana_core::gossip_service::{discover_cluster, get_multi_client};
 use solana_core::validator::ValidatorConfig;
-use solana_drone::drone::run_local_drone;
 use solana_exchange_program::exchange_processor::process_instruction;
 use solana_exchange_program::id;
 use solana_exchange_program::solana_exchange_program;
+use solana_faucet::faucet::run_local_faucet;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;
@@ -46,16 +46,16 @@ fn test_exchange_local_cluster() {
         ..ClusterConfig::default()
     });
 
-    let drone_keypair = Keypair::new();
+    let faucet_keypair = Keypair::new();
     cluster.transfer(
         &cluster.funding_keypair,
-        &drone_keypair.pubkey(),
+        &faucet_keypair.pubkey(),
         2_000_000_000_000,
     );
 
     let (addr_sender, addr_receiver) = channel();
-    run_local_drone(drone_keypair, addr_sender, Some(1_000_000_000_000));
-    let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+    run_local_faucet(faucet_keypair, addr_sender, Some(1_000_000_000_000));
+    let faucet_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
 
     info!("Connecting to the cluster");
     let (nodes, _) =
@@ -72,7 +72,7 @@ fn test_exchange_local_cluster() {
     const NUM_SIGNERS: u64 = 2;
     airdrop_lamports(
         &client,
-        &drone_addr,
+        &faucet_addr,
         &config.identity,
         fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
     );

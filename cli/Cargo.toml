@@ -32,7 +32,7 @@ solana-budget-program = { path = "../programs/budget", version = "0.22.0" }
 solana-clap-utils = { path = "../clap-utils", version = "0.22.0" }
 solana-client = { path = "../client", version = "0.22.0" }
 solana-config-program = { path = "../programs/config", version = "0.22.0" }
-solana-drone = { path = "../drone", version = "0.22.0" }
+solana-faucet = { path = "../faucet", version = "0.22.0" }
 solana-logger = { path = "../logger", version = "0.22.0" }
 solana-net-utils = { path = "../net-utils", version = "0.22.0" }
 solana-runtime = { path = "../runtime", version = "0.22.0" }

@@ -42,12 +42,12 @@ $ NDEBUG=1 ./multinode-demo/setup.sh
 
 ### Drone
 
-In order for the validators and clients to work, we'll need to spin up a drone to give out some test tokens. The drone delivers Milton Friedman-style "air drops" \(free tokens to requesting clients\) to be used in test transactions.
+In order for the validators and clients to work, we'll need to spin up a faucet to give out some test tokens. The faucet delivers Milton Friedman-style "air drops" \(free tokens to requesting clients\) to be used in test transactions.
 
-Start the drone with:
+Start the faucet with:
 
 ```bash
-$ NDEBUG=1 ./multinode-demo/drone.sh
+$ NDEBUG=1 ./multinode-demo/faucet.sh
 ```
 
 ### Singlenode Testnet
@@ -60,7 +60,7 @@ Now start the bootstrap leader in a separate shell:
 $ NDEBUG=1 ./multinode-demo/bootstrap-leader.sh
 ```
 
-Wait a few seconds for the server to initialize. It will print "leader ready..." when it's ready to receive transactions. The leader will request some tokens from the drone if it doesn't have any. The drone does not need to be running for subsequent leader starts.
+Wait a few seconds for the server to initialize. It will print "leader ready..." when it's ready to receive transactions. The leader will request some tokens from the faucet if it doesn't have any. The faucet does not need to be running for subsequent leader starts.
 
 ### Multinode Testnet
 
@@ -126,8 +126,7 @@ This will dump all the threads stack traces into gdb.txt
 In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
 
 ```bash
-$ NDEBUG=1 ./multinode-demo/bench-tps.sh --entrypoint testnet.solana.com:8001 --drone testnet.solana.com:9900 --duration 60 --tx_count 50
+$ NDEBUG=1 ./multinode-demo/bench-tps.sh --entrypoint testnet.solana.com:8001 --faucet testnet.solana.com:9900 --duration 60 --tx_count 50
 ```
 
 You can observe the effects of your client's transactions on our [dashboard](https://metrics.solana.com:3000/d/testnet/testnet-hud?orgId=2&from=now-30m&to=now&refresh=5s&var-testnet=testnet)
-

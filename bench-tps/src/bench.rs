@@ -3,7 +3,7 @@ use log::*;
 use rayon::prelude::*;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
-use solana_drone::drone::request_airdrop_transaction;
+use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(feature = "move")]
 use solana_librapay::{create_genesis, upload_mint_script, upload_payment_script};
 use solana_measure::measure::Measure;
@@ -624,7 +624,7 @@ pub fn fund_keys<T: Client>(
 
 pub fn airdrop_lamports<T: Client>(
     client: &T,
-    drone_addr: &SocketAddr,
+    faucet_addr: &SocketAddr,
     id: &Keypair,
     tx_count: u64,
 ) -> Result<()> {
@@ -637,12 +637,12 @@ pub fn airdrop_lamports<T: Client>(
         info!(
             "Airdropping {:?} lamports from {} for {}",
             airdrop_amount,
-            drone_addr,
+            faucet_addr,
             id.pubkey(),
         );
 
         let (blockhash, _fee_calculator) = get_recent_blockhash(client);
-        match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
+        match request_airdrop_transaction(&faucet_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let mut tries = 0;
                 loop {
@@ -656,7 +656,7 @@ pub fn airdrop_lamports<T: Client>(
                     if tries >= 5 {
                         panic!(
                             "Error requesting airdrop: to addr: {:?} amount: {} {:?}",
-                            drone_addr, airdrop_amount, result
+                            faucet_addr, airdrop_amount, result
                         )
                     }
                 }
@@ -664,7 +664,7 @@ pub fn airdrop_lamports<T: Client>(
             Err(err) => {
                 panic!(
                     "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                    err, drone_addr, airdrop_amount
+                    err, faucet_addr, airdrop_amount
                 );
             }
         };
@@ -947,7 +947,7 @@ fn fund_move_keys<T: Client>(
 
 pub fn generate_and_fund_keypairs<T: Client>(
     client: &T,
-    drone_addr: Option<SocketAddr>,
+    faucet_addr: Option<SocketAddr>,
     funding_key: &Keypair,
     tx_count: usize,
     lamports_per_account: u64,
@@ -985,7 +985,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
                  );
 
         if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
-            airdrop_lamports(client, &drone_addr.unwrap(), funding_key, total)?;
+            airdrop_lamports(client, &faucet_addr.unwrap(), funding_key, total)?;
         }
 
         #[cfg(feature = "move")]

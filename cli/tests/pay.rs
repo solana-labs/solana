@@ -2,7 +2,7 @@ use chrono::prelude::*;
 use serde_json::Value;
 use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
-use solana_drone::drone::run_local_drone;
+use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::KeypairUtil, signature::Signature};
 use std::fs::remove_dir_all;
 use std::str::FromStr;
@@ -32,8 +32,8 @@ fn test_cli_timestamp_tx() {
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender, None);
-    let drone_addr = receiver.recv().unwrap();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
@@ -49,13 +49,18 @@ fn test_cli_timestamp_tx() {
         config_witness.keypair.pubkey()
     );
 
-    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.keypair.pubkey(), 50)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config_payer.keypair.pubkey(),
+        50,
+    )
+    .unwrap();
     check_balance(50, &rpc_client, &config_payer.keypair.pubkey());
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &drone_addr,
+        &faucet_addr,
         &config_witness.keypair.pubkey(),
         1,
     )
@@ -106,8 +111,8 @@ fn test_cli_witness_tx() {
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender, None);
-    let drone_addr = receiver.recv().unwrap();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
@@ -123,11 +128,16 @@ fn test_cli_witness_tx() {
         config_witness.keypair.pubkey()
     );
 
-    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.keypair.pubkey(), 50)
-        .unwrap();
     request_and_confirm_airdrop(
         &rpc_client,
-        &drone_addr,
+        &faucet_addr,
+        &config_payer.keypair.pubkey(),
+        50,
+    )
+    .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
         &config_witness.keypair.pubkey(),
         1,
     )
@@ -176,8 +186,8 @@ fn test_cli_cancel_tx() {
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender, None);
-    let drone_addr = receiver.recv().unwrap();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
@@ -193,8 +203,13 @@ fn test_cli_cancel_tx() {
         config_witness.keypair.pubkey()
     );
 
-    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.keypair.pubkey(), 50)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config_payer.keypair.pubkey(),
+        50,
+    )
+    .unwrap();
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
     config_payer.command = CliCommand::Pay {
@@ -239,8 +254,8 @@ fn test_offline_pay_tx() {
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender, None);
-    let drone_addr = receiver.recv().unwrap();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
@@ -257,7 +272,7 @@ fn test_offline_pay_tx() {
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &drone_addr,
+        &faucet_addr,
         &config_offline.keypair.pubkey(),
         50,
     )
@@ -265,7 +280,7 @@ fn test_offline_pay_tx() {
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &drone_addr,
+        &faucet_addr,
         &config_online.keypair.pubkey(),
         50,
     )

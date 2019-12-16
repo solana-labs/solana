@@ -73,7 +73,7 @@ source scripts/configure-metrics.sh
 source multinode-demo/common.sh
 
 nodes=(
-  "multinode-demo/drone.sh"
+  "multinode-demo/faucet.sh"
   "multinode-demo/bootstrap-leader.sh \
     --no-restart \
     --init-complete-file init-complete-node1.log \
@@ -160,7 +160,7 @@ startNodes() {
   for i in $(seq 0 $((${#nodes[@]} - 1))); do
     declare cmd=${nodes[$i]}
 
-    if [[ "$i" -ne 0 ]]; then # 0 == drone, skip it
+    if [[ "$i" -ne 0 ]]; then # 0 == faucet, skip it
       declare initCompleteFile="init-complete-node$i.log"
       rm -f "$initCompleteFile"
       initCompleteFiles+=("$initCompleteFile")
@@ -243,8 +243,8 @@ rollingNodeRestart() {
     declare pid=${oldPids[$i]}
     declare cmd=${nodes[$i]}
     if [[ $i -eq 0 ]]; then
-      # First cmd should be the drone, don't restart it.
-      [[ "$cmd" = "multinode-demo/drone.sh" ]]
+      # First cmd should be the faucet, don't restart it.
+      [[ "$cmd" = "multinode-demo/faucet.sh" ]]
       pids+=("$pid")
     else
       echo "--- Restarting $pid: $cmd"
@@ -265,7 +265,7 @@ rollingNodeRestart() {
   # 'Atomically' remove the old pids from the pids array
   declare oldPidsList
   oldPidsList="$(printf ":%s" "${oldPids[@]}"):"
-  declare newPids=("${pids[0]}") # 0 = drone pid
+  declare newPids=("${pids[0]}") # 0 = faucet pid
   for pid in "${pids[@]}"; do
     [[ $oldPidsList =~ :$pid: ]] || {
       newPids+=("$pid")

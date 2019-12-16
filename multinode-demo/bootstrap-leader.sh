@@ -82,7 +82,7 @@ args+=(
   --identity-keypair "$identity_keypair"
   --storage-keypair "$storage_keypair"
   --voting-keypair "$vote_keypair"
-  --rpc-drone-address 127.0.0.1:9900
+  --rpc-faucet-address 127.0.0.1:9900
 )
 default_arg --gossip-port 8001
 default_arg --log -

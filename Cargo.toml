@@ -7,7 +7,7 @@ members = [
     "chacha-sys",
     "client",
     "core",
-    "drone",
+    "faucet",
     "perf",
     "validator",
     "genesis",

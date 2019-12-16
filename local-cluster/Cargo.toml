@@ -15,7 +15,7 @@ rand = "0.6.5"
 solana-config-program = { path = "../programs/config", version = "0.22.0" }
 solana-core = { path = "../core", version = "0.22.0" }
 solana-client = { path = "../client", version = "0.22.0" }
-solana-drone = { path = "../drone", version = "0.22.0" }
+solana-faucet = { path = "../faucet", version = "0.22.0" }
 solana-exchange-program = { path = "../programs/exchange", version = "0.22.0" }
 solana-genesis-programs = { path = "../genesis-programs", version = "0.22.0" }
 solana-ledger = { path = "../ledger", version = "0.22.0" }

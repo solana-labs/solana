@@ -2,7 +2,7 @@ use serde_json::Value;
 use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
-use solana_drone::drone::run_local_drone;
+use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{bpf_loader, pubkey::Pubkey};
 use std::{
     fs::{remove_dir_all, File},
@@ -25,8 +25,8 @@ fn test_cli_deploy_program() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
 
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender, None);
-    let drone_addr = receiver.recv().unwrap();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
@@ -40,8 +40,8 @@ fn test_cli_deploy_program() {
     let mut config = CliConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.command = CliCommand::Airdrop {
-        drone_host: None,
-        drone_port: drone_addr.port(),
+        faucet_host: None,
+        faucet_port: faucet_addr.port(),
         lamports: minimum_balance_for_rent_exemption + 1, // min balance for rent exemption + leftover for tx processing
         use_lamports_unit: true,
     };
