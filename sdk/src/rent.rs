@@ -48,8 +48,11 @@ impl Rent {
     /// minimum balance due for a given size Account::data.len()
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
-        (((ACCOUNT_STORAGE_OVERHEAD + bytes) * self.lamports_per_byte_year) as f64
-            * self.exemption_threshold) as u64
+        let minimum_balance = (((ACCOUNT_STORAGE_OVERHEAD + bytes) * self.lamports_per_byte_year)
+            as f64
+            * self.exemption_threshold) as u64;
+        // accounts need at least 1 lamport to be active
+        minimum_balance.max(1)
     }
 
     /// whether a given balance and data_len would be exempt

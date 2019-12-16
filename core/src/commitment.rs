@@ -238,7 +238,7 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::pubkey::Pubkey;
-    use solana_stake_program::stake_state;
+    use solana_stake_program::stake_state::{self, StakeState};
     use solana_vote_program::vote_state;
 
     #[test]
@@ -430,14 +430,16 @@ mod tests {
 
         let sk1 = Pubkey::new_rand();
         let pk1 = Pubkey::new_rand();
+        let rent = &genesis_config.rent;
         let mut vote_account1 = vote_state::create_account(&pk1, &Pubkey::new_rand(), 0, 100);
+        let min_stake_balance = StakeState::get_rent_exempt_reserve(rent);
         let stake_account1 =
-            stake_state::create_account(&sk1, &pk1, &vote_account1, &genesis_config.rent, 100);
+            stake_state::create_account(&sk1, &pk1, &vote_account1, rent, 100 + min_stake_balance);
         let sk2 = Pubkey::new_rand();
         let pk2 = Pubkey::new_rand();
         let mut vote_account2 = vote_state::create_account(&pk2, &Pubkey::new_rand(), 0, 50);
         let stake_account2 =
-            stake_state::create_account(&sk2, &pk2, &vote_account2, &genesis_config.rent, 50);
+            stake_state::create_account(&sk2, &pk2, &vote_account2, rent, 50 + min_stake_balance);
 
         genesis_config.accounts.extend(vec![
             (pk1, vote_account1.clone()),

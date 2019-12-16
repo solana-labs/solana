@@ -8,7 +8,7 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil},
     system_program::{self, solana_system_program},
 };
-use solana_stake_program::stake_state;
+use solana_stake_program::stake_state::{self, StakeState};
 use solana_vote_program::vote_state;
 
 // The default stake placed with the bootstrap leader
@@ -42,12 +42,13 @@ pub fn create_genesis_config_with_leader(
 
     let rent = Rent::free();
 
+    let min_stake_balance = StakeState::get_rent_exempt_reserve(&rent);
     let bootstrap_leader_stake_account = stake_state::create_account(
         &bootstrap_leader_staking_keypair.pubkey(),
         &bootstrap_leader_voting_keypair.pubkey(),
         &bootstrap_leader_vote_account,
         &rent,
-        bootstrap_leader_stake_lamports,
+        bootstrap_leader_stake_lamports + min_stake_balance,
     );
 
     let accounts = [

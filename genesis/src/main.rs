@@ -382,7 +382,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &bootstrap_vote_pubkey,
         &bootstrap_leader_pubkey,
         0,
-        VoteState::get_rent_exempt_reserve(&rent).max(1),
+        VoteState::get_rent_exempt_reserve(&rent),
     );
 
     let bootstrap_leader_stake_account = stake_state::create_account(

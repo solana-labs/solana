@@ -37,10 +37,10 @@ pub fn create_and_add_validator(
     let node_lamports = sol_to_lamports(validator_info.node_sol);
 
     // node is the system account from which votes will be issued
-    let node_rent_reserve = genesis_config.rent.minimum_balance(0).max(1);
+    let node_rent_reserve = genesis_config.rent.minimum_balance(0);
     let node_voting_fees = calculate_voting_fees(genesis_config, 1.0);
 
-    let vote_rent_reserve = VoteState::get_rent_exempt_reserve(&genesis_config.rent).max(1);
+    let vote_rent_reserve = VoteState::get_rent_exempt_reserve(&genesis_config.rent);
 
     let mut total_lamports = node_voting_fees + vote_rent_reserve + node_lamports;
 
@@ -97,8 +97,7 @@ mod tests {
         assert!(genesis_config
             .accounts
             .iter()
-            .all(|(_pubkey, account)| account.lamports
-                >= genesis_config.rent.minimum_balance(0).max(1)));
+            .all(|(_pubkey, account)| account.lamports >= genesis_config.rent.minimum_balance(0)));
     }
 
     #[test]
