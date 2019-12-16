@@ -22,6 +22,6 @@ fi
 
 set -x
 
-point="drone-airdrop,localmetrics=test request_amount=1i,request_current=1i"
+point="faucet-airdrop,localmetrics=test request_amount=1i,request_current=1i"
 echo "${host}/write?db=${INFLUX_DATABASE}&u=${INFLUX_USERNAME}&p={$INFLUX_PASSWORD}" \
   | xargs curl -XPOST --data-binary "$point"

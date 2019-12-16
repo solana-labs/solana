@@ -447,12 +447,12 @@ pub fn main() {
                 .help("Enable the JSON RPC 'validatorExit' API.  Only enable in a debug environment"),
         )
         .arg(
-            Arg::with_name("rpc_drone_addr")
-                .long("rpc-drone-address")
+            Arg::with_name("rpc_faucet_addr")
+                .long("rpc-faucet-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host_port)
-                .help("Enable the JSON RPC 'requestAirdrop' API with this drone address."),
+                .help("Enable the JSON RPC 'requestAirdrop' API with this faucet address."),
         )
         .arg(
             Arg::with_name("signer_addr")
@@ -583,8 +583,8 @@ pub fn main() {
 
     validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
 
-    validator_config.rpc_config.drone_addr = matches.value_of("rpc_drone_addr").map(|address| {
-        solana_net_utils::parse_host_port(address).expect("failed to parse drone address")
+    validator_config.rpc_config.faucet_addr = matches.value_of("rpc_faucet_addr").map(|address| {
+        solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
     });
 
     let dynamic_port_range =

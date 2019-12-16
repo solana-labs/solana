@@ -1,6 +1,6 @@
-//! The `drone` module provides an object for launching a Solana Drone,
+//! The `faucet` module provides an object for launching a Solana Faucet,
 //! which is the custodian of any remaining lamports in a mint.
-//! The Solana Drone builds and send airdrop transactions,
+//! The Solana Faucet builds and send airdrop transactions,
 //! checking requests against a request cap for a given time time_slice
 //! and (to come) an IP rate limit.
 
@@ -10,23 +10,27 @@ use bytes::{Bytes, BytesMut};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_info;
-use solana_sdk::hash::Hash;
-use solana_sdk::message::Message;
-use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction;
-use solana_sdk::transaction::Transaction;
-use std::io;
-use std::io::{Error, ErrorKind};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
-use tokio;
-use tokio::net::TcpListener;
-use tokio::prelude::{Future, Read, Sink, Stream, Write};
+use solana_sdk::{
+    hash::Hash,
+    message::Message,
+    packet::PACKET_DATA_SIZE,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    system_instruction,
+    transaction::Transaction,
+};
+use std::{
+    io::{self, Error, ErrorKind},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
+    sync::{mpsc::Sender, Arc, Mutex},
+    thread,
+    time::Duration,
+};
+use tokio::{
+    self,
+    net::TcpListener,
+    prelude::{Future, Read, Sink, Stream, Write},
+};
 use tokio_codec::{BytesCodec, Decoder};
 
 #[macro_export]
@@ -42,11 +46,11 @@ macro_rules! socketaddr {
 
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = solana_sdk::native_token::SOL_LAMPORTS * 1_000_000;
-pub const DRONE_PORT: u16 = 9900;
-pub const DRONE_PORT_STR: &str = "9900";
+pub const FAUCET_PORT: u16 = 9900;
+pub const FAUCET_PORT_STR: &str = "9900";
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-pub enum DroneRequest {
+pub enum FaucetRequest {
     GetAirdrop {
         lamports: u64,
         to: Pubkey,
@@ -54,7 +58,7 @@ pub enum DroneRequest {
     },
 }
 
-pub struct Drone {
+pub struct Faucet {
     mint_keypair: Keypair,
     ip_cache: Vec<IpAddr>,
     pub time_slice: Duration,
@@ -62,12 +66,12 @@ pub struct Drone {
     pub request_current: u64,
 }
 
-impl Drone {
+impl Faucet {
     pub fn new(
         mint_keypair: Keypair,
         time_input: Option<u64>,
         request_cap_input: Option<u64>,
-    ) -> Drone {
+    ) -> Faucet {
         let time_slice = match time_input {
             Some(time) => Duration::new(time, 0),
             None => Duration::new(TIME_SLICE, 0),
@@ -76,7 +80,7 @@ impl Drone {
             Some(cap) => cap,
             None => REQUEST_CAP,
         };
-        Drone {
+        Faucet {
             mint_keypair,
             ip_cache: Vec::new(),
             time_slice,
@@ -103,11 +107,11 @@ impl Drone {
 
     pub fn build_airdrop_transaction(
         &mut self,
-        req: DroneRequest,
+        req: FaucetRequest,
     ) -> Result<Transaction, io::Error> {
         trace!("build_airdrop_transaction: {:?}", req);
         match req {
-            DroneRequest::GetAirdrop {
+            FaucetRequest::GetAirdrop {
                 lamports,
                 to,
                 blockhash,
@@ -115,7 +119,7 @@ impl Drone {
                 if self.check_request_limit(lamports) {
                     self.request_current += lamports;
                     datapoint_info!(
-                        "drone-airdrop",
+                        "faucet-airdrop",
                         ("request_amount", lamports, i64),
                         ("request_current", self.request_current, i64)
                     );
@@ -137,11 +141,11 @@ impl Drone {
             }
         }
     }
-    pub fn process_drone_request(&mut self, bytes: &BytesMut) -> Result<Bytes, io::Error> {
-        let req: DroneRequest = deserialize(bytes).or_else(|err| {
+    pub fn process_faucet_request(&mut self, bytes: &BytesMut) -> Result<Bytes, io::Error> {
+        let req: FaucetRequest = deserialize(bytes).or_else(|err| {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("deserialize packet in drone: {:?}", err),
+                format!("deserialize packet in faucet: {:?}", err),
             ))
         })?;
 
@@ -152,7 +156,7 @@ impl Drone {
                 let response_vec = bincode::serialize(&tx).or_else(|err| {
                     Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("deserialize packet in drone: {:?}", err),
+                        format!("deserialize packet in faucet: {:?}", err),
                     ))
                 })?;
 
@@ -172,31 +176,31 @@ impl Drone {
     }
 }
 
-impl Drop for Drone {
+impl Drop for Faucet {
     fn drop(&mut self) {
         solana_metrics::flush();
     }
 }
 
 pub fn request_airdrop_transaction(
-    drone_addr: &SocketAddr,
+    faucet_addr: &SocketAddr,
     id: &Pubkey,
     lamports: u64,
     blockhash: Hash,
 ) -> Result<Transaction, Error> {
     info!(
-        "request_airdrop_transaction: drone_addr={} id={} lamports={} blockhash={}",
-        drone_addr, id, lamports, blockhash
+        "request_airdrop_transaction: faucet_addr={} id={} lamports={} blockhash={}",
+        faucet_addr, id, lamports, blockhash
     );
 
-    let mut stream = TcpStream::connect_timeout(drone_addr, Duration::new(3, 0))?;
+    let mut stream = TcpStream::connect_timeout(faucet_addr, Duration::new(3, 0))?;
     stream.set_read_timeout(Some(Duration::new(10, 0)))?;
-    let req = DroneRequest::GetAirdrop {
+    let req = FaucetRequest::GetAirdrop {
         lamports,
         blockhash,
         to: *id,
     };
-    let req = serialize(&req).expect("serialize drone request");
+    let req = serialize(&req).expect("serialize faucet request");
     stream.write_all(&req)?;
 
     // Read length of transaction
@@ -213,7 +217,7 @@ pub fn request_airdrop_transaction(
         return Err(Error::new(
             ErrorKind::Other,
             format!(
-                "request_airdrop_transaction: invalid transaction_length from drone: {}",
+                "request_airdrop_transaction: invalid transaction_length from faucet: {}",
                 transaction_length
             ),
         ));
@@ -240,42 +244,42 @@ pub fn request_airdrop_transaction(
 }
 
 // For integration tests. Listens on random open port and reports port to Sender.
-pub fn run_local_drone(
+pub fn run_local_faucet(
     mint_keypair: Keypair,
     sender: Sender<SocketAddr>,
     request_cap_input: Option<u64>,
 ) {
     thread::spawn(move || {
-        let drone_addr = socketaddr!(0, 0);
-        let drone = Arc::new(Mutex::new(Drone::new(
+        let faucet_addr = socketaddr!(0, 0);
+        let faucet = Arc::new(Mutex::new(Faucet::new(
             mint_keypair,
             None,
             request_cap_input,
         )));
-        run_drone(drone, drone_addr, Some(sender));
+        run_faucet(faucet, faucet_addr, Some(sender));
     });
 }
 
-pub fn run_drone(
-    drone: Arc<Mutex<Drone>>,
-    drone_addr: SocketAddr,
+pub fn run_faucet(
+    faucet: Arc<Mutex<Faucet>>,
+    faucet_addr: SocketAddr,
     send_addr: Option<Sender<SocketAddr>>,
 ) {
-    let socket = TcpListener::bind(&drone_addr).unwrap();
+    let socket = TcpListener::bind(&faucet_addr).unwrap();
     if let Some(send_addr) = send_addr {
         send_addr.send(socket.local_addr().unwrap()).unwrap();
     }
-    info!("Drone started. Listening on: {}", drone_addr);
+    info!("Faucet started. Listening on: {}", faucet_addr);
     let done = socket
         .incoming()
         .map_err(|e| debug!("failed to accept socket; error = {:?}", e))
         .for_each(move |socket| {
-            let drone2 = drone.clone();
+            let faucet2 = faucet.clone();
             let framed = BytesCodec::new().framed(socket);
             let (writer, reader) = framed.split();
 
             let processor = reader.and_then(move |bytes| {
-                match drone2.lock().unwrap().process_drone_request(&bytes) {
+                match faucet2.lock().unwrap().process_faucet_request(&bytes) {
                     Ok(response_bytes) => {
                         trace!("Airdrop response_bytes: {:?}", response_bytes.to_vec());
                         Ok(response_bytes)
@@ -290,7 +294,7 @@ pub fn run_drone(
                 .send_all(processor.or_else(|err| {
                     Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("Drone response: {:?}", err),
+                        format!("Faucet response: {:?}", err),
                     ))
                 }))
                 .then(|_| Ok(()));
@@ -309,61 +313,61 @@ mod tests {
     #[test]
     fn test_check_request_limit() {
         let keypair = Keypair::new();
-        let mut drone = Drone::new(keypair, None, Some(3));
-        assert!(drone.check_request_limit(1));
-        drone.request_current = 3;
-        assert!(!drone.check_request_limit(1));
+        let mut faucet = Faucet::new(keypair, None, Some(3));
+        assert!(faucet.check_request_limit(1));
+        faucet.request_current = 3;
+        assert!(!faucet.check_request_limit(1));
     }
 
     #[test]
     fn test_clear_request_count() {
         let keypair = Keypair::new();
-        let mut drone = Drone::new(keypair, None, None);
-        drone.request_current = drone.request_current + 256;
-        assert_eq!(drone.request_current, 256);
-        drone.clear_request_count();
-        assert_eq!(drone.request_current, 0);
+        let mut faucet = Faucet::new(keypair, None, None);
+        faucet.request_current = faucet.request_current + 256;
+        assert_eq!(faucet.request_current, 256);
+        faucet.clear_request_count();
+        assert_eq!(faucet.request_current, 0);
     }
 
     #[test]
     fn test_add_ip_to_cache() {
         let keypair = Keypair::new();
-        let mut drone = Drone::new(keypair, None, None);
+        let mut faucet = Faucet::new(keypair, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
-        assert_eq!(drone.ip_cache.len(), 0);
-        drone.add_ip_to_cache(ip);
-        assert_eq!(drone.ip_cache.len(), 1);
-        assert!(drone.ip_cache.contains(&ip));
+        assert_eq!(faucet.ip_cache.len(), 0);
+        faucet.add_ip_to_cache(ip);
+        assert_eq!(faucet.ip_cache.len(), 1);
+        assert!(faucet.ip_cache.contains(&ip));
     }
 
     #[test]
     fn test_clear_ip_cache() {
         let keypair = Keypair::new();
-        let mut drone = Drone::new(keypair, None, None);
+        let mut faucet = Faucet::new(keypair, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
-        assert_eq!(drone.ip_cache.len(), 0);
-        drone.add_ip_to_cache(ip);
-        assert_eq!(drone.ip_cache.len(), 1);
-        drone.clear_ip_cache();
-        assert_eq!(drone.ip_cache.len(), 0);
-        assert!(drone.ip_cache.is_empty());
+        assert_eq!(faucet.ip_cache.len(), 0);
+        faucet.add_ip_to_cache(ip);
+        assert_eq!(faucet.ip_cache.len(), 1);
+        faucet.clear_ip_cache();
+        assert_eq!(faucet.ip_cache.len(), 0);
+        assert!(faucet.ip_cache.is_empty());
     }
 
     #[test]
-    fn test_drone_default_init() {
+    fn test_faucet_default_init() {
         let keypair = Keypair::new();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
-        let drone = Drone::new(keypair, time_slice, request_cap);
-        assert_eq!(drone.time_slice, Duration::new(TIME_SLICE, 0));
-        assert_eq!(drone.request_cap, REQUEST_CAP);
+        let faucet = Faucet::new(keypair, time_slice, request_cap);
+        assert_eq!(faucet.time_slice, Duration::new(TIME_SLICE, 0));
+        assert_eq!(faucet.request_cap, REQUEST_CAP);
     }
 
     #[test]
-    fn test_drone_build_airdrop_transaction() {
+    fn test_faucet_build_airdrop_transaction() {
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let request = DroneRequest::GetAirdrop {
+        let request = FaucetRequest::GetAirdrop {
             lamports: 2,
             to,
             blockhash,
@@ -371,9 +375,9 @@ mod tests {
 
         let mint = Keypair::new();
         let mint_pubkey = mint.pubkey();
-        let mut drone = Drone::new(mint, None, None);
+        let mut faucet = Faucet::new(mint, None, None);
 
-        let tx = drone.build_airdrop_transaction(request).unwrap();
+        let tx = faucet.build_airdrop_transaction(request).unwrap();
         let message = tx.message();
 
         assert_eq!(tx.signatures.len(), 1);
@@ -388,17 +392,17 @@ mod tests {
         assert_eq!(instruction, SystemInstruction::Transfer { lamports: 2 });
 
         let mint = Keypair::new();
-        drone = Drone::new(mint, None, Some(1));
-        let tx = drone.build_airdrop_transaction(request);
+        faucet = Faucet::new(mint, None, Some(1));
+        let tx = faucet.build_airdrop_transaction(request);
         assert!(tx.is_err());
     }
 
     #[test]
-    fn test_process_drone_request() {
+    fn test_process_faucet_request() {
         let to = Pubkey::new_rand();
         let blockhash = Hash::new(&to.as_ref());
         let lamports = 50;
-        let req = DroneRequest::GetAirdrop {
+        let req = FaucetRequest::GetAirdrop {
             lamports,
             blockhash,
             to,
@@ -416,13 +420,13 @@ mod tests {
         LittleEndian::write_u16(&mut expected_vec_with_length, expected_bytes.len() as u16);
         expected_vec_with_length.extend_from_slice(&expected_bytes);
 
-        let mut drone = Drone::new(keypair, None, None);
-        let response = drone.process_drone_request(&bytes);
+        let mut faucet = Faucet::new(keypair, None, None);
+        let response = faucet.process_faucet_request(&bytes);
         let response_vec = response.unwrap().to_vec();
         assert_eq!(expected_vec_with_length, response_vec);
 
         let mut bad_bytes = BytesMut::with_capacity(9);
         bad_bytes.put("bad bytes");
-        assert!(drone.process_drone_request(&bad_bytes).is_err());
+        assert!(faucet.process_faucet_request(&bad_bytes).is_err());
     }
 }

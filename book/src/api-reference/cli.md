@@ -266,8 +266,8 @@ FLAGS:
 
 OPTIONS:
     -C, --config <PATH>        Configuration file to use [default: ~/.config/solana/cli/config.yml]
-        --drone-host <HOST>    Drone host to use [default: the --url host]
-        --drone-port <PORT>    Drone port to use [default: 9900]
+        --faucet-host <HOST>    Drone host to use [default: the --url host]
+        --faucet-port <PORT>    Drone port to use [default: 9900]
     -u, --url <URL>            JSON RPC URL for the solana cluster
     -k, --keypair <PATH>       /path/to/id.json
 

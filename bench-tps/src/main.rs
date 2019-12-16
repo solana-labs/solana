@@ -20,7 +20,7 @@ fn main() {
 
     let cli::Config {
         entrypoint_addr,
-        drone_addr,
+        faucet_addr,
         id,
         num_nodes,
         tx_count,
@@ -119,7 +119,7 @@ fn main() {
     } else {
         generate_and_fund_keypairs(
             &client,
-            Some(*drone_addr),
+            Some(*faucet_addr),
             &id,
             *tx_count,
             *num_lamports_per_account,

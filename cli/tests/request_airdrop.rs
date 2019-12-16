@@ -1,7 +1,7 @@
 use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
-use solana_drone::drone::run_local_drone;
+use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::signature::KeypairUtil;
 use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
@@ -10,14 +10,14 @@ use std::sync::mpsc::channel;
 fn test_cli_request_airdrop() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender, None);
-    let drone_addr = receiver.recv().unwrap();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
 
     let mut bob_config = CliConfig::default();
     bob_config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     bob_config.command = CliCommand::Airdrop {
-        drone_host: None,
-        drone_port: drone_addr.port(),
+        faucet_host: None,
+        faucet_port: faucet_addr.port(),
         lamports: 50,
         use_lamports_unit: true,
     };

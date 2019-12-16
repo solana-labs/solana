@@ -37,7 +37,7 @@ adhoc metrics collection/viewing
 Simple example of pulling all airdrop measurements out of the `testnet` database:
 
 ```sh
-$ influx -database testnet -username read -password read -execute 'SELECT * FROM "drone-airdrop"'
+$ influx -database testnet -username read -password read -execute 'SELECT * FROM "faucet-airdrop"'
 ```
 
 Reference: https://docs.influxdata.com/influxdb/v1.5/query_language/

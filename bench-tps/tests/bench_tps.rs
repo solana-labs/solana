@@ -4,7 +4,7 @@ use solana_bench_tps::cli::Config;
 use solana_client::thin_client::create_client;
 use solana_core::cluster_info::VALIDATOR_PORT_RANGE;
 use solana_core::validator::ValidatorConfig;
-use solana_drone::drone::run_local_drone;
+use solana_faucet::faucet::run_local_faucet;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 #[cfg(feature = "move")]
 use solana_sdk::move_loader::solana_move_loader_program;
@@ -29,10 +29,10 @@ fn test_bench_tps_local_cluster(config: Config) {
         ..ClusterConfig::default()
     });
 
-    let drone_keypair = Keypair::new();
+    let faucet_keypair = Keypair::new();
     cluster.transfer(
         &cluster.funding_keypair,
-        &drone_keypair.pubkey(),
+        &faucet_keypair.pubkey(),
         100_000_000,
     );
 
@@ -42,14 +42,14 @@ fn test_bench_tps_local_cluster(config: Config) {
     );
 
     let (addr_sender, addr_receiver) = channel();
-    run_local_drone(drone_keypair, addr_sender, None);
-    let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+    run_local_faucet(faucet_keypair, addr_sender, None);
+    let faucet_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
 
     let lamports_per_account = 100;
 
     let (keypairs, move_keypairs, _keypair_balance) = generate_and_fund_keypairs(
         &client,
-        Some(drone_addr),
+        Some(faucet_addr),
         &config.id,
         config.tx_count,
         lamports_per_account,

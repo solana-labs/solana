@@ -1,7 +1,7 @@
 use serde_json::Value;
 use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
-use solana_drone::drone::run_local_drone;
+use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
@@ -43,8 +43,8 @@ fn test_stake_delegation_and_deactivation() {
 
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender, None);
-    let drone_addr = receiver.recv().unwrap();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
@@ -66,7 +66,7 @@ fn test_stake_delegation_and_deactivation() {
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &drone_addr,
+        &faucet_addr,
         &config_validator.keypair.pubkey(),
         100_000,
     )
@@ -126,8 +126,8 @@ fn test_stake_delegation_and_deactivation_offline() {
 
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender, None);
-    let drone_addr = receiver.recv().unwrap();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
@@ -153,7 +153,7 @@ fn test_stake_delegation_and_deactivation_offline() {
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &drone_addr,
+        &faucet_addr,
         &config_validator.keypair.pubkey(),
         100_000,
     )

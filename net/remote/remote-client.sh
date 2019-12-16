@@ -49,7 +49,7 @@ solana-bench-tps)
   clientCommand="\
     solana-bench-tps \
       --entrypoint $entrypointIp:8001 \
-      --drone $entrypointIp:9900 \
+      --faucet $entrypointIp:9900 \
       --duration 7500 \
       --sustained \
       --threads $threadCount \
@@ -64,7 +64,7 @@ solana-bench-exchange)
   clientCommand="\
     solana-bench-exchange \
       --entrypoint $entrypointIp:8001 \
-      --drone $entrypointIp:9900 \
+      --faucet $entrypointIp:9900 \
       --threads $threadCount \
       --batch-size 1000 \
       --fund-amount 20000 \

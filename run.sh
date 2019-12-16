@@ -17,7 +17,7 @@ fi
 PATH=$PWD/target/$profile:$PATH
 
 ok=true
-for program in solana-{drone,genesis,keygen,validator}; do
+for program in solana-{faucet,genesis,keygen,validator}; do
   $program -V || ok=false
 done
 $ok || {
@@ -90,13 +90,13 @@ solana-genesis \
 
 abort() {
   set +e
-  kill "$drone" "$validator"
+  kill "$faucet" "$validator"
   wait "$validator"
 }
 trap abort INT TERM EXIT
 
-solana-drone --keypair "$dataDir"/faucet-keypair.json &
-drone=$!
+solana-faucet --keypair "$dataDir"/faucet-keypair.json &
+faucet=$!
 
 args=(
   --identity-keypair "$dataDir"/leader-keypair.json
@@ -105,7 +105,7 @@ args=(
   --ledger "$ledgerDir"
   --gossip-port 8001
   --rpc-port 8899
-  --rpc-drone-address 127.0.0.1:9900
+  --rpc-faucet-address 127.0.0.1:9900
   --accounts "$dataDir"/accounts
   --log -
   --enable-rpc-exit

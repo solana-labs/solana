@@ -1,15 +1,19 @@
 use clap::{crate_description, crate_name, App, Arg};
-use solana_drone::drone::{run_drone, Drone, DRONE_PORT};
-use solana_drone::socketaddr;
+use solana_faucet::{
+    faucet::{run_faucet, Faucet, FAUCET_PORT},
+    socketaddr,
+};
 use solana_sdk::signature::read_keypair_file;
-use std::error;
-use std::net::{Ipv4Addr, SocketAddr};
-use std::sync::{Arc, Mutex};
-use std::thread;
+use std::{
+    error,
+    net::{Ipv4Addr, SocketAddr},
+    sync::{Arc, Mutex},
+    thread,
+};
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_filter("solana=info");
-    solana_metrics::set_panic_hook("drone");
+    solana_metrics::set_panic_hook("faucet");
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_clap_utils::version!())
@@ -27,7 +31,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("slice")
                 .value_name("SECS")
                 .takes_value(true)
-                .help("Time slice over which to limit requests to drone"),
+                .help("Time slice over which to limit requests to faucet"),
         )
         .arg(
             Arg::with_name("cap")
@@ -54,21 +58,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         request_cap = None;
     }
 
-    let drone_addr = socketaddr!(0, DRONE_PORT);
+    let faucet_addr = socketaddr!(0, FAUCET_PORT);
 
-    let drone = Arc::new(Mutex::new(Drone::new(
+    let faucet = Arc::new(Mutex::new(Faucet::new(
         mint_keypair,
         time_slice,
         request_cap,
     )));
 
-    let drone1 = drone.clone();
+    let faucet1 = faucet.clone();
     thread::spawn(move || loop {
-        let time = drone1.lock().unwrap().time_slice;
+        let time = faucet1.lock().unwrap().time_slice;
         thread::sleep(time);
-        drone1.lock().unwrap().clear_request_count();
+        faucet1.lock().unwrap().clear_request_count();
     });
 
-    run_drone(drone, drone_addr, None);
+    run_faucet(faucet, faucet_addr, None);
     Ok(())
 }

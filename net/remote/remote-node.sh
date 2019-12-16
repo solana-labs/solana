@@ -237,7 +237,7 @@ EOF
 
     if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
-      ./multinode-demo/drone.sh > drone.log 2>&1 &
+      ./multinode-demo/faucet.sh > faucet.log 2>&1 &
 EOF
     fi
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
@@ -304,17 +304,17 @@ EOF
 
     set -x
     # Add the mint keypair to validators for convenient access from tools
-    # like bench-tps and add to blocktreamers to run a drone
+    # like bench-tps and add to blocktreamers to run a faucet
     scp "$entrypointIp":~/solana/config/faucet-keypair.json config/
     if [[ $nodeType = blockstreamer ]]; then
-      # Run another drone with the mint keypair on the blockstreamer node.
+      # Run another faucet with the mint keypair on the blockstreamer node.
       # Typically the blockstreamer node has a static IP/DNS name for hosting
       # the blockexplorer web app, and is a location that somebody would expect
       # to be able to airdrop from
       scp "$entrypointIp":~/solana/config/faucet-keypair.json config/
       if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
-        multinode-demo/drone.sh > drone.log 2>&1 &
+        multinode-demo/faucet.sh > faucet.log 2>&1 &
 EOF
       fi
 

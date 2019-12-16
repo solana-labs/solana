@@ -1997,7 +1997,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT \"request_amount\" FROM \"$testnet\".\"autogen\".\"drone-airdrop\" WHERE $timeFilter fill(null)\n\n\n\n",
+          "query": "SELECT \"request_amount\" FROM \"$testnet\".\"autogen\".\"faucet-airdrop\" WHERE $timeFilter fill(null)\n\n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
