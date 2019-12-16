@@ -13,7 +13,7 @@ use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
 pub const DEFAULT_MAX_LEDGER_EPOCHS: u64 = 2;
-// Nuke a fixed number of slots at a time, it's more efficient than doing it one-by-one
+// Remove a fixed number of slots at a time, it's more efficient than doing it one-by-one
 pub const DEFAULT_PURGE_BATCH_SIZE: u64 = 256;
 
 pub struct LedgerCleanupService {
