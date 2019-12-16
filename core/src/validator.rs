@@ -42,6 +42,7 @@ use solana_sdk::{
 
 use crate::ledger_cleanup_service::DEFAULT_MAX_LEDGER_EPOCHS;
 use solana_ledger::shred::Shred;
+use solana_sdk::epoch_schedule::EpochSchedule;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
@@ -197,11 +198,8 @@ impl Validator {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         // The version used by shreds, derived from genesis
         let shred_version = Shred::version_from_hash(&genesis_hash);
-        let max_ledger_slots = if config.limit_ledger_size {
-            Some(DEFAULT_MAX_LEDGER_EPOCHS * bank.epoch_schedule().slots_per_epoch)
-        } else {
-            None
-        };
+        let max_ledger_slots =
+            Self::max_ledger_slots(config.limit_ledger_size, bank.epoch_schedule());
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
@@ -474,6 +472,14 @@ impl Validator {
         self.ip_echo_server.shutdown_now();
 
         Ok(())
+    }
+
+    fn max_ledger_slots(limit_ledger_size: bool, epoch_schedule: &EpochSchedule) -> Option<u64> {
+        if limit_ledger_size {
+            Some(DEFAULT_MAX_LEDGER_EPOCHS * epoch_schedule.slots_per_epoch)
+        } else {
+            None
+        }
     }
 }
 
