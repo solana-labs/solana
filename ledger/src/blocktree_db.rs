@@ -44,6 +44,7 @@ pub enum BlocktreeError {
     IO(#[from] std::io::Error),
     Serialize(#[from] Box<bincode::ErrorKind>),
     FsExtraError(#[from] fs_extra::error::Error),
+    DeleteFailed,
 }
 pub(crate) type Result<T> = std::result::Result<T, BlocktreeError>;
 
@@ -588,6 +589,19 @@ impl Database {
     pub fn storage_size(&self) -> Result<u64> {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
+
+    pub fn delete_range_cf<C>(
+        &self,
+        batch: &mut WriteBatch,
+        from: C::Index,
+        to: C::Index,
+    ) -> Result<()>
+    where
+        C: Column,
+    {
+        let cf = self.cf_handle::<C>();
+        batch.delete_range_cf::<C>(cf, from, to)
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -714,6 +728,17 @@ impl<'a> WriteBatch<'a> {
     #[inline]
     fn get_cf<C: Column>(&self) -> &'a ColumnFamily {
         self.map[C::NAME]
+    }
+
+    pub fn delete_range_cf<C: Column>(
+        &mut self,
+        cf: &ColumnFamily,
+        from: C::Index,
+        to: C::Index,
+    ) -> Result<()> {
+        self.write_batch
+            .delete_range_cf(cf, C::key(from), C::key(to))?;
+        Ok(())
     }
 }
 

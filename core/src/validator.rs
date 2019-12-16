@@ -40,6 +40,7 @@ use solana_sdk::{
     timing::timestamp,
 };
 
+use crate::ledger_cleanup_service::DEFAULT_MAX_LEDGER_EPOCHS;
 use solana_ledger::shred::Shred;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -63,7 +64,7 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
     pub snapshot_config: Option<SnapshotConfig>,
-    pub max_ledger_slots: Option<u64>,
+    pub limit_ledger_size: bool,
     pub broadcast_stage_type: BroadcastStageType,
     pub partition_cfg: Option<PartitionCfg>,
     pub fixed_leader_schedule: Option<FixedSchedule>,
@@ -79,7 +80,7 @@ impl Default for ValidatorConfig {
             transaction_status_service_disabled: false,
             blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
-            max_ledger_slots: None,
+            limit_ledger_size: false,
             account_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
             snapshot_config: None,
@@ -196,6 +197,11 @@ impl Validator {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         // The version used by shreds, derived from genesis
         let shred_version = Shred::version_from_hash(&genesis_hash);
+        let mut max_ledger_slots = None;
+        if config.limit_ledger_size {
+            max_ledger_slots =
+                Some(DEFAULT_MAX_LEDGER_EPOCHS * bank.epoch_schedule().slots_per_epoch);
+        }
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
@@ -363,7 +369,7 @@ impl Validator {
             blocktree.clone(),
             &storage_state,
             config.blockstream_unix_socket.as_ref(),
-            config.max_ledger_slots,
+            max_ledger_slots,
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,

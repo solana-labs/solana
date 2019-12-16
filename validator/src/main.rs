@@ -16,7 +16,6 @@ use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
-    ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS,
     validator::{Validator, ValidatorConfig},
 };
 use solana_ledger::bank_forks::SnapshotConfig;
@@ -634,9 +633,7 @@ pub fn main() {
         snapshot_package_output_path: ledger_path.clone(),
     });
 
-    if matches.is_present("limit_ledger_size") {
-        validator_config.max_ledger_slots = Some(DEFAULT_MAX_LEDGER_SLOTS);
-    }
+    validator_config.limit_ledger_size = matches.is_present("limit_ledger_size");
 
     if matches.value_of("signer_addr").is_some() {
         warn!("--vote-signer-address ignored");
