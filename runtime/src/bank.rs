@@ -3658,6 +3658,39 @@ mod tests {
     }
 
     #[test]
+    fn test_bank_get_account_modified_since_parent() {
+        let pubkey = Pubkey::new_rand();
+
+        let (genesis_config, mint_keypair) = create_genesis_config(500);
+        let bank1 = Arc::new(Bank::new(&genesis_config));
+        bank1.transfer(1, &mint_keypair, &pubkey).unwrap();
+        let result = bank1.get_account_modified_since_parent(&pubkey);
+        assert!(result.is_some());
+        let (account, slot) = result.unwrap();
+        assert_eq!(account.lamports, 1);
+        assert_eq!(slot, 0);
+
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
+        assert!(bank2.get_account_modified_since_parent(&pubkey).is_none());
+        bank2.transfer(100, &mint_keypair, &pubkey).unwrap();
+        let result = bank1.get_account_modified_since_parent(&pubkey);
+        assert!(result.is_some());
+        let (account, slot) = result.unwrap();
+        assert_eq!(account.lamports, 1);
+        assert_eq!(slot, 0);
+        let result = bank2.get_account_modified_since_parent(&pubkey);
+        assert!(result.is_some());
+        let (account, slot) = result.unwrap();
+        assert_eq!(account.lamports, 101);
+        assert_eq!(slot, 1);
+
+        bank1.squash();
+
+        let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
+        assert_eq!(None, bank3.get_account_modified_since_parent(&pubkey));
+    }
+
+    #[test]
     fn test_bank_epoch_vote_accounts() {
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
