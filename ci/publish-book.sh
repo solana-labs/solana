@@ -59,13 +59,43 @@ echo --- create book repo
 )
 
 echo "--- publish $BOOK"
-cd book/html/
-git remote add origin $repo
-git fetch origin master
-if ! git diff HEAD origin/master --quiet; then
-  git push -f origin HEAD:master
-else
-  echo "Content unchanged, publish skipped"
-fi
+(
+  cd book/html/
+  git remote add origin $repo
+  git fetch origin master
+  if ! git diff HEAD origin/master --quiet; then
+    git push -f origin HEAD:master
+  else
+    echo "Content unchanged, publish skipped"
+  fi
+)
 
+echo --- update gitbook-cage
+(
+  branch=${${CHANNEL}_CHANNEL}
+
+  if [[ -z $branch ]];
+  then
+      exit 0
+  fi
+
+  set -x
+  git push -f github.com:rob-solana/solana-gitbook-cage.git remotes/origin/${branch}:refs/heads/${branch}
+  rm -rf gitbook-cage
+  git clone github.com:rob-solana/solana-gitbook-cage gitbook-cage
+  (
+    cd gitbook-cage
+    git checkout remotes/origin/${branch}
+    (. ci/rust-version.sh
+     ci/docker-run.sh $rust_stable_docker_image make -Cbook -B svg)
+    git add -A -f book/src/.gitbook/assets/.
+    git config user.email "maintainers@solana.com"
+    git config user.name "$(basename "$0")"
+    if ! git diff-index --quiet HEAD;
+    then
+        git commit -m "gitbook-cage update $(date -Is)"
+        git push -f origin HEAD:refs/heads/$branch
+    fi
+  )
+)
 exit 0
