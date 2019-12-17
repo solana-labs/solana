@@ -161,6 +161,11 @@ pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub processing_results: Vec<TransactionProcessResult>,
 }
+pub struct TransactionBalanceSet {
+    pub pre_balance: TransactionBalances,
+    pub post_balance: TransactionBalances,
+}
+pub type TransactionBalances = Vec<Vec<u64>>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HashAgeKind {
@@ -1030,6 +1035,18 @@ impl Bank {
         self.check_signatures(txs, iteration_order, age_results, &mut error_counters)
     }
 
+    pub fn collect_balances(&self, batch: &[Transaction]) -> TransactionBalances {
+        let mut balances: TransactionBalances = vec![];
+        for transaction in batch.iter() {
+            let mut transaction_balances: Vec<u64> = vec![];
+            for account_key in transaction.message.account_keys.iter() {
+                transaction_balances.push(self.get_balance(account_key));
+            }
+            balances.push(transaction_balances);
+        }
+        balances
+    }
+
     fn update_error_counters(error_counters: &ErrorCounters) {
         if 0 != error_counters.blockhash_not_found {
             inc_new_counter_error!(
@@ -1372,24 +1389,43 @@ impl Bank {
         &self,
         batch: &TransactionBatch,
         max_age: usize,
-    ) -> TransactionResults {
+        collect_balances: bool,
+    ) -> (TransactionResults, TransactionBalanceSet) {
+        let pre_balance = if collect_balances {
+            self.collect_balances(batch.transactions())
+        } else {
+            vec![]
+        };
         let (mut loaded_accounts, executed, _, tx_count, signature_count) =
             self.load_and_execute_transactions(batch, max_age);
 
-        self.commit_transactions(
+        let results = self.commit_transactions(
             batch.transactions(),
             batch.iteration_order(),
             &mut loaded_accounts,
             &executed,
             tx_count,
             signature_count,
+        );
+        let post_balance = if collect_balances {
+            self.collect_balances(batch.transactions())
+        } else {
+            vec![]
+        };
+        (
+            results,
+            TransactionBalanceSet {
+                pre_balance,
+                post_balance,
+            },
         )
     }
 
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let batch = self.prepare_batch(txs, None);
-        self.load_execute_and_commit_transactions(&batch, MAX_RECENT_BLOCKHASHES)
+        self.load_execute_and_commit_transactions(&batch, MAX_RECENT_BLOCKHASHES, false)
+            .0
             .fee_collection_results
     }
 
@@ -1816,7 +1852,7 @@ mod tests {
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::create_genesis_config,
-        instruction::{Instruction, InstructionError},
+        instruction::{CompiledInstruction, Instruction, InstructionError},
         message::{Message, MessageHeader},
         nonce_instruction, nonce_state,
         poh_config::PohConfig,
@@ -3221,7 +3257,8 @@ mod tests {
 
         let lock_result = bank.prepare_batch(&pay_alice, None);
         let results_alice = bank
-            .load_execute_and_commit_transactions(&lock_result, MAX_RECENT_BLOCKHASHES)
+            .load_execute_and_commit_transactions(&lock_result, MAX_RECENT_BLOCKHASHES, false)
+            .0
             .fee_collection_results;
         assert_eq!(results_alice[0], Ok(()));
 
@@ -4730,5 +4767,44 @@ mod tests {
         );
         /* Check fee charged */
         assert_eq!(bank.get_balance(&custodian_pubkey), 4_630_000);
+    }
+
+    #[test]
+    fn test_collect_balances() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(500);
+        let parent = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(new_from_parent(&parent));
+
+        let keypair = Keypair::new();
+        let pubkey0 = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
+        let program_id = Pubkey::new(&[2; 32]);
+        let keypair_account = Account::new(8, 0, &program_id);
+        let account0 = Account::new(11, 0, &program_id);
+        let program_account = Account::new(1, 10, &Pubkey::default());
+        bank0.store_account(&keypair.pubkey(), &keypair_account);
+        bank0.store_account(&pubkey0, &account0);
+        bank0.store_account(&program_id, &program_account);
+
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
+        let tx0 = Transaction::new_with_compiled_instructions(
+            &[&keypair],
+            &[pubkey0],
+            Hash::default(),
+            vec![program_id],
+            instructions,
+        );
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
+        let tx1 = Transaction::new_with_compiled_instructions(
+            &[&keypair],
+            &[pubkey1],
+            Hash::default(),
+            vec![program_id],
+            instructions,
+        );
+        let balances = bank0.collect_balances(&[tx0, tx1]);
+        assert_eq!(balances.len(), 2);
+        assert_eq!(balances[0], vec![8, 11, 1]);
+        assert_eq!(balances[1], vec![8, 0, 1]);
     }
 }
