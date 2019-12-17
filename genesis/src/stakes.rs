@@ -7,8 +7,9 @@ use solana_sdk::{
     account::Account, clock::Slot, genesis_config::GenesisConfig, native_token::sol_to_lamports,
     pubkey::Pubkey, system_program, timing::years_as_slots,
 };
-use solana_stake_program::stake_state::{
-    create_lockup_stake_account, Authorized, Lockup, StakeState,
+use solana_stake_program::{
+    self,
+    stake_state::{create_lockup_stake_account, Authorized, Lockup, StakeState},
 };
 
 #[derive(Debug)]
@@ -88,7 +89,11 @@ pub fn create_and_add_stakes(
         genesis_config.ticks_per_slot,
     );
 
-    let mut address_generator = AddressGenerator::new(&authorized.staker, staker_info.name);
+    let mut address_generator = AddressGenerator::new(
+        &authorized.staker,
+        staker_info.name,
+        &solana_stake_program::id(),
+    );
 
     let stake_rent_reserve = StakeState::get_rent_exempt_reserve(&genesis_config.rent);
 
