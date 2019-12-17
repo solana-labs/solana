@@ -266,6 +266,11 @@ should verify we can produce logically identical ledgers from scratch.)
 
 # Relationale
 
+- why need to write unit test?: For example crates can introduce unintended
+  changes accidentally. e2e-like testing for serialization is needed. Also
+  these large collection of small unit tests could be used for fuzzing testing
+  like afl-fuzz as the entry points for various untrusted input attack surfaces.
+
 - why `revision'?: Introduced new indirection to capture different
   timelines for diffent ABI items and units (epoch, version, etc). The
   `revision` is chosen because of `git grep revision` -> `Exited with 1`
@@ -276,9 +281,6 @@ should verify we can produce logically identical ledgers from scratch.)
 - why for each revision? what about fixture maintenance burden?: ABI changes
   should be last resorts in general (even adding fields, in contrast to the RPC
   API), so the pace of increasing number of fixtures should be low.
-
-- why need to write unit test?: For example crates can introduce unintended
-  changes accidentally.
 
 - why ascii binary (= hex) embedded inside yaml as the test fixture?
   yaml is line oriented and expressive adequately for this case. We can use
