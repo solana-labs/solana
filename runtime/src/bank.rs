@@ -4471,6 +4471,7 @@ mod tests {
         mint_keypair: &Keypair,
         custodian_lamports: u64,
         nonce_lamports: u64,
+        nonce_authority: Option<Pubkey>,
     ) -> Result<(Keypair, Keypair)> {
         let custodian_keypair = Keypair::new();
         let nonce_keypair = Keypair::new();
@@ -4480,9 +4481,11 @@ mod tests {
             &custodian_keypair.pubkey(),
             custodian_lamports,
         )];
+        let nonce_authority = nonce_authority.unwrap_or(nonce_keypair.pubkey());
         setup_ixs.extend_from_slice(&nonce_instruction::create_nonce_account(
             &custodian_keypair.pubkey(),
             &nonce_keypair.pubkey(),
+            &nonce_authority,
             nonce_lamports,
         ));
         let setup_tx = Transaction::new_signed_instructions(
@@ -4499,6 +4502,7 @@ mod tests {
         mut genesis_cfg_fn: F,
         custodian_lamports: u64,
         nonce_lamports: u64,
+        nonce_authority: Option<Pubkey>,
     ) -> Result<(Arc<Bank>, Keypair, Keypair, Keypair)>
     where
         F: FnMut(&mut GenesisConfig),
@@ -4508,22 +4512,27 @@ mod tests {
         genesis_cfg_fn(&mut genesis_config);
         let mut bank = Arc::new(Bank::new(&genesis_config));
 
-        let (custodian_keypair, nonce_keypair) =
-            nonce_setup(&mut bank, &mint_keypair, custodian_lamports, nonce_lamports)?;
+        let (custodian_keypair, nonce_keypair) = nonce_setup(
+            &mut bank,
+            &mint_keypair,
+            custodian_lamports,
+            nonce_lamports,
+            nonce_authority,
+        )?;
         Ok((bank, mint_keypair, custodian_keypair, nonce_keypair))
     }
 
     #[test]
     fn test_check_tx_durable_nonce_ok() {
         let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
         let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey),
+                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4536,7 +4545,7 @@ mod tests {
     #[test]
     fn test_check_tx_durable_nonce_not_durable_nonce_fail() {
         let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -4544,7 +4553,7 @@ mod tests {
         let tx = Transaction::new_signed_with_payer(
             vec![
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
-                nonce_instruction::nonce(&nonce_pubkey),
+                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
             ],
             Some(&custodian_pubkey),
             &[&custodian_keypair, &nonce_keypair],
@@ -4556,14 +4565,14 @@ mod tests {
     #[test]
     fn test_check_tx_durable_nonce_missing_ix_pubkey_fail() {
         let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
         let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
         let mut tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey),
+                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4577,7 +4586,7 @@ mod tests {
     #[test]
     fn test_check_tx_durable_nonce_nonce_acc_does_not_exist_fail() {
         let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
         let missing_keypair = Keypair::new();
@@ -4586,11 +4595,11 @@ mod tests {
         let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&missing_pubkey),
+                nonce_instruction::nonce(&missing_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
-            &[&custodian_keypair, &missing_keypair],
+            &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
         assert!(!bank.check_tx_durable_nonce(&tx));
@@ -4599,13 +4608,13 @@ mod tests {
     #[test]
     fn test_check_tx_durable_nonce_bad_tx_hash_fail() {
         let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000).unwrap();
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
         let tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey),
+                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4624,6 +4633,7 @@ mod tests {
             },
             5_000_000,
             250_000,
+            None,
         )
         .unwrap();
         let alice_keypair = Keypair::new();
@@ -4659,7 +4669,7 @@ mod tests {
         /* Durable Nonce transfer */
         let durable_tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey),
+                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4680,7 +4690,7 @@ mod tests {
         /* Durable Nonce re-use fails */
         let durable_tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey),
+                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4704,7 +4714,7 @@ mod tests {
 
         let durable_tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey),
+                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000_000),
             ],
             Some(&custodian_pubkey),
