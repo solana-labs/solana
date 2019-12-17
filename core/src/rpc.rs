@@ -419,7 +419,7 @@ pub trait RpcSol {
     fn get_block_commitment(
         &self,
         meta: Self::Metadata,
-        block: u64,
+        block: Slot,
     ) -> Result<(Option<BlockCommitment>, u64)>;
 
     #[rpc(meta, name = "getGenesisHash")]
@@ -429,6 +429,7 @@ pub trait RpcSol {
     fn get_leader_schedule(
         &self,
         meta: Self::Metadata,
+        slot: Option<Slot>,
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<Vec<String>>>;
 
@@ -679,8 +680,9 @@ impl RpcSol for RpcSolImpl {
     ) -> Result<RpcEpochInfo> {
         let bank = meta.request_processor.read().unwrap().bank(commitment);
         let epoch_schedule = bank.epoch_schedule();
-        let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(bank.slot());
+
         let slot = bank.slot();
+        let (epoch, slot_index) = epoch_schedule.get_epoch_and_slot_index(slot);
         Ok(RpcEpochInfo {
             epoch,
             slot_index,
@@ -709,11 +711,14 @@ impl RpcSol for RpcSolImpl {
     fn get_leader_schedule(
         &self,
         meta: Self::Metadata,
+        slot: Option<Slot>,
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<Vec<String>>> {
         let bank = meta.request_processor.read().unwrap().bank(commitment);
+        let slot = slot.unwrap_or_else(|| bank.slot());
+        let epoch = bank.epoch_schedule().get_epoch(slot);
         Ok(
-            solana_ledger::leader_schedule_utils::leader_schedule(bank.epoch(), &bank).map(
+            solana_ledger::leader_schedule_utils::leader_schedule(epoch, &bank).map(
                 |leader_schedule| {
                     leader_schedule
                         .get_slot_leaders()
@@ -1372,6 +1377,57 @@ pub mod tests {
             panic!("Expected single response");
         };
         assert_eq!(epoch_schedule, *bank.epoch_schedule());
+    }
+
+    #[test]
+    fn test_rpc_get_leader_schedule() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        for req in [
+            r#"{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [0]}"#,
+            r#"{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule"}"#,
+        ]
+        .iter()
+        {
+            let rep = io.handle_request_sync(&req, meta.clone());
+            let res: Response = serde_json::from_str(&rep.expect("actual response"))
+                .expect("actual response deserialization");
+
+            let schedule: Option<Vec<String>> = if let Response::Single(res) = res {
+                if let Output::Success(res) = res {
+                    serde_json::from_value(res.result).unwrap()
+                } else {
+                    panic!("Expected success for {}", req);
+                }
+            } else {
+                panic!("Expected single response");
+            };
+
+            assert_eq!(
+                schedule.unwrap().len(),
+                solana_ledger::leader_schedule_utils::leader_schedule(bank.epoch(), &bank)
+                    .unwrap()
+                    .get_slot_leaders()
+                    .len()
+            );
+        }
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [42424242]}"#;
+        let rep = io.handle_request_sync(&req, meta);
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let schedule: Option<Vec<String>> = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
+            } else {
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        assert_eq!(schedule, None);
     }
 
     #[test]

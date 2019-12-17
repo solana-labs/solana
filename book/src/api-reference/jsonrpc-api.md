@@ -373,15 +373,16 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### getLeaderSchedule
 
-Returns the leader schedule for the current epoch
+Returns the leader schedule for an epoch
 
 #### Parameters:
 
+* `slot` - (optional) Fetch the leader schedule for the epoch that corresponds to the provided slot.  If unspecified, the leader schedule for the current epoch is fetch
 * `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-The result field will be an array of leader public keys \(as base-58 encoded strings\) for each slot in the current epoch
+The result field will be an array of leader public keys \(as base-58 encoded strings\) for each slot in the epoch
 
 #### Example:
 
