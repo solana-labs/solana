@@ -107,13 +107,14 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     });
     let c_info = cluster_info.clone();
 
+    let staked_nodes = Arc::new(staked_nodes);
     let shreds_len = 100;
     let shuffled_peers: Vec<Vec<ContactInfo>> = (0..shreds_len as i32)
         .map(|i| {
             let mut seed = [0; 32];
             seed[0..4].copy_from_slice(&i.to_le_bytes());
             let (peers, stakes_and_index) =
-                cluster_info.sorted_retransmit_peers_and_stakes(Some(&staked_nodes));
+                cluster_info.sorted_retransmit_peers_and_stakes(Some(staked_nodes.clone()));
             let (_, shuffled_stakes_and_indexes) = ClusterInfo::shuffle_peers_and_index(
                 &cluster_info.id(),
                 &peers,

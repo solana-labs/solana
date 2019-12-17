@@ -62,10 +62,11 @@ fn retransmit(
     let bank_epoch = r_bank.get_leader_schedule_epoch(r_bank.slot());
     let mut peers_len = 0;
     let stakes = staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch);
+    let stakes = stakes.map(Arc::new);
     let (peers, stakes_and_index) = cluster_info
         .read()
         .unwrap()
-        .sorted_retransmit_peers_and_stakes(stakes.as_ref());
+        .sorted_retransmit_peers_and_stakes(stakes);
     let me = cluster_info.read().unwrap().my_data().clone();
     let mut discard_total = 0;
     let mut repair_total = 0;

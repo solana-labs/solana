@@ -518,7 +518,7 @@ impl ClusterInfo {
 
     fn sorted_stakes_with_index<S: std::hash::BuildHasher>(
         peers: &[ContactInfo],
-        stakes: Option<&HashMap<Pubkey, u64, S>>,
+        stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
     ) -> Vec<(u64, usize)> {
         let stakes_and_index: Vec<_> = peers
             .iter()
@@ -526,7 +526,11 @@ impl ClusterInfo {
             .map(|(i, c)| {
                 // For stake weighted shuffle a valid weight is atleast 1. Weight 0 is
                 // assumed to be missing entry. So let's make sure stake weights are atleast 1
-                let stake = 1.max(stakes.map_or(1, |stakes| *stakes.get(&c.id).unwrap_or(&1)));
+                let stake = 1.max(
+                    stakes
+                        .as_ref()
+                        .map_or(1, |stakes| *stakes.get(&c.id).unwrap_or(&1)),
+                );
                 (stake, i)
             })
             .sorted_by(|(l_stake, l_info), (r_stake, r_info)| {
@@ -555,7 +559,7 @@ impl ClusterInfo {
     // Return sorted_retransmit_peers(including self) and their stakes
     pub fn sorted_retransmit_peers_and_stakes(
         &self,
-        stakes: Option<&HashMap<Pubkey, u64>>,
+        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
         let mut peers = self.retransmit_peers();
         // insert "self" into this list for the layer and neighborhood computation
@@ -729,7 +733,7 @@ impl ClusterInfo {
 
     fn sorted_tvu_peers_and_stakes(
         &self,
-        stakes: Option<&HashMap<Pubkey, u64>>,
+        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
         let mut peers = self.tvu_peers();
         peers.dedup();
@@ -744,7 +748,7 @@ impl ClusterInfo {
         s: &UdpSocket,
         shreds: Vec<Vec<u8>>,
         seeds: &[[u8; 32]],
-        stakes: Option<&HashMap<Pubkey, u64>>,
+        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     ) -> Result<()> {
         let (peers, peers_and_stakes) = self.sorted_tvu_peers_and_stakes(stakes);
         let broadcast_len = peers_and_stakes.len();
@@ -1703,7 +1707,7 @@ pub struct Sockets {
     pub tvu_forwards: Vec<UdpSocket>,
     pub tpu: Vec<UdpSocket>,
     pub tpu_forwards: Vec<UdpSocket>,
-    pub broadcast: UdpSocket,
+    pub broadcast: Vec<UdpSocket>,
     pub repair: UdpSocket,
     pub retransmit_sockets: Vec<UdpSocket>,
     pub storage: Option<UdpSocket>,
@@ -1728,7 +1732,7 @@ impl Node {
         let empty = "0.0.0.0:0".parse().unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
 
-        let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         let info = ContactInfo::new(
             pubkey,
@@ -1774,7 +1778,7 @@ impl Node {
         let rpc_pubsub_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_pubsub_port);
 
-        let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
         let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let storage = UdpSocket::bind("0.0.0.0:0").unwrap();
         let info = ContactInfo::new(
@@ -1845,7 +1849,7 @@ impl Node {
             multi_bind_in_range(port_range, 8).expect("retransmit multi_bind");
 
         let (repair_port, repair) = Self::bind(port_range);
-        let (_, broadcast) = Self::bind(port_range);
+        let (_, broadcast) = multi_bind_in_range(port_range, 4).expect("broadcast multi_bind");
 
         let info = ContactInfo::new(
             pubkey,
@@ -2658,7 +2662,8 @@ mod tests {
         cluster_info.insert_info(contact_info);
         stakes.insert(id3, 10);
 
-        let (peers, peers_and_stakes) = cluster_info.sorted_tvu_peers_and_stakes(Some(&stakes));
+        let stakes = Arc::new(stakes);
+        let (peers, peers_and_stakes) = cluster_info.sorted_tvu_peers_and_stakes(Some(stakes));
         assert_eq!(peers.len(), 2);
         assert_eq!(peers[0].id, id);
         assert_eq!(peers[1].id, id2);

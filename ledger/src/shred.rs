@@ -402,8 +402,8 @@ impl Shred {
 
 #[derive(Debug)]
 pub struct Shredder {
-    slot: Slot,
-    parent_slot: Slot,
+    pub slot: Slot,
+    pub parent_slot: Slot,
     version: u16,
     fec_rate: f32,
     keypair: Arc<Keypair>,
@@ -443,6 +443,18 @@ impl Shredder {
         is_last_in_slot: bool,
         next_shred_index: u32,
     ) -> (Vec<Shred>, Vec<Shred>, u32) {
+        let (data_shreds, last_shred_index) =
+            self.entries_to_data_shreds(entries, is_last_in_slot, next_shred_index);
+        let coding_shreds = self.data_shreds_to_coding_shreds(&data_shreds);
+        (data_shreds, coding_shreds, last_shred_index)
+    }
+
+    pub fn entries_to_data_shreds(
+        &self,
+        entries: &[Entry],
+        is_last_in_slot: bool,
+        next_shred_index: u32,
+    ) -> (Vec<Shred>, u32) {
         let now = Instant::now();
         let serialized_shreds =
             bincode::serialize(entries).expect("Expect to serialize all entries");
@@ -495,7 +507,17 @@ impl Shredder {
             })
         });
         let gen_data_time = now.elapsed().as_millis();
+        datapoint_debug!(
+            "shredding-stats",
+            ("slot", self.slot as i64, i64),
+            ("num_data_shreds", data_shreds.len() as i64, i64),
+            ("serializing", serialize_time as i64, i64),
+            ("gen_data", gen_data_time as i64, i64),
+        );
+        (data_shreds, last_shred_index + 1)
+    }
 
+    pub fn data_shreds_to_coding_shreds(&self, data_shreds: &[Shred]) -> Vec<Shred> {
         let now = Instant::now();
         // 2) Generate coding shreds
         let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
@@ -528,16 +550,11 @@ impl Shredder {
 
         datapoint_debug!(
             "shredding-stats",
-            ("slot", self.slot as i64, i64),
-            ("num_data_shreds", data_shreds.len() as i64, i64),
             ("num_coding_shreds", coding_shreds.len() as i64, i64),
-            ("serializing", serialize_time as i64, i64),
-            ("gen_data", gen_data_time as i64, i64),
             ("gen_coding", gen_coding_time as i64, i64),
             ("sign_coding", sign_coding_time as i64, i64),
         );
-
-        (data_shreds, coding_shreds, last_shred_index + 1)
+        coding_shreds
     }
 
     pub fn sign_shred(signer: &Keypair, shred: &mut Shred) {

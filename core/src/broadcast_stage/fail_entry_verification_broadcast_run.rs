@@ -1,24 +1,30 @@
 use super::*;
 use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
 use solana_sdk::hash::Hash;
+use solana_sdk::signature::Keypair;
 
+#[derive(Clone)]
 pub(super) struct FailEntryVerificationBroadcastRun {
     shred_version: u16,
+    keypair: Arc<Keypair>,
 }
 
 impl FailEntryVerificationBroadcastRun {
-    pub(super) fn new(shred_version: u16) -> Self {
-        Self { shred_version }
+    pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
+        Self {
+            shred_version,
+            keypair,
+        }
     }
 }
 
 impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntry>,
-        sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
+        receiver: &Receiver<WorkingBankEntry>,
+        socket_sender: &Sender<TransmitShreds>,
+        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
@@ -32,7 +38,6 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             last_entry.hash = Hash::default();
         }
 
-        let keypair = cluster_info.read().unwrap().keypair.clone();
         let next_shred_index = blocktree
             .meta(bank.slot())
             .expect("Database error")
@@ -43,7 +48,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             bank.slot(),
             bank.parent().unwrap().slot(),
             RECOMMENDED_FEC_RATE,
-            keypair.clone(),
+            self.keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
             self.shred_version,
         )
@@ -55,34 +60,42 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             next_shred_index,
         );
 
-        let all_shreds = data_shreds
-            .iter()
-            .cloned()
-            .chain(coding_shreds.iter().cloned())
-            .collect::<Vec<_>>();
-        let all_seeds: Vec<[u8; 32]> = all_shreds.iter().map(|s| s.seed()).collect();
-        blocktree
-            .insert_shreds(all_shreds, None, true)
-            .expect("Failed to insert shreds in blocktree");
-
+        let data_shreds = Arc::new(data_shreds);
+        blocktree_sender.send(data_shreds.clone())?;
         // 3) Start broadcast step
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        let all_shred_bufs: Vec<Vec<u8>> = data_shreds
-            .into_iter()
-            .chain(coding_shreds.into_iter())
-            .map(|s| s.payload)
-            .collect();
-
+        let stakes = stakes.map(Arc::new);
+        socket_sender.send((stakes.clone(), data_shreds))?;
+        socket_sender.send((stakes, Arc::new(coding_shreds)))?;
+        Ok(())
+    }
+    fn transmit(
+        &self,
+        receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        sock: &UdpSocket,
+    ) -> Result<()> {
+        let (stakes, shreds) = receiver.lock().unwrap().recv()?;
+        let all_seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
         // Broadcast data
-        cluster_info.read().unwrap().broadcast_shreds(
-            sock,
-            all_shred_bufs,
-            &all_seeds,
-            stakes.as_ref(),
-        )?;
-
+        let all_shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
+        cluster_info
+            .read()
+            .unwrap()
+            .broadcast_shreds(sock, all_shred_bufs, &all_seeds, stakes)?;
+        Ok(())
+    }
+    fn record(
+        &self,
+        receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
+        blocktree: &Arc<Blocktree>,
+    ) -> Result<()> {
+        let all_shreds = receiver.lock().unwrap().recv()?;
+        blocktree
+            .insert_shreds(all_shreds.to_vec(), None, true)
+            .expect("Failed to insert shreds in blocktree");
         Ok(())
     }
 }

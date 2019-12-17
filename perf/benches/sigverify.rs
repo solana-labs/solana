@@ -35,10 +35,6 @@ fn bench_get_offsets(bencher: &mut Bencher) {
     bencher.iter(|| {
         let ans = sigverify::generate_offsets(&batches, &recycler);
         assert!(ans.is_ok());
-        let ans = ans.unwrap();
-        recycler.recycle(ans.0);
-        recycler.recycle(ans.1);
-        recycler.recycle(ans.2);
-        recycler.recycle(ans.3);
+        let _ans = ans.unwrap();
     })
 }

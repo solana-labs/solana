@@ -6,21 +6,24 @@ use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::{Error, Result};
 use solana_ledger::blocktree::Blocktree;
+use solana_ledger::shred::Shred;
 use solana_ledger::staking_utils;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
-use std::sync::{Arc, RwLock};
+use std::sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
+
+pub const NUM_INSERT_THREADS: usize = 2;
 
 mod broadcast_fake_shreds_run;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
-
-pub const NUM_THREADS: u32 = 10;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -37,25 +40,23 @@ pub enum BroadcastStageType {
 impl BroadcastStageType {
     pub fn new_broadcast_stage(
         &self,
-        sock: UdpSocket,
+        sock: Vec<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
         shred_version: u16,
     ) -> BroadcastStage {
+        let keypair = cluster_info.read().unwrap().keypair.clone();
         match self {
-            BroadcastStageType::Standard => {
-                let keypair = cluster_info.read().unwrap().keypair.clone();
-                BroadcastStage::new(
-                    sock,
-                    cluster_info,
-                    receiver,
-                    exit_sender,
-                    blocktree,
-                    StandardBroadcastRun::new(keypair, shred_version),
-                )
-            }
+            BroadcastStageType::Standard => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                exit_sender,
+                blocktree,
+                StandardBroadcastRun::new(keypair, shred_version),
+            ),
 
             BroadcastStageType::FailEntryVerification => BroadcastStage::new(
                 sock,
@@ -63,7 +64,7 @@ impl BroadcastStageType {
                 receiver,
                 exit_sender,
                 blocktree,
-                FailEntryVerificationBroadcastRun::new(shred_version),
+                FailEntryVerificationBroadcastRun::new(keypair, shred_version),
             ),
 
             BroadcastStageType::BroadcastFakeShreds => BroadcastStage::new(
@@ -72,18 +73,30 @@ impl BroadcastStageType {
                 receiver,
                 exit_sender,
                 blocktree,
-                BroadcastFakeShredsRun::new(0, shred_version),
+                BroadcastFakeShredsRun::new(keypair, 0, shred_version),
             ),
         }
     }
 }
 
+type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
 trait BroadcastRun {
     fn run(
         &mut self,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        blocktree: &Arc<Blocktree>,
         receiver: &Receiver<WorkingBankEntry>,
+        socket_sender: &Sender<TransmitShreds>,
+        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
+    ) -> Result<()>;
+    fn transmit(
+        &self,
+        receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
+    ) -> Result<()>;
+    fn record(
+        &self,
+        receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()>;
 }
@@ -107,33 +120,43 @@ impl Drop for Finalizer {
 }
 
 pub struct BroadcastStage {
-    thread_hdl: JoinHandle<BroadcastStageReturnType>,
+    thread_hdls: Vec<JoinHandle<BroadcastStageReturnType>>,
 }
 
 impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn run(
-        sock: &UdpSocket,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<WorkingBankEntry>,
         blocktree: &Arc<Blocktree>,
+        receiver: &Receiver<WorkingBankEntry>,
+        socket_sender: &Sender<TransmitShreds>,
+        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
-            if let Err(e) = broadcast_stage_run.run(&cluster_info, receiver, sock, blocktree) {
-                match e {
-                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
-                        return BroadcastStageReturnType::ChannelDisconnected;
-                    }
-                    Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
-                    _ => {
-                        inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
-                        error!("broadcaster error: {:?}", e);
-                    }
+            let res = broadcast_stage_run.run(blocktree, receiver, socket_sender, blocktree_sender);
+            let res = Self::handle_error(res);
+            if let Some(res) = res {
+                return res;
+            }
+        }
+    }
+    fn handle_error(r: Result<()>) -> Option<BroadcastStageReturnType> {
+        if let Err(e) = r {
+            match e {
+                Error::RecvTimeoutError(RecvTimeoutError::Disconnected)
+                | Error::SendError
+                | Error::RecvError(RecvError) => {
+                    return Some(BroadcastStageReturnType::ChannelDisconnected);
+                }
+                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
+                _ => {
+                    inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
+                    error!("broadcaster error: {:?}", e);
                 }
             }
         }
+        None
     }
 
     /// Service to broadcast messages from the leader to layer 1 nodes.
@@ -153,34 +176,69 @@ impl BroadcastStage {
     /// completing the cycle.
     #[allow(clippy::too_many_arguments)]
     fn new(
-        sock: UdpSocket,
+        socks: Vec<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
-        broadcast_stage_run: impl BroadcastRun + Send + 'static,
+        broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
     ) -> Self {
-        let blocktree = blocktree.clone();
-        let exit_sender = exit_sender.clone();
+        let btree = blocktree.clone();
+        let exit = exit_sender.clone();
+        let (socket_sender, socket_receiver) = channel();
+        let (blocktree_sender, blocktree_receiver) = channel();
+        let bs_run = broadcast_stage_run.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
-                let _finalizer = Finalizer::new(exit_sender);
-                Self::run(
-                    &sock,
-                    &cluster_info,
-                    &receiver,
-                    &blocktree,
-                    broadcast_stage_run,
-                )
+                let _finalizer = Finalizer::new(exit);
+                Self::run(&btree, &receiver, &socket_sender, &blocktree_sender, bs_run)
             })
             .unwrap();
+        let mut thread_hdls = vec![thread_hdl];
+        let socket_receiver = Arc::new(Mutex::new(socket_receiver));
+        for sock in socks.into_iter() {
+            let socket_receiver = socket_receiver.clone();
+            let bs_transmit = broadcast_stage_run.clone();
+            let cluster_info = cluster_info.clone();
+            let t = Builder::new()
+                .name("solana-broadcaster-transmit".to_string())
+                .spawn(move || loop {
+                    let res = bs_transmit.transmit(&socket_receiver, &cluster_info, &sock);
+                    let res = Self::handle_error(res);
+                    if let Some(res) = res {
+                        return res;
+                    }
+                })
+                .unwrap();
+            thread_hdls.push(t);
+        }
+        let blocktree_receiver = Arc::new(Mutex::new(blocktree_receiver));
+        for _ in 0..NUM_INSERT_THREADS {
+            let blocktree_receiver = blocktree_receiver.clone();
+            let bs_record = broadcast_stage_run.clone();
+            let btree = blocktree.clone();
+            let t = Builder::new()
+                .name("solana-broadcaster-record".to_string())
+                .spawn(move || loop {
+                    let res = bs_record.record(&blocktree_receiver, &btree);
+                    let res = Self::handle_error(res);
+                    if let Some(res) = res {
+                        return res;
+                    }
+                })
+                .unwrap();
+            thread_hdls.push(t);
+        }
 
-        Self { thread_hdl }
+        Self { thread_hdls }
     }
 
     pub fn join(self) -> thread::Result<BroadcastStageReturnType> {
-        self.thread_hdl.join()
+        for thread_hdl in self.thread_hdls.into_iter() {
+            let _ = thread_hdl.join();
+        }
+        Ok(BroadcastStageReturnType::ChannelDisconnected)
     }
 }
 

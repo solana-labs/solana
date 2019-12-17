@@ -9,6 +9,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use std::collections::HashMap;
 use std::net::UdpSocket;
+use std::sync::Arc;
 use test::Bencher;
 
 #[bench]
@@ -31,10 +32,11 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         cluster_info.insert_info(contact_info);
         stakes.insert(id, thread_rng().gen_range(1, NUM_PEERS) as u64);
     }
+    let stakes = Arc::new(stakes);
     bencher.iter(move || {
         let shreds = shreds.clone();
         cluster_info
-            .broadcast_shreds(&socket, shreds, &seeds, Some(&stakes))
+            .broadcast_shreds(&socket, shreds, &seeds, Some(stakes.clone()))
             .unwrap();
     });
 }

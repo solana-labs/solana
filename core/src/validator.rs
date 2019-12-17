@@ -432,7 +432,12 @@ impl Validator {
         );
         info!(
             "local broadcast address: {}",
-            node.sockets.broadcast.local_addr().unwrap()
+            node.sockets
+                .broadcast
+                .first()
+                .unwrap()
+                .local_addr()
+                .unwrap()
         );
         info!(
             "local repair address: {}",

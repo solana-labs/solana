@@ -39,7 +39,7 @@ impl Tpu {
         entry_receiver: Receiver<WorkingBankEntry>,
         transactions_sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,
-        broadcast_socket: UdpSocket,
+        broadcast_sockets: Vec<UdpSocket>,
         sigverify_disabled: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
         blocktree: &Arc<Blocktree>,
@@ -83,7 +83,7 @@ impl Tpu {
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
-            broadcast_socket,
+            broadcast_sockets,
             cluster_info.clone(),
             entry_receiver,
             &exit,
