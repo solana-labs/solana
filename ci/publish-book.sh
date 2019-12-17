@@ -72,29 +72,30 @@ echo "--- publish $BOOK"
 
 echo --- update gitbook-cage
 (
-  branch=${${CHANNEL}_CHANNEL}
 
-  if [[ -z $branch ]];
+  if [[ -z $CI_BRANCH ]];
   then
       exit 0
   fi
 
   set -x
-  git push -f github.com:rob-solana/solana-gitbook-cage.git remotes/origin/${branch}:refs/heads/${branch}
+  git push -f github.com:solana-labs/solana-gitbook-cage.git remotes/origin/"$CI_BRANCH":refs/heads/"$CI_BRANCH"
   rm -rf gitbook-cage
-  git clone github.com:rob-solana/solana-gitbook-cage gitbook-cage
+  git clone github.com:solana-labs/solana-gitbook-cage gitbook-cage
   (
     cd gitbook-cage
-    git checkout remotes/origin/${branch}
-    (. ci/rust-version.sh
-     ci/docker-run.sh $rust_stable_docker_image make -Cbook -B svg)
+    git checkout remotes/origin/"$CI_BRANCH"
+    (
+      . ci/rust-version.sh
+      ci/docker-run.sh $rust_stable_docker_image make -Cbook -B svg
+    )
     git add -A -f book/src/.gitbook/assets/.
     git config user.email "maintainers@solana.com"
     git config user.name "$(basename "$0")"
     if ! git diff-index --quiet HEAD;
     then
         git commit -m "gitbook-cage update $(date -Is)"
-        git push -f origin HEAD:refs/heads/$branch
+        git push -f origin HEAD:refs/heads/"$CI_BRANCH"
     fi
   )
 )
