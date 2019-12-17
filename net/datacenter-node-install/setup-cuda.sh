@@ -48,3 +48,6 @@ apt install -y gcc make dkms
 for rf in "${RUN_FILES[@]}"; do
   sh "$rf" --silent --driver --toolkit
 done
+
+# Allow normal users to use CUDA profiler
+echo 'options nvidia "NVreg_RestrictProfilingToAdminUsers=0"' > /etc/modprobe.d/nvidia-enable-user-profiling.conf
