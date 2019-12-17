@@ -4513,6 +4513,12 @@ pub mod tests {
             .filter(|entry| !entry.is_tick())
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
+                let mut pre_balance: Vec<u64> = vec![];
+                let mut post_balance: Vec<u64> = vec![];
+                for (i, _account_key) in transaction.message.account_keys.iter().enumerate() {
+                    pre_balance.push(i as u64 * 10);
+                    post_balance.push(i as u64 * 11);
+                }
                 let signature = transaction.signatures[0];
                 ledger
                     .transaction_status_cf
@@ -4521,6 +4527,8 @@ pub mod tests {
                         &RpcTransactionStatus {
                             status: Ok(()),
                             fee: 42,
+                            pre_balance: pre_balance.clone(),
+                            post_balance: post_balance.clone(),
                         },
                     )
                     .unwrap();
@@ -4531,6 +4539,8 @@ pub mod tests {
                         &RpcTransactionStatus {
                             status: Ok(()),
                             fee: 42,
+                            pre_balance: pre_balance.clone(),
+                            post_balance: post_balance.clone(),
                         },
                     )
                     .unwrap();
@@ -4539,6 +4549,8 @@ pub mod tests {
                     Some(RpcTransactionStatus {
                         status: Ok(()),
                         fee: 42,
+                        pre_balance,
+                        post_balance,
                     }),
                 )
             })
@@ -4657,6 +4669,9 @@ pub mod tests {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let transaction_status_cf = blocktree.db.column::<cf::TransactionStatus>();
 
+            let pre_balance_vec = vec![1, 2, 3];
+            let post_balance_vec = vec![3, 2, 1];
+
             // result not found
             assert!(transaction_status_cf
                 .get((0, Signature::default()))
@@ -4671,18 +4686,27 @@ pub mod tests {
                         status: solana_sdk::transaction::Result::<()>::Err(
                             TransactionError::AccountNotFound
                         ),
-                        fee: 5u64
+                        fee: 5u64,
+                        pre_balance: pre_balance_vec.clone(),
+                        post_balance: post_balance_vec.clone(),
                     },
                 )
                 .is_ok());
 
             // result found
-            let RpcTransactionStatus { status, fee } = transaction_status_cf
+            let RpcTransactionStatus {
+                status,
+                fee,
+                pre_balance,
+                post_balance,
+            } = transaction_status_cf
                 .get((0, Signature::default()))
                 .unwrap()
                 .unwrap();
             assert_eq!(status, Err(TransactionError::AccountNotFound));
             assert_eq!(fee, 5u64);
+            assert_eq!(pre_balance, pre_balance_vec);
+            assert_eq!(post_balance, post_balance_vec);
 
             // insert value
             assert!(transaction_status_cf
@@ -4690,13 +4714,20 @@ pub mod tests {
                     (9, Signature::default()),
                     &RpcTransactionStatus {
                         status: solana_sdk::transaction::Result::<()>::Ok(()),
-                        fee: 9u64
+                        fee: 9u64,
+                        pre_balance: pre_balance_vec.clone(),
+                        post_balance: post_balance_vec.clone(),
                     },
                 )
                 .is_ok());
 
             // result found
-            let RpcTransactionStatus { status, fee } = transaction_status_cf
+            let RpcTransactionStatus {
+                status,
+                fee,
+                pre_balance,
+                post_balance,
+            } = transaction_status_cf
                 .get((9, Signature::default()))
                 .unwrap()
                 .unwrap();
@@ -4704,6 +4735,8 @@ pub mod tests {
             // deserialize
             assert_eq!(status, Ok(()));
             assert_eq!(fee, 9u64);
+            assert_eq!(pre_balance, pre_balance_vec);
+            assert_eq!(post_balance, post_balance_vec);
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
@@ -4749,6 +4782,8 @@ pub mod tests {
                                 TransactionError::AccountNotFound,
                             ),
                             fee: x,
+                            pre_balance: vec![],
+                            post_balance: vec![],
                         },
                     )
                     .unwrap();
