@@ -55,7 +55,7 @@ fn test_nonce() {
 
     full_battery_tests(
         &rpc_client,
-        &drone_addr,
+        &faucet_addr,
         &mut config_payer,
         &mut config_nonce,
         &keypair_file,
@@ -70,8 +70,8 @@ fn test_nonce() {
 fn test_nonce_with_authority() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender, None);
-    let drone_addr = receiver.recv().unwrap();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
@@ -91,7 +91,7 @@ fn test_nonce_with_authority() {
 
     full_battery_tests(
         &rpc_client,
-        &drone_addr,
+        &faucet_addr,
         &mut config_payer,
         &mut config_nonce,
         &nonce_keypair_file,
@@ -104,7 +104,7 @@ fn test_nonce_with_authority() {
 
 fn full_battery_tests(
     rpc_client: &RpcClient,
-    drone_addr: &std::net::SocketAddr,
+    faucet_addr: &std::net::SocketAddr,
     config_payer: &mut CliConfig,
     config_nonce: &mut CliConfig,
     nonce_keypair_file: &str,
