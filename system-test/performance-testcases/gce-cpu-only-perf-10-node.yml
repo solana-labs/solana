@@ -1,5 +1,5 @@
 steps:
-  - command: "system-test/testnet-performance/testnet-automation.sh"
+  - command: "system-test/testnet-automation.sh"
     label: "GCE performance testnets CPU ONLY"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"

@@ -1,11 +1,11 @@
 steps:
-  - command: "system-test/testnet-performance/testnet-automation.sh"
-    label: "COLO performance testnet GPU enabled"
+  - command: "system-test/testnet-automation.sh"
+    label: "COLO performance testnet CPU only"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "colo"
-      TESTNET_TAG: "colo-perf-gpu-enabled"
-      ENABLE_GPU: "true"
+      TESTNET_TAG: "colo-perf-cpu-only"
+      ENABLE_GPU: "false"
       RAMP_UP_TIME: 0
       TEST_DURATION_SECONDS: 600
       NUMBER_OF_VALIDATOR_NODES: 4

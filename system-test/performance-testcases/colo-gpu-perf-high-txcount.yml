@@ -1,5 +1,5 @@
 steps:
-  - command: "system-test/testnet-performance/testnet-automation.sh"
+  - command: "system-test/testnet-automation.sh"
     label: "COLO performance testnet GPU enabled - High Tx Count"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
