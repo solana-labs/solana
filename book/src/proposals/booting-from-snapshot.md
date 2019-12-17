@@ -69,7 +69,7 @@ as it will be verified before being vote upon. Call the root of this snapshot
 
 2) We reject any snapshots `S` where `S` is less than the root of `L` and `S`
 is not in the list of roots in blocktree because this means `S` is for a
-different fork than the one this validiator last rooted. Thus it's critical for
+different fork than the one this validator last rooted. Thus it's critical for
 consistency in `replay_stage` that the order of events when setting a new root
 is:
 
@@ -92,8 +92,8 @@ which are then stored in an output `BankForks`. This is done in
 not locked out for voting. Every validator persists its tower state and must
 consult this state in order to boot safely and resume from a snapshot without
 being slashed. From this tower state and the ancestry information embedded in
-the snapshot, a validiator can derive which banks, are "safe" (See the
-`Determining Vote Safety From a Snapshot and Tower` section for more detals) to
+the snapshot, a validator can derive which banks, are "safe" (See the
+`Determining Vote Safety From a Snapshot and Tower` section for more details) to
 vote for.
 
 6) Periodically send canary transactions to the cluster using the validator's
@@ -101,7 +101,9 @@ local recent blockhash.
 
 7) Wait for the following criteria. While waiting, set a new root every time
 2/3 of the cluster's stake roots a bank. This allows the validator to prune its
-state and also calculate leader schedules as it moves across epochs.
+state and also calculate leader schedules as it moves across epochs. Even if
+the validator appears on the leader schedule, it does not produce blocks while
+waiting.
 
    1) Verify threshold commitment from the trusted validators on `S`. See the
    `Trusted Validator Set` section for details.
