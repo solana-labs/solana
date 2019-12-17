@@ -1,7 +1,7 @@
 only: pulls
 
 # Number of days of inactivity before a pull request becomes stale
-daysUntilStale: 30
+daysUntilStale: 7
 
 # Number of days of inactivity before a stale pull request is closed
 daysUntilClose: 7
