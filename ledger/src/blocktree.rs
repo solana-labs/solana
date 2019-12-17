@@ -286,35 +286,35 @@ impl Blocktree {
             .meta_cf
             .delete_slot(&mut write_batch, from_slot, batch_end)
             .unwrap_or(false)
-            && self
+            & self
                 .erasure_meta_cf
                 .delete_slot(&mut write_batch, from_slot, batch_end)
                 .unwrap_or(false)
-            && self
+            & self
                 .data_shred_cf
                 .delete_slot(&mut write_batch, from_slot, batch_end)
                 .unwrap_or(false)
-            && self
+            & self
                 .code_shred_cf
                 .delete_slot(&mut write_batch, from_slot, batch_end)
                 .unwrap_or(false)
-            && self
+            & self
                 .transaction_status_cf
                 .delete_slot(&mut write_batch, from_slot, batch_end)
                 .unwrap_or(false)
-            && self
+            & self
                 .orphans_cf
                 .delete_slot(&mut write_batch, from_slot, batch_end)
                 .unwrap_or(false)
-            && self
+            & self
                 .index_cf
                 .delete_slot(&mut write_batch, from_slot, batch_end)
                 .unwrap_or(false)
-            && self
+            & self
                 .dead_slots_cf
                 .delete_slot(&mut write_batch, from_slot, batch_end)
                 .unwrap_or(false)
-            && self
+            & self
                 .db
                 .column::<cf::Root>()
                 .delete_slot(&mut write_batch, from_slot, batch_end)
@@ -2283,6 +2283,74 @@ pub mod tests {
         entries
     }
 
+    // check that all columns are either empty or start at `min_slot`
+    fn test_all_empty_or_min(blocktree: &Blocktree, min_slot: Slot) {
+        let condition_met = blocktree
+            .db
+            .iter::<cf::SlotMeta>(IteratorMode::Start)
+            .unwrap()
+            .next()
+            .map(|(slot, _)| slot >= min_slot)
+            .unwrap_or(true)
+            & blocktree
+                .db
+                .iter::<cf::Root>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|(slot, _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blocktree
+                .db
+                .iter::<cf::ShredData>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|((slot, _), _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blocktree
+                .db
+                .iter::<cf::ShredCode>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|((slot, _), _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blocktree
+                .db
+                .iter::<cf::DeadSlots>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|(slot, _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blocktree
+                .db
+                .iter::<cf::ErasureMeta>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|((slot, _), _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blocktree
+                .db
+                .iter::<cf::Orphans>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|(slot, _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blocktree
+                .db
+                .iter::<cf::Index>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|(slot, _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blocktree
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|((slot, _), _)| slot >= min_slot)
+                .unwrap_or(true);
+        assert!(condition_met);
+    }
+
     #[test]
     fn test_create_new_ledger() {
         let mint_total = 1_000_000_000_000;
@@ -4113,14 +4181,13 @@ pub mod tests {
 
         blocktree.purge_slots(0, Some(5));
 
-        blocktree
-            .slot_meta_iterator(0)
-            .unwrap()
-            .for_each(|(slot, _)| {
-                assert!(slot > 5);
-            });
+        test_all_empty_or_min(&blocktree, 6);
 
         blocktree.purge_slots(0, None);
+
+        // min slot shouldn't matter, blocktree should be empty
+        test_all_empty_or_min(&blocktree, 100);
+        test_all_empty_or_min(&blocktree, 0);
 
         blocktree.slot_meta_iterator(0).unwrap().for_each(|(_, _)| {
             assert!(false);
@@ -4139,12 +4206,7 @@ pub mod tests {
 
         blocktree.purge_slots(0, Some(4999));
 
-        blocktree
-            .slot_meta_iterator(0)
-            .unwrap()
-            .for_each(|(slot, _)| {
-                assert_eq!(slot, 5000);
-            });
+        test_all_empty_or_min(&blocktree, 5000);
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
