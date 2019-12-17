@@ -132,16 +132,17 @@ The booting validator can confirm that the snapshot is valid and that the
 cluster it intends to join is building off of `snapshot_root` by verifying the
 signatures of votes for `snapshot_root`. The validator can calculate the
 commitment of its trusted validators, and at some threshold, such as 2/3 of
-trusted validators are locked out at least 2^31 slots, accept the snapshot.
+trusted validators are locked out at least 2^(MAX_LOCKOUT - 1) slots, accept
+the snapshot.
 
 **Proof:** For the snapshot to be valid, the validator that made the snapshot
 must have rooted `snapshot_root`, meaning that it must have observed at least
-2/3 of stake having >=2^31 lockout on `snapshot_root`. Any validators that are
-participating in consensus will eventually also observe the same lockout on
-`snapshot_root`, and will therefore bring themselves up to >=2^31 lockout on
-`snapshot_root`. Thus with any set of trusted validators meeting the conditions
-above, the booting validator will eventually observe the threshold commitment
-and accept the snapshot.
+2/3 of stake having >=2^(MAX_LOCKOUT - 1) lockout on `snapshot_root`. Any
+validators that are participating in consensus will eventually also observe the
+same lockout on `snapshot_root`, and will therefore bring themselves up to
+>=2^(MAX_LOCKOUT - 1) lockout on `snapshot_root`. Thus with any set of trusted
+validators meeting the conditions above, the booting validator will eventually
+observe the threshold commitment and accept the snapshot.
 
 ### Verifying Booting Validator is Caught Up
 
