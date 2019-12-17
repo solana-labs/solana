@@ -47,11 +47,12 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     let lamports_per_account = 100;
 
+    let keypair_count = config.tx_count * config.keypair_multiplier;
     let (keypairs, move_keypairs, _keypair_balance) = generate_and_fund_keypairs(
         &client,
         Some(faucet_addr),
         &config.id,
-        config.tx_count,
+        keypair_count,
         lamports_per_account,
         config.use_move,
     )
