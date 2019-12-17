@@ -111,6 +111,11 @@ pub enum CliCommand {
         use_lamports_unit: bool,
     },
     // Nonce commands
+    AuthorizeNonceAccount {
+        nonce_account: Pubkey,
+        nonce_authority: KeypairEq,
+        new_authority: Pubkey,
+    },
     CreateNonceAccount {
         nonce_account: KeypairEq,
         nonce_authority: Pubkey,
@@ -342,6 +347,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         }),
         ("show-validators", Some(matches)) => parse_show_validators(matches),
         // Nonce Commands
+        ("authorize-nonce-account", Some(matches)) => parse_authorize_nonce_account(matches),
         ("create-nonce-account", Some(matches)) => parse_nonce_create_account(matches),
         ("get-nonce", Some(matches)) => parse_get_nonce(matches),
         ("new-nonce", Some(matches)) => parse_new_nonce(matches),
@@ -1133,6 +1139,18 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Nonce Commands
 
+        // Assign authority to nonce account
+        CliCommand::AuthorizeNonceAccount {
+            nonce_account,
+            nonce_authority,
+            new_authority,
+        } => process_authorize_nonce_account(
+            &rpc_client,
+            config,
+            nonce_account,
+            nonce_authority,
+            new_authority,
+        ),
         // Create nonce account
         CliCommand::CreateNonceAccount {
             nonce_account,
