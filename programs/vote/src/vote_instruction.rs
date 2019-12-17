@@ -16,6 +16,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     system_instruction,
     sysvar::{self, clock::Clock, slot_hashes::SlotHashes, Sysvar},
+    transaction::Transaction,
 };
 use thiserror::Error;
 
@@ -39,6 +40,9 @@ pub enum VoteError {
 
     #[error("authorized voter has already been changed this epoch")]
     TooSoonToReauthorize,
+
+    #[error("lockout slash transaction is invalid")]
+    InvalidSlashTransaction,
 }
 
 impl<E> DecodeError<E> for VoteError {
@@ -64,6 +68,9 @@ pub enum VoteInstruction {
 
     /// Update the vote account's validator identity (node id)
     UpdateNode(Pubkey),
+
+    /// Update the vote account's validator identity (node id)
+    SlashLockouts(Transaction),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -175,7 +182,7 @@ pub fn withdraw(
 }
 
 pub fn process_instruction(
-    _program_id: &Pubkey,
+    program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
@@ -221,6 +228,10 @@ pub fn process_instruction(
         VoteInstruction::Withdraw(lamports) => {
             let to = next_keyed_account(keyed_accounts)?;
             vote_state::withdraw(me, lamports, to, &signers)
+        }
+        VoteInstruction::SlashLockouts(tx) => {
+            let slot_hashes = SlotHashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?;
+            vote_state::slash_state(me, &slot_hashes, program_id, &tx)
         }
     }
 }

@@ -1,7 +1,10 @@
 #![allow(clippy::implicit_hasher)]
 //! Vote state, vote program
 //! Receive and processes votes from validators
-use crate::{id, vote_instruction::VoteError};
+use crate::{
+    id,
+    vote_instruction::{VoteError, VoteInstruction},
+};
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
@@ -11,10 +14,12 @@ use solana_sdk::{
     clock::{Epoch, Slot, UnixTimestamp},
     hash::Hash,
     instruction::InstructionError,
+    instruction_processor_utils::limited_deserialize,
     pubkey::Pubkey,
     rent::Rent,
     slot_hashes::SlotHash,
     sysvar::clock::Clock,
+    transaction::Transaction,
 };
 use std::collections::{HashSet, VecDeque};
 
@@ -157,6 +162,7 @@ pub struct VoteState {
 
     /// most recent timestamp submitted with a vote
     pub last_timestamp: BlockTimestamp,
+    pub has_been_slashed: bool,
 }
 
 impl VoteState {
@@ -422,6 +428,75 @@ impl VoteState {
         self.last_timestamp = BlockTimestamp { slot, timestamp };
         Ok(())
     }
+
+    /// Find slots that would be slashable in self
+    /// votes: sorted oldest (lowest slot) to newest (highest slot)
+    pub fn slashable_slots(&self, votes: &[Slot]) -> Vec<Slot> {
+        let mut slashable_votes: Vec<Slot> = vec![];
+        slashable_votes.extend(self.votes.iter().map(|x| x.slot));
+        slashable_votes.extend(votes.iter());
+        let mut test = VoteState::default();
+        slashable_votes.sort();
+        slashable_votes.dedup();
+        for s in slashable_votes {
+            test.process_slot_vote_unchecked(s);
+        }
+        let mut retval = vec![];
+        if !test.equal(votes) && !self.same_or_older(votes) {
+            let test_set: HashSet<Slot> = test.votes.iter().map(|x| x.slot).collect();
+            let self_set: HashSet<Slot> = self.votes.iter().map(|x| x.slot).collect();
+            retval.extend(test_set.difference(&self_set));
+        }
+        if !test.equal(votes) && !self.same_or_older(votes) {
+            let test_set: HashSet<Slot> = test.votes.iter().map(|x| x.slot).collect();
+            let b_set: HashSet<Slot> = votes.iter().cloned().collect();
+            retval.extend(test_set.difference(&b_set));
+        }
+        retval
+    }
+
+    /// Check which VoteState has the oldest newest vote
+    fn equal(&self, other: &[Slot]) -> bool {
+        other
+            .iter()
+            .zip(
+                self.root_slot
+                    .iter()
+                    .chain(self.votes.iter().map(|l| &l.slot)),
+            )
+            .all(|(slot, lockout)| *slot == *lockout)
+    }
+
+    pub fn slots(&self) -> Vec<Slot> {
+        let mut slice: Vec<Slot> = self.root_slot.iter().cloned().collect();
+        slice.extend(self.votes.iter().map(|l| l.slot));
+        slice
+    }
+
+    /// Check which VoteState has the oldest newest vote
+    fn same_or_older(&self, other: &[Slot]) -> bool {
+        self.votes
+            .back()
+            .map(|s| s.slot)
+            .unwrap_or(self.root_slot.unwrap_or(0))
+            <= other.last().cloned().unwrap_or(0)
+    }
+
+    /// Set the VoteState as slashed if the slot is slashable
+    /// * slashable_slot - must be a slot which is not an ancestor of this bank
+    /// Instruction must validate that the slashable_slot is not an ancestor of this bank,
+    /// and that the vote is signed.
+    pub fn slash(&mut self, slot_hashes: &[SlotHash], slashable_slot: Slot) {
+        //verify that the slot is NOT an ancestor
+        for s in slot_hashes {
+            if s.0 == slashable_slot {
+                //slot is an ancestor
+                return;
+            }
+        }
+        let slashable_slots = self.slashable_slots(&[slashable_slot]);
+        self.has_been_slashed = self.has_been_slashed || slashable_slots.is_empty();
+    }
 }
 
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
@@ -547,6 +622,55 @@ pub fn process_vote(
             .max()
             .ok_or_else(|| VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
+    }
+    vote_account.set_state(&vote_state)
+}
+
+pub fn slash_state(
+    vote_account: &mut KeyedAccount,
+    slot_hashes: &[SlotHash],
+    program_id: &Pubkey,
+    tx: &Transaction,
+) -> Result<(), InstructionError> {
+    let mut vote_state: VoteState = vote_account.state()?;
+    //verify the tx is valid
+    if !tx.verify_refs() {
+        return Err(InstructionError::CustomError(
+            VoteError::InvalidSlashTransaction as u32,
+        ));
+    }
+    //verify transaction signature
+    if tx.verify().is_err() {
+        return Err(InstructionError::CustomError(
+            VoteError::InvalidSlashTransaction as u32,
+        ));
+    }
+    let signers: HashSet<Pubkey> = tx
+        .message
+        .account_keys
+        .iter()
+        .take(tx.signatures.len())
+        .cloned()
+        .collect();
+    //find vote instruction
+    for (i, ix) in tx.message.instructions.iter().enumerate() {
+        if tx.instruction_program(i) != Some(&program_id) {
+            continue;
+        }
+        if let Ok(VoteInstruction::Vote(vote)) = limited_deserialize(&ix.data) {
+            //verify that account matches mine
+            if tx.key(i, 0) != Some(vote_account.unsigned_key()) {
+                continue;
+            }
+            //verify that the transaction was signed by the expected signers
+            if verify_authorized_signer(&vote_state.authorized_voter, &signers).is_err() {
+                continue;
+            }
+            //slash the slot
+            for slot in vote.slots {
+                vote_state.slash(slot_hashes, slot);
+            }
+        }
     }
     vote_account.set_state(&vote_state)
 }
@@ -1424,5 +1548,37 @@ mod tests {
         // Test initial vote
         vote_state.last_timestamp = BlockTimestamp::default();
         assert_eq!(vote_state.process_timestamp(0, timestamp), Ok(()));
+    }
+
+    #[test]
+    fn test_vote_state_older() {
+        let s = VoteState::default();
+        assert!(s.same_or_older(&s.slots()));
+
+        let mut s1 = VoteState::default();
+        s1.process_slot_vote_unchecked(1);
+        assert!(s1.same_or_older(&s1.slots()));
+        assert!(s.same_or_older(&s1.slots()));
+        assert!(!s1.same_or_older(&s.slots()));
+
+        let mut s2 = VoteState::default();
+        s2.root_slot = Some(1);
+        assert!(s1.same_or_older(&s2.slots()));
+        assert!(s2.same_or_older(&s1.slots()));
+
+        let mut s3 = VoteState::default();
+        s3.root_slot = Some(2);
+        assert!(!s3.same_or_older(&s2.slots()));
+        assert!(s2.same_or_older(&s3.slots()));
+        assert!(s1.same_or_older(&s3.slots()));
+        assert!(s.same_or_older(&s3.slots()));
+    }
+
+    #[test]
+    fn test_slashable_slots() {
+        let s1 = VoteState::default();
+        let s2 = VoteState::default();
+        assert!(s1.slashable_slots(&s2.slots()).is_empty());
+        assert!(s2.slashable_slots(&s1.slots()).is_empty());
     }
 }
