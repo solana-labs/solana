@@ -56,7 +56,9 @@ echo --- create book repo
   cd book/html/
   git init .
   git add ./* ./.nojekyll
-  git commit --author="$me <maintainers@solana.com>" -m "${CI_COMMIT:-local}"
+  git config user.email maintainers@solana.com
+  git config user.name "$me"
+  git commit -m "${CI_COMMIT:-local}"
 )
 
 echo "--- publish $BOOK"
@@ -85,7 +87,9 @@ echo --- update gitbook-cage
   # make a local commit for the svgs
   git add -A -f book/src/.gitbook/assets/.
   if ! git diff-index --quiet HEAD; then
-    git commit --author="$me <maintainers@solana.com>" -m "gitbook-cage update $(date -Is)"
+    git config user.email maintainers@solana.com
+    git config user.name "$me"
+    git commit -m "gitbook-cage update $(date -Is)"
     git push -f github.com:solana-labs/solana-gitbook-cage.git HEAD:refs/heads/"$CI_BRANCH"
     # pop off the local commit
     git reset --hard HEAD~
