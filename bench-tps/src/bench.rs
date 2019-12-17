@@ -90,6 +90,7 @@ where
 
     let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
     let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
+    assert!(gen_keypairs.len() >= 2 * tx_count);
     for chunk in gen_keypairs.chunks_exact(2 * tx_count) {
         source_keypair_chunks.push(chunk[..tx_count].iter().collect());
         dest_keypair_chunks.push(chunk[tx_count..].iter().collect());
@@ -1123,8 +1124,9 @@ mod tests {
         config.tx_count = 10;
         config.duration = Duration::from_secs(5);
 
+        let keypair_count = config.tx_count * config.keypair_multiplier;
         let (keypairs, _move_keypairs, _keypair_balance) =
-            generate_and_fund_keypairs(&clients[0], None, &config.id, config.tx_count, 20, false)
+            generate_and_fund_keypairs(&clients[0], None, &config.id, keypair_count, 20, false)
                 .unwrap();
 
         do_bench_tps(clients, config, keypairs, 0, None);
@@ -1135,11 +1137,11 @@ mod tests {
         let (genesis_config, id) = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let client = BankClient::new(bank);
-        let tx_count = 10;
+        let keypair_count = 20;
         let lamports = 20;
 
         let (keypairs, _move_keypairs, _keypair_balance) =
-            generate_and_fund_keypairs(&client, None, &id, tx_count, lamports, false).unwrap();
+            generate_and_fund_keypairs(&client, None, &id, keypair_count, lamports, false).unwrap();
 
         for kp in &keypairs {
             assert_eq!(
@@ -1158,11 +1160,11 @@ mod tests {
         genesis_config.fee_calculator = fee_calculator;
         let bank = Bank::new(&genesis_config);
         let client = BankClient::new(bank);
-        let tx_count = 10;
+        let keypair_count = 20;
         let lamports = 20;
 
         let (keypairs, _move_keypairs, _keypair_balance) =
-            generate_and_fund_keypairs(&client, None, &id, tx_count, lamports, false).unwrap();
+            generate_and_fund_keypairs(&client, None, &id, keypair_count, lamports, false).unwrap();
 
         let max_fee = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
