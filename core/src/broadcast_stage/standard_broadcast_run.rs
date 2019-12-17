@@ -190,6 +190,14 @@ impl StandardBroadcastRun {
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
         );
+        //Insert the first shred so blocktree stores that the leader started this block
+        //This must be done before the blocks are sent out over the wire.
+        if !data_shreds.is_empty() && data_shreds[0].index() == 0 {
+            let first = vec![data_shreds[0].clone()];
+            blocktree
+                .insert_shreds(first, None, true)
+                .expect("Failed to insert shreds in blocktree");
+        }
         let last_data_shred = data_shreds.len();
         if let Some(last_shred) = last_unfinished_slot_shred {
             data_shreds.push(last_shred);
@@ -200,16 +208,8 @@ impl StandardBroadcastRun {
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
         let stakes = stakes.map(Arc::new);
         let data_shreds = Arc::new(data_shreds);
-        //Insert the first shred so blocktree stores that the leader started this block
-        //This must be done before the blocks are sent out over the wire.
-        let first_shred = data_shreds.first().map(|s| s.index() == 0).unwrap_or(false);
-        if first_shred {
-            self.insert(blocktree, data_shreds.clone())?;
-            socket_sender.send((stakes.clone(), data_shreds.clone()))?;
-        } else {
-            socket_sender.send((stakes.clone(), data_shreds.clone()))?;
-            blocktree_sender.send(data_shreds.clone())?;
-        }
+        socket_sender.send((stakes.clone(), data_shreds.clone()))?;
+        blocktree_sender.send(data_shreds.clone())?;
         let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..last_data_shred]);
         let coding_shreds = Arc::new(coding_shreds);
         socket_sender.send((stakes, coding_shreds))?;
@@ -230,8 +230,14 @@ impl StandardBroadcastRun {
     fn insert(&self, blocktree: &Arc<Blocktree>, shreds: Arc<Vec<Shred>>) -> Result<()> {
         // Insert shreds into blocktree
         let insert_shreds_start = Instant::now();
+        //The first shred is inserted synchronously
+        let data_shreds = if !shreds.is_empty() && shreds[0].index() == 0 {
+            shreds[1..].to_vec()
+        } else {
+            shreds.to_vec()
+        };
         blocktree
-            .insert_shreds(shreds.to_vec(), None, true)
+            .insert_shreds(data_shreds, None, true)
             .expect("Failed to insert shreds in blocktree");
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
         self.update_broadcast_stats(BroadcastStats {
