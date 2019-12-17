@@ -258,8 +258,8 @@ fn metrics_submit_lamport_balance(lamport_balance: u64) {
 
 #[cfg(feature = "move")]
 fn generate_move_txs(
-    source: &[Keypair],
-    dest: &[Keypair],
+    source: &[&Keypair],
+    dest: &VecDeque<&Keypair>,
     reclaim: bool,
     move_keypairs: &[Keypair],
     libra_pay_program_id: &Pubkey,
@@ -1047,7 +1047,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
                 // Still fund the solana ones which will be used for fees.
                 let seed = [0u8; 32];
                 let mut rnd = GenKeys::new(seed);
-                let move_keypairs = rnd.gen_n_keypairs(keypair_count);
+                let move_keypairs = rnd.gen_n_keypairs(keypair_count as u64);
                 fund_move_keys(
                     client,
                     funding_key,
