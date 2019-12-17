@@ -1,6 +1,6 @@
 # Anatomy of a Validator
 
-![Validator block diagrams](../.gitbook/assets/validator%20%281%29.svg)
+![Validator block diagrams](../.gitbook/assets/validator.svg)
 
 ## Pipelining
 
@@ -9,4 +9,3 @@ The validators make extensive use of an optimization common in CPU design, calle
 ## Pipelining in the Validator
 
 The validator contains two pipelined processes, one used in leader mode called the TPU and one used in validator mode called the TVU. In both cases, the hardware being pipelined is the same, the network input, the GPU cards, the CPU cores, writes to disk, and the network output. What it does with that hardware is different. The TPU exists to create ledger entries whereas the TVU exists to validate them.
-

@@ -2,6 +2,9 @@
 set -e
 
 cd "$(dirname "$0")/.."
+
+me=$(basename "$0")
+
 BOOK="book"
 
 source ci/rust-version.sh stable
@@ -52,20 +55,41 @@ echo --- create book repo
   set -x
   cd book/html/
   git init .
-  git config user.email "maintainers@solana.com"
-  git config user.name "$(basename "$0")"
   git add ./* ./.nojekyll
-  git commit -m "${CI_COMMIT:-local}"
+  git commit --author="$me <maintainers@solana.com>" -m "${CI_COMMIT:-local}"
 )
 
 echo "--- publish $BOOK"
-cd book/html/
-git remote add origin $repo
-git fetch origin master
-if ! git diff HEAD origin/master --quiet; then
-  git push -f origin HEAD:master
-else
-  echo "Content unchanged, publish skipped"
-fi
+(
+  cd book/html/
+  git remote add origin $repo
+  git fetch origin master
+  if ! git diff HEAD origin/master --quiet; then
+    git push -f origin HEAD:master
+  else
+    echo "Content unchanged, publish skipped"
+  fi
+)
+
+echo --- update gitbook-cage
+(
+  if [[ -z $CI_BRANCH ]]; then
+    exit 0
+  fi
+
+  set -x
+  (
+    . ci/rust-version.sh
+    ci/docker-run.sh $rust_stable_docker_image make -Cbook -B svg
+  )
+  # make a local commit for the svgs
+  git add -A -f book/src/.gitbook/assets/.
+  if ! git diff-index --quiet HEAD; then
+    git commit --author="$me <maintainers@solana.com>" -m "gitbook-cage update $(date -Is)"
+    git push -f github.com:solana-labs/solana-gitbook-cage.git HEAD:refs/heads/"$CI_BRANCH"
+    # pop off the local commit
+    git reset --hard HEAD~
+  fi
+)
 
 exit 0
