@@ -10,6 +10,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
+    system_instruction::create_address_with_seed,
     sysvar::{self, rewards::Rewards, stake_history::StakeHistory, Sysvar},
 };
 use solana_stake_program::{
@@ -336,4 +337,70 @@ fn test_stake_account_lifetime() {
     // verify all the math sums to zero
     assert_eq!(bank.get_balance(&split_stake_pubkey), 0);
     assert_eq!(bank.get_balance(&stake_pubkey), lamports - lamports / 2);
+}
+
+#[test]
+fn test_create_stake_account_from_seed() {
+    let vote_keypair = Keypair::new();
+    let vote_pubkey = vote_keypair.pubkey();
+    let node_pubkey = Pubkey::new_rand();
+
+    let GenesisConfigInfo {
+        mut genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config_with_leader(100_000_000_000, &Pubkey::new_rand(), 1_000_000);
+    genesis_config
+        .native_instruction_processors
+        .push(solana_stake_program::solana_stake_program!());
+    let bank = Bank::new(&genesis_config);
+    let mint_pubkey = mint_keypair.pubkey();
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let seed = "test-string";
+    let stake_pubkey =
+        create_address_with_seed(&mint_pubkey, seed, &solana_stake_program::id()).unwrap();
+
+    // Create Vote Account
+    let message = Message::new(vote_instruction::create_account(
+        &mint_pubkey,
+        &vote_pubkey,
+        &VoteInit {
+            node_pubkey,
+            authorized_voter: vote_pubkey,
+            authorized_withdrawer: vote_pubkey,
+            commission: 50,
+        },
+        10,
+    ));
+    bank_client
+        .send_message(&[&mint_keypair, &vote_keypair], message)
+        .expect("failed to create vote account");
+
+    let authorized = stake_state::Authorized::auto(&mint_pubkey);
+    // Create stake account and delegate to vote account
+    let message = Message::new(
+        stake_instruction::create_account_with_seed_and_delegate_stake(
+            &mint_pubkey,
+            &stake_pubkey,
+            seed,
+            &vote_pubkey,
+            &authorized,
+            &stake_state::Lockup::default(),
+            1_000_000,
+        ),
+    );
+    bank_client
+        .send_message(&[&mint_keypair], message)
+        .expect("failed to create and delegate stake account");
+
+    // Test that correct lamports are staked
+    let account = bank.get_account(&stake_pubkey).expect("account not found");
+    let stake_state = account.state().expect("couldn't unpack account data");
+    if let StakeState::Stake(_meta, stake) = stake_state {
+        assert_eq!(stake.delegation.stake, 1_000_000);
+    } else {
+        assert!(false, "wrong account type found")
+    }
 }
