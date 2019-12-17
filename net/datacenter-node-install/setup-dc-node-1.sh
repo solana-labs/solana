@@ -31,7 +31,7 @@ EOF
 
 apt install -y build-essential pkg-config clang cmake sysstat perf \
   linux-generic-hwe-18.04-edge linux-tools-generic-hwe-18.04-edge \
-  iftop
+  iftop heaptrack
 
 "$HERE"/../scripts/install-docker.sh
 usermod -aG docker "$SETUP_USER"
