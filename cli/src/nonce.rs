@@ -52,7 +52,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Account to be granted authority of the nonce account")
+                        .help("Account to be granted authority of the nonce account"),
                 )
                 .arg(nonce_authority_arg()),
         )
@@ -188,9 +188,7 @@ fn resolve_nonce_authority(matches: &ArgMatches<'_>) -> Keypair {
         .unwrap_or_else(|| keypair_of(matches, "nonce_account_keypair").unwrap())
 }
 
-pub fn parse_authorize_nonce_account(
-    matches: &ArgMatches<'_>,
-) -> Result<CliCommandInfo, CliError> {
+pub fn parse_authorize_nonce_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let new_authority = pubkey_of(matches, "new_authority").unwrap();
     let nonce_authority = resolve_nonce_authority(matches);
@@ -283,12 +281,8 @@ pub fn process_authorize_nonce_account(
     new_authority: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    
-    let ix = authorize(
-        nonce_account,
-        &nonce_authority.pubkey(),
-        new_authority,
-    );
+
+    let ix = authorize(nonce_account, &nonce_authority.pubkey(), new_authority);
     let mut tx = Transaction::new_signed_with_payer(
         vec![ix],
         Some(&config.keypair.pubkey()),
