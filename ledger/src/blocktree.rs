@@ -258,80 +258,65 @@ impl Blocktree {
             .unwrap_or(from_slot + PURGE_BATCH_SIZE)
             .min(from_slot + PURGE_BATCH_SIZE);
         while from_slot < batch_end {
-            if let Err(e) = self.run_purge_batch(from_slot, batch_end) {
-                error!(
-                    "Error: {:?} while purging slots {:?} to {:?}",
-                    e, from_slot, batch_end
-                );
+            if let Ok(end) = self.run_purge_batch(from_slot, batch_end) {
+                // no more slots to iter or reached the upper bound
+                if end {
+                    break;
+                } else {
+                    // update the next batch bounds
+                    from_slot = batch_end;
+                    batch_end = to_slot
+                        .unwrap_or(batch_end + PURGE_BATCH_SIZE)
+                        .min(batch_end + PURGE_BATCH_SIZE);
+                }
             }
-            // update the next batch bounds
-            from_slot = batch_end;
-            batch_end = to_slot
-                .unwrap_or(batch_end + PURGE_BATCH_SIZE)
-                .min(batch_end + PURGE_BATCH_SIZE);
         }
     }
 
     // Returns whether or not all columns have been purged until their end
-    fn run_purge_batch(&self, from_slot: Slot, to_slot: Slot) -> Result<()> {
+    fn run_purge_batch(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
         let mut write_batch = self
             .db
             .batch()
             .expect("Database Error: Failed to get write batch");
         // delete range cf is not inclusive
         let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
-        let status = self
+        let columns_empty = self
             .db
             .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
-            .is_ok()
-            && self
+            .unwrap_or_else(|_| false)
+            & self
                 .db
                 .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
-                .is_ok()
-            && self
+                .unwrap_or_else(|_| false)
+            & self
                 .db
-                .delete_range_cf::<cf::ShredData>(
-                    &mut write_batch,
-                    cf::ShredData::as_index(from_slot),
-                    cf::ShredData::as_index(to_slot),
-                )
-                .is_ok()
-            && self
+                .delete_range_cf::<cf::ShredData>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
                 .db
-                .delete_range_cf::<cf::ShredCode>(
-                    &mut write_batch,
-                    cf::ShredCode::as_index(from_slot),
-                    cf::ShredCode::as_index(to_slot),
-                )
-                .is_ok()
-            && self
+                .delete_range_cf::<cf::ShredCode>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
                 .db
                 .delete_range_cf::<cf::DeadSlots>(&mut write_batch, from_slot, to_slot)
-                .is_ok()
-            && self
+                .unwrap_or_else(|_| false)
+            & self
                 .db
-                .delete_range_cf::<cf::ErasureMeta>(
-                    &mut write_batch,
-                    cf::ErasureMeta::as_index(from_slot),
-                    cf::ErasureMeta::as_index(to_slot),
-                )
-                .is_ok()
-            && self
+                .delete_range_cf::<cf::ErasureMeta>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
                 .db
                 .delete_range_cf::<cf::Orphans>(&mut write_batch, from_slot, to_slot)
-                .is_ok()
-            && self
+                .unwrap_or_else(|_| false)
+            & self
                 .db
                 .delete_range_cf::<cf::Index>(&mut write_batch, from_slot, to_slot)
-                .is_ok()
-            && self
+                .unwrap_or_else(|_| false)
+            & self
                 .db
-                .delete_range_cf::<cf::TransactionStatus>(
-                    &mut write_batch,
-                    cf::TransactionStatus::as_index(from_slot),
-                    cf::TransactionStatus::as_index(to_slot),
-                )
-                .is_ok();
+                .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false);
         if let Err(e) = self.db.write(write_batch) {
             error!(
                 "Error: {:?} while submitting write batch for slot {:?} retrying...",
@@ -339,11 +324,7 @@ impl Blocktree {
             );
             return Err(e);
         }
-        if !status {
-            error!("Error while deleting columns");
-            return Err(BlocktreeError::DeleteFailed);
-        }
-        Ok(())
+        Ok(columns_empty)
     }
 
     pub fn erasure_meta(&self, slot: Slot, set_index: u64) -> Result<Option<ErasureMeta>> {

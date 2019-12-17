@@ -44,7 +44,6 @@ pub enum BlocktreeError {
     IO(#[from] std::io::Error),
     Serialize(#[from] Box<bincode::ErrorKind>),
     FsExtraError(#[from] fs_extra::error::Error),
-    DeleteFailed,
 }
 pub(crate) type Result<T> = std::result::Result<T, BlocktreeError>;
 
@@ -590,17 +589,23 @@ impl Database {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
 
-    pub fn delete_range_cf<C>(
-        &self,
-        batch: &mut WriteBatch,
-        from: C::Index,
-        to: C::Index,
-    ) -> Result<()>
+    // Adds a range to delete to the given write batch and returns whether or not the column has reached
+    // its end
+    pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<bool>
     where
         C: Column,
     {
         let cf = self.cf_handle::<C>();
-        batch.delete_range_cf::<C>(cf, from, to)
+        let from_index = C::as_index(from);
+        let to_index = C::as_index(to);
+        let result = batch.delete_range_cf::<C>(cf, from_index, to_index);
+        let max_slot = self
+            .iter::<C>(IteratorMode::End)?
+            .next()
+            .map(|(i, _)| C::slot(i))
+            .unwrap_or(0);
+        let end = max_slot <= to;
+        result.map(|_| end)
     }
 }
 
