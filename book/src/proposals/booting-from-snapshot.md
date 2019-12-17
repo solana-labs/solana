@@ -50,10 +50,10 @@ snapshot. With that set, the validator can follow the procedure detailed in the
 
 For the sections below:
 
-Assume an arbitrary tower state `L`, a snapshot root `S`, and a trusted bank
-slot `T` (defined in step 7-1 of the `Boot Procedure` section).
+Assume an arbitrary `Tower` state `tower`, a `snapshot_root`, and a
+`trusted_bank` (defined in step 7-1 of the `Boot Procedure` section).
 
-Define `L_i` to be: The slot of the ith vote in `L`.
+Define `tower_vote_slot` to be: The slot of some vote in `tower`.
 
 Define the function `is_ancestor(a, b)` to be: Given a slot `a` and a slot `b`
 will return true if `a` is an ancestor of `b`.
@@ -64,14 +64,13 @@ Define the function `is_locked(a, b)` to be: `a + a.lockout <= b`
 ## Boot Procedure:
 
 1) The validator gets a snapshot to boot from. This can come from any source,
-as it will be verified before being vote upon. Call the root of this snapshot
-`S`.
+as it will be verified before being vote upon.
 
-2) We reject any snapshots `S` where `S` is less than the root of `L` and `S`
-is not in the list of roots in blocktree because this means `S` is for a
-different fork than the one this validator last rooted. Thus it's critical for
-consistency in `replay_stage` that the order of events when setting a new root
-is:
+2) We reject any snapshots where `snapshot_root` is less than the root of
+`tower` and `snapshot_root` is not in the list of roots in blocktree because
+this means `snapshot_root` is for a different fork than the one this validator
+last rooted. Thus it's critical for consistency in `replay_stage` that the
+order of events when setting a new root is:
 
     1) Write the root to tower
 
@@ -83,18 +82,19 @@ is:
 blocktree. If not (there was a crash between 2-1 and 2-2), then rewrite the
 root to blocktree.
 
-4) On startup, the validator boots from the snapshot `S`, then replays all
-descendant blocks of `S` that exist in this validator's ledger, building banks
-which are then stored in an output `BankForks`. This is done in
-`blocktree_processor.rs`. The root of this `BankForks` is set to `S`.
+4) On startup, the validator boots from the snapshot `snapshot_root`, then
+replays all descendant blocks of `snapshot_root` that exist in this validator's
+ledger, building banks which are then stored in an output `bank_forks`. This is
+done in `blocktree_processor.rs`. The root of this `bank_forks` is set to
+`snapshot_root`.
 
-5) On startup, the validator calculates the first slot `S_n` from which it is
-not locked out for voting. Every validator persists its tower state and must
+5) On startup, the validator calculates the `first_votable_slot` from which it
+is not locked out for voting. Every validator persists its tower state and must
 consult this state in order to boot safely and resume from a snapshot without
 being slashed. From this tower state and the ancestry information embedded in
 the snapshot, a validator can derive which banks, are "safe" (See the
-`Determining Vote Safety From a Snapshot and Tower` section for more details) to
-vote for.
+`Determining Vote Safety From a Snapshot and Tower` section for more details)
+to vote for.
 
 6) Periodically send canary transactions to the cluster using the validator's
 local recent blockhash.
@@ -105,16 +105,16 @@ state and also calculate leader schedules as it moves across epochs. Even if
 the validator appears on the leader schedule, it does not produce blocks while
 waiting.
 
-   1) Verify threshold commitment from the trusted validators on `S`. See the
-   `Trusted Validator Set` section for details.
+   1) Verify threshold commitment from the trusted validators on
+   `snapshot_root`. See the `Trusted Validator Set` section for details.
 
    2) Observe a canary transaction in a bank that some threshold of trusted
-   validator stake has voted on at least once. Call this trusted bank `T`.
+   validator stake has voted on at least once. Call this `trusted_bank`.
 
-   3) The current working bank has slot number `S_current` > `S_n`
+   3) The current working bank has `bank.slot > first_votable_slot`
 
 8) Start the normal voting process, voting for any slot that satisfies
-`S_current` > `S_n`
+`bank.slot > first_votable_slot`
 
 
 ## Trusted Validator Set
@@ -129,18 +129,19 @@ that prevents them from receiving slots, voting, or broadcasting their votes.
 ### Verifying the Cluster is Building from the Snapshot
 
 The booting validator can confirm that the snapshot is valid and that the
-cluster it intends to join is building off of `S` by verifying the signatures
-of votes for `S`. The validator can calculate the commitment of its trusted
-validators, and at some threshold, such as 2/3 of trusted validators are locked
-out at least 2^31 slots, accept the snapshot.
+cluster it intends to join is building off of `snapshot_root` by verifying the
+signatures of votes for `snapshot_root`. The validator can calculate the
+commitment of its trusted validators, and at some threshold, such as 2/3 of
+trusted validators are locked out at least 2^31 slots, accept the snapshot.
 
 **Proof:** For the snapshot to be valid, the validator that made the snapshot
-must have rooted `S`, meaning that it must have observed at least 2/3 of stake
-having >=2^31 lockout on `S`. Any validators that are participating in
-consensus will eventually also observe the same lockout on `S`, and will
-therefore bring themselves up to >=2^31 lockout on `S`. Thus with any set of
-trusted validators meeting the conditions above, the booting validator will
-eventually observe the threshold commitment and accept the snapshot.
+must have rooted `snapshot_root`, meaning that it must have observed at least
+2/3 of stake having >=2^31 lockout on `snapshot_root`. Any validators that are
+participating in consensus will eventually also observe the same lockout on
+`snapshot_root`, and will therefore bring themselves up to >=2^31 lockout on
+`snapshot_root`. Thus with any set of trusted validators meeting the conditions
+above, the booting validator will eventually observe the threshold commitment
+and accept the snapshot.
 
 ### Verifying Booting Validator is Caught Up
 
@@ -151,38 +152,41 @@ trusted validators, it can conclude that it has caught up to the trusted
 validators.
 
 
-## Determining `S_n` From a Snapshot and Tower
+## Determining `first_votable_slot` From a Snapshot and Tower
 
 Define the "safety" condition to be:
 
-Given a `BankForks`, a validator can run some procedure to determine the first
-slot `S_n` that it can vote on without violating the lockouts of any vote in
-`L`. The procedure for this is:
+Given a `BankForks`, `bank_forks`, a validator can run some procedure to
+determine the `first_votable_slot` that it can vote on without violating the
+lockouts of any vote in `tower`. The procedure for this is:
 
-1) Find the earliest vote `V` in the tower for which `is_ancestor(V, S)` is not
-true.
+1) Find the earliest `vote` in the tower for which `is_ancestor(vote,
+snapshot_root)` is not true.
 
-2) `V` and every vote after it needs to expire before the validator can vote on
-any descendant of `S`, so with all the votes `V_i` in tower where `V_i >= V`,
-`S_n = max(V_i + lockout(V_i))`. If no `V` exists, then `S_n = S`.
+2) `vote` and every vote after it needs to expire before the validator can vote
+on any descendant of `snapshot_root`, so with all the votes `vote_i` in tower
+where `vote_i >= vote`, `first_votable_slot = max(vote_i + lockout(vote_i))`.
+If no `vote` exists, then `first_votable_slot = snapshot_root`.
 
 
 ## Achieving Safety
 
 Define the "Safety Criteria" to be: If the validator has a `BankForks` and a
-`Tower`, it is able to determine `is_ancestor(L_i, S_d)` where `L_i` is any
-slot in `Tower`, and `S_d` is any descendant of `S` that is also present in
-`BankForks.banks`.
+`Tower`, it is able to determine `is_ancestor(tower_vote_slot,
+snapshot_descendant)` where `tower_vote_slot` is any slot in `Tower`, and
+`snapshot_descendant` is any descendant of `snapshot_root` that is also present
+in `bank_forks.banks`.
 
 Assume the "Safety Criteria" is true, we show we can then achieve the "safety"
 condition:
 
-**Proof:** A validator wants to determine whether it can vote on `T`. `T` must
-be a descendant of `S` because the validator does not play any state for
-non-descendants of `S` when booting from the snapshot. From assuming "Safety
-Criteria" above, this means for any `L_i` we can determine `is_ancestor(L_i,
-T)`. This means we have all the tools to run the algorithm from the safety
-definition.
+**Proof:** A validator wants to determine whether it can vote on
+`trusted_bank`. `trusted_bank` must be a descendant of `snapshot_root` because
+the validator does not play any state for non-descendants of `snapshot_root`
+when booting from the snapshot. From assuming "Safety Criteria" above, this
+means for any `tower_vote_slot` we can determine `is_ancestor(tower_vote_slot,
+trusted_bank)`. This means we have all the tools to run the algorithm from the
+safety definition.
 
 Thus to achieve safety, we want to design the snapshotting system such that the
 "Safety Criteria" is met.
@@ -190,88 +194,105 @@ Thus to achieve safety, we want to design the snapshotting system such that the
 
 ## Implementing "Safety Criteria"
 
-The snapshot is augmented to store the last `N` ancestors of `S`. These
-ancestors are incorporated into the bank hash so they can be verified when a
-validator unpacks a snapshot. Call this set `N_Ancestors`.
+The snapshot is augmented to store the last `N` ancestors of `snapshot_root`.
+These ancestors are incorporated into the bank hash so they can be verified
+when a validator unpacks a snapshot. Call this set `ancestors`.
 
 We now implement the "Safety Criteria" in cases:
 
-### Case 1: Calculating `is_ancestor(L_i, S_d)` when `L_i` < `S`:
+### Case 1: Calculating `is_ancestor(tower_vote_slot, snapshot_descendant)`
+when `tower_vote_slot` < `snapshot_root`:
 
-There are two variants depending on whether the list of `N_Ancestors` goes back
-far enough to include `L_i`. This can be established by comparing `L_i` to the
-oldest slot in `N_Ancestors`, `N_Oldest`.
+There are two variants depending on whether the list of `ancestors` goes back
+far enough to include `tower_vote_slot`. This can be established by comparing
+`tower_vote_slot` to the oldest slot in `ancestors`, `oldest_ancestor`.
 
-#### Variant 1: `L_i` >= `N_Oldest`:
+#### Variant 1: `tower_vote_slot` >= `oldest_ancestor`:
 
 ##### Protocol:
 
-Search the list of `N_Ancestors` ancestors of `S` to check if `L_i` is an
-ancestor of `S`.
+Search the list of `ancestors` ancestors of `snapshot_root` to check if
+`tower_vote_slot` is an ancestor of `snapshot_root`.
 
 ##### Proof of Correctness for Protocol:
 
-This case is equivalent to determining `is_ancestor(L_i, S)`. This is because
-`is_ancestor(L_i, S_d) <=> (is_ancestor(L_i, S) && is_ancestor(S, S_d))`, and
-`is_ancestor(S, S_d)` is true by the definition of `S_d`.
+This case is equivalent to determining `is_ancestor(tower_vote_slot,
+snapshot_root)`. This is because `is_ancestor(tower_vote_slot,
+snapshot_descendant) <=> (is_ancestor(tower_vote_slot, snapshot_root) &&
+is_ancestor(snapshot_root, snapshot_descendant))`, and
+`is_ancestor(snapshot_root, snapshot_descendant)` is true by the definition of
+`snapshot_descendant`.
 
-Now we show the protocol is sufficient to determine `is_ancestor(L_i, S)`.
-Because `L_i + N >= S` in this variant, and `N_Ancestors` has length `N`, then
-if `L_i`, is an ancestor, it has to be a member of `N_Ancestors`, so the
+Now we show the protocol is sufficient to determine
+`is_ancestor(tower_vote_slot, snapshot_root)`.  Because `tower_vote_slot + N >=
+snapshot_root` in this variant, and `ancestors` has length `N`, then if
+`tower_vote_slot`, is an ancestor, it has to be a member of `ancestors`, so the
 protocol is sufficient.
 
-#### Variant 2: `L_i` < `N_Oldest`:
+#### Variant 2: `tower_vote_slot` < `oldest_ancestor`:
 
 ##### Protocol:
 
-Search the vote state of the validator in `S_d` for `L_i`. If `L_i` is not
-found, assume it is not an ancestor.
+Search the vote state of the validator in `snapshot_descendant` for
+`tower_vote_slot`. If `tower_vote_slot` is not found, assume it is not an
+ancestor.
 
 ##### Proof of Correctness for Protocol:
 
 A vote for a slot will only be placed into the validator's vote state in a bank
 descended from the slot the vote is for. Therefore, a vote will only be found
 in a vote state if the vote is for an ancestor of the slot the vote state is
-found in. This protocol may falsely determine that `L_i` is not an ancestor of
-`S_d` if the vote was never accepted by a leader, but the result will be that
-the validator will take the more cautious approach of waiting for the lockout
-of the vote to expire, so it will not be slashed due to this failure.
+found in. This protocol may falsely determine that `tower_vote_slot` is not an
+ancestor of `snapshot_descendant` if the vote was never accepted by a leader,
+but the result will be that the validator will take the more cautious approach
+of waiting for the lockout of the vote to expire, so it will not be slashed due
+to this failure.
 
-### Case 2: Calculating `is_ancestor(L_i, S_d)` when `L_i` >= `S`:
+### Case 2: Calculating `is_ancestor(tower_vote_slot, snapshot_descendant)`
+when `tower_vote_slot` >= `snapshot_root`:
 
 ##### Protocol:
 
-If `S_d < L_i`, return false, because an ancestor cannot have a greater slot
-number. Otherwise, Let the bank state for slot `S_d` be called `B_d`. Check
-`B_d.ancestors().contains(L_i)`.
+If `snapshot_descendant < tower_vote_slot`, return false, because an ancestor
+cannot have a greater slot number. Otherwise, Let the bank state for slot
+`snapshot_descendant` be called `snapshot_descendant_bank`. Check
+`snapshot_descendant_bank.ancestors().contains(tower_vote_slot)`.
 
 ##### Proof of Correctness for Protocol:
 
-**Lemma 1:** Given any `BankForks` and its root `R`, the bank state `B_d` for
-some slot `S_d`, where `B_d` is present in `BankForks.banks`, `B_d.ancestors()`
-must include all ancestors of `B_d` that are `>= R`
+**Lemma 1:** Given `bank_forks` and its root `bf_root`, the bank state
+`snapshot_descendant_bank` for some slot `snapshot_descendant`, where
+`snapshot_descendant_bank` is present in `bank_forks.banks`,
+`snapshot_descendant_bank.ancestors()` must include all ancestors of
+`snapshot_descendant_bank` that are `>= bf_root`
 
-**Proof:** Let `R` be the latest root bank in `BankForks`. The lemma holds at
-boot time because `R == S` and by step 4 of the "Boot Procedure", BankForks
-will only contain descendants of `S`,so each descendants' `ancestors` will only
-contain ancestors `>= R`. Going forward, by construction, ReplayStage only adds
-banks to `BankForks` if all of its ancestors are present and frozen. Thus
-because `B_d` is present in `BankForks.banks`, `B_d.ancestors()` must include
-all frozen ancestors `>= R`. Furthermore, `BankForks` prunes ancestors in its
-set of `banks` that are `< R'` after setting a new root `R'`, so this invariant
+**Proof:** Let `bf_root` be the latest root bank in `bank_forks`. The lemma
+holds at boot time because `bf_root == snapshot_root` and by step 4 of the
+"Boot Procedure", `bank_forks` will only contain descendants of
+`snapshot_root`, so each descendants' `ancestors` will only contain ancestors
+`>= bf_root`. Going forward, by construction, ReplayStage only adds banks to
+`bank_forks` if all of its ancestors are present and frozen. Thus because
+`snapshot_descendant_bank` is present in `bank_forks.banks`,
+`snapshot_descendant_bank.ancestors()` must include all frozen ancestors `>=
+bf_root`. Furthermore, `bank_forks` prunes ancestors in its set of `banks` that
+are `< bf_root_new` after setting a new root `bf_root_new`, so this invariant
 is always true.
 
-**Lemma 2:** Given a root bank `R` of `BankForks` and some `L_i` in tower, if
-`L_i >= S`, then `L_i >= R`.
+**Lemma 2:** Given a root bank `bf_root` of `bank_forks` and some
+`tower_vote_slot` in tower, if `tower_vote_slot >= snapshot_root`, then
+`tower_vote_slot >= bf_root`.
 
-**Proof:** When we boot from a snapshot, we set `R == S`, and in this case
-because we are assuming `L_i > S`, then we know `L_i >= R` at bootup. Then when
-we set a new root in BankForks `R'` after booting, we guarantee this only
-happens if the tower root is also set to `R'`. By the construction of tower,
-all votes in the tower must be greater than the tower root, so `L_i >= R'`.
+**Proof:** When we boot from a snapshot, we set `bf_root == snapshot_root`, and
+in this case because we are assuming `tower_vote_slot > snapshot_root`, then we
+know `tower_vote_slot >= bf_root` at bootup. Then when we set a new root in
+`bank_forks` `bf_root_new` after booting, we guarantee this only happens if the
+tower root is also set to `bf_root_new`. By the construction of tower, all
+votes in the tower must be greater than the tower root, so `tower_vote_slot >=
+bf_root_new`.
 
-For `Case 2` we assumed `L_i` >= `S`, so from Lemma 2 we know `L_i` >= `R`.
-Then from Lemma 1 we know its sufficient to check
-`B_d.ancestors().contains(L_i)`.
+For `Case 2` we assumed `tower_vote_slot` >= `snapshot_root`, so from Lemma 2
+we know `tower_vote_slot` >= `bf_root`.  Then from Lemma 1 we know its
+sufficient to check
+`snapshot_descendant_bank.ancestors().contains(tower_vote_slot)`.
 
 
