@@ -248,6 +248,39 @@ impl RpcClient {
         })
     }
 
+    pub fn get_leader_schedule(&self, slot: Option<Slot>) -> io::Result<Option<Vec<String>>> {
+        self.get_leader_schedule_with_commitment(slot, CommitmentConfig::default())
+    }
+
+    pub fn get_leader_schedule_with_commitment(
+        &self,
+        slot: Option<Slot>,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<Option<Vec<String>>> {
+        let params = slot.map(|slot| json!(slot));
+        let response = self
+            .client
+            .send(
+                &RpcRequest::GetLeaderSchedule,
+                params,
+                0,
+                commitment_config.ok(),
+            )
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetLeaderSchedule request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetLeaderSchedule failure: {}", err),
+            )
+        })
+    }
+
     pub fn get_epoch_schedule(&self) -> io::Result<EpochSchedule> {
         let response = self
             .client
