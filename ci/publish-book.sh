@@ -73,9 +73,8 @@ echo "--- publish $BOOK"
 
 echo --- update gitbook-cage
 (
-  if [[ -z $CI_BRANCH ]];
-  then
-      exit 0
+  if [[ -z $CI_BRANCH ]]; then
+    exit 0
   fi
 
   set -x
@@ -85,8 +84,7 @@ echo --- update gitbook-cage
   )
   # make a local commit for the svgs
   git add -A -f book/src/.gitbook/assets/.
-  if ! git diff-index --quiet HEAD;
-  then
+  if ! git diff-index --quiet HEAD; then
     git commit --author="$me <maintainers@solana.com>" -m "gitbook-cage update $(date -Is)"
     git push -f github.com:solana-labs/solana-gitbook-cage.git HEAD:refs/heads/"$CI_BRANCH"
     # pop off the local commit
