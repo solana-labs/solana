@@ -4180,6 +4180,13 @@ pub mod tests {
 
         test_all_empty_or_min(&blocktree, 6);
 
+        blocktree
+            .slot_data_iterator(0)
+            .unwrap()
+            .for_each(|(slot, _)| {
+                assert!(slot > (5, std::u64::MAX));
+            });
+
         blocktree.purge_slots(0, None);
 
         // min slot shouldn't matter, blocktree should be empty
