@@ -2,30 +2,43 @@
 
 ## Problem
 
-A validator booting from a snapshot should confirm that they are caught up to
-the correct cluster before voting. There are two major risks if they do not:
+A validator booting from a snapshot does not currently confirm that it is
+caught up to the correct cluster before voting. Due to this, the validator may
+get itself into a situation where it is required to wait before voting to avoid
+slashing, where confirmation of the previous condition would have allowed it to
+vote earlier. The two situations are:
 
-### Wrong Cluster
+### Locked Out of the Correct Cluster
 
 The validator may be fed a snapshot and gossip info for a different (though not
-necessarily malicious) cluster. If that cluster is at slot 100,000 while the
-cluster the validator intended to join is at 10,000, if the validator votes
-once on the wrong cluster, it must not vote on the correct cluster for at least
-90,000 slots to avoid being slashed. This is because slashing is based on slot
-numbers, so when the validator makes a vote `V` on the wrong cluster's slot
-100,000, it is locked out of voting on any slot < `100,000 + lockout(V)` on the
-correct cluster.
+necessarily malicious) cluster. As an example, assume that cluster is at slot
+100,000 while the cluster the validator intended to join is at 10,000. If the
+validator votes once on the wrong cluster, it must not vote on the correct
+cluster for at least 90,000 slots to avoid being slashed. This is because
+slashing is based on slot numbers, so when the validator makes a `vote` on the
+wrong cluster's slot 100,000, it is locked out of voting on any slot < `100,000
++ lockout(vote)` on the correct cluster. Avoiding this situation requires the
+correct cluster check.
 
 ### Voting Before Catching Up
 
 Any vote that a validator signs must have its lockout observed. If a validator
 has to reboot, the most secure way for it to check if its lockouts apply to the
-new set of forks is to see the votes on the ledger. If it can do this, it knows
-that those votes do not lock it out of voting on the current fork, so it just
-needs to wait for the lockouts of the votes not on the ledger to expire.
-However, if the validator votes before catching up, the votes will not go onto
-the ledger, so if the validator reboots, it will have to assume that the votes
-lock it out from voting again.
+new set of forks is to see the votes on the ledger. If it can find a vote on
+the ledger, it knows that that vote does not lock it out of voting on the
+current fork. For example, consider a validator that participates in a cluster
+and lands votes for every slot up to and including 100, after which it reboots.
+If it gets a snaphsot for slot 200, and it can see that all of its votes are in
+its vote account for slot 200, it knows that 200 must be a descendent of 100,
+so it can safely vote on 200 and its descendents. However, assume that the
+cluster is at 300 when the validator gets the snapshot for 200, and the
+validator replays and votes on slots 200-250 while catching up, but then
+reboots again before catching up. When the validator reboots again, assume it
+gets a snapshot for slot 300. It will not see its votes for slots 200-250 in
+its vote account in bank 300, so it will have to assume that they were for
+another fork, and wait for their lockouts to expire accordingly. Avoiding this
+situation requires the caught up check and the correct cluster check (a wrong
+cluster could also be missing the votes).
 
 
 ## Snapshot Verification Overview
