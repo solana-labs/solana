@@ -11,7 +11,7 @@ pub struct AccountsIndex<T> {
 
     pub roots: HashSet<Slot>,
 
-    //This value that needs to be stored to recover the index from AppendVec
+    // This value that needs to be stored to recover the index from AppendVec
     pub last_root: Slot,
 }
 

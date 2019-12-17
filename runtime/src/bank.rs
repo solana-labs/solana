@@ -1506,7 +1506,12 @@ impl Bank {
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Slot)> {
         let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
-        self.rc.accounts.load_slow(&just_self, pubkey)
+        if let Some((account, slot)) = self.rc.accounts.load_slow(&just_self, pubkey) {
+            if slot == self.slot() {
+                return Some((account, slot));
+            }
+        }
+        None
     }
 
     pub fn transaction_count(&self) -> u64 {
@@ -3650,6 +3655,39 @@ mod tests {
         assert_eq!(bank2.get_balance(&key1.pubkey()), 8);
 
         assert_eq!(bank4.get_balance(&key1.pubkey()), 8);
+    }
+
+    #[test]
+    fn test_bank_get_account_modified_since_parent() {
+        let pubkey = Pubkey::new_rand();
+
+        let (genesis_config, mint_keypair) = create_genesis_config(500);
+        let bank1 = Arc::new(Bank::new(&genesis_config));
+        bank1.transfer(1, &mint_keypair, &pubkey).unwrap();
+        let result = bank1.get_account_modified_since_parent(&pubkey);
+        assert!(result.is_some());
+        let (account, slot) = result.unwrap();
+        assert_eq!(account.lamports, 1);
+        assert_eq!(slot, 0);
+
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
+        assert!(bank2.get_account_modified_since_parent(&pubkey).is_none());
+        bank2.transfer(100, &mint_keypair, &pubkey).unwrap();
+        let result = bank1.get_account_modified_since_parent(&pubkey);
+        assert!(result.is_some());
+        let (account, slot) = result.unwrap();
+        assert_eq!(account.lamports, 1);
+        assert_eq!(slot, 0);
+        let result = bank2.get_account_modified_since_parent(&pubkey);
+        assert!(result.is_some());
+        let (account, slot) = result.unwrap();
+        assert_eq!(account.lamports, 101);
+        assert_eq!(slot, 1);
+
+        bank1.squash();
+
+        let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
+        assert_eq!(None, bank3.get_account_modified_since_parent(&pubkey));
     }
 
     #[test]
