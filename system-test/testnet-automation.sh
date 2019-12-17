@@ -279,7 +279,7 @@ function launchTestnet() {
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
-    python system-test/testnet-performance/testnet-automation-json-parser.py >>"$RESULT_FILE"
+    python system-test/testnet-automation-json-parser.py >>"$RESULT_FILE"
 
   execution_step "Writing test results to ${RESULT_FILE}"
   RESULT_DETAILS=$(<"$RESULT_FILE")
@@ -290,7 +290,7 @@ RESULT_DETAILS=
 STEP=
 execution_step "Initialize Environment"
 
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/.."
 
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
@@ -353,7 +353,7 @@ fi
 
 # shellcheck disable=SC1091
 source ci/upload-ci-artifact.sh
-source system-test/testnet-performance/upload_results_to_slack.sh
+source system-test/upload_results_to_slack.sh
 
 maybeClientOptions=${CLIENT_OPTIONS:+"-c"}
 maybeCustomMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"--custom-machine-type"}
