@@ -256,14 +256,22 @@ impl Blocktree {
         const PURGE_BATCH_SIZE: u64 = 1000;
         let mut batch_end = to_slot.unwrap_or(from_slot + PURGE_BATCH_SIZE);
         while from_slot < batch_end {
-            if let Ok(end) = self.run_purge(from_slot, batch_end) {
-                // no more slots to iter or reached the upper bound
-                if end {
+            match self.run_purge(from_slot, batch_end) {
+                Ok(end) => {
+                    if end {
+                        break;
+                    } else {
+                        // update the next batch bounds
+                        from_slot = batch_end;
+                        batch_end = to_slot.unwrap_or(batch_end + PURGE_BATCH_SIZE);
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "Error: {:?}; Purge failed in range {:?} to {:?}",
+                        e, from_slot, batch_end
+                    );
                     break;
-                } else {
-                    // update the next batch bounds
-                    from_slot = batch_end;
-                    batch_end = to_slot.unwrap_or(batch_end + PURGE_BATCH_SIZE);
                 }
             }
         }

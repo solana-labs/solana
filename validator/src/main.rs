@@ -12,6 +12,7 @@ use solana_clap_utils::{
     },
 };
 use solana_client::rpc_client::RpcClient;
+use solana_core::ledger_cleanup_service::{DEFAULT_PURGE_OFFSET, DEFAULT_SLOTS_ABOVE_ROOT};
 use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
@@ -506,7 +507,7 @@ pub fn main() {
             clap::Arg::with_name("limit_ledger_size")
                 .long("limit-ledger-size")
                 .takes_value(false)
-                .help("drop older slots in the ledger"),
+                .help("Drop older slots in the ledger"),
         )
         .arg(
             clap::Arg::with_name("skip_poh_verify")
@@ -633,7 +634,14 @@ pub fn main() {
         snapshot_package_output_path: ledger_path.clone(),
     });
 
-    validator_config.limit_ledger_size = matches.is_present("limit_ledger_size");
+    if matches.is_present("limit_ledger_size") {
+        validator_config.max_ledger_slots = Some(
+            validator_config
+                .snapshot_config
+                .map(|config| DEFAULT_PURGE_OFFSET * config.snapshot_interval_slots as u64)
+                .unwrap_or(DEFAULT_SLOTS_ABOVE_ROOT),
+        );
+    }
 
     if matches.value_of("signer_addr").is_some() {
         warn!("--vote-signer-address ignored");

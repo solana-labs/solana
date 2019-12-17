@@ -3,7 +3,7 @@
 use crate::result::{Error, Result};
 use solana_ledger::blocktree::Blocktree;
 use solana_metrics::datapoint_debug;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::clock::Slot;
 use std::string::ToString;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -12,7 +12,10 @@ use std::thread;
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
-pub const DEFAULT_MAX_LEDGER_EPOCHS: u64 = 2;
+// If a snapshot interval is defined, use 5x the interval as a buffer of slots higher than the latest root.
+pub const DEFAULT_PURGE_OFFSET: u64 = 5;
+// If no snapshot interval is provided, default to keeping 5000 slots higher than the latest root
+pub const DEFAULT_SLOTS_ABOVE_ROOT: u64 = 5000;
 // Remove a fixed number of slots at a time, it's more efficient than doing it one-by-one
 pub const DEFAULT_PURGE_BATCH_SIZE: u64 = 256;
 
@@ -22,7 +25,7 @@ pub struct LedgerCleanupService {
 
 impl LedgerCleanupService {
     pub fn new(
-        slot_full_receiver: Receiver<(u64, Pubkey)>,
+        new_root_receiver: Receiver<Slot>,
         blocktree: Arc<Blocktree>,
         max_ledger_slots: u64,
         exit: &Arc<AtomicBool>,
@@ -40,7 +43,7 @@ impl LedgerCleanupService {
                     break;
                 }
                 if let Err(e) = Self::cleanup_ledger(
-                    &slot_full_receiver,
+                    &new_root_receiver,
                     &blocktree,
                     max_ledger_slots,
                     &mut next_purge_batch,
@@ -57,17 +60,17 @@ impl LedgerCleanupService {
     }
 
     fn cleanup_ledger(
-        slot_full_receiver: &Receiver<(u64, Pubkey)>,
+        new_root_receiver: &Receiver<Slot>,
         blocktree: &Arc<Blocktree>,
         max_ledger_slots: u64,
         next_purge_batch: &mut u64,
     ) -> Result<()> {
         let disk_utilization_pre = blocktree.storage_size();
 
-        let (slot, _) = slot_full_receiver.recv_timeout(Duration::from_secs(1))?;
-        if slot > *next_purge_batch {
+        let root = new_root_receiver.recv_timeout(Duration::from_secs(1))?;
+        if root > *next_purge_batch {
             //cleanup
-            blocktree.purge_slots(0, Some(slot - max_ledger_slots));
+            blocktree.purge_slots(0, Some(root - max_ledger_slots));
             *next_purge_batch += DEFAULT_PURGE_BATCH_SIZE;
         }
 

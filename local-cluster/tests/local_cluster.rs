@@ -45,13 +45,12 @@ fn test_ledger_cleanup_service() {
     error!("test_ledger_cleanup_service");
     let num_nodes = 3;
     let mut validator_config = ValidatorConfig::default();
-    validator_config.limit_ledger_size = true;
+    validator_config.max_ledger_slots = Some(100);
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
         node_stakes: vec![100; num_nodes],
         validator_configs: vec![validator_config.clone(); num_nodes],
-        slots_per_epoch: 100,
         ..ClusterConfig::default()
     };
     let mut cluster = LocalCluster::new(&config);

@@ -65,7 +65,7 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
     pub snapshot_config: Option<SnapshotConfig>,
-    pub limit_ledger_size: bool,
+    pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub partition_cfg: Option<PartitionCfg>,
     pub fixed_leader_schedule: Option<FixedSchedule>,
@@ -81,7 +81,7 @@ impl Default for ValidatorConfig {
             transaction_status_service_disabled: false,
             blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
-            limit_ledger_size: false,
+            max_ledger_slots: None,
             account_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
             snapshot_config: None,
@@ -198,8 +198,6 @@ impl Validator {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         // The version used by shreds, derived from genesis
         let shred_version = Shred::version_from_hash(&genesis_hash);
-        let max_ledger_slots =
-            Self::max_ledger_slots(config.limit_ledger_size, bank.epoch_schedule());
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
@@ -367,7 +365,7 @@ impl Validator {
             blocktree.clone(),
             &storage_state,
             config.blockstream_unix_socket.as_ref(),
-            max_ledger_slots,
+            config.max_ledger_slots,
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
@@ -472,14 +470,6 @@ impl Validator {
         self.ip_echo_server.shutdown_now();
 
         Ok(())
-    }
-
-    fn max_ledger_slots(limit_ledger_size: bool, epoch_schedule: &EpochSchedule) -> Option<u64> {
-        if limit_ledger_size {
-            Some(DEFAULT_MAX_LEDGER_EPOCHS * epoch_schedule.slots_per_epoch)
-        } else {
-            None
-        }
     }
 }
 
