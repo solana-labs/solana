@@ -2,6 +2,7 @@ use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
 use log::*;
 
 #[cfg(target_os = "linux")]
+#[allow(dead_code)]
 fn tune_poh_service_priority(uid: u32) {
     fn find_pid<P: AsRef<std::path::Path>, F>(
         name: &str,
@@ -145,7 +146,6 @@ fn main() {
             #[cfg(target_os = "linux")]
             {
                 tune_kernel_udp_buffers();
-                tune_poh_service_priority(peer_uid);
             }
         }
     }
