@@ -252,29 +252,25 @@ impl Blocktree {
     /// Does not check for integrity and does not update slot metas that refer to deleted slots
     /// Modifies multiple column families simultaneously
     pub fn purge_slots(&self, mut from_slot: Slot, to_slot: Option<Slot>) {
-        // split the purge request into batches of 1000 slots
+        // if there's no upper bound, split the purge request into batches of 1000 slots
         const PURGE_BATCH_SIZE: u64 = 1000;
-        let mut batch_end = to_slot
-            .unwrap_or(from_slot + PURGE_BATCH_SIZE)
-            .min(from_slot + PURGE_BATCH_SIZE);
+        let mut batch_end = to_slot.unwrap_or(from_slot + PURGE_BATCH_SIZE);
         while from_slot < batch_end {
-            if let Ok(end) = self.run_purge_batch(from_slot, batch_end) {
+            if let Ok(end) = self.run_purge(from_slot, batch_end) {
                 // no more slots to iter or reached the upper bound
                 if end {
                     break;
                 } else {
                     // update the next batch bounds
                     from_slot = batch_end;
-                    batch_end = to_slot
-                        .unwrap_or(batch_end + PURGE_BATCH_SIZE)
-                        .min(batch_end + PURGE_BATCH_SIZE);
+                    batch_end = to_slot.unwrap_or(batch_end + PURGE_BATCH_SIZE);
                 }
             }
         }
     }
 
     // Returns whether or not all columns have been purged until their end
-    fn run_purge_batch(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
+    fn run_purge(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
         let mut write_batch = self
             .db
             .batch()
@@ -4816,7 +4812,7 @@ pub mod tests {
                 blocktree.insert_shreds(shreds, None, false).unwrap();
             }
             assert_eq!(blocktree.lowest_slot(), 1);
-            blocktree.run_purge_batch(0, 5).unwrap();
+            blocktree.run_purge(0, 5).unwrap();
             assert_eq!(blocktree.lowest_slot(), 6);
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
