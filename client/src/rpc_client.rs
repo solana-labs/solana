@@ -4,7 +4,10 @@ use crate::{
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::MockRpcClientRequest,
     rpc_client_request::RpcClientRequest,
-    rpc_request::{RpcContactInfo, RpcEpochInfo, RpcRequest, RpcVersionInfo, RpcVoteAccountStatus},
+    rpc_request::{
+        RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule, RpcRequest, RpcVersionInfo,
+        RpcVoteAccountStatus,
+    },
 };
 use bincode::serialize;
 use log::*;
@@ -248,7 +251,7 @@ impl RpcClient {
         })
     }
 
-    pub fn get_leader_schedule(&self, slot: Option<Slot>) -> io::Result<Option<Vec<String>>> {
+    pub fn get_leader_schedule(&self, slot: Option<Slot>) -> io::Result<Option<RpcLeaderSchedule>> {
         self.get_leader_schedule_with_commitment(slot, CommitmentConfig::default())
     }
 
@@ -256,7 +259,7 @@ impl RpcClient {
         &self,
         slot: Option<Slot>,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<Option<Vec<String>>> {
+    ) -> io::Result<Option<RpcLeaderSchedule>> {
         let params = slot.map(|slot| json!(slot));
         let response = self
             .client
