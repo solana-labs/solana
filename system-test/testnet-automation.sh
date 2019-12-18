@@ -87,63 +87,8 @@ $(eval echo "$@")"
   )
 
   execution_step "Deleting Testnet"
-  case $CLOUD_PROVIDER in
-  gce)
-  (
-    cat <<EOF
-- wait: ~
-  continue_on_failure: true
+  net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
 
-- command: "net/gce.sh delete -p ${TESTNET_TAG}"
-  label: "Delete Testnet"
-  agents:
-    - "queue=testnet-deploy"
-EOF
-  ) | buildkite-agent pipeline upload
-  ;;
-  ec2)
-  (
-    cat <<EOF
-- wait: ~
-  continue_on_failure: true
-
-- command: "net/ec2.sh delete -p ${TESTNET_TAG}"
-  label: "Delete Testnet"
-  agents:
-    - "queue=testnet-deploy"
-EOF
-  ) | buildkite-agent pipeline upload
-  ;;
-  azure)
-  (
-    cat <<EOF
-- wait: ~
-  continue_on_failure: true
-
-- command: "net/azure.sh delete -p ${TESTNET_TAG}"
-  label: "Delete Testnet"
-  agents:
-    - "queue=testnet-deploy"
-EOF
-  ) | buildkite-agent pipeline upload
-  ;;
-  colo)
-    (
-    cat <<EOF
-- wait: ~
-  continue_on_failure: true
-
-- command: "net/colo.sh delete -p ${TESTNET_TAG}"
-  label: "Delete Testnet"
-  agents:
-    - "queue=colo-deploy"
-EOF
-  ) | buildkite-agent pipeline upload
-  ;;
-  *)
-    echo "Error: Unsupported cloud provider: $CLOUD_PROVIDER"
-    ;;
-  esac
 }
 trap 'cleanup_testnet $BASH_COMMAND' EXIT
 
