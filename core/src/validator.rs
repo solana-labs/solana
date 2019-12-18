@@ -40,9 +40,7 @@ use solana_sdk::{
     timing::timestamp,
 };
 
-use crate::ledger_cleanup_service::DEFAULT_MAX_LEDGER_EPOCHS;
 use solana_ledger::shred::Shred;
-use solana_sdk::epoch_schedule::EpochSchedule;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},

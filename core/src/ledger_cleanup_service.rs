@@ -12,10 +12,12 @@ use std::thread;
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
-// If a snapshot interval is defined, use 5x the interval as a buffer of slots higher than the latest root.
-pub const DEFAULT_PURGE_OFFSET: u64 = 5;
-// If no snapshot interval is provided, default to keeping 5000 slots higher than the latest root
-pub const DEFAULT_SLOTS_ABOVE_ROOT: u64 = 5000;
+// This is chosen to allow enough time for
+// - To try and keep the RocksDB size under 128GB at 50k tps (100 slots take ~2GB).
+// - A validator to download a snapshot from a peer and boot from it
+// - To make sure that if a validator needs to reboot from its own snapshot, it has enough slots locally
+//   to catch back up to where it was when it stopped
+pub const MAX_LEDGER_SLOTS: u64 = 6400;
 // Remove a fixed number of slots at a time, it's more efficient than doing it one-by-one
 pub const DEFAULT_PURGE_BATCH_SIZE: u64 = 256;
 
@@ -116,7 +118,7 @@ mod tests {
 
         //send a signal to kill slots 0-40
         let mut next_purge_slot = 0;
-        sender.send((50, Pubkey::default())).unwrap();
+        sender.send(50).unwrap();
         LedgerCleanupService::cleanup_ledger(&receiver, &blocktree, 10, &mut next_purge_slot)
             .unwrap();
 

@@ -12,7 +12,7 @@ use solana_clap_utils::{
     },
 };
 use solana_client::rpc_client::RpcClient;
-use solana_core::ledger_cleanup_service::{DEFAULT_PURGE_OFFSET, DEFAULT_SLOTS_ABOVE_ROOT};
+use solana_core::ledger_cleanup_service::MAX_LEDGER_SLOTS;
 use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
@@ -635,12 +635,7 @@ pub fn main() {
     });
 
     if matches.is_present("limit_ledger_size") {
-        validator_config.max_ledger_slots = Some(
-            validator_config
-                .snapshot_config
-                .map(|config| DEFAULT_PURGE_OFFSET * config.snapshot_interval_slots as u64)
-                .unwrap_or(DEFAULT_SLOTS_ABOVE_ROOT),
-        );
+        validator_config.max_ledger_slots = Some(MAX_LEDGER_SLOTS);
     }
 
     if matches.value_of("signer_addr").is_some() {
