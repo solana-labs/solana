@@ -641,6 +641,17 @@ where
         Ok(end)
     }
 
+    pub fn compact_range(&self, from: Slot, to: Slot) -> Result<bool>
+    where
+        C::Index: PartialOrd + Copy,
+    {
+        let cf = self.handle();
+        let from = Some(C::key(C::as_index(from)));
+        let to = Some(C::key(C::as_index(to)));
+        self.backend.0.compact_range_cf(cf, from, to);
+        Ok(true)
+    }
+
     #[inline]
     pub fn handle(&self) -> &ColumnFamily {
         self.backend.cf_handle(C::NAME)

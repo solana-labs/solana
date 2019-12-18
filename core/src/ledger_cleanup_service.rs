@@ -117,4 +117,43 @@ mod tests {
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
+
+    #[test]
+    fn test_compaction() {
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Arc::new(Blocktree::open(&blocktree_path).unwrap());
+
+        let n = 10_000;
+        let batch_size = 100;
+        let batches = n / batch_size;
+        let max_ledger_slots = 100;
+
+        for i in 0..batches {
+            let (shreds, _) = make_many_slot_entries(i * batch_size, batch_size, 1);
+            blocktree.insert_shreds(shreds, None, false).unwrap();
+        }
+
+        let u1 = blocktree.storage_size().unwrap() as f64;
+
+        // send signal to cleanup slots
+        let (sender, receiver) = channel();
+        sender.send((n, Pubkey::default())).unwrap();
+        LedgerCleanupService::cleanup_ledger(&receiver, &blocktree, max_ledger_slots).unwrap();
+
+        thread::sleep(Duration::from_secs(2));
+
+        let u2 = blocktree.storage_size().unwrap() as f64;
+
+        assert!(u2 < u1, "insufficient compaction! pre={},post={}", u1, u2,);
+
+        // check that early slots don't exist
+        let max_slot = n - max_ledger_slots;
+        blocktree
+            .slot_meta_iterator(0)
+            .unwrap()
+            .for_each(|(slot, _)| assert!(slot > max_slot));
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
 }
