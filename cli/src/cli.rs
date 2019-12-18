@@ -21,7 +21,7 @@ use solana_faucet::faucet::request_airdrop_transaction;
 use solana_faucet::faucet_mock::request_airdrop_transaction;
 use solana_sdk::{
     bpf_loader,
-    clock::Slot,
+    clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -105,6 +105,10 @@ pub enum CliCommand {
         count: Option<u64>,
         timeout: Duration,
         commitment_config: CommitmentConfig,
+    },
+    ShowBlockProduction {
+        epoch: Option<Epoch>,
+        slot_limit: Option<u64>,
     },
     ShowGossip,
     ShowValidators {
@@ -336,6 +340,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         ("get-slot", Some(matches)) => parse_get_slot(matches),
         ("get-transaction-count", Some(matches)) => parse_get_transaction_count(matches),
         ("ping", Some(matches)) => parse_cluster_ping(matches),
+        ("show-block-production", Some(matches)) => parse_show_block_production(matches),
         ("show-gossip", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ShowGossip,
             require_keypair: false,
@@ -1126,6 +1131,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             timeout,
             commitment_config,
         ),
+        CliCommand::ShowBlockProduction { epoch, slot_limit } => {
+            process_show_block_production(&rpc_client, *epoch, *slot_limit)
+        }
         CliCommand::ShowGossip => process_show_gossip(&rpc_client),
         CliCommand::ShowValidators { use_lamports_unit } => {
             process_show_validators(&rpc_client, *use_lamports_unit)
