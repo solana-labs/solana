@@ -48,6 +48,7 @@ impl Vote {
             timestamp: None,
         }
     }
+
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -128,6 +129,7 @@ pub struct VoteState {
 
     /// most recent timestamp submitted with a vote
     pub last_timestamp: BlockTimestamp,
+    pub has_been_slashed: bool,
 }
 
 impl VoteState {
@@ -373,6 +375,67 @@ impl VoteState {
         self.last_timestamp = BlockTimestamp { slot, timestamp };
         Ok(())
     }
+
+    /// find a slot that would be slashable between the two vote states
+    /// - self: vote state A
+    /// - nca:  newest common ancestor.  This is necessary when the some
+    ///         votes are missing between the two forks.
+    /// - b:    vote state B
+    /// A slashable vote can be detected by appling votes from one bank 
+    /// to votes in the other bank and comparing the result.   If lockouts
+    /// have been observed, then the result should equal to the newer bank.
+    /// @retval: vec of votes that are not common to either self or b
+    /// 
+    /// Proof is all the votes that are diff between the two forks past the nca.
+    pub fn slashable_slots(
+        &self,
+        nca: Slot,
+        b: &VoteState,
+    ) -> Vec<Slot> {
+        let mut slashable = vec![];
+        let (newest,oldest) = if a.votes.last().unwrap_or(0) > b.votes.last().unwrap_or(0) {
+            (&a,&b)
+        } else {
+            (&b,&a)
+        };
+        let mut test = oldest.clone();
+        for v in newest.votes() {
+            if v.slot() < nca {
+                continue;
+            }
+            test.process_vote_unchecked(v.slot());
+        }
+        if test.votes != newest.votes {
+            let i = 0;
+            let j = 0;
+            while i < newest.len() && j < oldest.len() {
+                if newest.votes[i] != oldest.votes[j] {
+                    if newest.votes[i] < oldest.votes[j]  {
+                        slashable.push(newest.votes[i]);
+                        i+=1;
+                        continue;
+                    } else {
+                        slashable.push(oldest.votes[j]);
+                        j+=1;
+                        continue;
+                    }
+                }
+                i+=1;
+                j+=1;
+            }
+        }
+        slashable
+    }
+    pub fn slash(
+        &mut self,
+        slashable_slots: Vec<Slot>,
+    ) {
+        let mut test = self.clone();
+        for s in slashable_votes {
+            test.process_vote_unchecked(
+        }
+    }
+
 }
 
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
