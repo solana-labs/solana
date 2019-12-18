@@ -16,4 +16,4 @@ steps:
       USE_PUBLIC_IP_ADDRESSES: "true"
       ADDITIONAL_FLAGS: ""
     agents:
-      - "queue=testnet-deploy"
+      - "queue=azure-deploy"
