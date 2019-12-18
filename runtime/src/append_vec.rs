@@ -13,11 +13,12 @@ use std::{
     sync::Mutex,
 };
 
-//Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+//Data placement should be aligned at the next boundary. Without alignment accessing the memory may
 //crash on some architectures.
-macro_rules! align_up {
-    ($addr: expr, $align: expr) => {
-        ($addr + ($align - 1)) & !($align - 1)
+const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
+macro_rules! u64_align {
+    ($addr: expr) => {
+        ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
     };
 }
 
@@ -69,6 +70,20 @@ impl<'a> StoredAccount<'a> {
             data: self.data.to_vec(),
             hash: *self.hash,
         }
+    }
+
+    fn sanitize(&self) -> bool {
+        // Sanitize executable to ensure higher 7-bits are cleared correctly.
+        self.ref_executable_byte() & !1 == 0
+    }
+
+    fn ref_executable_byte(&self) -> &u8 {
+        // Use extra references to avoid value silently clamped to 1 (=true) and 0 (=false)
+        // Yes, this really happens; see test_set_file_crafted_executable
+        let executable_bool: &bool = &self.account_meta.executable;
+        // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+        let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
+        executable_byte
     }
 }
 
@@ -184,17 +199,44 @@ impl AppendVec {
 
         let map = unsafe { MmapMut::map_mut(&data)? };
         self.map = map;
+
+        if !self.sanitize_layout_and_length() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "incorrect layout/length",
+            ));
+        }
+
         Ok(())
     }
 
+    fn sanitize_layout_and_length(&self) -> bool {
+        let mut offset = 0;
+
+        // This discards allocated accounts immediately after check at each loop iteration.
+        //
+        // This code should not reuse AppendVec.accounts() method as the current form or
+        // extend it to be reused here because it would allow attackers to accumulate
+        // some measurable amount of memory needlessly.
+        while let Some((account, next_offset)) = self.get_account(offset) {
+            if !account.sanitize() {
+                return false;
+            }
+            offset = next_offset;
+        }
+        let aligned_current_len = u64_align!(self.current_len.load(Ordering::Relaxed));
+
+        offset == aligned_current_len
+    }
+
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
-        if offset + size > self.len() {
+        let (next, overflow) = offset.overflowing_add(size);
+        if overflow || next > self.len() {
             return None;
         }
-        let data = &self.map[offset..offset + size];
-        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-        //crash on some architectures.
-        let next = align_up!(offset + size, mem::size_of::<u64>());
+        let data = &self.map[offset..next];
+        let next = u64_align!(next);
+
         Some((
             //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
             //The lifetime of this slice is tied to &self, since it points to self.map memory
@@ -204,9 +246,7 @@ impl AppendVec {
     }
 
     fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
-        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-        //crash on some architectures.
-        let pos = align_up!(*offset as usize, mem::size_of::<u64>());
+        let pos = u64_align!(*offset);
         let data = &self.map[pos..(pos + len)];
         //UNSAFE: This mut append is safe because only 1 thread can append at a time
         //Mutex<append_offset> guarantees exclusive write access to the memory occupied in
@@ -221,9 +261,7 @@ impl AppendVec {
     fn append_ptrs_locked(&self, offset: &mut usize, vals: &[(*const u8, usize)]) -> Option<usize> {
         let mut end = *offset;
         for val in vals {
-            //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-            //crash on some architectures.
-            end = align_up!(end, mem::size_of::<u64>());
+            end = u64_align!(end);
             end += val.1;
         }
 
@@ -231,9 +269,7 @@ impl AppendVec {
             return None;
         }
 
-        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-        //crash on some architectures.
-        let pos = align_up!(*offset, mem::size_of::<u64>());
+        let pos = u64_align!(*offset);
         for val in vals {
             self.append_ptr(offset, val.0, val.1)
         }
@@ -386,8 +422,8 @@ impl Serialize for AppendVec {
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
-        let len = std::mem::size_of::<usize>() as u64;
-        let mut buf = vec![0u8; len as usize];
+        let len = std::mem::size_of::<usize>();
+        let mut buf = vec![0u8; len];
         let mut wr = Cursor::new(&mut buf[..]);
         serialize_into(&mut wr, &(self.current_len.load(Ordering::Relaxed) as u64))
             .map_err(Error::custom)?;
@@ -439,6 +475,7 @@ impl<'de> Deserialize<'de> for AppendVec {
 pub mod tests {
     use super::test_utils::*;
     use super::*;
+    use assert_matches::assert_matches;
     use log::*;
     use rand::{thread_rng, Rng};
     use solana_sdk::timing::duration_as_ms;
@@ -447,6 +484,32 @@ pub mod tests {
     impl AppendVec {
         fn append_account_test(&self, data: &(StoredMeta, Account)) -> Option<usize> {
             self.append_account(data.0.clone(), &data.1, Hash::default())
+        }
+    }
+
+    impl<'a> StoredAccount<'a> {
+        fn set_data_len_unsafe(&self, new_data_len: u64) {
+            let data_len: &u64 = &self.meta.data_len;
+            #[allow(mutable_transmutes)]
+            // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
+            let data_len: &mut u64 = unsafe { &mut *(data_len as *const u64 as *mut u64) };
+            *data_len = new_data_len;
+        }
+
+        fn get_executable_byte(&self) -> u8 {
+            let executable_bool: bool = self.account_meta.executable;
+            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+            let executable_byte: u8 = unsafe { std::mem::transmute::<bool, u8>(executable_bool) };
+            executable_byte
+        }
+
+        fn set_executable_as_byte(&self, new_executable_byte: u8) {
+            let executable_ref: &bool = &self.account_meta.executable;
+            #[allow(mutable_transmutes)]
+            // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
+            let executable_byte: &mut u8 =
+                unsafe { &mut *(executable_ref as *const bool as *mut u8) };
+            *executable_byte = new_executable_byte;
         }
     }
 
@@ -519,5 +582,117 @@ pub mod tests {
             relative_path,
             AppendVec::get_relative_path(full_path).unwrap()
         );
+    }
+
+    #[test]
+    fn test_set_file_empty_data() {
+        let file = get_append_vec_path("test_set_file_empty_data");
+        let path = &file.path;
+        let mut av = AppendVec::new(&path, true, 1024 * 1024);
+
+        assert_eq!(av.accounts(0).len(), 0);
+
+        let result = av.set_file(path);
+        assert_matches!(result, Ok(_));
+    }
+
+    #[test]
+    fn test_set_file_crafted_data_len() {
+        let file = get_append_vec_path("test_set_file_crafted_data_len");
+        let path = &file.path;
+        let mut av = AppendVec::new(&path, true, 1024 * 1024);
+
+        let crafted_data_len = 1;
+
+        av.append_account_test(&create_test_account(10)).unwrap();
+
+        let accounts = av.accounts(0);
+        let account = accounts.first().unwrap();
+        account.set_data_len_unsafe(crafted_data_len);
+        assert_eq!(account.meta.data_len, crafted_data_len);
+
+        // Reload accoutns and observe crafted_data_len
+        let accounts = av.accounts(0);
+        let account = accounts.first().unwrap();
+        assert_eq!(account.meta.data_len, crafted_data_len);
+
+        av.flush().unwrap();
+        let result = av.set_file(path);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
+    }
+
+    #[test]
+    fn test_set_file_too_large_data_len() {
+        let file = get_append_vec_path("test_set_file_too_large_data_len");
+        let path = &file.path;
+        let mut av = AppendVec::new(&path, true, 1024 * 1024);
+
+        let too_large_data_len = u64::max_value();
+        av.append_account_test(&create_test_account(10)).unwrap();
+
+        let accounts = av.accounts(0);
+        let account = accounts.first().unwrap();
+        account.set_data_len_unsafe(too_large_data_len);
+        assert_eq!(account.meta.data_len, too_large_data_len);
+
+        // Reload accounts and observe no account with bad offset
+        let accounts = av.accounts(0);
+        assert_matches!(accounts.first(), None);
+
+        av.flush().unwrap();
+        let result = av.set_file(path);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
+    }
+
+    #[test]
+    fn test_set_file_crafted_executable() {
+        let file = get_append_vec_path("test_set_file_crafted_executable");
+        let path = &file.path;
+        let mut av = AppendVec::new(&path, true, 1024 * 1024);
+        av.append_account_test(&create_test_account(10)).unwrap();
+        {
+            let mut executable_account = create_test_account(10);
+            executable_account.1.executable = true;
+            av.append_account_test(&executable_account).unwrap();
+        }
+
+        // reload accounts
+        let accounts = av.accounts(0);
+
+        // ensure false is 0u8 and true is 1u8 actually
+        assert_eq!(*accounts[0].ref_executable_byte(), 0);
+        assert_eq!(*accounts[1].ref_executable_byte(), 1);
+
+        let account = &accounts[0];
+        let crafted_executable = u8::max_value() - 1;
+
+        account.set_executable_as_byte(crafted_executable);
+
+        // reload crafted accounts
+        let accounts = av.accounts(0);
+        let account = accounts.first().unwrap();
+
+        // we can observe crafted value by ref
+        {
+            let executable_bool: &bool = &account.account_meta.executable;
+            // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
+            // assert_eq! thinks *exeutable_bool is equal to false but the if condition thinks it's not, contradictly.
+            assert_eq!(*executable_bool, false);
+            if *executable_bool == false {
+                panic!("This didn't occur if this test passed.");
+            }
+            assert_eq!(*account.ref_executable_byte(), crafted_executable);
+        }
+
+        // we can NOT observe crafted value by value
+        {
+            let executable_bool: bool = account.account_meta.executable;
+            assert_eq!(executable_bool, false);
+            assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
+        }
+
+        av.flush().unwrap();
+        let result = av.set_file(path);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
     }
 }
