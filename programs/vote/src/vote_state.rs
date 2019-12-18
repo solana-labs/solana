@@ -566,7 +566,12 @@ pub fn slash_state(
     }
     //verify transaction signature
     tx.verify()?;
-    let signers = tx.signers();
+    let signers: HashSet<_> = tx
+        .message
+        .account_keys
+        .iter()
+        .take(tx.signatures.len())
+        .collect();
     //find vote instruction
     for (i, ix) in tx.message.instructions.iter().enumerate() {
         if tx.instruction_program(i) != program_id {

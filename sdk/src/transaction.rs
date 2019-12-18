@@ -158,7 +158,6 @@ impl Transaction {
             .get(instruction_index)
             .and_then(|instruction| self.account_keys.get(instruction.program_id_index))
     }
-
     fn key_index(&self, instruction_index: usize, accounts_index: usize) -> Option<usize> {
         self.message
             .instructions
