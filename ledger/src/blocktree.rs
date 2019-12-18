@@ -258,6 +258,14 @@ impl Blocktree {
         while from_slot < batch_end {
             match self.run_purge(from_slot, batch_end) {
                 Ok(end) => {
+                    if let Err(e) = self.compact_storage(from_slot, batch_end) {
+                        // This error is not fatal and indicates an internal error
+                        error!(
+                            "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
+                            e, from_slot, batch_end
+                        );
+                    }
+
                     if end {
                         break;
                     } else {
@@ -329,6 +337,47 @@ impl Blocktree {
             return Err(e);
         }
         Ok(columns_empty)
+    }
+
+    pub fn compact_storage(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
+        let result = self
+            .meta_cf
+            .compact_range(from_slot, to_slot)
+            .unwrap_or(false)
+            && self
+                .db
+                .column::<cf::Root>()
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .data_shred_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .code_shred_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .dead_slots_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .erasure_meta_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .orphans_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .index_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .transaction_status_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false);
+        Ok(result)
     }
 
     pub fn erasure_meta(&self, slot: Slot, set_index: u64) -> Result<Option<ErasureMeta>> {

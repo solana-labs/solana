@@ -151,8 +151,15 @@ mod tests {
 
         // send signal to cleanup slots
         let (sender, receiver) = channel();
-        sender.send((n, Pubkey::default())).unwrap();
-        LedgerCleanupService::cleanup_ledger(&receiver, &blocktree, max_ledger_slots).unwrap();
+        sender.send(n).unwrap();
+        let mut next_purge_batch = 0;
+        LedgerCleanupService::cleanup_ledger(
+            &receiver,
+            &blocktree,
+            max_ledger_slots,
+            &mut next_purge_batch,
+        )
+        .unwrap();
 
         thread::sleep(Duration::from_secs(2));
 
