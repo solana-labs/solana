@@ -252,111 +252,83 @@ impl Blocktree {
     /// Does not check for integrity and does not update slot metas that refer to deleted slots
     /// Modifies multiple column families simultaneously
     pub fn purge_slots(&self, mut from_slot: Slot, to_slot: Option<Slot>) {
-        // split the purge request into batches of 1000 slots
+        // if there's no upper bound, split the purge request into batches of 1000 slots
         const PURGE_BATCH_SIZE: u64 = 1000;
-        let mut batch_end = to_slot
-            .unwrap_or(from_slot + PURGE_BATCH_SIZE)
-            .min(from_slot + PURGE_BATCH_SIZE);
+        let mut batch_end = to_slot.unwrap_or(from_slot + PURGE_BATCH_SIZE);
         while from_slot < batch_end {
-            if let Ok(end) = self.run_purge_batch(from_slot, batch_end) {
-                // no more slots to iter or reached the upper bound
-                if end {
+            match self.run_purge(from_slot, batch_end) {
+                Ok(end) => {
+                    if let Err(e) = self.compact_storage(from_slot, batch_end) {
+                        // This error is not fatal and indicates an internal error
+                        error!(
+                            "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
+                            e, from_slot, batch_end
+                        );
+                    }
+
+                    if end {
+                        break;
+                    } else {
+                        // update the next batch bounds
+                        from_slot = batch_end;
+                        batch_end = to_slot.unwrap_or(batch_end + PURGE_BATCH_SIZE);
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "Error: {:?}; Purge failed in range {:?} to {:?}",
+                        e, from_slot, batch_end
+                    );
                     break;
-                } else {
-                    // update the next batch bounds
-                    from_slot = batch_end;
-                    batch_end = to_slot
-                        .unwrap_or(batch_end + PURGE_BATCH_SIZE)
-                        .min(batch_end + PURGE_BATCH_SIZE);
                 }
             }
         }
     }
 
-    // Returns whether or not all iterators have reached their end
-    fn run_purge_batch(&self, from_slot: Slot, batch_end: Slot) -> Result<bool> {
-        let some_from_slot = Some(from_slot);
-        let some_batch_end = Some(batch_end);
-
+    // Returns whether or not all columns have been purged until their end
+    fn run_purge(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
         let mut write_batch = self
             .db
             .batch()
             .expect("Database Error: Failed to get write batch");
-        let end = self
-            .meta_cf
-            .delete_slot(&mut write_batch, some_from_slot, some_batch_end)
-            .unwrap_or(false)
-            & self
-                .meta_cf
-                .compact_range(from_slot, batch_end)
-                .unwrap_or(false)
-            & self
-                .erasure_meta_cf
-                .delete_slot(&mut write_batch, some_from_slot, some_batch_end)
-                .unwrap_or(false)
-            & self
-                .erasure_meta_cf
-                .compact_range(from_slot, batch_end)
-                .unwrap_or(false)
-            & self
-                .data_shred_cf
-                .delete_slot(&mut write_batch, some_from_slot, some_batch_end)
-                .unwrap_or(false)
-            & self
-                .data_shred_cf
-                .compact_range(from_slot, batch_end)
-                .unwrap_or(false)
-            & self
-                .code_shred_cf
-                .delete_slot(&mut write_batch, some_from_slot, some_batch_end)
-                .unwrap_or(false)
-            & self
-                .code_shred_cf
-                .compact_range(from_slot, batch_end)
-                .unwrap_or(false)
-            & self
-                .transaction_status_cf
-                .delete_slot(&mut write_batch, some_from_slot, some_batch_end)
-                .unwrap_or(false)
-            & self
-                .transaction_status_cf
-                .compact_range(from_slot, batch_end)
-                .unwrap_or(false)
-            & self
-                .orphans_cf
-                .delete_slot(&mut write_batch, some_from_slot, some_batch_end)
-                .unwrap_or(false)
-            & self
-                .orphans_cf
-                .compact_range(from_slot, batch_end)
-                .unwrap_or(false)
-            & self
-                .index_cf
-                .delete_slot(&mut write_batch, some_from_slot, some_batch_end)
-                .unwrap_or(false)
-            & self
-                .index_cf
-                .compact_range(from_slot, batch_end)
-                .unwrap_or(false)
-            & self
-                .dead_slots_cf
-                .delete_slot(&mut write_batch, some_from_slot, some_batch_end)
-                .unwrap_or(false)
-            & self
-                .dead_slots_cf
-                .compact_range(from_slot, batch_end)
-                .unwrap_or(false)
+        // delete range cf is not inclusive
+        let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
+        let columns_empty = self
+            .db
+            .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
+            .unwrap_or_else(|_| false)
             & self
                 .db
-                .column::<cf::Root>()
-                .delete_slot(&mut write_batch, some_from_slot, some_batch_end)
-                .unwrap_or(false)
+                .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
             & self
                 .db
-                .column::<cf::Root>()
-                .compact_range(from_slot, batch_end)
-                .unwrap_or(false);
-
+                .delete_range_cf::<cf::ShredData>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
+                .db
+                .delete_range_cf::<cf::ShredCode>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
+                .db
+                .delete_range_cf::<cf::DeadSlots>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
+                .db
+                .delete_range_cf::<cf::ErasureMeta>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
+                .db
+                .delete_range_cf::<cf::Orphans>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
+                .db
+                .delete_range_cf::<cf::Index>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
+                .db
+                .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false);
         if let Err(e) = self.db.write(write_batch) {
             error!(
                 "Error: {:?} while submitting write batch for slot {:?} retrying...",
@@ -364,7 +336,48 @@ impl Blocktree {
             );
             return Err(e);
         }
-        Ok(end)
+        Ok(columns_empty)
+    }
+
+    pub fn compact_storage(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
+        let result = self
+            .meta_cf
+            .compact_range(from_slot, to_slot)
+            .unwrap_or(false)
+            && self
+                .db
+                .column::<cf::Root>()
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .data_shred_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .code_shred_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .dead_slots_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .erasure_meta_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .orphans_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .index_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .transaction_status_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false);
+        Ok(result)
     }
 
     pub fn erasure_meta(&self, slot: Slot, set_index: u64) -> Result<Option<ErasureMeta>> {
@@ -4856,7 +4869,7 @@ pub mod tests {
                 blocktree.insert_shreds(shreds, None, false).unwrap();
             }
             assert_eq!(blocktree.lowest_slot(), 1);
-            blocktree.run_purge_batch(0, 5).unwrap();
+            blocktree.run_purge(0, 5).unwrap();
             assert_eq!(blocktree.lowest_slot(), 6);
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");

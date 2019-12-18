@@ -12,11 +12,11 @@ use solana_clap_utils::{
     },
 };
 use solana_client::rpc_client::RpcClient;
+use solana_core::ledger_cleanup_service::MAX_LEDGER_SLOTS;
 use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
-    ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS,
     validator::{Validator, ValidatorConfig},
 };
 use solana_ledger::bank_forks::SnapshotConfig;
@@ -507,7 +507,7 @@ pub fn main() {
             clap::Arg::with_name("limit_ledger_size")
                 .long("limit-ledger-size")
                 .takes_value(false)
-                .help("drop older slots in the ledger"),
+                .help("Drop older slots in the ledger"),
         )
         .arg(
             clap::Arg::with_name("skip_poh_verify")
@@ -635,7 +635,7 @@ pub fn main() {
     });
 
     if matches.is_present("limit_ledger_size") {
-        validator_config.max_ledger_slots = Some(DEFAULT_MAX_LEDGER_SLOTS);
+        validator_config.max_ledger_slots = Some(MAX_LEDGER_SLOTS);
     }
 
     if matches.value_of("signer_addr").is_some() {

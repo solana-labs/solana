@@ -73,6 +73,7 @@ pub struct ReplayStageConfig {
     pub subscriptions: Arc<RpcSubscriptions>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
     pub slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
+    pub latest_root_senders: Vec<Sender<Slot>>,
     pub snapshot_package_sender: Option<SnapshotPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
@@ -193,6 +194,7 @@ impl ReplayStage {
             subscriptions,
             leader_schedule_cache,
             slot_full_senders,
+            latest_root_senders,
             snapshot_package_sender,
             block_commitment_cache,
             transaction_status_sender,
@@ -315,6 +317,7 @@ impl ReplayStage {
                                 stats.total_staked,
                                 &lockouts_sender,
                                 &snapshot_package_sender,
+                                &latest_root_senders,
                             )?;
                         }
                         datapoint_debug!(
@@ -615,6 +618,7 @@ impl ReplayStage {
         total_staked: u64,
         lockouts_sender: &Sender<CommitmentAggregationData>,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
+        latest_root_senders: &[Sender<Slot>],
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -645,6 +649,11 @@ impl ReplayStage {
                 .unwrap()
                 .set_root(new_root, snapshot_package_sender);
             Self::handle_new_root(&bank_forks, progress);
+            latest_root_senders.iter().for_each(|s| {
+                if let Err(e) = s.send(new_root) {
+                    trace!("latest root send failed: {:?}", e);
+                }
+            });
             trace!("new root {}", new_root);
             if let Err(e) = root_bank_sender.send(rooted_banks) {
                 trace!("root_bank_sender failed: {:?}", e);

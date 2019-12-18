@@ -588,6 +588,25 @@ impl Database {
     pub fn storage_size(&self) -> Result<u64> {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
+
+    // Adds a range to delete to the given write batch and returns whether or not the column has reached
+    // its end
+    pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<bool>
+    where
+        C: Column,
+    {
+        let cf = self.cf_handle::<C>();
+        let from_index = C::as_index(from);
+        let to_index = C::as_index(to);
+        let result = batch.delete_range_cf::<C>(cf, from_index, to_index);
+        let max_slot = self
+            .iter::<C>(IteratorMode::End)?
+            .next()
+            .map(|(i, _)| C::slot(i))
+            .unwrap_or(0);
+        let end = max_slot <= to;
+        result.map(|_| end)
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -714,6 +733,17 @@ impl<'a> WriteBatch<'a> {
     #[inline]
     fn get_cf<C: Column>(&self) -> &'a ColumnFamily {
         self.map[C::NAME]
+    }
+
+    pub fn delete_range_cf<C: Column>(
+        &mut self,
+        cf: &ColumnFamily,
+        from: C::Index,
+        to: C::Index,
+    ) -> Result<()> {
+        self.write_batch
+            .delete_range_cf(cf, C::key(from), C::key(to))?;
+        Ok(())
     }
 }
 
