@@ -14,7 +14,7 @@ use rayon::{prelude::*, ThreadPool};
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
-    bank::{Bank, TransactionProcessResult, TransactionResults},
+    bank::{Bank, TransactionBalancesSet, TransactionProcessResult, TransactionResults},
     transaction_batch::TransactionBatch,
 };
 use solana_sdk::{
@@ -54,18 +54,24 @@ fn execute_batch(
     bank: &Arc<Bank>,
     transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<()> {
-    let TransactionResults {
-        fee_collection_results,
-        processing_results,
-    } = batch
-        .bank()
-        .load_execute_and_commit_transactions(batch, MAX_RECENT_BLOCKHASHES);
+    let (
+        TransactionResults {
+            fee_collection_results,
+            processing_results,
+        },
+        balances,
+    ) = batch.bank().load_execute_and_commit_transactions(
+        batch,
+        MAX_RECENT_BLOCKHASHES,
+        transaction_status_sender.is_some(),
+    );
 
     if let Some(sender) = transaction_status_sender {
         send_transaction_status_batch(
             bank.clone(),
             batch.transactions(),
             processing_results,
+            balances,
             sender,
         );
     }
@@ -560,6 +566,7 @@ pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<Transaction>,
     pub statuses: Vec<TransactionProcessResult>,
+    pub balances: TransactionBalancesSet,
 }
 pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
 
@@ -567,6 +574,7 @@ pub fn send_transaction_status_batch(
     bank: Arc<Bank>,
     transactions: &[Transaction],
     statuses: Vec<TransactionProcessResult>,
+    balances: TransactionBalancesSet,
     transaction_status_sender: TransactionStatusSender,
 ) {
     let slot = bank.slot();
@@ -574,6 +582,7 @@ pub fn send_transaction_status_batch(
         bank,
         transactions: transactions.to_vec(),
         statuses,
+        balances,
     }) {
         trace!(
             "Slot {} transaction_status send batch failed: {:?}",

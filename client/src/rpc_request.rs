@@ -32,9 +32,12 @@ pub struct RpcConfirmedBlock {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcTransactionStatus {
     pub status: Result<()>,
     pub fee: u64,
+    pub pre_balances: Vec<u64>,
+    pub post_balances: Vec<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -53,10 +53,16 @@ impl TransactionStatusService {
             bank,
             transactions,
             statuses,
+            balances,
         } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
 
         let slot = bank.slot();
-        for (transaction, (status, hash_age_kind)) in transactions.iter().zip(statuses) {
+        for (((transaction, (status, hash_age_kind)), pre_balances), post_balances) in transactions
+            .iter()
+            .zip(statuses)
+            .zip(balances.pre_balances)
+            .zip(balances.post_balances)
+        {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
                 let fee_hash = if let Some(HashAgeKind::DurableNonce) = hash_age_kind {
                     bank.last_blockhash()
@@ -70,7 +76,12 @@ impl TransactionStatusService {
                 blocktree
                     .write_transaction_status(
                         (slot, transaction.signatures[0]),
-                        &RpcTransactionStatus { status, fee },
+                        &RpcTransactionStatus {
+                            status,
+                            fee,
+                            pre_balances,
+                            post_balances,
+                        },
                     )
                     .expect("Expect database write to succeed");
             }
