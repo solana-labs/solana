@@ -291,43 +291,44 @@ impl Blocktree {
             .db
             .batch()
             .expect("Database Error: Failed to get write batch");
-        // delete range cf is not inclusive
-        let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
+        let from_slot = Some(from_slot);
+        let to_slot = Some(to_slot);
         let columns_empty = self
-            .db
-            .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
+            .meta_cf
+            .delete_slot(&mut write_batch, from_slot, to_slot)
             .unwrap_or_else(|_| false)
             & self
                 .db
-                .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
+                .column::<cf::Root>()
+                .delete_slot(&mut write_batch, from_slot, to_slot)
                 .unwrap_or_else(|_| false)
             & self
-                .db
-                .delete_range_cf::<cf::ShredData>(&mut write_batch, from_slot, to_slot)
+                .data_shred_cf
+                .delete_slot(&mut write_batch, from_slot, to_slot)
                 .unwrap_or_else(|_| false)
             & self
-                .db
-                .delete_range_cf::<cf::ShredCode>(&mut write_batch, from_slot, to_slot)
+                .code_shred_cf
+                .delete_slot(&mut write_batch, from_slot, to_slot)
                 .unwrap_or_else(|_| false)
             & self
-                .db
-                .delete_range_cf::<cf::DeadSlots>(&mut write_batch, from_slot, to_slot)
+                .dead_slots_cf
+                .delete_slot(&mut write_batch, from_slot, to_slot)
                 .unwrap_or_else(|_| false)
             & self
-                .db
-                .delete_range_cf::<cf::ErasureMeta>(&mut write_batch, from_slot, to_slot)
+                .erasure_meta_cf
+                .delete_slot(&mut write_batch, from_slot, to_slot)
                 .unwrap_or_else(|_| false)
             & self
-                .db
-                .delete_range_cf::<cf::Orphans>(&mut write_batch, from_slot, to_slot)
+                .orphans_cf
+                .delete_slot(&mut write_batch, from_slot, to_slot)
                 .unwrap_or_else(|_| false)
             & self
-                .db
-                .delete_range_cf::<cf::Index>(&mut write_batch, from_slot, to_slot)
+                .index_cf
+                .delete_slot(&mut write_batch, from_slot, to_slot)
                 .unwrap_or_else(|_| false)
             & self
-                .db
-                .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, from_slot, to_slot)
+                .transaction_status_cf
+                .delete_slot(&mut write_batch, from_slot, to_slot)
                 .unwrap_or_else(|_| false);
         if let Err(e) = self.db.write(write_batch) {
             error!(
