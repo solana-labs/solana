@@ -31,7 +31,7 @@ upload_results_to_slack() {
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": "*New Build: $BUILDKITE_MESSAGE*"
+				"text": "*$BUILDKITE_MESSAGE*"
 			}
 		},
     {
