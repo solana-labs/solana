@@ -5,7 +5,7 @@ use crate::{
     },
     display::println_name_value,
 };
-use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
+use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
@@ -20,7 +20,7 @@ use solana_sdk::{
     system_transaction,
 };
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     net::SocketAddr,
     thread::sleep,
     time::{Duration, Instant},
@@ -147,6 +147,22 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help(
                             "Wait until the transaction is confirmed at maximum-lockout commitment level",
                         ),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("show-block-production")
+                .about("Show information about block production")
+                .arg(
+                    Arg::with_name("epoch")
+                        .long("epoch")
+                        .takes_value(true)
+                        .help("Epoch to show block production for [default: current epoch]"),
+                )
+                .arg(
+                    Arg::with_name("slot_limit")
+                        .long("slot-limit")
+                        .takes_value(true)
+                        .help("Limit results to this many slots from the end of the epoch [default: full epoch]"),
                 ),
         )
         .subcommand(
@@ -392,6 +408,138 @@ pub fn process_get_slot(
 ) -> ProcessResult {
     let slot = rpc_client.get_slot_with_commitment(commitment_config.clone())?;
     Ok(slot.to_string())
+}
+
+pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let epoch = value_t!(matches, "epoch", Epoch).ok();
+    let slot_limit = value_t!(matches, "slot_limit", u64).ok();
+
+    Ok(CliCommandInfo {
+        command: CliCommand::ShowBlockProduction { epoch, slot_limit },
+        require_keypair: false,
+    })
+}
+
+pub fn process_show_block_production(
+    rpc_client: &RpcClient,
+    epoch: Option<Epoch>,
+    slot_limit: Option<u64>,
+) -> ProcessResult {
+    let epoch_schedule = rpc_client.get_epoch_schedule()?;
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::max())?;
+
+    let epoch = epoch.unwrap_or(epoch_info.epoch);
+
+    if epoch > epoch_info.epoch {
+        return Err(format!("Epoch {} is in the future", epoch).into());
+    }
+
+    let end_slot = std::cmp::min(
+        epoch_info.absolute_slot,
+        epoch_schedule.get_last_slot_in_epoch(epoch),
+    );
+    let start_slot = {
+        let start_slot = epoch_schedule.get_first_slot_in_epoch(epoch);
+        std::cmp::max(
+            end_slot.saturating_sub(slot_limit.unwrap_or(start_slot)),
+            start_slot,
+        )
+    };
+
+    let progress_bar = new_spinner_progress_bar();
+    progress_bar.set_message("Connecting...");
+    progress_bar.set_message(&format!("Fetching leader schedule for epoch {}...", epoch));
+
+    let leader_schedule = rpc_client
+        .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::max())?;
+
+    if leader_schedule.is_none() {
+        return Err(format!("Unable to fetch leader schedule for slot {}", start_slot).into());
+    }
+    let leader_schedule = leader_schedule.unwrap();
+
+    progress_bar.set_message(&format!(
+        "Fetching confirmed blocks between slots {} and {}...",
+        start_slot, end_slot
+    ));
+    let confirmed_blocks = rpc_client.get_confirmed_blocks(start_slot, Some(end_slot))?;
+
+    let total_slots = (end_slot - start_slot + 1) as usize;
+    let total_blocks = confirmed_blocks.len();
+    let total_slots_missed = total_slots - total_blocks;
+    let mut leader_slot_count = HashMap::new();
+    let mut leader_missed_slots = HashMap::new();
+
+    for slot_index in 0..total_slots {
+        let leader = {
+            let mut leader = None;
+            for (pubkey, leader_slots) in leader_schedule.iter() {
+                if leader_slots.contains(&slot_index) {
+                    leader = Some(pubkey);
+                    break;
+                }
+            }
+            leader.unwrap()
+        };
+
+        let slot = start_slot + slot_index as u64;
+        let remaining_slots = total_slots - slot_index;
+        progress_bar.set_message(&format!(
+            "Checking slot {} ({:.}% done, {} slots remaining)...",
+            slot,
+            100 * slot_index / total_slots,
+            remaining_slots,
+        ));
+        let slot_count = leader_slot_count.entry(leader).or_insert(0);
+        *slot_count += 1;
+
+        let missed_slots = leader_missed_slots.entry(leader).or_insert(0);
+
+        if !confirmed_blocks.contains(&slot) {
+            *missed_slots += 1;
+        }
+    }
+
+    progress_bar.finish_and_clear();
+    println!(
+        "\n{}",
+        style(format!(
+            "  {:<44}  {:>15}  {:>15}  {:>15}  {:>23}",
+            "Identity Pubkey",
+            "Leader Slots",
+            "Blocks Produced",
+            "Missed Slots",
+            "Missed Block Percentage",
+        ))
+        .bold()
+    );
+
+    for (leader, leader_slots) in leader_slot_count.iter() {
+        let missed_slots = leader_missed_slots.get(leader).unwrap();
+        let blocks_produced = leader_slots - missed_slots;
+        println!(
+            "  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
+            leader,
+            leader_slots,
+            blocks_produced,
+            missed_slots,
+            *missed_slots as f64 / *leader_slots as f64 * 100.
+        );
+    }
+
+    println!(
+        "\n  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
+        format!("Epoch {} total:", epoch),
+        total_slots,
+        total_blocks,
+        total_slots_missed,
+        total_slots_missed as f64 / total_slots as f64 * 100.
+    );
+    println!(
+        "  (using data from {} slots: {} to {})",
+        total_slots, start_slot, end_slot
+    );
+    Ok("".to_string())
 }
 
 pub fn process_get_transaction_count(

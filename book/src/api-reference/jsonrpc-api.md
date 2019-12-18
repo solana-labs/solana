@@ -405,7 +405,7 @@ Returns the leader schedule for an epoch
 
 #### Parameters:
 
-* `slot` - (optional) Fetch the leader schedule for the epoch that corresponds to the provided slot.  If unspecified, the leader schedule for the current epoch is fetch
+* `slot` - (optional) Fetch the leader schedule for the epoch that corresponds to the provided slot.  If unspecified, the leader schedule for the current epoch is fetched
 * `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
