@@ -48,7 +48,6 @@ impl Vote {
             timestamp: None,
         }
     }
-
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -376,66 +375,62 @@ impl VoteState {
         Ok(())
     }
 
-    /// find a slot that would be slashable between the two vote states
-    /// - self: vote state A
-    /// - nca:  newest common ancestor.  This is necessary when the some
-    ///         votes are missing between the two forks.
-    /// - b:    vote state B
-    /// A slashable vote can be detected by appling votes from one bank 
-    /// to votes in the other bank and comparing the result.   If lockouts
-    /// have been observed, then the result should equal to the newer bank.
-    /// @retval: vec of votes that are not common to either self or b
-    /// 
-    /// Proof is all the votes that are diff between the two forks past the nca.
-    pub fn slashable_slots(
-        &self,
-        nca: Slot,
-        b: &VoteState,
-    ) -> Vec<Slot> {
+    /// Find slots that would be slashable between the two vote states
+    /// This function is used outside of the bank to check if any concurrent
+    /// forks have slashable votes.
+    pub fn slashable_slots(&self, other: &VoteState) -> Vec<Slot> {
         let mut slashable = vec![];
-        let (newest,oldest) = if a.votes.last().unwrap_or(0) > b.votes.last().unwrap_or(0) {
-            (&a,&b)
-        } else {
-            (&b,&a)
-        };
-        let mut test = oldest.clone();
-        for v in newest.votes() {
-            if v.slot() < nca {
-                continue;
-            }
-            test.process_vote_unchecked(v.slot());
-        }
-        if test.votes != newest.votes {
-            let i = 0;
-            let j = 0;
-            while i < newest.len() && j < oldest.len() {
-                if newest.votes[i] != oldest.votes[j] {
-                    if newest.votes[i] < oldest.votes[j]  {
-                        slashable.push(newest.votes[i]);
-                        i+=1;
-                        continue;
-                    } else {
-                        slashable.push(oldest.votes[j]);
-                        j+=1;
-                        continue;
-                    }
-                }
-                i+=1;
-                j+=1;
-            }
-        }
-        slashable
-    }
-    pub fn slash(
-        &mut self,
-        slashable_slots: Vec<Slot>,
-    ) {
-        let mut test = self.clone();
+        slashable.extend(self.votes());
+        slashable.extend(other.votes());
+        let mut test = VoteState::default();
+        slashable_votes.sort();
+        slashable_votes.dedup();
         for s in slashable_votes {
-            test.process_vote_unchecked(
+            test.process_vote_unchecked(s);
         }
+        let mut retval = vec![];
+        if test.votes != self.votes && other.older(self) {
+            let test_set: HashSet<_> = test.votes.iter().cloned().collect(); 
+            let self_set: HashSet<_> = self.votes.iter().cloned().collect(); 
+            retval.extend(test_set.difference(self_set));
+        } 
+        if test.votes != other.votes && self.older(other) {
+            let test_set: HashSet<_> = test.votes.iter().cloned().collect(); 
+            let b_set: HashSet<_> = other.votes.iter().cloned().collect(); 
+            retval.extend(test_set.difference(b_set));
+        }
+        retval
     }
 
+    /// Check which VoteState has the oldest newest vote
+    pub fn older(&self, other: &VoteState) -> bool {
+        self.votes.last().unwrap_or(self.root) < other.votes.last().unwrap_or(other.root);
+    }
+
+    /// Set the VoteState as slashed if the slot is slashable
+    /// * slashable_slot - must be a slot which is not an ancestor of this bank
+    /// Instruction must validate that the slashable_slot is not an ancestor of this bank,
+    /// and that the vote is signed.
+    pub fn slash(&mut self, slashable_slot: Slot) {
+        let mut slashable_votes = vec![slashable_slot];
+        let mut test = VoteState::default();
+        slashable_votes.extend(&self.votes());
+        slashable_votes.sort();
+        slashable_votes.dedup();
+        for s in slashable_votes {
+            test.process_vote_unchecked(s);
+        }
+        let not_slashed = if test.votes.last().unwrap() == slashable_slot {
+            //slashable slot is put on top of the stack
+            //the previous vote must be popped
+            self.votes.is_empty()
+                || test.votes[..(test.votes.len() - 1)] == self.votes[..self.votes.len() - 1]
+        } else {
+            //all slashable slots got popped
+            test.votes == self.votes
+        };
+        self.slashed = !not_slashed;
+    }
 }
 
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
