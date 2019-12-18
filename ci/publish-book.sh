@@ -90,7 +90,7 @@ echo --- update gitbook-cage
     git config user.email maintainers@solana.com
     git config user.name "$me"
     git commit -m "gitbook-cage update $(date -Is)"
-    git push -f github.com:solana-labs/solana-gitbook-cage.git HEAD:refs/heads/"$CI_BRANCH"
+    git push -f git@github.com:solana-labs/solana-gitbook-cage.git HEAD:refs/heads/"$CI_BRANCH"
     # pop off the local commit
     git reset --hard HEAD~
   fi
