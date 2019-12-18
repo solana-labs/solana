@@ -22,7 +22,7 @@ use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counte
 use solana_perf::{cuda_runtime::PinnedVec, perf_libs};
 use solana_runtime::{
     accounts_db::ErrorCounters,
-    bank::{Bank, TransactionBalanceSet, TransactionProcessResult},
+    bank::{Bank, TransactionBalancesSet, TransactionProcessResult},
     transaction_batch::TransactionBatch,
 };
 use solana_sdk::{
@@ -511,7 +511,7 @@ impl BankingStage {
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
         let txs = batch.transactions();
-        let pre_balance = if transaction_status_sender.is_some() {
+        let pre_balances = if transaction_status_sender.is_some() {
             bank.collect_balances(txs)
         } else {
             vec![]
@@ -548,14 +548,14 @@ impl BankingStage {
                 .processing_results;
 
             if let Some(sender) = transaction_status_sender {
-                let post_balance = bank.collect_balances(txs);
+                let post_balances = bank.collect_balances(txs);
                 send_transaction_status_batch(
                     bank.clone(),
                     batch.transactions(),
                     transaction_statuses,
-                    TransactionBalanceSet {
-                        pre_balance,
-                        post_balance,
+                    TransactionBalancesSet {
+                        pre_balances,
+                        post_balances,
                     },
                     sender,
                 );

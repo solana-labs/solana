@@ -161,9 +161,9 @@ pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub processing_results: Vec<TransactionProcessResult>,
 }
-pub struct TransactionBalanceSet {
-    pub pre_balance: TransactionBalances,
-    pub post_balance: TransactionBalances,
+pub struct TransactionBalancesSet {
+    pub pre_balances: TransactionBalances,
+    pub post_balances: TransactionBalances,
 }
 pub type TransactionBalances = Vec<Vec<u64>>;
 
@@ -1390,8 +1390,8 @@ impl Bank {
         batch: &TransactionBatch,
         max_age: usize,
         collect_balances: bool,
-    ) -> (TransactionResults, TransactionBalanceSet) {
-        let pre_balance = if collect_balances {
+    ) -> (TransactionResults, TransactionBalancesSet) {
+        let pre_balances = if collect_balances {
             self.collect_balances(batch.transactions())
         } else {
             vec![]
@@ -1407,16 +1407,16 @@ impl Bank {
             tx_count,
             signature_count,
         );
-        let post_balance = if collect_balances {
+        let post_balances = if collect_balances {
             self.collect_balances(batch.transactions())
         } else {
             vec![]
         };
         (
             results,
-            TransactionBalanceSet {
-                pre_balance,
-                post_balance,
+            TransactionBalancesSet {
+                pre_balances,
+                post_balances,
             },
         )
     }

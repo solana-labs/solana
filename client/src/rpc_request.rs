@@ -36,8 +36,8 @@ pub struct RpcConfirmedBlock {
 pub struct RpcTransactionStatus {
     pub status: Result<()>,
     pub fee: u64,
-    pub pre_balance: Vec<u64>,
-    pub post_balance: Vec<u64>,
+    pub pre_balances: Vec<u64>,
+    pub post_balances: Vec<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

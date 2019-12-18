@@ -14,7 +14,7 @@ use rayon::{prelude::*, ThreadPool};
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
-    bank::{Bank, TransactionBalanceSet, TransactionProcessResult, TransactionResults},
+    bank::{Bank, TransactionBalancesSet, TransactionProcessResult, TransactionResults},
     transaction_batch::TransactionBatch,
 };
 use solana_sdk::{
@@ -566,7 +566,7 @@ pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<Transaction>,
     pub statuses: Vec<TransactionProcessResult>,
-    pub balances: TransactionBalanceSet,
+    pub balances: TransactionBalancesSet,
 }
 pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
 
@@ -574,7 +574,7 @@ pub fn send_transaction_status_batch(
     bank: Arc<Bank>,
     transactions: &[Transaction],
     statuses: Vec<TransactionProcessResult>,
-    balances: TransactionBalanceSet,
+    balances: TransactionBalancesSet,
     transaction_status_sender: TransactionStatusSender,
 ) {
     let slot = bank.slot();
