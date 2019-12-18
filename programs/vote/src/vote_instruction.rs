@@ -60,6 +60,9 @@ pub enum VoteInstruction {
 
     /// Update the vote account's validator identity (node id)
     UpdateNode(Pubkey),
+
+    /// Update the vote account's validator identity (node id)
+    SlashLockouts(Transaction),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -202,6 +205,19 @@ pub fn process_instruction(
         VoteInstruction::Withdraw(lamports) => {
             let to = next_keyed_account(keyed_accounts)?;
             vote_state::withdraw(me, lamports, to, &signers)
+        }
+        VoteInstruction::SlashLockouts(tx) => {
+            //find vote instruction
+            let mut vote_ix = None;
+            for i in tx.instructions {
+                if i.program_id != VoteProgram {
+                    continue;
+                }
+                if let VoteInstruction::Vote(slot) = limited_deserialize(i.data) {
+                    //TODO: verify that account matches mine
+                    //TODO: verify transaction signature
+                }
+            }
         }
     }
 }
