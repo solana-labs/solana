@@ -414,7 +414,7 @@ fn poll_blockhash<T: Client>(
                 if blockhash_time.elapsed().as_secs() > 30 {
                     panic!("Blockhash is not updating");
                 }
-                sleep(Duration::from_millis(100));
+                sleep(Duration::from_millis(50));
                 continue;
             }
         }
