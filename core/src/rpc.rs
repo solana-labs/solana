@@ -321,14 +321,22 @@ impl JsonRpcRequestProcessor {
         start_slot: Slot,
         end_slot: Option<Slot>,
     ) -> Result<Vec<Slot>> {
-        let mut slots: Vec<Slot> = RootedSlotIterator::new(start_slot, &self.blocktree)
-            .map_err(|err| Error::invalid_params(format!("Slot {:?}: {:?}", start_slot, err)))?
-            .map(|(slot, _)| slot)
-            .collect();
-        if let Some(end_slot) = end_slot {
-            slots.retain(|&x| x <= end_slot);
+        let end_slot = end_slot.unwrap_or_else(|| self.bank(None).slot());
+        if end_slot < start_slot {
+            return Ok(vec![]);
         }
-        Ok(slots)
+
+        let start_slot = (start_slot..end_slot).find(|&slot| self.blocktree.is_root(slot));
+        if let Some(start_slot) = start_slot {
+            let mut slots: Vec<Slot> = RootedSlotIterator::new(start_slot, &self.blocktree)
+                .unwrap()
+                .map(|(slot, _)| slot)
+                .collect();
+            slots.retain(|&x| x <= end_slot);
+            Ok(slots)
+        } else {
+            Ok(vec![])
+        }
     }
 
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
@@ -1156,12 +1164,26 @@ pub mod tests {
         let mut roots = blocktree_roots.clone();
         if !roots.is_empty() {
             roots.retain(|&x| x > 1);
+            let mut parent_bank = bank;
             for (i, root) in roots.iter().enumerate() {
+                let new_bank =
+                    Bank::new_from_parent(&parent_bank, parent_bank.collector_id(), *root);
+                parent_bank = bank_forks.write().unwrap().insert(new_bank);
+                parent_bank.squash();
+                bank_forks.write().unwrap().set_root(*root, &None);
                 let parent = if i > 0 { roots[i - 1] } else { 1 };
                 fill_blocktree_slot_with_ticks(&blocktree, 5, *root, parent, Hash::default());
             }
             blocktree.set_roots(&roots).unwrap();
+            let new_bank = Bank::new_from_parent(
+                &parent_bank,
+                parent_bank.collector_id(),
+                roots.iter().max().unwrap() + 1,
+            );
+            bank_forks.write().unwrap().insert(new_bank);
         }
+
+        let bank = bank_forks.read().unwrap().working_bank();
 
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
@@ -2022,7 +2044,8 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        assert!(result.get("error").is_some());
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, vec![3, 4, 8]);
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0, 4]}}"#);
@@ -2034,11 +2057,19 @@ pub mod tests {
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0, 7]}}"#);
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![0, 1, 3, 4]);
+
+        let req =
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9, 11]}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, Vec::<Slot>::new());
     }
 
     #[test]
