@@ -4807,4 +4807,55 @@ mod tests {
         assert_eq!(balances[0], vec![8, 11, 1]);
         assert_eq!(balances[1], vec![8, 0, 1]);
     }
+
+    #[test]
+    fn test_pre_post_transaction_balances() {
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
+        let fee_calculator = FeeCalculator::new(1, 0);
+        genesis_config.fee_calculator = fee_calculator;
+        let parent = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(new_from_parent(&parent));
+
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let pubkey0 = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
+        let keypair0_account = Account::new(8, 0, &Pubkey::default());
+        let keypair1_account = Account::new(9, 0, &Pubkey::default());
+        let account0 = Account::new(11, 0, &&Pubkey::default());
+        bank0.store_account(&keypair0.pubkey(), &keypair0_account);
+        bank0.store_account(&keypair1.pubkey(), &keypair1_account);
+        bank0.store_account(&pubkey0, &account0);
+
+        let blockhash = bank0.last_blockhash();
+
+        let tx0 = system_transaction::transfer(&keypair0, &pubkey0, 2, blockhash.clone());
+        let tx1 = system_transaction::transfer(&Keypair::new(), &pubkey1, 2, blockhash.clone());
+        let tx2 = system_transaction::transfer(&keypair1, &pubkey2, 12, blockhash.clone());
+        let txs = vec![tx0, tx1, tx2];
+
+        let lock_result = bank0.prepare_batch(&txs, None);
+        let (transaction_results, transaction_balances_set) =
+            bank0.load_execute_and_commit_transactions(&lock_result, MAX_RECENT_BLOCKHASHES, true);
+
+        assert_eq!(transaction_balances_set.pre_balances.len(), 3);
+        assert_eq!(transaction_balances_set.post_balances.len(), 3);
+
+        assert!(transaction_results.processing_results[0].0.is_ok());
+        assert_eq!(transaction_balances_set.pre_balances[0], vec![8, 11, 1]);
+        assert_eq!(transaction_balances_set.post_balances[0], vec![5, 13, 1]);
+
+        // Failed transactions still produce balance sets
+        // This is a TransactionError - not possible to charge fees
+        assert!(transaction_results.processing_results[1].0.is_err());
+        assert_eq!(transaction_balances_set.pre_balances[1], vec![0, 0, 1]);
+        assert_eq!(transaction_balances_set.post_balances[1], vec![0, 0, 1]);
+
+        // Failed transactions still produce balance sets
+        // This is an InstructionError - fees charged
+        assert!(transaction_results.processing_results[2].0.is_err());
+        assert_eq!(transaction_balances_set.pre_balances[2], vec![9, 0, 1]);
+        assert_eq!(transaction_balances_set.post_balances[2], vec![8, 0, 1]);
+    }
 }
