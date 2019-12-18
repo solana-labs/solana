@@ -23,6 +23,9 @@ coverageFlags+=("-Clink-dead-code")      # Dead code should appear red in the re
 coverageFlags+=("-Ccodegen-units=1")     # Disable code generation parallelism which is unsupported under -Zprofile (see [rustc issue #51705]).
 coverageFlags+=("-Cinline-threshold=0")  # Disable inlining, which complicates control flow.
 coverageFlags+=("-Coverflow-checks=off") # Disable overflow checks, which create unnecessary branches.
+coverageFlags+=("-Copt-level=0")         # Disable optimization completely
+coverageFlags+=("-Clto=off")             # Disable LTO, LTO causes less coverage due to optimizataion
+
 
 export RUSTFLAGS="${coverageFlags[*]} $RUSTFLAGS"
 export CARGO_INCREMENTAL=0
