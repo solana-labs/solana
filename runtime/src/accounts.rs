@@ -345,8 +345,8 @@ impl Accounts {
         })
     }
 
-    pub fn verify_hash_internal_state(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {
-        self.accounts_db.verify_hash_internal_state(slot, ancestors)
+    pub fn verify_bank_hash(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {
+        self.accounts_db.verify_bank_hash(slot, ancestors).is_ok()
     }
 
     pub fn load_by_program(
@@ -476,7 +476,7 @@ impl Accounts {
         }
     }
 
-    pub fn hash_internal_state(&self, slot_id: Slot) -> BankHash {
+    pub fn bank_hash_at(&self, slot_id: Slot) -> BankHash {
         let slot_hashes = self.accounts_db.slot_hashes.read().unwrap();
         *slot_hashes
             .get(&slot_id)
@@ -1164,17 +1164,17 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_accounts_empty_hash_internal_state() {
+    fn test_accounts_empty_bank_hash() {
         let accounts = Accounts::new(Vec::new());
-        accounts.hash_internal_state(0);
+        accounts.bank_hash_at(0);
     }
 
     #[test]
     #[should_panic]
-    fn test_accounts_empty_account_hash_internal_state() {
+    fn test_accounts_empty_account_bank_hash() {
         let accounts = Accounts::new(Vec::new());
         accounts.store_slow(0, &Pubkey::default(), &Account::new(1, 0, &sysvar::id()));
-        accounts.hash_internal_state(0);
+        accounts.bank_hash_at(0);
     }
 
     fn check_accounts(accounts: &Accounts, pubkeys: &Vec<Pubkey>, num: usize) {
@@ -1221,10 +1221,7 @@ mod tests {
             .accounts_from_stream(&mut reader, &daccounts_paths, copied_accounts.path())
             .is_ok());
         check_accounts(&daccounts, &pubkeys, 100);
-        assert_eq!(
-            accounts.hash_internal_state(0),
-            daccounts.hash_internal_state(0)
-        );
+        assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));
     }
 
     #[test]
