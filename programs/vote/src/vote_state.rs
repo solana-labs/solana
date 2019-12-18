@@ -584,6 +584,7 @@ pub fn slash_state(
             }
             //verify that the transaction was signed by the expected signers
             vote_state::verify_authorized_signer(&vote_state.authorized_voter, &signers)?;
+            //slash the slot
             vote_state.slash(slot_hashes, slot);
         }
     }

@@ -210,30 +210,8 @@ pub fn process_instruction(
             vote_state::withdraw(me, lamports, to, &signers)
         }
         VoteInstruction::SlashLockouts(tx) => {
-            //verify the tx is valid
-            if !tx.verify_refs() {
-                return Err(InvalidSlashTransaction);
-            }
-            //verify transaction signature
-            tx.verify()?;
-            //find vote instruction
-            for (i, ix) in tx.message.instructions.iter().enumerate() {
-                if tx.instruction_program(i) != program_id {
-                    continue;
-                }
-                if let VoteInstruction::Vote(slot) = limited_deserialize(ix.data) {
-                    //verify that account matches mine
-                    if tx.key(i, 0) != me.key {
-                        continue;
-                    }
-                    //verify that teh transaction was signed by the expected signer
-                    let vote_state: VoteState = me.state()?;
-                    vote_state::verify_authorized_signer(
-                        &vote_state.authorized_voter,
-                        tx.signers(),
-                    )?;
-                }
-            }
+            let slot_hashes = SlotHashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?;
+            vote_state::slash_vote(me, &slot_hashes, tx)
         }
     }
 }
