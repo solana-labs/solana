@@ -152,6 +152,12 @@ impl Transaction {
     pub fn data(&self, instruction_index: usize) -> &[u8] {
         &self.message.instructions[instruction_index].data
     }
+    fn instruction_program(&self, instruction_index: usize) -> Option<&Pubkey> {
+        self.message
+            .instructions
+            .get(instruction_index)
+            .and_then(|instruction| self.account_keys.get(instruction.program_id_index))
+    }
 
     fn key_index(&self, instruction_index: usize, accounts_index: usize) -> Option<usize> {
         self.message

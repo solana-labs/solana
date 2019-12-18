@@ -36,6 +36,9 @@ pub enum VoteError {
 
     #[error("vote timestamp not recent")]
     TimestampTooOld,
+
+    #[error("lockout slash transaction is invalid")]
+    InvalidSlashTransaction,
 }
 impl<E> DecodeError<E> for VoteError {
     fn type_of() -> &'static str {
@@ -167,7 +170,7 @@ pub fn withdraw(
 }
 
 pub fn process_instruction(
-    _program_id: &Pubkey,
+    program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
@@ -207,15 +210,28 @@ pub fn process_instruction(
             vote_state::withdraw(me, lamports, to, &signers)
         }
         VoteInstruction::SlashLockouts(tx) => {
+            //verify the tx is valid
+            if !tx.verify_refs() {
+                return Err(InvalidSlashTransaction);
+            }
+            //verify transaction signature
+            tx.verify()?;
             //find vote instruction
-            let mut vote_ix = None;
-            for i in tx.instructions {
-                if i.program_id != VoteProgram {
+            for (i, ix) in tx.message.instructions.iter().enumerate() {
+                if tx.instruction_program(i) != program_id {
                     continue;
                 }
-                if let VoteInstruction::Vote(slot) = limited_deserialize(i.data) {
-                    //TODO: verify that account matches mine
-                    //TODO: verify transaction signature
+                if let VoteInstruction::Vote(slot) = limited_deserialize(ix.data) {
+                    //verify that account matches mine
+                    if tx.key(i, 0) != me.key {
+                        continue;
+                    }
+                    //verify that teh transaction was signed by the expected signer
+                    let vote_state: VoteState = me.state()?;
+                    vote_state::verify_authorized_signer(
+                        &vote_state.authorized_voter,
+                        tx.signers(),
+                    )?;
                 }
             }
         }
