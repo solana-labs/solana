@@ -6,7 +6,7 @@ use solana_sdk::{
     hash::Hash,
     transaction::{Result, Transaction},
 };
-use std::{error, fmt, io, net::SocketAddr};
+use std::{collections::HashMap, error, fmt, io, net::SocketAddr};
 
 pub type RpcResponseIn<T> = JsonResult<Response<T>>;
 pub type RpcResponse<T> = io::Result<Response<T>>;
@@ -51,6 +51,9 @@ pub struct RpcContactInfo {
     /// JSON RPC port
     pub rpc: Option<SocketAddr>,
 }
+
+/// Map of leader base58 identity pubkeys to the slot indices relative to the first epoch slot
+pub type RpcLeaderSchedule = HashMap<String, Vec<usize>>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
