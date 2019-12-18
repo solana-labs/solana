@@ -16,7 +16,9 @@ use solana_client::rpc_request::{
     RpcResponseContext, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
-use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
+use solana_ledger::{
+    bank_forks::BankForks, blocktree::Blocktree, rooted_slot_iterator::RootedSlotIterator,
+};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
@@ -314,6 +316,29 @@ impl JsonRpcRequestProcessor {
         Ok(self.blocktree.get_confirmed_block(slot).ok())
     }
 
+    pub fn get_confirmed_blocks(
+        &self,
+        start_slot: Slot,
+        end_slot: Option<Slot>,
+    ) -> Result<Vec<Slot>> {
+        let end_slot = end_slot.unwrap_or_else(|| self.bank(None).slot());
+        if end_slot < start_slot {
+            return Ok(vec![]);
+        }
+
+        let start_slot = (start_slot..end_slot).find(|&slot| self.blocktree.is_root(slot));
+        if let Some(start_slot) = start_slot {
+            let mut slots: Vec<Slot> = RootedSlotIterator::new(start_slot, &self.blocktree)
+                .unwrap()
+                .map(|(slot, _)| slot)
+                .collect();
+            slots.retain(|&x| x <= end_slot);
+            Ok(slots)
+        } else {
+            Ok(vec![])
+        }
+    }
+
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         // This calculation currently assumes that bank.slots_per_year will remain unchanged after
         // genesis (ie. that this bank's slot_per_year will be applicable to any rooted slot being
@@ -541,6 +566,14 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getBlockTime")]
     fn get_block_time(&self, meta: Self::Metadata, slot: Slot) -> Result<Option<UnixTimestamp>>;
+
+    #[rpc(meta, name = "getConfirmedBlocks")]
+    fn get_confirmed_blocks(
+        &self,
+        meta: Self::Metadata,
+        start_slot: Slot,
+        end_slot: Option<Slot>,
+    ) -> Result<Vec<Slot>>;
 }
 
 pub struct RpcSolImpl;
@@ -1005,6 +1038,18 @@ impl RpcSol for RpcSolImpl {
             .get_confirmed_block(slot)
     }
 
+    fn get_confirmed_blocks(
+        &self,
+        meta: Self::Metadata,
+        start_slot: Slot,
+        end_slot: Option<Slot>,
+    ) -> Result<Vec<Slot>> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_confirmed_blocks(start_slot, end_slot)
+    }
+
     fn get_block_time(&self, meta: Self::Metadata, slot: Slot) -> Result<Option<UnixTimestamp>> {
         meta.request_processor.read().unwrap().get_block_time(slot)
     }
@@ -1020,7 +1065,8 @@ pub mod tests {
     };
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
     use solana_ledger::{
-        blocktree::entries_to_test_shreds, entry::next_entry_mut, get_tmp_ledger_path,
+        blocktree::entries_to_test_shreds, blocktree_processor::fill_blocktree_slot_with_ticks,
+        entry::next_entry_mut, get_tmp_ledger_path,
     };
     use solana_sdk::{
         fee_calculator::DEFAULT_BURN_PERCENT,
@@ -1057,7 +1103,7 @@ pub mod tests {
     }
 
     fn start_rpc_handler_with_tx(pubkey: &Pubkey) -> RpcHandler {
-        start_rpc_handler_with_tx_and_blocktree(pubkey, vec![1], 0)
+        start_rpc_handler_with_tx_and_blocktree(pubkey, vec![], 0)
     }
 
     fn start_rpc_handler_with_tx_and_blocktree(
@@ -1118,7 +1164,31 @@ pub mod tests {
             0,
         );
         blocktree.insert_shreds(shreds, None, false).unwrap();
-        blocktree.set_roots(&blocktree_roots).unwrap();
+        blocktree.set_roots(&[1]).unwrap();
+
+        let mut roots = blocktree_roots.clone();
+        if !roots.is_empty() {
+            roots.retain(|&x| x > 1);
+            let mut parent_bank = bank;
+            for (i, root) in roots.iter().enumerate() {
+                let new_bank =
+                    Bank::new_from_parent(&parent_bank, parent_bank.collector_id(), *root);
+                parent_bank = bank_forks.write().unwrap().insert(new_bank);
+                parent_bank.squash();
+                bank_forks.write().unwrap().set_root(*root, &None);
+                let parent = if i > 0 { roots[i - 1] } else { 1 };
+                fill_blocktree_slot_with_ticks(&blocktree, 5, *root, parent, Hash::default());
+            }
+            blocktree.set_roots(&roots).unwrap();
+            let new_bank = Bank::new_from_parent(
+                &parent_bank,
+                parent_bank.collector_id(),
+                roots.iter().max().unwrap() + 1,
+            );
+            bank_forks.write().unwrap().insert(new_bank);
+        }
+
+        let bank = bank_forks.read().unwrap().working_bank();
 
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
@@ -1962,6 +2032,54 @@ pub mod tests {
                 assert_eq!(result, None);
             }
         }
+    }
+
+    #[test]
+    fn test_get_confirmed_blocks() {
+        let bob_pubkey = Pubkey::new_rand();
+        let roots = vec![0, 1, 3, 4, 8];
+        let RpcHandler { io, meta, .. } =
+            start_rpc_handler_with_tx_and_blocktree(&bob_pubkey, roots.clone(), 0);
+
+        let req =
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}}"#);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, roots);
+
+        let req =
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[2]}}"#);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, vec![3, 4, 8]);
+
+        let req =
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0, 4]}}"#);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, vec![0, 1, 3, 4]);
+
+        let req =
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0, 7]}}"#);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, vec![0, 1, 3, 4]);
+
+        let req =
+            format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9, 11]}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, Vec::<Slot>::new());
     }
 
     #[test]
