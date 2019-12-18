@@ -553,10 +553,7 @@ impl BankingStage {
                     bank.clone(),
                     batch.transactions(),
                     transaction_statuses,
-                    TransactionBalancesSet {
-                        pre_balances,
-                        post_balances,
-                    },
+                    TransactionBalancesSet::new(pre_balances, post_balances),
                     sender,
                 );
             }
