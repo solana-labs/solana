@@ -12,8 +12,8 @@ use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{
-    Response, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcResponseContext, RpcVersionInfo,
-    RpcVoteAccountInfo, RpcVoteAccountStatus,
+    Response, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule,
+    RpcResponseContext, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_drone::drone::request_airdrop_transaction;
 use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
@@ -33,6 +33,7 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
+    collections::HashMap,
     net::{SocketAddr, UdpSocket},
     sync::{Arc, RwLock},
     thread::sleep,
@@ -430,7 +431,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         slot: Option<Slot>,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<Vec<String>>>;
+    ) -> Result<Option<RpcLeaderSchedule>>;
 
     #[rpc(meta, name = "getRecentBlockhash")]
     fn get_recent_blockhash(
@@ -712,18 +713,23 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         slot: Option<Slot>,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<Vec<String>>> {
+    ) -> Result<Option<RpcLeaderSchedule>> {
         let bank = meta.request_processor.read().unwrap().bank(commitment);
         let slot = slot.unwrap_or_else(|| bank.slot());
         let epoch = bank.epoch_schedule().get_epoch(slot);
+
         Ok(
             solana_ledger::leader_schedule_utils::leader_schedule(epoch, &bank).map(
                 |leader_schedule| {
-                    leader_schedule
-                        .get_slot_leaders()
-                        .iter()
-                        .map(|pubkey| pubkey.to_string())
-                        .collect()
+                    let mut map = HashMap::new();
+
+                    for (slot_index, pubkey) in
+                        leader_schedule.get_slot_leaders().iter().enumerate()
+                    {
+                        let pubkey = pubkey.to_string();
+                        map.entry(pubkey).or_insert_with(|| vec![]).push(slot_index);
+                    }
+                    map
                 },
             ),
         )
@@ -1357,7 +1363,7 @@ pub mod tests {
             let res: Response = serde_json::from_str(&rep.expect("actual response"))
                 .expect("actual response deserialization");
 
-            let schedule: Option<Vec<String>> = if let Response::Single(res) = res {
+            let schedule: Option<RpcLeaderSchedule> = if let Response::Single(res) = res {
                 if let Output::Success(res) = res {
                     serde_json::from_value(res.result).unwrap()
                 } else {
@@ -1366,9 +1372,14 @@ pub mod tests {
             } else {
                 panic!("Expected single response");
             };
+            let schedule = schedule.expect("leader schedule");
+
+            let bob_schedule = schedule
+                .get(&bank.collector_id().to_string())
+                .expect("leader not in the leader schedule");
 
             assert_eq!(
-                schedule.unwrap().len(),
+                bob_schedule.len(),
                 solana_ledger::leader_schedule_utils::leader_schedule(bank.epoch(), &bank)
                     .unwrap()
                     .get_slot_leaders()
@@ -1381,7 +1392,7 @@ pub mod tests {
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
 
-        let schedule: Option<Vec<String>> = if let Response::Single(res) = res {
+        let schedule: Option<RpcLeaderSchedule> = if let Response::Single(res) = res {
             if let Output::Success(res) = res {
                 serde_json::from_value(res.result).unwrap()
             } else {
