@@ -19,6 +19,12 @@ impl CommitmentConfig {
         }
     }
 
+    pub fn max() -> Self {
+        Self {
+            commitment: CommitmentLevel::Max,
+        }
+    }
+
     pub fn ok(&self) -> Option<Self> {
         if self == &Self::default() {
             None
