@@ -73,11 +73,18 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Identity of the custodian (can withdraw before lockup expires)")
                 )
                 .arg(
-                    Arg::with_name("lockup")
-                        .long("lockup")
-                        .value_name("SLOT")
+                    Arg::with_name("lockup_epoch")
+                        .long("lockup-epoch")
+                        .value_name("EPOCH")
                         .takes_value(true)
-                        .help("The slot height at which this account will be available for withdrawal")
+                        .help("The epoch height at which this account will be available for withdrawal")
+                )
+                .arg(
+                    Arg::with_name("lockup_date")
+                        .long("lockup-date")
+                        .value_name("RFC3339 DATE TIME")
+                        .takes_value(true)
+                        .help("The date and time at which this account will be available for withdrawal")
                 )
                 .arg(
                     Arg::with_name("authorized_staker")
@@ -322,7 +329,8 @@ impl StakeSubCommands for App<'_, '_> {
 
 pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account = keypair_of(matches, "stake_account").unwrap();
-    let epoch = value_of(&matches, "lockup").unwrap_or(0);
+    let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
+    let unix_timestamp = unix_timestamp_of(&matches, "lockup_date").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
     let staker = pubkey_of(matches, "authorized_staker");
     let withdrawer = pubkey_of(matches, "authorized_withdrawer");
@@ -333,7 +341,11 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
             stake_account: stake_account.into(),
             staker,
             withdrawer,
-            lockup: Lockup { custodian, epoch },
+            lockup: Lockup {
+                custodian,
+                epoch,
+                unix_timestamp,
+            },
             lamports,
         },
         require_keypair: true,
@@ -906,7 +918,7 @@ mod tests {
             &authorized_string,
             "--custodian",
             &custodian_string,
-            "--lockup",
+            "--lockup-epoch",
             "43",
             "lamports",
         ]);
@@ -919,6 +931,7 @@ mod tests {
                     withdrawer: Some(authorized),
                     lockup: Lockup {
                         epoch: 43,
+                        unix_timestamp: 0,
                         custodian,
                     },
                     lamports: 50

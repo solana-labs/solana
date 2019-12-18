@@ -109,6 +109,7 @@ pub fn create_and_add_stakes(
         let lockup = Lockup {
             epoch: unlock.epoch,
             custodian,
+            unix_timestamp: 0,
         };
         for _ in 0..(lamports / granularity).saturating_sub(1) {
             genesis_config.add_account(

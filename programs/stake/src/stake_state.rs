@@ -8,7 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::State,
-    clock::{Clock, Epoch, Slot},
+    clock::{Clock, Epoch, Slot, UnixTimestamp},
     instruction::InstructionError,
     pubkey::Pubkey,
     rent::Rent,
@@ -86,13 +86,23 @@ pub enum StakeAuthorize {
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Lockup {
-    /// epoch at which this stake will allow withdrawal, unless
+    /// UnixTimestamp at which this stake will allow withdrawal, unless
+    ///  to the custodian.
+    pub unix_timestamp: UnixTimestamp,
+    /// epoch height at which this stake will allow withdrawal, unless
     ///  to the custodian
     pub epoch: Epoch,
     /// custodian account, the only account to which this stake will honor a
     ///  withdrawal before lockup expires.  After lockup expires, custodian
     ///  is irrelevant
     pub custodian: Pubkey,
+}
+
+impl Lockup {
+    pub fn is_in_force(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> bool {
+        (self.unix_timestamp > clock.unix_timestamp || self.epoch > clock.epoch)
+            && !signers.contains(&self.custodian)
+    }
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -754,8 +764,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         };
 
         // verify that lockup has expired or that the withdrawal is signed by
-        //   the custodian
-        if lockup.epoch > clock.epoch && !signers.contains(&lockup.custodian) {
+        //   the custodian, both epoch and unix_timestamp must have passed
+        if lockup.is_in_force(&clock, signers) {
             return Err(StakeError::LockupInForce.into());
         }
 
@@ -1404,6 +1414,7 @@ mod tests {
                 &Authorized::auto(&stake_pubkey),
                 &Lockup {
                     epoch: 1,
+                    unix_timestamp: 0,
                     custodian
                 },
                 &Rent::free(),
@@ -1415,6 +1426,7 @@ mod tests {
             StakeState::from(&stake_keyed_account.account).unwrap(),
             StakeState::Initialized(Meta {
                 lockup: Lockup {
+                    unix_timestamp: 0,
                     epoch: 1,
                     custodian
                 },
@@ -1555,6 +1567,7 @@ mod tests {
             .initialize(
                 &Authorized::auto(&stake_pubkey),
                 &Lockup {
+                    unix_timestamp: 0,
                     epoch: 0,
                     custodian,
                 },
@@ -1759,6 +1772,7 @@ mod tests {
             total_lamports,
             &StakeState::Initialized(Meta {
                 lockup: Lockup {
+                    unix_timestamp: 0,
                     epoch: 1,
                     custodian,
                 },
@@ -2589,6 +2603,77 @@ mod tests {
             // reset
             stake_keyed_account.account.lamports = stake_lamports;
         }
+    }
+
+    #[test]
+    fn test_lockup_is_expired() {
+        let custodian = Pubkey::new_rand();
+        let signers = [custodian].iter().cloned().collect::<HashSet<_>>();
+        let lockup = Lockup {
+            epoch: 1,
+            unix_timestamp: 1,
+            custodian,
+        };
+        // neither time
+        assert_eq!(
+            lockup.is_in_force(
+                &Clock {
+                    epoch: 0,
+                    unix_timestamp: 0,
+                    ..Clock::default()
+                },
+                &HashSet::new()
+            ),
+            true
+        );
+        // not timestamp
+        assert_eq!(
+            lockup.is_in_force(
+                &Clock {
+                    epoch: 2,
+                    unix_timestamp: 0,
+                    ..Clock::default()
+                },
+                &HashSet::new()
+            ),
+            true
+        );
+        // not epoch
+        assert_eq!(
+            lockup.is_in_force(
+                &Clock {
+                    epoch: 0,
+                    unix_timestamp: 2,
+                    ..Clock::default()
+                },
+                &HashSet::new()
+            ),
+            true
+        );
+        // both, no custodian
+        assert_eq!(
+            lockup.is_in_force(
+                &Clock {
+                    epoch: 1,
+                    unix_timestamp: 1,
+                    ..Clock::default()
+                },
+                &HashSet::new()
+            ),
+            false
+        );
+        // neither, but custodian
+        assert_eq!(
+            lockup.is_in_force(
+                &Clock {
+                    epoch: 0,
+                    unix_timestamp: 0,
+                    ..Clock::default()
+                },
+                &signers,
+            ),
+            false,
+        );
     }
 
     #[test]

@@ -88,10 +88,7 @@ fn test_stake_delegation_and_deactivation() {
         stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
         staker: None,
         withdrawer: None,
-        lockup: Lockup {
-            custodian: Pubkey::default(),
-            epoch: 0,
-        },
+        lockup: Lockup::default(),
         lamports: 50_000,
     };
     process_command(&config_validator).unwrap();
@@ -175,10 +172,7 @@ fn test_stake_delegation_and_deactivation_offline() {
         stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
         staker: None,
         withdrawer: None,
-        lockup: Lockup {
-            custodian: Pubkey::default(),
-            epoch: 0,
-        },
+        lockup: Lockup::default(),
         lamports: 50_000,
     };
     process_command(&config_validator).unwrap();

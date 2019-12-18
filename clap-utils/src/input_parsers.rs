@@ -1,6 +1,8 @@
 use crate::keypair::{keypair_from_seed_phrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG};
+use chrono::DateTime;
 use clap::ArgMatches;
 use solana_sdk::{
+    clock::UnixTimestamp,
     native_token::sol_to_lamports,
     pubkey::Pubkey,
     signature::{read_keypair_file, Keypair, KeypairUtil, Signature},
@@ -29,6 +31,14 @@ where
     } else {
         None
     }
+}
+
+pub fn unix_timestamp_of(matches: &ArgMatches<'_>, name: &str) -> Option<UnixTimestamp> {
+    matches.value_of(name).and_then(|value| {
+        DateTime::parse_from_rfc3339(value)
+            .ok()
+            .map(|date_time| date_time.timestamp())
+    })
 }
 
 // Return the keypair for an argument with filename `name` or None if not present.
