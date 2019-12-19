@@ -5,10 +5,7 @@ use crate::{
 };
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
-use solana_sdk::{
-    clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT},
-    commitment_config::CommitmentConfig,
-};
+use solana_sdk::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
 use std::{thread::sleep, time::Duration};
 
 pub struct RpcClientRequest {
@@ -38,14 +35,14 @@ impl GenericRpcClientRequest for RpcClientRequest {
     fn send(
         &self,
         request: &RpcRequest,
-        params: Option<serde_json::Value>,
+        //params: Option<serde_json::Value>,
+        params: serde_json::Value,
         mut retries: usize,
-        commitment_config: Option<CommitmentConfig>,
     ) -> Result<serde_json::Value, ClientError> {
         // Concurrent requests are not supported so reuse the same request id for all requests
         let request_id = 1;
 
-        let request_json = request.build_request_json(request_id, params, commitment_config);
+        let request_json = request.build_request_json(request_id, params);
 
         loop {
             match self
