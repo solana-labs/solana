@@ -504,7 +504,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
                     signers,
                     blockhash,
                 },
-                require_keypair: !sign_only,
+                require_keypair: true,
             })
         }
         ("show-account", Some(matches)) => {
@@ -2216,7 +2216,7 @@ mod tests {
                     signers: None,
                     blockhash: None,
                 },
-                require_keypair: false
+                require_keypair: true,
             }
         );
 
