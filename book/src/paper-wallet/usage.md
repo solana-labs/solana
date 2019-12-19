@@ -79,6 +79,11 @@ solana-keygen pubkey ASK --skip-seed-phrase-validation
 Copy the derived public key to a USB stick for easy usage on networked computers
 {% endhint %}
 
+{% hint style="info" %}
+A common next step is to [check the balance](#checking-account-balance) of the
+account associated with a public key
+{% endhint %}
+
 For full usage details run:
 
 ```bash
@@ -90,7 +95,7 @@ All that is needed to check an account balance is the public key of an account.
 To retrieve public keys securely from a paper wallet, follow the
 [Public Key Derivation](#public-key-derivation) instructions on an
 [air gapped computer](https://en.wikipedia.org/wiki/Air_gap_\(networking\)).
-Public keys can then be typed manually or transferred via a USB stick into a
+Public keys can then be typed manually or transferred via a USB stick to a
 networked machine.
 
 Next, configure the `solana` CLI tool to connect to a particular cluster:
@@ -105,8 +110,8 @@ Finally, to check the balance, run the following command:
 solana balance <PUBKEY>
 ```
 
-In order to check a list of public keys quickly, append public keys to a file
-like so:
+In order to check a list of public keys quickly, append public keys to a file,
+one per line, like so:
 
 `public_keys.txt`
 ```bash
