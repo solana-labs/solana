@@ -482,6 +482,7 @@ impl<'de> Deserialize<'de> for AppendVec {
 pub mod tests {
     use super::test_utils::*;
     use super::*;
+    use assert_matches::assert_matches;
     use log::*;
     use rand::{thread_rng, Rng};
     use solana_sdk::timing::duration_as_ms;
@@ -496,14 +497,14 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "too small file size 0 for AppendVec")]
     fn test_append_vec_new_bad_size() {
-        let path = get_append_vec_path("test_append_too_bad_size");
+        let path = get_append_vec_path("test_append_vec_new_bad_size");
         let _av = AppendVec::new(&path.path, true, 0);
     }
 
     #[test]
     #[should_panic(expected = "too small file size 0 for AppendVec")]
     fn test_append_vec_set_file_bad_size() {
-        let file = get_append_vec_path("test_append_too_bad_size");
+        let file = get_append_vec_path("test_append_vec_set_file_bad_size");
         let path = &file.path;
         let mut av = AppendVec::new_empty_map(0);
 
