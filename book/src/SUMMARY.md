@@ -37,7 +37,6 @@
 * [Running an Archiver](running-archiver.md)
 * [Paper Wallet](paper-wallet/README.md)
   * [Installation](paper-wallet/installation.md)
-  * [Creating and Using a Seed Phrase](paper-wallet/keypair.md)
   * [Paper Wallet Usage](paper-wallet/usage.md)
 * [API Reference](api-reference/README.md)
   * [Transaction](api-reference/transaction-api.md)
