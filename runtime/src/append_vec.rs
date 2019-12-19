@@ -502,7 +502,6 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "too small file size 0 for AppendVec")]
     fn test_append_vec_set_file_bad_size() {
         let file = get_append_vec_path("test_append_vec_set_file_bad_size");
         let path = &file.path;
@@ -515,35 +514,38 @@ pub mod tests {
             .open(&path)
             .expect("create a test file for mmap");
 
-        av.set_file(path).unwrap();
+        let result = av.set_file(path);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"too small file size 0 for AppendVec");
     }
 
     #[test]
-    #[should_panic(expected = "too small file size 0 for AppendVec")]
     fn test_append_vec_sanitize_len_and_size_too_small() {
-        AppendVec::sanitize_len_and_size(0, 0).unwrap();
+        let result = AppendVec::sanitize_len_and_size(0, 0);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"too small file size 0 for AppendVec");
     }
 
     #[test]
     fn test_append_vec_sanitize_len_and_size_maximum() {
-        AppendVec::sanitize_len_and_size(0, 16 * 1024 * 1024 * 1024).unwrap();
+        let result = AppendVec::sanitize_len_and_size(0, 16 * 1024 * 1024 * 1024);
+        assert_matches!(result, Ok(_));
     }
 
     #[test]
-    #[should_panic(expected = "too large file size 17179869185 for AppendVec")]
     fn test_append_vec_sanitize_len_and_size_too_large() {
-        AppendVec::sanitize_len_and_size(0, 16 * 1024 * 1024 * 1024 + 1).unwrap();
+        let result = AppendVec::sanitize_len_and_size(0, 16 * 1024 * 1024 * 1024 + 1);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"too large file size 17179869185 for AppendVec");
     }
 
     #[test]
     fn test_append_vec_sanitize_len_and_size_full_and_same_as_current_len() {
-        AppendVec::sanitize_len_and_size(1 * 1024 * 1024, 1 * 1024 * 1024).unwrap();
+        let result = AppendVec::sanitize_len_and_size(1 * 1024 * 1024, 1 * 1024 * 1024);
+        assert_matches!(result, Ok(_));
     }
 
     #[test]
-    #[should_panic(expected = "current_len is larger than file size (1048576)")]
     fn test_append_vec_sanitize_len_and_size_larger_current_len() {
-        AppendVec::sanitize_len_and_size(1 * 1024 * 1024 + 1, 1 * 1024 * 1024).unwrap();
+        let result = AppendVec::sanitize_len_and_size(1 * 1024 * 1024 + 1, 1 * 1024 * 1024);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"current_len is larger than file size (1048576)");
     }
 
     #[test]
