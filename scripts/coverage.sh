@@ -29,15 +29,24 @@ export CARGO_INCREMENTAL=0
 export RUST_BACKTRACE=1
 export RUST_MIN_STACK=8388608
 
-echo "--- remove old coverage results"
+echo "--- revert target dir to pre-run state to remove old coverage results"
+# Remove me after awhile since we transition to new cache pruning method below
 if [[ -d target/cov ]]; then
   find target/cov -name \*.gcda -print0 | xargs -0 rm -f
 fi
 rm -rf target/cov/$reportName
 
+if [[ -e target/cov/build-finished ]]; then
+  echo "Reverting files"
+  find target/cov -newer target/cov/build-finished -type f -print -delete
+  echo "Reverting (empty) directories"
+  find target/cov -newer target/cov/build-finished -type d -empty -print -delete
+fi
+
 source ci/rust-version.sh nightly
 
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --no-run "${packages[@]}"
+touch target/cov/build-finished
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log
 
 echo "--- grcov"
