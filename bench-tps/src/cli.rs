@@ -15,6 +15,7 @@ pub struct Config {
     pub num_nodes: usize,
     pub duration: Duration,
     pub tx_count: usize,
+    pub keypair_multiplier: usize,
     pub thread_batch_sleep_ms: usize,
     pub sustained: bool,
     pub client_ids_and_stake_file: String,
@@ -36,6 +37,7 @@ impl Default for Config {
             num_nodes: 1,
             duration: Duration::new(std::u64::MAX, 0),
             tx_count: 50_000,
+            keypair_multiplier: 8,
             thread_batch_sleep_ms: 1000,
             sustained: false,
             client_ids_and_stake_file: String::new(),
@@ -123,6 +125,13 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Number of transactions to send per batch")
         )
         .arg(
+            Arg::with_name("keypair_multiplier")
+                .long("keypair-multiplier")
+                .value_name("NUM")
+                .takes_value(true)
+                .help("Multiply by transaction count to determine number of keypairs to create")
+        )
+        .arg(
             Arg::with_name("thread-batch-sleep-ms")
                 .short("z")
                 .long("thread-batch-sleep-ms")
@@ -208,7 +217,15 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     }
 
     if let Some(s) = matches.value_of("tx_count") {
-        args.tx_count = s.to_string().parse().expect("can't parse tx_account");
+        args.tx_count = s.to_string().parse().expect("can't parse tx_count");
+    }
+
+    if let Some(s) = matches.value_of("keypair_multiplier") {
+        args.keypair_multiplier = s
+            .to_string()
+            .parse()
+            .expect("can't parse keypair-multiplier");
+        assert!(args.keypair_multiplier >= 2);
     }
 
     if let Some(t) = matches.value_of("thread-batch-sleep-ms") {
