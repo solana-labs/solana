@@ -71,22 +71,20 @@ pub fn should_retransmit_and_persist(
 }
 
 fn run_insert(
-    exit: &Arc<AtomicBool>,
     shred_receiver: &CrossbeamReceiver<Vec<Shred>>,
     blocktree: &Arc<Blocktree>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
-    loop {
-        if exit.load(Ordering::Relaxed) {
-            break;
-        }
+    let mut shreds = shred_receiver.recv_timeout(timer)?;
 
-        let shreds = shred_receiver.recv_timeout(timer)?;
-        let blocktree_insert_metrics =
-            blocktree.insert_shreds(shreds, Some(leader_schedule_cache), false)?;
-        blocktree_insert_metrics.report_metrics("recv-window-insert-shreds");
+    while let Ok(mut more_shreds) = shred_receiver.try_recv() {
+        shreds.append(&mut more_shreds)
     }
+
+    let blocktree_insert_metrics =
+        blocktree.insert_shreds(shreds, Some(leader_schedule_cache), false)?;
+    blocktree_insert_metrics.report_metrics("recv-window-insert-shreds");
 
     Ok(())
 }
@@ -269,9 +267,11 @@ impl WindowService {
         Builder::new()
             .name("solana-window-insert".to_string())
             .spawn(move || loop {
-                if let Err(e) =
-                    run_insert(&exit, &insert_receiver, &blocktree, &leader_schedule_cache)
-                {
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                if let Err(e) = run_insert(&insert_receiver, &blocktree, &leader_schedule_cache) {
                     if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                         break;
                     }
