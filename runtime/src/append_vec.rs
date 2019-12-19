@@ -91,15 +91,15 @@ impl Drop for AppendVec {
 impl AppendVec {
     #[allow(clippy::mutex_atomic)]
     pub fn new(file: &Path, create: bool, size: usize) -> Self {
+        let initial_len = 0;
+        AppendVec::sanitize_len_and_size(initial_len, size).unwrap();
+
         if create {
             let _ignored = remove_file(file);
             if let Some(parent) = file.parent() {
                 create_dir_all(parent).expect("Create directory failed");
             }
         }
-
-        let initial_len = 0;
-        AppendVec::sanitize_len_and_size(initial_len, size).unwrap();
 
         let mut data = OpenOptions::new()
             .read(true)
