@@ -98,7 +98,8 @@ impl AppendVec {
             }
         }
 
-        AppendVec::sanitize_mmap_size(size).unwrap();
+        let initial_len = 0;
+        AppendVec::sanitize_len_and_size(initial_len, size).unwrap();
 
         let mut data = OpenOptions::new()
             .read(true)
@@ -137,8 +138,8 @@ impl AppendVec {
             map,
             // This mutex forces append to be single threaded, but concurrent with reads
             // See UNSAFE usage in `append_ptr`
-            append_offset: Mutex::new(0),
-            current_len: AtomicUsize::new(0),
+            append_offset: Mutex::new(initial_len),
+            current_len: AtomicUsize::new(initial_len),
             file_size: size as u64,
         }
     }
@@ -156,16 +157,21 @@ impl AppendVec {
         }
     }
 
-    fn sanitize_mmap_size(size: usize) -> io::Result<()> {
-        if size == 0 {
+    fn sanitize_len_and_size(current_len: usize, file_size: usize) -> io::Result<()> {
+        if file_size == 0 {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("too small file size {} for AppendVec", size),
+                format!("too small file size {} for AppendVec", file_size),
             ))
-        } else if size > MAXIMUM_APPEND_VEC_FILE_SIZE {
+        } else if file_size > MAXIMUM_APPEND_VEC_FILE_SIZE {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("too large file size {} for AppendVec", size),
+                format!("too large file size {} for AppendVec", file_size),
+            ))
+        } else if current_len > file_size {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("current_len is larger than file size ({})", file_size),
             ))
         } else {
             Ok(())
@@ -221,9 +227,7 @@ impl AppendVec {
         assert_eq!(current_len, *self.append_offset.lock().unwrap());
 
         let file_size = std::fs::metadata(&path)?.len();
-        assert!(current_len <= file_size as usize);
-
-        AppendVec::sanitize_mmap_size(file_size as usize)?;
+        AppendVec::sanitize_len_and_size(current_len, file_size as usize)?;
 
         let map = unsafe { MmapMut::map_mut(&data)? };
 
@@ -516,19 +520,30 @@ pub mod tests {
 
     #[test]
     #[should_panic(expected = "too small file size 0 for AppendVec")]
-    fn test_append_vec_sanitize_mmap_file_size_too_small() {
-        AppendVec::sanitize_mmap_size(0).unwrap();
+    fn test_append_vec_sanitize_len_and_size_too_small() {
+        AppendVec::sanitize_len_and_size(0, 0).unwrap();
     }
 
     #[test]
-    fn test_append_vec_sanitize_mmap_file_size_maximum() {
-        AppendVec::sanitize_mmap_size(16 * 1024 * 1024 * 1024).unwrap();
+    fn test_append_vec_sanitize_len_and_size_maximum() {
+        AppendVec::sanitize_len_and_size(0, 16 * 1024 * 1024 * 1024).unwrap();
     }
 
     #[test]
     #[should_panic(expected = "too large file size 17179869185 for AppendVec")]
-    fn test_append_vec_sanitize_mmap_file_size_too_large() {
-        AppendVec::sanitize_mmap_size(16 * 1024 * 1024 * 1024 + 1).unwrap();
+    fn test_append_vec_sanitize_len_and_size_too_large() {
+        AppendVec::sanitize_len_and_size(0, 16 * 1024 * 1024 * 1024 + 1).unwrap();
+    }
+
+    #[test]
+    fn test_append_vec_sanitize_len_and_size_full_and_same_as_current_len() {
+        AppendVec::sanitize_len_and_size(1 * 1024 * 1024, 1 * 1024 * 1024).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "current_len is larger than file size (1048576)")]
+    fn test_append_vec_sanitize_len_and_size_larger_current_len() {
+        AppendVec::sanitize_len_and_size(1 * 1024 * 1024 + 1, 1 * 1024 * 1024).unwrap();
     }
 
     #[test]
