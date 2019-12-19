@@ -51,7 +51,7 @@ snapshot. With that set, the validator can follow the procedure detailed in the
 For the sections below:
 
 Assume an arbitrary `Tower` state `tower`, a `snapshot_root`, and a
-`trusted_bank` (defined in step 7-1 of the `Boot Procedure` section).
+`trusted_bank` (defined in step 8-1 of the `Boot Procedure` section).
 
 Define `tower_vote_slot` to be: The slot of some vote in `tower`.
 
@@ -59,6 +59,21 @@ Define the function `is_ancestor(a, b)` to be: Given a slot `a` and a slot `b`
 will return true if `a` is an ancestor of `b`.
 
 Define the function `is_locked(a, b)` to be: `a + a.lockout <= b`
+
+### Additions to a Snapshot
+
+The snapshot is augmented to store the last `N` ancestors of `snapshot_root`.
+These ancestors are incorporated into the bank hash so they can be verified
+when a validator unpacks a snapshot. Call this set `ancestors`.
+
+A set of votes that can prove lockout on `snapshot_root` is also added to the
+snapshot package. Call this set `snapshot_votes`. The validator generating the
+package will include a set of votes from each validator in the leader schedule.
+For each included validator, the set of votes will be the votes on the fork
+that achieves the highest lockout on `snapshot_root` (up to
+`MAX_LOCKOUT_HISTORY`). The complete vote transaction will be included so that
+the signature is verifiable.  If available, a vote for `snapshot_root` must be
+included to verify `snapshot_root`'s bank hash.
 
 
 ## Boot Procedure:
@@ -82,13 +97,18 @@ order of events when setting a new root is:
 blocktree. If not (there was a crash between 2-1 and 2-2), then rewrite the
 root to blocktree.
 
-4) On startup, the validator boots from the snapshot `snapshot_root`, then
-replays all descendant blocks of `snapshot_root` that exist in this validator's
-ledger, building banks which are then stored in an output `bank_forks`. This is
-done in `blocktree_processor.rs`. The root of this `bank_forks` is set to
+4) On startup, the validator checks that `snapshot_votes` includes votes that
+prove threshold commitment from the trusted validators on `snapshot_root`. See
+the `Trusted Validator Set` section for details. If not, the validator panics
+and different snapshot must be obtained.
+
+5) On startup, the validator boots from the `snapshot_root`, then replays all
+descendant blocks of `snapshot_root` that exist in this validator's ledger,
+building banks which are then stored in an output `bank_forks`. This is done in
+`blocktree_processor.rs`. The root of this `bank_forks` is set to
 `snapshot_root`.
 
-5) On startup, the validator calculates the `first_votable_slot` from which it
+6) On startup, the validator calculates the `first_votable_slot` from which it
 is not locked out for voting. Every validator persists its tower state and must
 consult this state in order to boot safely and resume from a snapshot without
 being slashed. From this tower state and the ancestry information embedded in
@@ -96,24 +116,21 @@ the snapshot, a validator can derive which banks, are "safe" (See the
 `Determining Vote Safety From a Snapshot and Tower` section for more details)
 to vote for.
 
-6) Periodically send canary transactions to the cluster using the validator's
+7) Periodically send canary transactions to the cluster using the validator's
 local recent blockhash.
 
-7) Wait for the following criteria. While waiting, set a new root every time
+8) Wait for the following criteria. While waiting, set a new root every time
 2/3 of the cluster's stake roots a bank. This allows the validator to prune its
 state and also calculate leader schedules as it moves across epochs. Even if
 the validator appears on the leader schedule, it does not produce blocks while
 waiting.
 
-   1) Verify threshold commitment from the trusted validators on
-   `snapshot_root`. See the `Trusted Validator Set` section for details.
-
-   2) Observe a canary transaction in a bank that some threshold of trusted
+   1) Observe a canary transaction in a bank that some threshold of trusted
    validator stake has voted on at least once. Call this `trusted_bank`.
 
-   3) The current working bank has `bank.slot > first_votable_slot`
+   2) The current working bank has `bank.slot > first_votable_slot`
 
-8) Start the normal voting process, voting for any slot that satisfies
+9) Start the normal voting process, voting for any slot that satisfies
 `bank.slot > first_votable_slot`
 
 
@@ -195,11 +212,7 @@ Thus to achieve safety, we want to design the snapshotting system such that the
 
 ## Implementing "Safety Criteria"
 
-The snapshot is augmented to store the last `N` ancestors of `snapshot_root`.
-These ancestors are incorporated into the bank hash so they can be verified
-when a validator unpacks a snapshot. Call this set `ancestors`.
-
-We now implement the "Safety Criteria" in cases:
+We implement the "Safety Criteria" in cases:
 
 ### Case 1: Calculating `is_ancestor(tower_vote_slot, snapshot_descendant)`
 when `tower_vote_slot` < `snapshot_root`:
