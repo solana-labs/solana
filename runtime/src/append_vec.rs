@@ -152,7 +152,7 @@ impl AppendVec {
             map,
             append_offset: Mutex::new(current_len),
             current_len: AtomicUsize::new(current_len),
-            file_size: 0, // will be willed set_file()
+            file_size: 0, // will be filled by set_file()
         }
     }
 
@@ -208,14 +208,14 @@ impl AppendVec {
 
     #[allow(clippy::mutex_atomic)]
     pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+        // this AppendVec must not hold actual file;
+        assert_eq!(self.file_size, 0);
+
         let data = OpenOptions::new()
             .read(true)
             .write(true)
             .create(false)
             .open(&path)?;
-
-        // this AppendVec must not hold actual file;
-        assert_eq!(self.file_size, 0);
 
         let current_len = self.current_len.load(Ordering::Relaxed);
         assert_eq!(current_len, *self.append_offset.lock().unwrap());
@@ -499,7 +499,7 @@ pub mod tests {
 
     #[test]
     #[should_panic(expected = "too small file size 0 for AppendVec")]
-    fn test_append_set_file_bad_size() {
+    fn test_append_vec_set_file_bad_size() {
         let file = get_append_vec_path("test_append_too_bad_size");
         let path = &file.path;
         let mut av = AppendVec::new_empty_map(0);
