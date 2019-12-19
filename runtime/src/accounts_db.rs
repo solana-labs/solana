@@ -2288,9 +2288,9 @@ pub mod tests {
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
         let accounts = &[(&key, &account)];
-        // update AccountsDB's hash state but discard real account hashes
+        // update AccountsDB's bank hash but discard real account hashes
         db.hash_accounts(some_slot, accounts);
-        // provide bogus acount hashes
+        // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
         db.store_with_hashes(some_slot, accounts, &vec![some_hash]);
         db.add_root(some_slot);
