@@ -15,15 +15,10 @@ use solana_client::rpc_request::{
     Response, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule,
     RpcResponseContext, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
-<<<<<<< HEAD
 use solana_drone::drone::request_airdrop_transaction;
-use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
-=======
-use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
     bank_forks::BankForks, blocktree::Blocktree, rooted_slot_iterator::RootedSlotIterator,
 };
->>>>>>> c5b076ec7... Add getConfirmedBlocks rpc method (#7550)
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
@@ -321,11 +316,6 @@ impl JsonRpcRequestProcessor {
         Ok(self.blocktree.get_confirmed_block(slot).ok())
     }
 
-<<<<<<< HEAD
-    // The `get_block_time` method is not fully implemented. It currently returns `slot` *
-    // DEFAULT_MS_PER_SLOT offset from 0 for all requests, and null for any values that would
-    // overflow.
-=======
     pub fn get_confirmed_blocks(
         &self,
         start_slot: Slot,
@@ -349,7 +339,9 @@ impl JsonRpcRequestProcessor {
         }
     }
 
->>>>>>> c5b076ec7... Add getConfirmedBlocks rpc method (#7550)
+    // The `get_block_time` method is not fully implemented. It currently returns `slot` *
+    // DEFAULT_MS_PER_SLOT offset from 0 for all requests, and null for any values that would
+    // overflow.
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         // This calculation currently assumes that bank.ticks_per_slot and bank.slots_per_year will
         // remain unchanged after genesis. If these values will be variable in the future, those
@@ -1072,14 +1064,10 @@ pub mod tests {
         replay_stage::tests::create_test_transactions_and_populate_blocktree,
     };
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
-<<<<<<< HEAD
-    use solana_ledger::get_tmp_ledger_path;
-=======
     use solana_ledger::{
         blocktree::entries_to_test_shreds, blocktree_processor::fill_blocktree_slot_with_ticks,
         entry::next_entry_mut, get_tmp_ledger_path,
     };
->>>>>>> c5b076ec7... Add getConfirmedBlocks rpc method (#7550)
     use solana_sdk::{
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
@@ -1115,17 +1103,13 @@ pub mod tests {
     }
 
     fn start_rpc_handler_with_tx(pubkey: &Pubkey) -> RpcHandler {
-<<<<<<< HEAD
-=======
-        start_rpc_handler_with_tx_and_blocktree(pubkey, vec![], 0)
+        start_rpc_handler_with_tx_and_blocktree(pubkey, vec![])
     }
 
     fn start_rpc_handler_with_tx_and_blocktree(
         pubkey: &Pubkey,
         blocktree_roots: Vec<Slot>,
-        default_timestamp: i64,
     ) -> RpcHandler {
->>>>>>> c5b076ec7... Add getConfirmedBlocks rpc method (#7550)
         let (bank_forks, alice, leader_vote_keypair) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
 
@@ -1155,13 +1139,10 @@ pub mod tests {
             blocktree.clone(),
         );
 
-<<<<<<< HEAD
-=======
         // Add timestamp vote to blocktree
         let vote = Vote {
             slots: vec![1],
             hash: Hash::default(),
-            timestamp: Some(default_timestamp),
         };
         let vote_ix = vote_instruction::vote(
             &leader_vote_keypair.pubkey(),
@@ -1207,7 +1188,6 @@ pub mod tests {
 
         let bank = bank_forks.read().unwrap().working_bank();
 
->>>>>>> c5b076ec7... Add getConfirmedBlocks rpc method (#7550)
         let leader_pubkey = *bank.collector_id();
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
@@ -2057,7 +2037,7 @@ pub mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let roots = vec![0, 1, 3, 4, 8];
         let RpcHandler { io, meta, .. } =
-            start_rpc_handler_with_tx_and_blocktree(&bob_pubkey, roots.clone(), 0);
+            start_rpc_handler_with_tx_and_blocktree(&bob_pubkey, roots.clone());
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}}"#);
