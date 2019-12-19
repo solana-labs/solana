@@ -24,6 +24,7 @@ fn main() {
         id,
         num_nodes,
         tx_count,
+        keypair_multiplier,
         client_ids_and_stake_file,
         write_to_client_file,
         read_from_client_file,
@@ -34,9 +35,10 @@ fn main() {
         ..
     } = &cli_config;
 
+    let keypair_count = *tx_count * keypair_multiplier;
     if *write_to_client_file {
-        info!("Generating {} keypairs", *tx_count * 2);
-        let (keypairs, _) = generate_keypairs(&id, *tx_count as u64 * 2);
+        info!("Generating {} keypairs", keypair_count);
+        let (keypairs, _) = generate_keypairs(&id, keypair_count as u64);
         let num_accounts = keypairs.len() as u64;
         let max_fee =
             FeeCalculator::new(*target_lamports_per_signature, 0).max_lamports_per_signature;
@@ -102,10 +104,10 @@ fn main() {
                 last_balance = primordial_account.balance;
             });
 
-        if keypairs.len() < tx_count * 2 {
+        if keypairs.len() < keypair_count {
             eprintln!(
                 "Expected {} accounts in {}, only received {} (--tx_count mismatch?)",
-                tx_count * 2,
+                keypair_count,
                 client_ids_and_stake_file,
                 keypairs.len(),
             );
@@ -121,7 +123,7 @@ fn main() {
             &client,
             Some(*faucet_addr),
             &id,
-            *tx_count,
+            keypair_count,
             *num_lamports_per_account,
             *use_move,
         )
