@@ -748,9 +748,8 @@ impl Archiver {
             Ok(rpc_client
                 .send(
                     &RpcRequest::GetSlotsPerSegment,
-                    None,
+                    serde_json::json!([client_commitment]),
                     0,
-                    Some(client_commitment),
                 )
                 .map_err(|err| {
                     warn!("Error while making rpc request {:?}", err);
@@ -803,7 +802,11 @@ impl Archiver {
                     RpcClient::new_socket(rpc_peers[node_index].rpc)
                 };
                 let response = rpc_client
-                    .send(&RpcRequest::GetStorageTurn, None, 0, None)
+                    .send(
+                        &RpcRequest::GetStorageTurn,
+                        serde_json::value::Value::Null,
+                        0,
+                    )
                     .map_err(|err| {
                         warn!("Error while making rpc request {:?}", err);
                         Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))

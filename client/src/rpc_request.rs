@@ -2,7 +2,6 @@ use jsonrpc_core::Result as JsonResult;
 use serde_json::{json, Value};
 use solana_sdk::{
     clock::{Epoch, Slot},
-    commitment_config::CommitmentConfig,
     hash::Hash,
     transaction::{Result, Transaction},
 };
@@ -149,12 +148,7 @@ pub enum RpcRequest {
 }
 
 impl RpcRequest {
-    pub(crate) fn build_request_json(
-        &self,
-        id: u64,
-        params: Option<Value>,
-        commitment_config: Option<CommitmentConfig>,
-    ) -> Value {
+    pub(crate) fn build_request_json(&self, id: u64, params: Value) -> Value {
         let jsonrpc = "2.0";
         let method = match self {
             RpcRequest::ConfirmTransaction => "confirmTransaction",
@@ -190,21 +184,12 @@ impl RpcRequest {
             RpcRequest::SignVote => "signVote",
             RpcRequest::GetMinimumBalanceForRentExemption => "getMinimumBalanceForRentExemption",
         };
-        let mut request = json!({
+        json!({
            "jsonrpc": jsonrpc,
            "id": id,
            "method": method,
-        });
-        if let Some(param_string) = params {
-            if let Some(config) = commitment_config {
-                request["params"] = json!([param_string, config]);
-            } else {
-                request["params"] = json!([param_string]);
-            }
-        } else if let Some(config) = commitment_config {
-            request["params"] = json!([config]);
-        }
-        request
+           "params": params,
+        })
     }
 }
 
@@ -233,46 +218,46 @@ impl error::Error for RpcError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::commitment_config::CommitmentLevel;
+    use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 
     #[test]
     fn test_build_request_json() {
         let test_request = RpcRequest::GetAccountInfo;
         let addr = json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx");
-        let request = test_request.build_request_json(1, Some(addr.clone()), None);
+        let request = test_request.build_request_json(1, json!([addr.clone()]));
         assert_eq!(request["method"], "getAccountInfo");
         assert_eq!(request["params"], json!([addr]));
 
         let test_request = RpcRequest::GetBalance;
-        let request = test_request.build_request_json(1, Some(addr), None);
+        let request = test_request.build_request_json(1, json!([addr]));
         assert_eq!(request["method"], "getBalance");
 
         let test_request = RpcRequest::GetEpochInfo;
-        let request = test_request.build_request_json(1, None, None);
+        let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getEpochInfo");
 
         let test_request = RpcRequest::GetInflation;
-        let request = test_request.build_request_json(1, None, None);
+        let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getInflation");
 
         let test_request = RpcRequest::GetRecentBlockhash;
-        let request = test_request.build_request_json(1, None, None);
+        let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getRecentBlockhash");
 
         let test_request = RpcRequest::GetSlot;
-        let request = test_request.build_request_json(1, None, None);
+        let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getSlot");
 
         let test_request = RpcRequest::GetTransactionCount;
-        let request = test_request.build_request_json(1, None, None);
+        let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getTransactionCount");
 
         let test_request = RpcRequest::RequestAirdrop;
-        let request = test_request.build_request_json(1, None, None);
+        let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "requestAirdrop");
 
         let test_request = RpcRequest::SendTransaction;
-        let request = test_request.build_request_json(1, None, None);
+        let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "sendTransaction");
     }
 
@@ -285,13 +270,13 @@ mod tests {
 
         // Test request with CommitmentConfig and no params
         let test_request = RpcRequest::GetRecentBlockhash;
-        let request = test_request.build_request_json(1, None, Some(commitment_config.clone()));
+        let request = test_request.build_request_json(1, json!([commitment_config.clone()]));
         assert_eq!(request["params"], json!([commitment_config.clone()]));
 
         // Test request with CommitmentConfig and params
         let test_request = RpcRequest::GetBalance;
         let request =
-            test_request.build_request_json(1, Some(addr.clone()), Some(commitment_config.clone()));
+            test_request.build_request_json(1, json!([addr.clone(), commitment_config.clone()]));
         assert_eq!(request["params"], json!([addr, commitment_config]));
     }
 }

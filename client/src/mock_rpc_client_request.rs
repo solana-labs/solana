@@ -5,7 +5,6 @@ use crate::{
 };
 use serde_json::{Number, Value};
 use solana_sdk::{
-    commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     instruction::InstructionError,
     transaction::{self, TransactionError},
@@ -29,17 +28,16 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
     fn send(
         &self,
         request: &RpcRequest,
-        params: Option<serde_json::Value>,
+        params: serde_json::Value,
         _retries: usize,
-        _commitment_config: Option<CommitmentConfig>,
     ) -> Result<serde_json::Value, ClientError> {
         if self.url == "fails" {
             return Ok(Value::Null);
         }
         let val = match request {
             RpcRequest::ConfirmTransaction => {
-                if let Some(Value::Array(param_array)) = params {
-                    if let Value::String(param_string) = &param_array[0] {
+                if let Some(params_array) = params.as_array() {
+                    if let Value::String(param_string) = &params_array[0] {
                         Value::Bool(param_string == SIGNATURE)
                     } else {
                         Value::Null
