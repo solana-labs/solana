@@ -39,6 +39,7 @@
   * [Installation](paper-wallet/installation.md)
   * [Creating and Using a Seed Phrase](paper-wallet/keypair.md)
   * [Paper Wallet Usage](paper-wallet/usage.md)
+* [Offline Signing](offline-signing/README.md)
 * [API Reference](api-reference/README.md)
   * [Transaction](api-reference/transaction-api.md)
   * [Instruction](api-reference/instruction-api.md)
