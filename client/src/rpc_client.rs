@@ -5,8 +5,8 @@ use crate::{
     mock_rpc_client_request::MockRpcClientRequest,
     rpc_client_request::RpcClientRequest,
     rpc_request::{
-        RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule, RpcRequest, RpcVersionInfo,
-        RpcVoteAccountStatus,
+        RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule, RpcRequest,
+        RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -190,6 +190,52 @@ impl RpcClient {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetClusterNodes parse failure: {}", err),
+            )
+        })
+    }
+
+    pub fn get_confirmed_block(&self, slot: Slot) -> io::Result<RpcConfirmedBlock> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetConfirmedBlock, json!([slot]), 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetConfirmedBlock request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetConfirmedBlock parse failure: {}", err),
+            )
+        })
+    }
+
+    pub fn get_confirmed_blocks(
+        &self,
+        start_slot: Slot,
+        end_slot: Option<Slot>,
+    ) -> io::Result<Vec<Slot>> {
+        let response = self
+            .client
+            .send(
+                &RpcRequest::GetConfirmedBlocks,
+                json!([start_slot, end_slot]),
+                0,
+            )
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetConfirmedBlocks request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetConfirmedBlocks parse failure: {}", err),
             )
         })
     }
