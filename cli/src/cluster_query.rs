@@ -450,14 +450,6 @@ pub fn process_show_block_production(
     progress_bar.set_message("Connecting...");
     progress_bar.set_message(&format!("Fetching leader schedule for epoch {}...", epoch));
 
-    let leader_schedule = rpc_client
-        .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::max())?;
-
-    if leader_schedule.is_none() {
-        return Err(format!("Unable to fetch leader schedule for slot {}", start_slot).into());
-    }
-    let leader_schedule = leader_schedule.unwrap();
-
     progress_bar.set_message(&format!(
         "Fetching confirmed blocks between slots {} and {}...",
         start_slot, end_slot
@@ -466,37 +458,53 @@ pub fn process_show_block_production(
 
     let total_slots = (end_slot - start_slot + 1) as usize;
     let total_blocks = confirmed_blocks.len();
+    assert!(total_blocks <= total_slots);
     let total_slots_missed = total_slots - total_blocks;
     let mut leader_slot_count = HashMap::new();
     let mut leader_missed_slots = HashMap::new();
 
-    for slot_index in 0..total_slots {
-        let leader = {
-            let mut leader = None;
-            for (pubkey, leader_slots) in leader_schedule.iter() {
-                if leader_slots.contains(&slot_index) {
-                    leader = Some(pubkey);
+    let leader_schedule = rpc_client
+        .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::max())?;
+    if leader_schedule.is_none() {
+        return Err(format!("Unable to fetch leader schedule for slot {}", start_slot).into());
+    }
+    let leader_schedule = leader_schedule.unwrap();
+
+    let mut leader_per_slot_index = Vec::new();
+    leader_per_slot_index.resize(total_slots, "");
+    for (pubkey, leader_slots) in leader_schedule.iter() {
+        for slot_index in leader_slots.iter() {
+            if *slot_index < total_slots {
+                leader_per_slot_index[*slot_index] = pubkey;
+            }
+        }
+    }
+
+    progress_bar.set_message(&format!(
+        "Processing {} slots containing {} blocks and {} empty slots...",
+        total_slots, total_blocks, total_slots_missed
+    ));
+
+    let mut confirmed_blocks_index = 0;
+    for (slot_index, leader) in leader_per_slot_index.iter().enumerate().take(total_slots) {
+        let slot = start_slot + slot_index as u64;
+        let slot_count = leader_slot_count.entry(leader).or_insert(0);
+        *slot_count += 1;
+        let missed_slots = leader_missed_slots.entry(leader).or_insert(0);
+
+        loop {
+            if !confirmed_blocks.is_empty() {
+                let slot_of_next_confirmed_block = confirmed_blocks[confirmed_blocks_index];
+                if slot_of_next_confirmed_block < slot {
+                    confirmed_blocks_index += 1;
+                    continue;
+                }
+                if slot_of_next_confirmed_block == slot {
                     break;
                 }
             }
-            leader.unwrap()
-        };
-
-        let slot = start_slot + slot_index as u64;
-        let remaining_slots = total_slots - slot_index;
-        progress_bar.set_message(&format!(
-            "Checking slot {} ({:.}% done, {} slots remaining)...",
-            slot,
-            100 * slot_index / total_slots,
-            remaining_slots,
-        ));
-        let slot_count = leader_slot_count.entry(leader).or_insert(0);
-        *slot_count += 1;
-
-        let missed_slots = leader_missed_slots.entry(leader).or_insert(0);
-
-        if !confirmed_blocks.contains(&slot) {
             *missed_slots += 1;
+            break;
         }
     }
 
@@ -514,21 +522,24 @@ pub fn process_show_block_production(
         .bold()
     );
 
+    let mut table = vec![];
     for (leader, leader_slots) in leader_slot_count.iter() {
         let missed_slots = leader_missed_slots.get(leader).unwrap();
         let blocks_produced = leader_slots - missed_slots;
-        println!(
+        table.push(format!(
             "  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
             leader,
             leader_slots,
             blocks_produced,
             missed_slots,
             *missed_slots as f64 / *leader_slots as f64 * 100.
-        );
+        ));
     }
+    table.sort();
 
     println!(
-        "\n  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
+        "{}\n\n  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
+        table.join("\n"),
         format!("Epoch {} total:", epoch),
         total_slots,
         total_blocks,
