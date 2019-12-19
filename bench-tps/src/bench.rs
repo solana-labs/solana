@@ -427,8 +427,7 @@ fn poll_blockhash<T: Client>(
             break;
         }
 
-        // Wait a slot before checking again
-        sleep(Duration::from_millis(400));
+        sleep(Duration::from_millis(50));
     }
 }
 
