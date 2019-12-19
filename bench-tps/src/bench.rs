@@ -24,6 +24,7 @@ use std::{
     cmp,
     collections::VecDeque,
     net::SocketAddr,
+    process::exit,
     sync::{
         atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
         Arc, RwLock,
@@ -411,7 +412,10 @@ fn poll_blockhash<T: Client>(
                 blockhash_last_updated = Instant::now();
                 true
             } else {
-                if blockhash_last_updated.elapsed().as_secs() > 30 {
+                if blockhash_last_updated.elapsed().as_secs() > 120 {
+                    eprintln!("Blockhash is stuck");
+                    exit(1)
+                } else if blockhash_last_updated.elapsed().as_secs() > 30 {
                     error!("Blockhash is not updating");
                 }
                 false
