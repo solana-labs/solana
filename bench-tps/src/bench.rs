@@ -404,6 +404,7 @@ fn poll_blockhash<T: Client>(
     id: &Pubkey,
 ) {
     let mut blockhash_last_updated = Instant::now();
+    let mut last_error_log = Instant::now();
     loop {
         let blockhash_updated = {
             let old_blockhash = *blockhash.read().unwrap();
@@ -416,7 +417,10 @@ fn poll_blockhash<T: Client>(
                     eprintln!("Blockhash is stuck");
                     exit(1)
                 } else if blockhash_last_updated.elapsed().as_secs() > 30 {
-                    error!("Blockhash is not updating");
+                    if last_error_log.elapsed().as_secs() >= 1 {
+                        last_error_log = Instant::now();
+                        error!("Blockhash is not updating");
+                    }
                 }
                 false
             }
