@@ -128,7 +128,6 @@ impl AppendVec {
         data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
         data.write_all(&[0]).unwrap();
         data.seek(SeekFrom::Start(0)).unwrap();
-        //data.set_len(size as u64);
         data.flush().unwrap();
         //UNSAFE: Required to create a Mmap
         let map = unsafe { MmapMut::map_mut(&data).expect("failed to map the data file") };
