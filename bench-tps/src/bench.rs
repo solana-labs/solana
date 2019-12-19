@@ -24,6 +24,7 @@ use std::{
     cmp,
     collections::VecDeque,
     net::SocketAddr,
+    process::exit,
     sync::{
         atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
         Arc, RwLock,
@@ -402,29 +403,39 @@ fn poll_blockhash<T: Client>(
     client: &Arc<T>,
     id: &Pubkey,
 ) {
-    let mut blockhash_time;
+    let mut blockhash_last_updated = Instant::now();
+    let mut last_error_log = Instant::now();
     loop {
-        blockhash_time = Instant::now();
-        loop {
+        let blockhash_updated = {
             let old_blockhash = *blockhash.read().unwrap();
             if let Ok((new_blockhash, _fee)) = client.get_new_blockhash(&old_blockhash) {
                 *blockhash.write().unwrap() = new_blockhash;
-                break;
+                blockhash_last_updated = Instant::now();
+                true
             } else {
-                if blockhash_time.elapsed().as_secs() > 30 {
-                    panic!("Blockhash is not updating");
+                if blockhash_last_updated.elapsed().as_secs() > 120 {
+                    eprintln!("Blockhash is stuck");
+                    exit(1)
+                } else if blockhash_last_updated.elapsed().as_secs() > 30
+                    && last_error_log.elapsed().as_secs() >= 1
+                {
+                    last_error_log = Instant::now();
+                    error!("Blockhash is not updating");
                 }
-                sleep(Duration::from_millis(50));
-                continue;
+                false
             }
-        }
+        };
 
-        let balance = client.get_balance(id).unwrap_or(0);
-        metrics_submit_lamport_balance(balance);
+        if blockhash_updated {
+            let balance = client.get_balance(id).unwrap_or(0);
+            metrics_submit_lamport_balance(balance);
+        }
 
         if exit_signal.load(Ordering::Relaxed) {
             break;
         }
+
+        sleep(Duration::from_millis(50));
     }
 }
 
