@@ -287,7 +287,7 @@ pub struct CliConfig {
     pub keypair: Keypair,
     pub keypair_path: Option<String>,
     pub rpc_client: Option<RpcClient>,
-    pub print_header: bool,
+    pub verbose: bool,
 }
 
 impl CliConfig {
@@ -313,7 +313,7 @@ impl Default for CliConfig {
             keypair: Keypair::new(),
             keypair_path: Some(Self::default_keypair_path()),
             rpc_client: None,
-            print_header: true,
+            verbose: false,
         }
     }
 }
@@ -1073,13 +1073,9 @@ fn process_witness(
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
-    if config.print_header {
+    if config.verbose {
         if let Some(keypair_path) = &config.keypair_path {
             println_name_value("Keypair:", keypair_path);
-        }
-        if let CliCommand::Address = config.command {
-            // Get address of this client
-            return Ok(format!("{}", config.keypair.pubkey()));
         }
         println_name_value("RPC Endpoint:", &config.json_rpc_url);
     }
@@ -1095,6 +1091,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
     match &config.command {
         // Cluster Query Commands
+        // Get address of this client
+        CliCommand::Address => Ok(format!("{}", config.keypair.pubkey())),
 
         // Return software version of solana-cli and cluster entrypoint node
         CliCommand::Catchup { node_pubkey } => process_catchup(&rpc_client, node_pubkey),
@@ -1383,8 +1381,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Wallet Commands
 
-        // Get address of this client
-        CliCommand::Address => unreachable!(),
         // Request an airdrop from Solana Faucet;
         CliCommand::Airdrop {
             faucet_host,
@@ -2460,6 +2456,7 @@ mod tests {
             withdrawer: None,
             lockup: Lockup {
                 epoch: 0,
+                unix_timestamp: 0,
                 custodian,
             },
             lamports: 1234,

@@ -133,15 +133,13 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
         (default.keypair, None)
     };
 
-    let print_header = !matches.is_present("no_header");
-
     Ok(CliConfig {
         command,
         json_rpc_url,
         keypair,
         keypair_path,
         rpc_client: None,
-        print_header,
+        verbose: matches.is_present("verbose"),
     })
 }
 
@@ -186,10 +184,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .help("/path/to/id.json"),
     )
     .arg(
-        Arg::with_name("no_header")
-            .long("no-header")
+        Arg::with_name("verbose")
+            .long("verbose")
+            .short("v")
             .global(true)
-            .help("Disable information header"),
+            .help("Show extra information header"),
     )
     .arg(
         Arg::with_name(ASK_SEED_PHRASE_ARG.name)
