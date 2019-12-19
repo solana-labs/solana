@@ -3,9 +3,9 @@
 //! this account carries the Bank's most recent blockhashes for some N parents
 //!
 use crate::hash::Hash;
-use std::ops::Deref;
+use std::{iter::FromIterator, ops::Deref};
 
-pub const MAX_SLOT_HASHES: usize = 512; // 512 slots to get your vote in
+pub const MAX_SLOT_HASHES: usize = 512; // about 2.5 minutes to get your vote in
 
 pub use crate::clock::Slot;
 
@@ -17,7 +17,7 @@ pub struct SlotHashes(Vec<SlotHash>);
 
 impl SlotHashes {
     pub fn add(&mut self, slot: Slot, hash: Hash) {
-        match self.binary_search_by(|probe| slot.cmp(&probe.0)) {
+        match self.binary_search_by(|(probe, _)| slot.cmp(&probe)) {
             Ok(index) => (self.0)[index] = (slot, hash),
             Err(index) => (self.0).insert(index, (slot, hash)),
         }
@@ -25,14 +25,20 @@ impl SlotHashes {
     }
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn get(&self, slot: &Slot) -> Option<&Hash> {
-        self.binary_search_by(|probe| slot.cmp(&probe.0))
+        self.binary_search_by(|(probe, _)| slot.cmp(&probe))
             .ok()
             .map(|index| &self[index].1)
     }
     pub fn new(slot_hashes: &[SlotHash]) -> Self {
         let mut slot_hashes = slot_hashes.to_vec();
-        slot_hashes.sort_by(|a, b| b.0.cmp(&a.0)); // reverse order
+        slot_hashes.sort_by(|(a, _), (b, _)| b.cmp(a));
         Self(slot_hashes)
+    }
+}
+
+impl FromIterator<(Slot, Hash)> for SlotHashes {
+    fn from_iter<I: IntoIterator<Item = (Slot, Hash)>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
     }
 }
 
