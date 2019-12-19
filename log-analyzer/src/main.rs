@@ -53,6 +53,7 @@ impl LogLine {
 impl Sub for &LogLine {
     type Output = String;
 
+    #[allow(clippy::comparison_chain)]
     fn sub(self, rhs: Self) -> Self::Output {
         let a_to_b = Byte::from_str(&self.a_to_b)
             .expect("Failed to read a_to_b bytes")
@@ -94,7 +95,7 @@ fn map_ip_address(mappings: &[IPAddrMapping], target: String) -> String {
             return target.replace(&mapping.private, mapping.public.as_str());
         }
     }
-    target.to_string()
+    target
 }
 
 fn process_iftop_logs(matches: &ArgMatches) {

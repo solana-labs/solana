@@ -119,13 +119,13 @@ impl Tvu {
         let sigverify_stage = if !sigverify_disabled {
             SigVerifyStage::new(
                 fetch_receiver,
-                verified_sender.clone(),
+                verified_sender,
                 ShredSigVerifier::new(bank_forks.clone(), leader_schedule_cache.clone()),
             )
         } else {
             SigVerifyStage::new(
                 fetch_receiver,
-                verified_sender.clone(),
+                verified_sender,
                 DisabledSigVerifier::default(),
             )
         };

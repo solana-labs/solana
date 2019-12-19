@@ -96,7 +96,7 @@ impl Message {
             ),
         }
     }
-
+    #[allow(clippy::missing_safety_doc)]
     pub unsafe fn into_native(self) -> MessageNative {
         MessageNative {
             header: self.header.into_native(),
@@ -109,7 +109,7 @@ impl Message {
         }
     }
 
-    #[allow(clippy::should_implement_trait)]
+    #[allow(clippy::should_implement_trait, clippy::missing_safety_doc)]
     pub unsafe fn clone(&self) -> Self {
         Self {
             header: self.header.clone(),
@@ -143,6 +143,7 @@ impl CompiledInstruction {
         }
     }
 
+    #[allow(clippy::missing_safety_doc)]
     pub unsafe fn into_native(self) -> CompiledInstructionNative {
         CompiledInstructionNative {
             program_id_index: self.program_id_index,
@@ -151,7 +152,7 @@ impl CompiledInstruction {
         }
     }
 
-    #[allow(clippy::should_implement_trait)]
+    #[allow(clippy::should_implement_trait, clippy::missing_safety_doc)]
     pub unsafe fn clone(&self) -> Self {
         Self {
             program_id_index: self.program_id_index,
@@ -256,13 +257,14 @@ impl<T> CVec<T> {
         out
     }
 
+    #[allow(clippy::missing_safety_doc)]
     pub unsafe fn into_native(self) -> Vec<T> {
         Vec::from_raw_parts(self.data, self.len, self.capacity)
     }
 }
 
 impl<T: Clone> CVec<T> {
-    #[allow(clippy::should_implement_trait)]
+    #[allow(clippy::should_implement_trait, clippy::missing_safety_doc)]
     pub unsafe fn clone(&self) -> Self {
         let native = Vec::from_raw_parts(self.data, self.len, self.capacity);
         let mut new: Vec<T> = Vec::with_capacity(native.capacity());
@@ -273,7 +275,7 @@ impl<T: Clone> CVec<T> {
 }
 
 impl CVec<CompiledInstruction> {
-    #[allow(clippy::should_implement_trait)]
+    #[allow(clippy::should_implement_trait, clippy::missing_safety_doc)]
     pub unsafe fn clone(&self) -> Self {
         let native = Vec::from_raw_parts(self.data, self.len, self.capacity);
         let mut new: Vec<CompiledInstruction> = Vec::with_capacity(native.capacity());

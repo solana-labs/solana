@@ -214,7 +214,7 @@ pub fn process_claim_storage_reward(
         &tx.message,
     )?;
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &signers)?;
-    Ok(signature_str.to_string())
+    Ok(signature_str)
 }
 
 pub fn process_show_storage_account(
@@ -225,17 +225,16 @@ pub fn process_show_storage_account(
     let account = rpc_client.get_account(storage_account_pubkey)?;
 
     if account.owner != solana_storage_program::id() {
-        return Err(CliError::RpcRequestError(
-            format!("{:?} is not a storage account", storage_account_pubkey).to_string(),
-        )
+        return Err(CliError::RpcRequestError(format!(
+            "{:?} is not a storage account",
+            storage_account_pubkey
+        ))
         .into());
     }
 
     use solana_storage_program::storage_contract::StorageContract;
     let storage_contract: StorageContract = account.state().map_err(|err| {
-        CliError::RpcRequestError(
-            format!("Unable to deserialize storage account: {:?}", err).to_string(),
-        )
+        CliError::RpcRequestError(format!("Unable to deserialize storage account: {:?}", err))
     })?;
     println!("{:#?}", storage_contract);
     println!("account lamports: {}", account.lamports);

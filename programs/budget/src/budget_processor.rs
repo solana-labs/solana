@@ -125,7 +125,7 @@ pub fn process_instruction(
     match instruction {
         BudgetInstruction::InitializeAccount(expr) => {
             let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let expr = expr.clone();
+
             if let Some(payment) = expr.final_payment() {
                 let to_keyed_account = contract_keyed_account;
                 let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;

@@ -162,7 +162,6 @@ fn main() {
         // If it is dropped before poh_service, then poh_service will error when
         // calling send() on the channel.
         let signal_receiver = Arc::new(signal_receiver);
-        let signal_receiver2 = signal_receiver.clone();
         let mut total = 0;
         let mut tx_total = 0;
         let mut txs_processed = 0;
@@ -215,7 +214,7 @@ fn main() {
                     sleep(Duration::from_millis(5));
                 }
             }
-            if check_txs(&signal_receiver2, txes / CHUNKS, &poh_recorder) {
+            if check_txs(&signal_receiver, txes / CHUNKS, &poh_recorder) {
                 debug!(
                     "resetting bank {} tx count: {} txs_proc: {}",
                     bank.slot(),

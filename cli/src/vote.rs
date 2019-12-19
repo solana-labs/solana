@@ -402,9 +402,10 @@ fn get_vote_account(
     let vote_account = rpc_client.get_account(vote_account_pubkey)?;
 
     if vote_account.owner != solana_vote_program::id() {
-        return Err(CliError::RpcRequestError(
-            format!("{:?} is not a vote account", vote_account_pubkey).to_string(),
-        )
+        return Err(CliError::RpcRequestError(format!(
+            "{:?} is not a vote account",
+            vote_account_pubkey
+        ))
         .into());
     }
     let vote_state = VoteState::deserialize(&vote_account.data).map_err(|_| {

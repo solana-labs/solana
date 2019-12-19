@@ -95,7 +95,7 @@ impl JsonRpcRequestProcessor {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blocktree: Arc<Blocktree>,
         storage_state: StorageState,
-        validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
+        validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         JsonRpcRequestProcessor {
             config,
@@ -103,7 +103,7 @@ impl JsonRpcRequestProcessor {
             block_commitment_cache,
             blocktree,
             storage_state,
-            validator_exit: validator_exit.clone(),
+            validator_exit,
         }
     }
 
@@ -1207,7 +1207,7 @@ pub mod tests {
             block_commitment_cache.clone(),
             blocktree,
             StorageState::default(),
-            &validator_exit,
+            validator_exit,
         )));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::default(),
@@ -1259,7 +1259,7 @@ pub mod tests {
             block_commitment_cache,
             Arc::new(blocktree),
             StorageState::default(),
-            &validator_exit,
+            validator_exit,
         );
         thread::spawn(move || {
             let blockhash = bank.confirmed_last_blockhash().0;
@@ -1756,7 +1756,7 @@ pub mod tests {
                     block_commitment_cache,
                     Arc::new(blocktree),
                     StorageState::default(),
-                    &validator_exit,
+                    validator_exit,
                 );
                 Arc::new(RwLock::new(request_processor))
             },
@@ -1854,7 +1854,7 @@ pub mod tests {
             block_commitment_cache,
             Arc::new(blocktree),
             StorageState::default(),
-            &validator_exit,
+            validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -1875,7 +1875,7 @@ pub mod tests {
             block_commitment_cache,
             Arc::new(blocktree),
             StorageState::default(),
-            &validator_exit,
+            validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
@@ -1928,7 +1928,7 @@ pub mod tests {
             block_commitment_cache,
             Arc::new(blocktree),
             StorageState::default(),
-            &validator_exit,
+            validator_exit,
         );
         assert_eq!(
             request_processor.get_block_commitment(0),

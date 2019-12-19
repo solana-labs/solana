@@ -324,7 +324,7 @@ lazy_static! {
     static ref HOST_ID: Arc<RwLock<String>> = {
         Arc::new(RwLock::new({
             let hostname: String = hostname().unwrap_or_else(|_| "".to_string());
-            format!("{}", hash(hostname.as_bytes())).to_string()
+            format!("{}", hash(hostname.as_bytes()))
         }))
     };
 }
@@ -372,8 +372,7 @@ fn get_metrics_config() -> Result<MetricsConfig, String> {
     let mut config = MetricsConfig::default();
 
     let config_var = env::var("SOLANA_METRICS_CONFIG")
-        .map_err(|err| format!("SOLANA_METRICS_CONFIG: {}", err))?
-        .to_string();
+        .map_err(|err| format!("SOLANA_METRICS_CONFIG: {}", err))?;
 
     for pair in config_var.split(',') {
         let nv: Vec<_> = pair.split('=').collect();
@@ -397,7 +396,7 @@ fn get_metrics_config() -> Result<MetricsConfig, String> {
 }
 
 pub fn query(q: &str) -> Result<String, String> {
-    let config = get_metrics_config().map_err(|err| err.to_string())?;
+    let config = get_metrics_config().map_err(|err| err)?;
     let query_url = format!(
         "{}/query?u={}&p={}&q={}",
         &config.host, &config.username, &config.password, &q

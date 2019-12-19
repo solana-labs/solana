@@ -345,7 +345,10 @@ mod tests {
             let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
             let expected_res_str =
                 serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":{},"subscription":0}}}}"#, expected_res_str);
+            let expected = format!(
+                r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":{},"subscription":0}}}}"#,
+                expected_res_str
+            );
             assert_eq!(expected, response);
         }
     }
@@ -389,7 +392,9 @@ mod tests {
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[1]}}"#);
         let res = io.handle_request_sync(&req, session.clone());
-        let expected = format!(r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#);
+        let expected = format!(
+            r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#
+        );
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
@@ -529,7 +534,9 @@ mod tests {
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[1]}}"#);
         let res = io.handle_request_sync(&req, session.clone());
-        let expected = format!(r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#);
+        let expected = format!(
+            r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#
+        );
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
@@ -640,7 +647,10 @@ mod tests {
             };
             let expected_res_str =
                 serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#, expected_res_str);
+            let expected = format!(
+                r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
+                expected_res_str
+            );
             assert_eq!(expected, response);
         }
     }
@@ -662,7 +672,10 @@ mod tests {
             };
             let expected_res_str =
                 serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#, expected_res_str);
+            let expected = format!(
+                r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
+                expected_res_str
+            );
             assert_eq!(expected, response);
         }
 

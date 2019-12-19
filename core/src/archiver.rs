@@ -146,7 +146,7 @@ fn create_request_processor(
     let t_receiver = receiver(storage_socket.clone(), exit, s_reader, recycler, "archiver");
     thread_handles.push(t_receiver);
 
-    let t_responder = responder("archiver-responder", storage_socket.clone(), r_responder);
+    let t_responder = responder("archiver-responder", storage_socket, r_responder);
     thread_handles.push(t_responder);
 
     let exit = exit.clone();
@@ -428,7 +428,7 @@ impl Archiver {
                             "collected mining rewards: Account balance {:?}",
                             client.get_balance_with_commitment(
                                 &archiver_keypair.pubkey(),
-                                client_commitment.clone()
+                                client_commitment
                             )
                         );
                     }
@@ -493,7 +493,7 @@ impl Archiver {
 
         let _sigverify_stage = SigVerifyStage::new(
             shred_fetch_receiver,
-            verified_sender.clone(),
+            verified_sender,
             DisabledSigVerifier::default(),
         );
 
@@ -650,7 +650,7 @@ impl Archiver {
             let tx = Transaction::new_signed_instructions(&[keypair], ix, blockhash);
             let signature = client.async_send_transaction(tx)?;
             client
-                .poll_for_signature_with_commitment(&signature, client_commitment.clone())
+                .poll_for_signature_with_commitment(&signature, client_commitment)
                 .map_err(|err| match err {
                     TransportError::IoError(e) => e,
                     TransportError::TransactionError(_) => io::Error::new(
@@ -866,7 +866,7 @@ impl Archiver {
         let t_receiver = receiver(
             repair_socket.clone(),
             &exit,
-            s_reader.clone(),
+            s_reader,
             Recycler::default(),
             "archiver_reeciver",
         );

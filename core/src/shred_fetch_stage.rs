@@ -51,7 +51,7 @@ impl ShredFetchStage {
                 )
             })
             .collect();
-        let sender = sender.clone();
+
         let modifier_hdl = Builder::new()
             .name("solana-tvu-fetch-stage-packet-modifier".to_string())
             .spawn(|| Self::modify_packets(packet_receiver, sender, modify))
