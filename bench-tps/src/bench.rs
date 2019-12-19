@@ -416,11 +416,11 @@ fn poll_blockhash<T: Client>(
                 if blockhash_last_updated.elapsed().as_secs() > 120 {
                     eprintln!("Blockhash is stuck");
                     exit(1)
-                } else if blockhash_last_updated.elapsed().as_secs() > 30 {
-                    if last_error_log.elapsed().as_secs() >= 1 {
-                        last_error_log = Instant::now();
-                        error!("Blockhash is not updating");
-                    }
+                } else if blockhash_last_updated.elapsed().as_secs() > 30
+                    && last_error_log.elapsed().as_secs() >= 1
+                {
+                    last_error_log = Instant::now();
+                    error!("Blockhash is not updating");
                 }
                 false
             }
