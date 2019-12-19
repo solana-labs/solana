@@ -337,7 +337,7 @@ const SlotNotificationResult = struct({
  * Expected JSON RPC response for the "getProgramAccounts" message
  */
 const GetProgramAccountsRpcResult = jsonRpcResult(
-  struct.list([ProgramAccountInfoResult]),
+  struct.array([ProgramAccountInfoResult]),
 );
 
 /**
@@ -361,7 +361,7 @@ const GetSlotLeader = jsonRpcResult('string');
  * Expected JSON RPC response for the "getClusterNodes" message
  */
 const GetClusterNodes = jsonRpcResult(
-  struct.list([
+  struct.array([
     struct({
       pubkey: 'string',
       gossip: 'string',
@@ -376,13 +376,13 @@ const GetClusterNodes = jsonRpcResult(
  */
 const GetVoteAccounts = jsonRpcResult(
   struct({
-    current: struct.list([
+    current: struct.array([
       struct({
         votePubkey: 'string',
         nodePubkey: 'string',
         activatedStake: 'number',
         epochVoteAccount: 'boolean',
-        epochCredits: struct.list([
+        epochCredits: struct.array([
           struct.tuple(['number', 'number', 'number']),
         ]),
         commission: 'number',
@@ -390,13 +390,13 @@ const GetVoteAccounts = jsonRpcResult(
         rootSlot: 'number?',
       }),
     ]),
-    delinquent: struct.list([
+    delinquent: struct.array([
       struct({
         votePubkey: 'string',
         nodePubkey: 'string',
         activatedStake: 'number',
         epochVoteAccount: 'boolean',
-        epochCredits: struct.list([
+        epochCredits: struct.array([
           struct.tuple(['number', 'number', 'number']),
         ]),
         commission: 'number',
@@ -440,22 +440,22 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
     blockhash: 'string',
     previousBlockhash: 'string',
     parentSlot: 'number',
-    transactions: struct.list([
+    transactions: struct.array([
       struct.tuple([
         struct({
-          signatures: struct.list(['string']),
+          signatures: struct.array(['string']),
           message: struct({
-            accountKeys: struct.list(['string']),
+            accountKeys: struct.array(['string']),
             header: struct({
               numRequiredSignatures: 'number',
               numReadonlySignedAccounts: 'number',
               numReadonlyUnsignedAccounts: 'number',
             }),
-            instructions: struct.list([
+            instructions: struct.array([
               struct.union([
-                struct.list(['number']),
+                struct.array(['number']),
                 struct({
-                  accounts: struct.list(['number']),
+                  accounts: struct.array(['number']),
                   data: 'string',
                   programIdIndex: 'number',
                 }),
@@ -469,8 +469,8 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
           struct({
             status: SignatureStatusResult,
             fee: 'number',
-            preBalances: struct.list(['number']),
-            postBalances: struct.list(['number']),
+            preBalances: struct.array(['number']),
+            postBalances: struct.array(['number']),
           }),
         ]),
       ]),
