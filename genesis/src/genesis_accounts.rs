@@ -58,8 +58,7 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "unbecoming silver",
-        // TODO: staker: "42yapY7Vrs5jqht9TCKsPoyb4vDFYcPfRkqAP85NSAQ", WrongSize
-        staker: "GS7RFm4nrxzYGcPTmu1otzHzZbURWDKuxo2L4AQDvTg2",
+        staker: "42yapY7Vrs5jqht9TCKZsPoyb4vDFYcPfRkqAP85NSAQ",
         sol: 28_800.0,
     },
     StakerInfo {
