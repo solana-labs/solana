@@ -6,7 +6,7 @@ use test::Bencher;
 
 #[bench]
 fn bench_to_from_account(b: &mut Bencher) {
-    let mut slot_history = SlotHistory::new(1 * 1024 * 1024);
+    let mut slot_history = SlotHistory::default();
 
     b.iter(|| {
         let account = slot_history.create_account(0);
