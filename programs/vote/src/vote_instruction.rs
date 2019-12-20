@@ -227,9 +227,9 @@ mod tests {
             .iter()
             .map(|meta| {
                 if sysvar::clock::check_id(&meta.pubkey) {
-                    sysvar::clock::Clock::default().create_account(1)
+                    Clock::default().create_account(1)
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
-                    sysvar::slot_hashes::create_account(1, &[])
+                    SlotHashes::default().create_account(1)
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     Rent::free().create_account(1)
                 } else {
