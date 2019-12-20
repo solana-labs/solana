@@ -2,6 +2,7 @@
 
 import BN from 'bn.js';
 import bs58 from 'bs58';
+import hasha from 'hasha';
 
 /**
  * A public key
@@ -74,5 +75,14 @@ export class PublicKey {
    */
   toString(): string {
     return this.toBase58();
+  }
+
+  /**
+   * Derive a public key from another key, a seed, and a programId.
+   */
+  static createWithSeed(fromPublicKey: PublicKey, seed: string, programId: PublicKey): PublicKey {
+    const buffer = Buffer.concat([fromPublicKey.toBuffer(), Buffer.from(seed), programId.toBuffer()])
+    const hash = hasha(buffer, {algorithm: 'sha256'});
+    return new PublicKey('0x' + hash);
   }
 }
