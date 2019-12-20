@@ -37,7 +37,7 @@ regularly, we need a systematic assurance of not breaking the cluster when
 changing the source code.
 
 For that purpose, we introduce a mechanism of marking every ABI-related things
-in source code (`struct`, `enums`) with the new `#[solana_abi]` attribute. This
+in source code (`struct`, `enums`) with the new `#[frozen_abi]` attribute. This
 takes hard-coded digest value derived from types of its fields via serde::Serialize.
 And the attribute automatically generates a unit test to try to detect any unsanctioned
 changes to the marked ABI-related things. 
@@ -66,7 +66,7 @@ ABI item digest: Some fixed hash derived from type information of ABI item's fie
 If we were adding #7233 after some time since mainnet launch:
 
 ```patch
-+#[solana_abi(digest="1c6a53e9")]
++#[frozen_abi(digest="1c6a53e9")]
  #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)] 
  pub struct Vote {
      /// A stack of votes starting with the oldest vote
@@ -79,10 +79,10 @@ If we were adding #7233 after some time since mainnet launch:
 
 # Developer's work flow
 
-In general, once we add `solana_abi` and it's released, its digest should never change.
+In general, once we add `frozen_abi` and it's released, its digest should never change.
 If change is needed we should opt for defining a new struct like `FooV1`.
 
-To know the digest for new ABI items, developers can add `solana_abi` with a random digest
+To know the digest for new ABI items, developers can add `frozen_abi` with a random digest
 value and run the unit tests and replace it with correct one from the assertion test error
 message.
 
