@@ -4,7 +4,7 @@ Some security models require keeping signing keys, and thus the signing
 process, separated from transaction creation and network broadcast. Examples
 include:
   * Collecting signatures from geographically disparate signers in a
-multi-signature scheme
+[multi-signature scheme](../api-reference/cli.md#multiple-witnesses)
   * Signing transactions using an [airgapped](https://en.wikipedia.org/wiki/Air_gap_(networking))
 signing device
 
@@ -20,7 +20,7 @@ At present, the following commands support offline signing:
 
 ## Signing Transactions Offline
 
-To sign a transaction offline pass two arguments on the command line.
+To sign a transaction offline, pass two arguments on the command line.
 1) `--sign-only`, prevents the client from submitting the signed transaction
 to the network. Instead, the pubkey/signature pairs are printed to stdout. 
 2) `--blockhash BASE58_HASH`, allows the caller to specify the value used to
@@ -36,8 +36,8 @@ scheme
 Command
 
 ```bash
-solana@offline$ solana pay --sign-only --blockhash \
-5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF recipient-keypair.json 1 SOL
+solana@offline$ solana pay --sign-only --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
+    recipient-keypair.json 1 SOL
 ```
 
 Output
@@ -66,8 +66,8 @@ Command
 
 ```bash
 solana@online$ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
-recipient-keypair.json 1 SOL --signer \
-FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j=4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN
+    --signer FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j=4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN
+    recipient-keypair.json 1 SOL
 ```
 
 Output
