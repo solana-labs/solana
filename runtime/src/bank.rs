@@ -1595,7 +1595,7 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let accounts_delta_hash = self.rc.accounts.hash_internal_state(self.slot());
+        let accounts_delta_hash = self.rc.accounts.bank_hash_at(self.slot());
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
         hashv(&[
@@ -1611,7 +1611,7 @@ impl Bank {
     pub fn verify_hash_internal_state(&self) -> bool {
         self.rc
             .accounts
-            .verify_hash_internal_state(self.slot(), &self.ancestors)
+            .verify_bank_hash(self.slot(), &self.ancestors)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
@@ -1620,7 +1620,7 @@ impl Bank {
         self.purge_zero_lamport_accounts();
         self.rc
             .accounts
-            .verify_hash_internal_state(self.slot(), &self.ancestors)
+            .verify_bank_hash(self.slot(), &self.ancestors)
     }
 
     /// Return the number of hashes per tick
@@ -1806,8 +1806,8 @@ impl Bank {
         let dsc = dbank.src.status_cache.read().unwrap();
         assert_eq!(*sc, *dsc);
         assert_eq!(
-            self.rc.accounts.hash_internal_state(self.slot),
-            dbank.rc.accounts.hash_internal_state(dbank.slot)
+            self.rc.accounts.bank_hash_at(self.slot),
+            dbank.rc.accounts.bank_hash_at(dbank.slot)
         );
     }
 

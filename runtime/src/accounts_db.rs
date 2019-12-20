@@ -175,6 +175,13 @@ pub enum AccountStorageStatus {
     Candidate = 2,
 }
 
+#[derive(Debug)]
+pub enum BankHashVerificatonError {
+    MismatchedAccountHash,
+    MismatchedBankHash,
+    MissingBankHash,
+}
+
 /// Persistent storage structure holding the accounts
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountStorageEntry {
@@ -354,13 +361,11 @@ pub struct AccountsDB {
     /// Keeps tracks of index into AppendVec on a per slot basis
     pub accounts_index: RwLock<AccountsIndex<AccountInfo>>,
 
-    /// Account storage
     pub storage: RwLock<AccountStorage>,
 
     /// distribute the accounts across storage lists
     pub next_id: AtomicUsize,
 
-    /// write version
     write_version: AtomicUsize,
 
     /// Set of storage paths to pick from
@@ -379,7 +384,6 @@ pub struct AccountsDB {
     /// the accounts
     min_num_stores: usize,
 
-    /// slot to BankHash and a status flag to indicate if the hash has been initialized or not
     pub slot_hashes: RwLock<HashMap<Slot, BankHash>>,
 }
 
@@ -969,28 +973,49 @@ impl AccountsDB {
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
     }
 
-    pub fn verify_hash_internal_state(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {
-        let mut hash_state = BankHash::default();
-        let hashes: Vec<_> = self.scan_accounts(
+    pub fn verify_bank_hash(
+        &self,
+        slot: Slot,
+        ancestors: &HashMap<Slot, usize>,
+    ) -> Result<(), BankHashVerificatonError> {
+        use BankHashVerificatonError::*;
+
+        let (hashes, mismatch_found) = self.scan_accounts(
             ancestors,
-            |collector: &mut Vec<BankHash>, option: Option<(&Pubkey, Account, Slot)>| {
+            |(collector, mismatch_found): &mut (Vec<BankHash>, bool),
+             option: Option<(&Pubkey, Account, Slot)>| {
                 if let Some((pubkey, account, slot)) = option {
                     if !sysvar::check_id(&account.owner) {
-                        let hash = BankHash::from_hash(&Self::hash_account(slot, &account, pubkey));
+                        let hash = Self::hash_account(slot, &account, pubkey);
+                        if hash != account.hash {
+                            *mismatch_found = true;
+                        }
+                        if *mismatch_found {
+                            return;
+                        }
+                        let hash = BankHash::from_hash(&hash);
                         debug!("xoring..{} key: {}", hash, pubkey);
                         collector.push(hash);
                     }
                 }
             },
         );
+        if mismatch_found {
+            return Err(MismatchedAccountHash);
+        }
+        let mut calculated_hash = BankHash::default();
         for hash in hashes {
-            hash_state.xor(hash);
+            calculated_hash.xor(hash);
         }
         let slot_hashes = self.slot_hashes.read().unwrap();
-        if let Some(state) = slot_hashes.get(&slot) {
-            hash_state == *state
+        if let Some(found_hash) = slot_hashes.get(&slot) {
+            if calculated_hash == *found_hash {
+                Ok(())
+            } else {
+                Err(MismatchedBankHash)
+            }
         } else {
-            false
+            Err(BankHashVerificatonError::MissingBankHash)
         }
     }
 
@@ -1120,9 +1145,12 @@ impl AccountsDB {
     /// Store the account update.
     pub fn store(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) {
         let hashes = self.hash_accounts(slot_id, accounts);
+        self.store_with_hashes(slot_id, accounts, &hashes);
+    }
 
+    fn store_with_hashes(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)], hashes: &[Hash]) {
         let mut store_accounts = Measure::start("store::store_accounts");
-        let infos = self.store_accounts(slot_id, accounts, &hashes);
+        let infos = self.store_accounts(slot_id, accounts, hashes);
         store_accounts.stop();
 
         let mut update_index = Measure::start("store::update_index");
@@ -1234,9 +1262,11 @@ pub mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
     use crate::append_vec::AccountMeta;
+    use assert_matches::assert_matches;
     use bincode::serialize_into;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
+    use solana_sdk::hash::HASH_BYTES;
     use std::fs;
     use std::str::FromStr;
     use tempfile::TempDir;
@@ -2193,6 +2223,80 @@ pub mod tests {
             AccountsDB::hash_account(slot, &account, &stored_account.meta.pubkey),
             expected_account_hash,
             "Account-based hashing must be consistent with StoredAccount-based one."
+        );
+    }
+
+    #[test]
+    fn test_verify_bank_hash() {
+        use BankHashVerificatonError::*;
+        solana_logger::setup();
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let some_data_len = 0;
+        let some_slot: Slot = 0;
+        let account = Account::new(1, some_data_len, &key);
+        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+
+        db.store(some_slot, &[(&key, &account)]);
+        db.add_root(some_slot);
+        assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
+
+        db.slot_hashes.write().unwrap().remove(&some_slot).unwrap();
+        assert_matches!(
+            db.verify_bank_hash(some_slot, &ancestors),
+            Err(MissingBankHash)
+        );
+
+        let some_bank_hash = BankHash::from_hash(&Hash::new(&[0xca; HASH_BYTES]));
+        db.slot_hashes
+            .write()
+            .unwrap()
+            .insert(some_slot, some_bank_hash);
+        assert_matches!(
+            db.verify_bank_hash(some_slot, &ancestors),
+            Err(MismatchedBankHash)
+        );
+    }
+
+    #[test]
+    fn test_verify_bank_hash_no_account() {
+        solana_logger::setup();
+        let db = AccountsDB::new(Vec::new());
+
+        let some_slot: Slot = 0;
+        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+
+        db.slot_hashes
+            .write()
+            .unwrap()
+            .insert(some_slot, BankHash::default());
+        db.add_root(some_slot);
+        assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
+    }
+
+    #[test]
+    fn test_verify_bank_hash_bad_account_hash() {
+        use BankHashVerificatonError::*;
+        solana_logger::setup();
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let some_data_len = 0;
+        let some_slot: Slot = 0;
+        let account = Account::new(1, some_data_len, &key);
+        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+
+        let accounts = &[(&key, &account)];
+        // update AccountsDB's bank hash but discard real account hashes
+        db.hash_accounts(some_slot, accounts);
+        // provide bogus account hashes
+        let some_hash = Hash::new(&[0xca; HASH_BYTES]);
+        db.store_with_hashes(some_slot, accounts, &vec![some_hash]);
+        db.add_root(some_slot);
+        assert_matches!(
+            db.verify_bank_hash(some_slot, &ancestors),
+            Err(MismatchedAccountHash)
         );
     }
 }

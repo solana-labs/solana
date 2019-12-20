@@ -7,9 +7,10 @@ use std::fmt;
 use std::mem;
 use std::str::FromStr;
 
+pub const HASH_BYTES: usize = 32;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
-pub struct Hash([u8; 32]);
+pub struct Hash([u8; HASH_BYTES]);
 
 #[derive(Clone, Default)]
 pub struct Hasher {
@@ -28,7 +29,7 @@ impl Hasher {
     pub fn result(self) -> Hash {
         // At the time of this writing, the sha2 library is stuck on an old version
         // of generic_array (0.9.0). Decouple ourselves with a clone to our version.
-        Hash(<[u8; 32]>::try_from(self.hasher.result().as_slice()).unwrap())
+        Hash(<[u8; HASH_BYTES]>::try_from(self.hasher.result().as_slice()).unwrap())
     }
 }
 
@@ -73,7 +74,7 @@ impl FromStr for Hash {
 
 impl Hash {
     pub fn new(hash_slice: &[u8]) -> Self {
-        Hash(<[u8; 32]>::try_from(hash_slice).unwrap())
+        Hash(<[u8; HASH_BYTES]>::try_from(hash_slice).unwrap())
     }
 }
 
