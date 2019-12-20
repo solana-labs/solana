@@ -1,3 +1,0 @@
-{
-  "thread_mem_usage::tests::test_thread_memory_map": 128
-}
