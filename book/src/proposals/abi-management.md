@@ -14,10 +14,8 @@ on an existing cluster without rebooting the ledger.
 # Requirements and objectives
 
 - Unintended ABI changes can be detected as CI failures mechanically.
-- Newer impl must be able to process oldest data (since genesis) once we go
-  mainnet. (This is in stark contrast with regard to conventional software;
-  A decade-old SSL 3.0 doesn't work anymore, but the genesis block of Bitcoin
-  is still replayable today):
+- Newer implementation must be able to process oldest data (since genesis) once
+  we go mainnet.:
   - Deserialization stability: Newer implementation (like system programs)
     processes past object(transactions) exactly in the identical way when
     replaying the ledger.
@@ -26,9 +24,7 @@ on an existing cluster without rebooting the ledger.
     knowingly changed.
 - The objective of this proposal is to protect the ABI while sustaining rather
   rapid development by opting for mechanical process rather than very long
-  human-driven auditing process. After all, while cluster instability must be
-  avoided, timely delivery of software improvements is desired for all
-  stakeholders of the Solana cluster.
+  human-driven auditing process.
 - Once cryptographically-signed, signed data blob must be identical, so no
   in-place data format update is possible including inbound and outbound of the
   online system. Also, considering the sheer volume of transactions we're aiming
@@ -431,4 +427,4 @@ will provide confidene of changes and allow rapid development.
 # References
 
 1. Bitcoin Wiki: https://en.bitcoin.it/wiki/Hardfork
-2. Prity's ink to write smart contracts: https://github.com/paritytech/ink
+2. Parity's ink to write smart contracts: https://github.com/paritytech/ink
