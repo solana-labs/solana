@@ -7,7 +7,6 @@ Current testnet entrypoints:
 
 * Stable: testnet.solana.com
 * Beta: beta.testnet.solana.com
-* Edge: edge.testnet.solana.com
 
 Application developers should target the Stable testnet. Key differences
 between the Stable testnet and what will be mainnet:
@@ -19,11 +18,8 @@ between the Stable testnet and what will be mainnet:
 * Stable testnet may be maintained by different validators than mainnet
 
 The Beta testnet is used to showcase and stabilize new features before they
-are marked Stable. Application developers are free to target the Beta testnet,
-but should expect instability and periodic ledger resets.
-
-The Edge testnet is intended for Solana protocol developers, not application
-developers. It tracks the tip of the master branch, not any release. Regarding
+are tagged for release. Application developers are free to target the Beta
+testnet, but should expect instability and periodic ledger resets. Regarding
 stability, all that can be said is that CI automation was successful.
 
 ### Get Testnet Version
