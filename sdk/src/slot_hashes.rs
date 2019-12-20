@@ -5,7 +5,7 @@
 use crate::hash::Hash;
 use std::{iter::FromIterator, ops::Deref};
 
-pub const MAX_SLOT_HASHES: usize = 512; // about 2.5 minutes to get your vote in
+pub const MAX_ENTRIES: usize = 512; // about 2.5 minutes to get your vote in
 
 pub use crate::clock::Slot;
 
@@ -21,7 +21,7 @@ impl SlotHashes {
             Ok(index) => (self.0)[index] = (slot, hash),
             Err(index) => (self.0).insert(index, (slot, hash)),
         }
-        (self.0).truncate(MAX_SLOT_HASHES);
+        (self.0).truncate(MAX_ENTRIES);
     }
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn get(&self, slot: &Slot) -> Option<&Hash> {
@@ -68,16 +68,16 @@ mod tests {
         );
 
         let mut slot_hashes = SlotHashes::new(&[]);
-        for i in 0..MAX_SLOT_HASHES + 1 {
+        for i in 0..MAX_ENTRIES + 1 {
             slot_hashes.add(
                 i as u64,
                 hash(&[(i >> 24) as u8, (i >> 16) as u8, (i >> 8) as u8, i as u8]),
             );
         }
-        for i in 0..MAX_SLOT_HASHES {
-            assert_eq!(slot_hashes[i].0, (MAX_SLOT_HASHES - i) as u64);
+        for i in 0..MAX_ENTRIES {
+            assert_eq!(slot_hashes[i].0, (MAX_ENTRIES - i) as u64);
         }
 
-        assert_eq!(slot_hashes.len(), MAX_SLOT_HASHES);
+        assert_eq!(slot_hashes.len(), MAX_ENTRIES);
     }
 }

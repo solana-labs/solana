@@ -40,6 +40,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
+    slot_history::SlotHistory,
     system_transaction,
     sysvar::{self, Sysvar},
     timing::years_as_slots,
@@ -516,16 +517,26 @@ impl Bank {
         );
     }
 
+    fn update_slot_history(&self) {
+        let mut slot_history = self
+            .get_account(&sysvar::slot_history::id())
+            .map(|account| SlotHistory::from_account(&account).unwrap())
+            .unwrap_or_default();
+
+        slot_history.add(self.slot());
+
+        self.store_account(&sysvar::slot_history::id(), &slot_history.create_account(1));
+    }
+
     fn update_slot_hashes(&self) {
-        let mut account = self
+        let mut slot_hashes = self
             .get_account(&sysvar::slot_hashes::id())
-            .unwrap_or_else(|| sysvar::slot_hashes::create_account(1, &[]));
+            .map(|account| SlotHashes::from_account(&account).unwrap())
+            .unwrap_or_default();
 
-        let mut slot_hashes = SlotHashes::from_account(&account).unwrap();
         slot_hashes.add(self.slot(), self.hash());
-        slot_hashes.to_account(&mut account).unwrap();
 
-        self.store_account(&sysvar::slot_hashes::id(), &account);
+        self.store_account(&sysvar::slot_hashes::id(), &slot_hashes.create_account(1));
     }
 
     fn update_fees(&self) {
@@ -650,6 +661,7 @@ impl Bank {
             // finish up any deferred changes to account state
             self.collect_fees();
             self.distribute_rent();
+            self.update_slot_history();
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();

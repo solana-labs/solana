@@ -9,7 +9,7 @@ use std::ops::Deref;
 
 crate::declare_sysvar_id!("SysvarStakeHistory1111111111111111111111111", StakeHistory);
 
-pub const MAX_STAKE_HISTORY: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
+pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
 pub struct StakeHistoryEntry {
@@ -23,8 +23,10 @@ pub struct StakeHistoryEntry {
 pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
 
 impl Sysvar for StakeHistory {
-    fn biggest() -> Self {
-        StakeHistory(vec![(0, StakeHistoryEntry::default()); MAX_STAKE_HISTORY])
+    // override
+    fn size_of() -> usize {
+        // hard-coded so that we don't have to construct an empty
+        16392 // golden, update if MAX_ENTRIES changes
     }
 }
 
@@ -41,7 +43,7 @@ impl StakeHistory {
             Ok(index) => (self.0)[index] = (epoch, entry),
             Err(index) => (self.0).insert(index, (epoch, entry)),
         }
-        (self.0).truncate(MAX_STAKE_HISTORY);
+        (self.0).truncate(MAX_ENTRIES);
     }
 }
 
@@ -56,30 +58,33 @@ pub fn create_account(lamports: u64, stake_history: &StakeHistory) -> Account {
     stake_history.create_account(lamports)
 }
 
-use crate::account::KeyedAccount;
-use crate::instruction::InstructionError;
-pub fn from_keyed_account(account: &KeyedAccount) -> Result<StakeHistory, InstructionError> {
-    if !check_id(account.unsigned_key()) {
-        return Err(InstructionError::InvalidArgument);
-    }
-    StakeHistory::from_account(account.account).ok_or(InstructionError::InvalidArgument)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    fn test_size_of() {
+        assert_eq!(
+            bincode::serialized_size(&StakeHistory(vec![
+                (0, StakeHistoryEntry::default());
+                MAX_ENTRIES
+            ]))
+            .unwrap() as usize,
+            StakeHistory::size_of()
+        );
+    }
+
+    #[test]
     fn test_create_account() {
         let lamports = 42;
-        let account = create_account(lamports, &StakeHistory::default());
+        let account = StakeHistory::default().create_account(lamports);
         assert_eq!(account.data.len(), StakeHistory::size_of());
 
         let stake_history = StakeHistory::from_account(&account);
         assert_eq!(stake_history, Some(StakeHistory::default()));
 
         let mut stake_history = stake_history.unwrap();
-        for i in 0..MAX_STAKE_HISTORY as u64 + 1 {
+        for i in 0..MAX_ENTRIES as u64 + 1 {
             stake_history.add(
                 i,
                 StakeHistoryEntry {
@@ -88,7 +93,7 @@ mod tests {
                 },
             );
         }
-        assert_eq!(stake_history.len(), MAX_STAKE_HISTORY);
+        assert_eq!(stake_history.len(), MAX_ENTRIES);
         assert_eq!(stake_history.iter().map(|entry| entry.0).min().unwrap(), 1);
         assert_eq!(stake_history.get(&0), None);
         assert_eq!(
@@ -100,7 +105,7 @@ mod tests {
         );
         // verify the account can hold a full instance
         assert_eq!(
-            StakeHistory::from_account(&create_account(lamports, &stake_history)),
+            StakeHistory::from_account(&stake_history.create_account(lamports)),
             Some(stake_history)
         );
     }
