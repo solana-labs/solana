@@ -15,13 +15,7 @@ on an existing cluster without rebooting the ledger.
 
 - Unintended ABI changes can be detected as CI failures mechanically.
 - Newer implementation must be able to process oldest data (since genesis) once
-  we go mainnet.:
-  - Deserialization stability: Newer implementation (like system programs)
-    processes past object(transactions) exactly in the identical way when
-    replaying the ledger.
-  - Serialization stability: Newer implementation (like AccountsDB) produces
-    newer blobs exactly in the identical way unless its ABI is explicitly and
-    knowingly changed.
+  we go mainnet.
 - The objective of this proposal is to protect the ABI while sustaining rather
   rapid development by opting for mechanical process rather than very long
   human-driven auditing process.
@@ -38,32 +32,27 @@ changing the source code.
 
 For that purpose, we introduce a mechanism of marking every ABI-related things
 in source code (`struct`, `enums`) with the new `#[frozen_abi]` attribute. This
-takes hard-coded digest value derived from types of its fields via serde::Serialize.
-And the attribute automatically generates a unit test to try to detect any unsanctioned
-changes to the marked ABI-related things. 
+takes hard-coded digest value derived from types of its fields via
+`ser::Serialize`. And the attribute automatically generates a unit test to try
+to detect any unsanctioned changes to the marked ABI-related things. 
 
-However, the detection cannot be complete; no matter
-how hard we statically analyze the source code, it's still possible to break
-ABI. For example this includes not-`derive`d hand-writtern serde::Serialize,
-bincode's implementation changes, CPU architecutecture differences.
-These possible ABI imcompatibilities are out-of-scope of this API management.
+However, the detection cannot be complete; no matter how hard we statically
+analyze the source code, it's still possible to break ABI. For example this
+includes not-`derive`d hand-written `ser::Serialize`, underlying library's
+implementation changes (for example `bincode`), CPU architecture differences.
+These possible ABI incompatibility detection are out-of-scope of this API
+management.
 
 # Definitions
 
-Application binary interface (ABI): every system boundary which needs
-serialization/deserialization to communicate across the boundary of system
-components. This means sending and receiving message with peer nodes via
-networks and storing and loading files to storage devices.
+ABI item/type: various types to be used for serialization, which collectively
+comprises the whole ABI for any system components. For example, those type
+include `structs` and `enums`.
 
-ABI item/type: any conceivable thing and its associated kind, which collectively
-comprises the whole ABI for any system components. For example, type includes
-structs, serializer logics and implemented protocol communication procedures.
-
-ABI item digest: Some fixed hash derived from type information of ABI item's fields.
+ABI item digest: Some fixed hash derived from type information of ABI item's
+fields.
 
 # Example
-
-If we were adding #7233 after some time since mainnet launch:
 
 ```patch
 +#[frozen_abi(digest="1c6a53e9")]
@@ -76,22 +65,23 @@ If we were adding #7233 after some time since mainnet launch:
  }
 ```
 
-
 # Developer's work flow
 
-In general, once we add `frozen_abi` and it's released, its digest should never change.
-If change is needed we should opt for defining a new struct like `FooV1`.
+To know the digest for new ABI items, developers can add `frozen_abi` with a
+random digest value and run the unit tests and replace it with the correct
+digest from the assertion test error message.
 
-To know the digest for new ABI items, developers can add `frozen_abi` with a random digest
-value and run the unit tests and replace it with correct one from the assertion test error
-message.
+In general, once we add `frozen_abi` and its change is published in the stable
+release channel, its digest should never change. If such a change is needed, we
+should opt for defining a new struct like `FooV1`. And special release flow like
+hard forks should be approached.
 
 # Implemention remarks
 
-We use some degree of macro machineries to automatically generate units tests and calculate
-a digest from ABI items. This is doable by clevar use of serde::Serialize ([1]) and any::typename ([2]).
-
-For a precedent for similar implementation, `ink' from the Parity Technologies [3] could be informational. 
+We use some degree of macro machineries to automatically generate units tests
+and calculate a digest from ABI items. This is doable by clever use of
+`serde::Serialize` ([1]) and `any::typename` ([2]). For a precedent for similar
+implementation, `ink' from the Parity Technologies [3] could be informational. 
 
 # References
 
