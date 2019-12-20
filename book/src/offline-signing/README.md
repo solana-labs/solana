@@ -20,7 +20,7 @@ At present, the following commands support offline signing:
 
 ## Signing Transactions Offline
 
-To sign a transaction offline, two command line arguments are required
+To sign a transaction offline, pass the following arguments on the command line
 1) `--sign-only`, prevents the client from submitting the signed transaction
 to the network. Instead, the pubkey/signature pairs are printed to stdout. 
 2) `--blockhash BASE58_HASH`, allows the caller to specify the value used to
@@ -53,8 +53,8 @@ Signers (Pubkey=Signature):
 
 ## Submitting Offline Signed Transactions to the Network
 
-To submit a transaction that has been signed offline to the network, two command
-line arguments are required
+To submit a transaction that has been signed offline to the network, pass the
+following arguments on the command line
 1) `--blockhash BASE58_HASH`, must be the same blockhash as was used to sign
 2) `--signer BASE58_PUBKEY=BASE58_SIGNATURE`, one for each offline signer. This
 includes the pubkey/signature pairs directly in the transaction rather than
