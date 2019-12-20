@@ -66,10 +66,11 @@ Note that you could potentially use different passphrases for the same seed
 phrase. Each unique passphrase will yield a different keypair.
 {% endhint %}
 
-The `solana-keygen` tool assumes the use of the BIP39 standard English word
-list. If you chose to deviate from the word list or used a different language
-for your seed phrase, you can still derive a valid public key but will need to
-explicitly skip seed phrase validation.
+The `solana-keygen` tool uses the same BIP39 standard English word list as it
+does to generate seed phrases. If your seed phrase was generated with another
+tool that uses a different word list, you can still use `solana-keygen`, but
+will need to pass the `--skip-seed-phrase-validation` argument and forego this
+validation.
 
 ```bash
 solana-keygen pubkey ASK --skip-seed-phrase-validation
