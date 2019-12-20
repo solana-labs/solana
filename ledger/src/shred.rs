@@ -31,12 +31,18 @@ pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
 pub const SIZE_OF_DATA_SHRED_HEADER: usize = 3;
 pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 pub const SIZE_OF_SIGNATURE: usize = 64;
+pub const SIZE_OF_SHRED_TYPE: usize = 1;
+pub const SIZE_OF_SHRED_SLOT: usize = 8;
+pub const SIZE_OF_SHRED_INDEX: usize = 4;
 pub const SIZE_OF_DATA_SHRED_IGNORED_TAIL: usize =
     SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
 pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
     - SIZE_OF_COMMON_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+
+pub const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
+pub const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -923,6 +929,18 @@ pub mod tests {
         assert_eq!(
             SIZE_OF_SIGNATURE,
             bincode::serialized_size(&Signature::default()).unwrap() as usize
+        );
+        assert_eq!(
+            SIZE_OF_SHRED_TYPE,
+            bincode::serialized_size(&ShredType::default()).unwrap() as usize
+        );
+        assert_eq!(
+            SIZE_OF_SHRED_SLOT,
+            bincode::serialized_size(&Slot::default()).unwrap() as usize
+        );
+        assert_eq!(
+            SIZE_OF_SHRED_INDEX,
+            bincode::serialized_size(&ShredCommonHeader::default().index).unwrap() as usize
         );
     }
 

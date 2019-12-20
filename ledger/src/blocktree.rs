@@ -63,6 +63,11 @@ pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
 const TIMESTAMP_SLOT_RANGE: usize = 5;
 
+// An upper bound on maximum number of data shreds we can handle in a slot
+// 32K shreds would allow ~320K peak TPS
+// (32K shreds per slot * 4 TX per shred * 2.5 slots per sec)
+pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
+
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 
 // ledger window
@@ -1409,6 +1414,9 @@ impl Blocktree {
         slot: Slot,
         start_index: u64,
     ) -> Result<(Vec<Entry>, usize, bool)> {
+        if self.is_dead(slot) {
+            return Err(BlocktreeError::DeadSlot);
+        }
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
         let slot_meta = slot_meta_cf.get(slot)?;
         if slot_meta.is_none() {

@@ -45,6 +45,9 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> O
     let slot_end = slot_start + size_of::<u64>();
     let msg_start = sig_end;
     let msg_end = packet.meta.size;
+    if packet.meta.discard {
+        return Some(0);
+    }
     trace!("slot start and end {} {}", slot_start, slot_end);
     if packet.meta.size < slot_end {
         return Some(0);
@@ -104,7 +107,7 @@ fn slot_key_data_for_gpu<
                         .map(|packet| {
                             let slot_start = size_of::<Signature>() + size_of::<ShredType>();
                             let slot_end = slot_start + size_of::<u64>();
-                            if packet.meta.size < slot_end {
+                            if packet.meta.size < slot_end || packet.meta.discard {
                                 return std::u64::MAX;
                             }
                             let slot: Option<u64> =
