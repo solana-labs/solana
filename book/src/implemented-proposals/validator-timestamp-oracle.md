@@ -67,7 +67,7 @@ A validator's vote account will hold its most recent slot-timestamp in VoteState
 ### Vote Program
 
 The on-chain Vote program needs to be extended to process a timestamp sent with
-a Vote instruction from validators. In addition to its current process_vote
+a Vote instruction from validators. In addition to its current process\_vote
 functionality (including loading the correct Vote account and verifying that the
 transaction signer is the expected validator), this process needs to compare the
 timestamp and corresponding slot to the currently stored values to verify that
@@ -86,7 +86,7 @@ let timestamp_slot = floor(current_slot / timestamp_interval);
 Then the validator needs to gather all Vote WithTimestamp transactions from the
 ledger that reference that slot, using `Blocktree::get_slot_entries()`. As these
 transactions could have taken some time to reach and be processed by the leader,
-the validator needs to scan several completed blocks after the timestamp_slot to
+the validator needs to scan several completed blocks after the timestamp\_slot to
 get a reasonable set of Timestamps. The exact number of slots will need to be
 tuned: More slots will enable greater cluster participation and more timestamp
 datapoints; fewer slots will speed how long timestamp filtering takes.
@@ -109,21 +109,5 @@ let block_n_timestamp = mean_timestamp + (block_n_slot_offset * slot_duration);
 ```
 
 where `block_n_slot_offset` is the difference between the slot of block N and
-the timestamp_slot, and `slot_duration` is derived from the cluster's
+the timestamp\_slot, and `slot_duration` is derived from the cluster's
 `slots_per_year` stored in each Bank
-
-## Additional Considerations
-
-1. This proposal puts a distinct processing burden on a validator when it receives
-a `getBlockTime` RPC request. Another approach would be for a validator to
-maintain a list of mean timestamps, populated as the validator
-builds/replays the ledger.
-
-2. This proposal doesn't address the 4th requirement, that each validator must
-maintain a timestamp oracle. Even though timestamps are tied to voting, there
-are no lockout implications if a validator does not ever included timestamps
-with Votes. One sociological approach would be to include timestamp expectations
-in validator uptime calculations, where uptime is redefined as a function of a
-validator both promptly submitting votes and timestamps over an epoch. This
-might require storing more information about historical timestamps in the vote
-account, however.
