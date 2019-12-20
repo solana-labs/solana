@@ -38,6 +38,7 @@
 * [Paper Wallet](paper-wallet/README.md)
   * [Installation](paper-wallet/installation.md)
   * [Paper Wallet Usage](paper-wallet/usage.md)
+* [Offline Signing](offline-signing/README.md)
 * [API Reference](api-reference/README.md)
   * [Transaction](api-reference/transaction-api.md)
   * [Instruction](api-reference/instruction-api.md)
