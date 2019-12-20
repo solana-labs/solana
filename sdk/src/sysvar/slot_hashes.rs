@@ -2,17 +2,17 @@
 //!
 //! this account carries the Bank's most recent blockhashes for some N parents
 //!
-pub use crate::slot_hashes::{SlotHash, SlotHashes};
-use crate::{account::Account, sysvar::Sysvar};
+pub use crate::slot_hashes::{Slot, SlotHash, SlotHashes, MAX_SLOT_HASHES};
+use crate::{account::Account, hash::Hash, sysvar::Sysvar};
 
 crate::declare_sysvar_id!("SysvarS1otHashes111111111111111111111111111", SlotHashes);
-
-pub const MAX_SLOT_HASHES: usize = 512; // 512 slots to get your vote in
 
 impl Sysvar for SlotHashes {
     fn biggest() -> Self {
         // override
-        SlotHashes::new(&[SlotHash::default(); MAX_SLOT_HASHES])
+        (0..MAX_SLOT_HASHES)
+            .map(|slot| (slot as Slot, Hash::default()))
+            .collect::<Self>()
     }
 }
 
