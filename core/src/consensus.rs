@@ -8,6 +8,7 @@ use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     hash::Hash,
     pubkey::Pubkey,
+    signature::{KeypairUtil, Signature},
 };
 use solana_vote_program::vote_state::{
     BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
@@ -473,11 +474,12 @@ impl Tower {
         }
     }
 
-    pub fn save_to_file(&self, path: &PathBuf) -> Result<()> {
+    pub fn save_to_file<T: KeypairUtil>(&self, path: &PathBuf, keypair: &T) -> Result<()> {
         let timer = Instant::now();
+        let saveable_tower = SavedTower::new(self, keypair)?;
         fs::create_dir_all(path)?;
         let mut snapshot_file = File::create(path.join(TOWER_TEMP_SNAPSHOT_NAME))?;
-        bincode::serialize_into(&mut snapshot_file, self)?;
+        bincode::serialize_into(&mut snapshot_file, &saveable_tower)?;
         snapshot_file.flush()?;
         fs::rename(
             path.join(TOWER_TEMP_SNAPSHOT_NAME),
@@ -498,33 +500,65 @@ impl Tower {
         // try to reload tower from disk, otherwise reconstruct one
         let tower = File::open(path.join(TOWER_SNAPSHOT_NAME)).and_then(|tower_file| {
             let mut stream = BufReader::new(tower_file);
-            let tower: bincode::Result<Tower> = bincode::deserialize_from(&mut stream);
+            let tower: bincode::Result<SavedTower> = bincode::deserialize_from(&mut stream);
             tower.map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))
         });
-        // check that the tower actually belongs to this node
-        match tower {
+        let tower = match tower {
             Ok(tower) => {
-                if &tower.node_pubkey != my_pubkey {
+                if !tower.verify(vote_account) {
                     error!(
-                        "Wrong tower state found. My pubkey {:?} but found tower for {:?}",
-                        my_pubkey, tower.node_pubkey
+                        "Signature on tower in incorrect, generating a new tower from bank forks"
                     );
-                    Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
-                } else {
-                    info!("Restoring tower from saved state.");
-                    tower
+                    return Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
                 }
+                // If the signature is correct, the deserialize should never fail
+                tower
+                    .deserialize()
+                    .expect("Failed to deserialize Tower form SavedTower")
             }
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::NotFound {
                     error!(
-                        "Error: {:?} Unable to restore tower, generating a new one from from bank forks",
+                        "Error: {:?} Unable to restore SavedTower, generating a new tower from bank forks",
                         e
                     );
                 }
-                Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
+                return Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
             }
+        };
+        // check that the tower actually belongs to this node
+        if &tower.node_pubkey != my_pubkey {
+            error!(
+                "Wrong tower state found. My pubkey {:?} but found tower for {:?}",
+                my_pubkey, tower.node_pubkey
+            );
+            Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
+        } else {
+            info!("Restoring tower from saved state.");
+            tower
         }
+    }
+}
+
+#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct SavedTower {
+    signature: Signature,
+    data: Vec<u8>,
+}
+
+impl SavedTower {
+    pub fn new<T: KeypairUtil>(tower: &Tower, keypair: &T) -> Result<Self> {
+        let data = bincode::serialize(tower)?;
+        let signature = keypair.sign_message(&data);
+        Ok(Self { data, signature })
+    }
+
+    pub fn verify(&self, pubkey: &Pubkey) -> bool {
+        self.signature.verify(pubkey.as_ref(), &self.data)
+    }
+
+    pub fn deserialize(&self) -> Result<Tower> {
+        bincode::deserialize(&self.data).map_err(|e| e.into())
     }
 }
 
@@ -1511,7 +1545,9 @@ pub mod test {
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
 
-        tower.save_to_file(&dir.path().to_path_buf()).unwrap();
+        tower
+            .save_to_file(&dir.path().to_path_buf(), &vote_keypair)
+            .unwrap();
         modify_serialized(&dir.path().to_path_buf());
         let loaded = Tower::reload_from_file(
             &dir.path().to_path_buf(),

@@ -667,7 +667,7 @@ impl ReplayStage {
             vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
             vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
             // before publishing the latest vote on the network, snapshot the tower for persistent save
-            if let Err(e) = tower.save_to_file(&tower_snapshot_path) {
+            if let Err(e) = tower.save_to_file(&tower_snapshot_path, voting_keypair.as_ref()) {
                 panic!("Unable to backup tower, {:?}", e);
             }
             cluster_info
