@@ -9,7 +9,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     account_utils::State,
     hash::Hash,
-    nonce_instruction::{create_nonce_account, nonce, withdraw, NonceError},
+    nonce_instruction::{authorize, create_nonce_account, nonce, withdraw, NonceError},
     nonce_program,
     nonce_state::NonceState,
     pubkey::Pubkey,
@@ -34,6 +34,29 @@ fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
 impl NonceSubCommands for App<'_, '_> {
     fn nonce_subcommands(self) -> Self {
         self.subcommand(
+            SubCommand::with_name("authorize-nonce-account")
+                .about("Assign account authority to a new entity")
+                .arg(
+                    Arg::with_name("nonce_account_keypair")
+                        .index(1)
+                        .value_name("NONCE_ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Address of the nonce account"),
+                )
+                .arg(
+                    Arg::with_name("new_authority")
+                        .index(2)
+                        .value_name("NEW_AUTHORITY_PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Account to be granted authority of the nonce account"),
+                )
+                .arg(nonce_authority_arg()),
+        )
+        .subcommand(
             SubCommand::with_name("create-nonce-account")
                 .about("Create a nonce account")
                 .arg(
@@ -165,6 +188,21 @@ fn resolve_nonce_authority(matches: &ArgMatches<'_>) -> Keypair {
         .unwrap_or_else(|| keypair_of(matches, "nonce_account_keypair").unwrap())
 }
 
+pub fn parse_authorize_nonce_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
+    let new_authority = pubkey_of(matches, "new_authority").unwrap();
+    let nonce_authority = resolve_nonce_authority(matches);
+
+    Ok(CliCommandInfo {
+        command: CliCommand::AuthorizeNonceAccount {
+            nonce_account,
+            nonce_authority: nonce_authority.into(),
+            new_authority,
+        },
+        require_keypair: true,
+    })
+}
+
 pub fn parse_nonce_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
     let lamports = required_lamports_from(matches, "amount", "unit")?;
@@ -233,6 +271,33 @@ pub fn parse_withdraw_from_nonce_account(
         },
         require_keypair: true,
     })
+}
+
+pub fn process_authorize_nonce_account(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    nonce_account: &Pubkey,
+    nonce_authority: &Keypair,
+    new_authority: &Pubkey,
+) -> ProcessResult {
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    let ix = authorize(nonce_account, &nonce_authority.pubkey(), new_authority);
+    let mut tx = Transaction::new_signed_with_payer(
+        vec![ix],
+        Some(&config.keypair.pubkey()),
+        &[&config.keypair, nonce_authority],
+        recent_blockhash,
+    );
+    check_account_for_fee(
+        rpc_client,
+        &config.keypair.pubkey(),
+        &fee_calculator,
+        &tx.message,
+    )?;
+    let result =
+        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, nonce_authority]);
+    log_instruction_custom_error::<NonceError>(result)
 }
 
 pub fn process_create_nonce_account(
@@ -441,6 +506,50 @@ mod tests {
         let nonce_account_pubkey = nonce_account_keypair.pubkey();
         let nonce_account_string = nonce_account_pubkey.to_string();
 
+        let (authority_keypair_file, mut tmp_file2) = make_tmp_file();
+        let nonce_authority_keypair = Keypair::new();
+        write_keypair(&nonce_authority_keypair, tmp_file2.as_file_mut()).unwrap();
+
+        // Test AuthorizeNonceAccount Subcommand
+        let test_authorize_nonce_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "authorize-nonce-account",
+            &keypair_file,
+            &Pubkey::default().to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize_nonce_account).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::AuthorizeNonceAccount {
+                    nonce_account: nonce_account_pubkey,
+                    nonce_authority: read_keypair_file(&keypair_file).unwrap().into(),
+                    new_authority: Pubkey::default(),
+                },
+                require_keypair: true,
+            }
+        );
+
+        // Test AuthorizeNonceAccount Subcommand with authority
+        let test_authorize_nonce_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "authorize-nonce-account",
+            &keypair_file,
+            &Pubkey::default().to_string(),
+            "--nonce-authority",
+            &authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize_nonce_account).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::AuthorizeNonceAccount {
+                    nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
+                    nonce_authority: read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    new_authority: Pubkey::default(),
+                },
+                require_keypair: true,
+            }
+        );
+
         // Test CreateNonceAccount SubCommand
         let test_create_nonce_account = test_commands.clone().get_matches_from(vec![
             "test",
@@ -462,9 +571,6 @@ mod tests {
         );
 
         // Test CreateNonceAccount SubCommand with authority
-        let (authority_keypair_file, mut tmp_file2) = make_tmp_file();
-        let nonce_authority_keypair = Keypair::new();
-        write_keypair(&nonce_authority_keypair, tmp_file2.as_file_mut()).unwrap();
         let test_create_nonce_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-nonce-account",
