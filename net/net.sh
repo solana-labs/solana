@@ -52,8 +52,8 @@ Operate a configured testnet
                                       - Number of seconds to wait after validators have finished starting before starting client programs
                                         (default: $clientDelayStart)
    -n NUM_VALIDATORS                  - Number of validators to apply command to.
-   --gpu-mode GPU_MODE                - Specify GPU mode to launch validators with (default: $gpuMode).
-                                        MODE must be one of
+   --gpu-mode GPU_MODE                - REQUIRED: Specify GPU mode with which to launch validators
+                                        GPU_MODE must be one of
                                           on - GPU *required*, any vendor *
                                           off - No GPU, CPU-only
                                           auto - Use GPU if available, any vendor *
@@ -149,7 +149,7 @@ maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 debugBuild=false
 doBuild=true
-gpuMode=auto
+gpuMode=
 maybeUseMove=""
 netemPartition=""
 netemConfig=""
@@ -960,11 +960,19 @@ checkPremptibleInstances
 
 case $command in
 restart)
+  if [[ -z $gpuMode ]]; then
+    echo gpuMode not specified
+    exit 1
+  fi
   prepare_deploy
   stop
   deploy
   ;;
 start)
+  if [[ -z $gpuMode ]]; then
+    echo gpuMode not specified
+    exit 1
+  fi
   prepare_deploy
   deploy
   ;;
@@ -985,6 +993,10 @@ stopnode)
   stopNode "$nodeAddress" true
   ;;
 startnode)
+  if [[ -z $gpuMode ]]; then
+    echo gpuMode not specified
+    exit 1
+  fi
   if [[ -z $nodeAddress ]]; then
     usage "node address (-i) not specified"
     exit 1

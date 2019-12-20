@@ -24,7 +24,7 @@ numBenchExchangeClients="${15}"
 benchExchangeExtraArgs="${16}"
 genesisOptions="${17}"
 extraNodeArgs="${18}"
-gpuMode="${19:-auto}"
+gpuMode="${19}"
 GEOLOCATION_API_KEY="${20}"
 set +x
 
@@ -71,6 +71,11 @@ chmod +x ~/solana/on-reboot
 
 GPU_CUDA_OK=false
 GPU_FAIL_IF_NONE=false
+if [[ -z "$gpuMode" ]]; then
+  echo "gpuMode must be defined"
+  exit 1
+fi
+
 case "$gpuMode" in
   on) # GPU *required*, any vendor
     GPU_CUDA_OK=true
