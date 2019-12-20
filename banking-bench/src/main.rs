@@ -162,8 +162,8 @@ fn main() {
         // If it is dropped before poh_service, then poh_service will error when
         // calling send() on the channel.
         let signal_receiver = Arc::new(signal_receiver);
-        let mut total = 0;
-        let mut tx_total = 0;
+        let mut total_us = 0;
+        let mut tx_total_us = 0;
         let mut txs_processed = 0;
         let mut root = 1;
         let collector = Pubkey::new_rand();
@@ -173,6 +173,7 @@ fn main() {
             chunk_len,
             num_threads,
         };
+        let mut total_sent = 0;
         for _ in 0..ITERS {
             let now = Instant::now();
             let mut sent = 0;
@@ -223,7 +224,7 @@ fn main() {
                 );
                 assert!(txs_processed < bank.transaction_count());
                 txs_processed = bank.transaction_count();
-                tx_total += duration_as_us(&now.elapsed());
+                tx_total_us += duration_as_us(&now.elapsed());
 
                 let mut poh_time = Measure::start("poh_time");
                 poh_recorder.lock().unwrap().reset(
@@ -255,20 +256,21 @@ fn main() {
                     poh_time.as_us(),
                 );
             } else {
-                tx_total += duration_as_us(&now.elapsed());
+                tx_total_us += duration_as_us(&now.elapsed());
             }
 
             // This signature clear may not actually clear the signatures
             // in this chunk, but since we rotate between CHUNKS then
             // we should clear them by the time we come around again to re-use that chunk.
             bank.clear_signatures();
-            total += duration_as_us(&now.elapsed());
+            total_us += duration_as_us(&now.elapsed());
             debug!(
                 "time: {} us checked: {} sent: {}",
                 duration_as_us(&now.elapsed()),
                 txes / CHUNKS,
                 sent,
             );
+            total_sent += sent;
 
             if bank.slot() > 0 && bank.slot() % 16 == 0 {
                 for tx in transactions.iter_mut() {
@@ -284,11 +286,11 @@ fn main() {
         }
         eprintln!(
             "{{'name': 'banking_bench_total', 'median': '{}'}}",
-            total / ITERS as u64,
+            (1000.0 * 1000.0 * total_sent as f64) / (total_us as f64),
         );
         eprintln!(
             "{{'name': 'banking_bench_tx_total', 'median': '{}'}}",
-            tx_total / ITERS as u64,
+            (1000.0 * 1000.0 * total_sent as f64) / (tx_total_us as f64),
         );
 
         drop(verified_sender);
