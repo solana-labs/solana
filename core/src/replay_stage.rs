@@ -211,6 +211,13 @@ impl ReplayStage {
             }
         };
 
+        // Tower gets written to before blocktree, so the root may be missing from blocktree
+        if let Some(tower_root) = tower.root() {
+            if !blockstore.is_root(tower_root) {
+                blockstore.set_roots(&[tower_root]).unwrap();
+            }
+        }
+
         // Start the replay stage loop
 
         let (lockouts_sender, commitment_service) =
