@@ -422,6 +422,7 @@ pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliComman
 
 pub fn process_show_block_production(
     rpc_client: &RpcClient,
+    config: &CliConfig,
     epoch: Option<Epoch>,
     slot_limit: Option<u64>,
 ) -> ProcessResult {
@@ -429,40 +430,39 @@ pub fn process_show_block_production(
     let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::max())?;
 
     let epoch = epoch.unwrap_or(epoch_info.epoch);
-
     if epoch > epoch_info.epoch {
         return Err(format!("Epoch {} is in the future", epoch).into());
     }
 
+    let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
     let end_slot = std::cmp::min(
         epoch_info.absolute_slot,
         epoch_schedule.get_last_slot_in_epoch(epoch),
     );
-    let start_slot = {
-        let start_slot = epoch_schedule.get_first_slot_in_epoch(epoch);
-        std::cmp::max(
-            end_slot.saturating_sub(slot_limit.unwrap_or(start_slot)),
-            start_slot,
-        )
+
+    let start_slot = if let Some(slot_limit) = slot_limit {
+        std::cmp::max(end_slot.saturating_sub(slot_limit), first_slot_in_epoch)
+    } else {
+        first_slot_in_epoch
     };
+    let start_slot_index = (start_slot - first_slot_in_epoch) as usize;
+    let end_slot_index = (end_slot - start_slot) as usize;
 
     let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message("Connecting...");
-    progress_bar.set_message(&format!("Fetching leader schedule for epoch {}...", epoch));
-
     progress_bar.set_message(&format!(
         "Fetching confirmed blocks between slots {} and {}...",
         start_slot, end_slot
     ));
     let confirmed_blocks = rpc_client.get_confirmed_blocks(start_slot, Some(end_slot))?;
 
-    let total_slots = (end_slot - start_slot + 1) as usize;
+    let total_slots = end_slot_index - start_slot_index + 1;
     let total_blocks = confirmed_blocks.len();
     assert!(total_blocks <= total_slots);
     let total_slots_missed = total_slots - total_blocks;
     let mut leader_slot_count = HashMap::new();
     let mut leader_missed_slots = HashMap::new();
 
+    progress_bar.set_message(&format!("Fetching leader schedule for epoch {}...", epoch));
     let leader_schedule = rpc_client
         .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::max())?;
     if leader_schedule.is_none() {
@@ -471,11 +471,11 @@ pub fn process_show_block_production(
     let leader_schedule = leader_schedule.unwrap();
 
     let mut leader_per_slot_index = Vec::new();
-    leader_per_slot_index.resize(total_slots, "");
+    leader_per_slot_index.resize(total_slots, "?");
     for (pubkey, leader_slots) in leader_schedule.iter() {
         for slot_index in leader_slots.iter() {
-            if *slot_index < total_slots {
-                leader_per_slot_index[*slot_index] = pubkey;
+            if *slot_index >= start_slot_index && *slot_index <= end_slot_index {
+                leader_per_slot_index[*slot_index - start_slot_index] = pubkey;
             }
         }
     }
@@ -486,7 +486,8 @@ pub fn process_show_block_production(
     ));
 
     let mut confirmed_blocks_index = 0;
-    for (slot_index, leader) in leader_per_slot_index.iter().enumerate().take(total_slots) {
+    let mut individual_slot_status = vec![];
+    for (slot_index, leader) in leader_per_slot_index.iter().enumerate() {
         let slot = start_slot + slot_index as u64;
         let slot_count = leader_slot_count.entry(leader).or_insert(0);
         *slot_count += 1;
@@ -500,10 +501,17 @@ pub fn process_show_block_production(
                     continue;
                 }
                 if slot_of_next_confirmed_block == slot {
+                    individual_slot_status
+                        .push(style(format!("  {:<15} {:<44}", slot, leader)).to_string());
                     break;
                 }
             }
             *missed_slots += 1;
+            individual_slot_status.push(
+                style(format!("  {:<15} {:<44} MISSED", slot, leader))
+                    .red()
+                    .to_string(),
+            );
             break;
         }
     }
@@ -550,6 +558,14 @@ pub fn process_show_block_production(
         "  (using data from {} slots: {} to {})",
         total_slots, start_slot, end_slot
     );
+
+    if config.verbose {
+        println!(
+            "\n\n{}\n{}",
+            style(format!("  {:<15} {:<44}", "Slot", "Identity Pubkey")).bold(),
+            individual_slot_status.join("\n")
+        );
+    }
     Ok("".to_string())
 }
 

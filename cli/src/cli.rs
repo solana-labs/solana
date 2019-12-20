@@ -1136,7 +1136,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             commitment_config,
         ),
         CliCommand::ShowBlockProduction { epoch, slot_limit } => {
-            process_show_block_production(&rpc_client, *epoch, *slot_limit)
+            process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
         }
         CliCommand::ShowGossip => process_show_gossip(&rpc_client),
         CliCommand::ShowValidators { use_lamports_unit } => {
