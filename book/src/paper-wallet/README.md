@@ -19,6 +19,4 @@ To learn more about the BIP39 standard, visit the Bitcoin BIPs Github repository
 
 {% page-ref page="installation.md" %}
 
-{% page-ref page="keypair.md" %}
-
 {% page-ref page="usage.md" %}
