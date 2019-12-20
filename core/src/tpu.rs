@@ -59,10 +59,10 @@ impl Tpu {
 
         let sigverify_stage = if !sigverify_disabled {
             let verifier = TransactionSigVerifier::default();
-            SigVerifyStage::new(packet_receiver, verified_sender.clone(), verifier)
+            SigVerifyStage::new(packet_receiver, verified_sender, verifier)
         } else {
             let verifier = DisabledSigVerifier::default();
-            SigVerifyStage::new(packet_receiver, verified_sender.clone(), verifier)
+            SigVerifyStage::new(packet_receiver, verified_sender, verifier)
         };
 
         let (verified_vote_sender, verified_vote_receiver) = unbounded();

@@ -167,6 +167,7 @@ impl Delegation {
         self.stake_activating_and_deactivating(epoch, history).0
     }
 
+    #[allow(clippy::comparison_chain)]
     fn stake_activating_and_deactivating(
         &self,
         epoch: Epoch,

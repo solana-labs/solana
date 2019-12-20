@@ -225,11 +225,11 @@ impl Validator {
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
                 blocktree.clone(),
-                &cluster_info,
+                cluster_info.clone(),
                 genesis_hash,
                 ledger_path,
                 storage_state.clone(),
-                &validator_exit,
+                validator_exit.clone(),
             ))
         };
 

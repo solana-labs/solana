@@ -256,7 +256,7 @@ where
     trace!("Start trader thread");
     let trader_thread = {
         let exit_signal = exit_signal.clone();
-        let shared_txs = shared_txs.clone();
+
         let client = clients[0].clone();
         Builder::new()
             .name("solana-exchange-trader".to_string())

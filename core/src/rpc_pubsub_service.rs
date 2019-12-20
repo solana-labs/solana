@@ -31,7 +31,7 @@ impl PubSubService {
 
                 let server = ServerBuilder::with_meta_extractor(io, |context: &RequestContext| {
                         info!("New pubsub connection");
-                        let session = Arc::new(Session::new(context.sender().clone()));
+                        let session = Arc::new(Session::new(context.sender()));
                         session.on_drop(|| {
                             info!("Pubsub connection dropped");
                         });

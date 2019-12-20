@@ -658,9 +658,10 @@ pub fn process_show_stake_account(
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_pubkey)?;
     if stake_account.owner != solana_stake_program::id() {
-        return Err(CliError::RpcRequestError(
-            format!("{:?} is not a stake account", stake_account_pubkey).to_string(),
-        )
+        return Err(CliError::RpcRequestError(format!(
+            "{:?} is not a stake account",
+            stake_account_pubkey
+        ))
         .into());
     }
     fn show_authorized(authorized: &Authorized) {

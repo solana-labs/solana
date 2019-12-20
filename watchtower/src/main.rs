@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_filter("solana=info");
     solana_metrics::set_panic_hook("watchtower");
 
-    let rpc_client = RpcClient::new(json_rpc_url.to_string());
+    let rpc_client = RpcClient::new(json_rpc_url);
 
     let notifier = Notifier::new();
     let mut last_transaction_count = 0;

@@ -802,11 +802,11 @@ fn process_deploy(
 ) -> ProcessResult {
     let program_id = Keypair::new();
     let mut file = File::open(program_location).map_err(|err| {
-        CliError::DynamicProgramError(format!("Unable to open program file: {}", err).to_string())
+        CliError::DynamicProgramError(format!("Unable to open program file: {}", err))
     })?;
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).map_err(|err| {
-        CliError::DynamicProgramError(format!("Unable to read program file: {}", err).to_string())
+        CliError::DynamicProgramError(format!("Unable to read program file: {}", err))
     })?;
 
     // Build transactions to calculate fees

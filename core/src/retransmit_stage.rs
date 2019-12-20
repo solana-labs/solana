@@ -67,7 +67,7 @@ fn retransmit(
         .read()
         .unwrap()
         .sorted_retransmit_peers_and_stakes(stakes);
-    let me = cluster_info.read().unwrap().my_data().clone();
+    let me = cluster_info.read().unwrap().my_data();
     let mut discard_total = 0;
     let mut repair_total = 0;
     let mut retransmit_total = 0;

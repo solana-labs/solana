@@ -96,7 +96,7 @@ pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn er
         std::fs::create_dir_all(outdir)?;
     }
     let mut f = std::fs::File::create(outfile)?;
-    f.write_all(&serialized.clone().into_bytes())?;
+    f.write_all(&serialized.into_bytes())?;
 
     Ok(())
 }

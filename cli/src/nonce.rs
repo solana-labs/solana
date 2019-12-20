@@ -357,9 +357,10 @@ pub fn process_create_nonce_account(
 pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) -> ProcessResult {
     let nonce_account = rpc_client.get_account(nonce_account_pubkey)?;
     if nonce_account.owner != nonce_program::id() {
-        return Err(CliError::RpcRequestError(
-            format!("{:?} is not a nonce account", nonce_account_pubkey).to_string(),
-        )
+        return Err(CliError::RpcRequestError(format!(
+            "{:?} is not a nonce account",
+            nonce_account_pubkey
+        ))
         .into());
     }
     match nonce_account.state() {
@@ -417,9 +418,10 @@ pub fn process_show_nonce_account(
 ) -> ProcessResult {
     let nonce_account = rpc_client.get_account(nonce_account_pubkey)?;
     if nonce_account.owner != nonce_program::id() {
-        return Err(CliError::RpcRequestError(
-            format!("{:?} is not a nonce account", nonce_account_pubkey).to_string(),
-        )
+        return Err(CliError::RpcRequestError(format!(
+            "{:?} is not a nonce account",
+            nonce_account_pubkey
+        ))
         .into());
     }
     let print_account = |hash: Option<Hash>| {

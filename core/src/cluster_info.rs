@@ -203,8 +203,7 @@ impl ClusterInfo {
 
     pub fn insert_self(&mut self, contact_info: ContactInfo) {
         if self.id() == contact_info.id {
-            let value =
-                CrdsValue::new_signed(CrdsData::ContactInfo(contact_info.clone()), &self.keypair);
+            let value = CrdsValue::new_signed(CrdsData::ContactInfo(contact_info), &self.keypair);
             let _ = self.gossip.crds.insert(value, timestamp());
         }
     }
@@ -831,19 +830,19 @@ impl ClusterInfo {
     }
 
     pub fn window_index_request_bytes(&self, slot: Slot, shred_index: u64) -> Result<Vec<u8>> {
-        let req = Protocol::RequestWindowIndex(self.my_data().clone(), slot, shred_index);
+        let req = Protocol::RequestWindowIndex(self.my_data(), slot, shred_index);
         let out = serialize(&req)?;
         Ok(out)
     }
 
     fn window_highest_index_request_bytes(&self, slot: Slot, shred_index: u64) -> Result<Vec<u8>> {
-        let req = Protocol::RequestHighestWindowIndex(self.my_data().clone(), slot, shred_index);
+        let req = Protocol::RequestHighestWindowIndex(self.my_data(), slot, shred_index);
         let out = serialize(&req)?;
         Ok(out)
     }
 
     fn orphan_bytes(&self, slot: Slot) -> Result<Vec<u8>> {
-        let req = Protocol::RequestOrphan(self.my_data().clone(), slot);
+        let req = Protocol::RequestOrphan(self.my_data(), slot);
         let out = serialize(&req)?;
         Ok(out)
     }
@@ -1501,7 +1500,7 @@ impl ClusterInfo {
             .gossip
             .crds
             .update_record_timestamp(&from.id, timestamp());
-        let my_info = me.read().unwrap().my_data().clone();
+        let my_info = me.read().unwrap().my_data();
 
         let (res, label) = {
             match &request {

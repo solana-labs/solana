@@ -92,11 +92,11 @@ impl JsonRpcService {
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blocktree: Arc<Blocktree>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
         genesis_hash: Hash,
         ledger_path: &Path,
         storage_state: StorageState,
-        validator_exit: &Arc<RwLock<Option<ValidatorExit>>>,
+        validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -106,11 +106,12 @@ impl JsonRpcService {
             block_commitment_cache,
             blocktree,
             storage_state,
-            validator_exit,
+            validator_exit.clone(),
         )));
-        let request_processor_ = request_processor.clone();
 
-        let cluster_info = cluster_info.clone();
+        #[cfg(test)]
+        let test_request_processor = request_processor.clone();
+
         let ledger_path = ledger_path.to_path_buf();
 
         let (close_handle_sender, close_handle_receiver) = channel();
@@ -123,7 +124,7 @@ impl JsonRpcService {
 
                 let server =
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
-                        request_processor: request_processor_.clone(),
+                        request_processor: request_processor.clone(),
                         cluster_info: cluster_info.clone(),
                         genesis_hash
                     }).threads(4)
@@ -153,7 +154,7 @@ impl JsonRpcService {
         Self {
             thread_hdl,
             #[cfg(test)]
-            request_processor,
+            request_processor: test_request_processor,
             close_handle: Some(close_handle),
         }
     }
@@ -210,11 +211,11 @@ mod tests {
             bank_forks,
             block_commitment_cache,
             Arc::new(blocktree),
-            &cluster_info,
+            cluster_info,
             Hash::default(),
             &PathBuf::from("farf"),
             StorageState::default(),
-            &validator_exit,
+            validator_exit,
         );
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");

@@ -123,7 +123,7 @@ impl LibraAccountState {
         Self::User(*owner, write_set)
     }
 
-    pub fn create_genesis(mint_balance: u64) -> Result<(Self), InstructionError> {
+    pub fn create_genesis(mint_balance: u64) -> Result<Self, InstructionError> {
         let modules = stdlib_modules();
         let arena = Arena::new();
         let state_view = DataStore::default();
