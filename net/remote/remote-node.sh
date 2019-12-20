@@ -213,7 +213,7 @@ EOF
       fi
 
       if [[ -n $internalNodesStakeLamports ]]; then
-        args+=(--bootstrap-leader-stake-lamports "$internalNodesStakesLamports")
+        args+=(--bootstrap-leader-stake-lamports "$internalNodesStakeLamports")
       fi
       if [[ -n $internalNodesLamports ]]; then
         args+=(--bootstrap-leader-lamports "$internalNodesLamports")
