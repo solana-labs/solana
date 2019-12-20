@@ -32,6 +32,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_vote_program::vote_instruction;
+use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -189,8 +190,26 @@ impl ReplayStage {
 
         let (root_bank_sender, root_bank_receiver) = channel();
         trace!("replay stage");
-        let mut tower =
-            Tower::reload_from_file(&tower_snapshot_path, &my_pubkey, &vote_account, &bank_forks);
+        let tower = Tower::reload_from_file(&tower_snapshot_path, &my_pubkey, &vote_account);
+
+        let mut tower = match tower {
+            Ok(tower) => tower,
+            Err(e) => {
+                let bank_forks_lock = bank_forks.read().unwrap();
+                if let Some(account) = bank_forks_lock
+                    .get(bank_forks_lock.root())
+                    .expect("Failed to get root bank")
+                    .get_account(&vote_account)
+                {
+                    if let Some(vote_state) = VoteState::from(&account) {
+                        if !vote_state.votes.is_empty() {
+                            panic!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
+                        }
+                    }
+                }
+                Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
+            }
+        };
 
         // Start the replay stage loop
 

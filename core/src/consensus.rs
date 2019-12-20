@@ -1,4 +1,3 @@
-use crate::result::Result;
 use chrono::prelude::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_metrics::datapoint_debug;
@@ -16,11 +15,12 @@ use solana_vote_program::vote_state::{
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, File},
-    io::{self, BufReader, Write},
+    io::{BufReader, Write},
     path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::Arc,
     time::Instant,
 };
+use thiserror::Error;
 
 pub const TOWER_SNAPSHOT_NAME: &str = "tower";
 const TOWER_TEMP_SNAPSHOT_NAME: &str = "tower.tmp";
@@ -494,49 +494,27 @@ impl Tower {
         path: &PathBuf,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
-        bank_forks: &Arc<RwLock<BankForks>>,
-    ) -> Self {
+    ) -> Result<Self> {
         info!("Looking for Tower snapshot at {:?}", path);
         // try to reload tower from disk, otherwise reconstruct one
-        let tower = File::open(path.join(TOWER_SNAPSHOT_NAME)).and_then(|tower_file| {
-            let mut stream = BufReader::new(tower_file);
-            let tower: bincode::Result<SavedTower> = bincode::deserialize_from(&mut stream);
-            tower.map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))
-        });
-        let tower = match tower {
-            Ok(tower) => {
-                if !tower.verify(vote_account) {
-                    error!(
-                        "Signature on tower in incorrect, generating a new tower from bank forks"
-                    );
-                    return Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
-                }
-                // If the signature is correct, the deserialize should never fail
-                tower
-                    .deserialize()
-                    .expect("Failed to deserialize Tower form SavedTower")
-            }
-            Err(e) => {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    error!(
-                        "Error: {:?} Unable to restore SavedTower, generating a new tower from bank forks",
-                        e
-                    );
-                }
-                return Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
-            }
-        };
+        let tower_file = File::open(path.join(TOWER_SNAPSHOT_NAME))?;
+        let mut stream = BufReader::new(tower_file);
+        let tower: SavedTower = bincode::deserialize_from(&mut stream)?;
+        if !tower.verify(vote_account) {
+            error!("Signature on tower in invalid");
+            return Err(TowerError::InvalidSignature);
+        }
+        let tower = tower.deserialize()?;
         // check that the tower actually belongs to this node
         if &tower.node_pubkey != my_pubkey {
             error!(
                 "Wrong tower state found. My pubkey {:?} but found tower for {:?}",
                 my_pubkey, tower.node_pubkey
             );
-            Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
-        } else {
-            info!("Restoring tower from saved state.");
-            tower
+            return Err(TowerError::WrongPubkey);
         }
+        info!("Restoring tower from saved state.");
+        Ok(tower)
     }
 }
 
@@ -562,10 +540,28 @@ impl SavedTower {
     }
 }
 
+pub type Result<T> = std::result::Result<T, TowerError>;
+
+#[derive(Error, Debug)]
+pub enum TowerError {
+    #[error("IO Error: {0}")]
+    IOError(#[from] std::io::Error),
+
+    #[error("Serialization Error: {0}")]
+    SerializeError(#[from] Box<bincode::ErrorKind>),
+
+    #[error("The signature on the saved tower is invalid")]
+    InvalidSignature,
+
+    #[error("The tower pubkey does not match the validator pubkey")]
+    WrongPubkey,
+}
+
 #[cfg(test)]
 pub mod test {
     use super::*;
     use crate::replay_stage::{ForkProgress, ReplayStage};
+    use matches::assert_matches;
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
         bank::Bank,
@@ -1530,8 +1526,8 @@ pub mod test {
     fn run_test_load_tower_snapshot<F, G>(
         modify_original: F,
         modify_serialized: G,
-        expect_original: bool,
-    ) where
+    ) -> (Tower, Result<Tower>)
+    where
         F: Fn(&mut Tower, &Pubkey) -> (),
         G: Fn(&PathBuf) -> (),
     {
@@ -1541,9 +1537,6 @@ pub mod test {
         let my_keypair = Keypair::new();
         modify_original(&mut tower, &my_keypair.pubkey());
         let vote_keypair = Keypair::new();
-        let genesis_config = GenesisConfig::default();
-        let bank = Bank::new(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
 
         tower
             .save_to_file(&dir.path().to_path_buf(), &vote_keypair)
@@ -1553,38 +1546,30 @@ pub mod test {
             &dir.path().to_path_buf(),
             &my_keypair.pubkey(),
             &vote_keypair.pubkey(),
-            &bank_forks,
         );
 
-        if expect_original {
-            assert_eq!(loaded, tower);
-        } else {
-            let default = Tower::new(
-                &my_keypair.pubkey(),
-                &vote_keypair.pubkey(),
-                &bank_forks.read().unwrap(),
-            );
-            assert_eq!(loaded, default)
-        }
+        (tower, loaded)
     }
 
     #[test]
     fn test_load_tower_snapshot_good() {
-        run_test_load_tower_snapshot(|tower, pubkey| tower.node_pubkey = *pubkey, |_| (), true)
+        let (tower, loaded) =
+            run_test_load_tower_snapshot(|tower, pubkey| tower.node_pubkey = *pubkey, |_| ());
+        assert_eq!(loaded.unwrap(), tower)
     }
 
     #[test]
     fn test_load_tower_snapshot_wrong_owner() {
-        run_test_load_tower_snapshot(
+        let (_, loaded) = run_test_load_tower_snapshot(
             |tower, _| tower.node_pubkey = Keypair::new().pubkey(),
             |_| (),
-            false,
-        )
+        );
+        assert_matches!(loaded, Err(TowerError::WrongPubkey))
     }
 
     #[test]
-    fn test_load_tower_snapshot_deser_failure() {
-        run_test_load_tower_snapshot(
+    fn test_load_tower_snapshot_invalid_signature() {
+        let (_, loaded) = run_test_load_tower_snapshot(
             |tower, pubkey| tower.node_pubkey = *pubkey,
             |path| {
                 let mut file = OpenOptions::new()
@@ -1598,18 +1583,34 @@ pub mod test {
                 assert_eq!(file.seek(SeekFrom::Start(0)).unwrap(), 0);
                 assert_eq!(file.write(&buf).unwrap(), 1);
             },
-            false,
-        )
+        );
+        assert_matches!(loaded, Err(TowerError::InvalidSignature))
+    }
+
+    #[test]
+    fn test_load_tower_snapshot_deser_failure() {
+        let (_, loaded) = run_test_load_tower_snapshot(
+            |tower, pubkey| tower.node_pubkey = *pubkey,
+            |path| {
+                let path = path.join(TOWER_SNAPSHOT_NAME);
+                OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(&path)
+                    .expect(&format!("Failed to truncate file: {:?}", path));
+            },
+        );
+        assert_matches!(loaded, Err(TowerError::SerializeError(_)))
     }
 
     #[test]
     fn test_load_tower_snapshot_missing() {
-        run_test_load_tower_snapshot(
+        let (_, loaded) = run_test_load_tower_snapshot(
             |tower, pubkey| tower.node_pubkey = *pubkey,
             |path| {
                 remove_file(path.join(TOWER_SNAPSHOT_NAME)).unwrap();
             },
-            false,
-        )
+        );
+        assert_matches!(loaded, Err(TowerError::IOError(_)))
     }
 }
