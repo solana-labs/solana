@@ -11,7 +11,6 @@ use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
 use solana_sdk::clock::Slot;
-use solana_sdk::message::Message;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
@@ -420,11 +419,10 @@ impl Accounts {
     fn lock_account(
         &self,
         locks: &mut HashSet<Pubkey>,
-        message: &Message,
+        writable_keys: Vec<&Pubkey>,
+        readonly_keys: Vec<&Pubkey>,
         error_counters: &mut ErrorCounters,
     ) -> Result<()> {
-        let (writable_keys, readonly_keys) = message.get_account_keys_by_lock_type();
-
         for k in writable_keys.iter() {
             if locks.contains(k) || self.is_locked_readonly(k) {
                 error_counters.account_in_use += 1;
@@ -492,16 +490,26 @@ impl Accounts {
         txs_iteration_order: Option<&[usize]>,
     ) -> Vec<Result<()>> {
         let mut error_counters = ErrorCounters::default();
-        let rv = OrderedIterator::new(txs, txs_iteration_order)
+        let keys: Vec<_> = OrderedIterator::new(txs, txs_iteration_order)
             .map(|tx| {
                 let message = &tx.message();
-                self.lock_account(
-                    &mut self.account_locks.lock().unwrap(),
-                    &message,
-                    &mut error_counters,
-                )
+                message.get_account_keys_by_lock_type()
             })
             .collect();
+
+        let rv = {
+            let mut account_locks = &mut self.account_locks.lock().unwrap();
+            keys.into_iter()
+                .map(|(writable_keys, readonly_keys)| {
+                    self.lock_account(
+                        &mut account_locks,
+                        writable_keys,
+                        readonly_keys,
+                        &mut error_counters,
+                    )
+                })
+                .collect()
+        };
         if error_counters.account_in_use != 0 {
             inc_new_counter_error!(
                 "bank-process_transactions-account_in_use",
@@ -625,6 +633,7 @@ mod tests {
     use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
+    use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::sysvar;
     use solana_sdk::transaction::Transaction;
