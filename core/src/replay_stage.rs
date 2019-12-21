@@ -1144,24 +1144,6 @@ pub(crate) mod tests {
         sync::{Arc, RwLock},
     };
 
-    struct ForkInfo {
-        leader: usize,
-        fork: Vec<Slot>,
-        voters: Vec<usize>,
-    }
-
-    struct ValidatorInfo {
-        stake: u64,
-        keypair: Keypair,
-        voting_keypair: Keypair,
-        staking_keypair: Keypair,
-    }
-
-    struct ForkSelectionResponse {
-        slot: u64,
-        is_locked_out: bool,
-    }
-
     #[test]
     fn test_child_slots_of_same_parent() {
         let ledger_path = get_tmp_ledger_path!();
