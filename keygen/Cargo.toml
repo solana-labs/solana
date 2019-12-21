@@ -1,6 +1,6 @@
 [package]
 name = "solana-keygen"
-version = "0.22.0"
+version = "0.23.0"
 description = "Solana key generation utility"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,8 +14,8 @@ clap = "2.33"
 dirs = "2.0.2"
 num_cpus = "1.11.1"
 rpassword = "4.0"
-solana-clap-utils = { path = "../clap-utils", version = "0.22.0" }
-solana-sdk = { path = "../sdk", version = "0.22.0" }
+solana-clap-utils = { path = "../clap-utils", version = "0.23.0" }
+solana-sdk = { path = "../sdk", version = "0.23.0" }
 tiny-bip39 = "0.6.2"
 
 [[bin]]
