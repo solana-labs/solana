@@ -727,32 +727,30 @@ fn main() {
                     }
                 });
         }
-        ("bounds", Some(args_matches)) => {
-            match blocktree.slot_meta_iterator(0) {
-                Ok(metas) => {
-                    let all = args_matches.is_present("all");
+        ("bounds", Some(args_matches)) => match blocktree.slot_meta_iterator(0) {
+            Ok(metas) => {
+                let all = args_matches.is_present("all");
 
-                    println!("Collecting Ledger information...");
-                    let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-                    if slots.is_empty() {
-                        println!("Ledger is empty. No slots found.");
-                    } else {
-                        let first = slots.first().unwrap();
-                        let last = slots.last().unwrap_or_else(|| first);
-                        if first != last {
-                            println!("Ledger contains data from slots {:?} to {:?}", first, last);
-                            if all {
-                                println!("Non-empty slots: {:?}", slots);
-                            }
-                        } else {
-                            println!("Ledger only contains some data for slot {:?}", first);
+                println!("Collecting Ledger information...");
+                let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+                if slots.is_empty() {
+                    println!("Ledger is empty. No slots found.");
+                } else {
+                    let first = slots.first().unwrap();
+                    let last = slots.last().unwrap_or_else(|| first);
+                    if first != last {
+                        println!("Ledger contains data from slots {:?} to {:?}", first, last);
+                        if all {
+                            println!("Non-empty slots: {:?}", slots);
                         }
+                    } else {
+                        println!("Ledger only contains some data for slot {:?}", first);
                     }
                 }
-                Err(err) => {
-                    eprintln!("Unable to read the Ledger: {:?}", err);
-                    exit(1);
-                }
+            }
+            Err(err) => {
+                eprintln!("Unable to read the Ledger: {:?}", err);
+                exit(1);
             }
         },
         ("", _) => {
