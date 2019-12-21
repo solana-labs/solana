@@ -31,7 +31,7 @@ regularly, we need a systematic assurance of not breaking the cluster when
 changing the source code.
 
 For that purpose, we introduce a mechanism of marking every ABI-related things
-in source code (`struct`, `enums`) with the new `#[frozen_abi]` attribute. This
+in source code (`struct`s, `enum`s) with the new `#[frozen_abi]` attribute. This
 takes hard-coded digest value derived from types of its fields via
 `ser::Serialize`. And the attribute automatically generates a unit test to try
 to detect any unsanctioned changes to the marked ABI-related things.
@@ -47,7 +47,7 @@ ABI management.
 
 ABI item/type: various types to be used for serialization, which collectively
 comprises the whole ABI for any system components. For example, those types
-include `structs` and `enums`.
+include `struct`s and `enum`s.
 
 ABI item digest: Some fixed hash derived from type information of ABI item's
 fields.
