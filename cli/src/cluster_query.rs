@@ -446,7 +446,7 @@ pub fn process_show_block_production(
         first_slot_in_epoch
     };
     let start_slot_index = (start_slot - first_slot_in_epoch) as usize;
-    let end_slot_index = (end_slot - start_slot) as usize;
+    let end_slot_index = (end_slot - first_slot_in_epoch) as usize;
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!(
