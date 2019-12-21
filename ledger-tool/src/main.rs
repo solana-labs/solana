@@ -560,7 +560,14 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("bounds")
-            .about("Print lowest and highest non-empty slots. Note: This ignores gaps in slots")
+            .about("Print lowest and highest non-empty slots. Note that there may be empty slots within the bounds")
+            .arg(
+                Arg::with_name("all")
+                    .long("all")
+                    .takes_value(false)
+                    .required(false)
+                    .help("Additionally print all the non-empty slots within the bounds"),
+            )
         )
         .subcommand(
             SubCommand::with_name("json")
@@ -845,30 +852,34 @@ fn main() {
                     }
                 });
         }
-        ("bounds", _) => match open_blocktree(&ledger_path).slot_meta_iterator(0) {
-            Ok(metas) => {
-                println!("Collecting Ledger information...");
-                let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-                if slots.is_empty() {
-                    println!("Ledger is empty. No slots found.");
-                } else {
-                    let first = slots.first().unwrap();
-                    let last = slots.last().unwrap_or_else(|| first);
-                    if first != last {
-                        println!(
-                            "Ledger contains some data for slots {:?} to {:?}",
-                            first, last
-                        );
+        ("bounds", Some(args_matches)) => {
+            match open_blocktree(&ledger_path).slot_meta_iterator(0) {
+                Ok(metas) => {
+                    let all = args_matches.is_present("all");
+
+                    println!("Collecting Ledger information...");
+                    let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+                    if slots.is_empty() {
+                        println!("Ledger is empty. No slots found.");
                     } else {
-                        println!("Ledger only contains some data for slot {:?}", first);
+                        let first = slots.first().unwrap();
+                        let last = slots.last().unwrap_or_else(|| first);
+                        if first != last {
+                            println!("Ledger contains data from slots {:?} to {:?}", first, last);
+                            if all {
+                                println!("Non-empty slots: {:?}", slots);
+                            }
+                        } else {
+                            println!("Ledger only contains some data for slot {:?}", first);
+                        }
                     }
                 }
+                Err(err) => {
+                    eprintln!("Unable to read the Ledger: {:?}", err);
+                    exit(1);
+                }
             }
-            Err(err) => {
-                eprintln!("Unable to read the Ledger: {:?}", err);
-                exit(1);
-            }
-        },
+        }
         ("analyze-storage", _) => match analyze_storage(&open_database(&ledger_path)) {
             Ok(()) => {
                 println!("Ok.");
