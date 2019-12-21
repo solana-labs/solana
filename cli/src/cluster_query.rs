@@ -494,7 +494,7 @@ pub fn process_show_block_production(
         let missed_slots = leader_missed_slots.entry(leader).or_insert(0);
 
         loop {
-            if !confirmed_blocks.is_empty() {
+            if confirmed_blocks_index < confirmed_blocks.len() {
                 let slot_of_next_confirmed_block = confirmed_blocks[confirmed_blocks_index];
                 if slot_of_next_confirmed_block < slot {
                     confirmed_blocks_index += 1;
