@@ -109,6 +109,7 @@ struct ForkStats {
     stake_lockouts: HashMap<u64, StakeLockout>,
     computed: bool,
     confirmation_reported: bool,
+    are_threshold_vote_minority: bool,
 }
 
 impl ReplaySlotStats {
@@ -831,12 +832,14 @@ impl ReplayStage {
 
                 if !stats.computed {
                     stats.slot = bank.slot();
-                    let (stake_lockouts, total_staked, bank_weight) = tower.collect_vote_lockouts(
-                        bank.slot(),
-                        bank.vote_accounts().into_iter(),
-                        &ancestors,
-                    );
+                    let (stake_lockouts, total_staked, bank_weight, are_threshold_vote_minority) =
+                        tower.collect_vote_lockouts(
+                            bank.slot(),
+                            bank.vote_accounts().into_iter(),
+                            &ancestors,
+                        );
                     Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
+                    stats.are_threshold_vote_minority = are_threshold_vote_minority;
                     stats.total_staked = total_staked;
                     stats.weight = bank_weight;
                     stats.fork_weight = stats.weight
@@ -891,7 +894,13 @@ impl ReplayStage {
         let mut candidates: Vec<_> = frozen_banks.iter().zip(stats.iter()).collect();
 
         //highest weight, lowest slot first
-        candidates.sort_by_key(|b| (b.1.fork_weight, 0i64 - b.1.slot as i64));
+        candidates.sort_by_key(|b| {
+            (
+                !b.1.are_threshold_vote_minority,
+                b.1.fork_weight,
+                0i64 - b.1.slot as i64,
+            )
+        });
         let rv = candidates.last();
         let ms = timing::duration_as_ms(&tower_start.elapsed());
         let weights: Vec<(u128, u64, u64)> = candidates
@@ -1480,13 +1489,13 @@ pub(crate) mod tests {
         assert_eq!(resp[0].as_ref().unwrap().is_locked_out, true);
         assert_eq!(
             resp[0].as_ref().unwrap().slot,
-            forks[0].fork.last().unwrap().clone()
+            forks[1].fork.last().unwrap().clone()
         );
         assert!(resp[1].is_some());
         assert_eq!(resp[1].as_ref().unwrap().is_locked_out, true);
         assert_eq!(
             resp[1].as_ref().unwrap().slot,
-            forks[0].fork.last().unwrap().clone()
+            forks[1].fork.last().unwrap().clone()
         );
     }
 

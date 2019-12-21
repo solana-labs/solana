@@ -72,18 +72,79 @@ impl Tower {
         }
     }
 
+    // This method takes into account highest vote stack length recorded so far
+    // and calculates updated top stakes for the current vote stack
+    // For example, for threshold_depth of 4
+    // and A has 10 lamports, B has 20 lamports, C has 30 lamports
+    // vote stacks are as follows:
+    // VoteStack_A: * | * | * | * | * | * | * | *
+    // VoteStack_B: * | * | * | * | * |
+    // VoteStack_C: * | * | * | * | * | *
+    //
+    // Final top stakes would be:
+    // 60(A+B+C) | 40(A+C) | 10(A) | 10(A)
+    //
+    // This is useful to detect how much stake have voted for top threshold_depth
+    // between all vote states.
+    fn update_top_stakes(
+        vote_stack_length: usize,
+        max_vote_stack_length: &mut usize,
+        top_stakes: &mut Vec<u64>,
+        threshold_depth: usize,
+        lamports: u64,
+    ) {
+        let top_stake_range = if vote_stack_length > *max_vote_stack_length {
+            let height_diff = vote_stack_length.saturating_sub(*max_vote_stack_length);
+            if height_diff > threshold_depth {
+                *top_stakes = vec![0; threshold_depth];
+            } else {
+                for i in (height_diff..threshold_depth).rev() {
+                    top_stakes[i] = top_stakes[i - height_diff];
+                }
+                for top_stake in top_stakes.iter_mut().take(height_diff) {
+                    *top_stake = 0;
+                }
+            }
+            *max_vote_stack_length = vote_stack_length;
+
+            (vote_stack_length.saturating_sub(threshold_depth), 0)
+        } else {
+            let height_diff = max_vote_stack_length.saturating_sub(vote_stack_length);
+            if height_diff > threshold_depth {
+                (vote_stack_length, 0)
+            } else {
+                (
+                    vote_stack_length.saturating_sub(threshold_depth - height_diff),
+                    height_diff,
+                )
+            }
+        };
+
+        let mut index = top_stake_range.1;
+        for _ in (0..vote_stack_length).skip(top_stake_range.0) {
+            top_stakes[index] += lamports;
+            index += 1;
+        }
+    }
+
     pub fn collect_vote_lockouts<F>(
         &self,
         bank_slot: u64,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<u64>>,
-    ) -> (HashMap<Slot, StakeLockout>, u64, u128)
+    ) -> (HashMap<Slot, StakeLockout>, u64, u128, bool)
     where
         F: Iterator<Item = (Pubkey, (u64, Account))>,
     {
         let mut stake_lockouts = HashMap::new();
         let mut total_stake = 0;
         let mut total_weight = 0;
+
+        let mut max_vote_stake_length = 0;
+        // stores top threshold_depth stakes from all vote accounts combined.
+        // Used to get an idea of amount of stakes voted recently.
+        let mut top_stakes: Vec<u64> = vec![0; self.threshold_depth];
+
         for (key, (lamports, account)) in vote_accounts {
             if lamports == 0 {
                 continue;
@@ -123,6 +184,14 @@ impl Tower {
             let start_root = vote_state.root_slot;
 
             vote_state.process_slot_vote_unchecked(bank_slot);
+
+            Self::update_top_stakes(
+                vote_state.votes.len(),
+                &mut max_vote_stake_length,
+                &mut top_stakes,
+                self.threshold_depth,
+                lamports,
+            );
 
             for vote in &vote_state.votes {
                 total_weight += vote.lockout() as u128 * lamports as u128;
@@ -168,7 +237,15 @@ impl Tower {
             }
             total_stake += lamports;
         }
-        (stake_lockouts, total_stake, total_weight)
+
+        let minority_percentage = ((1f64 - self.threshold_size) * 100f64) as u64;
+        let max_staked_at_top = *top_stakes.iter().max().unwrap_or(&0);
+        (
+            stake_lockouts,
+            total_stake,
+            total_weight,
+            ((max_staked_at_top * 100) / total_stake) <= minority_percentage,
+        )
     }
 
     pub fn is_slot_confirmed(
@@ -381,7 +458,7 @@ impl Tower {
     }
 
     fn bank_weight(&self, bank: &Bank, ancestors: &HashMap<Slot, HashSet<Slot>>) -> u128 {
-        let (_, _, bank_weight) =
+        let (_, _, bank_weight, _) =
             self.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter(), ancestors);
         bank_weight
     }
@@ -477,7 +554,7 @@ mod test {
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
-        let (staked_lockouts, total_staked, bank_weight) =
+        let (staked_lockouts, total_staked, bank_weight, _) =
             tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
         assert_eq!(staked_lockouts[&0].stake, 2);
         assert_eq!(staked_lockouts[&0].lockout, 2 + 2 + 4 + 4);
@@ -514,7 +591,7 @@ mod test {
             + root_weight;
         let expected_bank_weight = 2 * vote_account_expected_weight;
         assert_eq!(tower.lockouts.root_slot, Some(0));
-        let (staked_lockouts, _total_staked, bank_weight) = tower.collect_vote_lockouts(
+        let (staked_lockouts, _total_staked, bank_weight, _) = tower.collect_vote_lockouts(
             MAX_LOCKOUT_HISTORY as u64,
             accounts.into_iter(),
             &ancestors,
@@ -876,7 +953,7 @@ mod test {
         for vote in &tower_votes {
             tower.record_vote(*vote, Hash::default());
         }
-        let (staked_lockouts, total_staked, _) =
+        let (staked_lockouts, total_staked, _, _) =
             tower.collect_vote_lockouts(vote_to_evaluate, accounts.clone().into_iter(), &ancestors);
         assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &staked_lockouts, total_staked));
 
@@ -884,7 +961,7 @@ mod test {
         // will expire the vote in one of the vote accounts, so we should have insufficient
         // stake to pass the threshold
         let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64 + 1;
-        let (staked_lockouts, total_staked, _) =
+        let (staked_lockouts, total_staked, _, _) =
             tower.collect_vote_lockouts(vote_to_evaluate, accounts.into_iter(), &ancestors);
         assert!(!tower.check_vote_stake_threshold(
             vote_to_evaluate,
