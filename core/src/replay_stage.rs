@@ -1113,7 +1113,6 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         commitment::BlockCommitment,
-        consensus::Tower,
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
@@ -1131,8 +1130,6 @@ pub(crate) mod tests {
         },
     };
     use solana_runtime::genesis_utils::GenesisConfigInfo;
-    use solana_sdk::account::Account;
-    use solana_sdk::rent::Rent;
     use solana_sdk::{
         hash::{hash, Hash},
         instruction::InstructionError,
@@ -1141,10 +1138,7 @@ pub(crate) mod tests {
         system_transaction,
         transaction::TransactionError,
     };
-    use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state;
-    use solana_vote_program::vote_state::{Vote, VoteState};
-    use std::iter;
+    use solana_vote_program::vote_state::VoteState;
     use std::{
         fs::remove_dir_all,
         sync::{Arc, RwLock},
