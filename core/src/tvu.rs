@@ -1,6 +1,7 @@
 //! The `tvu` module implements the Transaction Validation Unit, a multi-stage transaction
 //! validation pipeline in software.
 
+use crate::fork_selector::OptimalForkSelector;
 use crate::{
     blockstream_service::BlockstreamService,
     cluster_info::ClusterInfo,
@@ -171,6 +172,8 @@ impl Tvu {
             snapshot_package_sender,
             block_commitment_cache,
             transaction_status_sender,
+            // TODO: Make it configurable
+            fork_selector: OptimalForkSelector::default(),
         };
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(

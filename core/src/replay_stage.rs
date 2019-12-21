@@ -1,5 +1,7 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
+use crate::fork_selector::ForkSelector;
+use crate::replay_stage_ds::{ForkProgress, ForkStats};
 use crate::{
     cluster_info::ClusterInfo,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
@@ -65,7 +67,10 @@ impl Drop for Finalizer {
 }
 
 #[derive(Default)]
-pub struct ReplayStageConfig {
+pub struct ReplayStageConfig<T>
+where
+    T: Sync + Send + 'static + ForkSelector,
+{
     pub my_pubkey: Pubkey,
     pub vote_account: Pubkey,
     pub voting_keypair: Option<Arc<Keypair>>,
@@ -77,6 +82,7 @@ pub struct ReplayStageConfig {
     pub snapshot_package_sender: Option<SnapshotPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
+    pub fork_selector: T,
 }
 
 pub struct ReplayStage {
@@ -84,108 +90,19 @@ pub struct ReplayStage {
     commitment_service: AggregateCommitmentService,
 }
 
-struct ReplaySlotStats {
-    // Per-slot elapsed time
-    slot: Slot,
-    fetch_entries_elapsed: u64,
-    fetch_entries_fail_elapsed: u64,
-    entry_verification_elapsed: u64,
-    replay_elapsed: u64,
-    replay_start: Instant,
-}
-
-#[derive(Debug, Clone, Default)]
-struct ForkStats {
-    weight: u128,
-    fork_weight: u128,
-    total_staked: u64,
-    slot: Slot,
-    block_height: u64,
-    has_voted: bool,
-    is_recent: bool,
-    is_empty: bool,
-    vote_threshold: bool,
-    is_locked_out: bool,
-    stake_lockouts: HashMap<u64, StakeLockout>,
-    computed: bool,
-    confirmation_reported: bool,
-}
-
-impl ReplaySlotStats {
-    pub fn new(slot: Slot) -> Self {
-        Self {
-            slot,
-            fetch_entries_elapsed: 0,
-            fetch_entries_fail_elapsed: 0,
-            entry_verification_elapsed: 0,
-            replay_elapsed: 0,
-            replay_start: Instant::now(),
-        }
-    }
-
-    pub fn report_stats(&self, total_entries: usize, total_shreds: usize) {
-        datapoint_info!(
-            "replay-slot-stats",
-            ("slot", self.slot as i64, i64),
-            ("fetch_entries_time", self.fetch_entries_elapsed as i64, i64),
-            (
-                "fetch_entries_fail_time",
-                self.fetch_entries_fail_elapsed as i64,
-                i64
-            ),
-            (
-                "entry_verification_time",
-                self.entry_verification_elapsed as i64,
-                i64
-            ),
-            ("replay_time", self.replay_elapsed as i64, i64),
-            (
-                "replay_total_elapsed",
-                self.replay_start.elapsed().as_micros() as i64,
-                i64
-            ),
-            ("total_entries", total_entries as i64, i64),
-            ("total_shreds", total_shreds as i64, i64),
-        );
-    }
-}
-
-struct ForkProgress {
-    last_entry: Hash,
-    num_shreds: usize,
-    num_entries: usize,
-    tick_hash_count: u64,
-    started_ms: u64,
-    is_dead: bool,
-    stats: ReplaySlotStats,
-    fork_stats: ForkStats,
-}
-
-impl ForkProgress {
-    pub fn new(slot: Slot, last_entry: Hash) -> Self {
-        Self {
-            last_entry,
-            num_shreds: 0,
-            num_entries: 0,
-            tick_hash_count: 0,
-            started_ms: timing::timestamp(),
-            is_dead: false,
-            stats: ReplaySlotStats::new(slot),
-            fork_stats: ForkStats::default(),
-        }
-    }
-}
-
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(
-        config: ReplayStageConfig,
+    pub fn new<T>(
+        config: ReplayStageConfig<T>,
         blocktree: Arc<Blocktree>,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-    ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
+    ) -> (Self, Receiver<Vec<Arc<Bank>>>)
+    where
+        T: Sync + Send + 'static + ForkSelector,
+    {
         let ReplayStageConfig {
             my_pubkey,
             vote_account,
@@ -198,6 +115,7 @@ impl ReplayStage {
             snapshot_package_sender,
             block_commitment_cache,
             transaction_status_sender,
+            fork_selector,
         } = config;
 
         let (root_bank_sender, root_bank_receiver) = channel();
@@ -271,12 +189,19 @@ impl ReplayStage {
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
                     loop {
                         let start = allocated.get();
-                        let vote_bank = Self::select_fork(
+                        let frozen_banks = Self::compute_fork_progress(
                             &my_pubkey,
                             &ancestors,
                             &bank_forks,
                             &tower,
                             &mut progress,
+                        );
+                        let vote_bank = Self::select_fork(
+                            &fork_selector,
+                            &bank_forks,
+                            &ancestors,
+                            &frozen_banks,
+                            &progress,
                         );
                         datapoint_debug!(
                             "replay_stage-memory",
@@ -792,34 +717,64 @@ impl ReplayStage {
         did_complete_bank
     }
 
-    fn select_fork(
+    fn select_fork<T>(
+        fork_selector: &T,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        ancestors: &HashMap<u64, HashSet<u64>>,
+        frozen_banks: &HashMap<Slot, Arc<Bank>>,
+        progress: &HashMap<u64, ForkProgress>,
+    ) -> VoteAndPoHBank
+    where
+        T: ForkSelector,
+    {
+        let forks = fork_selector.extract_forks(
+            frozen_banks,
+            ancestors,
+            &bank_forks.read().unwrap().descendants(),
+            progress,
+        );
+        let best_fork = fork_selector.find_best_fork(forks, progress);
+
+        if let Some(best_fork) = best_fork {
+            let best_slot = best_fork.heaviest_slot;
+            Some((
+                bank_forks.read().unwrap().banks[&best_slot].clone(),
+                progress.get(&best_slot).unwrap().fork_stats.clone(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn compute_fork_progress(
         my_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         tower: &Tower,
         progress: &mut HashMap<u64, ForkProgress>,
-    ) -> VoteAndPoHBank {
-        let tower_start = Instant::now();
-
-        let mut frozen_banks: Vec<_> = bank_forks
+    ) -> HashMap<Slot, Arc<Bank>> {
+        let frozen_banks: HashMap<Slot, Arc<Bank>> = bank_forks
             .read()
             .unwrap()
             .frozen_banks()
             .values()
             .cloned()
+            .map(|b| (b.slot(), b))
             .collect();
-        frozen_banks.sort_by_key(|bank| bank.slot());
+
         let num_frozen_banks = frozen_banks.len();
 
         trace!("frozen_banks {}", frozen_banks.len());
         let num_old_banks = frozen_banks
             .iter()
-            .filter(|b| b.slot() < tower.root().unwrap_or(0))
+            .filter(|(_slot, b)| b.slot() < tower.root().unwrap_or(0))
             .count();
+
+        trace!("frozen_banks {}", frozen_banks.len());
 
         let stats: Vec<ForkStats> = frozen_banks
             .iter()
-            .map(|bank| {
+            .map(|(_slot, bank)| {
                 // Only time progress map should be missing a bank slot
                 // is if this node was the leader for this slot as those banks
                 // are not replayed in replay_active_banks()
@@ -876,9 +831,11 @@ impl ReplayStage {
                     .get_mut(&bank.slot())
                     .expect("All frozen banks must exist in the Progress map")
                     .fork_stats = stats.clone();
+
                 stats
             })
             .collect();
+
         let num_not_recent = stats.iter().filter(|s| !s.is_recent).count();
         let num_has_voted = stats.iter().filter(|s| s.has_voted).count();
         let num_empty = stats.iter().filter(|s| s.is_empty).count();
@@ -887,26 +844,6 @@ impl ReplayStage {
             .iter()
             .filter(|s| s.is_recent && !s.has_voted && !s.vote_threshold)
             .count();
-
-        let mut candidates: Vec<_> = frozen_banks.iter().zip(stats.iter()).collect();
-
-        //highest weight, lowest slot first
-        candidates.sort_by_key(|b| (b.1.fork_weight, 0i64 - b.1.slot as i64));
-        let rv = candidates.last();
-        let ms = timing::duration_as_ms(&tower_start.elapsed());
-        let weights: Vec<(u128, u64, u64)> = candidates
-            .iter()
-            .map(|x| (x.1.weight, x.1.slot, x.1.block_height))
-            .collect();
-        debug!(
-            "@{:?} tower duration: {:?} len: {}/{} weights: {:?} voting: {}",
-            timing::timestamp(),
-            ms,
-            candidates.len(),
-            stats.iter().filter(|s| !s.has_voted).count(),
-            weights,
-            rv.is_some()
-        );
         datapoint_debug!(
             "replay_stage-select_fork",
             ("frozen_banks", num_frozen_banks as i64, i64),
@@ -920,9 +857,9 @@ impl ReplayStage {
                 num_votable_threshold_failure as i64,
                 i64
             ),
-            ("tower_duration", ms as i64, i64),
         );
-        rv.cloned().map(|x| (x.0.clone(), x.1.clone()))
+
+        frozen_banks
     }
 
     fn confirm_forks(
@@ -1229,265 +1166,6 @@ pub(crate) mod tests {
     struct ForkSelectionResponse {
         slot: u64,
         is_locked_out: bool,
-    }
-
-    fn simulate_fork_selection(
-        neutral_fork: &ForkInfo,
-        forks: &Vec<ForkInfo>,
-        validators: &Vec<ValidatorInfo>,
-    ) -> Vec<Option<ForkSelectionResponse>> {
-        fn vote(bank: &Arc<Bank>, pubkey: &Pubkey, slot: Slot) {
-            let mut vote_account = bank.get_account(&pubkey).unwrap();
-            let mut vote_state = VoteState::from(&vote_account).unwrap();
-            vote_state.process_slot_vote_unchecked(slot);
-            vote_state.to(&mut vote_account).unwrap();
-            bank.store_account(&pubkey, &vote_account);
-        }
-
-        let mut towers: Vec<Tower> = iter::repeat_with(|| Tower::new_for_tests(8, 0.67))
-            .take(validators.len())
-            .collect();
-
-        for slot in &neutral_fork.fork {
-            for tower in towers.iter_mut() {
-                tower.record_bank_vote(Vote {
-                    hash: Hash::default(),
-                    slots: vec![*slot],
-                    timestamp: None,
-                });
-            }
-        }
-
-        for fork_info in forks.iter() {
-            for slot in fork_info.fork.iter() {
-                for voter_index in fork_info.voters.iter() {
-                    towers[*voter_index].record_bank_vote(Vote {
-                        hash: Hash::default(),
-                        slots: vec![*slot],
-                        timestamp: None,
-                    });
-                }
-            }
-        }
-
-        let genesis_vote_accounts: Vec<Account> = validators
-            .iter()
-            .map(|validator| {
-                vote_state::create_account(
-                    &validator.voting_keypair.pubkey(),
-                    &validator.keypair.pubkey(),
-                    0,
-                    validator.stake,
-                )
-            })
-            .collect();
-
-        let genesis_stake_accounts: Vec<Account> = validators
-            .iter()
-            .enumerate()
-            .map(|(i, validator)| {
-                stake_state::create_account(
-                    &validator.staking_keypair.pubkey(),
-                    &validator.voting_keypair.pubkey(),
-                    &genesis_vote_accounts[i],
-                    &Rent::default(),
-                    validator.stake,
-                )
-            })
-            .collect();
-
-        let mut genesis_config = create_genesis_config(10_000).genesis_config;
-        genesis_config.accounts.clear();
-
-        for i in 0..validators.len() {
-            genesis_config.accounts.insert(
-                validators[i].voting_keypair.pubkey(),
-                genesis_vote_accounts[i].clone(),
-            );
-            genesis_config.accounts.insert(
-                validators[i].staking_keypair.pubkey(),
-                genesis_stake_accounts[i].clone(),
-            );
-        }
-
-        let mut bank_forks = BankForks::new(neutral_fork.fork[0], Bank::new(&genesis_config));
-
-        let mut fork_progresses: Vec<HashMap<u64, ForkProgress>> = iter::repeat_with(HashMap::new)
-            .take(validators.len())
-            .collect();
-
-        for fork_progress in fork_progresses.iter_mut() {
-            fork_progress
-                .entry(neutral_fork.fork[0])
-                .or_insert_with(|| {
-                    ForkProgress::new(
-                        bank_forks.banks[&0].slot(),
-                        bank_forks.banks[&0].last_blockhash(),
-                    )
-                });
-        }
-
-        for index in 1..neutral_fork.fork.len() {
-            let bank = Bank::new_from_parent(
-                &bank_forks.banks[&neutral_fork.fork[index - 1]].clone(),
-                &validators[neutral_fork.leader].keypair.pubkey(),
-                neutral_fork.fork[index],
-            );
-
-            bank_forks.insert(bank);
-
-            for validator in validators.iter() {
-                vote(
-                    &bank_forks.banks[&neutral_fork.fork[index]].clone(),
-                    &validator.voting_keypair.pubkey(),
-                    neutral_fork.fork[index - 1],
-                );
-            }
-
-            bank_forks.banks[&neutral_fork.fork[index]].freeze();
-
-            for fork_progress in fork_progresses.iter_mut() {
-                fork_progress
-                    .entry(bank_forks.banks[&neutral_fork.fork[index]].slot())
-                    .or_insert_with(|| {
-                        ForkProgress::new(
-                            bank_forks.banks[&neutral_fork.fork[index]].slot(),
-                            bank_forks.banks[&neutral_fork.fork[index]].last_blockhash(),
-                        )
-                    });
-            }
-        }
-
-        let last_neutral_bank = &bank_forks.banks[neutral_fork.fork.last().unwrap()].clone();
-
-        for fork_info in forks.iter() {
-            for index in 0..fork_info.fork.len() {
-                let last_bank: &Arc<Bank>;
-                let last_bank_in_fork: Arc<Bank>;
-
-                if index == 0 {
-                    last_bank = &last_neutral_bank;
-                } else {
-                    last_bank_in_fork = bank_forks.banks[&fork_info.fork[index - 1]].clone();
-                    last_bank = &last_bank_in_fork;
-                }
-
-                let bank = Bank::new_from_parent(
-                    last_bank,
-                    &validators[fork_info.leader].keypair.pubkey(),
-                    fork_info.fork[index],
-                );
-
-                bank_forks.insert(bank);
-
-                for voter_index in fork_info.voters.iter() {
-                    vote(
-                        &bank_forks.banks[&fork_info.fork[index]].clone(),
-                        &validators[*voter_index].voting_keypair.pubkey(),
-                        last_bank.slot(),
-                    );
-                }
-
-                bank_forks.banks[&fork_info.fork[index]].freeze();
-
-                for fork_progress in fork_progresses.iter_mut() {
-                    fork_progress
-                        .entry(bank_forks.banks[&fork_info.fork[index]].slot())
-                        .or_insert_with(|| {
-                            ForkProgress::new(
-                                bank_forks.banks[&fork_info.fork[index]].slot(),
-                                bank_forks.banks[&fork_info.fork[index]].last_blockhash(),
-                            )
-                        });
-                }
-            }
-        }
-
-        let bank_fork_ancestors = bank_forks.ancestors();
-        let wrapped_bank_fork = Arc::new(RwLock::new(bank_forks));
-
-        (0..validators.len())
-            .map(|i| {
-                let response = ReplayStage::select_fork(
-                    &validators[i].keypair.pubkey(),
-                    &bank_fork_ancestors,
-                    &wrapped_bank_fork,
-                    &towers[i],
-                    &mut fork_progresses[i],
-                );
-
-                if response.is_none() {
-                    None
-                } else {
-                    let (_bank, stats) = response.unwrap();
-
-                    Some(ForkSelectionResponse {
-                        slot: stats.slot,
-                        is_locked_out: stats.is_locked_out,
-                    })
-                }
-            })
-            .collect()
-    }
-
-    #[test]
-    fn test_minority_fork_overcommit_attack() {
-        let neutral_fork = ForkInfo {
-            leader: 0,
-            fork: vec![0, 1, 2],
-            voters: vec![],
-        };
-
-        let forks: Vec<ForkInfo> = vec![
-            // Minority fork
-            ForkInfo {
-                leader: 2,
-                fork: (3..=3 + 8).collect(),
-                voters: vec![2],
-            },
-            ForkInfo {
-                leader: 1,
-                fork: (12..12 + 8).collect(),
-                voters: vec![0, 1],
-            },
-        ];
-
-        let validators: Vec<ValidatorInfo> = vec![
-            ValidatorInfo {
-                stake: 34_000_000,
-                keypair: Keypair::new(),
-                voting_keypair: Keypair::new(),
-                staking_keypair: Keypair::new(),
-            },
-            ValidatorInfo {
-                stake: 33_000_000,
-                keypair: Keypair::new(),
-                voting_keypair: Keypair::new(),
-                staking_keypair: Keypair::new(),
-            },
-            // Malicious Node
-            ValidatorInfo {
-                stake: 33_000_000,
-                keypair: Keypair::new(),
-                voting_keypair: Keypair::new(),
-                staking_keypair: Keypair::new(),
-            },
-        ];
-
-        let resp = simulate_fork_selection(&neutral_fork, &forks, &validators);
-        // Both honest nodes are now want to switch to minority fork and are locked out
-        assert!(resp[0].is_some());
-        assert_eq!(resp[0].as_ref().unwrap().is_locked_out, true);
-        assert_eq!(
-            resp[0].as_ref().unwrap().slot,
-            forks[0].fork.last().unwrap().clone()
-        );
-        assert!(resp[1].is_some());
-        assert_eq!(resp[1].as_ref().unwrap().is_locked_out, true);
-        assert_eq!(
-            resp[1].as_ref().unwrap().slot,
-            forks[0].fork.last().unwrap().clone()
-        );
     }
 
     #[test]
