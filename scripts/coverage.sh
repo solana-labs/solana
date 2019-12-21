@@ -29,29 +29,35 @@ export CARGO_INCREMENTAL=0
 export RUST_BACKTRACE=1
 export RUST_MIN_STACK=8388608
 
-echo "--- revert target dir to pre-run state to remove old coverage results"
-# Remove me after awhile since we transition to new cache pruning method below
+echo "--- remove old coverage results"
 if [[ -d target/cov ]]; then
-  find target/cov -name \*.gcda -print0 | xargs -0 rm -f
+  find target/cov -name \*.gcda -delete
 fi
 rm -rf target/cov/$reportName
-
-if [[ -e target/cov/build-finished ]]; then
-  echo "Reverting files"
-  find target/cov -newer target/cov/build-finished -type f -print -delete
-  echo "Reverting (empty) directories"
-  find target/cov -newer target/cov/build-finished -type d -empty -print -delete
-fi
+mkdir -p target/cov
+timing_file=target/cov/before-test
+touch "$timing_file"
 
 source ci/rust-version.sh nightly
 
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --no-run "${packages[@]}"
-touch target/cov/build-finished
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log
 
 echo "--- grcov"
 
-_ grcov target/cov/debug/deps/ > target/cov/lcov-full.info
+# Create a clean room dir only with updated gcda/gcno files for this run
+data_dir=target/cov/tmp
+rm -rf "$data_dir"
+mkdir -p "$data_dir"
+
+find target/cov -name \*.gcda -newer "$timing_file" |
+  (while read -r gcda_file; do
+    gcno_file="${gcda_file%.gcda}.gcno"
+    ln -s "../../../$gcda_file" "$data_dir/$(basename $gcda_file)"
+    ln -s "../../../$gcno_file" "$data_dir/$(basename $gcno_file)"
+  done)
+
+_ grcov "$data_dir" > target/cov/lcov-full.info
 
 echo "--- filter-files-from-lcov"
 
