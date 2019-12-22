@@ -508,7 +508,7 @@ pub fn process_show_block_production(
             }
             *missed_slots += 1;
             individual_slot_status.push(
-                style(format!("  {:<15} {:<44} MISSED", slot, leader))
+                style(format!("  {:<15} {:<44} SKIPPED", slot, leader))
                     .red()
                     .to_string(),
             );
