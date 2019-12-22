@@ -42,10 +42,6 @@ solana-gossip --entrypoint testnet.solana.com:8001 spy
 If your machine has a GPU with CUDA installed \(Linux-only currently\), include
 the `--cuda` argument to `solana-validator`.
 
-```bash
-export SOLANA_CUDA=1
-```
-
 When your validator is started look for the following log message to indicate
 that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
