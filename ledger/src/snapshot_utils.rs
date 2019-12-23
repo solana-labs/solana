@@ -107,6 +107,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
 }
 
 pub fn serialize_status_cache(
+    slot: Slot,
     slot_deltas: &[SlotDelta<TransactionResult<()>>],
     snapshot_links: &TempDir,
 ) -> Result<()> {
@@ -125,7 +126,11 @@ pub fn serialize_status_cache(
     )?;
     status_cache_serialize.stop();
 
-    datapoint_info!("snapshot-status-cache-file", ("size", consumed_size, i64));
+    datapoint_info!(
+        "snapshot-status-cache-file",
+        ("slot", slot, i64),
+        ("size", consumed_size, i64)
+    );
 
     inc_new_counter_info!(
         "serialize-status-cache-ms",
