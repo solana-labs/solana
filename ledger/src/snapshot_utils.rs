@@ -245,21 +245,24 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     fs::create_dir_all(slot_snapshot_dir.clone())?;
 
     // the snapshot is stored as snapshot_path/slot/slot
-    let snapshot_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
+    let snapshot_bank_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
     info!(
         "creating snapshot {}, path: {:?}",
         bank.slot(),
-        snapshot_file_path,
+        snapshot_bank_file_path,
     );
 
     // Create the snapshot
     let mut bank_rc_serialize = Measure::start("create snapshot");
-    let consumed_size =
-        serialize_snapshot_data_file(&snapshot_file_path, MAX_SNAPSHOT_DATA_FILE_SIZE, |stream| {
+    let consumed_size = serialize_snapshot_data_file(
+        &snapshot_bank_file_path,
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
+        |stream| {
             serialize_into(stream.by_ref(), &*bank)?;
             serialize_into(stream.by_ref(), &bank.rc)?;
             Ok(())
-        })?;
+        },
+    )?;
     bank_rc_serialize.stop();
 
     datapoint_info!(
@@ -274,7 +277,7 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
         "{} for slot {} at {:?}",
         bank_rc_serialize,
         bank.slot(),
-        snapshot_file_path,
+        snapshot_bank_file_path,
     );
 
     Ok(())
