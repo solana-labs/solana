@@ -49,8 +49,10 @@ echo "--- grcov"
 rm -rf target/cov/tmp
 mkdir -p target/cov/tmp
 
-find target/cov -name \*.gcda -newer "$timing_file" |
-  (while read -r gcda_file; do
+# Can't use a simpler construct under the condition of SC2044 and bash 3
+# (macOS's default). See: https://github.com/koalaman/shellcheck/wiki/SC2044
+find target/cov -name \*.gcda -newer "$timing_file" -print0 |
+  (while IFS= read -r -d '' gcda_file; do
     gcno_file="${gcda_file%.gcda}.gcno"
     ln -s "../../../$gcda_file" "target/cov/tmp/$(basename "$gcda_file")"
     ln -s "../../../$gcno_file" "target/cov/tmp/$(basename "$gcno_file")"
