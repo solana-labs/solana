@@ -220,31 +220,8 @@ impl Validator {
         );
 
         let blocktree = Arc::new(blocktree);
-
         if config.enable_ctrl_c_handler {
-            let bank_forks = bank_forks.clone();
-            let counter = Arc::new(AtomicUsize::new(0));
-            set_handler(move || {
-                if counter.fetch_add(1, Ordering::Relaxed) > 0 {
-                    std::process::exit(1);
-                }
-                let bank = bank_forks.read().unwrap().working_bank();
-                let stake: Option<u64> = bank
-                    .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
-                    .and_then(|account| {
-                        account.iter().find(|(pubkey, (stake, account))| {
-                            **pubkey == id
-                                && *stake > 0
-                                && VoteState::deserialize(&account.data).is_ok()
-                        })
-                    })
-                    .map(|(_, (n, _))| *n);
-                match stake {
-                    Some(_val) => warn!("Validator is staked!  Press ^C again to exit"),
-                    None => std::process::exit(1),
-                }
-            })
-            .expect("Error setting Ctrl-C handler");
+            set_ctrl_c_handler(id, bank_forks.clone())
         }
 
         let rpc_service = if node.info.rpc.port() == 0 {
@@ -500,6 +477,31 @@ impl Validator {
 
         Ok(())
     }
+}
+
+fn set_ctrl_c_handler(node_identity: Pubkey, bank_forks: Arc<RwLock<BankForks>>) {
+    let counter = Arc::new(AtomicUsize::new(0));
+    set_handler(move || {
+        if counter.fetch_add(1, Ordering::Relaxed) > 0 {
+            std::process::exit(1);
+        }
+        let bank = bank_forks.read().unwrap().working_bank();
+        let stake: Option<u64> = bank
+            .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
+            .and_then(|account| {
+                account.iter().find(|(pubkey, (stake, account))| {
+                    **pubkey == node_identity
+                        && *stake > 0
+                        && VoteState::deserialize(&account.data).is_ok()
+                })
+            })
+            .map(|(_, (n, _))| *n);
+        match stake {
+            Some(_val) => warn!("Validator is staked!  Press ^C again to exit"),
+            None => std::process::exit(1),
+        }
+    })
+    .expect("Error setting Ctrl-C handler");
 }
 
 pub fn new_banks_from_blocktree(
