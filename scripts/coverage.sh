@@ -31,9 +31,12 @@ export RUST_MIN_STACK=8388608
 
 echo "--- remove old coverage results"
 if [[ -d target/cov ]]; then
-  find target/cov -name \*.gcda -print0 | xargs -0 rm -f
+  find target/cov -name \*.gcda -delete
 fi
 rm -rf target/cov/$reportName
+mkdir -p target/cov
+timing_file=target/cov/before-test
+touch "$timing_file"
 
 source ci/rust-version.sh nightly
 
@@ -42,7 +45,20 @@ RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${pac
 
 echo "--- grcov"
 
-_ grcov target/cov/debug/deps/ > target/cov/lcov-full.info
+# Create a clean room dir only with updated gcda/gcno files for this run
+rm -rf target/cov/tmp
+mkdir -p target/cov/tmp
+
+# Can't use a simpler construct under the condition of SC2044 and bash 3
+# (macOS's default). See: https://github.com/koalaman/shellcheck/wiki/SC2044
+find target/cov -name \*.gcda -newer "$timing_file" -print0 |
+  (while IFS= read -r -d '' gcda_file; do
+    gcno_file="${gcda_file%.gcda}.gcno"
+    ln -s "../../../$gcda_file" "target/cov/tmp/$(basename "$gcda_file")"
+    ln -s "../../../$gcno_file" "target/cov/tmp/$(basename "$gcno_file")"
+  done)
+
+_ grcov target/cov/tmp > target/cov/lcov-full.info
 
 echo "--- filter-files-from-lcov"
 
