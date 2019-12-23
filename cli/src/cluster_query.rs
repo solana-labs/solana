@@ -458,9 +458,9 @@ pub fn process_show_block_production(
     let total_slots = end_slot_index - start_slot_index + 1;
     let total_blocks = confirmed_blocks.len();
     assert!(total_blocks <= total_slots);
-    let total_slots_missed = total_slots - total_blocks;
+    let total_slots_skipped = total_slots - total_blocks;
     let mut leader_slot_count = HashMap::new();
-    let mut leader_missed_slots = HashMap::new();
+    let mut leader_skipped_slots = HashMap::new();
 
     progress_bar.set_message(&format!("Fetching leader schedule for epoch {}...", epoch));
     let leader_schedule = rpc_client
@@ -482,7 +482,7 @@ pub fn process_show_block_production(
 
     progress_bar.set_message(&format!(
         "Processing {} slots containing {} blocks and {} empty slots...",
-        total_slots, total_blocks, total_slots_missed
+        total_slots, total_blocks, total_slots_skipped
     ));
 
     let mut confirmed_blocks_index = 0;
@@ -491,7 +491,7 @@ pub fn process_show_block_production(
         let slot = start_slot + slot_index as u64;
         let slot_count = leader_slot_count.entry(leader).or_insert(0);
         *slot_count += 1;
-        let missed_slots = leader_missed_slots.entry(leader).or_insert(0);
+        let skipped_slots = leader_skipped_slots.entry(leader).or_insert(0);
 
         loop {
             if confirmed_blocks_index < confirmed_blocks.len() {
@@ -506,7 +506,7 @@ pub fn process_show_block_production(
                     break;
                 }
             }
-            *missed_slots += 1;
+            *skipped_slots += 1;
             individual_slot_status.push(
                 style(format!("  {:<15} {:<44} SKIPPED", slot, leader))
                     .red()
@@ -524,23 +524,23 @@ pub fn process_show_block_production(
             "Identity Pubkey",
             "Leader Slots",
             "Blocks Produced",
-            "Missed Slots",
-            "Missed Block Percentage",
+            "Skipped Slots",
+            "Skipped Slot Percentage",
         ))
         .bold()
     );
 
     let mut table = vec![];
     for (leader, leader_slots) in leader_slot_count.iter() {
-        let missed_slots = leader_missed_slots.get(leader).unwrap();
-        let blocks_produced = leader_slots - missed_slots;
+        let skipped_slots = leader_skipped_slots.get(leader).unwrap();
+        let blocks_produced = leader_slots - skipped_slots;
         table.push(format!(
             "  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
             leader,
             leader_slots,
             blocks_produced,
-            missed_slots,
-            *missed_slots as f64 / *leader_slots as f64 * 100.
+            skipped_slots,
+            *skipped_slots as f64 / *leader_slots as f64 * 100.
         ));
     }
     table.sort();
@@ -551,8 +551,8 @@ pub fn process_show_block_production(
         format!("Epoch {} total:", epoch),
         total_slots,
         total_blocks,
-        total_slots_missed,
-        total_slots_missed as f64 / total_slots as f64 * 100.
+        total_slots_skipped,
+        total_slots_skipped as f64 / total_slots as f64 * 100.
     );
     println!(
         "  (using data from {} slots: {} to {})",
