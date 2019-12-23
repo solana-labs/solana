@@ -475,10 +475,10 @@ impl Accounts {
     }
 
     pub fn bank_hash_at(&self, slot_id: Slot) -> BankHash {
-        let slot_hashes = self.accounts_db.slot_hashes.read().unwrap();
-        *slot_hashes
+        let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
+        *bank_hashes
             .get(&slot_id)
-            .expect("No accounts hash was found for this bank, that should not be possible")
+            .expect("No bank hash was found for this bank, that should not be possible")
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the
