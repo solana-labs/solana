@@ -95,12 +95,37 @@ pub struct Api<'a> {
 
 static mut API: Option<Container<Api>> = None;
 
-fn init(name: &OsStr) {
+enum GpuApi {
+    Cuda,
+    OpenCL,
+}
+
+static mut GPU_API: Option<GpuApi> = None;
+
+#[derive(PartialEq)]
+pub enum PerfFeature {
+    Ed25519Verify,
+    Ed25519Sign,
+    PohVerify,
+    Chacha,
+}
+
+pub fn is_supported(feature: PerfFeature) -> bool {
+    unsafe {
+        match &GPU_API {
+            Some(GpuApi::OpenCL) => feature == PerfFeature::Ed25519Verify,
+            _ => true,
+        }
+    }
+}
+
+fn init(name: &OsStr, gpu_api: GpuApi) {
     static INIT_HOOK: Once = Once::new();
 
     info!("Loading {:?}", name);
     unsafe {
         INIT_HOOK.call_once(|| {
+            GPU_API = Some(gpu_api);
             API = Some(Container::load(name).unwrap_or_else(|err| {
                 error!("Unable to load {:?}: {}", name, err);
                 std::process::exit(1);
@@ -166,14 +191,34 @@ pub fn init_cuda() {
             let libcuda_crypt = perf_libs_path
                 .join(cuda_home.file_name().unwrap())
                 .join("libcuda-crypt.so");
-            return init(libcuda_crypt.as_os_str());
+            return init(libcuda_crypt.as_os_str(), GpuApi::Cuda);
         } else {
             warn!("CUDA installation not found");
         }
     }
 
     // Last resort!  Blindly load the shared object and hope it all works out
-    init(OsStr::new("libcuda-crypt.so"))
+    init(OsStr::new("libcuda-crypt.so"), GpuApi::Cuda)
+}
+
+pub fn init_opencl() {
+    if let Some(perf_libs_path) = locate_perf_libs() {
+        let ld_library_path = perf_libs_path
+            .join("opencl")
+            .to_str()
+            .unwrap_or("")
+            .to_string()
+            + ":"
+            + &env::var("LD_LIBRARY_PATH").unwrap_or_else(|_| "".to_string());
+        info!("LD_LIBRARY_PATH set to {:?}", ld_library_path);
+        env::set_var("LD_LIBRARY_PATH", ld_library_path);
+
+        let libcl_crypt = perf_libs_path.join("opencl").join("libcl-crypt.so");
+
+        return init(libcl_crypt.as_os_str(), GpuApi::OpenCL);
+    }
+
+    init(OsStr::new("libcl-crypt.so"), GpuApi::OpenCL)
 }
 
 pub fn api() -> Option<&'static Container<Api<'static>>> {
@@ -182,6 +227,8 @@ pub fn api() -> Option<&'static Container<Api<'static>>> {
         INIT_HOOK.call_once(|| {
             if std::env::var("TEST_PERF_LIBS_CUDA").is_ok() {
                 init_cuda();
+            } else if std::env::var("TEST_PERF_LIBS_OPENCL").is_ok() {
+                init_opencl();
             }
         })
     }

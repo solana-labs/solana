@@ -522,6 +522,13 @@ pub fn main() {
                 .help("Use CUDA"),
         )
         .arg(
+            clap::Arg::with_name("opencl")
+                .long("opencl")
+                .takes_value(false)
+                .conflicts_with("cuda")
+                .help("Use OpenCL"),
+        )
+        .arg(
             Arg::with_name("expected_genesis_hash")
                 .long("expected-genesis-hash")
                 .value_name("HASH")
@@ -567,6 +574,7 @@ pub fn main() {
     let init_complete_file = matches.value_of("init_complete_file");
     let skip_poh_verify = matches.is_present("skip_poh_verify");
     let cuda = matches.is_present("cuda");
+    let opencl = matches.is_present("opencl");
     let no_genesis_fetch = matches.is_present("no_genesis_fetch");
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
     let rpc_port = value_t!(matches, "rpc_port", u16);
@@ -713,6 +721,10 @@ pub fn main() {
     if cuda {
         solana_perf::perf_libs::init_cuda();
         enable_recycler_warming();
+    }
+
+    if opencl {
+        solana_perf::perf_libs::init_opencl();
     }
 
     let entrypoint_addr = matches.value_of("entrypoint").map(|entrypoint| {

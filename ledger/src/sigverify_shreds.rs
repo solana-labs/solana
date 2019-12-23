@@ -213,7 +213,7 @@ pub fn verify_shreds_gpu(
     recycler_cache: &RecyclerCache,
 ) -> Vec<Vec<u8>> {
     let api = perf_libs::api();
-    if api.is_none() {
+    if api.is_none() || !perf_libs::is_supported(perf_libs::PerfFeature::Ed25519Verify) {
         return verify_shreds_cpu(batches, slot_leaders);
     }
     let api = api.unwrap();
@@ -348,7 +348,11 @@ pub fn sign_shreds_gpu(
     let pubkey_size = size_of::<Pubkey>();
     let api = perf_libs::api();
     let count = batch_size(batches);
-    if api.is_none() || count < SIGN_SHRED_GPU_MIN || pinned_keypair.is_none() {
+    if api.is_none()
+        || count < SIGN_SHRED_GPU_MIN
+        || pinned_keypair.is_none()
+        || !perf_libs::is_supported(perf_libs::PerfFeature::Ed25519Sign)
+    {
         return sign_shreds_cpu(keypair, batches);
     }
     let api = api.unwrap();

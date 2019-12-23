@@ -38,6 +38,10 @@ test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
 # Clear the BPF sysroot files, they are not automatically rebuilt
 rm -rf target/xargo # Issue #3105
 
+runPerfTests() {
+  _ cargo +"$rust_stable" test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
+}
+
 echo "Executing $testName"
 case $testName in
 test-stable)
@@ -86,7 +90,15 @@ test-stable-perf)
   fi
 
   _ cargo +"$rust_stable" build --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
+  runPerfTests
+
+  if [[ $(uname) = Linux ]]; then
+    # Run again in OpenCL mode
+    unset TEST_PERF_LIBS_CUDA
+    export TEST_PERF_LIBS_OPENCL=1
+    runPerfTests
+  fi
+
   ;;
 test-move)
   ci/affects-files.sh \

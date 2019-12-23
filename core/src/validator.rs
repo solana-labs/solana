@@ -139,7 +139,7 @@ impl Validator {
         warn!("identity pubkey: {:?}", id);
         warn!("vote pubkey: {:?}", vote_account);
         warn!(
-            "CUDA is {}abled",
+            "GPU is {}abled",
             if solana_perf::perf_libs::api().is_some() {
                 "en"
             } else {

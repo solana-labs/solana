@@ -54,6 +54,7 @@ solana_bench_tps=$(solana_program bench-tps)
 solana_faucet=$(solana_program faucet)
 solana_validator=$(solana_program validator)
 solana_validator_cuda="$solana_validator --cuda"
+solana_validator_opencl="$solana_validator --opencl"
 solana_genesis=$(solana_program genesis)
 solana_gossip=$(solana_program gossip)
 solana_keygen=$(solana_program keygen)

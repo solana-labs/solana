@@ -15,6 +15,8 @@ fi
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda
+elif [[ -n $SOLANA_OPENCL ]]; then
+  program=$solana_validator_opencl
 else
   program=$solana_validator
 fi

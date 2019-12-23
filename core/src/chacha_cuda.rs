@@ -20,6 +20,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
     samples: &[u64],
 ) -> io::Result<Vec<Hash>> {
     let api = perf_libs::api().expect("no perf libs");
+    assert!(perf_libs::is_supported(perf_libs::PerfFeature::Chacha));
     if ivecs.len() % CHACHA_BLOCK_SIZE != 0 {
         return Err(io::Error::new(
             io::ErrorKind::Other,

@@ -304,7 +304,7 @@ impl EntrySlice for [Entry] {
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
         let api = perf_libs::api();
-        if api.is_none() {
+        if api.is_none() || !perf_libs::is_supported(perf_libs::PerfFeature::PohVerify) {
             return self.verify_cpu(start_hash);
         }
         let api = api.unwrap();
