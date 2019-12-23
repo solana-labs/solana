@@ -18,9 +18,9 @@ Accounts whose balance is insufficient to satisfy the rent that would be due sim
 
 A percentage of the rent collected is destroyed. The rest is distributed to validator accounts by stake weight, a la transaction fees, at the end of every slot.
 
-## Credit only
+## Read-only accounts
 
-Credit only accounts are treated as a special case. They are loaded as if rent were due, but updates to their state may be delayed until the end of the slot, when credits are paid.
+Read-only accounts are not being charged rent in current implementation.
 
 ## Design considerations, others considered
 
