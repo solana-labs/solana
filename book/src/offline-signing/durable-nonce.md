@@ -48,7 +48,7 @@ authority and is supported by the following commands
 ### Nonce Account Creation
 
 The durable transaction nonce feature uses an account to store the next nonce
-value.  Durable nonce accounts must be [rent-exempt](proposals/rent.md#two-tiered-rent-regime),
+value.  Durable nonce accounts must be [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime),
 so need to carry the minimum balance to acheive this.
 
 A nonce account is created by first generating a new keypair
