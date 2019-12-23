@@ -138,6 +138,8 @@ impl Validator {
         poh_verify: bool,
         config: &ValidatorConfig,
     ) -> Self {
+        detect_target_features();
+
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
 
@@ -152,21 +154,7 @@ impl Validator {
             }
         );
 
-        // Validator binaries built on a machine with AVX support will generate invalid opcodes
-        // when run on machines without AVX causing a non-obvious process abort.  Instead detect
-        // the mismatch and error cleanly.
-        #[target_feature(enable = "avx")]
-        {
-            if is_x86_feature_detected!("avx") {
-                info!("AVX detected");
-            } else {
-                error!("Your machine does not have AVX support, please rebuild from source on your machine");
-                process::exit(1);
-            }
-        }
-
         info!("entrypoint: {:?}", entrypoint_info_option);
-
         Self::print_node_info(&node);
 
         info!("Initializing sigverify, this could take a while...");
@@ -202,10 +190,12 @@ impl Validator {
         // The version used by shreds, derived from genesis
         let shred_version = Shred::version_from_hash(&genesis_hash);
 
-        let mut validator_exit = ValidatorExit::default();
-        let exit_ = exit.clone();
-        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
-        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
+        let validator_exit = {
+            let mut validator_exit = ValidatorExit::default();
+            let exit_ = exit.clone();
+            validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+            Arc::new(RwLock::new(Some(validator_exit)))
+        };
 
         node.info.wallclock = timestamp();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
@@ -476,6 +466,21 @@ impl Validator {
         self.ip_echo_server.shutdown_now();
 
         Ok(())
+    }
+}
+
+fn detect_target_features() {
+    // Validator binaries built on a machine with AVX support will generate invalid opcodes
+    // when run on machines without AVX causing a non-obvious process abort.  Instead detect
+    // the mismatch and error cleanly.
+    #[target_feature(enable = "avx")]
+    {
+        if is_x86_feature_detected!("avx") {
+            info!("AVX detected");
+        } else {
+            error!("Your machine does not have AVX support, please rebuild from source on your machine");
+            process::exit(1);
+        }
     }
 }
 
