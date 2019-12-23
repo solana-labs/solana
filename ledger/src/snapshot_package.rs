@@ -1,5 +1,6 @@
 use solana_runtime::accounts_db::AccountStorageEntry;
 use solana_runtime::status_cache::SlotDelta;
+use solana_sdk::clock::Slot;
 use solana_sdk::transaction::Result as TransactionResult;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, SendError, Sender};
@@ -11,7 +12,7 @@ pub type SnapshotPackageReceiver = Receiver<SnapshotPackage>;
 pub type SnapshotPackageSendError = SendError<SnapshotPackage>;
 
 pub struct SnapshotPackage {
-    pub root: u64,
+    pub root: Slot,
     pub slot_deltas: Vec<SlotDelta<TransactionResult<()>>>,
     pub snapshot_links: TempDir,
     pub storage_entries: Vec<Arc<AccountStorageEntry>>,
@@ -20,7 +21,7 @@ pub struct SnapshotPackage {
 
 impl SnapshotPackage {
     pub fn new(
-        root: u64,
+        root: Slot,
         slot_deltas: Vec<SlotDelta<TransactionResult<()>>>,
         snapshot_links: TempDir,
         storage_entries: Vec<Arc<AccountStorageEntry>>,
