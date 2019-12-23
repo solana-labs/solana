@@ -456,10 +456,16 @@ startCommon() {
     "
   fi
   [[ -z "$externalNodeSshKey" ]] || ssh-copy-id -f -i "$externalNodeSshKey" "${sshOptions[@]}" "solana@$ipAddress"
+  syncScripts "$ipAddress"
+}
+
+syncScripts() {
+  echo "rsyncing scripts... to $ipAddress"
+  declare ipAddress=$1
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     --exclude 'net/log*' \
     "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
-    "$ipAddress":~/solana/
+    "$ipAddress":~/solana/ > /dev/null
 }
 
 startBootstrapLeader() {
@@ -870,33 +876,14 @@ stopNode() {
 
   echo "--- Stopping node: $ipAddress"
   echo "stop log: $logFile"
+  syncScripts "$ipAddress"
   (
+    # Since cleanup.sh does a pkill, we cannot pass the command directly,
+    # otherwise the process which is doing the killing will be killed because
+    # the script itself will match the pkill pattern
     set -x
     # shellcheck disable=SC2029 # It's desired that PS4 be expanded on the client side
-    ssh "${sshOptions[@]}" "$ipAddress" "
-      PS4=\"$PS4\"
-      set -x
-      ! tmux list-sessions || tmux kill-session
-      declare sudo=
-      if sudo true; then
-        sudo=\"sudo -n\"
-      fi
-
-      for pid in solana/*.pid; do
-        pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')
-        if [[ -n \$pgid ]]; then
-          \$sudo kill -- -\$pgid
-        fi
-      done
-      if [[ -f solana/netem.cfg ]]; then
-        solana/scripts/netem.sh delete < solana/netem.cfg
-        rm -f solana/netem.cfg
-      fi
-      solana/scripts/net-shaper.sh force_cleanup
-      for pattern in solana- remote- iftop validator client node; do
-        pkill -9 -f \$pattern
-      done
-    "
+    ssh "${sshOptions[@]}" "$ipAddress" "PS4=\"$PS4\" ./solana/net/remote/cleanup.sh"
   ) >> "$logFile" 2>&1 &
 
   declare pid=$!
