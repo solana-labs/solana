@@ -344,10 +344,10 @@ impl<'a> Serialize for AccountsDBSerialize<'a> {
         let account_storage_serialize = AccountStorageSerialize::new(&*storage, self.slot);
         serialize_into(&mut wr, &account_storage_serialize).map_err(Error::custom)?;
         serialize_into(&mut wr, &version).map_err(Error::custom)?;
-        let slot_hashes = self.accounts_db.slot_hashes.read().unwrap();
+        let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
         serialize_into(
             &mut wr,
-            &(self.slot, &*slot_hashes.get(&self.slot).unwrap()),
+            &(self.slot, &*bank_hashes.get(&self.slot).unwrap()),
         )
         .map_err(Error::custom)?;
         let len = wr.position() as usize;
@@ -384,7 +384,7 @@ pub struct AccountsDB {
     /// the accounts
     min_num_stores: usize,
 
-    pub slot_hashes: RwLock<HashMap<Slot, BankHash>>,
+    pub bank_hashes: RwLock<HashMap<Slot, BankHash>>,
 }
 
 impl Default for AccountsDB {
@@ -404,7 +404,7 @@ impl Default for AccountsDB {
                 .build()
                 .unwrap(),
             min_num_stores: num_threads,
-            slot_hashes: RwLock::new(HashMap::default()),
+            bank_hashes: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -521,12 +521,9 @@ impl AccountsDB {
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
 
-        let slot_hash: (Slot, BankHash) = deserialize_from(&mut stream)
-            .map_err(|_| AccountsDB::get_io_error("slot hashes deserialize error"))?;
-        self.slot_hashes
-            .write()
-            .unwrap()
-            .insert(slot_hash.0, slot_hash.1);
+        let (slot, bank_hash): (Slot, BankHash) = deserialize_from(&mut stream)
+            .map_err(|_| AccountsDB::get_io_error("bank hashes deserialize error"))?;
+        self.bank_hashes.write().unwrap().insert(slot, bank_hash);
 
         // Process deserialized data, set necessary fields in self
         *self.paths.write().unwrap() = local_account_paths.to_vec();
@@ -717,11 +714,11 @@ impl AccountsDB {
     }
 
     pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
-        let mut slot_hashes = self.slot_hashes.write().unwrap();
-        let hash = *slot_hashes
+        let mut bank_hashes = self.bank_hashes.write().unwrap();
+        let hash = *bank_hashes
             .get(&parent_slot)
             .expect("accounts_db::set_hash::no parent slot");
-        slot_hashes.insert(slot, hash);
+        bank_hashes.insert(slot, hash);
     }
 
     pub fn load(
@@ -1007,22 +1004,22 @@ impl AccountsDB {
         for hash in hashes {
             calculated_hash.xor(hash);
         }
-        let slot_hashes = self.slot_hashes.read().unwrap();
-        if let Some(found_hash) = slot_hashes.get(&slot) {
+        let bank_hashes = self.bank_hashes.read().unwrap();
+        if let Some(found_hash) = bank_hashes.get(&slot) {
             if calculated_hash == *found_hash {
                 Ok(())
             } else {
                 Err(MismatchedBankHash)
             }
         } else {
-            Err(BankHashVerificatonError::MissingBankHash)
+            Err(MissingBankHash)
         }
     }
 
     pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash) {
-        let mut slot_hashes = self.slot_hashes.write().unwrap();
-        let slot_hash_state = slot_hashes.entry(slot_id).or_insert_with(BankHash::default);
-        slot_hash_state.xor(hash);
+        let mut bank_hashes = self.bank_hashes.write().unwrap();
+        let bank_hash = bank_hashes.entry(slot_id).or_insert_with(BankHash::default);
+        bank_hash.xor(hash);
     }
 
     fn update_index(
@@ -1100,9 +1097,9 @@ impl AccountsDB {
                 }
             }
             {
-                let mut slot_hashes = self.slot_hashes.write().unwrap();
+                let mut bank_hashes = self.bank_hashes.write().unwrap();
                 for slot in dead_slots.iter() {
-                    slot_hashes.remove(slot);
+                    bank_hashes.remove(slot);
                 }
             }
         }
@@ -1837,11 +1834,11 @@ pub mod tests {
         );
 
         // Get the hash for the latest slot, which should be the only hash in the
-        // slot_hashes map on the deserialized AccountsDb
-        assert_eq!(daccounts.slot_hashes.read().unwrap().len(), 1);
+        // bank_hashes map on the deserialized AccountsDb
+        assert_eq!(daccounts.bank_hashes.read().unwrap().len(), 1);
         assert_eq!(
-            daccounts.slot_hashes.read().unwrap().get(&latest_slot),
-            accounts.slot_hashes.read().unwrap().get(&latest_slot)
+            daccounts.bank_hashes.read().unwrap().get(&latest_slot),
+            accounts.bank_hashes.read().unwrap().get(&latest_slot)
         );
 
         print_count_and_status("daccounts", &daccounts);
@@ -2242,14 +2239,14 @@ pub mod tests {
         db.add_root(some_slot);
         assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
 
-        db.slot_hashes.write().unwrap().remove(&some_slot).unwrap();
+        db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
         assert_matches!(
             db.verify_bank_hash(some_slot, &ancestors),
             Err(MissingBankHash)
         );
 
         let some_bank_hash = BankHash::from_hash(&Hash::new(&[0xca; HASH_BYTES]));
-        db.slot_hashes
+        db.bank_hashes
             .write()
             .unwrap()
             .insert(some_slot, some_bank_hash);
@@ -2267,7 +2264,7 @@ pub mod tests {
         let some_slot: Slot = 0;
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
-        db.slot_hashes
+        db.bank_hashes
             .write()
             .unwrap()
             .insert(some_slot, BankHash::default());
