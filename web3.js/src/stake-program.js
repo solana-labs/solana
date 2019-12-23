@@ -97,7 +97,7 @@ export class StakeInstruction extends TransactionInstruction {
 /**
  * An enumeration of valid StakeInstructionTypes
  */
-const StakeInstructionLayout = Object.freeze({
+export const StakeInstructionLayout = Object.freeze({
   Initialize: {
     index: 0,
     layout: BufferLayout.struct([
@@ -210,8 +210,14 @@ export class StakeProgram {
   ): TransactionInstruction {
     const type = StakeInstructionLayout.Initialize;
     const data = encodeData(type, {
-      authorized,
-      lockup,
+      authorized: {
+        staker: authorized.staker.toBuffer(),
+        withdrawer: authorized.withdrawer.toBuffer(),
+      },
+      lockup: {
+        epoch: lockup.epoch,
+        custodian: lockup.custodian.toBuffer(),
+      },
     });
     const instructionData = {
       keys: [
@@ -307,7 +313,7 @@ export class StakeProgram {
   ): Transaction {
     const type = StakeInstructionLayout.Authorize;
     const data = encodeData(type, {
-      newAuthorized,
+      newAuthorized: newAuthorized.toBuffer(),
       stakeAuthorizationType: stakeAuthorizationType.index,
     });
 
