@@ -52,6 +52,46 @@ export class StakeInstruction extends TransactionInstruction {
    * Type of StakeInstruction
    */
   type: InstructionType;
+
+  constructor(opts?: TransactionInstructionCtorFields, type?: InstructionType) {
+    if (
+      opts &&
+      opts.programId &&
+      !opts.programId.equals(StakeProgram.programId)
+    ) {
+      throw new Error('programId incorrect; not a StakeInstruction');
+    }
+    super(opts);
+    if (type) {
+      this.type = type;
+    }
+  }
+
+  static from(instruction: TransactionInstruction): StakeInstruction {
+    if (!instruction.programId.equals(StakeProgram.programId)) {
+      throw new Error('programId incorrect; not StakeProgram');
+    }
+
+    const instructionTypeLayout = BufferLayout.u32('instruction');
+    const typeIndex = instructionTypeLayout.decode(instruction.data);
+    let type;
+    for (const t in StakeInstructionLayout) {
+      if (StakeInstructionLayout[t].index == typeIndex) {
+        type = StakeInstructionLayout[t];
+      }
+    }
+    if (!type) {
+      throw new Error('Instruction type incorrect; not a StakeInstruction');
+    }
+    return new StakeInstruction(
+      {
+        keys: instruction.keys,
+        programId: instruction.programId,
+        data: instruction.data,
+      },
+      type,
+    );
+  }
 }
 
 /**
