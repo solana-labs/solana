@@ -3,14 +3,17 @@ use itertools::izip;
 use log::*;
 use solana_archiver_lib::archiver::Archiver;
 use solana_client::thin_client::{create_client, ThinClient};
+use solana_core::consensus::TOWER_SNAPSHOT_NAME;
 use solana_core::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
+    consensus::Tower,
     contact_info::ContactInfo,
     genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     gossip_service::discover_cluster,
     validator::{Validator, ValidatorConfig},
 };
-use solana_ledger::create_new_tmp_ledger;
+use solana_ledger::{bank_forks::BankForks, create_new_tmp_ledger};
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
@@ -34,11 +37,11 @@ use solana_storage_program::{
 };
 use solana_vote_program::{
     vote_instruction,
-    vote_state::{VoteInit, VoteState},
+    vote_state::{Vote, VoteInit, VoteState},
 };
 use std::{
     collections::HashMap,
-    fs::remove_dir_all,
+    fs::{remove_dir_all, remove_file},
     io::{Error, ErrorKind, Result},
     iter,
     path::PathBuf,
@@ -72,6 +75,8 @@ pub struct ClusterConfig {
     pub validator_keys: Option<Vec<Arc<Keypair>>>,
     /// The stakes of each node
     pub node_stakes: Vec<u64>,
+    /// The votes a validator made before starting
+    pub existing_votes: Vec<Option<Vec<Vote>>>,
     /// The total lamports available to the cluster
     pub cluster_lamports: u64,
     pub ticks_per_slot: u64,
@@ -91,6 +96,7 @@ impl Default for ClusterConfig {
             num_listeners: 0,
             validator_keys: None,
             node_stakes: vec![],
+            existing_votes: vec![],
             cluster_lamports: 0,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_epoch: DEFAULT_DEV_SLOTS_PER_EPOCH,
@@ -132,6 +138,16 @@ impl LocalCluster {
 
     pub fn new(config: &ClusterConfig) -> Self {
         assert_eq!(config.validator_configs.len(), config.node_stakes.len());
+
+        let _existing_votes;
+        let existing_votes = if !config.existing_votes.is_empty() {
+            assert_eq!(config.validator_configs.len(), config.existing_votes.len());
+            &config.existing_votes
+        } else {
+            _existing_votes = vec![None; config.validator_configs.len()];
+            &_existing_votes
+        };
+
         let validator_keys = {
             if let Some(ref keys) = config.validator_keys {
                 assert_eq!(config.validator_configs.len(), keys.len());
@@ -211,6 +227,21 @@ impl LocalCluster {
             leader_node.info.rpc.port(),
             leader_node.info.rpc_pubsub.port(),
         ));
+
+        if let Some(ref votes) = existing_votes[0] {
+            let mut tower = Tower::new(
+                &leader_pubkey,
+                &leader_voting_keypair.pubkey(),
+                &BankForks::new(0, Bank::default()),
+            );
+            for vote in votes {
+                tower.record_bank_vote(vote.clone());
+            }
+            tower
+                .save_to_file(&leader_ledger_path, &*leader_voting_keypair)
+                .unwrap();
+        }
+
         let leader_server = Validator::new(
             leader_node,
             &leader_keypair,
@@ -250,12 +281,13 @@ impl LocalCluster {
             archiver_infos: HashMap::new(),
         };
 
-        for (stake, validator_config, key) in izip!(
+        for (stake, validator_config, key, existing_votes) in izip!(
             (&config.node_stakes[1..]).iter(),
             config.validator_configs[1..].iter(),
             validator_keys[1..].iter(),
+            existing_votes[1..].iter(),
         ) {
-            cluster.add_validator(validator_config, *stake, key.clone());
+            cluster.add_validator(validator_config, *stake, key.clone(), existing_votes);
         }
 
         let listener_config = ValidatorConfig {
@@ -263,7 +295,7 @@ impl LocalCluster {
             ..config.validator_configs[0].clone()
         };
         (0..config.num_listeners).for_each(|_| {
-            cluster.add_validator(&listener_config, 0, Arc::new(Keypair::new()));
+            cluster.add_validator(&listener_config, 0, Arc::new(Keypair::new()), &None);
         });
 
         discover_cluster(
@@ -311,6 +343,7 @@ impl LocalCluster {
         validator_config: &ValidatorConfig,
         stake: u64,
         validator_keypair: Arc<Keypair>,
+        existing_votes: &Option<Vec<Vote>>,
     ) -> Pubkey {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
@@ -324,6 +357,18 @@ impl LocalCluster {
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let contact_info = validator_node.info.clone();
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_config);
+
+        if let Some(ref votes) = existing_votes {
+            let mut tower = Tower::new(
+                &validator_pubkey,
+                &voting_keypair.pubkey(),
+                &BankForks::new(0, Bank::default()),
+            );
+            for vote in votes {
+                tower.record_bank_vote(vote.clone());
+            }
+            tower.save_to_file(&ledger_path, &voting_keypair).unwrap();
+        }
 
         if validator_config.voting_disabled {
             // setup as a listener
@@ -633,6 +678,23 @@ impl LocalCluster {
         client
             .retry_transfer(&from_keypair, &mut transaction, 10)
             .map(|_signature| ())
+    }
+
+    pub fn exit_restart_node_delete_saved_tower(
+        &mut self,
+        pubkey: &Pubkey,
+        validator_config: ValidatorConfig,
+    ) {
+        let mut cluster_validator_info = self.exit_node(pubkey);
+        cluster_validator_info.config = validator_config;
+        remove_file(
+            cluster_validator_info
+                .info
+                .ledger_path
+                .join(TOWER_SNAPSHOT_NAME),
+        )
+        .expect("Failed to delete saved tower");
+        self.restart_node(pubkey, cluster_validator_info);
     }
 }
 

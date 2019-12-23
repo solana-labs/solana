@@ -4,8 +4,10 @@ use serial_test_derive::serial;
 use solana_client::rpc_client::RpcClient;
 use solana_client::thin_client::create_client;
 use solana_core::{
-    broadcast_stage::BroadcastStageType, consensus::VOTE_THRESHOLD_DEPTH,
-    gossip_service::discover_cluster, validator::ValidatorConfig,
+    broadcast_stage::BroadcastStageType,
+    consensus::{Tower, VOTE_THRESHOLD_DEPTH},
+    gossip_service::discover_cluster,
+    validator::ValidatorConfig,
 };
 use solana_ledger::{
     bank_forks::SnapshotConfig, blockstore::Blockstore, leader_schedule::FixedSchedule,
@@ -22,9 +24,11 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
     genesis_config::OperatingMode,
+    hash::Hash,
     poh_config::PohConfig,
     signature::{Keypair, KeypairUtil},
 };
+use solana_vote_program::vote_state::Vote;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::{HashMap, HashSet},
@@ -649,7 +653,7 @@ fn test_snapshot_restart_tower() {
         .unwrap()
         .snapshot_package_output_path;
     let tar = snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
-    wait_for_next_snapshot(&cluster, &tar);
+    wait_for_next_snapshot(&cluster, &tar, Duration::from_millis(5000));
 
     // Copy tar to validator's snapshot output directory
     let validator_tar_path = snapshot_utils::get_snapshot_archive_path(
@@ -725,6 +729,7 @@ fn test_snapshots_blockstore_floor() {
         &validator_snapshot_test_config.validator_config,
         validator_stake,
         Arc::new(Keypair::new()),
+        &None,
     );
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
@@ -806,7 +811,7 @@ fn test_snapshots_restart_validity() {
         expected_balances.extend(new_balances);
 
         let tar = snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
-        wait_for_next_snapshot(&cluster, &tar);
+        wait_for_next_snapshot(&cluster, &tar, Duration::from_millis(5000));
 
         // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point
@@ -943,7 +948,7 @@ fn test_no_voting() {
     }
 }
 
-fn wait_for_next_snapshot<P: AsRef<Path>>(cluster: &LocalCluster, tar: P) {
+fn wait_for_next_snapshot<P: AsRef<Path>>(cluster: &LocalCluster, tar: P, wait_time: Duration) {
     // Get slot after which this was generated
     let client = cluster
         .get_validator_client(&cluster.entry_point_info.id)
@@ -967,7 +972,7 @@ fn wait_for_next_snapshot<P: AsRef<Path>>(cluster: &LocalCluster, tar: P) {
             }
             trace!("snapshot tar slot {} < last_slot {}", slot, last_slot);
         }
-        sleep(Duration::from_millis(5000));
+        sleep(wait_time);
     }
 }
 
@@ -1017,4 +1022,163 @@ fn setup_snapshot_validator_config(
         account_storage_dirs,
         validator_config,
     }
+}
+
+#[test]
+fn test_validator_saves_tower() {
+    const TARGET_SLOT: u64 = 2;
+    solana_logger::setup();
+    error!("test_validator_saves_tower");
+    let validator_config = ValidatorConfig::default();
+    let config = ClusterConfig {
+        cluster_lamports: 10_000,
+        poh_config: PohConfig::new_sleep(Duration::from_millis(20)),
+        node_stakes: vec![100],
+        validator_configs: vec![validator_config],
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+
+    let validator_id = cluster.get_node_pubkeys()[0];
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+    let vote_id = cluster
+        .validators
+        .get(&validator_id)
+        .unwrap()
+        .info
+        .voting_keypair
+        .clone();
+
+    let ledger_path = cluster
+        .validators
+        .get(&validator_id)
+        .unwrap()
+        .info
+        .ledger_path
+        .clone();
+
+    // Wait a few slots for votes to be generated
+    let mut current_slot = 0;
+    while current_slot <= TARGET_SLOT {
+        trace!("current_slot: {}", current_slot);
+        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::recent()) {
+            current_slot = slot;
+        } else {
+            continue;
+        }
+        sleep(Duration::from_millis(5));
+    }
+    cluster.close_preserve_ledgers();
+
+    let tower = Tower::reload_from_file(&ledger_path, &validator_id, &vote_id.pubkey()).unwrap();
+
+    assert_eq!(tower.last_vote().slots, vec![TARGET_SLOT]);
+}
+
+#[test]
+fn test_validator_obeys_existing_tower() {
+    const TARGET_SLOT: u64 = 2;
+    solana_logger::setup();
+    error!("test_validator_saves_tower");
+
+    let existing_votes = vec![
+        Vote {
+            slots: vec![0],
+            hash: Hash::default(),
+            timestamp: None,
+        },
+        Vote {
+            slots: vec![0, 4],
+            hash: Hash::default(),
+            timestamp: None,
+        },
+        Vote {
+            slots: vec![0, 4, 5],
+            hash: Hash::default(),
+            timestamp: None,
+        },
+    ];
+
+    let validator_config = ValidatorConfig::default();
+    let config = ClusterConfig {
+        cluster_lamports: 10_000,
+        poh_config: PohConfig::new_sleep(Duration::from_millis(10)),
+        node_stakes: vec![100],
+        validator_configs: vec![validator_config],
+        existing_votes: vec![Some(existing_votes)],
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+
+    let validator_id = cluster.get_node_pubkeys()[0];
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+    let vote_id = cluster
+        .validators
+        .get(&validator_id)
+        .unwrap()
+        .info
+        .voting_keypair
+        .clone();
+
+    let ledger_path = cluster
+        .validators
+        .get(&validator_id)
+        .unwrap()
+        .info
+        .ledger_path
+        .clone();
+
+    // Wait a few slots for votes to be generated
+    let mut current_slot = 0;
+    while current_slot <= TARGET_SLOT {
+        trace!("current_slot: {}", current_slot);
+        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::recent()) {
+            current_slot = slot;
+        } else {
+            continue;
+        }
+        sleep(Duration::from_millis(5));
+    }
+    cluster.close_preserve_ledgers();
+
+    let tower = Tower::reload_from_file(&ledger_path, &validator_id, &vote_id.pubkey()).unwrap();
+
+    assert_eq!(tower.last_vote().slots, vec![0, 4, 5]);
+}
+
+#[test]
+#[should_panic]
+fn test_panic_missing_saved_tower() {
+    solana_logger::setup();
+    let snapshot_interval_slots = 10;
+    let num_account_paths = 4;
+    let snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+    let snapshot_package_output_path = &snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .snapshot_package_output_path;
+
+    let config = ClusterConfig {
+        node_stakes: vec![10000],
+        cluster_lamports: 100000,
+        validator_configs: vec![snapshot_test_config.validator_config.clone()],
+        poh_config: PohConfig::new_sleep(Duration::from_millis(1)),
+        ..ClusterConfig::default()
+    };
+
+    let mut cluster = LocalCluster::new(&config);
+
+    let validator_id = cluster.get_node_pubkeys()[0];
+
+    // Wait for a snapshot that the validator can reboot from
+    let tar = snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
+    wait_for_next_snapshot(&cluster, &tar, Duration::from_millis(1));
+
+    cluster.exit_restart_node_delete_saved_tower(
+        &validator_id,
+        snapshot_test_config.validator_config.clone(),
+    );
 }
