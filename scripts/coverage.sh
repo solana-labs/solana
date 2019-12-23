@@ -46,18 +46,17 @@ RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${pac
 echo "--- grcov"
 
 # Create a clean room dir only with updated gcda/gcno files for this run
-data_dir=target/cov/tmp
-rm -rf "$data_dir"
-mkdir -p "$data_dir"
+rm -rf target/cov/tmp
+mkdir -p target/cov/tmp
 
 find target/cov -name \*.gcda -newer "$timing_file" |
   (while read -r gcda_file; do
     gcno_file="${gcda_file%.gcda}.gcno"
-    ln -s "../../../$gcda_file" "$data_dir/$(basename "$gcda_file")"
-    ln -s "../../../$gcno_file" "$data_dir/$(basename "$gcno_file")"
+    ln -s "../../../$gcda_file" "target/cov/tmp/$(basename "$gcda_file")"
+    ln -s "../../../$gcno_file" "target/cov/tmp/$(basename "$gcno_file")"
   done)
 
-_ grcov "$data_dir" > target/cov/lcov-full.info
+_ grcov target/cov/tmp > target/cov/lcov-full.info
 
 echo "--- filter-files-from-lcov"
 
