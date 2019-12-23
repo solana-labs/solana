@@ -279,7 +279,7 @@ pub fn process_blocktree(
 
     // Setup bank for slot 0
     let bank0 = Arc::new(Bank::new_with_paths(&genesis_config, account_paths));
-    info!("processing ledger for bank 0...");
+    info!("processing ledger for slot 0...");
     process_bank_0(&bank0, blocktree, &opts)?;
     process_blocktree_from_root(genesis_config, blocktree, bank0, &opts)
 }
@@ -291,7 +291,7 @@ pub fn process_blocktree_from_root(
     bank: Arc<Bank>,
     opts: &ProcessOptions,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
-    info!("processing ledger from root: {}...", bank.slot());
+    info!("processing ledger from root slot {}...", bank.slot());
     // Starting slot must be a root, and thus has no parents
     assert!(bank.parent().is_none());
     let start_slot = bank.slot();
@@ -304,7 +304,7 @@ pub fn process_blocktree_from_root(
 
     blocktree
         .set_roots(&[start_slot])
-        .expect("Couldn't set root on startup");
+        .expect("Couldn't set root slot on startup");
 
     let meta = blocktree.meta(start_slot).unwrap();
 
@@ -510,7 +510,7 @@ fn process_pending_slots(
         let (slot, meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
 
         if last_status_report.elapsed() > Duration::from_secs(2) {
-            info!("processing ledger...block {}", slot);
+            info!("processing ledger...slot {}", slot);
             last_status_report = Instant::now();
         }
 
