@@ -49,6 +49,7 @@ impl ForkSelector for OptimalForkSelector {
                 let mut fork_contents: Vec<u64> = ancestors[slot].iter().copied().collect();
                 fork_contents.push(*slot);
                 fork_contents.sort_by(|a, b| a.cmp(b).reverse());
+                fork_contents.retain(|slot| frozen_banks.contains_key(slot));
 
                 let mut new_fork = Fork {
                     heaviest_slot: *slot,
