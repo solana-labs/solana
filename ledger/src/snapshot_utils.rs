@@ -5,7 +5,7 @@ use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    bank::{deserialize_for_snapshot, Bank, MAX_SNAPSHOT_DATA_FILE_SIZE},
+    bank::{deserialize_from_snapshot, Bank, MAX_SNAPSHOT_DATA_FILE_SIZE},
     status_cache::SlotDelta,
 };
 use solana_sdk::transaction::Result as TransactionResult;
@@ -296,7 +296,7 @@ pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<Slot> {
         &last_root_paths.snapshot_file_path,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
-            let bank: Bank = deserialize_for_snapshot(stream.by_ref())?;
+            let bank: Bank = deserialize_from_snapshot(stream.by_ref())?;
             bank.rc.accounts_from_stream(
                 stream.by_ref(),
                 &local_account_paths,
@@ -389,7 +389,7 @@ where
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             // Rebuild the root bank
-            let bank: Bank = deserialize_for_snapshot(stream.by_ref())?;
+            let bank: Bank = deserialize_from_snapshot(stream.by_ref())?;
             // Rebuild accounts
             bank.rc.accounts_from_stream(
                 stream.by_ref(),
@@ -407,7 +407,7 @@ where
         |stream| {
             // Rebuild status cache
             let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
-                deserialize_for_snapshot(stream).unwrap_or_default();
+                deserialize_from_snapshot(stream).unwrap_or_default();
 
             Ok(slot_deltas)
         },

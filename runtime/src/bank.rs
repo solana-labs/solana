@@ -1873,7 +1873,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
 // of memory as much as possible. But set a hard-limit with ample of head rooms.
 // This is an extra protection for possible bincode bugs in addition to
 // deserialize_snapshot_data_file
-pub fn deserialize_for_snapshot<R, T>(reader: R) -> bincode::Result<T>
+pub fn deserialize_from_snapshot<R, T>(reader: R) -> bincode::Result<T>
 where
     R: Read,
     T: serde::de::DeserializeOwned,
@@ -4325,7 +4325,7 @@ mod tests {
         serialize_into(&mut writer, &bank2.rc).unwrap();
 
         let mut rdr = Cursor::new(&buf[..]);
-        let mut dbank: Bank = deserialize_for_snapshot(&mut rdr).unwrap();
+        let mut dbank: Bank = deserialize_from_snapshot(&mut rdr).unwrap();
         let mut reader = BufReader::new(&buf[rdr.position() as usize..]);
 
         // Create a new set of directories for this bank's accounts
