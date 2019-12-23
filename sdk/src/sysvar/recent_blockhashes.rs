@@ -39,8 +39,9 @@ impl<'a> FromIterator<&'a Hash> for RecentBlockhashes {
 }
 
 impl Sysvar for RecentBlockhashes {
-    fn biggest() -> Self {
-        RecentBlockhashes(vec![Hash::default(); MAX_ENTRIES])
+    fn size_of() -> usize {
+        // hard-coded so that we don't have to construct an empty
+        1032 // golden, update if MAX_ENTRIES changes
     }
 }
 
@@ -85,6 +86,15 @@ pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
 mod tests {
     use super::*;
     use crate::hash::Hash;
+
+    #[test]
+    fn test_size_of() {
+        assert_eq!(
+            bincode::serialized_size(&RecentBlockhashes(vec![Hash::default(); MAX_ENTRIES]))
+                .unwrap() as usize,
+            RecentBlockhashes::size_of()
+        );
+    }
 
     #[test]
     fn test_create_account_empty() {

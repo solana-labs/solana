@@ -14,6 +14,7 @@ pub mod recent_blockhashes;
 pub mod rent;
 pub mod rewards;
 pub mod slot_hashes;
+pub mod slot_history;
 pub mod stake_history;
 
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
@@ -24,6 +25,7 @@ pub fn is_sysvar_id(id: &Pubkey) -> bool {
         || rent::check_id(id)
         || rewards::check_id(id)
         || slot_hashes::check_id(id)
+        || slot_history::check_id(id)
         || stake_history::check_id(id)
 }
 
@@ -59,11 +61,8 @@ pub trait SysvarId {
 pub trait Sysvar:
     SysvarId + Default + Sized + serde::Serialize + serde::de::DeserializeOwned
 {
-    fn biggest() -> Self {
-        Self::default()
-    }
     fn size_of() -> usize {
-        bincode::serialized_size(&Self::biggest()).unwrap() as usize
+        bincode::serialized_size(&Self::default()).unwrap() as usize
     }
     fn from_account(account: &Account) -> Option<Self> {
         bincode::deserialize(&account.data).ok()
@@ -84,7 +83,8 @@ pub trait Sysvar:
         Self::from_account(account.account).ok_or(InstructionError::InvalidArgument)
     }
     fn create_account(&self, lamports: u64) -> Account {
-        let mut account = Account::new(lamports, Self::size_of(), &id());
+        let data_len = Self::size_of().max(bincode::serialized_size(self).unwrap() as usize);
+        let mut account = Account::new(lamports, data_len, &id());
         self.to_account(&mut account).unwrap();
         account
     }

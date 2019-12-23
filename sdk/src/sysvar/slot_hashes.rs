@@ -2,32 +2,42 @@
 //!
 //! this account carries the Bank's most recent blockhashes for some N parents
 //!
-pub use crate::slot_hashes::{Slot, SlotHash, SlotHashes, MAX_SLOT_HASHES};
-use crate::{account::Account, hash::Hash, sysvar::Sysvar};
+pub use crate::slot_hashes::SlotHashes;
+
+use crate::sysvar::Sysvar;
 
 crate::declare_sysvar_id!("SysvarS1otHashes111111111111111111111111111", SlotHashes);
 
 impl Sysvar for SlotHashes {
-    fn biggest() -> Self {
-        // override
-        (0..MAX_SLOT_HASHES)
-            .map(|slot| (slot as Slot, Hash::default()))
-            .collect::<Self>()
+    // override
+    fn size_of() -> usize {
+        // hard-coded so that we don't have to construct an empty
+        20_488 // golden, update if MAX_ENTRIES changes
     }
-}
-
-pub fn create_account(lamports: u64, slot_hashes: &[SlotHash]) -> Account {
-    SlotHashes::new(slot_hashes).create_account(lamports)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{clock::Slot, hash::Hash, slot_hashes::MAX_ENTRIES};
+
+    #[test]
+    fn test_size_of() {
+        assert_eq!(
+            SlotHashes::size_of(),
+            bincode::serialized_size(
+                &(0..MAX_ENTRIES)
+                    .map(|slot| (slot as Slot, Hash::default()))
+                    .collect::<SlotHashes>()
+            )
+            .unwrap() as usize
+        );
+    }
 
     #[test]
     fn test_create_account() {
         let lamports = 42;
-        let account = create_account(lamports, &[]);
+        let account = SlotHashes::new(&[]).create_account(lamports);
         assert_eq!(account.data.len(), SlotHashes::size_of());
         let slot_hashes = SlotHashes::from_account(&account);
         assert_eq!(slot_hashes, Some(SlotHashes::default()));
