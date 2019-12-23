@@ -54,6 +54,26 @@ export const rustString = (property: string = 'string') => {
   return rsl;
 };
 
+/**
+ * Layout for an Authorized object
+ */
+export const authorized = (property: string = 'authorized') => {
+  return BufferLayout.struct(
+    [publicKey('staker'), publicKey('withdrawer')],
+    property,
+  );
+};
+
+/**
+ * Layout for a Lockup object
+ */
+export const lockup = (property: string = 'lockup') => {
+  return BufferLayout.struct(
+    [BufferLayout.ns64('epoch'), publicKey('custodian')],
+    property,
+  );
+};
+
 export function getAlloc(type: Object, fields: Object): number {
   let alloc = 0;
   type.layout.fields.forEach(item => {

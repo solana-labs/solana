@@ -80,8 +80,16 @@ export class PublicKey {
   /**
    * Derive a public key from another key, a seed, and a programId.
    */
-  static createWithSeed(fromPublicKey: PublicKey, seed: string, programId: PublicKey): PublicKey {
-    const buffer = Buffer.concat([fromPublicKey.toBuffer(), Buffer.from(seed), programId.toBuffer()])
+  static createWithSeed(
+    fromPublicKey: PublicKey,
+    seed: string,
+    programId: PublicKey,
+  ): PublicKey {
+    const buffer = Buffer.concat([
+      fromPublicKey.toBuffer(),
+      Buffer.from(seed),
+      programId.toBuffer(),
+    ]);
     const hash = hasha(buffer, {algorithm: 'sha256'});
     return new PublicKey('0x' + hash);
   }

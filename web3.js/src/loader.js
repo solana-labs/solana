@@ -6,7 +6,7 @@ import {Account} from './account';
 import {PublicKey} from './publickey';
 import {NUM_TICKS_PER_SECOND} from './timing';
 import {Transaction, PACKET_DATA_SIZE} from './transaction';
-import {SYSVAR_RENT_PUBKEY} from './sysvar-rent';
+import {SYSVAR_RENT_PUBKEY} from './sysvar';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import {sleep} from './util/sleep';
 import type {Connection} from './connection';

@@ -71,6 +71,7 @@
     "bs58": "^4.0.1",
     "buffer-layout": "^1.2.0",
     "esdoc-inject-style-plugin": "^1.0.0",
+    "hasha": "^5.1.0",
     "jayson": "^3.0.1",
     "mz": "^2.7.0",
     "node-fetch": "^2.2.0",
