@@ -2,21 +2,26 @@
 export {Account} from './account';
 export {BpfLoader} from './bpf-loader';
 export {BudgetProgram} from './budget-program';
+export {CONFIG_PROGRAM_ID} from './config-program';
 export {Connection} from './connection';
 export {Loader} from './loader';
 export {PublicKey} from './publickey';
+export {StakeInstruction, StakeProgram} from './stake-program';
 export {SystemInstruction, SystemProgram} from './system-program';
 export {Transaction, TransactionInstruction} from './transaction';
 export {VALIDATOR_INFO_KEY, ValidatorInfo} from './validator-info';
-export {VOTE_ACCOUNT_KEY, VoteAccount} from './vote-account';
-export {SYSVAR_RENT_PUBKEY} from './sysvar-rent';
+export {VOTE_PROGRAM_ID, VoteAccount} from './vote-account';
+export {
+  SYSVAR_CLOCK_PUBKEY,
+  SYSVAR_RENT_PUBKEY,
+  SYSVAR_REWARDS_PUBKEY,
+  SYSVAR_STAKE_HISTORY_PUBKEY,
+} from './sysvar';
 export {
   sendAndConfirmTransaction,
   sendAndConfirmRecentTransaction,
 } from './util/send-and-confirm-transaction';
-export {
-  sendAndConfirmRawTransaction,
-} from './util/send-and-confirm-raw-transaction';
+export {sendAndConfirmRawTransaction} from './util/send-and-confirm-raw-transaction';
 export {testnetChannelEndpoint} from './util/testnet';
 
 // There are 1-billion lamports in one SOL

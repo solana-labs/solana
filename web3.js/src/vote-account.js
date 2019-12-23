@@ -4,7 +4,7 @@ import * as BufferLayout from 'buffer-layout';
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
 
-export const VOTE_ACCOUNT_KEY = new PublicKey(
+export const VOTE_PROGRAM_ID = new PublicKey(
   'Vote111111111111111111111111111111111111111',
 );
 

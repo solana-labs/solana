@@ -203,6 +203,62 @@ declare module '@solana/web3.js' {
     validatorExit(): Promise<boolean>;
   }
 
+  // === src/config-program.js ===
+  declare export var CONFIG_PROGRAM_ID;
+
+  // === src/stake-program.js ===
+  declare export class StakeProgram {
+    static programId: PublicKey;
+    static space: number;
+
+    static createAccount(
+      from: PublicKey,
+      stakeAccount: PublicKey,
+      authorized: Authorized,
+      lockup: Lockup,
+      lamports: number,
+    ): Transaction;
+    static createAccountWithSeed(
+      from: PublicKey,
+      stakeAccount: PublicKey,
+      seed: string,
+      authorized: Authorized,
+      lockup: Lockup,
+      lamports: number,
+    ): Transaction;
+    static delegate(
+      stakeAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+      votePubkey: PublicKey,
+    ): Transaction;
+    static authorize(
+      stakeAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+      newAuthorized: PublicKey,
+      stakeAuthorizationType: StakeAuthorizationType,
+    ): Transaction;
+    static redeemVoteCredits(
+      stakeAccount: PublicKey,
+      votePubkey: PublicKey,
+    ): Transaction;
+    static split(
+      stakeAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+      lamports: number,
+      splitStakePubkey: PublicKey,
+    ): Transaction;
+    static withdraw(
+      stakeAccount: PublicKey,
+      withdrawerPubkey: PublicKey,
+      to: PublicKey,
+      lamports: number,
+    ): Transaction;
+    static deactivate(
+      stakeAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+    ): Transaction;
+  }
+
   // === src/system-program.js ===
   declare export class SystemProgram {
     static programId: PublicKey;
@@ -248,11 +304,14 @@ declare module '@solana/web3.js' {
     static fromConfigData(buffer: Buffer): ?ValidatorInfo;
   }
 
-  // === src/sysvar-rent.js ===
+  // === src/sysvar.js ===
+  declare export var SYSVAR_CLOCK_PUBKEY;
   declare export var SYSVAR_RENT_PUBKEY;
+  declare export var SYSVAR_REWARDS_PUBKEY;
+  declare export var SYSVAR_STAKE_HISTORY_PUBKEY;
 
   // === src/vote-account.js ===
-  declare export var VOTE_ACCOUNT_KEY;
+  declare export var VOTE_PROGRAM_ID;
   declare export type Lockout = {|
     slot: number,
     confirmationCount: number,
@@ -276,6 +335,17 @@ declare module '@solana/web3.js' {
     epochCredits: Array<EpochCredits>;
     static fromAccountData(buffer: Buffer): VoteAccount;
   }
+
+  // === src/instruction.js ===
+  declare export type InstructionType = {|
+    index: number,
+    layout: typeof BufferLayout,
+  |};
+
+  declare export function encodeData(
+    type: InstructionType,
+    fields: Object,
+  ): Buffer;
 
   // === src/transaction.js ===
   declare export type TransactionSignature = string;

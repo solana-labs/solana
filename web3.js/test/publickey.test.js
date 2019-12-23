@@ -259,7 +259,15 @@ test('createWithSeed', () => {
     0,
     0,
   ]);
-  const derivedKey = PublicKey.createWithSeed(defaultPublicKey, 'limber chicken: 4/45', defaultPublicKey);
+  const derivedKey = PublicKey.createWithSeed(
+    defaultPublicKey,
+    'limber chicken: 4/45',
+    defaultPublicKey,
+  );
 
-  expect(derivedKey.equals(new PublicKey('9h1HyLCW5dZnBVap8C5egQ9Z6pHyjsh5MNy83iPqqRuq'))).toBe(true);
+  expect(
+    derivedKey.equals(
+      new PublicKey('9h1HyLCW5dZnBVap8C5egQ9Z6pHyjsh5MNy83iPqqRuq'),
+    ),
+  ).toBe(true);
 });

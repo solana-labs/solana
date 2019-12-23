@@ -2,9 +2,11 @@
 
 import * as BufferLayout from 'buffer-layout';
 
-import {Transaction, TransactionInstruction} from './transaction';
-import {PublicKey} from './publickey';
+import {encodeData} from './instruction';
+import type {InstructionType} from './instruction';
 import * as Layout from './layout';
+import {PublicKey} from './publickey';
+import {Transaction, TransactionInstruction} from './transaction';
 import type {TransactionInstructionCtorFields} from './transaction';
 
 /**
@@ -14,12 +16,9 @@ export class SystemInstruction extends TransactionInstruction {
   /**
    * Type of SystemInstruction
    */
-  type: SystemInstructionType;
+  type: InstructionType;
 
-  constructor(
-    opts?: TransactionInstructionCtorFields,
-    type?: SystemInstructionType,
-  ) {
+  constructor(opts?: TransactionInstructionCtorFields, type?: InstructionType) {
     if (
       opts &&
       opts.programId &&
@@ -108,16 +107,6 @@ export class SystemInstruction extends TransactionInstruction {
 }
 
 /**
- * @typedef {Object} SystemInstructionType
- * @property (index} The System Instruction index (from solana-sdk)
- * @property (BufferLayout} The BufferLayout to use to build data
- */
-type SystemInstructionType = {|
-  index: number,
-  layout: typeof BufferLayout,
-|};
-
-/**
  * An enumeration of valid SystemInstructionTypes
  */
 const SystemInstructionLayout = Object.freeze({
@@ -156,18 +145,6 @@ const SystemInstructionLayout = Object.freeze({
     ]),
   },
 });
-
-/**
- * Populate a buffer of instruction data using the SystemInstructionType
- */
-function encodeData(type: SystemInstructionType, fields: Object): Buffer {
-  const allocLength =
-    type.layout.span >= 0 ? type.layout.span : Layout.getAlloc(type, fields);
-  const data = Buffer.alloc(allocLength);
-  const layoutFields = Object.assign({instruction: type.index}, fields);
-  type.layout.encode(layoutFields, data);
-  return data;
-}
 
 /**
  * Factory class for transactions to interact with the System program
