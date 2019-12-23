@@ -44,6 +44,7 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
+use solana_stake_program::stake_state::Delegation;
 use std::{
     collections::HashMap,
     io::{BufReader, Cursor, Error as IOError, Read},
@@ -1554,6 +1555,12 @@ impl Bank {
         self.storage_accounts.read().unwrap().clone()
     }
 
+    /// current stake delegations for this bank
+    /// Note: this method is exposed publicly for external usage
+    pub fn stake_delegations(&self) -> HashMap<Pubkey, Delegation> {
+        self.stakes.read().unwrap().stake_delegations().clone()
+    }
+
     /// current vote accounts for this bank along with the stake
     ///   attributed to each account
     pub fn vote_accounts(&self) -> HashMap<Pubkey, (u64, Account)> {
@@ -1688,7 +1695,10 @@ mod tests {
         system_instruction,
         sysvar::{fees::Fees, rewards::Rewards},
     };
-    use solana_stake_program::stake_state::{Delegation, Stake};
+    use solana_stake_program::{
+        stake_instruction,
+        stake_state::{Authorized, Delegation, Stake},
+    };
     use solana_vote_program::{
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
@@ -3620,6 +3630,54 @@ mod tests {
         let vote_accounts = bank.vote_accounts();
 
         assert_eq!(vote_accounts.len(), 1);
+    }
+
+    #[test]
+    fn test_bank_stake_delegations() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(500, &Pubkey::new_rand(), 1);
+        let bank = Arc::new(Bank::new(&genesis_config));
+
+        let stake_delegations = bank.stake_delegations();
+        assert_eq!(stake_delegations.len(), 1); // bootstrap leader has
+                                                // to have a stake delegation
+
+        let vote_keypair = Keypair::new();
+        let mut instructions = vote_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &vote_keypair.pubkey(),
+            &VoteInit {
+                node_pubkey: mint_keypair.pubkey(),
+                authorized_voter: vote_keypair.pubkey(),
+                authorized_withdrawer: vote_keypair.pubkey(),
+                commission: 0,
+            },
+            10,
+        );
+
+        let stake_keypair = Keypair::new();
+        instructions.extend(stake_instruction::create_stake_account_and_delegate_stake(
+            &mint_keypair.pubkey(),
+            &stake_keypair.pubkey(),
+            &vote_keypair.pubkey(),
+            &Authorized::auto(&stake_keypair.pubkey()),
+            10,
+        ));
+
+        let transaction = Transaction::new_signed_instructions(
+            &[&mint_keypair, &vote_keypair, &stake_keypair],
+            instructions,
+            bank.last_blockhash(),
+        );
+
+        bank.process_transaction(&transaction).unwrap();
+
+        let stake_delegations = bank.stake_delegations();
+        assert_eq!(stake_delegations.len(), 2);
+        assert!(stake_delegations.get(&stake_keypair.pubkey()).is_some());
     }
 
     #[test]
