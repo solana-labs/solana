@@ -4588,7 +4588,7 @@ mod tests {
         let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
+                nonce_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4609,7 +4609,7 @@ mod tests {
         let tx = Transaction::new_signed_with_payer(
             vec![
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
-                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
+                nonce_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
             ],
             Some(&custodian_pubkey),
             &[&custodian_keypair, &nonce_keypair],
@@ -4628,7 +4628,7 @@ mod tests {
         let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
         let mut tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
+                nonce_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4651,7 +4651,7 @@ mod tests {
         let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&missing_pubkey, &nonce_pubkey),
+                nonce_instruction::nonce_advance(&missing_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4670,7 +4670,7 @@ mod tests {
 
         let tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
+                nonce_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4725,7 +4725,7 @@ mod tests {
         /* Durable Nonce transfer */
         let durable_tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
+                nonce_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4746,7 +4746,7 @@ mod tests {
         /* Durable Nonce re-use fails */
         let durable_tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
+                nonce_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4770,7 +4770,7 @@ mod tests {
 
         let durable_tx = Transaction::new_signed_with_payer(
             vec![
-                nonce_instruction::nonce(&nonce_pubkey, &nonce_pubkey),
+                nonce_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000_000),
             ],
             Some(&custodian_pubkey),

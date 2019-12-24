@@ -36,16 +36,16 @@ impl<E> DecodeError<E> for NonceError {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum NonceInstruction {
-    /// `Nonce` consumes a stored nonce, replacing it with a successor
+    /// `NonceAdvance` consumes a stored nonce, replacing it with a successor
     ///
     /// Expects 2 Accounts:
     ///     0 - A NonceAccount
     ///     1 - RecentBlockhashes sysvar
     ///
     /// The current authority must sign a transaction executing this instrucion
-    Nonce,
+    NonceAdvance,
 
-    /// `Withdraw` transfers funds out of the nonce account
+    /// `NonceWithdraw` transfers funds out of the nonce account
     ///
     /// Expects 4 Accounts:
     ///     0 - A NonceAccount
@@ -57,9 +57,9 @@ pub enum NonceInstruction {
     /// account balance above the rent exempt reserve or at zero.
     ///
     /// The current authority must sign a transaction executing this instruction
-    Withdraw(u64),
+    NonceWithdraw(u64),
 
-    /// `Initialize` drives state of Uninitalized NonceAccount to Initialized,
+    /// `NonceInitialize` drives state of Uninitalized NonceAccount to Initialized,
     /// setting the nonce value.
     ///
     /// Expects 3 Accounts:
@@ -72,9 +72,9 @@ pub enum NonceInstruction {
     ///
     /// No signatures are required to execute this instruction, enabling derived
     /// nonce account addresses
-    Initialize(Pubkey),
+    NonceInitialize(Pubkey),
 
-    /// `Authorize` changes the entity authorized to execute nonce instructions
+    /// `NonceAuthorize` changes the entity authorized to execute nonce instructions
     /// on the account
     ///
     /// Expects 1 Account:
@@ -83,7 +83,7 @@ pub enum NonceInstruction {
     /// The `Pubkey` parameter identifies the entity to authorize
     ///
     /// The current authority must sign a transaction executing this instruction
-    Authorize(Pubkey),
+    NonceAuthorize(Pubkey),
 }
 
 pub fn create_nonce_account(
@@ -100,14 +100,14 @@ pub fn create_nonce_account(
             NonceState::size() as u64,
             &id(),
         ),
-        initialize(nonce_pubkey, authority),
+        nonce_initialize(nonce_pubkey, authority),
     ]
 }
 
-fn initialize(nonce_pubkey: &Pubkey, authority: &Pubkey) -> Instruction {
+fn nonce_initialize(nonce_pubkey: &Pubkey, authority: &Pubkey) -> Instruction {
     Instruction::new(
         id(),
-        &NonceInstruction::Initialize(*authority),
+        &NonceInstruction::NonceInitialize(*authority),
         vec![
             AccountMeta::new(*nonce_pubkey, false),
             AccountMeta::new_readonly(recent_blockhashes::id(), false),
@@ -116,16 +116,16 @@ fn initialize(nonce_pubkey: &Pubkey, authority: &Pubkey) -> Instruction {
     )
 }
 
-pub fn nonce(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
+pub fn nonce_advance(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*nonce_pubkey, false),
         AccountMeta::new_readonly(recent_blockhashes::id(), false),
     ]
     .with_signer(authorized_pubkey);
-    Instruction::new(id(), &NonceInstruction::Nonce, account_metas)
+    Instruction::new(id(), &NonceInstruction::NonceAdvance, account_metas)
 }
 
-pub fn withdraw(
+pub fn nonce_withdraw(
     nonce_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     to_pubkey: &Pubkey,
@@ -138,10 +138,14 @@ pub fn withdraw(
         AccountMeta::new_readonly(rent::id(), false),
     ]
     .with_signer(authorized_pubkey);
-    Instruction::new(id(), &NonceInstruction::Withdraw(lamports), account_metas)
+    Instruction::new(
+        id(),
+        &NonceInstruction::NonceWithdraw(lamports),
+        account_metas,
+    )
 }
 
-pub fn authorize(
+pub fn nonce_authorize(
     nonce_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     new_authority: &Pubkey,
@@ -149,7 +153,7 @@ pub fn authorize(
     let account_metas = vec![AccountMeta::new(*nonce_pubkey, false)].with_signer(authorized_pubkey);
     Instruction::new(
         id(),
-        &NonceInstruction::Authorize(*new_authority),
+        &NonceInstruction::NonceAuthorize(*new_authority),
         account_metas,
     )
 }
@@ -165,13 +169,13 @@ pub fn process_instruction(
     let me = &mut next_keyed_account(keyed_accounts)?;
 
     match limited_deserialize(data)? {
-        NonceInstruction::Nonce => me.nonce(
+        NonceInstruction::NonceAdvance => me.nonce_advance(
             &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             &signers,
         ),
-        NonceInstruction::Withdraw(lamports) => {
+        NonceInstruction::NonceWithdraw(lamports) => {
             let to = &mut next_keyed_account(keyed_accounts)?;
-            me.withdraw(
+            me.nonce_withdraw(
                 lamports,
                 to,
                 &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
@@ -179,12 +183,14 @@ pub fn process_instruction(
                 &signers,
             )
         }
-        NonceInstruction::Initialize(authorized) => me.initialize(
+        NonceInstruction::NonceInitialize(authorized) => me.nonce_initialize(
             &authorized,
             &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
-        NonceInstruction::Authorize(nonce_authority) => me.authorize(&nonce_authority, &signers),
+        NonceInstruction::NonceAuthorize(nonce_authority) => {
+            me.nonce_authorize(&nonce_authority, &signers)
+        }
     }
 }
 
@@ -244,7 +250,7 @@ mod tests {
     #[test]
     fn test_process_nonce_ix_no_acc_data_fail() {
         assert_eq!(
-            process_instruction(&nonce(&Pubkey::default(), &Pubkey::default())),
+            process_instruction(&nonce_advance(&Pubkey::default(), &Pubkey::default())),
             Err(InstructionError::InvalidAccountData),
         );
     }
@@ -255,7 +261,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [],
-                &serialize(&NonceInstruction::Nonce).unwrap()
+                &serialize(&NonceInstruction::NonceAdvance).unwrap()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -271,7 +277,7 @@ mod tests {
                     true,
                     &mut Account::default(),
                 ),],
-                &serialize(&NonceInstruction::Nonce).unwrap(),
+                &serialize(&NonceInstruction::NonceAdvance).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -290,7 +296,7 @@ mod tests {
                         &mut Account::default(),
                     ),
                 ],
-                &serialize(&NonceInstruction::Nonce).unwrap(),
+                &serialize(&NonceInstruction::NonceAdvance).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -317,7 +323,7 @@ mod tests {
                     &mut sysvar::rent::create_account(1, &Rent::free()),
                 ),
             ],
-            &serialize(&NonceInstruction::Initialize(Pubkey::default())).unwrap(),
+            &serialize(&NonceInstruction::NonceInitialize(Pubkey::default())).unwrap(),
         )
         .unwrap();
         assert_eq!(
@@ -334,7 +340,7 @@ mod tests {
                         ),
                     ),
                 ],
-                &serialize(&NonceInstruction::Nonce).unwrap(),
+                &serialize(&NonceInstruction::NonceAdvance).unwrap(),
             ),
             Ok(()),
         );
@@ -343,7 +349,7 @@ mod tests {
     #[test]
     fn test_process_withdraw_ix_no_acc_data_fail() {
         assert_eq!(
-            process_instruction(&withdraw(
+            process_instruction(&nonce_withdraw(
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
@@ -359,7 +365,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [],
-                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
+                &serialize(&NonceInstruction::NonceWithdraw(42)).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -375,7 +381,7 @@ mod tests {
                     true,
                     &mut Account::default(),
                 ),],
-                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
+                &serialize(&NonceInstruction::NonceWithdraw(42)).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -395,7 +401,7 @@ mod tests {
                         &mut Account::default(),
                     ),
                 ],
-                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
+                &serialize(&NonceInstruction::NonceWithdraw(42)).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -423,7 +429,7 @@ mod tests {
                     ),
                     KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
                 ],
-                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
+                &serialize(&NonceInstruction::NonceWithdraw(42)).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -455,7 +461,7 @@ mod tests {
                         &mut sysvar::rent::create_account(1, &Rent::free())
                     ),
                 ],
-                &serialize(&NonceInstruction::Withdraw(42)).unwrap(),
+                &serialize(&NonceInstruction::NonceWithdraw(42)).unwrap(),
             ),
             Ok(()),
         );
@@ -465,7 +471,7 @@ mod tests {
     fn test_process_initialize_ix_invalid_acc_data_fail() {
         let authorized = Pubkey::default();
         assert_eq!(
-            process_instruction(&initialize(&Pubkey::default(), &authorized)),
+            process_instruction(&nonce_initialize(&Pubkey::default(), &authorized)),
             Err(InstructionError::InvalidAccountData),
         );
     }
@@ -476,7 +482,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [],
-                &serialize(&NonceInstruction::Initialize(Pubkey::default())).unwrap(),
+                &serialize(&NonceInstruction::NonceInitialize(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -492,7 +498,7 @@ mod tests {
                     true,
                     &mut nonce_state::create_account(1_000_000),
                 ),],
-                &serialize(&NonceInstruction::Initialize(Pubkey::default())).unwrap(),
+                &serialize(&NonceInstruction::NonceInitialize(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -515,7 +521,7 @@ mod tests {
                         &mut Account::default(),
                     ),
                 ],
-                &serialize(&NonceInstruction::Initialize(Pubkey::default())).unwrap(),
+                &serialize(&NonceInstruction::NonceInitialize(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -542,7 +548,7 @@ mod tests {
                     ),
                     KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
                 ],
-                &serialize(&NonceInstruction::Initialize(Pubkey::default())).unwrap(),
+                &serialize(&NonceInstruction::NonceInitialize(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -573,7 +579,7 @@ mod tests {
                         &mut sysvar::rent::create_account(1, &Rent::free())
                     ),
                 ],
-                &serialize(&NonceInstruction::Initialize(Pubkey::default())).unwrap(),
+                &serialize(&NonceInstruction::NonceInitialize(Pubkey::default())).unwrap(),
             ),
             Ok(()),
         );
@@ -600,14 +606,14 @@ mod tests {
                     &mut sysvar::rent::create_account(1, &Rent::free()),
                 ),
             ],
-            &serialize(&NonceInstruction::Initialize(Pubkey::default())).unwrap(),
+            &serialize(&NonceInstruction::NonceInitialize(Pubkey::default())).unwrap(),
         )
         .unwrap();
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc,),],
-                &serialize(&NonceInstruction::Authorize(Pubkey::default(),)).unwrap(),
+                &serialize(&NonceInstruction::NonceAuthorize(Pubkey::default(),)).unwrap(),
             ),
             Ok(()),
         );
@@ -616,7 +622,7 @@ mod tests {
     #[test]
     fn test_process_authorize_bad_account_data_fail() {
         assert_eq!(
-            process_instruction(&authorize(
+            process_instruction(&nonce_authorize(
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
