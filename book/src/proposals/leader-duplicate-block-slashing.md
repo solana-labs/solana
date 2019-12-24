@@ -115,12 +115,8 @@ then the two versions must be distinguishable.
 An issue to note here is that if some version of a slot violates correctness
 before the slot is finished, then the validator does not know what the ending
 blockhash is and thus cannot store the slot as dead. In these cases we can drop
-the entire slot and wait for repair. Because repair will include a merkle proof
-of each shred for each repair (which includes the final blockhash `B`), 
-then the advantage there is if a repaired shred fails to play, we know the
-entire version of that slot with blockhash `B` is no good, and we can store 
-`(slot, B)` in the Dead Slots column family and ignore all forks that build on
- top of `(slot, B)`.
+the entire slot and wait for repair. More details in the `Replay Failures` 
+section below.
 
 ### Repairing Multiple versions of the Same Slot
 Repair is augmented with a blockhash. The various types of repairs:
@@ -175,6 +171,49 @@ to avoid waiting for multiple shreds).
 version of `B` is detected before this version is completed, we drop all the
 shreds for slot `B`.
 3) For all possible versions of slot `A` see which version chains to `E_B`
-4) If no version of slot `A` chains, then deserializie `S_B` to find the first
+4) If no version of slot `A` chains, then deserialize `S_B` to find the first
 tick `T_B`, then make a `Orphan(slot, T_B.hash, T_B.num_hashes)` request
 to get the last shred in the version of slot `A` that chains to slot `B`.
+
+### Replay Failures
+As summarized under the `Dead Slots` column family in the
+`Indexing the Column Families by Blockhash` section above, validators must now
+account for the possibility that some versions of a slot have correctness 
+issues while other versions don't.
+
+Let `V_A` be a version of slot `A` with blockhash `B_A`.
+
+Assume that on replay of `V_A` the validator runs into some correctness issue 
+(entry verification failure, bad tick count, etc.) while replaying the entries.
+
+Define `S` to be the set of shreds as follows:
+
+1) On entry verification failures of entries`E1` and `E2`:
+
+Let `S` be the set of all shreds that contain any part of `E1` and `E2`.
+
+2) On TransactionError in some entry `E`:
+
+Let `S` be the set of all shreds that contain any part of `E`.
+
+3) On Blocktree inability to deserialize an entry from a set of shreds:
+
+Let `S` be the FEC set that failed to deserialize
+
+4) On BlockErrors (InvalidTickCount, InvalidHashCount, TrailingEntry, etc.)
+on some entry `E`
+
+Let `S` be the set of all shreds that contain any part of `E`.
+
+
+Protocol: 
+
+1) The validator queries for a merkle proof of all shreds in `S` to prove that
+all the offending shreds were indeed part of the version `A` with blockhash `B_A`.
+
+2) If the merkle proof checks out, we add `(A, B_A)` to the `Dead Slots` column
+family. No further forks chaining to this slot will be played.
+
+3) If the merkle proof instead shows that there is a different version of some
+shred in `S`, that means we got maliciously sent the wrong shred for version 
+`B_A`. We must then drop those wrong shreds and repair them again.
