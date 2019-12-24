@@ -18,12 +18,11 @@ use solana_sdk::hash::Hash;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::cell::RefCell;
-use std::cmp;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::thread::JoinHandle;
 use std::time::Instant;
+use std::{cmp, thread};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -151,10 +150,10 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction
     }
 }
 
-pub struct EntryVerifyState {
+pub struct VerificationData {
     thread_h: Option<JoinHandle<u64>>,
+    verification_status: EntryVerificationStatus,
     hashes: Option<Arc<Mutex<PinnedVec<Hash>>>>,
-    verified: bool,
     tx_hashes: Vec<Option<Hash>>,
     start_time_ms: u64,
 }
@@ -165,46 +164,75 @@ pub struct VerifyRecyclers {
     tick_count_recycler: Recycler<PinnedVec<u64>>,
 }
 
-impl EntryVerifyState {
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum EntryVerificationStatus {
+    Failure,
+    Success,
+    Pending,
+}
+
+pub enum EntryVerificationState {
+    CPU(VerificationData),
+    GPU(VerificationData),
+}
+
+impl EntryVerificationState {
+    pub fn status(&self) -> EntryVerificationStatus {
+        match self {
+            EntryVerificationState::CPU(state) => state.verification_status,
+            EntryVerificationState::GPU(state) => state.verification_status,
+        }
+    }
+
     pub fn finish_verify(&mut self, entries: &[Entry]) -> bool {
-        if self.hashes.is_some() {
-            let gpu_time_ms = self.thread_h.take().unwrap().join().unwrap();
+        match self {
+            EntryVerificationState::GPU(verification_state) => {
+                let gpu_time_ms = verification_state.thread_h.take().unwrap().join().unwrap();
 
-            let mut verify_check_time = Measure::start("verify_check");
-            let hashes = self.hashes.take().expect("hashes.as_ref");
-            let hashes = Arc::try_unwrap(hashes)
-                .expect("unwrap Arc")
-                .into_inner()
-                .expect("into_inner");
-            let res = PAR_THREAD_POOL.with(|thread_pool| {
-                thread_pool.borrow().install(|| {
-                    hashes
-                        .into_par_iter()
-                        .zip(&self.tx_hashes)
-                        .zip(entries)
-                        .all(|((hash, tx_hash), answer)| {
-                            if answer.num_hashes == 0 {
-                                *hash == answer.hash
-                            } else {
-                                let mut poh = Poh::new(*hash, None);
-                                if let Some(mixin) = tx_hash {
-                                    poh.record(*mixin).unwrap().hash == answer.hash
+                let mut verify_check_time = Measure::start("verify_check");
+                let hashes = verification_state.hashes.take().expect("hashes.as_ref");
+                let hashes = Arc::try_unwrap(hashes)
+                    .expect("unwrap Arc")
+                    .into_inner()
+                    .expect("into_inner");
+                let res = PAR_THREAD_POOL.with(|thread_pool| {
+                    thread_pool.borrow().install(|| {
+                        hashes
+                            .into_par_iter()
+                            .zip(&verification_state.tx_hashes)
+                            .zip(entries)
+                            .all(|((hash, tx_hash), answer)| {
+                                if answer.num_hashes == 0 {
+                                    *hash == answer.hash
                                 } else {
-                                    poh.tick().unwrap().hash == answer.hash
+                                    let mut poh = Poh::new(*hash, None);
+                                    if let Some(mixin) = tx_hash {
+                                        poh.record(*mixin).unwrap().hash == answer.hash
+                                    } else {
+                                        poh.tick().unwrap().hash == answer.hash
+                                    }
                                 }
-                            }
-                        })
-                })
-            });
+                            })
+                    })
+                });
 
-            verify_check_time.stop();
-            inc_new_counter_warn!(
-                "entry_verify-duration",
-                (gpu_time_ms + verify_check_time.as_ms() + self.start_time_ms) as usize
-            );
-            res
-        } else {
-            self.verified
+                verify_check_time.stop();
+                inc_new_counter_warn!(
+                    "entry_verify-duration",
+                    (gpu_time_ms + verify_check_time.as_ms() + verification_state.start_time_ms)
+                        as usize
+                );
+
+                verification_state.verification_status = if res {
+                    EntryVerificationStatus::Success
+                } else {
+                    EntryVerificationStatus::Failure
+                };
+                res
+            }
+            EntryVerificationState::CPU(verification_state) => {
+                verification_state.verification_status == EntryVerificationStatus::Success
+            }
         }
     }
 }
@@ -212,8 +240,9 @@ impl EntryVerifyState {
 // an EntrySlice is a slice of Entries
 pub trait EntrySlice {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
-    fn verify_cpu(&self, start_hash: &Hash) -> EntryVerifyState;
-    fn start_verify(&self, start_hash: &Hash, recyclers: VerifyRecyclers) -> EntryVerifyState;
+    fn verify_cpu(&self, start_hash: &Hash) -> EntryVerificationState;
+    fn start_verify(&self, start_hash: &Hash, recyclers: VerifyRecyclers)
+        -> EntryVerificationState;
     fn verify(&self, start_hash: &Hash) -> bool;
     /// Checks that each entry tick has the correct number of hashes. Entry slices do not
     /// necessarily end in a tick, so `tick_hash_count` is used to carry over the hash count
@@ -228,7 +257,7 @@ impl EntrySlice for [Entry] {
         self.start_verify(start_hash, VerifyRecyclers::default())
             .finish_verify(self)
     }
-    fn verify_cpu(&self, start_hash: &Hash) -> EntryVerifyState {
+    fn verify_cpu(&self, start_hash: &Hash) -> EntryVerificationState {
         let now = Instant::now();
         let genesis = [Entry {
             num_hashes: 0,
@@ -256,16 +285,24 @@ impl EntrySlice for [Entry] {
             "entry_verify-duration",
             timing::duration_as_ms(&now.elapsed()) as usize
         );
-        EntryVerifyState {
+        EntryVerificationState::CPU(VerificationData {
             thread_h: None,
-            verified: res,
+            verification_status: if res {
+                EntryVerificationStatus::Success
+            } else {
+                EntryVerificationStatus::Failure
+            },
             hashes: None,
             tx_hashes: vec![],
             start_time_ms: 0,
-        }
+        })
     }
 
-    fn start_verify(&self, start_hash: &Hash, recyclers: VerifyRecyclers) -> EntryVerifyState {
+    fn start_verify(
+        &self,
+        start_hash: &Hash,
+        recyclers: VerifyRecyclers,
+    ) -> EntryVerificationState {
         let api = perf_libs::api();
         if api.is_none() {
             return self.verify_cpu(start_hash);
@@ -341,13 +378,13 @@ impl EntrySlice for [Entry] {
             })
         });
 
-        EntryVerifyState {
+        EntryVerificationState::GPU(VerificationData {
             thread_h: Some(gpu_verify_thread),
-            verified: false,
+            verification_status: EntryVerificationStatus::Pending,
             tx_hashes,
             start_time_ms: timing::duration_as_ms(&start.elapsed()),
             hashes: Some(hashes),
-        }
+        })
     }
 
     fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool {
@@ -515,14 +552,17 @@ mod tests {
         solana_logger::setup();
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-        assert!(vec![][..].verify(&zero)); // base case
-        assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
-        assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
-        assert!(vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero)); // inductive step
+        assert_eq!(vec![][..].verify(&zero), true); // base case
+        assert_eq!(vec![Entry::new_tick(0, &zero)][..].verify(&zero), true); // singleton case 1
+        assert_eq!(vec![Entry::new_tick(0, &zero)][..].verify(&one), false); // singleton case 2, bad
+        assert_eq!(
+            vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero),
+            true
+        ); // inductive step
 
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
         bad_ticks[1].hash = one;
-        assert!(!bad_ticks.verify(&zero)); // inductive step, bad
+        assert_eq!(bad_ticks.verify(&zero), false); // inductive step, bad
     }
 
     #[test]
@@ -531,18 +571,18 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let two = hash(&one.as_ref());
-        assert!(vec![][..].verify(&one)); // base case
-        assert!(vec![Entry::new_tick(1, &two)][..].verify(&one)); // singleton case 1
-        assert!(!vec![Entry::new_tick(1, &two)][..].verify(&two)); // singleton case 2, bad
+        assert_eq!(vec![][..].verify(&one), true); // base case
+        assert_eq!(vec![Entry::new_tick(1, &two)][..].verify(&one), true); // singleton case 1
+        assert_eq!(vec![Entry::new_tick(1, &two)][..].verify(&two), false); // singleton case 2, bad
 
         let mut ticks = vec![next_entry(&one, 1, vec![])];
         ticks.push(next_entry(&ticks.last().unwrap().hash, 1, vec![]));
-        assert!(ticks.verify(&one)); // inductive step
+        assert_eq!(ticks.verify(&one), true); // inductive step
 
         let mut bad_ticks = vec![next_entry(&one, 1, vec![])];
         bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![]));
         bad_ticks[1].hash = one;
-        assert!(!bad_ticks.verify(&one)); // inductive step, bad
+        assert_eq!(bad_ticks.verify(&one), false); // inductive step, bad
     }
 
     #[test]
@@ -554,9 +594,15 @@ mod tests {
         let alice_pubkey = Keypair::default();
         let tx0 = create_sample_payment(&alice_pubkey, one);
         let tx1 = create_sample_timestamp(&alice_pubkey, one);
-        assert!(vec![][..].verify(&one)); // base case
-        assert!(vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&one)); // singleton case 1
-        assert!(!vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&two)); // singleton case 2, bad
+        assert_eq!(vec![][..].verify(&one), true); // base case
+        assert_eq!(
+            vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&one),
+            true
+        ); // singleton case 1
+        assert_eq!(
+            vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&two),
+            false
+        ); // singleton case 2, bad
 
         let mut ticks = vec![next_entry(&one, 1, vec![tx0.clone()])];
         ticks.push(next_entry(
@@ -564,12 +610,12 @@ mod tests {
             1,
             vec![tx1.clone()],
         ));
-        assert!(ticks.verify(&one)); // inductive step
+        assert_eq!(ticks.verify(&one), true); // inductive step
 
         let mut bad_ticks = vec![next_entry(&one, 1, vec![tx0])];
         bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![tx1]));
         bad_ticks[1].hash = one;
-        assert!(!bad_ticks.verify(&one)); // inductive step, bad
+        assert_eq!(bad_ticks.verify(&one), false); // inductive step, bad
     }
 
     #[test]

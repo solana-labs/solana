@@ -9,6 +9,7 @@ use crate::{
     rpc_subscriptions::RpcSubscriptions,
     thread_mem_usage,
 };
+use solana_ledger::entry::EntryVerificationStatus;
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
@@ -1070,6 +1071,10 @@ impl ReplayStage {
         datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
         let mut verify_total = Measure::start("verify_and_process_entries");
         let mut entry_state = entries.start_verify(last_entry, recyclers.clone());
+
+        if entry_state.status() == EntryVerificationStatus::Failure {
+            return handle_block_error(BlockError::InvalidEntryHash);
+        }
 
         let mut replay_elapsed = Measure::start("replay_elapsed");
         let res =

@@ -303,7 +303,7 @@ fn poll_all_nodes_for_signature(
 
 fn get_and_verify_slot_entries(blocktree: &Blocktree, slot: Slot, last_entry: &Hash) -> Vec<Entry> {
     let entries = blocktree.get_slot_entries(slot, 0, None).unwrap();
-    assert!(entries.verify(last_entry));
+    assert_eq!(entries.verify(last_entry), true);
     entries
 }
 
