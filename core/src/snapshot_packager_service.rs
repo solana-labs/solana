@@ -275,7 +275,6 @@ mod tests {
         // the source dir for snapshots
         let dummy_slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
         snapshot_utils::serialize_snapshot_data_file(
-            snapshot_package.root,
             &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
             MAX_SNAPSHOT_DATA_FILE_SIZE,
             |stream| {
