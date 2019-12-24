@@ -20,7 +20,7 @@ solana-logger = { path = "../logger", version = "0.23.0" }
 [target."cfg(unix)".dependencies]
 unix_socket2 = "0.5.4"
 users = "0.9.1"
-nix = "0.16.0"
+nix = "0.16.1"
 sysctl = "0.4.0"
 
 [lib]
