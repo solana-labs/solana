@@ -201,6 +201,7 @@ OPTIONS:
 SUBCOMMANDS:
     address                             Get your public key
     airdrop                             Request lamports
+    authorize-nonce-account             Assign account authority to a new entity
     balance                             Get your balance
     cancel                              Cancel a transfer
     catchup                             Wait for a validator to catch up to the cluster
@@ -303,6 +304,35 @@ OPTIONS:
 ARGS:
     <AMOUNT>    The airdrop amount to request (default unit SOL)
     <UNIT>      Specify unit to use for request and balance display [possible values: SOL, lamports]
+```
+
+#### solana-authorize-nonce-account
+```text
+solana-authorize-nonce-account 
+Assign account authority to a new entity
+
+USAGE:
+    solana authorize-nonce-account [FLAGS] [OPTIONS] <NONCE_ACCOUNT> <NEW_AUTHORITY_PUBKEY>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+                                            [possible values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+        --nonce-authority <KEYPAIR>         Specify nonce authority if different from account
+
+ARGS:
+    <NONCE_ACCOUNT>           Address of the nonce account
+    <NEW_AUTHORITY_PUBKEY>    Account to be granted authority of the nonce account
 ```
 
 #### solana-balance
