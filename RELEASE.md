@@ -140,25 +140,6 @@ TODO: Documentation update procedure is WIP as we move to gitbook
 
 Document the new recommended version by updating `book/src/running-archiver.md` and `book/src/validator-testnet.md` on the release (beta) branch to point at the `solana-install` for the upcoming release version.
 
-#### Publish updated Book
-We maintain three copies of the "book" as official documentation:
-
-1) "Book" is the documentation for the latest official release.  This should get manually updated whenever a new release is made.  It is published here:
-https://solana-labs.github.io/book/
-
-2) "Book-edge" tracks the tip of the master branch and updates automatically.
-https://solana-labs.github.io/book-edge/
-
-3) "Book-beta" tracks the tip of the beta branch and updates automatically.
-https://solana-labs.github.io/book-beta/
-
-To manually trigger an update of the "Book", create a new job of the manual-update-book pipeline.
-Set the tag of the latest release as the PUBLISH_BOOK_TAG environment variable.
-```bash
-PUBLISH_BOOK_TAG=v0.16.6
-```
-https://buildkite.com/solana-labs/manual-update-book
-
 ### Update software on testnet.solana.com
 
 The testnet running on testnet.solana.com is set to use a fixed release tag
