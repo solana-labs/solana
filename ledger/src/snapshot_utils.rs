@@ -106,40 +106,6 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     Ok(package)
 }
 
-pub fn serialize_status_cache(
-    slot: Slot,
-    slot_deltas: &[SlotDelta<TransactionResult<()>>],
-    snapshot_links: &TempDir,
-) -> Result<()> {
-    // the status cache is stored as snapshot_path/status_cache
-    let snapshot_status_cache_file_path =
-        snapshot_links.path().join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
-
-    let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
-    let consumed_size = serialize_snapshot_data_file(
-        &snapshot_status_cache_file_path,
-        MAX_SNAPSHOT_DATA_FILE_SIZE,
-        |stream| {
-            serialize_into(stream, slot_deltas)?;
-            Ok(())
-        },
-    )?;
-    status_cache_serialize.stop();
-
-    datapoint_info!(
-        "snapshot-status-cache-file",
-        ("slot", slot, i64),
-        ("size", consumed_size, i64)
-    );
-
-    inc_new_counter_info!(
-        "serialize-status-cache-ms",
-        status_cache_serialize.as_ms() as usize
-    );
-
-    Ok(())
-}
-
 pub fn get_snapshot_paths<P: AsRef<Path>>(snapshot_path: P) -> Vec<SlotSnapshotPaths>
 where
     P: std::fmt::Debug,
@@ -237,6 +203,35 @@ where
     Ok(ret)
 }
 
+macro_rules! serialize_snapshot_data_file_with_metrics {
+    (
+        $data_file_path:expr,
+        $slot:expr,
+        $data_file_type:expr,
+        $serializer:expr,
+    ) => {{
+        const SERIALIZE_NAME: &'static str = concat!($data_file_type, "-serialize-ms");
+        let mut serialize = Measure::start(SERIALIZE_NAME);
+        let consumed_size = serialize_snapshot_data_file(
+            $data_file_path,
+            MAX_SNAPSHOT_DATA_FILE_SIZE,
+            $serializer,
+        )?;
+        serialize.stop();
+
+        // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
+        datapoint_info!(
+            concat!("snapshot-", $data_file_type, "-file"),
+            ("slot", $slot, i64),
+            ("size", consumed_size, i64)
+        );
+
+        inc_new_counter_info!(SERIALIZE_NAME, serialize.as_ms() as usize);
+
+        serialize
+    }};
+}
+
 pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
     bank.purge_zero_lamport_accounts();
     let slot = bank.slot();
@@ -252,34 +247,45 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
         snapshot_bank_file_path,
     );
 
-    // Create the snapshot
-    let mut bank_rc_serialize = Measure::start("create snapshot");
-    let consumed_size = serialize_snapshot_data_file(
+    let bank_serialize = serialize_snapshot_data_file_with_metrics!(
         &snapshot_bank_file_path,
-        MAX_SNAPSHOT_DATA_FILE_SIZE,
+        bank.slot(),
+        "bank",
         |stream| {
             serialize_into(stream.by_ref(), &*bank)?;
             serialize_into(stream.by_ref(), &bank.rc)?;
             Ok(())
         },
-    )?;
-    bank_rc_serialize.stop();
-
-    datapoint_info!(
-        "snapshot-bank-file",
-        ("slot", slot, i64),
-        ("size", consumed_size, i64)
     );
-
-    inc_new_counter_info!("bank-rc-serialize-ms", bank_rc_serialize.as_ms() as usize);
 
     info!(
         "{} for slot {} at {:?}",
-        bank_rc_serialize,
+        bank_serialize,
         bank.slot(),
         snapshot_bank_file_path,
     );
 
+    Ok(())
+}
+
+pub fn serialize_status_cache(
+    slot: Slot,
+    slot_deltas: &[SlotDelta<TransactionResult<()>>],
+    snapshot_links: &TempDir,
+) -> Result<()> {
+    // the status cache is stored as snapshot_path/status_cache
+    let snapshot_status_cache_file_path =
+        snapshot_links.path().join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
+
+    serialize_snapshot_data_file_with_metrics!(
+        &snapshot_status_cache_file_path,
+        slot,
+        "status-cache",
+        |stream| {
+            serialize_into(stream, slot_deltas)?;
+            Ok(())
+        },
+    );
     Ok(())
 }
 
