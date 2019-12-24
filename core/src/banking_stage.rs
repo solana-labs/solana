@@ -1118,7 +1118,7 @@ mod tests {
                 .collect();
             trace!("done");
             assert_eq!(entries.len(), genesis_config.ticks_per_slot as usize);
-            assert!(entries.verify(&start_hash));
+            assert_eq!(entries.verify(&start_hash), true);
             assert_eq!(entries[entries.len() - 1].hash, bank.last_blockhash());
             banking_stage.join().unwrap();
         }
@@ -1220,7 +1220,7 @@ mod tests {
                     .map(|(_bank, (entry, _tick_height))| entry)
                     .collect();
 
-                assert!(entries.verify(&blockhash));
+                assert_eq!(entries.verify(&blockhash), true);
                 if !entries.is_empty() {
                     blockhash = entries.last().unwrap().hash;
                     for entry in entries {
