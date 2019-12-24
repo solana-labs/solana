@@ -5,7 +5,28 @@ cd "$(dirname "$0")/.."
 
 me=$(basename "$0")
 
-BOOK="book"
+echo --- update gitbook-cage
+if [[ -n $CI_BRANCH ]]; then
+  (
+
+    set -x
+    (
+      . ci/rust-version.sh stable
+      ci/docker-run.sh "$rust_stable_docker_image" make -Cbook -B svg
+    )
+    # make a local commit for the svgs
+    git add -A -f book/src/.gitbook/assets/.
+    if ! git diff-index --quiet HEAD; then
+      git config user.email maintainers@solana.com
+      git config user.name "$me"
+      git commit -m "gitbook-cage update $(date -Is)"
+      git push -f git@github.com:solana-labs/solana-gitbook-cage.git HEAD:refs/heads/"$CI_BRANCH"
+      # pop off the local commit
+      git reset --hard HEAD~
+    fi
+  )
+fi
+
 
 source ci/rust-version.sh stable
 eval "$(ci/channel-info.sh)"
@@ -31,6 +52,7 @@ EOF
     exit 0
   fi
   repo=git@github.com:solana-labs/book.git
+  BOOK="book"
 else
   # book-edge and book-beta are published automatically on the tip of the branch
   case $CHANNEL in
@@ -70,29 +92,6 @@ echo "--- publish $BOOK"
     git push -f origin HEAD:master
   else
     echo "Content unchanged, publish skipped"
-  fi
-)
-
-echo --- update gitbook-cage
-(
-  if [[ -z $CI_BRANCH ]]; then
-    exit 0
-  fi
-
-  set -x
-  (
-    . ci/rust-version.sh
-    ci/docker-run.sh $rust_stable_docker_image make -Cbook -B svg
-  )
-  # make a local commit for the svgs
-  git add -A -f book/src/.gitbook/assets/.
-  if ! git diff-index --quiet HEAD; then
-    git config user.email maintainers@solana.com
-    git config user.name "$me"
-    git commit -m "gitbook-cage update $(date -Is)"
-    git push -f git@github.com:solana-labs/solana-gitbook-cage.git HEAD:refs/heads/"$CI_BRANCH"
-    # pop off the local commit
-    git reset --hard HEAD~
   fi
 )
 
