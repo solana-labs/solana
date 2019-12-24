@@ -33,7 +33,7 @@ lazy_static = "1.4.0"
 libc = "0.2.66"
 log = "0.4.8"
 memmap = { version = "0.7.0", optional = true }
-nix = "0.16.0"
+nix = "0.16.1"
 num-traits = "0.2"
 rand = "0.6.5"
 rand_chacha = "0.1.1"
