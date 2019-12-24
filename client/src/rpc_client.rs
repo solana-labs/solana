@@ -2,7 +2,7 @@ use crate::rpc_request::{Response, RpcResponse};
 use crate::{
     client_error::ClientError,
     generic_rpc_client_request::GenericRpcClientRequest,
-    mock_rpc_client_request::MockRpcClientRequest,
+    mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
     rpc_request::{
         RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule, RpcRequest,
@@ -45,6 +45,12 @@ impl RpcClient {
     pub fn new_mock(url: String) -> Self {
         Self {
             client: Box::new(MockRpcClientRequest::new(url)),
+        }
+    }
+
+    pub fn new_mock_with_mocks(url: String, mocks: Mocks) -> Self {
+        Self {
+            client: Box::new(MockRpcClientRequest::new_with_mocks(url, mocks)),
         }
     }
 

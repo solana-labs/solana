@@ -3,6 +3,7 @@
 use crate::hash::Hash;
 use crate::instruction::{CompiledInstruction, Instruction, InstructionError};
 use crate::message::Message;
+use crate::nonce_instruction;
 use crate::pubkey::Pubkey;
 use crate::short_vec;
 use crate::signature::{KeypairUtil, Signature};
@@ -92,6 +93,19 @@ impl Transaction {
     ) -> Self {
         let message = Message::new_with_payer(instructions, payer);
         Self::new(signing_keypairs, message, recent_blockhash)
+    }
+
+    pub fn new_signed_with_nonce<T: KeypairUtil>(
+        mut instructions: Vec<Instruction>,
+        payer: Option<&Pubkey>,
+        signing_keypairs: &[&T],
+        nonce_account_pubkey: &Pubkey,
+        nonce_authority_pubkey: &Pubkey,
+        nonce_hash: Hash,
+    ) -> Self {
+        let nonce_ix = nonce_instruction::nonce(&nonce_account_pubkey, &nonce_authority_pubkey);
+        instructions.insert(0, nonce_ix);
+        Self::new_signed_with_payer(instructions, payer, signing_keypairs, nonce_hash)
     }
 
     pub fn new_unsigned_instructions(instructions: Vec<Instruction>) -> Self {
