@@ -7,7 +7,7 @@ use chrono::{Local, TimeZone};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use solana_client::rpc_client::RpcClient;
-use solana_config_program::{config_instruction, get_config_data};
+use solana_config_program::{config_instruction, get_config_data, ConfigState};
 use solana_sdk::{
     hash::{Hash, Hasher},
     message::Message,
@@ -202,10 +202,13 @@ fn new_update_manifest(
     {
         let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
+        let lamports = rpc_client
+            .get_minimum_balance_for_rent_exemption(SignedUpdateManifest::max_space() as usize)?;
+
         let new_account = config_instruction::create_account::<SignedUpdateManifest>(
             &from_keypair.pubkey(),
             &update_manifest_keypair.pubkey(),
-            1,      // lamports
+            lamports,
             vec![], // additional keys
         );
         let mut transaction = Transaction::new_unsigned_instructions(new_account);
