@@ -18,7 +18,12 @@ pub fn process_instruction(
     let config_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
     let current_data: ConfigKeys =
         deserialize(&config_keyed_account.account.data).map_err(|err| {
-            error!("Invalid data in account[0]: {:?} {:?}", data, err);
+            error!(
+                "Unable to deserialize account[0]: {:?} (len={}): {:?}",
+                config_keyed_account.account.data,
+                config_keyed_account.account.data.len(),
+                err
+            );
             InstructionError::InvalidAccountData
         })?;
     let current_signer_keys: Vec<Pubkey> = current_data
