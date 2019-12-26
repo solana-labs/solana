@@ -203,9 +203,6 @@ declare module '@solana/web3.js' {
     validatorExit(): Promise<boolean>;
   }
 
-  // === src/config-program.js ===
-  declare export var CONFIG_PROGRAM_ID;
-
   // === src/stake-program.js ===
   declare export class StakeProgram {
     static programId: PublicKey;

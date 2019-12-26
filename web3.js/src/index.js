@@ -2,11 +2,11 @@
 export {Account} from './account';
 export {BpfLoader} from './bpf-loader';
 export {BudgetProgram} from './budget-program';
-export {CONFIG_PROGRAM_ID} from './config-program';
 export {Connection} from './connection';
 export {Loader} from './loader';
 export {PublicKey} from './publickey';
 export {
+  STAKE_CONFIG_ID,
   Authorized,
   Lockup,
   StakeAuthorizationLayout,
