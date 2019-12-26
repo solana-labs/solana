@@ -15,10 +15,10 @@ mod tests {
     use std::time::{Duration, Instant};
     use systemstat::{CPULoad, Platform, System};
 
-    const DEFAULT_BENCHMARK_SLOTS: u64 = 180;
+    const DEFAULT_BENCHMARK_SLOTS: u64 = 50;
     const DEFAULT_BATCH_SIZE: u64 = 1;
-    const DEFAULT_MAX_LEDGER_SLOTS: u64 = 180;
-    const DEFAULT_ENTRIES_PER_SLOT: u64 = 50_000;
+    const DEFAULT_MAX_LEDGER_SLOTS: u64 = 50;
+    const DEFAULT_ENTRIES_PER_SLOT: u64 = 500;
     const DEFAULT_STOP_SIZE_BYTES: u64 = 0;
     const DEFAULT_STOP_SIZE_ITERATIONS: u64 = 0;
 
@@ -317,9 +317,14 @@ mod tests {
             &sys.get_stats(),
         );
 
-        std::thread::sleep(std::time::Duration::from_secs(
-            ROCKSDB_FLUSH_GRACE_PERIOD_SECS,
-        ));
+        // Poll on some compaction happening
+        let start_poll = Instant::now();
+        while blocktree.storage_size().unwrap_or(0) >= u1 {
+            if start_poll.elapsed().as_secs() > ROCKSDB_FLUSH_GRACE_PERIOD_SECS {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
 
         emit_stats(
             &time_initial,
@@ -340,10 +345,6 @@ mod tests {
 
         exit_cpu.store(true, Ordering::SeqCst);
         sys.join().unwrap();
-
-        std::thread::sleep(std::time::Duration::from_secs(
-            ROCKSDB_FLUSH_GRACE_PERIOD_SECS,
-        ));
 
         if config.assert_compaction {
             assert!(u2 < u1, "expected compaction! pre={},post={}", u1, u2);
