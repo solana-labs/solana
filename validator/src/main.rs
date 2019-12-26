@@ -587,6 +587,12 @@ pub fn main() {
                 .help("Skip ledger verification at node bootup"),
         )
         .arg(
+            clap::Arg::with_name("allow_missing_tower_state")
+                .long("allow-missing-tower-state")
+                .takes_value(false)
+                .help("Don't panic if the saved tower state is missing"),
+        )
+        .arg(
             clap::Arg::with_name("cuda")
                 .long("cuda")
                 .takes_value(false)
@@ -665,6 +671,7 @@ pub fn main() {
     let entrypoint = matches.value_of("entrypoint");
     let init_complete_file = matches.value_of("init_complete_file");
     let skip_poh_verify = matches.is_present("skip_poh_verify");
+    let allow_missing_tower_state = matches.is_present("allow_missing_tower_state");
     let cuda = matches.is_present("cuda");
     let no_genesis_fetch = matches.is_present("no_genesis_fetch");
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
@@ -965,6 +972,7 @@ pub fn main() {
         &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
         !skip_poh_verify,
+        allow_missing_tower_state,
         &validator_config,
     );
 

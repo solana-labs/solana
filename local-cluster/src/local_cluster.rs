@@ -251,6 +251,7 @@ impl LocalCluster {
             &leader_storage_keypair,
             None,
             true,
+            false,
             &leader_config,
         );
 
@@ -413,6 +414,7 @@ impl LocalCluster {
             &storage_keypair,
             Some(&self.entry_point_info),
             true,
+            false,
             &config,
         );
 
@@ -750,6 +752,7 @@ impl Cluster for LocalCluster {
             &validator_info.storage_keypair,
             entry_point_info,
             true,
+            false,
             &cluster_validator_info.config,
         );
 

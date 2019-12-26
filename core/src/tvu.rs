@@ -89,6 +89,7 @@ impl Tvu {
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         tower_snapshot_path: &Path,
+        allow_missing_tower_state: bool,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -175,6 +176,7 @@ impl Tvu {
             transaction_status_sender,
             rewards_recorder_sender,
             tower_snapshot_path: tower_snapshot_path.to_path_buf(),
+            allow_missing_tower_state,
         };
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
@@ -319,6 +321,7 @@ pub mod tests {
             None,
             None,
             &blockstore_path,
+            false,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

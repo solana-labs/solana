@@ -133,6 +133,7 @@ pub struct Validator {
 
 impl Validator {
     #[allow(clippy::cognitive_complexity)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
@@ -142,6 +143,7 @@ impl Validator {
         storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
         poh_verify: bool,
+        allow_missing_tower_state: bool,
         config: &ValidatorConfig,
     ) -> Self {
         let id = keypair.pubkey();
@@ -406,6 +408,7 @@ impl Validator {
             transaction_status_sender.clone(),
             rewards_recorder_sender,
             ledger_path,
+            allow_missing_tower_state,
         );
 
         if config.dev_sigverify_disabled {
@@ -659,6 +662,7 @@ pub fn new_validator_for_tests_ex(
         &storage_keypair,
         None,
         true,
+        false,
         &config,
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
@@ -762,6 +766,7 @@ mod tests {
             &storage_keypair,
             Some(&leader_node.info),
             true,
+            false,
             &config,
         );
         validator.close().unwrap();
@@ -801,6 +806,7 @@ mod tests {
                     &storage_keypair,
                     Some(&leader_node.info),
                     true,
+                    false,
                     &config,
                 )
             })

@@ -82,6 +82,7 @@ pub struct ReplayStageConfig {
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
     pub tower_snapshot_path: PathBuf,
+    pub allow_missing_tower_state: bool,
 }
 
 pub struct ReplayStage {
@@ -186,6 +187,7 @@ impl ReplayStage {
             transaction_status_sender,
             rewards_recorder_sender,
             tower_snapshot_path,
+            allow_missing_tower_state,
         } = config;
 
         let (root_bank_sender, root_bank_receiver) = channel();
@@ -203,7 +205,11 @@ impl ReplayStage {
                 {
                     if let Some(vote_state) = VoteState::from(&account) {
                         if !vote_state.votes.is_empty() {
-                            panic!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
+                            if allow_missing_tower_state {
+                                error!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
+                            } else {
+                                panic!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
+                            }
                         }
                     }
                 }
