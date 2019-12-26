@@ -81,11 +81,15 @@ included to verify `snapshot_root`'s bank hash.
 1) The validator gets a snapshot to boot from. This can come from any source,
 as it will be verified before being vote upon.
 
-2) We reject any snapshots where `snapshot_root` is less than the root of
-`tower` and `snapshot_root` is not in the list of roots in blocktree because
-this means `snapshot_root` is for a different fork than the one this validator
-last rooted. Thus it's critical for consistency in `replay_stage` that the
-order of events when setting a new root is:
+2) The validator rejects any snapshot where `snapshot_root` <= the largest root
+recorded in blocktree.
+
+3) The validator rejects any snapshot where `tower.root` is not an ancestor of
+`snapshoot_root`.  If `tower.root` < `snapshot_root`, this can be done by
+checking if `tower.root` is contained in the snapshot's `ancestors` set.  If
+`tower.root` == `snapshot_root` then ancestry is proven. `tower.root` <=
+`snapshot_root` provided that the check in 2) passes and that the order of
+events when setting a new root is:
 
     1) Write the root to tower
 
@@ -93,22 +97,22 @@ order of events when setting a new root is:
 
     3) Generate snapshot for that root
 
-3) On startup, the validator checks that the current root in tower exists in
-blocktree. If not (there was a crash between 2-1 and 2-2), then rewrite the
+4) On startup, the validator checks that the current root in tower exists in
+blocktree. If not (there was a crash between 3-1 and 3-2), then rewrite the
 root to blocktree.
 
-4) On startup, the validator checks that `snapshot_votes` includes votes that
+5) On startup, the validator checks that `snapshot_votes` includes votes that
 prove threshold commitment from the trusted validators on `snapshot_root`. See
 the `Trusted Validator Set` section for details. If not, the validator panics
 and different snapshot must be obtained.
 
-5) On startup, the validator boots from the `snapshot_root`, then replays all
+6) On startup, the validator boots from the `snapshot_root`, then replays all
 descendant blocks of `snapshot_root` that exist in this validator's ledger,
 building banks which are then stored in an output `bank_forks`. This is done in
 `blocktree_processor.rs`. The root of this `bank_forks` is set to
 `snapshot_root`.
 
-6) On startup, the validator calculates the `first_votable_slot` from which it
+7) On startup, the validator calculates the `first_votable_slot` from which it
 is not locked out for voting. Every validator persists its tower state and must
 consult this state in order to boot safely and resume from a snapshot without
 being slashed. From this tower state and the ancestry information embedded in
@@ -116,10 +120,10 @@ the snapshot, a validator can derive which banks, are "safe" (See the
 `Determining Vote Safety From a Snapshot and Tower` section for more details)
 to vote for.
 
-7) Periodically send canary transactions to the cluster using the validator's
+8) Periodically send canary transactions to the cluster using the validator's
 local recent blockhash.
 
-8) Wait for the following criteria. While waiting, set a new root every time
+9) Wait for the following criteria. While waiting, set a new root every time
 2/3 of the cluster's stake roots a bank. This allows the validator to prune its
 state and also calculate leader schedules as it moves across epochs. Even if
 the validator appears on the leader schedule, it does not produce blocks while
@@ -130,7 +134,7 @@ waiting.
 
    2) The current working bank has `bank.slot > first_votable_slot`
 
-9) Start the normal voting process, voting for any slot that satisfies
+10) Start the normal voting process, voting for any slot that satisfies
 `bank.slot > first_votable_slot`
 
 
