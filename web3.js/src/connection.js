@@ -490,6 +490,8 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
           struct({
             status: SignatureStatusResult,
             fee: 'number',
+            preBalances: struct.list(['number']),
+            postBalances: struct.list(['number']),
           }),
         ]),
       ]),
