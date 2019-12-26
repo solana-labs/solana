@@ -2,6 +2,7 @@ use log::*;
 
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
+    account_utils::{account_is_system, SystemAccountKind},
     instruction::InstructionError,
     instruction_processor_utils::{limited_deserialize, next_keyed_account},
     nonce_state::NonceAccount,
@@ -139,8 +140,13 @@ fn assign_account_to_program(
         return Err(SystemError::InvalidProgramId.into());
     }
 
-    account.account.owner = *program_id;
-    Ok(())
+    match account_is_system(&account.account) {
+        Some(SystemAccountKind::Nonce) => Err(InstructionError::InvalidArgument),
+        _ => {
+            account.account.owner = *program_id;
+            Ok(())
+        }
+    }
 }
 
 fn transfer_lamports(
@@ -164,9 +170,15 @@ fn transfer_lamports(
         );
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
-    from.account.lamports -= lamports;
-    to.account.lamports += lamports;
-    Ok(())
+
+    match account_is_system(&from.account) {
+        Some(SystemAccountKind::Nonce) => Err(InstructionError::InvalidArgument),
+        _ => {
+            from.account.lamports -= lamports;
+            to.account.lamports += lamports;
+            Ok(())
+        }
+    }
 }
 
 pub fn process_instruction(
@@ -262,6 +274,7 @@ mod tests {
     use crate::bank_client::BankClient;
     use bincode::serialize;
     use solana_sdk::account::Account;
+    use solana_sdk::account_utils::{account_is_system, SystemAccountKind};
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::hash::{hash, Hash};
@@ -658,6 +671,31 @@ mod tests {
     }
 
     #[test]
+    fn test_assign_from_nonce_account_fail() {
+        let new_program_owner = Pubkey::new(&[9; 32]);
+        let mut nonce_account = Account::new_data(
+            42,
+            &nonce_state::NonceState::Initialized(
+                nonce_state::Meta::new(&Pubkey::default()),
+                Hash::default(),
+            ),
+            &system_program::id(),
+        )
+        .unwrap();
+        assert_eq!(
+            account_is_system(&nonce_account),
+            Some(SystemAccountKind::Nonce)
+        );
+        assert_eq!(
+            assign_account_to_program(
+                &mut KeyedAccount::new(&Pubkey::default(), true, &mut nonce_account),
+                &new_program_owner,
+            ),
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+
+    #[test]
     fn test_assign_account_to_sysvar() {
         let new_program_owner = sysvar::id();
 
@@ -732,6 +770,31 @@ mod tests {
         .is_ok(),);
         assert_eq!(from_account.lamports, 50);
         assert_eq!(to_account.lamports, 51);
+    }
+
+    #[test]
+    fn test_transfer_lamports_from_nonce_account_fail() {
+        let from = Pubkey::new_rand();
+        let mut from_account = Account::new_data(
+            100,
+            &nonce_state::NonceState::Initialized(nonce_state::Meta::new(&from), Hash::default()),
+            &system_program::id(),
+        )
+        .unwrap();
+        assert_eq!(
+            account_is_system(&from_account),
+            Some(SystemAccountKind::Nonce)
+        );
+        let to = Pubkey::new_rand();
+        let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
+        assert_eq!(
+            transfer_lamports(
+                &mut KeyedAccount::new(&from, true, &mut from_account),
+                &mut KeyedAccount::new(&to, false, &mut to_account),
+                50,
+            ),
+            Err(InstructionError::InvalidArgument),
+        )
     }
 
     #[test]
