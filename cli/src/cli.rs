@@ -685,7 +685,6 @@ pub fn parse_create_address_with_seed(
         "STAKE" => solana_stake_program::id(),
         "VOTE" => solana_vote_program::id(),
         "STORAGE" => solana_storage_program::id(),
-        "NONCE" => solana_sdk::nonce_program::id(),
         _ => pubkey_of(matches, "program_id").unwrap(),
     };
 
@@ -1769,7 +1768,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .help(
                             "The program_id that the address will ultimately be used for, \n\
-                             or one of STAKE, VOTE, NONCE, and STORAGE keywords",
+                             or one of STAKE, VOTE, and STORAGE keywords",
                         ),
                 )
                 .arg(
@@ -1985,9 +1984,9 @@ mod tests {
     };
     use solana_sdk::{
         account::Account,
-        nonce_program,
         nonce_state::{Meta as NonceMeta, NonceState},
         signature::{read_keypair_file, write_keypair_file},
+        system_program,
         transaction::TransactionError,
     };
     use std::{collections::HashMap, path::PathBuf};
@@ -2123,7 +2122,6 @@ mod tests {
         for (name, program_id) in &[
             ("STAKE", solana_stake_program::id()),
             ("VOTE", solana_vote_program::id()),
-            ("NONCE", solana_sdk::nonce_program::id()),
             ("STORAGE", solana_storage_program::id()),
         ] {
             let test_create_address_with_seed = test_commands.clone().get_matches_from(vec![
@@ -2665,7 +2663,7 @@ mod tests {
             value: json!(Account::new_data(
                 1,
                 &NonceState::Initialized(NonceMeta::new(&config.keypair.pubkey()), blockhash),
-                &nonce_program::ID,
+                &system_program::ID,
             )
             .unwrap()),
         });
@@ -2691,7 +2689,7 @@ mod tests {
             value: json!(Account::new_data(
                 1,
                 &NonceState::Initialized(NonceMeta::new(&bob_pubkey), blockhash),
-                &nonce_program::ID,
+                &system_program::ID,
             )
             .unwrap()),
         });

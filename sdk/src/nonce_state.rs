@@ -3,9 +3,9 @@ use crate::{
     account_utils::State,
     hash::Hash,
     instruction::InstructionError,
-    nonce_instruction::NonceError,
-    nonce_program,
     pubkey::Pubkey,
+    system_instruction::NonceError,
+    system_program,
     sysvar::recent_blockhashes::RecentBlockhashes,
     sysvar::rent::Rent,
 };
@@ -183,7 +183,7 @@ pub fn create_account(lamports: u64) -> Account {
         lamports,
         &NonceState::Uninitialized,
         NonceState::size(),
-        &nonce_program::id(),
+        &system_program::id(),
     )
     .expect("nonce_account")
 }
@@ -205,7 +205,7 @@ mod test {
     use super::*;
     use crate::{
         account::KeyedAccount,
-        nonce_instruction::NonceError,
+        system_instruction::NonceError,
         sysvar::recent_blockhashes::{create_test_recent_blockhashes, RecentBlockhashes},
     };
     use std::iter::FromIterator;
