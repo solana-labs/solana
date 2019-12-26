@@ -3,7 +3,6 @@
 import * as BufferLayout from 'buffer-layout';
 import hasha from 'hasha';
 
-import {CONFIG_PROGRAM_ID} from './config-program';
 import {encodeData} from './instruction';
 import type {InstructionType} from './instruction';
 import * as Layout from './layout';
@@ -17,6 +16,10 @@ import {
 } from './sysvar';
 import {Transaction, TransactionInstruction} from './transaction';
 import type {TransactionInstructionCtorFields} from './transaction';
+
+export const STAKE_CONFIG_ID = new PublicKey(
+  'StakeConfig11111111111111111111111111111111',
+);
 
 export class Authorized {
   staker: PublicKey;
@@ -32,13 +35,15 @@ export class Authorized {
 }
 
 export class Lockup {
+  unixTimestamp: number;
   epoch: number;
   custodian: PublicKey;
 
   /**
-   * Create a new Authorized object
+   * Create a new Lockup object
    */
-  constructor(epoch: number, custodian: PublicKey) {
+  constructor(unixTimestamp: number, epoch: number, custodian: PublicKey) {
+    this.unixTimestamp = unixTimestamp;
     this.epoch = epoch;
     this.custodian = custodian;
   }
@@ -126,14 +131,14 @@ export const StakeInstructionLayout = Object.freeze({
     index: 4,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
-      BufferLayout.ns64('amount'),
+      BufferLayout.ns64('lamports'),
     ]),
   },
   Withdraw: {
     index: 5,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
-      BufferLayout.ns64('amount'),
+      BufferLayout.ns64('lamports'),
     ]),
   },
   Deactivate: {
@@ -197,7 +202,7 @@ export class StakeProgram {
    * Max space of a Stake account
    */
   static get space(): number {
-    return 2000;
+    return 2008;
   }
 
   /**
@@ -215,6 +220,7 @@ export class StakeProgram {
         withdrawer: authorized.withdrawer.toBuffer(),
       },
       lockup: {
+        unixTimestamp: lockup.unixTimestamp,
         epoch: lockup.epoch,
         custodian: lockup.custodian.toBuffer(),
       },
@@ -293,7 +299,7 @@ export class StakeProgram {
         {pubkey: stakeAccount, isSigner: false, isWritable: true},
         {pubkey: votePubkey, isSigner: false, isWritable: false},
         {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
-        {pubkey: CONFIG_PROGRAM_ID, isSigner: false, isWritable: false},
+        {pubkey: STAKE_CONFIG_ID, isSigner: false, isWritable: false},
         {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
       ],
       programId: this.programId,

@@ -69,7 +69,11 @@ export const authorized = (property: string = 'authorized') => {
  */
 export const lockup = (property: string = 'lockup') => {
   return BufferLayout.struct(
-    [BufferLayout.ns64('epoch'), publicKey('custodian')],
+    [
+      BufferLayout.ns64('unixTimestamp'),
+      BufferLayout.ns64('epoch'),
+      publicKey('custodian'),
+    ],
     property,
   );
 };

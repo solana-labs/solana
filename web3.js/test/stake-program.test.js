@@ -3,8 +3,11 @@
 import {
   Account,
   Authorized,
+  Connection,
   Lockup,
   PublicKey,
+  sendAndConfirmRecentTransaction,
+  LAMPORTS_PER_SOL,
   StakeAuthorizationLayout,
   StakeInstruction,
   StakeInstructionLayout,
@@ -13,6 +16,13 @@ import {
   SystemProgram,
   Transaction,
 } from '../src';
+import {mockRpcEnabled} from './__mocks__/node-fetch';
+import {url} from './url';
+
+if (!mockRpcEnabled) {
+  // Testing max commitment level takes around 20s to complete
+  jest.setTimeout(30000);
+}
 
 test('createAccountWithSeed', () => {
   const from = new Account();
@@ -30,7 +40,7 @@ test('createAccountWithSeed', () => {
     newAccountPubkey,
     seed,
     new Authorized(authorized.publicKey, authorized.publicKey),
-    new Lockup(0, from.publicKey),
+    new Lockup(0, 0, from.publicKey),
     123,
   );
 
@@ -52,7 +62,7 @@ test('createAccount', () => {
     from.publicKey,
     newAccount.publicKey,
     new Authorized(authorized.publicKey, authorized.publicKey),
-    new Lockup(0, from.publicKey),
+    new Lockup(0, 0, from.publicKey),
     123,
   );
 
@@ -179,7 +189,7 @@ test('StakeInstructions', () => {
     newAccountPubkey,
     seed,
     new Authorized(authorized.publicKey, authorized.publicKey),
-    new Lockup(0, from.publicKey),
+    new Lockup(0, 0, from.publicKey),
     amount,
   );
   const createWithSeedTransaction = new Transaction({recentBlockhash}).add(
@@ -219,4 +229,122 @@ test('StakeInstructions', () => {
   expect(anotherStakeInstruction.type).toEqual(
     StakeInstructionLayout.DelegateStake,
   );
+});
+
+test('live staking actions', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url, 'recent');
+  const voteAccounts = await connection.getVoteAccounts();
+  const voteAccount = voteAccounts.current.concat(voteAccounts.delinquent)[0];
+  const votePubkey = new PublicKey(voteAccount.votePubkey);
+
+  const from = new Account();
+  const authorized = new Account();
+  await connection.requestAirdrop(from.publicKey, LAMPORTS_PER_SOL);
+  await connection.requestAirdrop(authorized.publicKey, LAMPORTS_PER_SOL);
+
+  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+    StakeProgram.space,
+    'recent',
+  );
+
+  // Create Stake account with seed
+  const seed = 'test string';
+  const newAccountPubkey = PublicKey.createWithSeed(
+    from.publicKey,
+    seed,
+    StakeProgram.programId,
+  );
+
+  let createAndInitializeWithSeed = StakeProgram.createAccountWithSeed(
+    from.publicKey,
+    newAccountPubkey,
+    seed,
+    new Authorized(authorized.publicKey, authorized.publicKey),
+    new Lockup(0, 0, new PublicKey('0x00')),
+    2 * minimumAmount + 42,
+  );
+
+  await sendAndConfirmRecentTransaction(
+    connection,
+    createAndInitializeWithSeed,
+    from,
+  );
+  let originalStakeBalance = await connection.getBalance(newAccountPubkey);
+  expect(originalStakeBalance).toEqual(2 * minimumAmount + 42);
+
+  let delegation = StakeProgram.delegate(
+    newAccountPubkey,
+    authorized.publicKey,
+    votePubkey,
+  );
+  await sendAndConfirmRecentTransaction(connection, delegation, authorized);
+
+  // Test that withdraw fails before deactivation
+  const recipient = new Account();
+  let withdraw = StakeProgram.withdraw(
+    newAccountPubkey,
+    authorized.publicKey,
+    recipient.publicKey,
+    1000,
+  );
+  await expect(
+    sendAndConfirmRecentTransaction(connection, withdraw, authorized),
+  ).rejects.toThrow();
+
+  // Authorize to new account
+  const newAuthorized = new Account();
+  await connection.requestAirdrop(newAuthorized.publicKey, LAMPORTS_PER_SOL);
+
+  let authorize = StakeProgram.authorize(
+    newAccountPubkey,
+    authorized.publicKey,
+    newAuthorized.publicKey,
+    StakeAuthorizationLayout.Withdrawer,
+  );
+  await sendAndConfirmRecentTransaction(connection, authorize, authorized);
+  authorize = StakeProgram.authorize(
+    newAccountPubkey,
+    authorized.publicKey,
+    newAuthorized.publicKey,
+    StakeAuthorizationLayout.Staker,
+  );
+  await sendAndConfirmRecentTransaction(connection, authorize, authorized);
+
+  // Test old authorized can't deactivate
+  let deactivateNotAuthorized = StakeProgram.deactivate(
+    newAccountPubkey,
+    authorized.publicKey,
+  );
+  await expect(
+    sendAndConfirmRecentTransaction(
+      connection,
+      deactivateNotAuthorized,
+      authorized,
+    ),
+  ).rejects.toThrow();
+
+  // Deactivate stake
+  let deactivate = StakeProgram.deactivate(
+    newAccountPubkey,
+    newAuthorized.publicKey,
+  );
+  await sendAndConfirmRecentTransaction(connection, deactivate, newAuthorized);
+
+  // Test that withdraw succeeds after deactivation
+  withdraw = StakeProgram.withdraw(
+    newAccountPubkey,
+    newAuthorized.publicKey,
+    recipient.publicKey,
+    minimumAmount + 20,
+  );
+  await sendAndConfirmRecentTransaction(connection, withdraw, newAuthorized);
+  const balance = await connection.getBalance(newAccountPubkey);
+  expect(balance).toEqual(minimumAmount + 22);
+  const recipientBalance = await connection.getBalance(recipient.publicKey);
+  expect(recipientBalance).toEqual(minimumAmount + 20);
 });
