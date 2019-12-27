@@ -381,6 +381,7 @@ export class StakeProgram {
       this.space,
       this.programId,
     );
+    transaction.instructions[0].keys[0].isSigner = false;
     const type = StakeInstructionLayout.Split;
     const data = encodeData(type, {lamports});
 
