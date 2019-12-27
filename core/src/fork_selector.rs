@@ -278,6 +278,7 @@ mod tests {
 
         let best_fork = optimal_fork_selector.find_best_fork(forks, &progress);
         assert!(best_fork.is_some());
+
         let best_fork = best_fork.unwrap();
         // best fork would be 13 as 13, 14 and 15 has same weight, so we will choose lower slot
         assert_eq!(best_fork.heaviest_slot, 13);
