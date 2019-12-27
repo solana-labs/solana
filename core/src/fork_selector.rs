@@ -105,6 +105,7 @@ impl ForkSelector for OptimalForkSelector {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::fork_selector::{Fork, ForkSelector, OptimalForkSelector};
     use crate::replay_stage_ds::ForkProgress;
