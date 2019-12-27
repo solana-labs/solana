@@ -9,18 +9,28 @@ use solana_sdk::{
     instruction::InstructionError,
     transaction::{self, TransactionError},
 };
+use std::{collections::HashMap, sync::RwLock};
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
 pub const SIGNATURE: &str =
     "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8";
 
+pub type Mocks = HashMap<RpcRequest, Value>;
 pub struct MockRpcClientRequest {
+    mocks: RwLock<Mocks>,
     url: String,
 }
 
 impl MockRpcClientRequest {
     pub fn new(url: String) -> Self {
-        Self { url }
+        Self::new_with_mocks(url, Mocks::default())
+    }
+
+    pub fn new_with_mocks(url: String, mocks: Mocks) -> Self {
+        Self {
+            url,
+            mocks: RwLock::new(mocks),
+        }
     }
 }
 
@@ -31,6 +41,9 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
         params: serde_json::Value,
         _retries: usize,
     ) -> Result<serde_json::Value, ClientError> {
+        if let Some(value) = self.mocks.write().unwrap().remove(request) {
+            return Ok(value);
+        }
         if self.url == "fails" {
             return Ok(Value::Null);
         }

@@ -3,9 +3,11 @@ use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, 
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
+    account_utils::State,
     hash::Hash,
+    nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, KeypairUtil, Signature},
+    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil, Signature},
 };
 use solana_stake_program::stake_state::Lockup;
 use std::fs::remove_dir_all;
@@ -101,6 +103,8 @@ fn test_stake_delegation_and_deactivation() {
         sign_only: false,
         signers: None,
         blockhash: None,
+        nonce_account: None,
+        nonce_authority: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -110,6 +114,8 @@ fn test_stake_delegation_and_deactivation() {
         sign_only: false,
         signers: None,
         blockhash: None,
+        nonce_account: None,
+        nonce_authority: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -185,6 +191,8 @@ fn test_stake_delegation_and_deactivation_offline() {
         sign_only: true,
         signers: None,
         blockhash: None,
+        nonce_account: None,
+        nonce_authority: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
     let object: Value = serde_json::from_str(&sig_response).unwrap();
@@ -208,6 +216,8 @@ fn test_stake_delegation_and_deactivation_offline() {
         sign_only: false,
         signers: Some(signers),
         blockhash: Some(blockhash_str.parse::<Hash>().unwrap()),
+        nonce_account: None,
+        nonce_authority: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -217,6 +227,8 @@ fn test_stake_delegation_and_deactivation_offline() {
         sign_only: true,
         signers: None,
         blockhash: None,
+        nonce_account: None,
+        nonce_authority: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
     let object: Value = serde_json::from_str(&sig_response).unwrap();
@@ -238,8 +250,113 @@ fn test_stake_delegation_and_deactivation_offline() {
         sign_only: false,
         signers: Some(signers),
         blockhash: Some(blockhash_str.parse::<Hash>().unwrap()),
+        nonce_account: None,
+        nonce_authority: None,
     };
     process_command(&config_payer).unwrap();
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+fn test_nonced_stake_delegation_and_deactivation() {
+    solana_logger::setup();
+
+    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (sender, receiver) = channel();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+
+    let mut config = CliConfig::default();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+
+    let minimum_nonce_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(NonceState::size())
+        .unwrap();
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
+        .unwrap();
+
+    // Create vote account
+    let vote_keypair = Keypair::new();
+    let (vote_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&vote_keypair, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateVoteAccount {
+        vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        node_pubkey: config.keypair.pubkey(),
+        authorized_voter: None,
+        authorized_withdrawer: None,
+        commission: 0,
+    };
+    process_command(&config).unwrap();
+
+    // Create stake account
+    let stake_keypair = Keypair::new();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        staker: None,
+        withdrawer: None,
+        lockup: Lockup::default(),
+        lamports: 50_000,
+    };
+    process_command(&config).unwrap();
+
+    // Create nonce account
+    let nonce_account = Keypair::new();
+    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateNonceAccount {
+        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        nonce_authority: config.keypair.pubkey(),
+        lamports: minimum_nonce_balance,
+    };
+    process_command(&config).unwrap();
+
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Delegate stake
+    config.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        vote_account_pubkey: vote_keypair.pubkey(),
+        force: true,
+        sign_only: false,
+        signers: None,
+        blockhash: Some(nonce_hash),
+        nonce_account: Some(nonce_account.pubkey()),
+        nonce_authority: None,
+    };
+    process_command(&config).unwrap();
+
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Deactivate stake
+    let config_keypair = Keypair::from_bytes(&config.keypair.to_bytes()).unwrap();
+    config.command = CliCommand::DeactivateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        sign_only: false,
+        signers: None,
+        blockhash: Some(nonce_hash),
+        nonce_account: Some(nonce_account.pubkey()),
+        nonce_authority: Some(config_keypair.into()),
+    };
+    process_command(&config).unwrap();
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
