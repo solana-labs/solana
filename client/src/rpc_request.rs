@@ -113,7 +113,7 @@ pub struct RpcVoteAccountInfo {
     pub root_slot: Slot,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum RpcRequest {
     ConfirmTransaction,
     DeregisterNode,

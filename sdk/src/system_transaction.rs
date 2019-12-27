@@ -49,3 +49,25 @@ pub fn transfer(
     let instructions = vec![transfer_instruction];
     Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
 }
+
+/// Create and sign new nonced system_instruction::Transfer transaction
+pub fn nonced_transfer(
+    from_keypair: &Keypair,
+    to: &Pubkey,
+    lamports: u64,
+    nonce_account: &Pubkey,
+    nonce_authority: &Keypair,
+    nonce_hash: Hash,
+) -> Transaction {
+    let from_pubkey = from_keypair.pubkey();
+    let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
+    let instructions = vec![transfer_instruction];
+    Transaction::new_signed_with_nonce(
+        instructions,
+        Some(&from_pubkey),
+        &[from_keypair, nonce_authority],
+        nonce_account,
+        &nonce_authority.pubkey(),
+        nonce_hash,
+    )
+}
