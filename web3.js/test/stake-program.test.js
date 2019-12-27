@@ -266,7 +266,7 @@ test('live staking actions', async () => {
     seed,
     new Authorized(authorized.publicKey, authorized.publicKey),
     new Lockup(0, 0, new PublicKey('0x00')),
-    2 * minimumAmount + 42,
+    3 * minimumAmount + 42,
   );
 
   await sendAndConfirmRecentTransaction(
@@ -275,7 +275,7 @@ test('live staking actions', async () => {
     from,
   );
   let originalStakeBalance = await connection.getBalance(newAccountPubkey);
-  expect(originalStakeBalance).toEqual(2 * minimumAmount + 42);
+  expect(originalStakeBalance).toEqual(3 * minimumAmount + 42);
 
   let delegation = StakeProgram.delegate(
     newAccountPubkey,
@@ -295,6 +295,21 @@ test('live staking actions', async () => {
   await expect(
     sendAndConfirmRecentTransaction(connection, withdraw, authorized),
   ).rejects.toThrow();
+
+  // Split stake
+  const newStake = new Account();
+  let split = StakeProgram.split(
+    newAccountPubkey,
+    authorized.publicKey,
+    minimumAmount + 20,
+    newStake.publicKey,
+  );
+  await sendAndConfirmRecentTransaction(
+    connection,
+    split,
+    authorized,
+    newStake,
+  );
 
   // Authorize to new account
   const newAuthorized = new Account();
@@ -344,7 +359,7 @@ test('live staking actions', async () => {
   );
   await sendAndConfirmRecentTransaction(connection, withdraw, newAuthorized);
   const balance = await connection.getBalance(newAccountPubkey);
-  expect(balance).toEqual(minimumAmount + 22);
+  expect(balance).toEqual(minimumAmount + 2);
   const recipientBalance = await connection.getBalance(recipient.publicKey);
   expect(recipientBalance).toEqual(minimumAmount + 20);
 });
