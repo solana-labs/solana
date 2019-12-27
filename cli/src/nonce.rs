@@ -4,9 +4,10 @@ use crate::cli::{
     CliError, ProcessResult,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{input_parsers::*, input_validators::*};
+use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
+    account::Account,
     account_utils::State,
     hash::Hash,
     nonce_instruction::{authorize, create_nonce_account, nonce, withdraw, NonceError},
@@ -16,6 +17,30 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil},
     system_instruction::SystemError,
     transaction::Transaction,
+};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CliNonceError {
+    InvalidAccountOwner,
+    InvalidAccountData,
+    InvalidHash,
+    InvalidAuthority,
+    InvalidState,
+}
+
+pub const NONCE_ARG: ArgConstant<'static> = ArgConstant {
+    name: "nonce",
+    long: "nonce",
+    help: "Provide the nonce account to use when creating a nonced \n\
+           transaction. Nonced transactions are useful when a transaction \n\
+           requires a lengthy signing process. Learn more about nonced \n\
+           transactions at https://docs.solana.com/offline-signing/durable-nonce",
+};
+
+pub const NONCE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
+    name: "nonce_authority",
+    long: "nonce-authority",
+    help: "Provide the nonce authority keypair to use when signing a nonced transaction",
 };
 
 pub trait NonceSubCommands {
@@ -273,6 +298,34 @@ pub fn parse_withdraw_from_nonce_account(
     })
 }
 
+/// Check if a nonce account is initialized with the given authority and hash
+pub fn check_nonce_account(
+    nonce_account: &Account,
+    nonce_authority: &Pubkey,
+    nonce_hash: &Hash,
+) -> Result<(), Box<CliError>> {
+    if nonce_account.owner != nonce_program::ID {
+        return Err(CliError::InvalidNonce(CliNonceError::InvalidAccountOwner).into());
+    }
+    let nonce_state: NonceState = nonce_account
+        .state()
+        .map_err(|_| Box::new(CliError::InvalidNonce(CliNonceError::InvalidAccountData)))?;
+    match nonce_state {
+        NonceState::Initialized(meta, hash) => {
+            if &hash != nonce_hash {
+                Err(CliError::InvalidNonce(CliNonceError::InvalidHash).into())
+            } else if nonce_authority != &meta.nonce_authority {
+                Err(CliError::InvalidNonce(CliNonceError::InvalidAuthority).into())
+            } else {
+                Ok(())
+            }
+        }
+        NonceState::Uninitialized => {
+            Err(CliError::InvalidNonce(CliNonceError::InvalidState).into())
+        }
+    }
+}
+
 pub fn process_authorize_nonce_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -491,7 +544,13 @@ pub fn process_withdraw_from_nonce_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::{read_keypair_file, write_keypair};
+    use solana_sdk::{
+        account::Account,
+        hash::hash,
+        nonce_state::{Meta as NonceMeta, NonceState},
+        signature::{read_keypair_file, write_keypair},
+        system_program,
+    };
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -727,6 +786,68 @@ mod tests {
                 },
                 require_keypair: true
             }
+        );
+    }
+
+    #[test]
+    fn test_check_nonce_account() {
+        let blockhash = Hash::default();
+        let nonce_pubkey = Pubkey::new_rand();
+        let valid = Account::new_data(
+            1,
+            &NonceState::Initialized(NonceMeta::new(&nonce_pubkey), blockhash),
+            &nonce_program::ID,
+        );
+        assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
+
+        let invalid_owner = Account::new_data(
+            1,
+            &NonceState::Initialized(NonceMeta::new(&nonce_pubkey), blockhash),
+            &system_program::ID,
+        );
+        assert_eq!(
+            check_nonce_account(&invalid_owner.unwrap(), &nonce_pubkey, &blockhash),
+            Err(Box::new(CliError::InvalidNonce(
+                CliNonceError::InvalidAccountOwner
+            ))),
+        );
+
+        let invalid_data = Account::new_data(1, &"invalid", &nonce_program::ID);
+        assert_eq!(
+            check_nonce_account(&invalid_data.unwrap(), &nonce_pubkey, &blockhash),
+            Err(Box::new(CliError::InvalidNonce(
+                CliNonceError::InvalidAccountData
+            ))),
+        );
+
+        let invalid_hash = Account::new_data(
+            1,
+            &NonceState::Initialized(NonceMeta::new(&nonce_pubkey), hash(b"invalid")),
+            &nonce_program::ID,
+        );
+        assert_eq!(
+            check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash),
+            Err(Box::new(CliError::InvalidNonce(CliNonceError::InvalidHash))),
+        );
+
+        let invalid_authority = Account::new_data(
+            1,
+            &NonceState::Initialized(NonceMeta::new(&Pubkey::new_rand()), blockhash),
+            &nonce_program::ID,
+        );
+        assert_eq!(
+            check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash),
+            Err(Box::new(CliError::InvalidNonce(
+                CliNonceError::InvalidAuthority
+            ))),
+        );
+
+        let invalid_state = Account::new_data(1, &NonceState::Uninitialized, &nonce_program::ID);
+        assert_eq!(
+            check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash),
+            Err(Box::new(CliError::InvalidNonce(
+                CliNonceError::InvalidState
+            ))),
         );
     }
 }
