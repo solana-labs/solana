@@ -733,6 +733,7 @@ impl Bank {
             self.capitalization
                 .fetch_add(account.lamports, Ordering::Relaxed);
         }
+
         for (pubkey, account) in genesis_config.rewards_pools.iter() {
             if self.get_account(&pubkey).is_some() {
                 panic!("{} repeated in genesis config", pubkey);
