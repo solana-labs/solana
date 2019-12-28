@@ -1,7 +1,7 @@
 //! The `tvu` module implements the Transaction Validation Unit, a multi-stage transaction
 //! validation pipeline in software.
 
-use crate::fork_selector::{ForkSelector, OptimalForkSelector};
+use crate::fork_selector::ForkSelector;
 use crate::{
     blockstream_service::BlockstreamService,
     cluster_info::ClusterInfo,
@@ -257,6 +257,7 @@ pub mod tests {
     use super::*;
     use crate::banking_stage::create_test_recorder;
     use crate::cluster_info::{ClusterInfo, Node};
+    use crate::fork_selector::OptimalForkSelector;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::create_new_tmp_ledger;
     use solana_runtime::bank::Bank;
