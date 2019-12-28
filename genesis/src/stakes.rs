@@ -4,8 +4,8 @@ use crate::{
     unlocks::{UnlockInfo, Unlocks},
 };
 use solana_sdk::{
-    account::Account, clock::Slot, genesis_config::GenesisConfig, native_token::sol_to_lamports,
-    pubkey::Pubkey, system_program, timing::years_as_slots,
+    account::Account, clock::Slot, genesis_config::GenesisConfig, pubkey::Pubkey, system_program,
+    timing::years_as_slots,
 };
 use solana_stake_program::{
     self,
@@ -16,7 +16,7 @@ use solana_stake_program::{
 pub struct StakerInfo {
     pub name: &'static str,
     pub staker: &'static str,
-    pub sol: f64,
+    pub lamports: u64,
 }
 
 // lamports required to run staking operations for one year
@@ -54,7 +54,7 @@ pub fn create_and_add_stakes(
         .parse::<Pubkey>()
         .expect("invalid custodian");
 
-    let total_lamports = sol_to_lamports(staker_info.sol);
+    let total_lamports = staker_info.lamports;
 
     // staker is a system account
     let staker_rent_reserve = genesis_config.rent.minimum_balance(0).max(1);
@@ -154,7 +154,7 @@ pub fn create_and_add_stakes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{native_token::lamports_to_sol, rent::Rent};
+    use solana_sdk::rent::Rent;
 
     fn create_and_check_stakes(
         genesis_config: &mut GenesisConfig,
@@ -241,7 +241,7 @@ mod tests {
             &StakerInfo {
                 name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
-                sol: lamports_to_sol(total_lamports),
+                lamports: total_lamports,
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
@@ -266,7 +266,7 @@ mod tests {
             &StakerInfo {
                 name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
-                sol: lamports_to_sol(total_lamports),
+                lamports: total_lamports,
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
@@ -291,7 +291,7 @@ mod tests {
             &StakerInfo {
                 name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
-                sol: lamports_to_sol(total_lamports),
+                lamports: total_lamports,
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
@@ -315,7 +315,7 @@ mod tests {
             &StakerInfo {
                 name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
-                sol: lamports_to_sol(total_lamports),
+                lamports: total_lamports,
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
