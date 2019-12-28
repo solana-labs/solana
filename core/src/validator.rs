@@ -40,6 +40,7 @@ use solana_sdk::{
     timing::timestamp,
 };
 
+use crate::fork_selector::OptimalForkSelector;
 use solana_ledger::shred::Shred;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -375,6 +376,8 @@ impl Validator {
             config.partition_cfg.clone(),
             shred_version,
             transaction_status_sender.clone(),
+            // TODO: Make this configurable
+            OptimalForkSelector::default(),
         );
 
         if config.dev_sigverify_disabled {

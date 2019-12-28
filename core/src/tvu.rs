@@ -1,7 +1,7 @@
 //! The `tvu` module implements the Transaction Validation Unit, a multi-stage transaction
 //! validation pipeline in software.
 
-use crate::fork_selector::OptimalForkSelector;
+use crate::fork_selector::{ForkSelector, OptimalForkSelector};
 use crate::{
     blockstream_service::BlockstreamService,
     cluster_info::ClusterInfo,
@@ -66,7 +66,7 @@ impl Tvu {
     /// * `sockets` - fetch, repair, and retransmit sockets
     /// * `blocktree` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new(
+    pub fn new<T>(
         vote_account: &Pubkey,
         voting_keypair: Option<Arc<Keypair>>,
         storage_keypair: &Arc<Keypair>,
@@ -88,7 +88,11 @@ impl Tvu {
         cfg: Option<PartitionCfg>,
         shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> Self {
+        fork_selector: T,
+    ) -> Self
+    where
+        T: Sync + Send + 'static + ForkSelector,
+    {
         let keypair: Arc<Keypair> = cluster_info
             .read()
             .expect("Unable to read from cluster_info during Tvu creation")
@@ -173,7 +177,7 @@ impl Tvu {
             block_commitment_cache,
             transaction_status_sender,
             // TODO: Make it configurable
-            fork_selector: OptimalForkSelector::default(),
+            fork_selector,
         };
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
@@ -316,6 +320,7 @@ pub mod tests {
             None,
             0,
             None,
+            OptimalForkSelector::default(),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
