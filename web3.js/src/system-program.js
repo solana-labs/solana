@@ -148,6 +148,7 @@ const SystemInstructionLayout = Object.freeze({
     index: 3,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
+      Layout.publicKey('base'),
       Layout.rustString('seed'),
       BufferLayout.ns64('lamports'),
       BufferLayout.ns64('space'),
@@ -246,6 +247,7 @@ export class SystemProgram {
   static createAccountWithSeed(
     from: PublicKey,
     newAccount: PublicKey,
+    base: PublicKey,
     seed: string,
     lamports: number,
     space: number,
@@ -253,6 +255,7 @@ export class SystemProgram {
   ): Transaction {
     const type = SystemInstructionLayout.CreateWithSeed;
     const data = encodeData(type, {
+      base: base.toBuffer(),
       seed,
       lamports,
       space,

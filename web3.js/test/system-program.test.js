@@ -58,6 +58,7 @@ test('createAccountWithSeed', () => {
   transaction = SystemProgram.createAccountWithSeed(
     from.publicKey,
     newAccount.publicKey,
+    from.publicKey,
     'hi there',
     123,
     BudgetProgram.space,
@@ -133,6 +134,7 @@ test('SystemInstruction createWithSeed', () => {
   const create = SystemProgram.createAccountWithSeed(
     from.publicKey,
     to.publicKey,
+    from.publicKey,
     'hi there',
     amount,
     space,

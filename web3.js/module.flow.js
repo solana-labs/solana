@@ -223,6 +223,7 @@ declare module '@solana/web3.js' {
     static createAccountWithSeed(
       from: PublicKey,
       newAccount: PublicKey,
+      base: PublicKey,
       seed: string,
       lamports: number,
       space: number,
