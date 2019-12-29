@@ -142,6 +142,7 @@ pub fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Locku
 pub fn create_account_with_seed(
     from_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
+    base: &Pubkey,
     seed: &str,
     authorized: &Authorized,
     lockup: &Lockup,
@@ -151,6 +152,7 @@ pub fn create_account_with_seed(
         system_instruction::create_account_with_seed(
             from_pubkey,
             stake_pubkey,
+            base,
             seed,
             lamports,
             std::mem::size_of::<StakeState>() as u64,
@@ -224,6 +226,7 @@ pub fn create_account_and_delegate_stake(
 pub fn create_account_with_seed_and_delegate_stake(
     from_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
+    base: &Pubkey,
     seed: &str,
     vote_pubkey: &Pubkey,
     authorized: &Authorized,
@@ -233,6 +236,7 @@ pub fn create_account_with_seed_and_delegate_stake(
     let mut instructions = create_account_with_seed(
         from_pubkey,
         stake_pubkey,
+        base,
         seed,
         authorized,
         lockup,
