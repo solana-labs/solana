@@ -87,8 +87,10 @@ $(eval echo "$@")"
   )
 
   execution_step "Deleting Testnet"
-  net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
-
+  (
+    set -x
+    net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
+  )
 }
 trap 'cleanup_testnet $BASH_COMMAND' EXIT
 
