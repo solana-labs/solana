@@ -1,7 +1,7 @@
 use log::*;
 
 use solana_sdk::{
-    account::KeyedAccount,
+    account::{get_signers, KeyedAccount},
     instruction::InstructionError,
     instruction_processor_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
@@ -11,27 +11,31 @@ use solana_sdk::{
     system_program, sysvar,
 };
 
+use std::collections::HashSet;
+
 fn create_account_with_seed(
     from: &mut KeyedAccount,
     to: &mut KeyedAccount,
+    base: &Pubkey,
     seed: &str,
     lamports: u64,
     data_length: u64,
     program_id: &Pubkey,
+    signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    // `from` is the source of the derived address, the caller must have
-    //  signed, even if no lamports will be transferred
-    if from.signer_key().is_none() {
-        debug!("CreateAccountWithSeed: from must sign");
+    // `base` is the source of the derived address and must sign for
+    //   rights to the address
+    if !signers.contains(&base) {
+        debug!("CreateAccountWithSeed: must carry signature of `base`");
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    // re-derive the address, must match `to`
-    let address = create_address_with_seed(from.unsigned_key(), seed, program_id)?;
+    // re-derive the address, must match the `to` account
+    let address = create_address_with_seed(base, seed, program_id)?;
 
     if to.unsigned_key() != &address {
         debug!(
-            "CreateAccountWithSeed: invalid argument; generated {} does not match to {}",
+            "CreateAccountWithSeed: invalid argument; derived {} does not match `to` {}",
             address,
             to.unsigned_key()
         );
@@ -49,14 +53,8 @@ fn create_account(
     data_length: u64,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    // if lamports == 0, the `from` account isn't touched
-    if lamports != 0 && from.signer_key().is_none() {
-        debug!("CreateAccount: from must sign");
-        return Err(InstructionError::MissingRequiredSignature);
-    }
-
     if to.signer_key().is_none() {
-        debug!("CreateAccount: to must sign");
+        debug!("CreateAccount: `to` must sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
 
@@ -70,6 +68,12 @@ fn finish_create_account(
     data_length: u64,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
+    // if lamports == 0, the `from` account isn't touched
+    if lamports != 0 && from.signer_key().is_none() {
+        debug!("CreateAccount: `from` must sign transfer");
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
     // if it looks like the `to` account is already in use, bail
     if to.account.lamports != 0
         || !to.account.data.is_empty()
@@ -173,6 +177,7 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", instruction);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
+    let signers = get_signers(keyed_accounts);
     let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
 
     match instruction {
@@ -186,6 +191,7 @@ pub fn process_instruction(
             create_account(from, to, lamports, space, &program_id)
         }
         SystemInstruction::CreateAccountWithSeed {
+            base,
             seed,
             lamports,
             space,
@@ -193,7 +199,17 @@ pub fn process_instruction(
         } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
-            create_account_with_seed(from, to, &seed, lamports, space, &program_id)
+
+            create_account_with_seed(
+                from,
+                to,
+                &base,
+                &seed,
+                lamports,
+                space,
+                &program_id,
+                &signers,
+            )
         }
         SystemInstruction::Assign { program_id } => {
             let account = next_keyed_account(keyed_accounts_iter)?;
@@ -269,6 +285,7 @@ mod tests {
                     KeyedAccount::new(&to, false, &mut to_account)
                 ],
                 &bincode::serialize(&SystemInstruction::CreateAccountWithSeed {
+                    base: from,
                     seed: seed.to_string(),
                     lamports: 50,
                     space: 2,
@@ -298,10 +315,12 @@ mod tests {
             create_account_with_seed(
                 &mut KeyedAccount::new(&from, true, &mut from_account),
                 &mut KeyedAccount::new(&to, false, &mut to_account),
+                &from,
                 seed,
                 50,
                 2,
                 &new_program_owner,
+                &[from].iter().cloned().collect::<HashSet<_>>(),
             ),
             Err(SystemError::AddressWithSeedMismatch.into())
         );
@@ -322,10 +341,12 @@ mod tests {
             create_account_with_seed(
                 &mut KeyedAccount::new(&from, false, &mut from_account),
                 &mut KeyedAccount::new(&to, false, &mut to_account),
+                &from,
                 seed,
                 50,
                 2,
                 &new_program_owner,
+                &[from].iter().cloned().collect::<HashSet<_>>(),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );

@@ -65,6 +65,7 @@ pub enum SystemInstruction {
     /// * space - memory to allocate if greater then zero
     /// * program_id - the program id of the new account
     CreateAccountWithSeed {
+        base: Pubkey,
         seed: String,
         lamports: u64,
         space: u64,
@@ -97,6 +98,7 @@ pub fn create_account(
 pub fn create_account_with_seed(
     from_pubkey: &Pubkey,
     to_pubkey: &Pubkey,
+    base: &Pubkey,
     seed: &str,
     lamports: u64,
     space: u64,
@@ -110,6 +112,7 @@ pub fn create_account_with_seed(
     Instruction::new(
         system_program::id(),
         &SystemInstruction::CreateAccountWithSeed {
+            base: *base,
             seed: seed.to_string(),
             lamports,
             space,

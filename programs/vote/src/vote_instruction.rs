@@ -90,6 +90,7 @@ pub fn create_account(
 pub fn create_account_with_seed(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
+    base: &Pubkey,
     seed: &str,
     vote_init: &VoteInit,
     lamports: u64,
@@ -98,6 +99,7 @@ pub fn create_account_with_seed(
     let create_ix = system_instruction::create_account_with_seed(
         from_pubkey,
         vote_pubkey,
+        base,
         seed,
         lamports,
         space,

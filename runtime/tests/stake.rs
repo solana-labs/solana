@@ -384,6 +384,7 @@ fn test_create_stake_account_from_seed() {
         stake_instruction::create_account_with_seed_and_delegate_stake(
             &mint_pubkey,
             &stake_pubkey,
+            &mint_pubkey,
             seed,
             &vote_pubkey,
             &authorized,
