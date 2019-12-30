@@ -3485,15 +3485,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-fixed-buf"
-version = "0.23.0"
-dependencies = [
- "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "solana-genesis"
 version = "0.23.0"
 dependencies = [
