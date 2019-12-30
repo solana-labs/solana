@@ -75,3 +75,11 @@ Output
 ```text
 4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN
 ```
+
+## Buying More Time to Sign
+
+Typically a Solana transaction must be signed and accepted by the network within
+a number of slots from the blockhash in its `recent_blockhash` field (~2min at
+the time of this writing). If your signing procedure takes longer than this, a
+[Durable Transaction Nonce](durable-nonce.md) can give you the extra time you
+need.
