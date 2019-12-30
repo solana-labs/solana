@@ -1,6 +1,6 @@
 # Stake Delegation and Rewards
 
-Stakers are rewarded for helping to validate the ledger. They do this by delegating their stake to validator nodes. Those validators do the legwork of replaying the ledger and send votes to a per-node vote account to which stakers can delegate their stakes. The rest of the cluster uses those stake-weighted votes to select a block when forks arise. Both the validator and staker need some economic incentive to play their part. The validator needs to be compensated for its hardware and the staker needs to be compensated for the risk of getting its stake slashed. The economics are covered in [staking rewards](../proposals/staking-rewards.md). This chapter, on the other hand, describes the underlying mechanics of its implementation.
+Stakers are rewarded for helping to validate the ledger. They do this by delegating their stake to validator nodes. Those validators do the legwork of replaying the ledger and send votes to a per-node vote account to which stakers can delegate their stakes. The rest of the cluster uses those stake-weighted votes to select a block when forks arise. Both the validator and staker need some economic incentive to play their part. The validator needs to be compensated for its hardware and the staker needs to be compensated for the risk of getting its stake slashed. The economics are covered in [staking rewards](../implemented-proposals/staking-rewards.md). This chapter, on the other hand, describes the underlying mechanics of its implementation.
 
 ## Basic Design
 
@@ -162,11 +162,11 @@ Lamports build up over time in a Stake account and any excess over activated sta
 
 ## Staking Rewards
 
-The specific mechanics and rules of the validator rewards regime is outlined here. Rewards are earned by delegating stake to a validator that is voting correctly. Voting incorrectly exposes that validator's stakes to [slashing](https://github.com/solana-labs/solana/tree/aacead62c0eb052068172eba6b53fc85874d6d54/book/src/staking-and-rewards.md).
+The specific mechanics and rules of the validator rewards regime is outlined here. Rewards are earned by delegating stake to a validator that is voting correctly. Voting incorrectly exposes that validator's stakes to [slashing](../proposals/slashing.md).
 
 ### Basics
 
-The network pays rewards from a portion of network [inflation](https://github.com/solana-labs/solana/tree/aacead62c0eb052068172eba6b53fc85874d6d54/book/src/inflation.md). The number of lamports available to pay rewards for an epoch is fixed and must be evenly divided among all staked nodes according to their relative stake weight and participation. The weighting unit is called a [point](../terminology.md#point).
+The network pays rewards from a portion of network [inflation](../terminology.md#inflation). The number of lamports available to pay rewards for an epoch is fixed and must be evenly divided among all staked nodes according to their relative stake weight and participation. The weighting unit is called a [point](../terminology.md#point).
 
 Rewards for an epoch are not available until the end of that epoch.
 

@@ -112,6 +112,10 @@ The configuration file that prepares the [ledger](terminology.md#ledger) for the
 
 A digital fingerprint of a sequence of bytes.
 
+## inflation
+
+The increase in token supply over time used by the network to incentivize validation and replication, and to fund continued development of the network.
+
 ## instruction
 
 The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#instruction).

@@ -38,7 +38,7 @@
 
       reject transactions with a `recent_blockhash` that is too old.
 
-    * **instructions:** A list of [instructions](https://github.com/solana-labs/solana/tree/aacead62c0eb052068172eba6b53fc85874d6d54/book/src/instruction.md) that are
+    * **instructions:** A list of [instructions](instruction-api.md) that are
 
       run sequentially and committed in one atomic transaction if all
 

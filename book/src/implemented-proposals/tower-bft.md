@@ -12,7 +12,7 @@ For brevity this design assumes that a single voter with a stake is deployed as 
 
 ## Time
 
-The Solana cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](https://github.com/solana-labs/solana/tree/aacead62c0eb052068172eba6b53fc85874d6d54/book/src/book/src/synchronization.md).
+The Solana cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](../cluster/synchronization.md).
 
 Proof of History is used to create a deterministic round robin schedule for all the active leaders. At any given time only 1 leader, which can be computed from the ledger itself, can propose a fork. For more details, see [fork generation](../cluster/fork-generation.md) and [leader rotation](../cluster/leader-rotation.md).
 
@@ -109,7 +109,7 @@ When evaluating multiple forks, each validator should use the following rules:
 3. Pick the fork that has the greatest amount of cluster transaction fees.
 4. Pick the latest fork in terms of PoH.
 
-Cluster transaction fees are fees that are deposited to the mining pool as described in the [Staking Rewards](https://github.com/solana-labs/solana/tree/aacead62c0eb052068172eba6b53fc85874d6d54/book/src/book/src/staking-rewards.md) section.
+Cluster transaction fees are fees that are deposited to the mining pool as described in the [Staking Rewards](staking-rewards.md) section.
 
 ## PoH ASIC Resistance
 
@@ -134,4 +134,3 @@ An attacker generates a concurrent fork from an older block to try to rollback t
 * 3 votes have a lockout of 8 slots. Concurrent fork must be at least 8 slots ahead and produced in 3 slots. Therefore requires an ASIC 2.6x faster.
 * 10 votes have a lockout of 1024 slots. 1024/10, or 102.4x faster ASIC.
 * 20 votes have a lockout of 2^20 slots. 2^20/20, or 52,428.8x faster ASIC.
-
