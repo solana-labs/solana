@@ -39,6 +39,7 @@
   * [Installation](paper-wallet/installation.md)
   * [Paper Wallet Usage](paper-wallet/usage.md)
 * [Offline Signing](offline-signing/README.md)
+  * [Durable Transaction Nonces](offline-signing/durable-nonce.md)
 * [API Reference](api-reference/README.md)
   * [Transaction](api-reference/transaction-api.md)
   * [Instruction](api-reference/instruction-api.md)
