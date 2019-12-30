@@ -369,5 +369,5 @@ declare module '@solana/web3.js' {
   // === src/util/testnet.js ===
   declare export function testnetChannelEndpoint(channel?: string): string;
 
-  declare export var SOL_LAMPORTS: number;
+  declare export var LAMPORTS_PER_SOL: number;
 }
