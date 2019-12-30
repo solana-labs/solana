@@ -4,7 +4,7 @@ import {
   Connection,
   SystemProgram,
   sendAndConfirmTransaction,
-  SOL_LAMPORTS,
+  LAMPORTS_PER_SOL,
 } from '../src';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
@@ -53,8 +53,8 @@ test('get program accounts', async () => {
   const account0 = new Account();
   const account1 = new Account();
   const programId = new Account();
-  await connection.requestAirdrop(account0.publicKey, SOL_LAMPORTS);
-  await connection.requestAirdrop(account1.publicKey, 0.5 * SOL_LAMPORTS);
+  await connection.requestAirdrop(account0.publicKey, LAMPORTS_PER_SOL);
+  await connection.requestAirdrop(account1.publicKey, 0.5 * LAMPORTS_PER_SOL);
 
   let transaction = SystemProgram.assign(
     account0.publicKey,
@@ -79,11 +79,11 @@ test('get program accounts', async () => {
     ]).toEqual(expect.arrayContaining([element[0]]));
     if (element[0] == account0.publicKey) {
       expect(element[1].lamports).toBe(
-        SOL_LAMPORTS - feeCalculator.lamportsPerSignature,
+        LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
       );
     } else {
       expect(element[1].lamports).toBe(
-        0.5 * SOL_LAMPORTS - feeCalculator.lamportsPerSignature,
+        0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
       );
     }
   });
@@ -784,8 +784,8 @@ test('multi-instruction transaction', async () => {
   const accountTo = new Account();
   const connection = new Connection(url, 'recent');
 
-  await connection.requestAirdrop(accountFrom.publicKey, SOL_LAMPORTS);
-  expect(await connection.getBalance(accountFrom.publicKey)).toBe(SOL_LAMPORTS);
+  await connection.requestAirdrop(accountFrom.publicKey, LAMPORTS_PER_SOL);
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(LAMPORTS_PER_SOL);
 
   await connection.requestAirdrop(accountTo.publicKey, 21);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
@@ -818,11 +818,11 @@ test('multi-instruction transaction', async () => {
     Ok: null,
   });
 
-  // accountFrom may have less than SOL_LAMPORTS due to transaction fees
+  // accountFrom may have less than LAMPORTS_PER_SOL due to transaction fees
   expect(await connection.getBalance(accountFrom.publicKey)).toBeGreaterThan(0);
   expect(
     await connection.getBalance(accountFrom.publicKey),
-  ).toBeLessThanOrEqual(SOL_LAMPORTS);
+  ).toBeLessThanOrEqual(LAMPORTS_PER_SOL);
 
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
 });
@@ -849,7 +849,7 @@ test('account change notification', async () => {
     1,
   );
 
-  await connection.requestAirdrop(owner.publicKey, SOL_LAMPORTS);
+  await connection.requestAirdrop(owner.publicKey, LAMPORTS_PER_SOL);
   try {
     let transaction = SystemProgram.transfer(
       owner.publicKey,
@@ -913,7 +913,7 @@ test('program account change notification', async () => {
     },
   );
 
-  await connection.requestAirdrop(owner.publicKey, SOL_LAMPORTS);
+  await connection.requestAirdrop(owner.publicKey, LAMPORTS_PER_SOL);
   try {
     let transaction = SystemProgram.transfer(
       owner.publicKey,
