@@ -4,7 +4,7 @@ use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
 use std::{net::SocketAddr, process::exit, time::Duration};
 
-const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::SOL_LAMPORTS;
+const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
 
 /// Holds the configuration for a single run of the benchmark
 pub struct Config {
