@@ -91,11 +91,11 @@ LightEntry {
 
 The light entries are reconstructed from Entries and simply show the entry Merkle Root that was mixed in to the PoH hash, instead of the full transaction set.
 
-Clients do not need the starting vote state. The [fork selection](https://github.com/solana-labs/solana/tree/aacead62c0eb052068172eba6b53fc85874d6d54/book/src/book/src/fork-selection.md) algorithm is defined such that only votes that appear after the transaction provide finality for the transaction, and finality is independent of the starting state.
+Clients do not need the starting vote state. The [fork selection](../implemented-proposals/tower-bft.md) algorithm is defined such that only votes that appear after the transaction provide finality for the transaction, and finality is independent of the starting state.
 
 ### Verification
 
-A light client that is aware of the supermajority set validators can verify a receipt by following the Merkle Path to the PoH chain. The Bank-Merkle is the Merkle Root and will appear in votes included in an Entry. The light client can simulate [fork selection](https://github.com/solana-labs/solana/tree/aacead62c0eb052068172eba6b53fc85874d6d54/book/src/book/src/fork-selection.md) for the consecutive votes and verify that the receipt is confirmed at the desired lockout threshold.
+A light client that is aware of the supermajority set validators can verify a receipt by following the Merkle Path to the PoH chain. The Bank-Merkle is the Merkle Root and will appear in votes included in an Entry. The light client can simulate [fork selection](../implemented-proposals/tower-bft.md) for the consecutive votes and verify that the receipt is confirmed at the desired lockout threshold.
 
 ### Synthetic State
 

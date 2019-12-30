@@ -10,7 +10,7 @@ When replay stage starts processing the same transactions, it can assume that Po
 
 ## Fee Account
 
-The [fee account](https://github.com/solana-labs/solana/tree/b5f7a4bff9953415b1f3d385bd59bc65c1ec11a4/book/src/proposals/terminology.md#fee_account) pays for the transaction to be included in the block. The leader only needs to validate that the fee account has the balance to pay for the fee.
+The [fee account](../terminology.md#fee_account) pays for the transaction to be included in the block. The leader only needs to validate that the fee account has the balance to pay for the fee.
 
 ## Balance Cache
 
@@ -53,4 +53,3 @@ The same fee account can be reused many times in the same block until it is used
 Clients that transmit a large number of transactions per second should use a dedicated fee account that is not used as Credit-Debit in any instruction.
 
 Once an account fee is used as Credit-Debit, it will fail the balance check until the balance cache is reset.
-
