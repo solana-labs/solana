@@ -69,7 +69,7 @@ pub fn create_and_add_validator(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{native_token::SOL_LAMPORTS, rent::Rent};
+    use solana_sdk::{native_token::LAMPORTS_PER_SOL, rent::Rent};
 
     fn create_and_check_validators(
         genesis_config: &mut GenesisConfig,
@@ -144,7 +144,7 @@ mod tests {
         let total_lamports = VoteState::get_rent_exempt_reserve(&rent) * 2
             + calculate_voting_fees(&genesis_config, 1.0) * 2 // two vote accounts
             + rent.minimum_balance(0) // one node account
-            + 1 * SOL_LAMPORTS; // 2nd vote account ask has SOL
+            + 1 * LAMPORTS_PER_SOL; // 2nd vote account ask has SOL
 
         // weird case, just wanted to verify that the duplicated node account gets double fees
         create_and_check_validators(
@@ -160,7 +160,7 @@ mod tests {
                 ValidatorInfo {
                     name: "unfun",
                     node: "3VTm54dw8w6jTTsPH4BfoV5vo6mF985JAMtNDRYcaGFc", // random pubkeys, same node
-                    node_lamports: 1 * SOL_LAMPORTS,
+                    node_lamports: 1 * LAMPORTS_PER_SOL,
                     vote: "8XrFPRULg98kSm535kFaLV4GMnK5JQSuAymyrCHXsUcy",
                     commission: 50,
                 },

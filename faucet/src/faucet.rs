@@ -45,7 +45,7 @@ macro_rules! socketaddr {
 }
 
 pub const TIME_SLICE: u64 = 60;
-pub const REQUEST_CAP: u64 = solana_sdk::native_token::SOL_LAMPORTS * 1_000_000;
+pub const REQUEST_CAP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL * 1_000_000;
 pub const FAUCET_PORT: u16 = 9900;
 pub const FAUCET_PORT_STR: &str = "9900";
 
