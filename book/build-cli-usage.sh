@@ -7,7 +7,7 @@ usage=$(cargo -q run -p solana-cli -- -C ~/.foo --help | sed 's|'"$HOME"'|~|g')
 
 out=${1:-src/api-reference/cli.md}
 
-cat src/api-reference/.cli.md > "$out"
+cat src/api-reference/.cli.md.header > "$out"
 
 section() {
   declare mark=${2:-"###"}

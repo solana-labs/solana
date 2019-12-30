@@ -28,7 +28,7 @@ lockout on a bank `b`.
 
 This computation is performed on a votable candidate bank `b` as follows.
 
-```
+```text
    let output: HashMap<b, StakeLockout> = HashMap::new();
    for vote_account in b.vote_accounts {
        for v in vote_account.vote_stack {
@@ -62,7 +62,7 @@ votes > v as the number of confirmations will be lower).
 
 Now more specifically, we augment the above computation to:
 
-```
+```text
    let output: HashMap<b, StakeLockout> = HashMap::new();
    let fork_commitment_cache = ForkCommitmentCache::default();
    for vote_account in b.vote_accounts {
@@ -76,7 +76,7 @@ Now more specifically, we augment the above computation to:
 ```
 
 where `f'` is defined as:
-```
+```text
     fn f`(
         stake_lockout: &mut StakeLockout,
         some_ancestor: &mut BlockCommitment,

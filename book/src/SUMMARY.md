@@ -91,3 +91,4 @@
   * [Durable Transaction Nonces](implemented-proposals/durable-tx-nonces.md)
   * [Validator Timestamp Oracle](implemented-proposals/validator-timestamp-oracle.md)
   * [Commitment](implemented-proposals/commitment.md)
+  * [Snapshot Verification](implemented-proposals/snapshot-verification.md)
