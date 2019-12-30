@@ -537,6 +537,7 @@ impl ReplayStage {
             }
             Err(Error::BlockError(_)) => true,
             Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(_))) => true,
+            Err(Error::BlocktreeError(BlocktreeError::DeadSlot)) => true,
             _ => false,
         }
     }

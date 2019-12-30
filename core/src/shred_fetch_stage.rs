@@ -2,7 +2,10 @@
 
 use crate::packet::{Packet, PacketsRecycler};
 use crate::streamer::{self, PacketReceiver, PacketSender};
+use solana_ledger::blocktree::MAX_DATA_SHREDS_PER_SLOT;
+use solana_ledger::shred::{OFFSET_OF_SHRED_INDEX, SIZE_OF_SHRED_INDEX};
 use solana_perf::cuda_runtime::PinnedVec;
+use solana_perf::packet::limited_deserialize;
 use solana_perf::recycler::Recycler;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -21,7 +24,21 @@ impl ShredFetchStage {
         F: Fn(&mut Packet),
     {
         while let Some(mut p) = recvr.iter().next() {
-            p.packets.iter_mut().for_each(|p| modify(p));
+            let index_start = OFFSET_OF_SHRED_INDEX;
+            let index_end = index_start + SIZE_OF_SHRED_INDEX;
+            p.packets.iter_mut().for_each(|p| {
+                p.meta.discard = true;
+                if index_end <= p.meta.size {
+                    if let Ok(index) = limited_deserialize::<u32>(&p.data[index_start..index_end]) {
+                        if index < MAX_DATA_SHREDS_PER_SLOT as u32 {
+                            p.meta.discard = false;
+                            modify(p);
+                        } else {
+                            inc_new_counter_warn!("shred_fetch_stage-shred_index_overrun", 1);
+                        }
+                    }
+                }
+            });
             if sendr.send(p).is_err() {
                 break;
             }

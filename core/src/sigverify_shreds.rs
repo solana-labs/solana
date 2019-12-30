@@ -4,12 +4,10 @@ use crate::sigverify;
 use crate::sigverify_stage::SigVerifier;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::ShredType;
+use solana_ledger::shred::{OFFSET_OF_SHRED_SLOT, SIZE_OF_SHRED_SLOT};
 use solana_ledger::sigverify_shreds::verify_shreds_gpu;
 use solana_perf::recycler_cache::RecyclerCache;
-use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
-use std::mem::size_of;
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
@@ -36,8 +34,8 @@ impl ShredSigVerifier {
             .iter()
             .flat_map(|batch| {
                 batch.packets.iter().filter_map(|packet| {
-                    let slot_start = size_of::<Signature>() + size_of::<ShredType>();
-                    let slot_end = slot_start + size_of::<u64>();
+                    let slot_start = OFFSET_OF_SHRED_SLOT;
+                    let slot_end = slot_start + SIZE_OF_SHRED_SLOT;
                     trace!("slot {} {}", slot_start, slot_end,);
                     if slot_end <= packet.meta.size {
                         limited_deserialize(&packet.data[slot_start..slot_end]).ok()

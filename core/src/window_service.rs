@@ -13,7 +13,7 @@ use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blocktree::{self, Blocktree};
+use solana_ledger::blocktree::{self, Blocktree, MAX_DATA_SHREDS_PER_SLOT};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
@@ -60,6 +60,9 @@ pub fn should_retransmit_and_persist(
             false
         } else if shred.version() != shred_version {
             inc_new_counter_debug!("streamer-recv_window-incorrect_shred_version", 1);
+            false
+        } else if shred.index() >= MAX_DATA_SHREDS_PER_SLOT as u32 {
+            inc_new_counter_warn!("streamer-recv_window-shred_index_overrun", 1);
             false
         } else {
             true
@@ -130,6 +133,13 @@ where
                             Shred::new_from_serialized_shred(packet.data.to_vec())
                         {
                             if shred_filter(&shred, last_root) {
+                                // Mark slot as dead if the current shred is on the boundary
+                                // of max shreds per slot. However, let the current shred
+                                // get retransmitted. It'll allow peer nodes to see this shred
+                                // and trigger them to mark the slot as dead.
+                                if shred.index() >= (MAX_DATA_SHREDS_PER_SLOT - 1) as u32 {
+                                    let _ = blocktree.set_dead_slot(shred.slot());
+                                }
                                 packet.meta.slot = shred.slot();
                                 packet.meta.seed = shred.seed();
                                 Some(shred)
