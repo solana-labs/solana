@@ -5,11 +5,11 @@ use crate::bank::{HashAgeKind, TransactionProcessResult};
 use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use crate::rent_collector::RentCollector;
+use crate::system_instruction_processor::{get_system_account_kind, SystemAccountKind};
 use log::*;
 use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
-use solana_sdk::account_utils::{account_is_system, SystemAccountKind};
 use solana_sdk::bank_hash::BankHash;
 use solana_sdk::clock::Slot;
 use solana_sdk::native_loader;
@@ -135,7 +135,7 @@ impl Accounts {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
             } else {
-                let min_balance = match account_is_system(&accounts[0]).ok_or_else(|| {
+                let min_balance = match get_system_account_kind(&accounts[0]).ok_or_else(|| {
                     error_counters.invalid_account_for_fee += 1;
                     TransactionError::InvalidAccountForFee
                 })? {

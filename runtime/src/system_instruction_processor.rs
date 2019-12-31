@@ -1,11 +1,11 @@
 use log::*;
 
 use solana_sdk::{
-    account::{get_signers, KeyedAccount},
-    account_utils::{account_is_system, SystemAccountKind},
+    account::{get_signers, Account, KeyedAccount},
+    account_utils::State,
     instruction::InstructionError,
     instruction_processor_utils::{limited_deserialize, next_keyed_account},
-    nonce_state::NonceAccount,
+    nonce_state::{NonceAccount, NonceState},
     pubkey::Pubkey,
     system_instruction::{
         create_address_with_seed, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
@@ -116,7 +116,7 @@ fn finish_create_account(
         return Err(SystemError::InvalidProgramId.into());
     }
 
-    match account_is_system(&from.account) {
+    match get_system_account_kind(&from.account) {
         Some(SystemAccountKind::Nonce) => Err(InstructionError::InvalidArgument),
         _ => {
             to.account.owner = *program_id;
@@ -146,7 +146,7 @@ fn assign_account_to_program(
         return Err(SystemError::InvalidProgramId.into());
     }
 
-    match account_is_system(&account.account) {
+    match get_system_account_kind(&account.account) {
         Some(SystemAccountKind::Nonce) => Err(InstructionError::InvalidArgument),
         _ => {
             account.account.owner = *program_id;
@@ -177,7 +177,7 @@ fn transfer_lamports(
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
 
-    match account_is_system(&from.account) {
+    match get_system_account_kind(&from.account) {
         Some(SystemAccountKind::Nonce) => Err(InstructionError::InvalidArgument),
         _ => {
             from.account.lamports -= lamports;
@@ -273,6 +273,26 @@ pub fn process_instruction(
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SystemAccountKind {
+    System,
+    Nonce,
+}
+
+pub fn get_system_account_kind(account: &Account) -> Option<SystemAccountKind> {
+    if system_program::check_id(&account.owner) {
+        if account.data.is_empty() {
+            Some(SystemAccountKind::System)
+        } else if let Ok(NonceState::Initialized(_, _)) = account.state() {
+            Some(SystemAccountKind::Nonce)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,7 +300,6 @@ mod tests {
     use crate::bank_client::BankClient;
     use bincode::serialize;
     use solana_sdk::account::Account;
-    use solana_sdk::account_utils::{account_is_system, SystemAccountKind};
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::hash::{hash, Hash};
@@ -712,7 +731,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_is_system(&nonce_account),
+            get_system_account_kind(&nonce_account),
             Some(SystemAccountKind::Nonce)
         );
         assert_eq!(
@@ -811,7 +830,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            account_is_system(&from_account),
+            get_system_account_kind(&from_account),
             Some(SystemAccountKind::Nonce)
         );
         let to = Pubkey::new_rand();
@@ -1271,5 +1290,59 @@ mod tests {
             )),
             Err(InstructionError::InvalidAccountData),
         );
+    }
+
+    #[test]
+    fn test_get_system_account_kind_system_ok() {
+        let system_account = Account::default();
+        assert_eq!(
+            get_system_account_kind(&system_account),
+            Some(SystemAccountKind::System)
+        );
+    }
+
+    #[test]
+    fn test_get_system_account_kind_nonce_ok() {
+        let nonce_account = Account::new_data(
+            42,
+            &nonce_state::NonceState::Initialized(
+                nonce_state::Meta::new(&Pubkey::default()),
+                Hash::default(),
+            ),
+            &system_program::id(),
+        )
+        .unwrap();
+        assert_eq!(
+            get_system_account_kind(&nonce_account),
+            Some(SystemAccountKind::Nonce)
+        );
+    }
+
+    #[test]
+    fn test_get_system_account_kind_uninitialized_nonce_account_fail() {
+        assert_eq!(
+            get_system_account_kind(&nonce_state::create_account(42)),
+            None
+        );
+    }
+
+    #[test]
+    fn test_get_system_account_kind_system_owner_nonzero_nonnonce_data_fail() {
+        let other_data_account = Account::new_data(42, b"other", &Pubkey::default()).unwrap();
+        assert_eq!(get_system_account_kind(&other_data_account), None);
+    }
+
+    #[test]
+    fn test_get_system_account_kind_nonsystem_owner_with_nonce_state_data_fail() {
+        let nonce_account = Account::new_data(
+            42,
+            &nonce_state::NonceState::Initialized(
+                nonce_state::Meta::new(&Pubkey::default()),
+                Hash::default(),
+            ),
+            &Pubkey::new_rand(),
+        )
+        .unwrap();
+        assert_eq!(get_system_account_kind(&nonce_account), None);
     }
 }

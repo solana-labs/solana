@@ -16,6 +16,7 @@ use crate::{
     status_cache::{SlotDelta, StatusCache},
     storage_utils,
     storage_utils::StorageAccounts,
+    system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
 };
@@ -30,7 +31,6 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
-    account_utils::{account_is_system, SystemAccountKind},
     clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
@@ -1497,7 +1497,7 @@ impl Bank {
     pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
         match self.get_account(pubkey) {
             Some(mut account) => {
-                let min_balance = match account_is_system(&account) {
+                let min_balance = match get_system_account_kind(&account) {
                     Some(SystemAccountKind::Nonce) => {
                         self.rent_collector.rent.minimum_balance(NonceState::size())
                     }
