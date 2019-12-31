@@ -45,7 +45,6 @@ members = [
     "sys-tuner",
     "upload-perf",
     "net-utils",
-    "fixed-buf",
     "vote-signer",
     "cli",
     "rayon-threadlimit",
