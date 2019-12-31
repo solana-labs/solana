@@ -86,6 +86,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("lockup_date")
                         .long("lockup-date")
                         .value_name("RFC3339 DATE TIME")
+                        .validator(is_rfc3339_datetime)
                         .takes_value(true)
                         .help("The date and time at which this account will be available for withdrawal")
                 )
@@ -367,7 +368,7 @@ impl StakeSubCommands for App<'_, '_> {
 pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account = keypair_of(matches, "stake_account").unwrap();
     let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
-    let unix_timestamp = unix_timestamp_of(&matches, "lockup_date").unwrap_or(0);
+    let unix_timestamp = unix_timestamp_from_rfc3339_datetime(&matches, "lockup_date").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
     let staker = pubkey_of(matches, "authorized_staker");
     let withdrawer = pubkey_of(matches, "authorized_withdrawer");

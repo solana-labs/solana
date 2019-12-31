@@ -1,9 +1,10 @@
 //! A command-line executable for generating the chain's genesis config.
 
+use chrono::{TimeZone, Utc};
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::{
-    input_parsers::{pubkey_of, unix_timestamp_of},
-    input_validators::is_valid_percentage,
+    input_parsers::{pubkey_of, unix_timestamp_from_rfc3339_datetime},
+    input_validators::{is_rfc3339_datetime, is_valid_percentage},
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
 use solana_ledger::{blocktree::create_new_ledger, poh::compute_hashes_per_tick};
@@ -140,8 +141,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Arg::with_name("creation_time")
                 .long("creation-time")
                 .value_name("RFC3339 DATE TIME")
+                .validator(is_rfc3339_datetime)
                 .takes_value(true)
-                .help("Time when the bootrap leader will start, defaults to current system time"),
+                .help("Time when the bootstrap leader will start the cluster [default: current system time]"),
         )
         .arg(
             Arg::with_name("bootstrap_leader_pubkey_file")
@@ -246,7 +248,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .default_value(default_lamports_per_byte_year)
                 .help(
                     "The cost in lamports that the cluster will charge per byte per year \
-                     for accounts with data.",
+                     for accounts with data",
                 ),
         )
         .arg(
@@ -257,7 +259,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .default_value(default_rent_exemption_threshold)
                 .help(
                     "amount of time (in years) the balance has to include rent for \
-                     to qualify as rent exempted account.",
+                     to qualify as rent exempted account",
                 ),
         )
         .arg(
@@ -486,7 +488,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ..GenesisConfig::default()
     };
 
-    if let Some(creation_time) = unix_timestamp_of(&matches, "creation_time") {
+    if let Some(creation_time) = unix_timestamp_from_rfc3339_datetime(&matches, "creation_time") {
         genesis_config.creation_time = creation_time;
     }
 
@@ -518,8 +520,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     create_new_ledger(&ledger_path, &genesis_config)?;
 
     println!(
-        "Genesis hash: {}\nOperating mode: {:?}\nHashes per tick: {:?}\nSlots per epoch: {}\nCapitalization: {} SOL in {} accounts",
+        "Genesis hash: {}\nCreation time: {}\nOperating mode: {:?}\nHashes per tick: {:?}\nSlots per epoch: {}\nCapitalization: {} SOL in {} accounts",
         genesis_config.hash(),
+        Utc.timestamp(genesis_config.creation_time, 0).to_rfc3339(),
         operating_mode,
         genesis_config.poh_config.hashes_per_tick,
         slots_per_epoch,

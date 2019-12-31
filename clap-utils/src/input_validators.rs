@@ -1,4 +1,5 @@
 use crate::keypair::ASK_KEYWORD;
+use chrono::DateTime;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair_file, Signature};
@@ -128,4 +129,10 @@ pub fn is_amount(amount: String) -> Result<(), String> {
             amount
         ))
     }
+}
+
+pub fn is_rfc3339_datetime(value: String) -> Result<(), String> {
+    DateTime::parse_from_rfc3339(&value)
+        .map(|_| ())
+        .map_err(|e| format!("{:?}", e))
 }
