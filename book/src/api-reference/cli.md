@@ -234,6 +234,7 @@ SUBCOMMANDS:
     send-timestamp                      Send a timestamp to unlock a transfer
     set                                 Set a cli config setting
     show-account                        Show the contents of an account
+    show-block-production               Show information about block production
     show-gossip                         Show the current gossip network nodes
     show-nonce-account                  Show the contents of a nonce account
     show-stake-account                  Show the contents of a stake account
@@ -1210,6 +1211,33 @@ OPTIONS:
 
 ARGS:
     <ACCOUNT PUBKEY>    Account pubkey
+```
+
+#### solana-show-block-production
+```text
+solana-show-block-production 
+Show information about block production
+
+USAGE:
+    solana show-block-production [FLAGS] [OPTIONS]
+
+FLAGS:
+    -h, --help                           Prints help information
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+                                            [possible values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+        --epoch <epoch>                     Epoch to show block production for [default: current epoch]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+        --slot-limit <slot_limit>           Limit results to this many slots from the end of the epoch [default: full
+                                            epoch]
 ```
 
 #### solana-show-gossip
