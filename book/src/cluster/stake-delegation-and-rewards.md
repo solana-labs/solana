@@ -103,7 +103,7 @@ The Stake account is moved from Ininitialized to StakeState::Stake form. This is
 
 ### StakeInstruction::Authorize\(Pubkey, StakeAuthorize\)
 
-Updates the account with a new authorized staker or withdrawer, according to the StakeAuthorize parameter \(`Staker` or `Withdrawer`\). The transaction must be by signed by the Stakee account's current `authorized_staker` or `authorized_withdrawer`.
+Updates the account with a new authorized staker or withdrawer, according to the StakeAuthorize parameter \(`Staker` or `Withdrawer`\). The transaction must be by signed by the Stakee account's current `authorized_staker` or `authorized_withdrawer`.  Any stake lock-up must have expired, or the lock-up custodian must also sign the transaction.
 
 * `account[0]` - RW - The StakeState
 
@@ -228,4 +228,4 @@ Only lamports in excess of effective+activating stake may be withdrawn at any ti
 
 ### Lock-up
 
-Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as an epoch height, i.e. the minimum epoch height that must be reached by the network before the stake account balance is available for withdrawal, unless the transaction is also signed by a specified custodian. This information is gathered when the stake account is created, and stored in the Lockup field of the stake account's state.
+Stake accounts support the notion of lock-up, wherein the stake account balance is unavailable for withdrawal until a specified time. Lock-up is specified as an epoch height, i.e. the minimum epoch height that must be reached by the network before the stake account balance is available for withdrawal, unless the transaction is also signed by a specified custodian. This information is gathered when the stake account is created, and stored in the Lockup field of the stake account's state.  Changing the authorized staker or withdrawer is also subject to lock-up, as such an operation is effectively a transfer.
