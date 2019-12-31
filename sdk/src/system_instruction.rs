@@ -149,6 +149,7 @@ pub fn create_account(
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, true),
+        AccountMeta::new_readonly(rent::id(), false),
     ];
     Instruction::new(
         system_program::id(),
@@ -173,6 +174,7 @@ pub fn create_account_with_seed(
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
+        AccountMeta::new_readonly(rent::id(), false),
     ];
 
     Instruction::new(
