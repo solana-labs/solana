@@ -30,6 +30,7 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
+    account_utils::{account_is_system, SystemAccountKind},
     clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
@@ -37,6 +38,7 @@ use solana_sdk::{
     hash::{hashv, Hash},
     inflation::Inflation,
     native_loader,
+    nonce_state::NonceState,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
@@ -1495,7 +1497,13 @@ impl Bank {
     pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
         match self.get_account(pubkey) {
             Some(mut account) => {
-                if lamports > account.lamports {
+                let min_balance = match account_is_system(&account) {
+                    Some(SystemAccountKind::Nonce) => {
+                        self.rent_collector.rent.minimum_balance(NonceState::size())
+                    }
+                    _ => 0,
+                };
+                if lamports + min_balance > account.lamports && lamports != account.lamports {
                     return Err(TransactionError::InsufficientFundsForFee);
                 }
 
@@ -2998,6 +3006,43 @@ mod tests {
         // Enough balance
         assert_eq!(bank.withdraw(&key.pubkey(), 2), Ok(()));
         assert_eq!(bank.get_balance(&key.pubkey()), 1);
+    }
+
+    #[test]
+    fn test_bank_withdraw_from_nonce_account() {
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        genesis_config.rent.lamports_per_byte_year = 42;
+        let bank = Bank::new(&genesis_config);
+
+        let min_balance =
+            bank.get_minimum_balance_for_rent_exemption(nonce_state::NonceState::size());
+        let nonce = Keypair::new();
+        let nonce_account = Account::new_data(
+            min_balance + 42,
+            &nonce_state::NonceState::Initialized(
+                nonce_state::Meta::new(&Pubkey::default()),
+                Hash::default(),
+            ),
+            &system_program::id(),
+        )
+        .unwrap();
+        bank.store_account(&nonce.pubkey(), &nonce_account);
+        assert_eq!(bank.get_balance(&nonce.pubkey()), min_balance + 42);
+
+        // Resulting in non-zero, but sub-min_balance balance fails
+        assert_eq!(
+            bank.withdraw(&nonce.pubkey(), min_balance / 2),
+            Err(TransactionError::InsufficientFundsForFee)
+        );
+        assert_eq!(bank.get_balance(&nonce.pubkey()), min_balance + 42);
+
+        // Resulting in exactly rent-exempt balance succeeds
+        bank.withdraw(&nonce.pubkey(), 42).unwrap();
+        assert_eq!(bank.get_balance(&nonce.pubkey()), min_balance);
+
+        // Account closure succeeds
+        bank.withdraw(&nonce.pubkey(), min_balance).unwrap();
+        assert_eq!(bank.get_balance(&nonce.pubkey()), 0);
     }
 
     #[test]
