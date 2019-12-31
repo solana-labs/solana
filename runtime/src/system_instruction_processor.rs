@@ -5,7 +5,7 @@ use solana_sdk::{
     account_utils::{account_is_system, SystemAccountKind},
     instruction::InstructionError,
     instruction_processor_utils::{limited_deserialize, next_keyed_account},
-    nonce_state::{self, NonceAccount},
+    nonce_state::NonceAccount,
     pubkey::Pubkey,
     system_instruction::{
         create_address_with_seed, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
@@ -24,7 +24,6 @@ fn create_account_with_seed(
     lamports: u64,
     data_length: u64,
     program_id: &Pubkey,
-    rent: &Rent,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
     // `base` is the source of the derived address and must sign for
@@ -47,7 +46,7 @@ fn create_account_with_seed(
     }
 
     // all of finish_create_account's rules apply
-    finish_create_account(from, to, lamports, data_length, program_id, rent)
+    finish_create_account(from, to, lamports, data_length, program_id)
 }
 
 fn create_account(
@@ -56,14 +55,13 @@ fn create_account(
     lamports: u64,
     data_length: u64,
     program_id: &Pubkey,
-    rent: &Rent,
 ) -> Result<(), InstructionError> {
     if to.signer_key().is_none() {
         debug!("CreateAccount: `to` must sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    finish_create_account(from, to, lamports, data_length, program_id, rent)
+    finish_create_account(from, to, lamports, data_length, program_id)
 }
 
 fn finish_create_account(
@@ -72,7 +70,6 @@ fn finish_create_account(
     lamports: u64,
     data_length: u64,
     program_id: &Pubkey,
-    rent: &Rent,
 ) -> Result<(), InstructionError> {
     // if lamports == 0, the `from` account isn't touched
     if lamports != 0 && from.signer_key().is_none() {
@@ -97,12 +94,7 @@ fn finish_create_account(
         return Err(SystemError::InvalidAccountId.into());
     }
 
-    let min_balance = match account_is_system(&from.account) {
-        Some(SystemAccountKind::Nonce) => rent.minimum_balance(nonce_state::NonceState::size()),
-        _ => 0,
-    };
-
-    if lamports + min_balance > from.account.lamports && lamports != from.account.lamports {
+    if lamports > from.account.lamports {
         debug!(
             "CreateAccount: insufficient lamports ({}, need {})",
             from.account.lamports, lamports
@@ -123,14 +115,20 @@ fn finish_create_account(
         debug!("Assign: program id {} invalid", program_id);
         return Err(SystemError::InvalidProgramId.into());
     }
-    to.account.owner = *program_id;
 
-    from.account.lamports -= lamports;
-    to.account.lamports += lamports;
-    to.account.data = vec![0; data_length as usize];
-    to.account.executable = false;
+    match account_is_system(&from.account) {
+        Some(SystemAccountKind::Nonce) => Err(InstructionError::InvalidArgument),
+        _ => {
+            to.account.owner = *program_id;
 
-    Ok(())
+            from.account.lamports -= lamports;
+            to.account.lamports += lamports;
+            to.account.data = vec![0; data_length as usize];
+            to.account.executable = false;
+
+            Ok(())
+        }
+    }
 }
 
 fn assign_account_to_program(
@@ -210,14 +208,7 @@ pub fn process_instruction(
         } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
-            create_account(
-                from,
-                to,
-                lamports,
-                space,
-                &program_id,
-                &Rent::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
-            )
+            create_account(from, to, lamports, space, &program_id)
         }
         SystemInstruction::CreateAccountWithSeed {
             base,
@@ -237,7 +228,6 @@ pub fn process_instruction(
                 lamports,
                 space,
                 &program_id,
-                &Rent::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
                 &signers,
             )
         }
@@ -315,12 +305,7 @@ mod tests {
                 &Pubkey::default(),
                 &mut [
                     KeyedAccount::new(&from, true, &mut from_account),
-                    KeyedAccount::new(&to, true, &mut to_account),
-                    KeyedAccount::new(
-                        &sysvar::rent::id(),
-                        false,
-                        &mut sysvar::rent::create_account(1, &Rent::free()),
-                    ),
+                    KeyedAccount::new(&to, true, &mut to_account)
                 ],
                 &bincode::serialize(&SystemInstruction::CreateAccount {
                     lamports: 50,
@@ -352,12 +337,7 @@ mod tests {
                 &Pubkey::default(),
                 &mut [
                     KeyedAccount::new(&from, true, &mut from_account),
-                    KeyedAccount::new(&to, false, &mut to_account),
-                    KeyedAccount::new(
-                        &sysvar::rent::id(),
-                        false,
-                        &mut sysvar::rent::create_account(1, &Rent::free()),
-                    ),
+                    KeyedAccount::new(&to, false, &mut to_account)
                 ],
                 &bincode::serialize(&SystemInstruction::CreateAccountWithSeed {
                     base: from,
@@ -395,7 +375,6 @@ mod tests {
                 50,
                 2,
                 &new_program_owner,
-                &Rent::default(),
                 &[from].iter().cloned().collect::<HashSet<_>>(),
             ),
             Err(SystemError::AddressWithSeedMismatch.into())
@@ -422,7 +401,6 @@ mod tests {
                 50,
                 2,
                 &new_program_owner,
-                &Rent::default(),
                 &[from].iter().cloned().collect::<HashSet<_>>(),
             ),
             Err(InstructionError::MissingRequiredSignature)
@@ -448,7 +426,6 @@ mod tests {
                 0,
                 2,
                 &new_program_owner,
-                &Rent::default(),
             ),
             Ok(())
         );
@@ -480,7 +457,6 @@ mod tests {
             150,
             2,
             &new_program_owner,
-            &Rent::default(),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         let from_lamports = from_account.lamports;
@@ -502,7 +478,6 @@ mod tests {
             50,
             MAX_PERMITTED_DATA_LENGTH + 1,
             &system_program::id(),
-            &Rent::default(),
         );
         assert!(result.is_err());
         assert_eq!(
@@ -517,7 +492,6 @@ mod tests {
             50,
             MAX_PERMITTED_DATA_LENGTH,
             &system_program::id(),
-            &Rent::default(),
         );
         assert!(result.is_ok());
         assert_eq!(to_account.lamports, 50);
@@ -542,7 +516,6 @@ mod tests {
             50,
             2,
             &new_program_owner,
-            &Rent::default(),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
 
@@ -558,7 +531,6 @@ mod tests {
             50,
             2,
             &new_program_owner,
-            &Rent::default(),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         let from_lamports = from_account.lamports;
@@ -584,7 +556,6 @@ mod tests {
             50,
             2,
             &new_program_owner,
-            &Rent::default(),
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
         assert_eq!(from_account.lamports, 100);
@@ -597,7 +568,6 @@ mod tests {
             50,
             2,
             &new_program_owner,
-            &Rent::default(),
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
         assert_eq!(from_account.lamports, 100);
@@ -610,7 +580,6 @@ mod tests {
             0,
             2,
             &new_program_owner,
-            &Rent::default(),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(from_account.lamports, 100);
@@ -633,7 +602,6 @@ mod tests {
             50,
             2,
             &sysvar::id(),
-            &Rent::default(),
         );
         assert_eq!(result, Err(SystemError::InvalidProgramId.into()));
 
@@ -647,7 +615,6 @@ mod tests {
             50,
             2,
             &system_program::id(),
-            &Rent::default(),
         );
         assert_eq!(result, Err(SystemError::InvalidAccountId.into()));
 
@@ -675,7 +642,6 @@ mod tests {
             50,
             2,
             &new_program_owner,
-            &Rent::default(),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         assert_eq!(from_account.lamports, 100);
@@ -683,15 +649,10 @@ mod tests {
     }
 
     #[test]
-    fn test_create_from_account_is_nonce() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
-        let min_balance = rent.minimum_balance(nonce_state::NonceState::size());
+    fn test_create_from_account_is_nonce_fail() {
         let nonce = Pubkey::new_rand();
         let mut nonce_account = Account::new_data(
-            min_balance + 42,
+            42,
             &nonce_state::NonceState::Initialized(
                 nonce_state::Meta::new(&Pubkey::default()),
                 Hash::default(),
@@ -702,45 +663,12 @@ mod tests {
         let mut from = KeyedAccount::new(&nonce, true, &mut nonce_account);
         let new = Pubkey::new_rand();
 
-        // Resulting in min_balance From balance succeeds
         let mut new_account = Account::default();
         let mut to = KeyedAccount::new(&new, true, &mut new_account);
         assert_eq!(
-            create_account(&mut from, &mut to, 42, 0, &Pubkey::new_rand(), &rent),
-            Ok(())
+            create_account(&mut from, &mut to, 42, 0, &Pubkey::new_rand()),
+            Err(InstructionError::InvalidArgument),
         );
-        assert_eq!(from.account.lamports, min_balance);
-
-        // Resulting in non-zero, but sub-min_balance From balance fails
-        let mut new_account = Account::default();
-        let mut to = KeyedAccount::new(&new, true, &mut new_account);
-        assert_eq!(
-            create_account(
-                &mut from,
-                &mut to,
-                min_balance / 2,
-                0,
-                &Pubkey::new_rand(),
-                &rent
-            ),
-            Err(SystemError::ResultWithNegativeLamports.into())
-        );
-
-        // Resulting in zero lamport From balance succeeds
-        let mut new_account = Account::default();
-        let mut to = KeyedAccount::new(&new, true, &mut new_account);
-        assert_eq!(
-            create_account(
-                &mut from,
-                &mut to,
-                min_balance,
-                0,
-                &Pubkey::new_rand(),
-                &rent
-            ),
-            Ok(())
-        );
-        assert_eq!(from.account.lamports, 0);
     }
 
     #[test]
