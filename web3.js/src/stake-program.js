@@ -243,6 +243,7 @@ export class StakeProgram {
   static createAccountWithSeed(
     from: PublicKey,
     stakeAccount: PublicKey,
+    base: PublicKey,
     seed: string,
     authorized: Authorized,
     lockup: Lockup,
@@ -251,6 +252,7 @@ export class StakeProgram {
     let transaction = SystemProgram.createAccountWithSeed(
       from,
       stakeAccount,
+      base,
       seed,
       lamports,
       this.space,

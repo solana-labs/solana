@@ -38,6 +38,7 @@ test('createAccountWithSeed', () => {
   transaction = StakeProgram.createAccountWithSeed(
     from.publicKey,
     newAccountPubkey,
+    from.publicKey,
     seed,
     new Authorized(authorized.publicKey, authorized.publicKey),
     new Lockup(0, 0, from.publicKey),
@@ -187,6 +188,7 @@ test('StakeInstructions', () => {
   const createWithSeed = StakeProgram.createAccountWithSeed(
     from.publicKey,
     newAccountPubkey,
+    from.publicKey,
     seed,
     new Authorized(authorized.publicKey, authorized.publicKey),
     new Lockup(0, 0, from.publicKey),
@@ -244,8 +246,8 @@ test('live staking actions', async () => {
 
   const from = new Account();
   const authorized = new Account();
-  await connection.requestAirdrop(from.publicKey, LAMPORTS_PER_SOL);
-  await connection.requestAirdrop(authorized.publicKey, LAMPORTS_PER_SOL);
+  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
+  await connection.requestAirdrop(authorized.publicKey, 2 * LAMPORTS_PER_SOL);
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
     StakeProgram.space,
@@ -263,6 +265,7 @@ test('live staking actions', async () => {
   let createAndInitializeWithSeed = StakeProgram.createAccountWithSeed(
     from.publicKey,
     newAccountPubkey,
+    from.publicKey,
     seed,
     new Authorized(authorized.publicKey, authorized.publicKey),
     new Lockup(0, 0, new PublicKey('0x00')),
