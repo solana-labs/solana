@@ -535,8 +535,7 @@ pub fn process_vote(
             .iter()
             .max()
             .ok_or_else(|| VoteError::EmptySlots)
-            .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))
-            .map_err(|err| InstructionError::CustomError(err as u32))?;
+            .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
     vote_account.set_state(&vote_state)
 }
@@ -1348,6 +1347,18 @@ mod tests {
 
         vote_state.increment_credits(2);
         assert_eq!(vote_state.epoch_credits().len(), 1);
+    }
+
+    #[test]
+    fn test_vote_state_increment_credits() {
+        let mut vote_state = VoteState::default();
+
+        let credits = (MAX_EPOCH_CREDITS_HISTORY + 2) as u64;
+        for i in 0..credits {
+            vote_state.increment_credits(i as u64);
+        }
+        assert_eq!(vote_state.credits(), credits);
+        assert!(vote_state.epoch_credits().len() <= MAX_EPOCH_CREDITS_HISTORY);
     }
 
     #[test]
