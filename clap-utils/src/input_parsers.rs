@@ -33,7 +33,10 @@ where
     }
 }
 
-pub fn unix_timestamp_of(matches: &ArgMatches<'_>, name: &str) -> Option<UnixTimestamp> {
+pub fn unix_timestamp_from_rfc3339_datetime(
+    matches: &ArgMatches<'_>,
+    name: &str,
+) -> Option<UnixTimestamp> {
     matches.value_of(name).and_then(|value| {
         DateTime::parse_from_rfc3339(value)
             .ok()
