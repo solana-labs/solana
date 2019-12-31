@@ -104,6 +104,7 @@ pub(crate) mod tests {
         create_genesis_config, GenesisConfigInfo, BOOTSTRAP_LEADER_LAMPORTS,
     };
     use solana_sdk::{
+        clock::Clock,
         instruction::Instruction,
         pubkey::Pubkey,
         signature::{Keypair, KeypairUtil},
@@ -318,10 +319,13 @@ pub(crate) mod tests {
         for i in 0..3 {
             stakes.push((
                 i,
-                VoteState::new(&VoteInit {
-                    node_pubkey: node1,
-                    ..VoteInit::default()
-                }),
+                VoteState::new(
+                    &VoteInit {
+                        node_pubkey: node1,
+                        ..VoteInit::default()
+                    },
+                    &Clock::default(),
+                ),
             ));
         }
 
@@ -330,10 +334,13 @@ pub(crate) mod tests {
 
         stakes.push((
             5,
-            VoteState::new(&VoteInit {
-                node_pubkey: node2,
-                ..VoteInit::default()
-            }),
+            VoteState::new(
+                &VoteInit {
+                    node_pubkey: node2,
+                    ..VoteInit::default()
+                },
+                &Clock::default(),
+            ),
         ));
 
         let result = to_staked_nodes(stakes.into_iter());
