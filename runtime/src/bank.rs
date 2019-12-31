@@ -1503,7 +1503,7 @@ impl Bank {
                     }
                     _ => 0,
                 };
-                if lamports + min_balance > account.lamports && lamports != account.lamports {
+                if lamports + min_balance > account.lamports {
                     return Err(TransactionError::InsufficientFundsForFee);
                 }
 
@@ -3040,9 +3040,11 @@ mod tests {
         bank.withdraw(&nonce.pubkey(), 42).unwrap();
         assert_eq!(bank.get_balance(&nonce.pubkey()), min_balance);
 
-        // Account closure succeeds
-        bank.withdraw(&nonce.pubkey(), min_balance).unwrap();
-        assert_eq!(bank.get_balance(&nonce.pubkey()), 0);
+        // Account closure fails
+        assert_eq!(
+            bank.withdraw(&nonce.pubkey(), min_balance),
+            Err(TransactionError::InsufficientFundsForFee),
+        );
     }
 
     #[test]

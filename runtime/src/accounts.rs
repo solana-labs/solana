@@ -145,7 +145,7 @@ impl Accounts {
                     }
                 };
 
-                if accounts[0].lamports < fee + min_balance && fee != accounts[0].lamports {
+                if accounts[0].lamports < fee + min_balance {
                     error_counters.insufficient_funds += 1;
                     Err(TransactionError::InsufficientFundsForFee)
                 } else {
@@ -917,7 +917,7 @@ mod tests {
         let (tx_accounts, _loaders, _rents) = load_res.as_ref().unwrap();
         assert_eq!(tx_accounts[0].lamports, min_balance);
 
-        // Fee leaves zero balance succeeds
+        // Fee leaves zero balance fails
         accounts[0].1.lamports = min_balance;
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
@@ -928,8 +928,7 @@ mod tests {
         );
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _hash_age_kind) = &loaded_accounts[0];
-        let (tx_accounts, _loaders, _rents) = load_res.as_ref().unwrap();
-        assert_eq!(tx_accounts[0].lamports, 0);
+        assert_eq!(*load_res, Err(TransactionError::InsufficientFundsForFee));
 
         // Fee leaves non-zero, but sub-min_balance balance fails
         accounts[0].1.lamports = 3 * min_balance / 2;
