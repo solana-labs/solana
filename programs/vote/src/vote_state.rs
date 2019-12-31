@@ -99,12 +99,49 @@ pub struct BlockTimestamp {
     pub timestamp: UnixTimestamp,
 }
 
+// this is how many epochs a voter can be remembered for slashing
+const MAX_ITEMS: usize = 32;
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct CircBuf<I> {
+    pub buf: [I; MAX_ITEMS],
+    /// next pointer
+    pub idx: usize,
+}
+
+impl<I: Default + Copy> Default for CircBuf<I> {
+    fn default() -> Self {
+        Self {
+            buf: [I::default(); MAX_ITEMS],
+            idx: MAX_ITEMS - 1,
+        }
+    }
+}
+
+impl<I> CircBuf<I> {
+    pub fn append(&mut self, item: I) {
+        // remember prior delegate and when we switched, to support later slashing
+        self.idx += 1;
+        self.idx %= MAX_ITEMS;
+
+        self.buf[self.idx] = item;
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct VoteState {
     /// the node that votes in this account
     pub node_pubkey: Pubkey,
+
     /// the signer for vote transactions
     pub authorized_voter: Pubkey,
+    /// when the authorized voter was set/initialized
+    pub authorized_voter_epoch: Epoch,
+
+    /// history of prior authorized voters and the epoch ranges for which
+    ///  they were set
+    pub prior_voters: CircBuf<(Pubkey, Epoch, Epoch, Slot)>,
+
     /// the signer for withdrawals
     pub authorized_withdrawer: Pubkey,
     /// percentage (0-100) that represents what part of a rewards
@@ -131,10 +168,11 @@ pub struct VoteState {
 }
 
 impl VoteState {
-    pub fn new(vote_init: &VoteInit) -> Self {
+    pub fn new(vote_init: &VoteInit, clock: &Clock) -> Self {
         Self {
             node_pubkey: vote_init.node_pubkey,
             authorized_voter: vote_init.authorized_voter,
+            authorized_voter_epoch: clock.epoch,
             authorized_withdrawer: vote_init.authorized_withdrawer,
             commission: vote_init.commission,
             ..VoteState::default()
@@ -383,6 +421,7 @@ pub fn authorize(
     authorized: &Pubkey,
     vote_authorize: VoteAuthorize,
     signers: &HashSet<Pubkey>,
+    clock: &Clock,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
@@ -390,7 +429,19 @@ pub fn authorize(
     match vote_authorize {
         VoteAuthorize::Voter => {
             verify_authorized_signer(&vote_state.authorized_voter, signers)?;
+            // only one re-authorization supported per epoch
+            if vote_state.authorized_voter_epoch == clock.epoch {
+                return Err(VoteError::TooSoonToReauthorize.into());
+            }
+            // remember prior
+            vote_state.prior_voters.append((
+                vote_state.authorized_voter,
+                vote_state.authorized_voter_epoch,
+                clock.epoch,
+                clock.slot,
+            ));
             vote_state.authorized_voter = *authorized;
+            vote_state.authorized_voter_epoch = clock.epoch;
         }
         VoteAuthorize::Withdrawer => {
             verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
@@ -453,13 +504,14 @@ pub fn withdraw(
 pub fn initialize_account(
     vote_account: &mut KeyedAccount,
     vote_init: &VoteInit,
+    clock: &Clock,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
 
     if vote_state.authorized_voter != Pubkey::default() {
         return Err(InstructionError::AccountAlreadyInitialized);
     }
-    vote_account.set_state(&VoteState::new(vote_init))
+    vote_account.set_state(&VoteState::new(vote_init, clock))
 }
 
 pub fn process_vote(
@@ -483,8 +535,7 @@ pub fn process_vote(
             .iter()
             .max()
             .ok_or_else(|| VoteError::EmptySlots)
-            .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))
-            .map_err(|err| InstructionError::CustomError(err as u32))?;
+            .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
     vote_account.set_state(&vote_state)
 }
@@ -498,12 +549,15 @@ pub fn create_account(
 ) -> Account {
     let mut vote_account = Account::new(lamports, VoteState::size_of(), &id());
 
-    VoteState::new(&VoteInit {
-        node_pubkey: *node_pubkey,
-        authorized_voter: *vote_pubkey,
-        authorized_withdrawer: *vote_pubkey,
-        commission,
-    })
+    VoteState::new(
+        &VoteInit {
+            node_pubkey: *node_pubkey,
+            authorized_voter: *vote_pubkey,
+            authorized_withdrawer: *vote_pubkey,
+            commission,
+        },
+        &Clock::default(),
+    )
     .to(&mut vote_account)
     .unwrap();
 
@@ -525,12 +579,15 @@ mod tests {
 
     impl VoteState {
         pub fn new_for_test(auth_pubkey: &Pubkey) -> Self {
-            Self::new(&VoteInit {
-                node_pubkey: Pubkey::new_rand(),
-                authorized_voter: *auth_pubkey,
-                authorized_withdrawer: *auth_pubkey,
-                commission: 0,
-            })
+            Self::new(
+                &VoteInit {
+                    node_pubkey: Pubkey::new_rand(),
+                    authorized_voter: *auth_pubkey,
+                    authorized_withdrawer: *auth_pubkey,
+                    commission: 0,
+                },
+                &Clock::default(),
+            )
         }
     }
 
@@ -551,6 +608,7 @@ mod tests {
                 authorized_withdrawer: vote_account_pubkey,
                 commission: 0,
             },
+            &Clock::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -563,6 +621,7 @@ mod tests {
                 authorized_withdrawer: vote_account_pubkey,
                 commission: 0,
             },
+            &Clock::default(),
         );
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
     }
@@ -738,6 +797,10 @@ mod tests {
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
             &signers,
+            &Clock {
+                epoch: 1,
+                ..Clock::default()
+            },
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
@@ -748,6 +811,19 @@ mod tests {
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
             &signers,
+            &Clock::default(),
+        );
+        assert_eq!(res, Err(VoteError::TooSoonToReauthorize.into()));
+
+        let res = authorize(
+            &mut keyed_accounts[0],
+            &authorized_voter_pubkey,
+            VoteAuthorize::Voter,
+            &signers,
+            &Clock {
+                epoch: 1,
+                ..Clock::default()
+            },
         );
         assert_eq!(res, Ok(()));
 
@@ -767,6 +843,7 @@ mod tests {
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
             &signers,
+            &Clock::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -780,6 +857,7 @@ mod tests {
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
             &signers,
+            &Clock::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -795,6 +873,7 @@ mod tests {
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
             &signers,
+            &Clock::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1207,6 +1286,7 @@ mod tests {
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
             &signers,
+            &Clock::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1267,6 +1347,18 @@ mod tests {
 
         vote_state.increment_credits(2);
         assert_eq!(vote_state.epoch_credits().len(), 1);
+    }
+
+    #[test]
+    fn test_vote_state_increment_credits() {
+        let mut vote_state = VoteState::default();
+
+        let credits = (MAX_EPOCH_CREDITS_HISTORY + 2) as u64;
+        for i in 0..credits {
+            vote_state.increment_credits(i as u64);
+        }
+        assert_eq!(vote_state.credits(), credits);
+        assert!(vote_state.epoch_credits().len() <= MAX_EPOCH_CREDITS_HISTORY);
     }
 
     #[test]

@@ -455,7 +455,7 @@ mod test {
         let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
             let mut account = Account::default();
-            account.data = vec![0; 1024];
+            account.data = vec![0; VoteState::size_of()];
             account.lamports = *lamports;
             let mut vote_state = VoteState::default();
             for slot in *votes {

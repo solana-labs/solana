@@ -36,7 +36,11 @@ pub enum VoteError {
 
     #[error("vote timestamp not recent")]
     TimestampTooOld,
+
+    #[error("authorized voter has already been changed this epoch")]
+    TooSoonToReauthorize,
 }
+
 impl<E> DecodeError<E> for VoteError {
     fn type_of() -> &'static str {
         "VoteError"
@@ -65,7 +69,8 @@ pub enum VoteInstruction {
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new(sysvar::rent::id(), false),
+        AccountMeta::new_readonly(sysvar::rent::id(), false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
     ];
     Instruction::new(
         id(),
@@ -115,7 +120,11 @@ pub fn authorize(
     new_authorized_pubkey: &Pubkey,
     vote_authorize: VoteAuthorize,
 ) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*vote_pubkey, false)].with_signer(authorized_pubkey);
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+    ]
+    .with_signer(authorized_pubkey);
 
     Instruction::new(
         id(),
@@ -183,11 +192,19 @@ pub fn process_instruction(
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             sysvar::rent::verify_rent_exemption(me, next_keyed_account(keyed_accounts)?)?;
-            vote_state::initialize_account(me, &vote_init)
+            vote_state::initialize_account(
+                me,
+                &vote_init,
+                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            )
         }
-        VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
-            vote_state::authorize(me, &voter_pubkey, vote_authorize, &signers)
-        }
+        VoteInstruction::Authorize(voter_pubkey, vote_authorize) => vote_state::authorize(
+            me,
+            &voter_pubkey,
+            vote_authorize,
+            &signers,
+            &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+        ),
         VoteInstruction::UpdateNode(node_pubkey) => {
             vote_state::update_node(me, &node_pubkey, &signers)
         }
@@ -307,8 +324,8 @@ mod tests {
     fn test_minimum_balance() {
         let rent = solana_sdk::rent::Rent::default();
         let minimum_balance = rent.minimum_balance(VoteState::size_of());
-        // vote state cheaper than "my $0.02" ;)
-        assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.02)
+        // golden, may need updating when vote_state grows
+        assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.04)
     }
 
     #[test]
