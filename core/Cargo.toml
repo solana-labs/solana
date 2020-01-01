@@ -73,10 +73,6 @@ untrusted = "0.7.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.23.0" }
 reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "4.0.1-3", features = ["simd-accel"] }
 
-[target."cfg(unix)".dependencies]
-jemallocator = "0.3.2"
-jemalloc-ctl = "0.3.2"
-
 [dev-dependencies]
 hex-literal = "0.2.1"
 matches = "0.1.6"

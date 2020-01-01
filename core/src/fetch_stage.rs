@@ -5,7 +5,7 @@ use crate::packet::PacketsRecycler;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::streamer::{self, PacketReceiver, PacketSender};
-use crate::thread_mem_usage;
+use solana_measure::thread_mem_usage;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::recycler::Recycler;
 use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
