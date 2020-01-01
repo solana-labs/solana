@@ -7,14 +7,11 @@
 
 pub mod banking_stage;
 pub mod broadcast_stage;
-pub mod chacha;
-pub mod chacha_cuda;
 pub mod cluster_info_vote_listener;
 pub mod commitment;
 pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
-pub mod archiver;
 pub mod blockstream;
 pub mod blockstream_service;
 pub mod cluster_info;
@@ -39,7 +36,7 @@ pub mod poh_service;
 pub mod recvmmsg;
 pub mod repair_service;
 pub mod replay_stage;
-mod result;
+pub mod result;
 pub mod retransmit_stage;
 pub mod rpc;
 pub mod rpc_pubsub;
@@ -62,10 +59,6 @@ pub mod window_service;
 
 #[macro_use]
 extern crate solana_budget_program;
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
 
 #[macro_use]
 extern crate log;

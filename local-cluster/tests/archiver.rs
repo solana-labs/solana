@@ -1,8 +1,8 @@
 use log::*;
 use serial_test_derive::serial;
+use solana_archiver_lib::archiver::Archiver;
 use solana_client::thin_client::create_client;
 use solana_core::{
-    archiver::Archiver,
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::discover_cluster,

@@ -1,5 +1,6 @@
 use clap::{crate_description, crate_name, App, Arg};
 use console::style;
+use solana_archiver_lib::archiver::Archiver;
 use solana_clap_utils::{
     input_validators::is_keypair,
     keypair::{
@@ -8,7 +9,6 @@ use solana_clap_utils::{
     },
 };
 use solana_core::{
-    archiver::Archiver,
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
 };

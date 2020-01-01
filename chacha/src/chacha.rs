@@ -74,13 +74,14 @@ pub fn chacha_cbc_encrypt_ledger(
 #[cfg(test)]
 mod tests {
     use crate::chacha::chacha_cbc_encrypt_ledger;
-    use crate::gen_keys::GenKeys;
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
     use solana_ledger::blockstore::Blockstore;
     use solana_ledger::entry::Entry;
     use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::KeypairUtil;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use std::fs::remove_file;
     use std::fs::File;
@@ -92,8 +93,9 @@ mod tests {
         let one = hash(&zero.as_ref());
 
         let seed = [2u8; 32];
-        let mut rnd = GenKeys::new(seed);
-        let keypair = rnd.gen_keypair();
+
+        let mut generator = ChaChaRng::from_seed(seed);
+        let keypair = Keypair::generate(&mut generator);
 
         let mut id = one;
         let mut num_hashes = 0;
@@ -135,8 +137,9 @@ mod tests {
         let out_path = tmp_file_path("test_encrypt_ledger");
 
         let seed = [2u8; 32];
-        let mut rnd = GenKeys::new(seed);
-        let keypair = rnd.gen_keypair();
+
+        let mut generator = ChaChaRng::from_seed(seed);
+        let keypair = Keypair::generate(&mut generator);
 
         let entries = make_tiny_deterministic_test_entries(slots_per_segment);
         blockstore
