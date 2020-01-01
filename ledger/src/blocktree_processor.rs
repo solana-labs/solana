@@ -509,6 +509,7 @@ fn process_pending_slots(
     let mut fork_info = vec![];
     let mut last_status_report = Instant::now();
     let mut pending_slots = vec![];
+    let mut last_root_slot = root_bank.slot();
     process_next_slots(
         root_bank,
         root_meta,
@@ -523,7 +524,10 @@ fn process_pending_slots(
         let (slot, meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
 
         if last_status_report.elapsed() > Duration::from_secs(2) {
-            info!("processing ledger...slot {}", slot);
+            info!(
+                "processing ledger: slot={}, last root slot={}",
+                slot, last_root_slot
+            );
             last_status_report = Instant::now();
         }
 
@@ -557,10 +561,12 @@ fn process_pending_slots(
             bank.squash();
             pending_slots.clear();
             fork_info.clear();
+            last_root_slot = slot;
         }
 
         trace!(
-            "Bank for slot {} is complete. {} bytes allocated",
+            "Bank for {}slot {} is complete. {} bytes allocated",
+            if last_root_slot == slot { "root " } else { "" },
             slot,
             allocated.since(initial_allocation)
         );
