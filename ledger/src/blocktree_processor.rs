@@ -11,6 +11,7 @@ use itertools::Itertools;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
+use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
@@ -292,6 +293,9 @@ pub fn process_blocktree_from_root(
     opts: &ProcessOptions,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
     info!("processing ledger from root slot {}...", bank.slot());
+    let allocated = thread_mem_usage::Allocatedp::default();
+    let initial_allocation = allocated.get();
+
     // Starting slot must be a root, and thus has no parents
     assert!(bank.parent().is_none());
     let start_slot = bank.slot();
@@ -344,8 +348,9 @@ pub fn process_blocktree_from_root(
     };
 
     info!(
-        "ledger processed in {}ms. {} fork{} at {}",
+        "ledger processed in {}ms. {} MB allocated. {} fork{} at {}",
         duration_as_ms(&now.elapsed()),
+        allocated.since(initial_allocation) / 1_000_000,
         bank_forks_info.len(),
         if bank_forks_info.len() > 1 { "s" } else { "" },
         bank_forks_info
@@ -461,6 +466,9 @@ fn process_next_slots(
         // Only process full slots in blocktree_processor, replay_stage
         // handles any partials
         if next_meta.is_full() {
+            let allocated = thread_mem_usage::Allocatedp::default();
+            let initial_allocation = allocated.get();
+
             let next_bank = Arc::new(Bank::new_from_parent(
                 &bank,
                 &leader_schedule_cache
@@ -468,7 +476,12 @@ fn process_next_slots(
                     .unwrap(),
                 *next_slot,
             ));
-            trace!("Add child bank {} of slot={}", next_slot, bank.slot());
+            trace!(
+                "New bank for slot {}, parent slot is {}. {} bytes allocated",
+                next_slot,
+                bank.slot(),
+                allocated.since(initial_allocation)
+            );
             pending_slots.push((*next_slot, next_meta, next_bank, bank.last_blockhash()));
         } else {
             let bfi = BankForksInfo {
@@ -519,6 +532,9 @@ fn process_pending_slots(
             continue;
         }
 
+        let allocated = thread_mem_usage::Allocatedp::default();
+        let initial_allocation = allocated.get();
+
         // Fetch all entries for this slot
         let entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
             warn!("Failed to load entries for slot {}: {:?}", slot, err);
@@ -542,6 +558,12 @@ fn process_pending_slots(
             pending_slots.clear();
             fork_info.clear();
         }
+
+        trace!(
+            "Bank for slot {} is complete. {} bytes allocated",
+            slot,
+            allocated.since(initial_allocation)
+        );
 
         if slot >= dev_halt_at_slot {
             let bfi = BankForksInfo { bank_slot: slot };
