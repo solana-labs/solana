@@ -18,8 +18,7 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::SnapshotPackageSender,
 };
-use solana_measure::measure::Measure;
-use solana_measure::thread_mem_usage;
+use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
