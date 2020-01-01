@@ -11,4 +11,10 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
+log = "0.4.8"
 solana-sdk = { path = "../sdk", version = "0.23.0" }
+solana-metrics = { path = "../metrics", version = "0.23.0" }
+
+[target."cfg(unix)".dependencies]
+jemallocator = "0.3.2"
+jemalloc-ctl = "0.3.2"

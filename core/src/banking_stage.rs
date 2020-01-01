@@ -6,7 +6,7 @@ use crate::{
     packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
-    thread_mem_usage,
+    result::{Error, Result},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
@@ -16,7 +16,7 @@ use solana_ledger::{
     entry::hash_transactions,
     leader_schedule_cache::LeaderScheduleCache,
 };
-use solana_measure::measure::Measure;
+use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
 use solana_perf::{cuda_runtime::PinnedVec, perf_libs};
 use solana_runtime::{
