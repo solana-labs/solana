@@ -7,7 +7,6 @@ use crate::{
     poh_recorder::PohRecorder,
     result::{Error, Result},
     rpc_subscriptions::RpcSubscriptions,
-    thread_mem_usage,
 };
 use solana_ledger::{
     bank_forks::BankForks,
@@ -19,6 +18,7 @@ use solana_ledger::{
     snapshot_package::SnapshotPackageSender,
 };
 use solana_measure::measure::Measure;
+use solana_measure::thread_mem_usage;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{

@@ -4,7 +4,11 @@
 use crate::packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH};
 use crate::recvmmsg::NUM_RCVMMSGS;
 use crate::result::{Error, Result};
+<<<<<<< HEAD
 use crate::thread_mem_usage;
+=======
+use solana_measure::thread_mem_usage;
+>>>>>>> a0fb9de51... Move thread_mem_usage module into measure/
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
