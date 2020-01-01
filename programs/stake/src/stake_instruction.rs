@@ -256,7 +256,11 @@ pub fn authorize(
     new_authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
 ) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*stake_pubkey, false)].with_signer(authorized_pubkey);
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+    ]
+    .with_signer(authorized_pubkey);
 
     Instruction::new(
         id(),
@@ -357,9 +361,12 @@ pub fn process_instruction(
             &lockup,
             &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
-        StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
-            me.authorize(&authorized_pubkey, stake_authorize, &signers)
-        }
+        StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => me.authorize(
+            &authorized_pubkey,
+            stake_authorize,
+            &signers,
+            &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+        ),
         StakeInstruction::DelegateStake => {
             let vote = next_keyed_account(keyed_accounts)?;
 
