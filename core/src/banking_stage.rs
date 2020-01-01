@@ -7,7 +7,10 @@ use crate::{
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
     result::{Error, Result},
+<<<<<<< HEAD
     thread_mem_usage,
+=======
+>>>>>>> a0fb9de51... Move thread_mem_usage module into measure/
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
@@ -17,7 +20,7 @@ use solana_ledger::{
     entry::hash_transactions,
     leader_schedule_cache::LeaderScheduleCache,
 };
-use solana_measure::measure::Measure;
+use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
 use solana_perf::{cuda_runtime::PinnedVec, perf_libs};
 use solana_runtime::{accounts_db::ErrorCounters, bank::Bank, transaction_batch::TransactionBatch};

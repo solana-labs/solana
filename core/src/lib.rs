@@ -12,7 +12,6 @@ pub mod chacha_cuda;
 pub mod cluster_info_vote_listener;
 pub mod commitment;
 pub mod shred_fetch_stage;
-pub mod thread_mem_usage;
 #[macro_use]
 pub mod contact_info;
 pub mod archiver;
@@ -84,10 +83,3 @@ extern crate solana_metrics;
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
-
-#[cfg(unix)]
-extern crate jemallocator;
-
-#[cfg(unix)]
-#[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
