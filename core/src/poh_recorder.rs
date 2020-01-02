@@ -39,7 +39,7 @@ pub enum PohRecorderError {
     #[error("max height reached")]
     MaxHeightReached,
 
-    #[error("max height not reached")]
+    #[error("min height not reached")]
     MinHeightNotReached,
 
     #[error("send WorkingBankEntry error")]
