@@ -441,7 +441,7 @@ impl BankingStage {
         txs: &[Transaction],
         results: &[TransactionProcessResult],
         poh: &Arc<Mutex<PohRecorder>>,
-    ) -> (std::result::Result<usize, PohRecorderError>, Vec<usize>) {
+    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut processed_generation = Measure::start("record::process_generation");
         let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) = results
             .iter()
@@ -496,7 +496,7 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         batch: &TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> (std::result::Result<usize, PohRecorderError>, Vec<usize>) {
+    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut load_execute_time = Measure::start("load_execute_time");
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
@@ -572,7 +572,7 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> (std::result::Result<usize, PohRecorderError>, Vec<usize>) {
+    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
@@ -853,7 +853,7 @@ impl BankingStage {
         id: u32,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> std::result::Result<UnprocessedPackets, RecvTimeoutError> {
+    ) -> Result<UnprocessedPackets, RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
         recv_time.stop();
