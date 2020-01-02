@@ -38,12 +38,13 @@ Full usage details for durable nonce CLI commands can be found in the
 
 ### Nonce Authority
 
-Authority over a nonce account can be assigned to another account. In doing so
-the new authority inherits full control over the nonce account from the previous
-authority, including the account creator. This feature enables the creation of
-more complex account ownership arrangements and derived account addresses not
-associated with a keypair. The `--nonce-authority <AUTHORITY_KEYPAIR>` argument
-is used to specify this account and is supported by the following commands
+Authority over a nonce account can optionally be assigned to another account. In
+doing so the new authority inherits full control over the nonce account from the
+previous authority, including the account creator. This feature enables the
+creation of more complex account ownership arrangements and derived account
+addresses not associated with a keypair. The `--nonce-authority <AUTHORITY_KEYPAIR>`
+argument is used to specify this account and is supported by the following
+commands
 * `create-nonce-account`
 * `new-nonce`
 * `withdraw-from-nonce-account`
@@ -230,6 +231,11 @@ $ solana airdrop -k alice.json 10 SOL
 
 Now Alice needs a nonce account. Create one
 
+{% hint style="info" %}
+Here, no separate [nonce authority](#nonce-authority) employed, so `nonce.json`
+has full authority over the nonce account
+{% endhint %}
+
 ```bash
 $ solana create-nonce-account -k alice.json nonce.json 1 SOL
 3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV
@@ -250,6 +256,10 @@ Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSP
 
 Alice retries the transaction, this time specifying her nonce account and the
 blockhash stored there
+
+{% hint style="info" %}
+Remember, `nonce.json` is the [nonce authority](#nonce-authority) in this example
+{% endhint %}
 
 ```bash
 $ solana show-nonce-account nonce.json 
