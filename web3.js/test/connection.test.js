@@ -785,7 +785,9 @@ test('multi-instruction transaction', async () => {
   const connection = new Connection(url, 'recent');
 
   await connection.requestAirdrop(accountFrom.publicKey, LAMPORTS_PER_SOL);
-  expect(await connection.getBalance(accountFrom.publicKey)).toBe(LAMPORTS_PER_SOL);
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(
+    LAMPORTS_PER_SOL,
+  );
 
   await connection.requestAirdrop(accountTo.publicKey, 21);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);

@@ -106,7 +106,7 @@ test('authorize', () => {
     type,
   );
 
-  expect(transaction.keys).toHaveLength(2);
+  expect(transaction.keys).toHaveLength(3);
   expect(transaction.programId).toEqual(StakeProgram.programId);
   // TODO: Validate transaction contents more
 });

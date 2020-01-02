@@ -328,6 +328,7 @@ export class StakeProgram {
     return new Transaction().add({
       keys: [
         {pubkey: stakeAccount, isSigner: false, isWritable: true},
+        {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: true},
         {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
       ],
       programId: this.programId,
