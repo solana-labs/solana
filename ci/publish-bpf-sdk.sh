@@ -4,7 +4,6 @@ set -e
 cd "$(dirname "$0")/.."
 eval "$(ci/channel-info.sh)"
 
-TAG=
 if [[ -n "$CI_TAG" ]]; then
   CHANNEL_OR_TAG=$CI_TAG
 else
