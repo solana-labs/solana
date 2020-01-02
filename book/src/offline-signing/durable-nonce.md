@@ -11,7 +11,7 @@ about in the [proposal](../implemented-proposals/durable-tx-nonces.md).
 
 The durable nonce implementation contains a vulernability which allows for fees
 to be stolen by a transaction using the feature under certain conditions. If the
-transaction fails with an instruction errror, the runtime rolls back the step
+transaction fails with an instruction error, the runtime rolls back the step
 that advanced the stored nonce, allowing it to be replayed and fees charged.
 This can be repeated until the stored nonce is successfully advanced.
 
@@ -53,7 +53,7 @@ is used to specify this account and is supported by the following commands
 
 The durable transaction nonce feature uses an account to store the next nonce
 value.  Durable nonce accounts must be [rent-exempt](../implemented-proposals/rent.md#two-tiered-rent-regime),
-so need to carry the minimum balance to acheive this.
+so need to carry the minimum balance to achieve this.
 
 A nonce account is created by first generating a new keypair, then create the account on chain
 
@@ -203,7 +203,7 @@ The following subcommands have received this treatment so far
 
 ### Example Pay Using Durable Nonce
 
-Here we demonstrate Alice paying Bob 1 SOL using a durable donce. The procedure
+Here we demonstrate Alice paying Bob 1 SOL using a durable nonce. The procedure
 is the same for all subcommands supporting durable nonces
 
 #### - Create accounts
@@ -248,7 +248,7 @@ Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSP
 
 #### - Nonce to the rescue!
 
-Alice retries the transaction.  This time specifying her nonce account and the
+Alice retries the transaction, this time specifying her nonce account and the
 blockhash stored there
 
 ```bash
