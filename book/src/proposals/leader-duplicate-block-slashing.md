@@ -19,7 +19,7 @@ Turbine. A shred contains the following
 The signature is of the merkle tree of the shred data.
 
 ```text
-              merke root
+              merkle root
     /                        \
 (slot index, shred index)        hash(msg)
 ```
@@ -138,13 +138,18 @@ shreds that do not chain, they will then drop the entire `slot`, and only
 repair `slot` if some later child slot chains back to `slot` (this will be 
 initiated by `Orphan` repairs below). 
 
-2) Repair responses need to be tied to a particular blockhash. However, 
-because repair responses are limited to the size of a shred, we cannot
-include the blockhash in the repair response. This means we need to include 
-some repair "cookie" in the request + response that maps some number of bits
-to a particular `blockhash`. This breaks down if there are more versions of 
-this slot than can be tracked by the number of bits allocated to the cookie.
+2) Repair responses need to be tied to a particular blockhash. This
+way the receving validator knows which version of the slot the repair
+response belongs in. If a repair response is bogus (is corrupt or the sending
+validiator claims the shred is for a particular version of a slot when it
+isn't, the receiving validator has to issue a request for a merkle proof to
+detect the corruption. See section `Replay Failures` below). 
 
+However, because repair responses are limited to the size of a shred, we cannot
+include the entire blockhash in the repair response. This means we need to
+include some repair "cookie" in the request + response that maps some number of
+bits to a particular `blockhash`. This breaks down if there are more versions
+of this slot than can be tracked by the number of bits allocated to the cookie.
 
 `Orphan(slot, first_tick_hash, num_hashes)` - Ask for the last shred
 of the parent of the child slot, where the child has slot equal to `slot`. 
