@@ -9,18 +9,6 @@ use solana_vote_program::vote_state::VoteState;
 use std::collections::HashMap;
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct StakeDelegation {
-    /// to whom the stake is delegated
-    pub voter_pubkey: Pubkey,
-    /// activated stake amount, set at delegate_stake() time
-    pub stake: u64,
-    /// epoch at which this stake was activated, std::Epoch::MAX if is a bootstrap stake
-    pub activation_epoch: Epoch,
-    /// epoch the stake was deactivated, std::Epoch::MAX if not deactivated
-    pub deactivation_epoch: Epoch,
-}
-
-#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Stakes {
     /// vote accounts
     vote_accounts: HashMap<Pubkey, (u64, Account)>,
