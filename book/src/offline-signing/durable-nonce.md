@@ -232,7 +232,7 @@ $ solana airdrop -k alice.json 10 SOL
 Now Alice needs a nonce account. Create one
 
 {% hint style="info" %}
-Here, no separate [nonce authority](#nonce-authority) employed, so `nonce.json`
+Here, no separate [nonce authority](#nonce-authority) employed, so `alice.json`
 has full authority over the nonce account
 {% endhint %}
 
@@ -258,7 +258,7 @@ Alice retries the transaction, this time specifying her nonce account and the
 blockhash stored there
 
 {% hint style="info" %}
-Remember, `nonce.json` is the [nonce authority](#nonce-authority) in this example
+Remember, `alice.json` is the [nonce authority](#nonce-authority) in this example
 {% endhint %}
 
 ```bash
