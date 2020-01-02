@@ -39,6 +39,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Return all RPC URLs"),
                 )
                 .arg(
+                    Arg::with_name("any")
+                        .long("any")
+                        .takes_value(false)
+                        .conflicts_with("all")
+                        .help("Return any RPC URL"),
+                )
+                .arg(
                     Arg::with_name("timeout")
                         .long("timeout")
                         .value_name("SECONDS")
@@ -237,6 +244,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("get-rpc-url", Some(matches)) => {
+            let any = matches.is_present("any");
+            let all = matches.is_present("all");
             let entrypoint_addr = parse_entrypoint(&matches);
             let timeout = value_t_or_exit!(matches, "timeout", u64);
             let (nodes, _archivers) = discover(
@@ -251,7 +260,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let rpc_addrs: Vec<_> = nodes
                 .iter()
                 .filter_map(|contact_info| {
-                    if (matches.is_present("all") || Some(contact_info.gossip) == entrypoint_addr)
+                    if (any || all || Some(contact_info.gossip) == entrypoint_addr)
                         && ContactInfo::is_valid_address(&contact_info.rpc)
                     {
                         return Some(contact_info.rpc);
@@ -267,6 +276,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             for rpc_addr in rpc_addrs {
                 println!("http://{}", rpc_addr);
+                if any {
+                    break;
+                }
             }
         }
         ("stop", Some(matches)) => {
