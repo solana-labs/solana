@@ -843,7 +843,12 @@ pub fn create_lockup_stake_account(
     let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
 
     let rent_exempt_reserve = rent.minimum_balance(stake_account.data.len());
-    assert!(lamports >= rent_exempt_reserve);
+    assert!(
+        lamports >= rent_exempt_reserve,
+        "lamports: {} is less than rent_exempt_reserve {}",
+        lamports,
+        rent_exempt_reserve
+    );
 
     stake_account
         .set_state(&StakeState::Initialized(Meta {

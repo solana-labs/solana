@@ -4470,13 +4470,13 @@ mod tests {
                         &Authorized::auto(&pubkey),
                         &Lockup::default(),
                         &Rent::default(),
-                        42,
+                        50_000_000,
                     ),
                 );
             });
         }
         solana_logger::setup();
-        let (mut genesis_config, _) = create_genesis_config(100_000_000);
+        let (mut genesis_config, _) = create_genesis_config(100_000_000_000_000);
         add_lotsa_stake_accounts(&mut genesis_config);
         let mut bank = std::sync::Arc::new(Bank::new(&genesis_config));
         let mut num_banks = 0;
