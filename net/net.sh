@@ -489,6 +489,7 @@ startBootstrapLeader() {
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
+         $ipAddress \
          bootstrap-leader \
          $entrypointIp \
          $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
@@ -558,6 +559,7 @@ startNode() {
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
+         $ipAddress \
          $nodeType \
          $entrypointIp \
          $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
