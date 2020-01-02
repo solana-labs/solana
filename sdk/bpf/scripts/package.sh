@@ -3,6 +3,8 @@ set -ex
 
 cd "$(dirname "$0")"/../../..
 
+echo --- Creating bpf-sdk tarball
+
 rm -rf bpf-sdk.tar.bz2 bpf-sdk/
 mkdir bpf-sdk/
 cp LICENSE bpf-sdk/

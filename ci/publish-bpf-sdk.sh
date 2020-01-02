@@ -10,7 +10,6 @@ else
   CHANNEL_OR_TAG=$CHANNEL
 fi
 
-echo --- Creating tarball
 (
   set -x
   sdk/bpf/scripts/package.sh
