@@ -255,7 +255,7 @@ pub fn parse_new_nonce(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
     Ok(CliCommandInfo {
         command: CliCommand::NewNonce {
             nonce_account,
-            nonce_authority: nonce_authority,
+            nonce_authority,
         },
         require_keypair: true,
     })
@@ -285,7 +285,7 @@ pub fn parse_withdraw_from_nonce_account(
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawFromNonceAccount {
             nonce_account,
-            nonce_authority: nonce_authority,
+            nonce_authority,
             destination_account_pubkey,
             lamports,
         },
@@ -379,7 +379,7 @@ pub fn process_create_nonce_account(
         .into());
     }
 
-    let nonce_authority = nonce_authority.unwrap_or(config.keypair.pubkey());
+    let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.pubkey());
     let ixs = create_nonce_account(
         &config.keypair.pubkey(),
         &nonce_account_pubkey,
@@ -603,7 +603,9 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::AuthorizeNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
-                    nonce_authority: Some(read_keypair_file(&authority_keypair_file).unwrap().into()),
+                    nonce_authority: Some(
+                        read_keypair_file(&authority_keypair_file).unwrap().into()
+                    ),
                     new_authority: Pubkey::default(),
                 },
                 require_keypair: true,
@@ -645,7 +647,9 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().into(),
-                    nonce_authority: Some(read_keypair_file(&authority_keypair_file).unwrap().pubkey()),
+                    nonce_authority: Some(
+                        read_keypair_file(&authority_keypair_file).unwrap().pubkey()
+                    ),
                     lamports: 50,
                 },
                 require_keypair: true
@@ -697,7 +701,9 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::NewNonce {
                     nonce_account: nonce_account.pubkey(),
-                    nonce_authority: Some(read_keypair_file(&authority_keypair_file).unwrap().into()),
+                    nonce_authority: Some(
+                        read_keypair_file(&authority_keypair_file).unwrap().into()
+                    ),
                 },
                 require_keypair: true
             }
@@ -779,7 +785,9 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::WithdrawFromNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
-                    nonce_authority: Some(read_keypair_file(&authority_keypair_file).unwrap().into()),
+                    nonce_authority: Some(
+                        read_keypair_file(&authority_keypair_file).unwrap().into()
+                    ),
                     destination_account_pubkey: nonce_account_pubkey,
                     lamports: 42
                 },

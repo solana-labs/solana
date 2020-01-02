@@ -1219,7 +1219,12 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::NewNonce {
             nonce_account,
             ref nonce_authority,
-        } => process_new_nonce(&rpc_client, config, nonce_account, nonce_authority.as_deref()),
+        } => process_new_nonce(
+            &rpc_client,
+            config,
+            nonce_account,
+            nonce_authority.as_deref(),
+        ),
         // Show the contents of a nonce account
         CliCommand::ShowNonceAccount {
             nonce_account_pubkey,
