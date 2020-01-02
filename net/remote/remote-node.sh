@@ -5,27 +5,28 @@ cd "$(dirname "$0")"/../..
 
 set -x
 deployMethod="$1"
-nodeType="$2"
-entrypointIp="$3"
-numNodes="$4"
-if [[ -n $5 ]]; then
-  export RUST_LOG="$5"
+ipAddress="$2"
+nodeType="$3"
+entrypointIp="$4"
+numNodes="$5"
+if [[ -n $6 ]]; then
+  export RUST_LOG="$6"
 fi
-skipSetup="$6"
-failOnValidatorBootupFailure="$7"
-externalPrimordialAccountsFile="$8"
-maybeDisableAirdrops="$9"
-internalNodesStakeLamports="${10}"
-internalNodesLamports="${11}"
-nodeIndex="${12}"
-numBenchTpsClients="${13}"
-benchTpsExtraArgs="${14}"
-numBenchExchangeClients="${15}"
-benchExchangeExtraArgs="${16}"
-genesisOptions="${17}"
-extraNodeArgs="${18}"
-gpuMode="${19:-auto}"
-GEOLOCATION_API_KEY="${20}"
+skipSetup="$7"
+failOnValidatorBootupFailure="$8"
+externalPrimordialAccountsFile="$9"
+maybeDisableAirdrops="${10}"
+internalNodesStakeLamports="${11}"
+internalNodesLamports="${12}"
+nodeIndex="${13}"
+numBenchTpsClients="${14}"
+benchTpsExtraArgs="${15}"
+numBenchExchangeClients="${16}"
+benchExchangeExtraArgs="${17}"
+genesisOptions="${18}"
+extraNodeArgs="${19}"
+gpuMode="${20:-auto}"
+GEOLOCATION_API_KEY="${21}"
 set +x
 
 missing() {
@@ -34,6 +35,7 @@ missing() {
 }
 
 [[ -n $deployMethod ]]  || missing deployMethod
+[[ -n $ipAddress ]]     || missing ipAddress
 [[ -n $nodeType ]]      || missing nodeType
 [[ -n $entrypointIp ]]  || missing entrypointIp
 [[ -n $numNodes ]]      || missing numNodes
@@ -276,18 +278,22 @@ EOF
     fi
 
     args=(
-      --entrypoint "$entrypointIp:8001"
-      --gossip-port 8001
       --rpc-port 8899
     )
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
-        --blockstream /tmp/solana-blockstream.sock
+        --entrypoint "$ipAddress:8001"
+        --gossip-port 9001
         --no-voting
         --dev-no-sigverify
+        --blockstream /tmp/solana-blockstream.sock
       )
     else
-      args+=(--enable-rpc-exit)
+      args+=(
+        --entrypoint "$entrypointIp:8001"
+        --gossip-port 8001
+        --enable-rpc-exit
+      )
       if [[ -n $internalNodesLamports ]]; then
         args+=(--node-lamports "$internalNodesLamports")
       fi
@@ -357,6 +363,11 @@ EOF
 
 cat >> ~/solana/on-reboot <<EOF
       ~/solana/restart-explorer
+      echo --- Starting gossip spy node
+      ln -sfT gossip.log.\$now gossip.log
+      nohup solana-gossip spy --gossip-port 8001 --gossip-host "$ipAddress" --entrypoint $entrypointIp:8001 > gossip.log.\$now 2>&1 &
+      sleep 1
+      head gossip.log
 EOF
     fi
 
