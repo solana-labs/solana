@@ -36,11 +36,14 @@ This issue is being actively addressed, progress can be followed on
 Full usage details for durable nonce CLI commands can be found in the
 [CLI reference](../api-reference/cli.md).
 
-Additionally, authority over a nonce account can be assigned to another entity.
-This enables the creation of more complex account ownership arrangements and
-derived account addresses not associated with a keypair. The
-`--nonce-authority <AUTHORITY_KEYPAIR>` argument is used to specify this
-authority and is supported by the following commands
+### Nonce Authority
+
+Authority over a nonce account can be assigned to another account. In doing so
+the new authority inherits full control over the nonce account from the previous
+authority, including the account creator. This feature enables the creation of
+more complex account ownership arrangements and derived account addresses not
+associated with a keypair. The `--nonce-authority <AUTHORITY_KEYPAIR>` argument
+is used to specify this account and is supported by the following commands
 * `create-nonce-account`
 * `new-nonce`
 * `withdraw-from-nonce-account`
@@ -186,3 +189,91 @@ solana authorize-nonce-account nonce-keypair.json nonce-authority.json
 [Full usage documentation](../api-reference/cli.md#solana-authorize-nonce-account)
 {% endhint %}
 
+## Other Commands Supporting Durable Nonces
+
+To make use of durable nonces with other CLI subcommands, two arguments must be
+supported.
+* `--nonce`, specifies the account storing the nonce value
+* `--nonce-authority`, specifies an optional [nonce authority](#nonce-authority)
+
+The following subcommands have received this treatment so far
+* [`pay`](../api-reference/cli.md#solana-pay)
+* [`delegate-stake`](../api-reference/cli.md#solana-delegate-stake)
+* [`deactivate-stake`](../api-reference/cli.md#solana-deactivate-stake)
+
+### Example Pay Using Durable Nonce
+
+Here we demonstrate Alice paying Bob 1 SOL using a durable donce. The procedure
+is the same for all subcommands supporting durable nonces
+
+#### - Create accounts
+
+First we need some accounts for Alice, Alice's nonce and Bob
+
+```bash
+$ solana-keygen new -o alice.json
+$ solana-keygen new -o nonce.json
+$ solana-keygen new -o bob.json
+```
+
+#### - Fund Alice's account
+
+Alice will need some funds to create a nonce account and send to Bob. Airdrop
+her some SOL
+
+```bash
+$ solana airdrop -k alice.json 10 SOL
+10 SOL
+```
+
+#### - Create Alice's nonce account
+
+Now Alice needs a nonce account. Create one
+
+```bash
+$ solana create-nonce-account -k alice.json nonce.json 1 SOL
+3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV
+```
+
+#### - A failed first attempt to pay Bob
+
+Alice attempts to pay Bob, but takes too long to sign. The specified blockhash
+expires and the transaction fails
+
+```bash
+$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 1 SOL
+[2020-01-02T18:48:28.462911000Z ERROR solana_cli::cli] Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
+Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
+```
+
+#### - Nonce to the rescue!
+
+Alice retries the transaction.  This time specifying her nonce account and the
+blockhash stored there
+
+```bash
+$ solana show-nonce-account nonce.json 
+balance: 1 SOL
+minimum balance required: 0.00136416 SOL
+nonce: F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7
+```
+```bash
+$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1 SOL
+HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
+```
+
+#### - Success!
+
+The transaction succeeds!  Bob receives 1 SOL from Alice and Alice's stored
+nonce advances to a new value
+
+```bash
+$ solana balance -k bob.json
+1 SOL
+```
+```bash
+$ solana show-nonce-account nonce.json 
+balance: 1 SOL
+minimum balance required: 0.00136416 SOL
+nonce: 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN
+```
