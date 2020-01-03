@@ -9,7 +9,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_core::{contact_info::ContactInfo, gossip_service::discover};
 use solana_sdk::pubkey::Pubkey;
 use std::error;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -37,6 +37,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("all")
                         .takes_value(false)
                         .help("Return all RPC URLs"),
+                )
+                .arg(
+                    Arg::with_name("any")
+                        .long("any")
+                        .takes_value(false)
+                        .conflicts_with("all")
+                        .help("Return any RPC URL"),
                 )
                 .arg(
                     Arg::with_name("timeout")
@@ -74,9 +81,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("gossip-host")
                         .value_name("HOST")
                         .takes_value(true)
-                        .conflicts_with("entrypoint")
                         .validator(solana_net_utils::is_host)
-                        .help("Gossip DNS name or IP address for the node when --entrypoint is not provided [default: 127.0.0.1]"),
+                        .help("Gossip DNS name or IP address for the node [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
                 )
                 .arg(
                     Arg::with_name("num_nodes")
@@ -164,21 +170,29 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             let entrypoint_addr = parse_entrypoint(&matches);
 
-            let gossip_host = if let Some(entrypoint_addr) = entrypoint_addr {
-                solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-                    eprintln!(
-                        "Failed to contact cluster entrypoint {}: {}",
-                        entrypoint_addr, err
-                    );
-                    exit(1);
-                })
-            } else {
-                solana_net_utils::parse_host(matches.value_of("gossip_host").unwrap_or("127.0.0.1"))
-                    .unwrap_or_else(|err| {
-                        eprintln!("Error: {}", err);
+            let gossip_host = matches
+                .value_of("gossip_host")
+                .map(|gossip_host| {
+                    solana_net_utils::parse_host(gossip_host).unwrap_or_else(|e| {
+                        eprintln!("failed to parse gossip-host: {}", e);
                         exit(1);
                     })
-            };
+                })
+                .unwrap_or_else(|| {
+                    if let Some(entrypoint_addr) = entrypoint_addr {
+                        solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(
+                            |err| {
+                                eprintln!(
+                                    "Failed to contact cluster entrypoint {}: {}",
+                                    entrypoint_addr, err
+                                );
+                                exit(1);
+                            },
+                        )
+                    } else {
+                        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))
+                    }
+                });
 
             let gossip_addr = SocketAddr::new(
                 gossip_host,
@@ -230,6 +244,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("get-rpc-url", Some(matches)) => {
+            let any = matches.is_present("any");
+            let all = matches.is_present("all");
             let entrypoint_addr = parse_entrypoint(&matches);
             let timeout = value_t_or_exit!(matches, "timeout", u64);
             let (nodes, _archivers) = discover(
@@ -244,7 +260,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let rpc_addrs: Vec<_> = nodes
                 .iter()
                 .filter_map(|contact_info| {
-                    if (matches.is_present("all") || Some(contact_info.gossip) == entrypoint_addr)
+                    if (any || all || Some(contact_info.gossip) == entrypoint_addr)
                         && ContactInfo::is_valid_address(&contact_info.rpc)
                     {
                         return Some(contact_info.rpc);
@@ -260,6 +276,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             for rpc_addr in rpc_addrs {
                 println!("http://{}", rpc_addr);
+                if any {
+                    break;
+                }
             }
         }
         ("stop", Some(matches)) => {
