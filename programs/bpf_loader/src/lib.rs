@@ -6,12 +6,14 @@ pub mod helpers;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use log::*;
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::{limited_deserialize, next_keyed_account};
-use solana_sdk::loader_instruction::LoaderInstruction;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::sysvar::rent;
+use solana_sdk::{
+    account::KeyedAccount,
+    instruction::InstructionError,
+    instruction_processor_utils::{limited_deserialize, next_keyed_account},
+    loader_instruction::LoaderInstruction,
+    pubkey::Pubkey,
+    sysvar::rent,
+};
 use std::convert::TryFrom;
 use std::io::prelude::*;
 use std::io::Error;
@@ -41,7 +43,7 @@ pub fn check_elf(prog: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
-fn serialize_parameters(
+pub fn serialize_parameters(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
@@ -67,7 +69,7 @@ fn serialize_parameters(
     v
 }
 
-fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
+pub fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
     assert_eq!(32, mem::size_of::<Pubkey>());
 
     let mut start = mem::size_of::<u64>();
