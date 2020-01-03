@@ -27,6 +27,7 @@ pub const SUCCESS: u32 = 0;
 #[macro_export]
 macro_rules! entrypoint {
     ($process_instruction:ident) => {
+        /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u32 {
             unsafe {
