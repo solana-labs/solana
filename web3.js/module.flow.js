@@ -201,6 +201,15 @@ declare module '@solana/web3.js' {
     onSlotChange(callback: SlotChangeCallback): number;
     removeProgramAccountChangeListener(id: number): Promise<void>;
     validatorExit(): Promise<boolean>;
+    getMinimumBalanceForRentExemption(
+      dataLength: number,
+      commitment: ?Commitment,
+    ): Promise<number>;
+   getBlock(
+      slot: number,
+    ): Promise<
+      Array<[Transaction, SignatureSuccess] | [Transaction, TransactionError]>,
+    >;
   }
 
   // === src/stake-program.js ===
