@@ -982,7 +982,7 @@ impl Bank {
                     let message = tx.message();
                     if hash_queue.check_hash_age(&message.recent_blockhash, max_age) {
                         (Ok(()), Some(HashAgeKind::Extant))
-                    } else if self.check_tx_durable_nonce(&tx) {
+                    } else if let Some((_pubkey, _acc)) = self.check_tx_durable_nonce(&tx) {
                         (Ok(()), Some(HashAgeKind::DurableNonce))
                     } else {
                         error_counters.reserve_blockhash += 1;
@@ -1037,16 +1037,16 @@ impl Bank {
             .check_hash_age(hash, max_age)
     }
 
-    pub fn check_tx_durable_nonce(&self, tx: &Transaction) -> bool {
+    pub fn check_tx_durable_nonce(&self, tx: &Transaction) -> Option<(Pubkey, Account)> {
         nonce_utils::transaction_uses_durable_nonce(&tx)
             .and_then(|nonce_ix| nonce_utils::get_nonce_pubkey_from_instruction(&nonce_ix, &tx))
-            .and_then(|nonce_pubkey| self.get_account(&nonce_pubkey))
-            .map_or_else(
-                || false,
-                |nonce_account| {
-                    nonce_utils::verify_nonce(&nonce_account, &tx.message().recent_blockhash)
-                },
-            )
+            .and_then(|nonce_pubkey| {
+                self.get_account(&nonce_pubkey)
+                    .map(|acc| (*nonce_pubkey, acc))
+            })
+            .filter(|(_pubkey, nonce_account)| {
+                nonce_utils::verify_nonce(nonce_account, &tx.message().recent_blockhash)
+            })
     }
 
     pub fn check_transactions(
@@ -4739,7 +4739,11 @@ mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        assert!(bank.check_tx_durable_nonce(&tx));
+        let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
+        assert_eq!(
+            bank.check_tx_durable_nonce(&tx),
+            Some((nonce_pubkey, nonce_account))
+        );
     }
 
     #[test]
@@ -4759,7 +4763,7 @@ mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        assert!(!bank.check_tx_durable_nonce(&tx));
+        assert!(bank.check_tx_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -4780,7 +4784,7 @@ mod tests {
             nonce_hash,
         );
         tx.message.instructions[0].accounts.clear();
-        assert!(!bank.check_tx_durable_nonce(&tx));
+        assert!(bank.check_tx_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -4802,7 +4806,7 @@ mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        assert!(!bank.check_tx_durable_nonce(&tx));
+        assert!(bank.check_tx_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -4821,7 +4825,7 @@ mod tests {
             &[&custodian_keypair, &nonce_keypair],
             Hash::default(),
         );
-        assert!(!bank.check_tx_durable_nonce(&tx));
+        assert!(bank.check_tx_durable_nonce(&tx).is_none());
     }
 
     #[test]
