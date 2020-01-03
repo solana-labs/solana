@@ -337,16 +337,17 @@ mod tests {
     #[test]
     fn test_slots_to_snapshot() {
         solana_logger::setup();
-        for add_root_interval in 1..10 {
+        let num_set_roots = MAX_CACHE_ENTRIES * 2;
+
+        for add_root_interval in &[1, 3, 9] {
             let (snapshot_sender, _snapshot_receiver) = channel();
-            let num_set_roots = MAX_CACHE_ENTRIES * 5;
             // Make sure this test never clears bank.slots_since_snapshot
             let mut snapshot_test_config =
                 setup_snapshot_test(add_root_interval * num_set_roots * 2);
             let mut current_bank = snapshot_test_config.bank_forks[0].clone();
             let snapshot_sender = Some(snapshot_sender);
             for _ in 0..num_set_roots {
-                for _ in 0..add_root_interval {
+                for _ in 0..*add_root_interval {
                     let new_slot = current_bank.slot() + 1;
                     let new_bank =
                         Bank::new_from_parent(&current_bank, &Pubkey::default(), new_slot);
@@ -358,9 +359,9 @@ mod tests {
                     .set_root(current_bank.slot(), &snapshot_sender);
             }
 
-            let num_old_slots = num_set_roots * add_root_interval - MAX_CACHE_ENTRIES + 1;
+            let num_old_slots = num_set_roots * *add_root_interval - MAX_CACHE_ENTRIES + 1;
             let expected_slots_to_snapshot = (num_old_slots as u64
-                ..=num_set_roots as u64 * add_root_interval as u64)
+                ..=num_set_roots as u64 * *add_root_interval as u64)
                 .collect_vec();
 
             let rooted_bank = snapshot_test_config
