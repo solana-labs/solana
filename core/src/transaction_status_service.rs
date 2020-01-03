@@ -59,7 +59,7 @@ impl TransactionStatusService {
             .zip(balances.post_balances)
         {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
-                let fee_hash = if let Some(HashAgeKind::DurableNonce) = hash_age_kind {
+                let fee_hash = if let Some(HashAgeKind::DurableNonce(_, _)) = hash_age_kind {
                     bank.last_blockhash()
                 } else {
                     transaction.message().recent_blockhash

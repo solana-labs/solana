@@ -185,7 +185,7 @@ pub type TransactionBalances = Vec<Vec<u64>>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HashAgeKind {
     Extant,
-    DurableNonce,
+    DurableNonce(Pubkey, Account),
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
@@ -982,8 +982,8 @@ impl Bank {
                     let message = tx.message();
                     if hash_queue.check_hash_age(&message.recent_blockhash, max_age) {
                         (Ok(()), Some(HashAgeKind::Extant))
-                    } else if let Some((_pubkey, _acc)) = self.check_tx_durable_nonce(&tx) {
-                        (Ok(()), Some(HashAgeKind::DurableNonce))
+                    } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(&tx) {
+                        (Ok(()), Some(HashAgeKind::DurableNonce(pubkey, acc)))
                     } else {
                         error_counters.reserve_blockhash += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
@@ -1236,7 +1236,7 @@ impl Bank {
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
             .map(|(tx, (res, hash_age_kind))| {
-                let fee_hash = if let Some(HashAgeKind::DurableNonce) = hash_age_kind {
+                let fee_hash = if let Some(HashAgeKind::DurableNonce(_, _)) = hash_age_kind {
                     self.last_blockhash()
                 } else {
                     tx.message().recent_blockhash

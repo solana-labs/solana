@@ -247,7 +247,7 @@ impl Accounts {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, (Ok(()), hash_age_kind)) => {
-                    let fee_hash = if let Some(HashAgeKind::DurableNonce) = hash_age_kind {
+                    let fee_hash = if let Some(HashAgeKind::DurableNonce(_, _)) = hash_age_kind {
                         hash_queue.last_hash()
                     } else {
                         tx.message().recent_blockhash
