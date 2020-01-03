@@ -6,6 +6,7 @@ import {encodeData} from './instruction';
 import type {InstructionType} from './instruction';
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
+import {SYSVAR_RECENT_BLOCKHASHES_PUBKEY, SYSVAR_RENT_PUBKEY} from './sysvar';
 import {Transaction, TransactionInstruction} from './transaction';
 import type {TransactionInstructionCtorFields} from './transaction';
 
@@ -66,6 +67,7 @@ export class SystemInstruction extends TransactionInstruction {
     if (
       this.type == SystemInstructionLayout.Create ||
       this.type == SystemInstructionLayout.CreateWithSeed ||
+      this.type == SystemInstructionLayout.NonceWithdraw ||
       this.type == SystemInstructionLayout.Transfer
     ) {
       return this.keys[0].pubkey;
@@ -81,6 +83,7 @@ export class SystemInstruction extends TransactionInstruction {
     if (
       this.type == SystemInstructionLayout.Create ||
       this.type == SystemInstructionLayout.CreateWithSeed ||
+      this.type == SystemInstructionLayout.NonceWithdraw ||
       this.type == SystemInstructionLayout.Transfer
     ) {
       return this.keys[1].pubkey;
@@ -94,11 +97,11 @@ export class SystemInstruction extends TransactionInstruction {
    */
   get amount(): number | null {
     const data = this.type.layout.decode(this.data);
-    if (this.type == SystemInstructionLayout.Transfer) {
-      return data.amount;
-    } else if (
+    if (
       this.type == SystemInstructionLayout.Create ||
-      this.type == SystemInstructionLayout.CreateWithSeed
+      this.type == SystemInstructionLayout.CreateWithSeed ||
+      this.type == SystemInstructionLayout.NonceWithdraw ||
+      this.type == SystemInstructionLayout.Transfer
     ) {
       return data.lamports;
     }
@@ -130,7 +133,7 @@ const SystemInstructionLayout = Object.freeze({
     index: 2,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
-      BufferLayout.ns64('amount'),
+      BufferLayout.ns64('lamports'),
     ]),
   },
   CreateWithSeed: {
@@ -142,6 +145,31 @@ const SystemInstructionLayout = Object.freeze({
       BufferLayout.ns64('lamports'),
       BufferLayout.ns64('space'),
       Layout.publicKey('programId'),
+    ]),
+  },
+  NonceAdvance: {
+    index: 4,
+    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
+  },
+  NonceWithdraw: {
+    index: 5,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      BufferLayout.ns64('lamports'),
+    ]),
+  },
+  NonceInitialize: {
+    index: 6,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.publicKey('authorized'),
+    ]),
+  },
+  NonceAuthorize: {
+    index: 7,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.publicKey('authorized'),
     ]),
   },
 });
@@ -157,6 +185,13 @@ export class SystemProgram {
     return new PublicKey(
       '0x000000000000000000000000000000000000000000000000000000000000000',
     );
+  }
+
+  /**
+   * Max space of a Nonce account
+   */
+  static get nonceSpace(): number {
+    return 68;
   }
 
   /**
@@ -181,7 +216,7 @@ export class SystemProgram {
         {pubkey: from, isSigner: true, isWritable: true},
         {pubkey: newAccount, isSigner: true, isWritable: true},
       ],
-      programId: SystemProgram.programId,
+      programId: this.programId,
       data,
     });
   }
@@ -189,16 +224,20 @@ export class SystemProgram {
   /**
    * Generate a Transaction that transfers lamports from one account to another
    */
-  static transfer(from: PublicKey, to: PublicKey, amount: number): Transaction {
+  static transfer(
+    from: PublicKey,
+    to: PublicKey,
+    lamports: number,
+  ): Transaction {
     const type = SystemInstructionLayout.Transfer;
-    const data = encodeData(type, {amount});
+    const data = encodeData(type, {lamports});
 
     return new Transaction().add({
       keys: [
         {pubkey: from, isSigner: true, isWritable: true},
         {pubkey: to, isSigner: false, isWritable: true},
       ],
-      programId: SystemProgram.programId,
+      programId: this.programId,
       data,
     });
   }
@@ -212,7 +251,7 @@ export class SystemProgram {
 
     return new Transaction().add({
       keys: [{pubkey: from, isSigner: true, isWritable: true}],
-      programId: SystemProgram.programId,
+      programId: this.programId,
       data,
     });
   }
@@ -244,7 +283,126 @@ export class SystemProgram {
         {pubkey: from, isSigner: true, isWritable: true},
         {pubkey: newAccount, isSigner: false, isWritable: true},
       ],
-      programId: SystemProgram.programId,
+      programId: this.programId,
+      data,
+    });
+  }
+
+  /**
+   * Generate a Transaction that creates a new Nonce account
+   */
+  static createNonceAccount(
+    from: PublicKey,
+    nonceAccount: PublicKey,
+    authorizedPubkey: PublicKey,
+    lamports: number,
+  ): Transaction {
+    let transaction = SystemProgram.createAccount(
+      from,
+      nonceAccount,
+      lamports,
+      this.nonceSpace,
+      this.programId,
+    );
+
+    const type = SystemInstructionLayout.NonceInitialize;
+    const data = encodeData(type, {
+      authorized: authorizedPubkey.toBuffer(),
+    });
+
+    return transaction.add({
+      keys: [
+        {pubkey: nonceAccount, isSigner: false, isWritable: true},
+        {
+          pubkey: SYSVAR_RECENT_BLOCKHASHES_PUBKEY,
+          isSigner: false,
+          isWritable: false,
+        },
+        {pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false},
+      ],
+      programId: this.programId,
+      data,
+    });
+  }
+
+  /**
+   * Generate an instruction to advance the nonce in a Nonce account
+   */
+  static nonceAdvance(
+    nonceAccount: PublicKey,
+    authorizedPubkey: PublicKey,
+  ): TransactionInstruction {
+    const type = SystemInstructionLayout.NonceAdvance;
+    const data = encodeData(type);
+    const instructionData = {
+      keys: [
+        {pubkey: nonceAccount, isSigner: false, isWritable: true},
+        {
+          pubkey: SYSVAR_RECENT_BLOCKHASHES_PUBKEY,
+          isSigner: false,
+          isWritable: false,
+        },
+        {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
+      ],
+      programId: this.programId,
+      data,
+    };
+    return new TransactionInstruction(instructionData);
+  }
+
+  /**
+   * Generate a Transaction that withdraws lamports from a Nonce account
+   */
+  static nonceWithdraw(
+    nonceAccount: PublicKey,
+    authorizedPubkey: PublicKey,
+    to: PublicKey,
+    lamports: number,
+  ): Transaction {
+    const type = SystemInstructionLayout.NonceWithdraw;
+    const data = encodeData(type, {lamports});
+
+    return new Transaction().add({
+      keys: [
+        {pubkey: nonceAccount, isSigner: false, isWritable: true},
+        {pubkey: to, isSigner: false, isWritable: true},
+        {
+          pubkey: SYSVAR_RECENT_BLOCKHASHES_PUBKEY,
+          isSigner: false,
+          isWritable: false,
+        },
+        {
+          pubkey: SYSVAR_RENT_PUBKEY,
+          isSigner: false,
+          isWritable: false,
+        },
+        {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
+      ],
+      programId: this.programId,
+      data,
+    });
+  }
+
+  /**
+   * Generate a Transaction that authorizes a new PublicKey as the authority
+   * on a Nonce account.
+   */
+  static nonceAuthorize(
+    nonceAccount: PublicKey,
+    authorizedPubkey: PublicKey,
+    newAuthorized: PublicKey,
+  ): Transaction {
+    const type = SystemInstructionLayout.NonceAuthorize;
+    const data = encodeData(type, {
+      newAuthorized: newAuthorized.toBuffer(),
+    });
+
+    return new Transaction().add({
+      keys: [
+        {pubkey: nonceAccount, isSigner: false, isWritable: true},
+        {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
+      ],
+      programId: this.programId,
       data,
     });
   }
