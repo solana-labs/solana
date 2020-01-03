@@ -733,6 +733,7 @@ mod test {
             cluster_lamports: 100,
             ticks_per_slot: 8,
             slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH as u64,
+            stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH as u64,
             ..ClusterConfig::default()
         };
         let cluster = LocalCluster::new(&config);
