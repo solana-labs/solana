@@ -72,9 +72,15 @@ fn finish_create_account(
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
     // if lamports == 0, the `from` account isn't touched
-    if lamports != 0 && from.signer_key().is_none() {
-        debug!("CreateAccount: `from` must sign transfer");
-        return Err(InstructionError::MissingRequiredSignature);
+    if lamports != 0 {
+        if from.signer_key().is_none() {
+            debug!("CreateAccount: `from` must sign transfer");
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+        if !from.account.data.is_empty() {
+            debug!("CreateAccount: `from` must not carry data");
+            return Err(InstructionError::InvalidArgument);
+        }
     }
 
     // if it looks like the `to` account is already in use, bail
@@ -116,19 +122,14 @@ fn finish_create_account(
         return Err(SystemError::InvalidProgramId.into());
     }
 
-    match get_system_account_kind(&from.account) {
-        Some(SystemAccountKind::Nonce) => Err(InstructionError::InvalidArgument),
-        _ => {
-            to.account.owner = *program_id;
+    to.account.owner = *program_id;
 
-            from.account.lamports -= lamports;
-            to.account.lamports += lamports;
-            to.account.data = vec![0; data_length as usize];
-            to.account.executable = false;
+    from.account.lamports -= lamports;
+    to.account.lamports += lamports;
+    to.account.data = vec![0; data_length as usize];
+    to.account.executable = false;
 
-            Ok(())
-        }
-    }
+    Ok(())
 }
 
 fn assign_account_to_program(
@@ -146,13 +147,13 @@ fn assign_account_to_program(
         return Err(SystemError::InvalidProgramId.into());
     }
 
-    match get_system_account_kind(&account.account) {
-        Some(SystemAccountKind::Nonce) => Err(InstructionError::InvalidArgument),
-        _ => {
-            account.account.owner = *program_id;
-            Ok(())
-        }
+    if !account.account.data.is_empty() {
+        debug!("Assign: `account` must not carry data");
+        return Err(InstructionError::InvalidArgument);
     }
+
+    account.account.owner = *program_id;
+    Ok(())
 }
 
 fn transfer_lamports(
@@ -169,6 +170,11 @@ fn transfer_lamports(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
+    if !from.account.data.is_empty() {
+        debug!("Transfer: `from` must not carry data");
+        return Err(InstructionError::InvalidArgument);
+    }
+
     if lamports > from.account.lamports {
         debug!(
             "Transfer: insufficient lamports ({}, need {})",
@@ -177,14 +183,9 @@ fn transfer_lamports(
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
 
-    match get_system_account_kind(&from.account) {
-        Some(SystemAccountKind::Nonce) => Err(InstructionError::InvalidArgument),
-        _ => {
-            from.account.lamports -= lamports;
-            to.account.lamports += lamports;
-            Ok(())
-        }
-    }
+    from.account.lamports -= lamports;
+    to.account.lamports += lamports;
+    Ok(())
 }
 
 pub fn process_instruction(
@@ -433,7 +434,7 @@ mod tests {
         // create account with zero lamports tranferred
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &Pubkey::new_rand()); // not from system account
+        let mut from_account = Account::new(100, 1, &Pubkey::new_rand()); // not from system account
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
