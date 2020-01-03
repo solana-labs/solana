@@ -449,6 +449,7 @@ fn test_two_unbalanced_stakes() {
         validator_configs: vec![validator_config.clone(); 2],
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
+        stakers_slot_offset: num_slots_per_epoch,
         poh_config: PohConfig::new_sleep(Duration::from_millis(1000 / num_ticks_per_second)),
         ..ClusterConfig::default()
     });
@@ -497,15 +498,16 @@ fn test_forwarding() {
 fn test_restart_node() {
     solana_logger::setup();
     error!("test_restart_node");
-    let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
+    let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH * 2 as u64;
     let ticks_per_slot = 16;
     let validator_config = ValidatorConfig::default();
     let mut cluster = LocalCluster::new(&ClusterConfig {
-        node_stakes: vec![3],
+        node_stakes: vec![100; 1],
         cluster_lamports: 100,
         validator_configs: vec![validator_config.clone()],
         ticks_per_slot,
         slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
         ..ClusterConfig::default()
     });
     let nodes = cluster.get_node_pubkeys();
