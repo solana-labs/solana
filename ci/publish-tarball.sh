@@ -89,21 +89,21 @@ echo --- Creating release tarball
 )
 
 # Metrics tarball is platform agnostic, only publish it from Linux
-MAYBE_METRICS_TARBALL=
+MAYBE_TARBALLS=
 if [[ "$CI_OS_NAME" = linux ]]; then
   metrics/create-metrics-tarball.sh
-  MAYBE_METRICS_TARBALL=solana-metrics.tar.bz2
-fi
+  (
+    set -x
+    sdk/bpf/scripts/package.sh
+    [[ -f bpf-sdk.tar.bz2 ]]
 
-(
-  set -x
-  sdk/bpf/scripts/package.sh
-  [[ -f bpf-sdk.tar.bz2 ]]
-)
+  )
+  MAYBE_TARBALLS="bpf-sdk.tar.bz2 solana-metrics.tar.bz2"
+fi
 
 source ci/upload-ci-artifact.sh
 
-for file in solana-release-$TARGET.tar.bz2 solana-release-$TARGET.yml solana-install-init-"$TARGET"* $MAYBE_METRICS_TARBALL bpf-sdk.tar.bz2; do
+for file in solana-release-$TARGET.tar.bz2 solana-release-$TARGET.yml solana-install-init-"$TARGET"* $MAYBE_TARBALLS; do
   upload-ci-artifact "$file"
 
   if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
