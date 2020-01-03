@@ -134,8 +134,8 @@ impl<'a> KeyedAccount<'a> {
         self.is_writable
     }
 
-    pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a mut Account) -> KeyedAccount<'a> {
-        KeyedAccount {
+    pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a mut Account) -> Self {
+        Self {
             is_signer,
             is_writable: true,
             key,
@@ -143,12 +143,8 @@ impl<'a> KeyedAccount<'a> {
         }
     }
 
-    pub fn new_readonly(
-        key: &'a Pubkey,
-        is_signer: bool,
-        account: &'a mut Account,
-    ) -> KeyedAccount<'a> {
-        KeyedAccount {
+    pub fn new_readonly(key: &'a Pubkey, is_signer: bool, account: &'a mut Account) -> Self {
+        Self {
             is_signer,
             is_writable: false,
             key,
@@ -159,7 +155,7 @@ impl<'a> KeyedAccount<'a> {
 
 impl<'a> From<(&'a Pubkey, &'a mut Account)> for KeyedAccount<'a> {
     fn from((key, account): (&'a Pubkey, &'a mut Account)) -> Self {
-        KeyedAccount {
+        Self {
             is_signer: false,
             is_writable: true,
             key,
@@ -170,7 +166,7 @@ impl<'a> From<(&'a Pubkey, &'a mut Account)> for KeyedAccount<'a> {
 
 impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for KeyedAccount<'a> {
     fn from((key, is_signer, account): (&'a Pubkey, bool, &'a mut Account)) -> Self {
-        KeyedAccount {
+        Self {
             is_signer,
             is_writable: true,
             key,
@@ -181,7 +177,7 @@ impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for KeyedAccount<'a> {
 
 impl<'a> From<&'a mut (Pubkey, Account)> for KeyedAccount<'a> {
     fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
-        KeyedAccount {
+        Self {
             is_signer: false,
             is_writable: true,
             key,
