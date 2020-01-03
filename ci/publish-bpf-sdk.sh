@@ -4,7 +4,12 @@ set -e
 cd "$(dirname "$0")/.."
 eval "$(ci/channel-info.sh)"
 
-echo --- Creating tarball
+if [[ -n "$CI_TAG" ]]; then
+  CHANNEL_OR_TAG=$CI_TAG
+else
+  CHANNEL_OR_TAG=$CHANNEL
+fi
+
 (
   set -x
   sdk/bpf/scripts/package.sh
@@ -12,7 +17,7 @@ echo --- Creating tarball
 )
 
 echo --- AWS S3 Store
-if [[ -z $CHANNEL ]]; then
+if [[ -z $CHANNEL_OR_TAG ]]; then
   echo Skipped
 else
   (
@@ -24,7 +29,7 @@ else
       --volume "$PWD:/solana" \
       eremite/aws-cli:2018.12.18 \
       /usr/bin/s3cmd --acl-public put /solana/bpf-sdk.tar.bz2 \
-      s3://solana-sdk/"$CHANNEL"/bpf-sdk.tar.bz2
+      s3://solana-sdk/"$CHANNEL_OR_TAG"/bpf-sdk.tar.bz2
   )
 fi
 
