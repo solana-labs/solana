@@ -4,6 +4,7 @@ export {BpfLoader} from './bpf-loader';
 export {BudgetProgram} from './budget-program';
 export {Connection} from './connection';
 export {Loader} from './loader';
+export {NonceAccount} from './nonce-account';
 export {PublicKey} from './publickey';
 export {
   STAKE_CONFIG_ID,

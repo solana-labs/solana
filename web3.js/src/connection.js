@@ -7,8 +7,9 @@ import jayson from 'jayson/lib/client/browser';
 import {struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 
-import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from './timing';
+import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
+import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from './timing';
 import {Transaction} from './transaction';
 import {sleep} from './util/sleep';
 import type {Blockhash} from './blockhash';
@@ -1147,6 +1148,55 @@ export class Connection {
         return [Transaction.fromRpcResult(result[0]), result[1]];
       }),
     };
+  }
+
+  /**
+   * Fetch the contents of a Nonce account from the cluster
+   */
+  async getNonceAndContext(
+    nonceAccount: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<RpcResponseAndContext<NonceAccount>> {
+    const args = this._argsWithCommitment(
+      [nonceAccount.toBase58()],
+      commitment,
+    );
+    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
+    const res = GetAccountInfoAndContextRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+
+    const isV021 =
+      typeof res.result.context !== 'undefined' &&
+      typeof res.result.value !== 'undefined';
+
+    const slot = isV021 ? res.result.context.slot : NaN;
+    const resultValue = isV021 ? res.result.value : res.result;
+
+    if (!resultValue) {
+      throw new Error('Invalid request');
+    }
+
+    const value = NonceAccount.fromAccountData(Buffer.from(resultValue.data));
+
+    return {
+      context: {
+        slot,
+      },
+      value,
+    };
+  }
+  async getNonce(
+    nonceAccount: PublicKey,
+    commitment: ?Commitment,
+  ): Promise<NonceAccount> {
+    return await this.getNonceAndContext(nonceAccount, commitment)
+      .then(x => x.value)
+      .catch(e => {
+        throw e;
+      });
   }
 
   /**
