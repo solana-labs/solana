@@ -4732,6 +4732,39 @@ mod tests {
     }
 
     #[test]
+    fn test_assign_from_nonce_account_fail() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let nonce = Keypair::new();
+        let nonce_account = Account::new_data(
+            42424242,
+            &nonce_state::NonceState::Initialized(
+                nonce_state::Meta::new(&Pubkey::default()),
+                Hash::default(),
+            ),
+            &system_program::id(),
+        )
+        .unwrap();
+        let blockhash = bank.last_blockhash();
+        bank.store_account(&nonce.pubkey(), &nonce_account);
+
+        let tx = Transaction::new_signed_instructions(
+            &[&nonce],
+            vec![system_instruction::assign(
+                &nonce.pubkey(),
+                &Pubkey::new(&[9u8; 32]),
+            )],
+            blockhash,
+        );
+
+        let expect = Err(TransactionError::InstructionError(
+            0,
+            InstructionError::ModifiedProgramId,
+        ));
+        assert_eq!(bank.process_transaction(&tx), expect);
+    }
+
+    #[test]
     fn test_durable_nonce_transaction() {
         let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
             10_000_000,

@@ -147,11 +147,6 @@ fn assign_account_to_program(
         return Err(SystemError::InvalidProgramId.into());
     }
 
-    if !account.account.data.is_empty() {
-        debug!("Assign: `account` must not carry data");
-        return Err(InstructionError::InvalidArgument);
-    }
-
     account.account.owner = *program_id;
     Ok(())
 }
@@ -716,31 +711,6 @@ mod tests {
                 .unwrap()
             ),
             Ok(())
-        );
-    }
-
-    #[test]
-    fn test_assign_from_nonce_account_fail() {
-        let new_program_owner = Pubkey::new(&[9; 32]);
-        let mut nonce_account = Account::new_data(
-            42,
-            &nonce_state::NonceState::Initialized(
-                nonce_state::Meta::new(&Pubkey::default()),
-                Hash::default(),
-            ),
-            &system_program::id(),
-        )
-        .unwrap();
-        assert_eq!(
-            get_system_account_kind(&nonce_account),
-            Some(SystemAccountKind::Nonce)
-        );
-        assert_eq!(
-            assign_account_to_program(
-                &mut KeyedAccount::new(&Pubkey::default(), true, &mut nonce_account),
-                &new_program_owner,
-            ),
-            Err(InstructionError::InvalidArgument),
         );
     }
 
