@@ -3342,21 +3342,11 @@ dependencies = [
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "indexmap 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
-<<<<<<< HEAD
- "jemalloc-ctl 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "jemallocator 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-derive 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-http-server 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-pubsub 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-ws-server 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
-=======
- "jsonrpc-core 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-derive 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-http-server 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-pubsub 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-ws-server 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
->>>>>>> a0fb9de51... Move thread_mem_usage module into measure/
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3710,15 +3700,11 @@ dependencies = [
 name = "solana-measure"
 version = "0.21.6"
 dependencies = [
-<<<<<<< HEAD
- "solana-sdk 0.21.6",
-=======
  "jemalloc-ctl 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jemallocator 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-metrics 0.23.0",
- "solana-sdk 0.23.0",
->>>>>>> a0fb9de51... Move thread_mem_usage module into measure/
+ "solana-metrics 0.21.6",
+ "solana-sdk 0.21.6",
 ]
 
 [[package]]
