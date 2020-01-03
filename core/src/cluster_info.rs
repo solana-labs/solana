@@ -24,7 +24,6 @@ use crate::{
     repair_service::RepairType,
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
-    thread_mem_usage,
     weighted_shuffle::{weighted_best, weighted_shuffle},
 };
 use bincode::{serialize, serialized_size};
@@ -32,6 +31,7 @@ use core::cmp;
 use itertools::Itertools;
 use rand::{thread_rng, Rng};
 use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree, staking_utils};
+use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
 use solana_net_utils::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
