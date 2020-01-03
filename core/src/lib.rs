@@ -40,7 +40,7 @@ pub mod poh_service;
 pub mod recvmmsg;
 pub mod repair_service;
 pub mod replay_stage;
-pub mod result;
+mod result;
 pub mod retransmit_stage;
 pub mod rpc;
 pub mod rpc_pubsub;

@@ -1,6 +1,5 @@
 use clap::{crate_description, crate_name, App, Arg};
 use solana_core::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
-use solana_core::result::Result;
 use solana_core::streamer::{receiver, PacketReceiver};
 use std::cmp::max;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -8,7 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::sleep;
-use std::thread::{spawn, JoinHandle};
+use std::thread::{spawn, JoinHandle, Result};
 use std::time::Duration;
 use std::time::SystemTime;
 

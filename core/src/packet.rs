@@ -1,8 +1,5 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-use crate::{
-    recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
-    result::{Error, Result},
-};
+use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 pub use solana_perf::packet::{
     limited_deserialize, to_packets, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
     PACKETS_BATCH_SIZE, PACKETS_PER_BATCH,
@@ -10,7 +7,7 @@ pub use solana_perf::packet::{
 
 use solana_metrics::inc_new_counter_debug;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use std::{net::UdpSocket, time::Instant};
+use std::{io::Result, net::UdpSocket, time::Instant};
 
 pub fn recv_from(obj: &mut Packets, socket: &UdpSocket) -> Result<usize> {
     let mut i = 0;
@@ -34,7 +31,7 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket) -> Result<usize> {
             }
             Err(e) => {
                 trace!("recv_from err {:?}", e);
-                return Err(Error::IO(e));
+                return Err(e);
             }
             Ok((size, npkts)) => {
                 if i == 0 {

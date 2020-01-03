@@ -122,7 +122,6 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::poh_recorder::WorkingBank;
-    use crate::result::Result;
     use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
     use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
     use solana_perf::test_tx::test_tx;
@@ -164,7 +163,7 @@ mod tests {
                 max_tick_height: std::u64::MAX,
             };
 
-            let entry_producer: JoinHandle<Result<()>> = {
+            let entry_producer = {
                 let poh_recorder = poh_recorder.clone();
                 let exit = exit.clone();
 
@@ -181,7 +180,7 @@ mod tests {
                                 .record(bank.slot(), h1, vec![tx]);
 
                             if exit.load(Ordering::Relaxed) {
-                                break Ok(());
+                                break;
                             }
                         }
                     })

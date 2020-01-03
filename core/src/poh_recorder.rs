@@ -10,7 +10,6 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
-use crate::result::{Error, Result};
 use solana_ledger::blocktree::Blocktree;
 use solana_ledger::entry::Entry;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
@@ -27,16 +26,27 @@ use std::cmp;
 use std::sync::mpsc::{channel, Receiver, SendError, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use thiserror::Error;
 
 const GRACE_TICKS_FACTOR: u64 = 2;
 const MAX_GRACE_SLOTS: u64 = 3;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Error, Debug, Clone)]
 pub enum PohRecorderError {
+    #[error("invalid calling object")]
     InvalidCallingObject,
+
+    #[error("max height reached")]
     MaxHeightReached,
+
+    #[error("min height not reached")]
     MinHeightNotReached,
+
+    #[error("send WorkingBankEntry error")]
+    SendError(#[from] SendError<WorkingBankEntry>),
 }
+
+type Result<T> = std::result::Result<T, PohRecorderError>;
 
 pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
 
@@ -248,16 +258,12 @@ impl PohRecorder {
         let working_bank = self
             .working_bank
             .as_ref()
-            .ok_or(Error::PohRecorderError(PohRecorderError::MaxHeightReached))?;
+            .ok_or(PohRecorderError::MaxHeightReached)?;
         if self.tick_height < working_bank.min_tick_height {
-            return Err(Error::PohRecorderError(
-                PohRecorderError::MinHeightNotReached,
-            ));
+            return Err(PohRecorderError::MinHeightNotReached);
         }
         if tick && self.tick_height == working_bank.min_tick_height {
-            return Err(Error::PohRecorderError(
-                PohRecorderError::MinHeightNotReached,
-            ));
+            return Err(PohRecorderError::MinHeightNotReached);
         }
 
         let entry_count = self
@@ -358,9 +364,9 @@ impl PohRecorder {
             let working_bank = self
                 .working_bank
                 .as_ref()
-                .ok_or(Error::PohRecorderError(PohRecorderError::MaxHeightReached))?;
+                .ok_or(PohRecorderError::MaxHeightReached)?;
             if bank_slot != working_bank.bank.slot() {
-                return Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached));
+                return Err(PohRecorderError::MaxHeightReached);
             }
 
             {
@@ -757,7 +763,7 @@ mod tests {
             let h1 = hash(b"hello world!");
             assert_matches!(
                 poh_recorder.record(bank.slot() + 1, h1, vec![tx.clone()]),
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
+                Err(PohRecorderError::MaxHeightReached)
             );
         }
         Blocktree::destroy(&ledger_path).unwrap();

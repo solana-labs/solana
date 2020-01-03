@@ -64,6 +64,7 @@ solana-sys-tuner = { path = "../sys-tuner", version = "0.23.0" }
 symlink = "0.1.0"
 sys-info = "0.5.8"
 tempfile = "3.1.0"
+thiserror = "1.0"
 tokio = "0.1"
 tokio-codec = "0.1"
 tokio-fs = "0.1"

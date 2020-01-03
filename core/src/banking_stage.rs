@@ -6,7 +6,6 @@ use crate::{
     packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
-    result::{Error, Result},
     thread_mem_usage,
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
@@ -167,7 +166,7 @@ impl BankingStage {
         buffered_packets: &mut Vec<PacketsAndOffsets>,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> Result<UnprocessedPackets> {
+    ) -> UnprocessedPackets {
         let mut unprocessed_packets = vec![];
         let mut rebuffered_packets = 0;
         let mut new_tx_count = 0;
@@ -251,7 +250,7 @@ impl BankingStage {
         inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
         inc_new_counter_debug!("banking_stage-dropped_batches_count", dropped_batches_count);
 
-        Ok(unprocessed_packets)
+        unprocessed_packets
     }
 
     fn consume_or_forward_packets(
@@ -291,7 +290,7 @@ impl BankingStage {
         enable_forwarding: bool,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> Result<()> {
+    ) {
         let (leader_at_slot_offset, poh_has_bank, would_be_leader) = {
             let poh = poh_recorder.lock().unwrap();
             (
@@ -318,9 +317,8 @@ impl BankingStage {
                     buffered_packets,
                     batch_limit,
                     transaction_status_sender,
-                )?;
+                );
                 buffered_packets.append(&mut unprocessed);
-                Ok(())
             }
             BufferedPacketsDecision::Forward => {
                 if enable_forwarding {
@@ -328,7 +326,7 @@ impl BankingStage {
                         .lock()
                         .unwrap()
                         .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
-                    next_leader.map_or(Ok(()), |leader_pubkey| {
+                    next_leader.map_or((), |leader_pubkey| {
                         let leader_addr = {
                             cluster_info
                                 .read()
@@ -337,22 +335,20 @@ impl BankingStage {
                                 .map(|leader| leader.tpu_forwards)
                         };
 
-                        leader_addr.map_or(Ok(()), |leader_addr| {
+                        leader_addr.map_or((), |leader_addr| {
                             let _ = Self::forward_buffered_packets(
                                 &socket,
                                 &leader_addr,
                                 &buffered_packets,
                             );
                             buffered_packets.clear();
-                            Ok(())
                         })
                     })
                 } else {
                     buffered_packets.clear();
-                    Ok(())
                 }
             }
-            _ => Ok(()),
+            _ => (),
         }
     }
 
@@ -380,8 +376,7 @@ impl BankingStage {
                     enable_forwarding,
                     batch_limit,
                     transaction_status_sender.clone(),
-                )
-                .unwrap_or_else(|_| buffered_packets.clear());
+                );
             }
 
             let recv_timeout = if !buffered_packets.is_empty() {
@@ -404,8 +399,8 @@ impl BankingStage {
                 batch_limit,
                 transaction_status_sender.clone(),
             ) {
-                Err(Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout)) => (),
-                Err(Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
+                Err(RecvTimeoutError::Timeout) => (),
+                Err(RecvTimeoutError::Disconnected) => break,
                 Ok(mut unprocessed_packets) => {
                     if unprocessed_packets.is_empty() {
                         continue;
@@ -416,9 +411,6 @@ impl BankingStage {
                         .sum();
                     inc_new_counter_info!("banking_stage-buffered_packets", num);
                     buffered_packets.append(&mut unprocessed_packets);
-                }
-                Err(err) => {
-                    debug!("solana-banking-stage-tx error: {:?}", err);
                 }
             }
         }
@@ -449,7 +441,7 @@ impl BankingStage {
         txs: &[Transaction],
         results: &[TransactionProcessResult],
         poh: &Arc<Mutex<PohRecorder>>,
-    ) -> (Result<usize>, Vec<usize>) {
+    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut processed_generation = Measure::start("record::process_generation");
         let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) = results
             .iter()
@@ -484,11 +476,11 @@ impl BankingStage {
 
             match res {
                 Ok(()) => (),
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
+                Err(PohRecorderError::MaxHeightReached) => {
                     // If record errors, add all the committable transactions (the ones
                     // we just attempted to record) as retryable
                     return (
-                        Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)),
+                        Err(PohRecorderError::MaxHeightReached),
                         processed_transactions_indexes,
                     );
                 }
@@ -504,7 +496,7 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         batch: &TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> (Result<usize>, Vec<usize>) {
+    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut load_execute_time = Measure::start("load_execute_time");
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
@@ -580,7 +572,7 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> (Result<usize>, Vec<usize>) {
+    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
@@ -641,7 +633,7 @@ impl BankingStage {
             // Add the retryable txs (transactions that errored in a way that warrants a retry)
             // to the list of unprocessed txs.
             unprocessed_txs.extend_from_slice(&retryable_txs_in_chunk);
-            if let Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) = result {
+            if let Err(PohRecorderError::MaxHeightReached) = result {
                 info!(
                     "process transactions: max height reached slot: {} height: {}",
                     bank.slot(),
@@ -861,7 +853,7 @@ impl BankingStage {
         id: u32,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
-    ) -> Result<UnprocessedPackets> {
+    ) -> Result<UnprocessedPackets, RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
         recv_time.stop();
@@ -1436,10 +1428,7 @@ mod tests {
                 &results,
                 &poh_recorder,
             );
-            assert_matches!(
-                res,
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-            );
+            assert_matches!(res, Err(PohRecorderError::MaxHeightReached));
             // The first result was an error so it's filtered out. The second result was Ok(),
             // so it should be marked as retryable
             assert_eq!(retryable, vec![1]);
@@ -1757,7 +1746,7 @@ mod tests {
                     None,
                 )
                 .0,
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
+                Err(PohRecorderError::MaxHeightReached)
             );
 
             assert_eq!(bank.get_balance(&pubkey), 1);

@@ -3,18 +3,32 @@
 
 use crate::packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH};
 use crate::recvmmsg::NUM_RCVMMSGS;
-use crate::result::{Error, Result};
 use crate::thread_mem_usage;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
+use thiserror::Error;
 
 pub type PacketReceiver = Receiver<Packets>;
 pub type PacketSender = Sender<Packets>;
+
+#[derive(Error, Debug)]
+pub enum StreamerError {
+    #[error("I/O error")]
+    IO(#[from] std::io::Error),
+
+    #[error("receive timeout error")]
+    RecvTimeoutError(#[from] RecvTimeoutError),
+
+    #[error("send packets error")]
+    SendError(#[from] SendError<Packets>),
+}
+
+pub type Result<T> = std::result::Result<T, StreamerError>;
 
 fn recv_loop(
     sock: &UdpSocket,
@@ -117,8 +131,8 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: PacketReceiver) ->
             thread_mem_usage::datapoint(name);
             if let Err(e) = recv_send(&sock, &r) {
                 match e {
-                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                    Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                    StreamerError::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                    StreamerError::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                     _ => warn!("{} responder error: {:?}", name, e),
                 }
             }

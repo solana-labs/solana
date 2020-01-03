@@ -1,4 +1,3 @@
-use crate::result::{Error, Result};
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use solana_client::rpc_request::RpcTransactionStatus;
 use solana_ledger::{blocktree::Blocktree, blocktree_processor::TransactionStatusBatch};
@@ -30,15 +29,11 @@ impl TransactionStatusService {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
-                if let Err(e) = Self::write_transaction_status_batch(
+                if let Err(RecvTimeoutError::Disconnected) = Self::write_transaction_status_batch(
                     &write_transaction_status_receiver,
                     &blocktree,
                 ) {
-                    match e {
-                        Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => info!("Error from write_transaction_status_batch: {:?}", e),
-                    }
+                    break;
                 }
             })
             .unwrap();
@@ -48,7 +43,7 @@ impl TransactionStatusService {
     fn write_transaction_status_batch(
         write_transaction_status_receiver: &Receiver<TransactionStatusBatch>,
         blocktree: &Arc<Blocktree>,
-    ) -> Result<()> {
+    ) -> Result<(), RecvTimeoutError> {
         let TransactionStatusBatch {
             bank,
             transactions,

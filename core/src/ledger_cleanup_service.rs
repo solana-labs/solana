@@ -1,6 +1,5 @@
 //! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
 
-use crate::result::{Error, Result};
 use solana_ledger::blocktree::Blocktree;
 use solana_metrics::datapoint_debug;
 use solana_sdk::clock::Slot;
@@ -51,9 +50,8 @@ impl LedgerCleanupService {
                     &mut next_purge_batch,
                 ) {
                     match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => info!("Error from cleanup_ledger: {:?}", e),
+                        RecvTimeoutError::Disconnected => break,
+                        RecvTimeoutError::Timeout => (),
                     }
                 }
             })
@@ -66,7 +64,7 @@ impl LedgerCleanupService {
         blocktree: &Arc<Blocktree>,
         max_ledger_slots: u64,
         next_purge_batch: &mut u64,
-    ) -> Result<()> {
+    ) -> Result<(), RecvTimeoutError> {
         let disk_utilization_pre = blocktree.storage_size();
 
         let root = new_root_receiver.recv_timeout(Duration::from_secs(1))?;
