@@ -132,18 +132,18 @@ pub enum CliCommand {
     // Nonce commands
     AuthorizeNonceAccount {
         nonce_account: Pubkey,
-        nonce_authority: KeypairEq,
+        nonce_authority: Option<KeypairEq>,
         new_authority: Pubkey,
     },
     CreateNonceAccount {
         nonce_account: KeypairEq,
-        nonce_authority: Pubkey,
+        nonce_authority: Option<Pubkey>,
         lamports: u64,
     },
     GetNonce(Pubkey),
     NewNonce {
         nonce_account: Pubkey,
-        nonce_authority: KeypairEq,
+        nonce_authority: Option<KeypairEq>,
     },
     ShowNonceAccount {
         nonce_account_pubkey: Pubkey,
@@ -151,7 +151,7 @@ pub enum CliCommand {
     },
     WithdrawFromNonceAccount {
         nonce_account: Pubkey,
-        nonce_authority: KeypairEq,
+        nonce_authority: Option<KeypairEq>,
         destination_account_pubkey: Pubkey,
         lamports: u64,
     },
@@ -1190,13 +1190,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Assign authority to nonce account
         CliCommand::AuthorizeNonceAccount {
             nonce_account,
-            nonce_authority,
+            ref nonce_authority,
             new_authority,
         } => process_authorize_nonce_account(
             &rpc_client,
             config,
             nonce_account,
-            nonce_authority,
+            nonce_authority.as_deref(),
             new_authority,
         ),
         // Create nonce account
@@ -1208,7 +1208,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             nonce_account,
-            nonce_authority,
+            *nonce_authority,
             *lamports,
         ),
         // Get the current nonce
@@ -1218,8 +1218,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Get a new nonce
         CliCommand::NewNonce {
             nonce_account,
-            nonce_authority,
-        } => process_new_nonce(&rpc_client, config, nonce_account, nonce_authority),
+            ref nonce_authority,
+        } => process_new_nonce(
+            &rpc_client,
+            config,
+            nonce_account,
+            nonce_authority.as_deref(),
+        ),
         // Show the contents of a nonce account
         CliCommand::ShowNonceAccount {
             nonce_account_pubkey,
@@ -1228,14 +1233,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Withdraw lamports from a nonce account
         CliCommand::WithdrawFromNonceAccount {
             nonce_account,
-            nonce_authority,
+            ref nonce_authority,
             destination_account_pubkey,
             lamports,
         } => process_withdraw_from_nonce_account(
             &rpc_client,
             config,
             &nonce_account,
-            nonce_authority,
+            nonce_authority.as_deref(),
             &destination_account_pubkey,
             *lamports,
         ),

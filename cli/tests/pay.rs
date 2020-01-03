@@ -368,7 +368,7 @@ fn test_nonced_pay_tx() {
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
-        nonce_authority: config.keypair.pubkey(),
+        nonce_authority: Some(config.keypair.pubkey()),
         lamports: minimum_nonce_balance,
     };
     process_command(&config).unwrap();
