@@ -227,7 +227,6 @@ pub fn parse_nonce_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
     let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
     let lamports = required_lamports_from(matches, "amount", "unit")?;
     let nonce_authority = pubkey_of(matches, "nonce_authority");
-    println!("na: {:?}", nonce_authority);
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateNonceAccount {
