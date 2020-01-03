@@ -5,6 +5,10 @@ export const SYSVAR_CLOCK_PUBKEY = new PublicKey(
   'SysvarC1ock11111111111111111111111111111111',
 );
 
+export const SYSVAR_RECENT_BLOCKHASHES_PUBKEY = new PublicKey(
+  'SysvarRecentB1ockHashes11111111111111111111',
+);
+
 export const SYSVAR_RENT_PUBKEY = new PublicKey(
   'SysvarRent111111111111111111111111111111111',
 );
