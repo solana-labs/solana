@@ -51,7 +51,8 @@ impl VoteSubCommands for App<'_, '_> {
                         .long("commission")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("The commission taken on reward redemption (0-100), default: 0"),
+                        .default_value("100")
+                        .help("The commission taken on reward redemption (0-100)"),
                 )
                 .arg(
                     Arg::with_name("authorized_voter")
@@ -195,7 +196,7 @@ impl VoteSubCommands for App<'_, '_> {
 pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let vote_account = keypair_of(matches, "vote_account").unwrap();
     let identity_pubkey = pubkey_of(matches, "identity_pubkey").unwrap();
-    let commission = value_of(&matches, "commission").unwrap_or(0);
+    let commission = value_t_or_exit!(matches, "commission", u8);
     let authorized_voter = pubkey_of(matches, "authorized_voter");
     let authorized_withdrawer = pubkey_of(matches, "authorized_withdrawer");
 
@@ -609,7 +610,7 @@ mod tests {
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
-                    commission: 0,
+                    commission: 100,
                 },
                 require_keypair: true
             }
@@ -637,7 +638,7 @@ mod tests {
                     node_pubkey,
                     authorized_voter: Some(authed),
                     authorized_withdrawer: None,
-                    commission: 0
+                    commission: 100
                 },
                 require_keypair: true
             }
@@ -663,7 +664,7 @@ mod tests {
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),
-                    commission: 0
+                    commission: 100
                 },
                 require_keypair: true
             }
