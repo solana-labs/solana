@@ -61,7 +61,7 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
-const TIMESTAMP_SLOT_RANGE: usize = 5;
+const TIMESTAMP_SLOT_RANGE: usize = 50;
 
 // An upper bound on maximum number of data shreds we can handle in a slot
 // 32K shreds would allow ~320K peak TPS
@@ -1249,7 +1249,7 @@ impl Blocktree {
     ) -> Option<UnixTimestamp> {
         let mut total_stake = 0;
         let stake_weighted_timestamps_sum: u64 = self
-            .get_timestamp_slots(slot, TIMESTAMP_SLOT_INTERVAL)
+            .get_timestamp_slots(slot, TIMESTAMP_SLOT_INTERVAL, TIMESTAMP_SLOT_RANGE)
             .iter()
             .flat_map(|timestamp_slot| {
                 let offset = (slot - timestamp_slot) as u32 * slot_duration;
@@ -1276,7 +1276,12 @@ impl Blocktree {
         }
     }
 
-    fn get_timestamp_slots(&self, slot: Slot, timestamp_interval: u64) -> Vec<Slot> {
+    fn get_timestamp_slots(
+        &self,
+        slot: Slot,
+        timestamp_interval: u64,
+        timestamp_sample_range: usize,
+    ) -> Vec<Slot> {
         let rooted_slots = RootedSlotIterator::new(0, &self);
         if !self.is_root(slot) || rooted_slots.is_err() {
             return vec![];
@@ -1287,7 +1292,7 @@ impl Blocktree {
             .filter(|&iter_slot| iter_slot <= slot)
             .collect();
 
-        if slots.len() < TIMESTAMP_SLOT_RANGE {
+        if slots.len() < timestamp_sample_range {
             return slots;
         }
 
@@ -1296,17 +1301,20 @@ impl Blocktree {
             .position(|&x| x >= slot - (slot % timestamp_interval))
             .unwrap();
 
-        let filtered_iter = if slots.len() - TIMESTAMP_SLOT_RANGE >= recent_timestamp_slot_position
-        {
-            slots.iter().skip(recent_timestamp_slot_position)
-        } else {
-            let earlier_timestamp_slot_position = slots
-                .iter()
-                .position(|&x| x >= slot - (slot % timestamp_interval) - timestamp_interval)
-                .unwrap();
-            slots.iter().skip(earlier_timestamp_slot_position)
-        };
-        filtered_iter.take(TIMESTAMP_SLOT_RANGE).cloned().collect()
+        let filtered_iter =
+            if slots.len() - timestamp_sample_range >= recent_timestamp_slot_position {
+                slots.iter().skip(recent_timestamp_slot_position)
+            } else {
+                let earlier_timestamp_slot_position = slots
+                    .iter()
+                    .position(|&x| x >= slot - (slot % timestamp_interval) - timestamp_interval)
+                    .unwrap();
+                slots.iter().skip(earlier_timestamp_slot_position)
+            };
+        filtered_iter
+            .take(timestamp_sample_range)
+            .cloned()
+            .collect()
     }
 
     pub fn get_confirmed_block(&self, slot: Slot) -> Result<RpcConfirmedBlock> {
@@ -4456,6 +4464,7 @@ pub mod tests {
 
     #[test]
     fn test_get_timestamp_slots() {
+        let timestamp_sample_range = 5;
         let ticks_per_slot = 5;
         // Smaller interval than TIMESTAMP_SLOT_INTERVAL for convenience of building blocktree
         let timestamp_interval = 7;
@@ -4485,11 +4494,11 @@ pub mod tests {
         blocktree.set_roots(&[1, 2, 3]).unwrap();
 
         assert_eq!(
-            blocktree.get_timestamp_slots(2, timestamp_interval),
+            blocktree.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
             vec![0, 1, 2]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(3, timestamp_interval),
+            blocktree.get_timestamp_slots(3, timestamp_interval, timestamp_sample_range),
             vec![0, 1, 2, 3]
         );
 
@@ -4525,23 +4534,23 @@ pub mod tests {
         blocktree.set_roots(&desired_roots).unwrap();
 
         assert_eq!(
-            blocktree.get_timestamp_slots(2, timestamp_interval),
+            blocktree.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
             vec![0, 1, 2]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(8, timestamp_interval),
+            blocktree.get_timestamp_slots(8, timestamp_interval, timestamp_sample_range),
             vec![0, 1, 2, 3, 4]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(13, timestamp_interval),
+            blocktree.get_timestamp_slots(13, timestamp_interval, timestamp_sample_range),
             vec![8, 9, 10, 11, 12]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(18, timestamp_interval),
+            blocktree.get_timestamp_slots(18, timestamp_interval, timestamp_sample_range),
             vec![8, 9, 10, 11, 12]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(19, timestamp_interval),
+            blocktree.get_timestamp_slots(19, timestamp_interval, timestamp_sample_range),
             vec![14, 16, 17, 18, 19]
         );
     }
