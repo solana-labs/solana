@@ -74,11 +74,9 @@ fn finish_create_account(
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
     // if lamports == 0, the `from` account isn't touched
-    if lamports != 0 {
-        if !from.account.data.is_empty() {
-            debug!("CreateAccount: `from` must not carry data");
-            return Err(InstructionError::InvalidArgument);
-        }
+    if lamports != 0 && !from.account.data.is_empty() {
+        debug!("CreateAccount: `from` must not carry data");
+        return Err(InstructionError::InvalidArgument);
     }
 
     // if it looks like the `to` account is already in use, bail
