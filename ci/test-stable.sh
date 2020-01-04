@@ -111,7 +111,7 @@ test-move)
   ;;
 test-local-cluster)
   _ cargo +"$rust_stable" build --release --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture --test-threads=1
   exit 0
   ;;
 *)
