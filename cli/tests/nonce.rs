@@ -1,4 +1,6 @@
-use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
+use solana_cli::cli::{
+    process_command, request_and_confirm_airdrop, CliCommand, CliConfig, KeypairEq,
+};
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
@@ -59,7 +61,7 @@ fn test_nonce() {
         &mut config_payer,
         &mut config_nonce,
         &keypair_file,
-        &keypair_file,
+        None,
     );
 
     server.close().unwrap();
@@ -95,11 +97,15 @@ fn test_nonce_with_authority() {
         &mut config_payer,
         &mut config_nonce,
         &nonce_keypair_file,
-        &authority_keypair_file,
+        Some(&authority_keypair_file),
     );
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
+}
+
+fn read_keypair_from_option(keypair_file: &Option<&str>) -> Option<KeypairEq> {
+    keypair_file.map(|akf| read_keypair_file(&akf).unwrap().into())
 }
 
 fn full_battery_tests(
@@ -108,7 +114,7 @@ fn full_battery_tests(
     config_payer: &mut CliConfig,
     config_nonce: &mut CliConfig,
     nonce_keypair_file: &str,
-    authority_keypair_file: &str,
+    authority_keypair_file: Option<&str>,
 ) {
     request_and_confirm_airdrop(
         &rpc_client,
@@ -122,7 +128,8 @@ fn full_battery_tests(
     // Create nonce account
     config_payer.command = CliCommand::CreateNonceAccount {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
-        nonce_authority: read_keypair_file(&authority_keypair_file).unwrap().pubkey(),
+        nonce_authority: read_keypair_from_option(&authority_keypair_file)
+            .map(|na: KeypairEq| na.pubkey()),
         lamports: 1000,
     };
     process_command(&config_payer).unwrap();
@@ -144,7 +151,7 @@ fn full_battery_tests(
     // New nonce
     config_payer.command = CliCommand::NewNonce {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().pubkey(),
-        nonce_authority: read_keypair_file(&authority_keypair_file).unwrap().into(),
+        nonce_authority: read_keypair_from_option(&authority_keypair_file),
     };
     process_command(&config_payer).unwrap();
 
@@ -159,7 +166,7 @@ fn full_battery_tests(
     let payee_pubkey = Pubkey::new_rand();
     config_payer.command = CliCommand::WithdrawFromNonceAccount {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().pubkey(),
-        nonce_authority: read_keypair_file(&authority_keypair_file).unwrap().into(),
+        nonce_authority: read_keypair_from_option(&authority_keypair_file),
         destination_account_pubkey: payee_pubkey,
         lamports: 100,
     };
@@ -181,7 +188,7 @@ fn full_battery_tests(
     write_keypair(&new_authority, tmp_file.as_file_mut()).unwrap();
     config_payer.command = CliCommand::AuthorizeNonceAccount {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().pubkey(),
-        nonce_authority: read_keypair_file(&authority_keypair_file).unwrap().into(),
+        nonce_authority: read_keypair_from_option(&authority_keypair_file),
         new_authority: read_keypair_file(&new_authority_keypair_file)
             .unwrap()
             .pubkey(),
@@ -191,25 +198,29 @@ fn full_battery_tests(
     // Old authority fails now
     config_payer.command = CliCommand::NewNonce {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().pubkey(),
-        nonce_authority: read_keypair_file(&authority_keypair_file).unwrap().into(),
+        nonce_authority: read_keypair_from_option(&authority_keypair_file),
     };
     process_command(&config_payer).unwrap_err();
 
     // New authority can advance nonce
     config_payer.command = CliCommand::NewNonce {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().pubkey(),
-        nonce_authority: read_keypair_file(&new_authority_keypair_file)
-            .unwrap()
-            .into(),
+        nonce_authority: Some(
+            read_keypair_file(&new_authority_keypair_file)
+                .unwrap()
+                .into(),
+        ),
     };
     process_command(&config_payer).unwrap();
 
     // New authority can withdraw from nonce account
     config_payer.command = CliCommand::WithdrawFromNonceAccount {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().pubkey(),
-        nonce_authority: read_keypair_file(&new_authority_keypair_file)
-            .unwrap()
-            .into(),
+        nonce_authority: Some(
+            read_keypair_file(&new_authority_keypair_file)
+                .unwrap()
+                .into(),
+        ),
         destination_account_pubkey: payee_pubkey,
         lamports: 100,
     };
