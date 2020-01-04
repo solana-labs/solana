@@ -41,11 +41,17 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
     let server = tcp
         .incoming()
         .map_err(|err| warn!("accept failed: {:?}", err))
-        .for_each(move |socket| {
-            let peer_addr = socket.peer_addr().expect("Expect peer_addr()");
-            info!("connection from {:?}", peer_addr);
-
-            let framed = BytesCodec::new().framed(socket);
+        .filter_map(|socket| match socket.peer_addr() {
+            Ok(peer_addr) => {
+                info!("connection from {:?}", peer_addr);
+                Some((peer_addr, BytesCodec::new().framed(socket)))
+            }
+            Err(err) => {
+                info!("peer_addr failed for {:?}: {:?}", socket, err);
+                None
+            }
+        })
+        .for_each(move |(peer_addr, framed)| {
             let (writer, reader) = framed.split();
 
             let processor = reader
