@@ -95,7 +95,7 @@ Download the binaries by navigating to [https://github.com/solana-labs/solana/re
 Try running following command to join the gossip network and view all the other nodes in the cluster:
 
 ```bash
-solana-gossip --entrypoint testnet.solana.com:8001 spy
+solana-gossip spy --entrypoint testnet.solana.com:8001
 # Press ^C to exit
 ```
 
@@ -146,7 +146,7 @@ solana-archiver --entrypoint testnet.solana.com:8001 --identity-keypair archiver
 From another console, confirm the IP address and **identity pubkey** of your archiver is visible in the gossip network by running:
 
 ```bash
-solana-gossip --entrypoint testnet.solana.com:8001 spy
+solana-gossip spy --entrypoint testnet.solana.com:8001
 ```
 
 Provide the **storage account pubkey** to the `solana show-storage-account` command to view the recent mining activity from your archiver:

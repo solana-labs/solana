@@ -89,7 +89,7 @@ To monitor your validator during its warmup period:
 * View your stake account, the delegation preference and details of your stake:`solana show-stake-account ~/validator-stake-keypair.json`
 * `solana uptime ~/validator-vote-keypair.json` will display the voting history \(aka, uptime\) of your validator over recent Epochs
 * `solana show-validators` displays the current active stake of all validators, including yours
-* `solana show-show-stake-history ` shows the history of stake warming up and cooling down over recent epochs
+* `solana show-stake-history ` shows the history of stake warming up and cooling down over recent epochs
 * Look for log messages on your validator indicating your next leader slot: `[2019-09-27T20:16:00.319721164Z INFO solana_core::replay_stage] <VALIDATOR_IDENTITY_PUBKEY> voted and reset PoH at tick height ####. My next leader slot is ####`
 * Once your stake is warmed up, you will see a stake balance listed for your validator on the [Solana Network Explorer](http://explorer.solana.com/validators)
 
