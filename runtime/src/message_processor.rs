@@ -7,8 +7,6 @@ use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::message::Message;
-use solana_sdk::nonce_instruction;
-use solana_sdk::nonce_program;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::TransactionError;
@@ -200,13 +198,10 @@ pub struct MessageProcessor {
 
 impl Default for MessageProcessor {
     fn default() -> Self {
-        let instruction_processors: Vec<(Pubkey, ProcessInstruction)> = vec![
-            (
-                system_program::id(),
-                system_instruction_processor::process_instruction,
-            ),
-            (nonce_program::id(), nonce_instruction::process_instruction),
-        ];
+        let instruction_processors: Vec<(Pubkey, ProcessInstruction)> = vec![(
+            system_program::id(),
+            system_instruction_processor::process_instruction,
+        )];
 
         Self {
             instruction_processors,
