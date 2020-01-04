@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-genesis"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.22.1"
+version = "0.22.2"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -17,13 +17,13 @@ serde = "1.0.104"
 serde_derive = "1.0.103"
 serde_json = "1.0.44"
 serde_yaml = "0.8.11"
-solana-clap-utils = { path = "../clap-utils", version = "0.22.1" }
-solana-genesis-programs = { path = "../genesis-programs", version = "0.22.1" }
-solana-ledger = { path = "../ledger", version = "0.22.1" }
-solana-sdk = { path = "../sdk", version = "0.22.1" }
-solana-stake-program = { path = "../programs/stake", version = "0.22.1" }
-solana-storage-program = { path = "../programs/storage", version = "0.22.1" }
-solana-vote-program = { path = "../programs/vote", version = "0.22.1" }
+solana-clap-utils = { path = "../clap-utils", version = "0.22.2" }
+solana-genesis-programs = { path = "../genesis-programs", version = "0.22.2" }
+solana-ledger = { path = "../ledger", version = "0.22.2" }
+solana-sdk = { path = "../sdk", version = "0.22.2" }
+solana-stake-program = { path = "../programs/stake", version = "0.22.2" }
+solana-storage-program = { path = "../programs/storage", version = "0.22.2" }
+solana-vote-program = { path = "../programs/vote", version = "0.22.2" }
 tempfile = "3.1.0"
 
 [[bin]]
