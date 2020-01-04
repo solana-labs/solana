@@ -188,6 +188,15 @@ pub enum HashAgeKind {
     DurableNonce(Pubkey, Account),
 }
 
+impl HashAgeKind {
+    pub fn is_durable_nonce(&self) -> bool {
+        match self {
+            HashAgeKind::DurableNonce(_, _) => true,
+            _ => false,
+        }
+    }
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default, Deserialize, Serialize)]
 pub struct Bank {
@@ -1930,6 +1939,14 @@ mod tests {
     };
     use std::{io::Cursor, result, time::Duration};
     use tempfile::TempDir;
+
+    #[test]
+    fn test_hash_age_kind_is_durable_nonce() {
+        assert!(
+            HashAgeKind::DurableNonce(Pubkey::default(), Account::default()).is_durable_nonce()
+        );
+        assert!(!HashAgeKind::Extant.is_durable_nonce());
+    }
 
     #[test]
     fn test_bank_unix_timestamp() {
