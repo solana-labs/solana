@@ -10,12 +10,14 @@ use solana_sdk::{
     account::Account,
     account_utils::State,
     hash::Hash,
-    nonce_instruction::{authorize, create_nonce_account, nonce, withdraw, NonceError},
-    nonce_program,
     nonce_state::NonceState,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
-    system_instruction::SystemError,
+    system_instruction::{
+        create_nonce_account, nonce_advance, nonce_authorize, nonce_withdraw, NonceError,
+        SystemError,
+    },
+    system_program,
     transaction::Transaction,
 };
 
@@ -298,7 +300,7 @@ pub fn check_nonce_account(
     nonce_authority: &Pubkey,
     nonce_hash: &Hash,
 ) -> Result<(), Box<CliError>> {
-    if nonce_account.owner != nonce_program::ID {
+    if nonce_account.owner != system_program::ID {
         return Err(CliError::InvalidNonce(CliNonceError::InvalidAccountOwner).into());
     }
     let nonce_state: NonceState = nonce_account
@@ -330,7 +332,7 @@ pub fn process_authorize_nonce_account(
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let nonce_authority = nonce_authority.unwrap_or(&config.keypair);
-    let ix = authorize(nonce_account, &nonce_authority.pubkey(), new_authority);
+    let ix = nonce_authorize(nonce_account, &nonce_authority.pubkey(), new_authority);
     let mut tx = Transaction::new_signed_with_payer(
         vec![ix],
         Some(&config.keypair.pubkey()),
@@ -405,7 +407,7 @@ pub fn process_create_nonce_account(
 
 pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) -> ProcessResult {
     let nonce_account = rpc_client.get_account(nonce_account_pubkey)?;
-    if nonce_account.owner != nonce_program::id() {
+    if nonce_account.owner != system_program::id() {
         return Err(CliError::RpcRequestError(format!(
             "{:?} is not a nonce account",
             nonce_account_pubkey
@@ -442,7 +444,7 @@ pub fn process_new_nonce(
     }
 
     let nonce_authority = nonce_authority.unwrap_or(&config.keypair);
-    let ix = nonce(&nonce_account, &nonce_authority.pubkey());
+    let ix = nonce_advance(&nonce_account, &nonce_authority.pubkey());
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_with_payer(
         vec![ix],
@@ -467,7 +469,7 @@ pub fn process_show_nonce_account(
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let nonce_account = rpc_client.get_account(nonce_account_pubkey)?;
-    if nonce_account.owner != nonce_program::id() {
+    if nonce_account.owner != system_program::id() {
         return Err(CliError::RpcRequestError(format!(
             "{:?} is not a nonce account",
             nonce_account_pubkey
@@ -515,7 +517,7 @@ pub fn process_withdraw_from_nonce_account(
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let nonce_authority = nonce_authority.unwrap_or(&config.keypair);
-    let ix = withdraw(
+    let ix = nonce_withdraw(
         nonce_account,
         &nonce_authority.pubkey(),
         destination_account_pubkey,
@@ -802,14 +804,14 @@ mod tests {
         let valid = Account::new_data(
             1,
             &NonceState::Initialized(NonceMeta::new(&nonce_pubkey), blockhash),
-            &nonce_program::ID,
+            &system_program::ID,
         );
         assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
 
         let invalid_owner = Account::new_data(
             1,
             &NonceState::Initialized(NonceMeta::new(&nonce_pubkey), blockhash),
-            &system_program::ID,
+            &Pubkey::new(&[1u8; 32]),
         );
         assert_eq!(
             check_nonce_account(&invalid_owner.unwrap(), &nonce_pubkey, &blockhash),
@@ -818,7 +820,7 @@ mod tests {
             ))),
         );
 
-        let invalid_data = Account::new_data(1, &"invalid", &nonce_program::ID);
+        let invalid_data = Account::new_data(1, &"invalid", &system_program::ID);
         assert_eq!(
             check_nonce_account(&invalid_data.unwrap(), &nonce_pubkey, &blockhash),
             Err(Box::new(CliError::InvalidNonce(
@@ -829,7 +831,7 @@ mod tests {
         let invalid_hash = Account::new_data(
             1,
             &NonceState::Initialized(NonceMeta::new(&nonce_pubkey), hash(b"invalid")),
-            &nonce_program::ID,
+            &system_program::ID,
         );
         assert_eq!(
             check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash),
@@ -839,7 +841,7 @@ mod tests {
         let invalid_authority = Account::new_data(
             1,
             &NonceState::Initialized(NonceMeta::new(&Pubkey::new_rand()), blockhash),
-            &nonce_program::ID,
+            &system_program::ID,
         );
         assert_eq!(
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash),
@@ -848,7 +850,7 @@ mod tests {
             ))),
         );
 
-        let invalid_state = Account::new_data(1, &NonceState::Uninitialized, &nonce_program::ID);
+        let invalid_state = Account::new_data(1, &NonceState::Uninitialized, &system_program::ID);
         assert_eq!(
             check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash),
             Err(Box::new(CliError::InvalidNonce(

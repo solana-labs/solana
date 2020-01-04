@@ -2,7 +2,6 @@ use solana_sdk::{
     account::Account,
     fee_calculator::FeeCalculator,
     genesis_config::GenesisConfig,
-    nonce_program::solana_nonce_program,
     pubkey::Pubkey,
     rent::Rent,
     signature::{Keypair, KeypairUtil},
@@ -75,7 +74,6 @@ pub fn create_genesis_config_with_leader(
     // Bare minimum program set
     let native_instruction_processors = vec![
         solana_system_program(),
-        solana_nonce_program(),
         solana_bpf_loader_program!(),
         solana_vote_program!(),
         solana_stake_program!(),

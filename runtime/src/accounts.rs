@@ -5,6 +5,7 @@ use crate::bank::{HashAgeKind, TransactionProcessResult};
 use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use crate::rent_collector::RentCollector;
+use crate::system_instruction_processor::{get_system_account_kind, SystemAccountKind};
 use log::*;
 use rayon::slice::ParallelSliceMut;
 use solana_metrics::inc_new_counter_error;
@@ -12,8 +13,8 @@ use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
 use solana_sdk::clock::Slot;
 use solana_sdk::native_loader;
+use solana_sdk::nonce_state::NonceState;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_program;
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
@@ -133,15 +134,24 @@ impl Accounts {
             if accounts.is_empty() || accounts[0].lamports == 0 {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
-            } else if accounts[0].owner != system_program::id() {
-                error_counters.invalid_account_for_fee += 1;
-                Err(TransactionError::InvalidAccountForFee)
-            } else if accounts[0].lamports < fee {
-                error_counters.insufficient_funds += 1;
-                Err(TransactionError::InsufficientFundsForFee)
             } else {
-                accounts[0].lamports -= fee;
-                Ok((accounts, tx_rent))
+                let min_balance = match get_system_account_kind(&accounts[0]).ok_or_else(|| {
+                    error_counters.invalid_account_for_fee += 1;
+                    TransactionError::InvalidAccountForFee
+                })? {
+                    SystemAccountKind::System => 0,
+                    SystemAccountKind::Nonce => {
+                        rent_collector.rent.minimum_balance(NonceState::size())
+                    }
+                };
+
+                if accounts[0].lamports < fee + min_balance {
+                    error_counters.insufficient_funds += 1;
+                    Err(TransactionError::InsufficientFundsForFee)
+                } else {
+                    accounts[0].lamports -= fee;
+                    Ok((accounts, tx_rent))
+                }
             }
         }
     }
@@ -627,14 +637,19 @@ mod tests {
     use crate::accounts_db::tests::copy_append_vecs;
     use crate::accounts_db::{get_temp_accounts_paths, AccountsDBSerialize};
     use crate::bank::HashAgeKind;
+    use crate::rent_collector::RentCollector;
     use bincode::serialize_into;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
+    use solana_sdk::epoch_schedule::EpochSchedule;
     use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::message::Message;
+    use solana_sdk::nonce_state;
+    use solana_sdk::rent::Rent;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_program;
     use solana_sdk::sysvar;
     use solana_sdk::transaction::Transaction;
     use std::io::Cursor;
@@ -642,10 +657,11 @@ mod tests {
     use std::{thread, time};
     use tempfile::TempDir;
 
-    fn load_accounts_with_fee(
+    fn load_accounts_with_fee_and_rent(
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
+        rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         let mut hash_queue = BlockhashQueue::new(100);
@@ -656,7 +672,6 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let rent_collector = RentCollector::default();
         let res = accounts.load_accounts(
             &ancestors,
             &[tx],
@@ -664,9 +679,19 @@ mod tests {
             vec![(Ok(()), Some(HashAgeKind::Extant))],
             &hash_queue,
             error_counters,
-            &rent_collector,
+            rent_collector,
         );
         res
+    }
+
+    fn load_accounts_with_fee(
+        tx: Transaction,
+        ka: &Vec<(Pubkey, Account)>,
+        fee_calculator: &FeeCalculator,
+        error_counters: &mut ErrorCounters,
+    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
+        let rent_collector = RentCollector::default();
+        load_accounts_with_fee_and_rent(tx, ka, fee_calculator, &rent_collector, error_counters)
     }
 
     fn load_accounts(
@@ -743,7 +768,7 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = Account::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
 
         let account = Account::new(2, 1, &Pubkey::default());
@@ -779,7 +804,7 @@ mod tests {
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
 
-        let account = Account::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -842,6 +867,84 @@ mod tests {
     }
 
     #[test]
+    fn test_load_accounts_fee_payer_is_nonce() {
+        let mut error_counters = ErrorCounters::default();
+        let rent_collector = RentCollector::new(
+            0,
+            &EpochSchedule::default(),
+            500_000.0,
+            &Rent {
+                lamports_per_byte_year: 42,
+                ..Rent::default()
+            },
+        );
+        let min_balance = rent_collector
+            .rent
+            .minimum_balance(nonce_state::NonceState::size());
+        let fee_calculator = FeeCalculator::new(min_balance, 0);
+        let nonce = Keypair::new();
+        let mut accounts = vec![(
+            nonce.pubkey(),
+            Account::new_data(
+                min_balance * 2,
+                &nonce_state::NonceState::Initialized(
+                    nonce_state::Meta::new(&Pubkey::default()),
+                    Hash::default(),
+                ),
+                &system_program::id(),
+            )
+            .unwrap(),
+        )];
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
+        let tx = Transaction::new_with_compiled_instructions(
+            &[&nonce],
+            &[],
+            Hash::default(),
+            vec![native_loader::id()],
+            instructions,
+        );
+
+        // Fee leaves min_balance balance succeeds
+        let loaded_accounts = load_accounts_with_fee_and_rent(
+            tx.clone(),
+            &accounts,
+            &fee_calculator,
+            &rent_collector,
+            &mut error_counters,
+        );
+        assert_eq!(loaded_accounts.len(), 1);
+        let (load_res, _hash_age_kind) = &loaded_accounts[0];
+        let (tx_accounts, _loaders, _rents) = load_res.as_ref().unwrap();
+        assert_eq!(tx_accounts[0].lamports, min_balance);
+
+        // Fee leaves zero balance fails
+        accounts[0].1.lamports = min_balance;
+        let loaded_accounts = load_accounts_with_fee_and_rent(
+            tx.clone(),
+            &accounts,
+            &fee_calculator,
+            &rent_collector,
+            &mut error_counters,
+        );
+        assert_eq!(loaded_accounts.len(), 1);
+        let (load_res, _hash_age_kind) = &loaded_accounts[0];
+        assert_eq!(*load_res, Err(TransactionError::InsufficientFundsForFee));
+
+        // Fee leaves non-zero, but sub-min_balance balance fails
+        accounts[0].1.lamports = 3 * min_balance / 2;
+        let loaded_accounts = load_accounts_with_fee_and_rent(
+            tx.clone(),
+            &accounts,
+            &fee_calculator,
+            &rent_collector,
+            &mut error_counters,
+        );
+        assert_eq!(loaded_accounts.len(), 1);
+        let (load_res, _hash_age_kind) = &loaded_accounts[0];
+        assert_eq!(*load_res, Err(TransactionError::InsufficientFundsForFee));
+    }
+
+    #[test]
     fn test_load_accounts_no_loaders() {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
@@ -850,7 +953,7 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let mut account = Account::new(1, 1, &Pubkey::default());
+        let mut account = Account::new(1, 0, &Pubkey::default());
         account.rent_epoch = 1;
         accounts.push((key0, account));
 
@@ -899,7 +1002,7 @@ mod tests {
         let key5 = Pubkey::new(&[9u8; 32]);
         let key6 = Pubkey::new(&[10u8; 32]);
 
-        let account = Account::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
 
         let mut account = Account::new(40, 1, &Pubkey::default());
@@ -966,7 +1069,7 @@ mod tests {
         let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = Account::new(40, 1, &Pubkey::default());
+        let mut account = Account::new(40, 0, &Pubkey::default());
         account.executable = true;
         account.owner = Pubkey::default();
         accounts.push((key1, account));
@@ -1002,7 +1105,7 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = Account::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
 
         let mut account = Account::new(40, 1, &Pubkey::default());
@@ -1041,7 +1144,7 @@ mod tests {
         let key1 = Pubkey::new(&[5u8; 32]);
         let key2 = Pubkey::new(&[6u8; 32]);
 
-        let mut account = Account::new(1, 1, &Pubkey::default());
+        let mut account = Account::new(1, 0, &Pubkey::default());
         account.rent_epoch = 1;
         accounts.push((key0, account));
 

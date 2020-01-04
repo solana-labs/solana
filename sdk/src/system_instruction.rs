@@ -1,9 +1,12 @@
 use crate::hash::hashv;
-use crate::instruction::{AccountMeta, Instruction};
+use crate::instruction::{AccountMeta, Instruction, WithSigner};
 use crate::instruction_processor_utils::DecodeError;
+use crate::nonce_state::NonceState;
 use crate::pubkey::Pubkey;
 use crate::system_program;
+use crate::sysvar::{recent_blockhashes, rent};
 use num_derive::{FromPrimitive, ToPrimitive};
+use thiserror::Error;
 
 #[derive(Serialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum SystemError {
@@ -29,6 +32,24 @@ impl std::fmt::Display for SystemError {
     }
 }
 impl std::error::Error for SystemError {}
+
+#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum NonceError {
+    #[error("recent blockhash list is empty")]
+    NoRecentBlockhashes,
+    #[error("stored nonce is still in recent_blockhashes")]
+    NotExpired,
+    #[error("specified nonce does not match stored nonce")]
+    UnexpectedValue,
+    #[error("cannot handle request in current account state")]
+    BadAccountState,
+}
+
+impl<E> DecodeError<E> for NonceError {
+    fn type_of() -> &'static str {
+        "NonceError"
+    }
+}
 
 /// maximum length of derived address seed
 pub const MAX_ADDRESS_SEED_LEN: usize = 32;
@@ -71,6 +92,51 @@ pub enum SystemInstruction {
         space: u64,
         program_id: Pubkey,
     },
+    /// `NonceAdvance` consumes a stored nonce, replacing it with a successor
+    ///
+    /// Expects 2 Accounts:
+    ///     0 - A NonceAccount
+    ///     1 - RecentBlockhashes sysvar
+    ///
+    /// The current authority must sign a transaction executing this instrucion
+    NonceAdvance,
+    /// `NonceWithdraw` transfers funds out of the nonce account
+    ///
+    /// Expects 4 Accounts:
+    ///     0 - A NonceAccount
+    ///     1 - A system account to which the lamports will be transferred
+    ///     2 - RecentBlockhashes sysvar
+    ///     3 - Rent sysvar
+    ///
+    /// The `u64` parameter is the lamports to withdraw, which must leave the
+    /// account balance above the rent exempt reserve or at zero.
+    ///
+    /// The current authority must sign a transaction executing this instruction
+    NonceWithdraw(u64),
+    /// `NonceInitialize` drives state of Uninitalized NonceAccount to Initialized,
+    /// setting the nonce value.
+    ///
+    /// Expects 3 Accounts:
+    ///     0 - A NonceAccount in the Uninitialized state
+    ///     1 - RecentBlockHashes sysvar
+    ///     2 - Rent sysvar
+    ///
+    /// The `Pubkey` parameter specifies the entity authorized to execute nonce
+    /// instruction on the account
+    ///
+    /// No signatures are required to execute this instruction, enabling derived
+    /// nonce account addresses
+    NonceInitialize(Pubkey),
+    /// `NonceAuthorize` changes the entity authorized to execute nonce instructions
+    /// on the account
+    ///
+    /// Expects 1 Account:
+    ///     0 - A NonceAccount
+    ///
+    /// The `Pubkey` parameter identifies the entity to authorize
+    ///
+    /// The current authority must sign a transaction executing this instruction
+    NonceAuthorize(Pubkey),
 }
 
 pub fn create_account(
@@ -167,9 +233,82 @@ pub fn create_address_with_seed(
     ))
 }
 
+pub fn create_nonce_account(
+    from_pubkey: &Pubkey,
+    nonce_pubkey: &Pubkey,
+    authority: &Pubkey,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        create_account(
+            from_pubkey,
+            nonce_pubkey,
+            lamports,
+            NonceState::size() as u64,
+            &system_program::id(),
+        ),
+        Instruction::new(
+            system_program::id(),
+            &SystemInstruction::NonceInitialize(*authority),
+            vec![
+                AccountMeta::new(*nonce_pubkey, false),
+                AccountMeta::new_readonly(recent_blockhashes::id(), false),
+                AccountMeta::new_readonly(rent::id(), false),
+            ],
+        ),
+    ]
+}
+
+pub fn nonce_advance(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*nonce_pubkey, false),
+        AccountMeta::new_readonly(recent_blockhashes::id(), false),
+    ]
+    .with_signer(authorized_pubkey);
+    Instruction::new(
+        system_program::id(),
+        &SystemInstruction::NonceAdvance,
+        account_metas,
+    )
+}
+
+pub fn nonce_withdraw(
+    nonce_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    to_pubkey: &Pubkey,
+    lamports: u64,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*nonce_pubkey, false),
+        AccountMeta::new(*to_pubkey, false),
+        AccountMeta::new_readonly(recent_blockhashes::id(), false),
+        AccountMeta::new_readonly(rent::id(), false),
+    ]
+    .with_signer(authorized_pubkey);
+    Instruction::new(
+        system_program::id(),
+        &SystemInstruction::NonceWithdraw(lamports),
+        account_metas,
+    )
+}
+
+pub fn nonce_authorize(
+    nonce_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    new_authority: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*nonce_pubkey, false)].with_signer(authorized_pubkey);
+    Instruction::new(
+        system_program::id(),
+        &SystemInstruction::NonceAuthorize(*new_authority),
+        account_metas,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::instruction::{Instruction, InstructionError};
 
     fn get_keys(instruction: &Instruction) -> Vec<Pubkey> {
         instruction.accounts.iter().map(|x| x.pubkey).collect()
@@ -238,5 +377,57 @@ mod tests {
         assert_eq!(instructions.len(), 2);
         assert_eq!(get_keys(&instructions[0]), vec![alice_pubkey, bob_pubkey]);
         assert_eq!(get_keys(&instructions[1]), vec![alice_pubkey, carol_pubkey]);
+    }
+
+    #[test]
+    fn test_create_nonce_account() {
+        let from_pubkey = Pubkey::new_rand();
+        let nonce_pubkey = Pubkey::new_rand();
+        let authorized = nonce_pubkey;
+        let ixs = create_nonce_account(&from_pubkey, &nonce_pubkey, &authorized, 42);
+        assert_eq!(ixs.len(), 2);
+        let ix = &ixs[0];
+        assert_eq!(ix.program_id, system_program::id());
+        let pubkeys: Vec<_> = ix.accounts.iter().map(|am| am.pubkey).collect();
+        assert!(pubkeys.contains(&from_pubkey));
+        assert!(pubkeys.contains(&nonce_pubkey));
+    }
+
+    #[test]
+    fn test_nonce_error_decode() {
+        use num_traits::FromPrimitive;
+        fn pretty_err<T>(err: InstructionError) -> String
+        where
+            T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
+        {
+            if let InstructionError::CustomError(code) = err {
+                let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
+                format!(
+                    "{:?}: {}::{:?} - {}",
+                    err,
+                    T::type_of(),
+                    specific_error,
+                    specific_error,
+                )
+            } else {
+                "".to_string()
+            }
+        }
+        assert_eq!(
+            "CustomError(0): NonceError::NoRecentBlockhashes - recent blockhash list is empty",
+            pretty_err::<NonceError>(NonceError::NoRecentBlockhashes.into())
+        );
+        assert_eq!(
+            "CustomError(1): NonceError::NotExpired - stored nonce is still in recent_blockhashes",
+            pretty_err::<NonceError>(NonceError::NotExpired.into())
+        );
+        assert_eq!(
+            "CustomError(2): NonceError::UnexpectedValue - specified nonce does not match stored nonce",
+            pretty_err::<NonceError>(NonceError::UnexpectedValue.into())
+        );
+        assert_eq!(
+            "CustomError(3): NonceError::BadAccountState - cannot handle request in current account state",
+            pretty_err::<NonceError>(NonceError::BadAccountState.into())
+        );
     }
 }
