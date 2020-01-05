@@ -4,6 +4,7 @@ use crate::append_vec::StoredAccount;
 use crate::bank::{HashAgeKind, TransactionProcessResult};
 use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
+use crate::nonce_utils::prepare_if_nonce_account;
 use crate::rent_collector::RentCollector;
 use crate::system_instruction_processor::{get_system_account_kind, SystemAccountKind};
 use log::*;
@@ -12,6 +13,7 @@ use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
 use solana_sdk::clock::Slot;
+use solana_sdk::hash::Hash;
 use solana_sdk::native_loader;
 use solana_sdk::nonce_state::NonceState;
 use solana_sdk::pubkey::Pubkey;
@@ -559,9 +561,16 @@ impl Accounts {
         res: &[TransactionProcessResult],
         loaded: &mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
+        last_blockhash: &Hash,
     ) {
-        let accounts_to_store =
-            self.collect_accounts_to_store(txs, txs_iteration_order, res, loaded, rent_collector);
+        let accounts_to_store = self.collect_accounts_to_store(
+            txs,
+            txs_iteration_order,
+            res,
+            loaded,
+            rent_collector,
+            last_blockhash,
+        );
         self.accounts_db.store(slot, &accounts_to_store);
     }
 
@@ -582,6 +591,7 @@ impl Accounts {
         res: &'a [TransactionProcessResult],
         loaded: &'a mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
         rent_collector: &RentCollector,
+        last_blockhash: &Hash,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _hash_age_kind), tx)) in loaded
@@ -611,6 +621,7 @@ impl Accounts {
                 .enumerate()
                 .zip(acc.0.iter_mut())
             {
+                prepare_if_nonce_account(account, key, res, maybe_nonce, last_blockhash);
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
                         account.rent_epoch = rent_collector.epoch;
@@ -1610,8 +1621,14 @@ mod tests {
                 },
             );
         }
-        let collected_accounts =
-            accounts.collect_accounts_to_store(&txs, None, &loaders, &mut loaded, &rent_collector);
+        let collected_accounts = accounts.collect_accounts_to_store(
+            &txs,
+            None,
+            &loaders,
+            &mut loaded,
+            &rent_collector,
+            &Hash::default(),
+        );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()

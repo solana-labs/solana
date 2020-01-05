@@ -1322,6 +1322,7 @@ impl Bank {
             executed,
             loaded_accounts,
             &self.rent_collector,
+            &self.last_blockhash(),
         );
         self.collect_rent(executed, loaded_accounts);
 
