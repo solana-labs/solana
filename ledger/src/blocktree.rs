@@ -1251,12 +1251,12 @@ impl Blocktree {
         let stake_weighted_timestamps_sum: u64 = self
             .get_timestamp_slots(slot, TIMESTAMP_SLOT_INTERVAL, TIMESTAMP_SLOT_RANGE)
             .iter()
-            .flat_map(|timestamp_slot| {
-                let offset = (slot - timestamp_slot) as u32 * slot_duration;
-                if let Ok(timestamps) = self.get_block_timestamps(*timestamp_slot) {
+            .flat_map(|query_slot| {
+                if let Ok(timestamps) = self.get_block_timestamps(*query_slot) {
                     timestamps
                         .iter()
-                        .filter_map(|(vote_pubkey, timestamp)| {
+                        .filter_map(|(vote_pubkey, timestamp_slot, timestamp)| {
+                            let offset = (slot - timestamp_slot) as u32 * slot_duration;
                             stakes.get(vote_pubkey).map(|(stake, _account)| {
                                 total_stake += stake;
                                 (*timestamp as u64 + offset.as_secs()) * stake
@@ -1282,10 +1282,12 @@ impl Blocktree {
         timestamp_interval: u64,
         timestamp_sample_range: usize,
     ) -> Vec<Slot> {
-        let rooted_slots = RootedSlotIterator::new(0, &self);
-        if !self.is_root(slot) || rooted_slots.is_err() {
+        let root_iterator = self.db.iter::<cf::Root>(IteratorMode::Start);
+        if !self.is_root(slot) || root_iterator.is_err() {
             return vec![];
         }
+        let lowest_nonzero_root = root_iterator.unwrap().map(|(slot, _)| slot).nth(1).unwrap();
+        let rooted_slots = RootedSlotIterator::new(lowest_nonzero_root, &self);
         let slots: Vec<Slot> = rooted_slots
             .unwrap()
             .map(|(iter_slot, _)| iter_slot)
@@ -1377,14 +1379,14 @@ impl Blocktree {
         self.transaction_status_cf.put(index, status)
     }
 
-    fn get_block_timestamps(&self, slot: Slot) -> Result<Vec<(Pubkey, UnixTimestamp)>> {
+    fn get_block_timestamps(&self, slot: Slot) -> Result<Vec<(Pubkey, Slot, UnixTimestamp)>> {
         let slot_entries = self.get_slot_entries(slot, 0, None)?;
         Ok(slot_entries
             .iter()
             .cloned()
             .flat_map(|entry| entry.transactions)
             .flat_map(|transaction| {
-                let mut timestamps: Vec<(Pubkey, UnixTimestamp)> = Vec::new();
+                let mut timestamps: Vec<(Pubkey, Slot, UnixTimestamp)> = Vec::new();
                 for instruction in transaction.message.instructions {
                     let program_id = instruction.program_id(&transaction.message.account_keys);
                     if program_id == &solana_vote_program::id() {
@@ -1392,9 +1394,12 @@ impl Blocktree {
                             limited_deserialize(&instruction.data)
                         {
                             if let Some(timestamp) = vote.timestamp {
-                                let vote_pubkey = transaction.message.account_keys
-                                    [instruction.accounts[0] as usize];
-                                timestamps.push((vote_pubkey, timestamp));
+                                let timestamp_slot = vote.slots.iter().max();
+                                if let Some(timestamp_slot) = timestamp_slot {
+                                    let vote_pubkey = transaction.message.account_keys
+                                        [instruction.accounts[0] as usize];
+                                    timestamps.push((vote_pubkey, *timestamp_slot, timestamp));
+                                }
                             }
                         }
                     }
@@ -4495,11 +4500,11 @@ pub mod tests {
 
         assert_eq!(
             blocktree.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
-            vec![0, 1, 2]
+            vec![1, 2]
         );
         assert_eq!(
             blocktree.get_timestamp_slots(3, timestamp_interval, timestamp_sample_range),
-            vec![0, 1, 2, 3]
+            vec![1, 2, 3]
         );
 
         drop(blocktree);
@@ -4535,11 +4540,11 @@ pub mod tests {
 
         assert_eq!(
             blocktree.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
-            vec![0, 1, 2]
+            vec![1, 2]
         );
         assert_eq!(
             blocktree.get_timestamp_slots(8, timestamp_interval, timestamp_sample_range),
-            vec![0, 1, 2, 3, 4]
+            vec![1, 2, 3, 4, 5]
         );
         assert_eq!(
             blocktree.get_timestamp_slots(13, timestamp_interval, timestamp_sample_range),
@@ -4659,14 +4664,14 @@ pub mod tests {
     fn test_get_block_timestamps() {
         let vote_keypairs: Vec<Keypair> = (0..6).map(|_| Keypair::new()).collect();
         let base_timestamp = 1576183541;
-        let mut expected_timestamps: Vec<(Pubkey, UnixTimestamp)> = Vec::new();
+        let mut expected_timestamps: Vec<(Pubkey, Slot, UnixTimestamp)> = Vec::new();
 
         // Populate slot 1 with vote transactions, some of which have timestamps
         let mut vote_entries: Vec<Entry> = Vec::new();
         for (i, keypair) in vote_keypairs.iter().enumerate() {
             let timestamp = if i % 2 == 0 {
                 let unique_timestamp = base_timestamp + i as i64;
-                expected_timestamps.push((keypair.pubkey(), unique_timestamp));
+                expected_timestamps.push((keypair.pubkey(), 1, unique_timestamp));
                 Some(unique_timestamp)
             } else {
                 None
