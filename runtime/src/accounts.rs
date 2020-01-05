@@ -589,10 +589,19 @@ impl Accounts {
             .zip(OrderedIterator::new(txs, txs_iteration_order))
             .enumerate()
         {
-            let (res, _hash_age_kind) = &res[i];
-            if res.is_err() || raccs.is_err() {
+            if raccs.is_err() {
                 continue;
             }
+            let (res, hash_age_kind) = &res[i];
+            let maybe_nonce = match (res, hash_age_kind) {
+                (Ok(_), Some(HashAgeKind::DurableNonce(pubkey, acc))) => Some((pubkey, acc)),
+                (
+                    Err(TransactionError::InstructionError(_, _)),
+                    Some(HashAgeKind::DurableNonce(pubkey, acc)),
+                ) => Some((pubkey, acc)),
+                (Ok(_), _hash_age_kind) => None,
+                (Err(_), _hash_age_kind) => continue,
+            };
 
             let message = &tx.message();
             let acc = raccs.as_mut().unwrap();

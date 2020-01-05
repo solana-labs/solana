@@ -1245,7 +1245,11 @@ impl Bank {
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
             .map(|(tx, (res, hash_age_kind))| {
-                let fee_hash = if let Some(HashAgeKind::DurableNonce(_, _)) = hash_age_kind {
+                let is_durable_nonce = hash_age_kind
+                    .as_ref()
+                    .map(|hash_age_kind| hash_age_kind.is_durable_nonce())
+                    .unwrap_or(false);
+                let fee_hash = if is_durable_nonce {
                     self.last_blockhash()
                 } else {
                     tx.message().recent_blockhash
@@ -1261,7 +1265,12 @@ impl Bank {
                         // credit the transaction fee even in case of InstructionError
                         // necessary to withdraw from account[0] here because previous
                         // work of doing so (in accounts.load()) is ignored by store_account()
-                        self.withdraw(&message.account_keys[0], fee)?;
+                        //
+                        // ...except nonce accounts, which will have their post-load,
+                        // pre-execute account state stored
+                        if !is_durable_nonce {
+                            self.withdraw(&message.account_keys[0], fee)?;
+                        }
                         fees += fee;
                         Ok(())
                     }
