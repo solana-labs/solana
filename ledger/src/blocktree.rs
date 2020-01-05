@@ -1247,27 +1247,30 @@ impl Blocktree {
         slot_duration: Duration,
         stakes: &HashMap<Pubkey, (u64, Account)>,
     ) -> Option<UnixTimestamp> {
-        let mut total_stake = 0;
-        let stake_weighted_timestamps_sum: u64 = self
+        let mut stake_weighted_timestamps: HashMap<Pubkey, (u64, u64)> = HashMap::new();
+        for query_slot in self
             .get_timestamp_slots(slot, TIMESTAMP_SLOT_INTERVAL, TIMESTAMP_SLOT_RANGE)
             .iter()
-            .flat_map(|query_slot| {
-                if let Ok(timestamps) = self.get_block_timestamps(*query_slot) {
-                    timestamps
-                        .iter()
-                        .filter_map(|(vote_pubkey, timestamp_slot, timestamp)| {
-                            let offset = (slot - timestamp_slot) as u32 * slot_duration;
-                            stakes.get(vote_pubkey).map(|(stake, _account)| {
-                                total_stake += stake;
-                                (*timestamp as u64 + offset.as_secs()) * stake
-                            })
-                        })
-                        .collect()
-                } else {
-                    vec![]
+        {
+            if let Ok(timestamps) = self.get_block_timestamps(*query_slot) {
+                for (vote_pubkey, timestamp_slot, timestamp) in timestamps.iter() {
+                    let offset = (slot - timestamp_slot) as u32 * slot_duration;
+                    if let Some((stake, _account)) = stakes.get(vote_pubkey) {
+                        let stake_weighted_timestamp =
+                            (*timestamp as u64 + offset.as_secs()) * stake;
+                        stake_weighted_timestamps
+                            .insert(*vote_pubkey, (*stake, stake_weighted_timestamp));
+                    }
                 }
-            })
-            .sum();
+            }
+        }
+        let mut total_stake = 0;
+        let mut stake_weighted_timestamps_sum = 0;
+        for (_key, (stake, stake_weighted_timestamp)) in stake_weighted_timestamps.iter() {
+            total_stake += stake;
+            stake_weighted_timestamps_sum += stake_weighted_timestamp;
+        }
+
         if total_stake > 0 {
             let mean_timestamp: u64 = stake_weighted_timestamps_sum / total_stake;
             Some(mean_timestamp as i64)
