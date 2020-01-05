@@ -1247,33 +1247,25 @@ impl Blocktree {
         slot_duration: Duration,
         stakes: &HashMap<Pubkey, (u64, Account)>,
     ) -> Option<UnixTimestamp> {
-        let mut stake_weighted_timestamps: HashMap<Pubkey, (u64, u64)> = HashMap::new();
-        for query_slot in self
+        let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = self
             .get_timestamp_slots(slot, TIMESTAMP_SLOT_INTERVAL, TIMESTAMP_SLOT_RANGE)
-            .iter()
-        {
-            if let Ok(timestamps) = self.get_block_timestamps(*query_slot) {
-                for (vote_pubkey, timestamp_slot, timestamp) in timestamps.iter() {
-                    let offset = (slot - timestamp_slot) as u32 * slot_duration;
-                    if let Some((stake, _account)) = stakes.get(vote_pubkey) {
-                        let stake_weighted_timestamp =
-                            (*timestamp as u64 + offset.as_secs()) * stake;
-                        stake_weighted_timestamps
-                            .insert(*vote_pubkey, (*stake, stake_weighted_timestamp));
-                    }
-                }
-            }
-        }
-        let mut total_stake = 0;
-        let mut stake_weighted_timestamps_sum = 0;
-        for (_key, (stake, stake_weighted_timestamp)) in stake_weighted_timestamps.iter() {
-            total_stake += stake;
-            stake_weighted_timestamps_sum += stake_weighted_timestamp;
-        }
+            .into_iter()
+            .flat_map(|query_slot| self.get_block_timestamps(query_slot).unwrap_or_default())
+            .collect();
 
+        let (stake_weighted_timestamps_sum, total_stake) = unique_timestamps
+            .into_iter()
+            .filter_map(|(vote_pubkey, (timestamp_slot, timestamp))| {
+                let offset = (slot - timestamp_slot) as u32 * slot_duration;
+                stakes
+                    .get(&vote_pubkey)
+                    .map(|(stake, _account)| ((timestamp as u64 + offset.as_secs()) * stake, stake))
+            })
+            .fold((0, 0), |(timestamps, stakes), (timestamp, stake)| {
+                (timestamps + timestamp, stakes + stake)
+            });
         if total_stake > 0 {
-            let mean_timestamp: u64 = stake_weighted_timestamps_sum / total_stake;
-            Some(mean_timestamp as i64)
+            Some((stake_weighted_timestamps_sum / total_stake) as i64)
         } else {
             None
         }
@@ -1382,14 +1374,14 @@ impl Blocktree {
         self.transaction_status_cf.put(index, status)
     }
 
-    fn get_block_timestamps(&self, slot: Slot) -> Result<Vec<(Pubkey, Slot, UnixTimestamp)>> {
+    fn get_block_timestamps(&self, slot: Slot) -> Result<Vec<(Pubkey, (Slot, UnixTimestamp))>> {
         let slot_entries = self.get_slot_entries(slot, 0, None)?;
         Ok(slot_entries
             .iter()
             .cloned()
             .flat_map(|entry| entry.transactions)
             .flat_map(|transaction| {
-                let mut timestamps: Vec<(Pubkey, Slot, UnixTimestamp)> = Vec::new();
+                let mut timestamps: Vec<(Pubkey, (Slot, UnixTimestamp))> = Vec::new();
                 for instruction in transaction.message.instructions {
                     let program_id = instruction.program_id(&transaction.message.account_keys);
                     if program_id == &solana_vote_program::id() {
@@ -1401,7 +1393,7 @@ impl Blocktree {
                                 if let Some(timestamp_slot) = timestamp_slot {
                                     let vote_pubkey = transaction.message.account_keys
                                         [instruction.accounts[0] as usize];
-                                    timestamps.push((vote_pubkey, *timestamp_slot, timestamp));
+                                    timestamps.push((vote_pubkey, (*timestamp_slot, timestamp)));
                                 }
                             }
                         }
@@ -4667,14 +4659,14 @@ pub mod tests {
     fn test_get_block_timestamps() {
         let vote_keypairs: Vec<Keypair> = (0..6).map(|_| Keypair::new()).collect();
         let base_timestamp = 1576183541;
-        let mut expected_timestamps: Vec<(Pubkey, Slot, UnixTimestamp)> = Vec::new();
+        let mut expected_timestamps: Vec<(Pubkey, (Slot, UnixTimestamp))> = Vec::new();
 
         // Populate slot 1 with vote transactions, some of which have timestamps
         let mut vote_entries: Vec<Entry> = Vec::new();
         for (i, keypair) in vote_keypairs.iter().enumerate() {
             let timestamp = if i % 2 == 0 {
                 let unique_timestamp = base_timestamp + i as i64;
-                expected_timestamps.push((keypair.pubkey(), 1, unique_timestamp));
+                expected_timestamps.push((keypair.pubkey(), (1, unique_timestamp)));
                 Some(unique_timestamp)
             } else {
                 None
