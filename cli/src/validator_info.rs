@@ -312,10 +312,12 @@ pub fn process_set_validator_info(
             "Publishing info for Validator {:?}",
             config.keypair.pubkey()
         );
+        let lamports = rpc_client
+            .get_minimum_balance_for_rent_exemption(ValidatorInfo::max_space() as usize)?;
         let mut instructions = config_instruction::create_account::<ValidatorInfo>(
             &config.keypair.pubkey(),
             &info_keypair.pubkey(),
-            1,
+            lamports,
             keys.clone(),
         );
         instructions.extend_from_slice(&[config_instruction::store(
