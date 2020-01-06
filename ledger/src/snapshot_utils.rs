@@ -203,35 +203,6 @@ where
     Ok(ret)
 }
 
-macro_rules! serialize_snapshot_data_file_with_metrics {
-    (
-        $data_file_path:expr,
-        $slot:expr,
-        $data_file_type:expr,
-        $serializer:expr,
-    ) => {{
-        const SERIALIZE_NAME: &'static str = concat!($data_file_type, "-serialize-ms");
-        let mut serialize = Measure::start(SERIALIZE_NAME);
-        let consumed_size = serialize_snapshot_data_file(
-            $data_file_path,
-            MAX_SNAPSHOT_DATA_FILE_SIZE,
-            $serializer,
-        )?;
-        serialize.stop();
-
-        // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
-        datapoint_info!(
-            concat!("snapshot-", $data_file_type, "-file"),
-            ("slot", $slot, i64),
-            ("size", consumed_size, i64)
-        );
-
-        inc_new_counter_info!(SERIALIZE_NAME, serialize.as_ms() as usize);
-
-        serialize
-    }};
-}
-
 pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
     bank.purge_zero_lamport_accounts();
     let slot = bank.slot();
@@ -247,16 +218,26 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
         snapshot_bank_file_path,
     );
 
-    let bank_serialize = serialize_snapshot_data_file_with_metrics!(
+    let mut bank_serialize = Measure::start("bank-serialize-ms");
+    let consumed_size = serialize_snapshot_data_file(
         &snapshot_bank_file_path,
-        bank.slot(),
-        "bank",
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             serialize_into(stream.by_ref(), &*bank)?;
             serialize_into(stream.by_ref(), &bank.rc)?;
             Ok(())
         },
+    )?;
+    bank_serialize.stop();
+
+    // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
+    datapoint_info!(
+        "snapshot-bank-file",
+        ("slot", bank.slot(), i64),
+        ("size", consumed_size, i64)
     );
+
+    inc_new_counter_info!("bank-serialize-ms", bank_serialize.as_ms() as usize);
 
     info!(
         "{} for slot {} at {:?}",
@@ -277,14 +258,27 @@ pub fn serialize_status_cache(
     let snapshot_status_cache_file_path =
         snapshot_links.path().join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
 
-    serialize_snapshot_data_file_with_metrics!(
+    let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
+    let consumed_size = serialize_snapshot_data_file(
         &snapshot_status_cache_file_path,
-        slot,
-        "status-cache",
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             serialize_into(stream, slot_deltas)?;
             Ok(())
         },
+    )?;
+    status_cache_serialize.stop();
+
+    // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
+    datapoint_info!(
+        "snapshot-status-cache-file",
+        ("slot", slot, i64),
+        ("size", consumed_size, i64)
+    );
+
+    inc_new_counter_info!(
+        "serialize-status-cache-ms",
+        status_cache_serialize.as_ms() as usize
     );
     Ok(())
 }
