@@ -1,3 +1,4 @@
+use crate::result::ArchiverError;
 use crossbeam_channel::unbounded;
 use ed25519_dalek;
 use rand::{thread_rng, Rng, SeedableRng};
@@ -8,7 +9,6 @@ use solana_client::{
     rpc_client::RpcClient, rpc_request::RpcRequest, rpc_response::RpcStorageTurn,
     thin_client::ThinClient,
 };
-use solana_core::result::{Error, Result};
 use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
@@ -56,6 +56,8 @@ use std::{
     thread::{sleep, spawn, JoinHandle},
     time::Duration,
 };
+
+type Result<T> = std::result::Result<T, ArchiverError>;
 
 static ENCRYPTED_FILENAME: &str = "ledger.enc";
 
@@ -209,7 +211,7 @@ impl Archiver {
                     //shutdown services before exiting
                     exit.store(true, Ordering::Relaxed);
                     gossip_service.join()?;
-                    return Err(Error::from(e));
+                    return Err(e.into());
                 }
             };
         let client = solana_core::gossip_service::get_client(&nodes);
@@ -586,9 +588,7 @@ impl Archiver {
             client_commitment.clone(),
         )? == 0
         {
-            return Err(
-                io::Error::new(io::ErrorKind::Other, "keypair account has no balance").into(),
-            );
+            return Err(ArchiverError::EmptyStorageAccountBalance);
         }
 
         info!("checking storage account keypair...");
@@ -599,11 +599,8 @@ impl Archiver {
             let blockhash =
                 match client.get_recent_blockhash_with_commitment(client_commitment.clone()) {
                     Ok((blockhash, _)) => blockhash,
-                    Err(_) => {
-                        return Err(Error::IO(<io::Error>::new(
-                            io::ErrorKind::Other,
-                            "unable to get recent blockhash, can't submit proof",
-                        )));
+                    Err(e) => {
+                        return Err(ArchiverError::TransportError(e));
                     }
                 };
 
@@ -701,7 +698,7 @@ impl Archiver {
     fn get_segment_config(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         client_commitment: CommitmentConfig,
-    ) -> result::Result<u64, Error> {
+    ) -> Result<u64> {
         let rpc_peers = {
             let cluster_info = cluster_info.read().unwrap();
             cluster_info.rpc_peers()
@@ -720,12 +717,12 @@ impl Archiver {
                 )
                 .map_err(|err| {
                     warn!("Error while making rpc request {:?}", err);
-                    Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
+                    ArchiverError::ClientError(err)
                 })?
                 .as_u64()
                 .unwrap())
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "No RPC peers...".to_string()).into())
+            Err(ArchiverError::NoRpcPeers)
         }
     }
 
@@ -735,7 +732,7 @@ impl Archiver {
         slots_per_segment: u64,
         previous_blockhash: &Hash,
         exit: &Arc<AtomicBool>,
-    ) -> result::Result<(Hash, u64), Error> {
+    ) -> Result<(Hash, u64)> {
         loop {
             let (blockhash, turn_slot) = Self::poll_for_blockhash_and_slot(
                 cluster_info,
@@ -755,7 +752,7 @@ impl Archiver {
         slots_per_segment: u64,
         previous_blockhash: &Hash,
         exit: &Arc<AtomicBool>,
-    ) -> result::Result<(Hash, u64), Error> {
+    ) -> Result<(Hash, u64)> {
         info!("waiting for the next turn...");
         loop {
             let rpc_peers = {
@@ -776,17 +773,13 @@ impl Archiver {
                     )
                     .map_err(|err| {
                         warn!("Error while making rpc request {:?}", err);
-                        Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
+                        ArchiverError::ClientError(err)
                     })?;
                 let RpcStorageTurn {
                     blockhash: storage_blockhash,
                     slot: turn_slot,
-                } = serde_json::from_value::<RpcStorageTurn>(response).map_err(|err| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Couldn't parse response: {:?}", err),
-                    )
-                })?;
+                } = serde_json::from_value::<RpcStorageTurn>(response)
+                    .map_err(ArchiverError::JsonError)?;
                 let turn_blockhash = storage_blockhash.parse().map_err(|err| {
                     io::Error::new(
                         io::ErrorKind::Other,
@@ -804,7 +797,7 @@ impl Archiver {
                 }
             }
             if exit.load(Ordering::Relaxed) {
-                return Err(Error::IO(io::Error::new(
+                return Err(ArchiverError::IO(io::Error::new(
                     ErrorKind::Other,
                     "exit signalled...",
                 )));
@@ -912,9 +905,7 @@ impl Archiver {
 
         // check if all the slots in the segment are complete
         if !Self::segment_complete(start_slot, slots_per_segment, blockstore) {
-            return Err(
-                io::Error::new(ErrorKind::Other, "Unable to download the full segment").into(),
-            );
+            return Err(ArchiverError::SegmentDownloadError);
         }
         Ok(start_slot)
     }

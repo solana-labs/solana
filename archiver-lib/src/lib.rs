@@ -8,3 +8,4 @@ extern crate serde_derive;
 extern crate solana_metrics;
 
 pub mod archiver;
+mod result;
