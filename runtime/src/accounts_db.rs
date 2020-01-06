@@ -965,7 +965,7 @@ impl AccountsDB {
                 oldest_slot = *slot;
             }
         }
-        info!("accounts_db: total_stores: {} newest_slot: {} oldest_slot: {} max_slot: {} (num={}) min_slot: {} (num={})",
+        info!("total_stores: {}, newest_slot: {}, oldest_slot: {}, max_slot: {} (num={}), min_slot: {} (num={})",
               total_count, newest_slot, oldest_slot, max_slot, max, min_slot, min);
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
     }
