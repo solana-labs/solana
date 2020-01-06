@@ -213,9 +213,17 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### getBlockTime
 
-Returns the estimated production time of a block. Validators report their UTC
-time to the ledger on a regular interval. A block's time is calculated as an
-offset from the median value of the most recent validator time report.
+Returns the estimated production time of a block.
+
+Each validator reports their UTC time to the ledger on a regular interval by
+intermittently adding a timestamp to a Vote for a particular block. A requested
+block's time is calculated from the stake-weighted mean of the Vote timestamps
+in a set of recent blocks recorded on the ledger.
+
+Nodes that are booting from snapshot or limiting ledger size (by purging old
+slots) will return null timestamps for blocks below their lowest root +
+`TIMESTAMP_SLOT_RANGE`. Users interested in having this historical data must
+query a node that is built from genesis and retains the entire ledger.
 
 #### Parameters:
 
