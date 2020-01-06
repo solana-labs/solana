@@ -10,11 +10,12 @@ channel=$(
   cd "$(dirname "$0")";
   node -p '
     let p = [
+      "../../package.json",
       "../lib/node_modules/@solana/web3.js/package.json",
       "../@solana/web3.js/package.json",
       "../package.json"
     ].find(require("fs").existsSync);
-    if (!p) throw new Error("Unable to locate solana-web3.js directory");
+    if (!p) throw new Error("Unable to locate package.json");
     require(p)["testnetDefaultChannel"]
   '
 )
@@ -22,10 +23,6 @@ channel=$(
 if [[ -n $2 ]]; then
   channel=$2
 fi
-[[ $channel = edge || $channel = beta ]] || {
-  echo "Error: Invalid channel: $channel"
-  exit 1
-}
 
 echo "Installing $channel BPF SDK into $installDir"
 
