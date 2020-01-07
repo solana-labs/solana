@@ -68,7 +68,7 @@ pub struct ValidatorConfig {
     pub broadcast_stage_type: BroadcastStageType,
     pub partition_cfg: Option<PartitionCfg>,
     pub fixed_leader_schedule: Option<FixedSchedule>,
-    pub wait_for_super_majority: bool,
+    pub wait_for_supermajority: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -88,7 +88,7 @@ impl Default for ValidatorConfig {
             broadcast_stage_type: BroadcastStageType::Standard,
             partition_cfg: None,
             fixed_leader_schedule: None,
-            wait_for_super_majority: false,
+            wait_for_supermajority: false,
         }
     }
 }
@@ -297,7 +297,7 @@ impl Validator {
                 .set_entrypoint(entrypoint_info.clone());
         }
 
-        if config.wait_for_super_majority {
+        if config.wait_for_supermajority {
             info!(
                 "Waiting more than 66% of activated stake at slot {} to be in gossip...",
                 bank.slot()
