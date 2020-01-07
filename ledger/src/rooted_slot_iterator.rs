@@ -65,7 +65,11 @@ impl<'a> Iterator for RootedSlotIterator<'a> {
 
         rooted_slot.map(|r| {
             self.prev_root = r;
-            (r, slot_meta)
+            if slot_skipped {
+                (r, None)
+            } else {
+                (r, slot_meta)
+            }
         })
     }
 }
@@ -211,6 +215,9 @@ mod tests {
 
         // Create one more post-skip slot at 11 with parent equal to 10
         fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 11, 10, Hash::default());
+
+        // Set roots
+        blocktree.set_roots(&[11]).unwrap();
 
         let result: Vec<_> = RootedSlotIterator::new(0, &blocktree)
             .unwrap()
