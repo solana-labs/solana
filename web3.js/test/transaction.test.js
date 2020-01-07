@@ -4,6 +4,7 @@ import nacl from 'tweetnacl';
 import {Account} from '../src/account';
 import {PublicKey} from '../src/publickey';
 import {Transaction} from '../src/transaction';
+import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
 
 test('signPartial', () => {
@@ -76,6 +77,54 @@ test('dedup signatures', () => {
     transfer2,
   );
   orgTransaction.sign(account1);
+});
+
+test('use nonce', () => {
+  const account1 = new Account();
+  const account2 = new Account();
+  const nonceAccount = new Account();
+  const nonce = account2.publicKey.toBase58(); // Fake Nonce hash
+
+  const nonceInfo = {
+    nonce,
+    nonceInstruction: SystemProgram.nonceAdvance(
+      nonceAccount.publicKey,
+      account1.publicKey,
+    ),
+  };
+
+  const transferTransaction = new Transaction({nonceInfo}).add(
+    SystemProgram.transfer(account1.publicKey, account2.publicKey, 123),
+  );
+  transferTransaction.sign(account1);
+
+  let expectedData = Buffer.alloc(4);
+  expectedData.writeInt32LE(4, 0);
+
+  expect(transferTransaction.instructions).toHaveLength(2);
+  expect(transferTransaction.instructions[0].programId).toEqual(
+    SystemProgram.programId,
+  );
+  expect(transferTransaction.instructions[0].data).toEqual(expectedData);
+  expect(transferTransaction.recentBlockhash).toEqual(nonce);
+
+  const stakeAccount = new Account();
+  const voteAccount = new Account();
+  const stakeTransaction = new Transaction({nonceInfo}).add(
+    StakeProgram.delegate(
+      stakeAccount.publicKey,
+      account1.publicKey,
+      voteAccount.publicKey,
+    ),
+  );
+  stakeTransaction.sign(account1);
+
+  expect(stakeTransaction.instructions).toHaveLength(2);
+  expect(stakeTransaction.instructions[0].programId).toEqual(
+    SystemProgram.programId,
+  );
+  expect(stakeTransaction.instructions[0].data).toEqual(expectedData);
+  expect(stakeTransaction.recentBlockhash).toEqual(nonce);
 });
 
 test('parse wire format and serialize', () => {
