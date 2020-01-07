@@ -86,15 +86,17 @@ pub enum StakeAuthorize {
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Lockup {
-    /// UnixTimestamp at which this stake will allow withdrawal, unless
-    ///  to the custodian.
+    /// UnixTimestamp at which this stake will allow withdrawal, or
+    ///   changes to authorized staker or withdrawer, unless the
+    ///   transaction is signed by the custodian
     pub unix_timestamp: UnixTimestamp,
-    /// epoch height at which this stake will allow withdrawal, unless
+    /// epoch height at which this stake will allow withdrawal, or
+    ///   changes to authorized staker or withdrawer, unless the
+    ///   transaction is signed by the custodian
     ///  to the custodian
     pub epoch: Epoch,
-    /// custodian account, the only account to which this stake will honor a
-    ///  withdrawal before lockup expires.  After lockup expires, custodian
-    ///  is irrelevant
+    /// custodian signature on a transaction exempts the operation from
+    ///  lockup constraints
     pub custodian: Pubkey,
 }
 
