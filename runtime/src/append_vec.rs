@@ -567,6 +567,7 @@ pub mod tests {
         let file = get_append_vec_path("test_append_vec_set_file_bad_size");
         let path = &file.path;
         let mut av = AppendVec::new_empty_map(0);
+        assert_eq!(av.accounts(0).len(), 0);
 
         let _data = OpenOptions::new()
             .read(true)
@@ -681,18 +682,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_set_file_empty_data() {
-        let file = get_append_vec_path("test_set_file_empty_data");
-        let path = &file.path;
-        let mut av = AppendVec::new(&path, true, 1024 * 1024);
-
-        assert_eq!(av.accounts(0).len(), 0);
-
-        let result = av.set_file(path);
-        assert_matches!(result, Ok(_));
-    }
-
-    #[test]
     fn test_set_file_crafted_data_len() {
         let file = get_append_vec_path("test_set_file_crafted_data_len");
         let path = &file.path;
@@ -713,6 +702,7 @@ pub mod tests {
         assert_eq!(account.meta.data_len, crafted_data_len);
 
         av.flush().unwrap();
+        av.file_size = 0;
         let result = av.set_file(path);
         assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
     }
@@ -736,6 +726,7 @@ pub mod tests {
         assert_matches!(accounts.first(), None);
 
         av.flush().unwrap();
+        av.file_size = 0;
         let result = av.set_file(path);
         assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
     }
@@ -788,6 +779,7 @@ pub mod tests {
         }
 
         av.flush().unwrap();
+        av.file_size = 0;
         let result = av.set_file(path);
         assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
     }
