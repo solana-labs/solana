@@ -48,7 +48,8 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
-    thread::Result,
+    thread::{sleep, Result},
+    time::Duration,
 };
 
 #[derive(Clone, Debug)]
@@ -67,6 +68,7 @@ pub struct ValidatorConfig {
     pub broadcast_stage_type: BroadcastStageType,
     pub partition_cfg: Option<PartitionCfg>,
     pub fixed_leader_schedule: Option<FixedSchedule>,
+    pub wait_for_super_majority: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -86,6 +88,7 @@ impl Default for ValidatorConfig {
             broadcast_stage_type: BroadcastStageType::Standard,
             partition_cfg: None,
             fixed_leader_schedule: None,
+            wait_for_super_majority: false,
         }
     }
 }
@@ -293,14 +296,7 @@ impl Validator {
         if config.snapshot_config.is_some() {
             poh_recorder.set_bank(&bank);
         }
-
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-        let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
-        assert_eq!(
-            blocktree.new_shreds_signals.len(),
-            1,
-            "New shred signal for the TVU should be the same as the clear bank signal."
-        );
 
         let ip_echo_server = solana_net_utils::ip_echo_server(node.sockets.ip_echo.unwrap());
 
@@ -319,6 +315,22 @@ impl Validator {
                 .write()
                 .unwrap()
                 .set_entrypoint(entrypoint_info.clone());
+        }
+
+        if config.wait_for_super_majority {
+            info!(
+                "Waiting more than 66% of activated stake at slot {} to be in gossip...",
+                bank.slot()
+            );
+            loop {
+                let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info);
+
+                info!("{}% of activated stake in gossip", gossip_stake_percent,);
+                if gossip_stake_percent > 66 {
+                    break;
+                }
+                sleep(Duration::new(1, 0));
+            }
         }
 
         let sockets = Sockets {
@@ -352,6 +364,13 @@ impl Validator {
         } else {
             Some(voting_keypair.clone())
         };
+
+        let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
+        assert_eq!(
+            blocktree.new_shreds_signals.len(),
+            1,
+            "New shred signal for the TVU should be the same as the clear bank signal."
+        );
 
         let tvu = Tvu::new(
             vote_account,
@@ -582,6 +601,35 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
     (node, contact_info, mint_keypair, ledger_path)
+}
+
+// Get the activated stake percentage (based on the provided bank) that is visible in gossip
+fn get_stake_percent_in_gossip(
+    bank: &Arc<solana_runtime::bank::Bank>,
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
+) -> u64 {
+    let mut gossip_stake = 0;
+    let mut total_activated_stake = 0;
+    let tvu_peers = cluster_info.read().unwrap().tvu_peers();
+
+    for (activated_stake, vote_account) in bank.vote_accounts().values() {
+        let vote_state =
+            solana_vote_program::vote_state::VoteState::from(&vote_account).unwrap_or_default();
+        total_activated_stake += activated_stake;
+        if tvu_peers
+            .iter()
+            .any(|peer| peer.id == vote_state.node_pubkey)
+        {
+            trace!(
+                "observed {} in gossip, (activated_stake={})",
+                vote_state.node_pubkey,
+                activated_stake
+            );
+            gossip_stake += activated_stake;
+        }
+    }
+
+    gossip_stake * 100 / total_activated_stake
 }
 
 #[cfg(test)]
