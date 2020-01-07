@@ -537,6 +537,12 @@ pub fn main() {
                 .takes_value(true)
                 .help("Redirect logging to the specified file, '-' for standard error"),
         )
+        .arg(
+            Arg::with_name("wait_for_supermajority")
+                .long("wait-for-supermajority")
+                .takes_value(false)
+                .help("After processing the ledger, wait until a supermajority of stake is visible on gossip before starting PoH"),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(
@@ -582,6 +588,7 @@ pub fn main() {
     validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
 
     validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
+    validator_config.wait_for_supermajority = matches.is_present("wait_for_supermajority");
 
     validator_config.rpc_config.drone_addr = matches.value_of("rpc_drone_addr").map(|address| {
         solana_net_utils::parse_host_port(address).expect("failed to parse drone address")
