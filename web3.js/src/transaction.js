@@ -96,7 +96,20 @@ type SignaturePubkeyPair = {|
  */
 type TransactionCtorFields = {|
   recentBlockhash?: Blockhash | null,
+  nonceInfo?: NonceInformation | null,
   signatures?: Array<SignaturePubkeyPair>,
+|};
+
+/**
+ * NonceInformation to be used to build a Transaction.
+ *
+ * @typedef {Object} NonceInformation
+ * @property {nonce} The current Nonce blockhash
+ * @property {nonceInstruction} The NonceAdvance Instruction
+ */
+type NonceInformation = {|
+  nonce: Blockhash,
+  nonceInstruction: TransactionInstruction,
 |};
 
 /**
@@ -128,6 +141,12 @@ export class Transaction {
    * A recent transaction id.  Must be populated by the caller
    */
   recentBlockhash: Blockhash | null;
+
+  /**
+   * Optional Nonce information. If populated, transaction will use a durable
+   * Nonce hash instead of a recentBlockhash. Must be populated by the caller
+   */
+  nonceInfo: NonceInformation | null;
 
   /**
    * Construct an empty Transaction
@@ -164,6 +183,11 @@ export class Transaction {
    * @private
    */
   _getSignData(): Buffer {
+    const {nonceInfo} = this;
+    if (nonceInfo) {
+      this.recentBlockhash = nonceInfo.nonce;
+      this.instructions.unshift(nonceInfo.nonceInstruction);
+    }
     const {recentBlockhash} = this;
     if (!recentBlockhash) {
       throw new Error('Transaction recentBlockhash required');
