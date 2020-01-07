@@ -54,18 +54,18 @@ pub const DEFAULT_NUM_DIRS: u32 = 4;
 
 #[derive(Debug, Default)]
 pub struct ErrorCounters {
-    pub account_not_found: usize,
+    pub total: usize,
     pub account_in_use: usize,
     pub account_loaded_twice: usize,
+    pub account_not_found: usize,
     pub blockhash_not_found: usize,
     pub blockhash_too_old: usize,
-    pub reserve_blockhash: usize,
-    pub invalid_account_for_fee: usize,
-    pub insufficient_funds: usize,
-    pub invalid_account_index: usize,
-    pub duplicate_signature: usize,
     pub call_chain_too_deep: usize,
-    pub missing_signature_for_fee: usize,
+    pub duplicate_signature: usize,
+    pub instruction_error: usize,
+    pub insufficient_funds: usize,
+    pub invalid_account_for_fee: usize,
+    pub invalid_account_index: usize,
 }
 
 #[derive(Deserialize, Serialize, Default, Debug, PartialEq, Clone)]

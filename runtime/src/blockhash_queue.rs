@@ -51,12 +51,11 @@ impl BlockhashQueue {
 
     /// Check if the age of the hash is within the max_age
     /// return false for any hashes with an age above max_age
-    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> bool {
-        let hash_age = self.ages.get(hash);
-        match hash_age {
-            Some(age) => self.hash_height - age.hash_height <= max_age as u64,
-            _ => false,
-        }
+    /// return None for any hashes that were not found
+    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> Option<bool> {
+        self.ages
+            .get(hash)
+            .map(|age| self.hash_height - age.hash_height <= max_age as u64)
     }
 
     /// check if hash is valid
@@ -135,6 +134,7 @@ mod tests {
         assert!(hash_queue.check_hash(last_hash));
         assert_eq!(hash_queue.hash_height(), 1);
     }
+
     #[test]
     fn test_reject_old_last_hash() {
         let mut hash_queue = BlockhashQueue::new(100);
@@ -145,7 +145,14 @@ mod tests {
         }
         // Assert we're no longer able to use the oldest hash.
         assert!(!hash_queue.check_hash(last_hash));
+        assert_eq!(None, hash_queue.check_hash_age(&last_hash, 0));
+
+        // Assert we are not able to use the oldest remaining hash.
+        let last_valid_hash = hash(&serialize(&1).unwrap());
+        assert!(hash_queue.check_hash(last_valid_hash));
+        assert_eq!(Some(false), hash_queue.check_hash_age(&last_valid_hash, 0));
     }
+
     /// test that when max age is 0, that a valid last_hash still passes the age check
     #[test]
     fn test_queue_init_blockhash() {
@@ -153,7 +160,7 @@ mod tests {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&last_hash, &FeeCalculator::default());
         assert_eq!(last_hash, hash_queue.last_hash());
-        assert!(hash_queue.check_hash_age(&last_hash, 0));
+        assert_eq!(Some(true), hash_queue.check_hash_age(&last_hash, 0));
     }
 
     #[test]
@@ -169,7 +176,10 @@ mod tests {
         let recent_blockhashes = blockhash_queue.get_recent_blockhashes();
         // Verify that the returned hashes are most recent
         for (_slot, hash) in recent_blockhashes {
-            assert!(blockhash_queue.check_hash_age(hash, MAX_RECENT_BLOCKHASHES));
+            assert_eq!(
+                Some(true),
+                blockhash_queue.check_hash_age(hash, MAX_RECENT_BLOCKHASHES)
+            );
         }
     }
 }

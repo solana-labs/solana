@@ -192,7 +192,10 @@ fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
         goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
     }
     // Verify blockhash_queue is full (genesis hash has been kicked out)
-    assert!(!bank.check_hash_age(&genesis_hash, MAX_RECENT_BLOCKHASHES));
+    assert_eq!(
+        Some(false),
+        bank.check_hash_age(&genesis_hash, MAX_RECENT_BLOCKHASHES)
+    );
     bencher.iter(|| {
         bank.update_recent_blockhashes();
     });
