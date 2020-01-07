@@ -12,7 +12,7 @@ We will describe a way to minimize this trust using Merkle Proofs to anchor the 
 
 A 'light client' is a cluster participant that does not itself run a validator. This light client would provide a level of security greater than trusting a remote validator, without requiring the light client to spend a lot of resources verifying the ledger.
 
-Rather than providing transaction signatures directly to a light client, the validator instead generates a Merkle Proof from the transaction of interest to the root of a Merkle Tree of all transactions in the including block. This Merkle Root is stored in a ledger entry which is voted on by validators, providing it consensus legitimacy. The additional level of security for a light client depends on an initial canonical set of validators the light client considers to be the stakeholders of the cluster. As that set is changed, the client can update its internal set of known validators with [receipts](simple-payment-and-state-verification.md#receipts). This may become challenging with a large number of delegated stakes.
+Rather than naively providing all the transaction signatures in a block to a light client, the validator instead generates a Merkle Proof from the transaction of interest to the root of a Merkle Tree of all transactions in the including block. This Merkle Root is stored in a ledger entry which is voted on by validators, providing it consensus legitimacy. The additional level of security for a light client depends on an initial canonical set of validators the light client considers to be the stakeholders of the cluster. As that set is changed, the client can update its internal set of known validators with [receipts](simple-payment-and-state-verification.md#receipts). This may become challenging with a large number of delegated stakes.
 
 Validators themselves may want to use light client APIs for performance reasons. For example, during the initial launch of a validator, the validator may use a cluster provided checkpoint of the state and verify it with a receipt.
 
@@ -32,7 +32,7 @@ An Entry-Merkle is a Merkle Root including all transactions in the entry, sorted
 
 ![Block Merkle Diagram](../.gitbook/assets/spv-block-merkle.svg)
 
-A Block-Merkle is a Merkle root of all the Entry-Merkles sequenced in the block. Transaction status is necessary for the receipt because the state receipt is constructed for the block. Two transactions over the same state can appear in the block, and therefore, there is no way to infer from just the state whether a transaction that is committed to the ledger has succeeded or failed in modifying the intended state. It may not be necessary to encode the full status code, but a single status bit to indicate the transaction's success.
+A Block-Merkle is a Merkle Root of all the Entry-Merkles sequenced in the block. Transaction status is necessary for the receipt because the state receipt is constructed for the block. Two transactions over the same state can appear in the block, and therefore, there is no way to infer from just the state whether a transaction that is committed to the ledger has succeeded or failed in modifying the intended state. It may not be necessary to encode the full status code, but a single status bit to indicate the transaction's success.
 
 ### State Merkle Path
 
@@ -58,17 +58,17 @@ Clients that want to query the chain for a receipt of the "latest" state would n
 
 Leaders should coalesce the validator votes by stake weight into a single entry. This will reduce the number of entries necessary to create a receipt.
 
-### Chain of Entries
+### Chain of Components in Merkle Path
 
-A receipt has a PoH link from the payment or state Merkle Path root to a list of consecutive validation votes.
+A receipt has a PoH link from the Payment or State Merkle Path Root to a list of consecutive validation votes.
 
 It contains the following:
 
-* State -&gt; Bank-Merkle
+* Transaction -&gt; Entry-Merkle -&gt; Block-Merkle -&gt; Bank-Merkle (for Payment Merkle Path)
 
   or
 
-* Transaction -&gt; Entry-Merkle -&gt; Block-Merkle -&gt; Bank-Merkle
+* State -&gt; Bank-Merkle (for State Merkle Path)
 
 And a vector of PoH entries:
 
@@ -89,13 +89,13 @@ LightEntry {
 }
 ```
 
-The light entries are reconstructed from Entries and simply show the entry Merkle Root that was mixed in to the PoH hash, instead of the full transaction set.
+The light entries are reconstructed from Entries and simply show the Entry-Merkle Root that was mixed in to the PoH hash, instead of the full transaction set.
 
 Clients do not need the starting vote state. The [fork selection](../implemented-proposals/tower-bft.md) algorithm is defined such that only votes that appear after the transaction provide finality for the transaction, and finality is independent of the starting state.
 
 ### Verification
 
-A light client that is aware of the supermajority set validators can verify a receipt by following the Merkle Path to the PoH chain. The Bank-Merkle is the Merkle Root and will appear in votes included in an Entry. The light client can simulate [fork selection](../implemented-proposals/tower-bft.md) for the consecutive votes and verify that the receipt is confirmed at the desired lockout threshold.
+A light client that is aware of the supermajority set validators can verify a receipt by following the Merkle Path to the PoH chain. The Bank-Merkle is the Merkle Root that will appear in votes. The light client can simulate [fork selection](../implemented-proposals/tower-bft.md) for the consecutive votes and verify that the receipt is confirmed at the desired lockout threshold.
 
 ### Synthetic State
 
