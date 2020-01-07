@@ -2,7 +2,7 @@
 
 This design describes Solana's _Tower BFT_ algorithm. It addresses the following problems:
 
-* Some forks may not end up accepted by the super-majority of the cluster, and voters need to recover from voting on such forks.
+* Some forks may not end up accepted by the supermajority of the cluster, and voters need to recover from voting on such forks.
 * Many forks may be votable by different voters, and each voter may see a different set of votable forks. The selected forks should eventually converge for the cluster.
 * Reward based votes have an associated risk. Voters should have the ability to configure how much risk they take on.
 * The [cost of rollback](tower-bft.md#cost-of-rollback) needs to be computable. It is important to clients that rely on some measurable form of Consistency. The costs to break consistency need to be computable, and increase super-linearly for older votes.
