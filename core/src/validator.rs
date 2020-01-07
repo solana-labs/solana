@@ -141,27 +141,7 @@ impl Validator {
 
         warn!("identity pubkey: {:?}", id);
         warn!("vote pubkey: {:?}", vote_account);
-        warn!(
-            "CUDA is {}abled",
-            if solana_perf::perf_libs::api().is_some() {
-                "en"
-            } else {
-                "dis"
-            }
-        );
-
-        // Validator binaries built on a machine with AVX support will generate invalid opcodes
-        // when run on machines without AVX causing a non-obvious process abort.  Instead detect
-        // the mismatch and error cleanly.
-        #[target_feature(enable = "avx")]
-        {
-            if is_x86_feature_detected!("avx") {
-                info!("AVX detected");
-            } else {
-                error!("Your machine does not have AVX support, please rebuild from source on your machine");
-                process::exit(1);
-            }
-        }
+        report_target_features();
 
         info!("entrypoint: {:?}", entrypoint_info_option);
 
@@ -601,6 +581,30 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
     (node, contact_info, mint_keypair, ledger_path)
+}
+
+fn report_target_features() {
+    warn!(
+        "CUDA is {}abled",
+        if solana_perf::perf_libs::api().is_some() {
+            "en"
+        } else {
+            "dis"
+        }
+    );
+
+    // Validator binaries built on a machine with AVX support will generate invalid opcodes
+    // when run on machines without AVX causing a non-obvious process abort.  Instead detect
+    // the mismatch and error cleanly.
+    #[target_feature(enable = "avx")]
+    {
+        if is_x86_feature_detected!("avx") {
+            info!("AVX detected");
+        } else {
+            error!("Your machine does not have AVX support, please rebuild from source on your machine");
+            process::exit(1);
+        }
+    }
 }
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
