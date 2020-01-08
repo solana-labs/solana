@@ -677,7 +677,7 @@ export class Connection {
   }
 
   /**
-   * Fetch the balance for the specified public key
+   * Fetch the balance for the specified public key, return with context
    */
   async getBalanceAndContext(
     publicKey: PublicKey,
@@ -692,6 +692,10 @@ export class Connection {
     assert(typeof res.result !== 'undefined');
     return res.result;
   }
+
+  /**
+   * Fetch the balance for the specified public key
+   */
   async getBalance(
     publicKey: PublicKey,
     commitment: ?Commitment,
@@ -704,7 +708,7 @@ export class Connection {
   }
 
   /**
-   * Fetch all the account info for the specified public key
+   * Fetch all the account info for the specified public key, return with context
    */
   async getAccountInfoAndContext(
     publicKey: PublicKey,
@@ -737,6 +741,10 @@ export class Connection {
       value,
     };
   }
+
+  /**
+   * Fetch all the account info for the specified public key
+   */
   async getAccountInfo(
     publicKey: PublicKey,
     commitment: ?Commitment,
@@ -779,7 +787,7 @@ export class Connection {
   }
 
   /**
-   * Confirm the transaction identified by the specified signature
+   * Confirm the transaction identified by the specified signature, return with context
    */
   async confirmTransactionAndContext(
     signature: TransactionSignature,
@@ -794,6 +802,10 @@ export class Connection {
     assert(typeof res.result !== 'undefined');
     return res.result;
   }
+
+  /**
+   * Confirm the transaction identified by the specified signature
+   */
   async confirmTransaction(
     signature: TransactionSignature,
     commitment: ?Commitment,
@@ -971,7 +983,7 @@ export class Connection {
   }
 
   /**
-   * Fetch a recent blockhash from the cluster
+   * Fetch a recent blockhash from the cluster, return with context
    */
   async getRecentBlockhashAndContext(
     commitment: ?Commitment,
@@ -986,6 +998,10 @@ export class Connection {
     assert(typeof res.result !== 'undefined');
     return res.result;
   }
+
+  /**
+   * Fetch a recent blockhash from the cluster
+   */
   async getRecentBlockhash(
     commitment: ?Commitment,
   ): Promise<BlockhashAndFeeCalculator> {
@@ -1033,7 +1049,7 @@ export class Connection {
   }
 
   /**
-   * Fetch the contents of a Nonce account from the cluster
+   * Fetch the contents of a Nonce account from the cluster, return with context
    */
   async getNonceAndContext(
     nonceAccount: PublicKey,
@@ -1064,6 +1080,10 @@ export class Connection {
       value,
     };
   }
+
+  /**
+   * Fetch the contents of a Nonce account from the cluster
+   */
   async getNonce(
     nonceAccount: PublicKey,
     commitment: ?Commitment,
