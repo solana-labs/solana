@@ -33,7 +33,7 @@ The `bank_hash` of each bank `B` is now augmented to be:
 We include these components to support the proof generation described
 in the sections below.
 
-## Repair Proof
+## Proof of Repair Safety
 
 Let `S'` be some version of slot `S` that a validator has already detected a
 duplicate version of and dropped and marked as "duplicate" (step 2 of the
@@ -70,7 +70,7 @@ hashes `H1` and `H2` for two banks `B1` and `B2` where both:
 Let `S` and `S'` be two versions of some slot. A proof shows two signed votes for two 
 banks `B1` and `B2` with bank hashes `H(B1)` and `H(B2)`. The proof shows:
 s
-* `Proof of Minority`: For each of these hashes `H` and each bank `B`, show 
+* `Proof of Unconfirmed`: For each of these hashes `H` and each bank `B`, show 
 that `Confirmed(B) < S` by providing `state_hash(B)`, `Confirmed(B).slot`, 
 `bank_hash(parent(B))`, `parent(B).slot` such that:
 
