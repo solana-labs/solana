@@ -30,17 +30,12 @@ type RpcResponseAndContext<T> = {
  * @private
  */
 function jsonRpcResultAndContext(resultDescription: any) {
-  return struct.union([
-    // those same methods return results with context in v0.21+ servers
-    jsonRpcResult({
-      context: struct({
-        slot: 'number',
-      }),
-      value: resultDescription,
+  return jsonRpcResult({
+    context: struct({
+      slot: 'number',
     }),
-    // selected methods return "bare" results in pre-v0.21 servers
-    jsonRpcResult(resultDescription),
-  ]);
+    value: resultDescription,
+  });
 }
 
 /**
@@ -375,19 +370,6 @@ const GetClusterNodes = jsonRpcResult(
     }),
   ]),
 );
-/**
- * @ignore
- */
-const GetClusterNodes_015 = jsonRpcResult(
-  struct.list([
-    struct({
-      id: 'string',
-      gossip: 'string',
-      tpu: struct.union(['null', 'string']),
-      rpc: struct.union(['null', 'string']),
-    }),
-  ]),
-);
 
 /**
  * Expected JSON RPC response for the "getVoteAccounts" message
@@ -507,20 +489,6 @@ const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext([
   'string',
   struct({
     burnPercent: 'number',
-    lamportsPerSignature: 'number',
-    maxLamportsPerSignature: 'number',
-    minLamportsPerSignature: 'number',
-    targetLamportsPerSignature: 'number',
-    targetSignaturesPerSlot: 'number',
-  }),
-]);
-
-/**
- * @ignore
- */
-const GetRecentBlockhash_016 = jsonRpcResult([
-  'string',
-  struct({
     lamportsPerSignature: 'number',
     maxLamportsPerSignature: 'number',
     minLamportsPerSignature: 'number',
@@ -722,21 +690,7 @@ export class Connection {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-
-    const isV021 =
-      typeof res.result.context !== 'undefined' &&
-      typeof res.result.value !== 'undefined';
-
-    if (isV021) {
-      return res.result;
-    } else {
-      return {
-        context: {
-          slot: NaN,
-        },
-        value: res.result,
-      };
-    }
+    return res.result;
   }
   async getBalance(
     publicKey: PublicKey,
@@ -764,18 +718,11 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
 
-    const isV021 =
-      typeof res.result.context !== 'undefined' &&
-      typeof res.result.value !== 'undefined';
-
-    const slot = isV021 ? res.result.context.slot : NaN;
-    const resultValue = isV021 ? res.result.value : res.result;
-
-    if (!resultValue) {
+    if (!res.result.value) {
       throw new Error('Invalid request');
     }
 
-    const {executable, owner, lamports, data} = resultValue;
+    const {executable, owner, lamports, data} = res.result.value;
     const value = {
       executable,
       owner: new PublicKey(owner),
@@ -785,7 +732,7 @@ export class Connection {
 
     return {
       context: {
-        slot,
+        slot: res.result.context.slot,
       },
       value,
     };
@@ -845,21 +792,7 @@ export class Connection {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-
-    const isV021 =
-      typeof res.result.context !== 'undefined' &&
-      typeof res.result.value !== 'undefined';
-
-    if (isV021) {
-      return res.result;
-    } else {
-      return {
-        context: {
-          slot: NaN,
-        },
-        value: res.result,
-      };
-    }
+    return res.result;
   }
   async confirmTransaction(
     signature: TransactionSignature,
@@ -877,23 +810,6 @@ export class Connection {
    */
   async getClusterNodes(): Promise<Array<ContactInfo>> {
     const unsafeRes = await this._rpcRequest('getClusterNodes', []);
-
-    // Legacy v0.15 response.  TODO: Remove in August 2019
-    try {
-      const res_015 = GetClusterNodes_015(unsafeRes);
-      if (res_015.error) {
-        console.log('no', res_015.error);
-        throw new Error(res_015.error.message);
-      }
-      return res_015.result.map(node => {
-        node.pubkey = node.id;
-        node.id = undefined;
-        return node;
-      });
-    } catch (e) {
-      // Not legacy format
-    }
-    // End Legacy v0.15 response
 
     const res = GetClusterNodes(unsafeRes);
     if (res.error) {
@@ -1063,46 +979,12 @@ export class Connection {
     const args = this._argsWithCommitment([], commitment);
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
 
-    // Legacy v0.16 response.  TODO: Remove in September 2019
-    try {
-      const res_016 = GetRecentBlockhash_016(unsafeRes);
-      if (res_016.error) {
-        throw new Error(res_016.error.message);
-      }
-      const [blockhash, feeCalculator] = res_016.result;
-      feeCalculator.burnPercent = 0;
-
-      return {
-        context: {
-          slot: NaN,
-        },
-        value: [blockhash, feeCalculator],
-      };
-    } catch (e) {
-      // Not legacy format
-    }
-    // End Legacy v0.16 response
-
     const res = GetRecentBlockhashAndContextRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-
-    const isV021 =
-      typeof res.result.context !== 'undefined' &&
-      typeof res.result.value !== 'undefined';
-
-    if (isV021) {
-      return res.result;
-    } else {
-      return {
-        context: {
-          slot: NaN,
-        },
-        value: res.result,
-      };
-    }
+    return res.result;
   }
   async getRecentBlockhash(
     commitment: ?Commitment,
@@ -1167,23 +1049,17 @@ export class Connection {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-
-    const isV021 =
-      typeof res.result.context !== 'undefined' &&
-      typeof res.result.value !== 'undefined';
-
-    const slot = isV021 ? res.result.context.slot : NaN;
-    const resultValue = isV021 ? res.result.value : res.result;
-
-    if (!resultValue) {
+    if (!res.result.value) {
       throw new Error('Invalid request');
     }
 
-    const value = NonceAccount.fromAccountData(Buffer.from(resultValue.data));
+    const value = NonceAccount.fromAccountData(
+      Buffer.from(res.result.value.data),
+    );
 
     return {
       context: {
-        slot,
+        slot: res.result.context.slot,
       },
       value,
     };

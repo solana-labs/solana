@@ -20,17 +20,22 @@ export function mockGetRecentBlockhash(commitment: ?Commitment) {
     },
     {
       error: null,
-      result: [
-        recentBlockhash.publicKey.toBase58(),
-        {
-          lamportsPerSignature: 42,
-          burnPercent: 50,
-          maxLamportsPerSignature: 42,
-          minLamportsPerSignature: 42,
-          targetLamportsPerSignature: 42,
-          targetSignaturesPerSlot: 42,
+      result: {
+        context: {
+          slot: 11,
         },
-      ],
+        value: [
+          recentBlockhash.publicKey.toBase58(),
+          {
+            lamportsPerSignature: 42,
+            burnPercent: 50,
+            maxLamportsPerSignature: 42,
+            minLamportsPerSignature: 42,
+            targetLamportsPerSignature: 42,
+            targetSignaturesPerSlot: 42,
+          },
+        ],
+      },
     },
   ]);
 }
