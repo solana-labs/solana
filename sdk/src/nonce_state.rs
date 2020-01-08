@@ -189,7 +189,6 @@ pub fn create_account(lamports: u64) -> Account {
 }
 
 /// Convenience function for working with keyed accounts in tests
-#[cfg(not(feature = "program"))]
 pub fn with_test_keyed_account<F>(lamports: u64, signer: bool, mut f: F)
 where
     F: FnMut(&mut KeyedAccount),

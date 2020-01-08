@@ -7,6 +7,7 @@ use solana_sdk::{
     entrypoint,
     entrypoint::SUCCESS,
     info,
+    log::Log,
     pubkey::Pubkey,
     rent,
     sysvar::{

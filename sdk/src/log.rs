@@ -1,6 +1,8 @@
 //! @brief Solana Rust-based BPF program logging
 
-use crate::account_info::AccountInfo;
+#![cfg(feature = "program")]
+
+use crate::{account_info::AccountInfo, pubkey::Pubkey};
 
 /// Prints a string
 /// There are two forms and are fast
@@ -27,37 +29,29 @@ macro_rules! info {
 /// Prints a string to stdout
 ///
 /// @param message - Message to print
-#[cfg(feature = "program")]
 #[inline]
 pub fn sol_log(message: &str) {
     unsafe {
         sol_log_(message.as_ptr(), message.len() as u64);
     }
 }
-#[cfg(feature = "program")]
 extern "C" {
     fn sol_log_(message: *const u8, length: u64);
 }
-#[cfg(not(feature = "program"))]
-pub fn sol_log(_message: &str) {}
 
 /// Prints 64 bit values represented as hexadecimal to stdout
 ///
 /// @param argx - integer arguments to print
 
-#[cfg(feature = "program")]
 #[inline]
 pub fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
     unsafe {
         sol_log_64_(arg1, arg2, arg3, arg4, arg5);
     }
 }
-#[cfg(feature = "program")]
 extern "C" {
     fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64);
 }
-#[cfg(not(feature = "program"))]
-pub fn sol_log_64(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) {}
 
 /// Prints the hexadecimal representation of a slice
 ///
@@ -66,6 +60,18 @@ pub fn sol_log_64(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) {}
 pub fn sol_log_slice(slice: &[u8]) {
     for (i, s) in slice.iter().enumerate() {
         sol_log_64(0, 0, 0, i as u64, u64::from(*s));
+    }
+}
+
+/// Prints a pubkey
+pub trait Log {
+    fn log(&self);
+}
+impl Log for Pubkey {
+    fn log(&self) {
+        for (i, k) in self.to_bytes().iter().enumerate() {
+            sol_log_64(0, 0, 0, i as u64, u64::from(*k));
+        }
     }
 }
 

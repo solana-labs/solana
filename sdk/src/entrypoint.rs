@@ -1,5 +1,7 @@
 //! @brief Solana Rust-based BPF program entrypoint and its parameter types
 
+#![cfg(feature = "program")]
+
 extern crate alloc;
 
 use crate::{account_info::AccountInfo, pubkey::Pubkey};
