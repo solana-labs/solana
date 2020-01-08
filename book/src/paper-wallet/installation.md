@@ -2,7 +2,7 @@
 Follow this guide to setup Solana's key generation tool called `solana-keygen`
 
 {% hint style="warn" %}
-After installation, ensure your version is `0.21.6` or higher by running `solana-keygen -V`
+After installation, ensure your version is `0.21.7` or higher by running `solana-keygen -V`
 {% endhint %}
 
 ## Download
