@@ -3,10 +3,21 @@
 import {
   Account,
   BudgetProgram,
+  Connection,
   SystemInstruction,
   SystemProgram,
   Transaction,
+  sendAndConfirmRecentTransaction,
+  LAMPORTS_PER_SOL,
 } from '../src';
+import {mockRpcEnabled} from './__mocks__/node-fetch';
+import {sleep} from '../src/util/sleep';
+import {url} from './url';
+
+if (!mockRpcEnabled) {
+  // Testing max commitment level takes around 20s to complete
+  jest.setTimeout(30000);
+}
 
 test('createAccount', () => {
   const from = new Account();
@@ -85,7 +96,9 @@ test('createNonceAccount', () => {
   expect(transaction.instructions[0].programId).toEqual(
     SystemProgram.programId,
   );
-  expect(transaction.instructions[1].programId).toEqual(SystemProgram.programId);
+  expect(transaction.instructions[1].programId).toEqual(
+    SystemProgram.programId,
+  );
   // TODO: Validate transaction contents more
 });
 
@@ -258,4 +271,73 @@ test('non-SystemInstruction error', () => {
   expect(() => {
     SystemInstruction.from(transaction.instructions[0]);
   }).toThrow();
+});
+
+test('live Nonce actions', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url, 'recent');
+  const nonceAccount = new Account();
+  const from = new Account();
+  const to = new Account();
+  const authority = new Account();
+  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
+  await connection.requestAirdrop(authority.publicKey, LAMPORTS_PER_SOL);
+
+  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+    SystemProgram.nonceSpace,
+    'recent',
+  );
+
+  let createNonceAccount = SystemProgram.createNonceAccount(
+    from.publicKey,
+    nonceAccount.publicKey,
+    from.publicKey,
+    minimumAmount,
+  );
+  await sendAndConfirmRecentTransaction(
+    connection,
+    createNonceAccount,
+    from,
+    nonceAccount,
+  );
+  const nonceBalance = await connection.getBalance(nonceAccount.publicKey);
+  expect(nonceBalance).toEqual(minimumAmount);
+
+  const nonceQuery1 = await connection.getNonce(nonceAccount.publicKey);
+  const nonceQuery2 = await connection.getNonce(nonceAccount.publicKey);
+  expect(nonceQuery1.nonce).toEqual(nonceQuery2.nonce);
+
+  await sleep(500);
+
+  const advanceNonce = new Transaction().add(
+    SystemProgram.nonceAdvance(nonceAccount.publicKey, from.publicKey),
+  );
+  await sendAndConfirmRecentTransaction(connection, advanceNonce, from);
+
+  const nonceQuery3 = await connection.getNonce(nonceAccount.publicKey);
+  expect(nonceQuery1.nonce).not.toEqual(nonceQuery3.nonce);
+  const nonce = nonceQuery3.nonce;
+
+  await sleep(500);
+
+  let transfer = SystemProgram.transfer(
+    from.publicKey,
+    to.publicKey,
+    minimumAmount,
+  );
+  transfer.nonceInfo = {
+    nonce,
+    nonceInstruction: SystemProgram.nonceAdvance(
+      nonceAccount.publicKey,
+      from.publicKey,
+    ),
+  };
+
+  await sendAndConfirmRecentTransaction(connection, transfer, from);
+  const toBalance = await connection.getBalance(to.publicKey);
+  expect(toBalance).toEqual(minimumAmount);
 });

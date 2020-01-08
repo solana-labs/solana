@@ -1224,59 +1224,63 @@ export class Connection {
     transaction: Transaction,
     ...signers: Array<Account>
   ): Promise<TransactionSignature> {
-    for (;;) {
-      // Attempt to use a recent blockhash for up to 30 seconds
-      const seconds = new Date().getSeconds();
-      if (
-        this._blockhashInfo.recentBlockhash != null &&
-        this._blockhashInfo.seconds < seconds + 30
-      ) {
-        transaction.recentBlockhash = this._blockhashInfo.recentBlockhash;
-        transaction.sign(...signers);
-        if (!transaction.signature) {
-          throw new Error('!signature'); // should never happen
-        }
-
-        // If the signature of this transaction has not been seen before with the
-        // current recentBlockhash, all done.
-        const signature = transaction.signature.toString();
-        if (!this._blockhashInfo.transactionSignatures.includes(signature)) {
-          this._blockhashInfo.transactionSignatures.push(signature);
-          if (this._disableBlockhashCaching) {
-            this._blockhashInfo.seconds = -1;
-          }
-          break;
-        }
-      }
-
-      // Fetch a new blockhash
-      let attempts = 0;
-      const startTime = Date.now();
+    if (transaction.nonceInfo) {
+      transaction.sign(...signers);
+    } else {
       for (;;) {
-        const [
-          recentBlockhash,
-          //feeCalculator,
-        ] = await this.getRecentBlockhash();
+        // Attempt to use a recent blockhash for up to 30 seconds
+        const seconds = new Date().getSeconds();
+        if (
+          this._blockhashInfo.recentBlockhash != null &&
+          this._blockhashInfo.seconds < seconds + 30
+        ) {
+          transaction.recentBlockhash = this._blockhashInfo.recentBlockhash;
+          transaction.sign(...signers);
+          if (!transaction.signature) {
+            throw new Error('!signature'); // should never happen
+          }
 
-        if (this._blockhashInfo.recentBlockhash != recentBlockhash) {
-          this._blockhashInfo = {
+          // If the signature of this transaction has not been seen before with the
+          // current recentBlockhash, all done.
+          const signature = transaction.signature.toString();
+          if (!this._blockhashInfo.transactionSignatures.includes(signature)) {
+            this._blockhashInfo.transactionSignatures.push(signature);
+            if (this._disableBlockhashCaching) {
+              this._blockhashInfo.seconds = -1;
+            }
+            break;
+          }
+        }
+
+        // Fetch a new blockhash
+        let attempts = 0;
+        const startTime = Date.now();
+        for (;;) {
+          const [
             recentBlockhash,
-            seconds: new Date().getSeconds(),
-            transactionSignatures: [],
-          };
-          break;
-        }
-        if (attempts === 50) {
-          throw new Error(
-            `Unable to obtain a new blockhash after ${Date.now() -
-              startTime}ms`,
-          );
-        }
+            //feeCalculator,
+          ] = await this.getRecentBlockhash();
 
-        // Sleep for approximately half a slot
-        await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
+          if (this._blockhashInfo.recentBlockhash != recentBlockhash) {
+            this._blockhashInfo = {
+              recentBlockhash,
+              seconds: new Date().getSeconds(),
+              transactionSignatures: [],
+            };
+            break;
+          }
+          if (attempts === 50) {
+            throw new Error(
+              `Unable to obtain a new blockhash after ${Date.now() -
+                startTime}ms`,
+            );
+          }
 
-        ++attempts;
+          // Sleep for approximately half a slot
+          await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
+
+          ++attempts;
+        }
       }
     }
 

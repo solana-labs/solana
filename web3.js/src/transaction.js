@@ -184,7 +184,7 @@ export class Transaction {
    */
   _getSignData(): Buffer {
     const {nonceInfo} = this;
-    if (nonceInfo) {
+    if (nonceInfo && this.instructions[0] != nonceInfo.nonceInstruction) {
       this.recentBlockhash = nonceInfo.nonce;
       this.instructions.unshift(nonceInfo.nonceInstruction);
     }
@@ -203,30 +203,41 @@ export class Transaction {
 
     const programIds = [];
 
+    const allKeys = [];
     this.instructions.forEach(instruction => {
       instruction.keys.forEach(keySignerPair => {
-        const keyStr = keySignerPair.pubkey.toString();
-        if (!keys.includes(keyStr)) {
-          if (keySignerPair.isSigner) {
-            this.signatures.push({
-              signature: null,
-              publicKey: keySignerPair.pubkey,
-            });
-            if (!keySignerPair.isWritable) {
-              numReadonlySignedAccounts += 1;
-            }
-          } else {
-            if (!keySignerPair.isWritable) {
-              numReadonlyUnsignedAccounts += 1;
-            }
-          }
-          keys.push(keyStr);
-        }
+        allKeys.push(keySignerPair);
       });
 
       const programId = instruction.programId.toString();
       if (!programIds.includes(programId)) {
         programIds.push(programId);
+      }
+    });
+
+    allKeys.sort(function(x, y) {
+      const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
+      const checkWritable = x.isWritable === y.isWritable ? 0 : x.isWritable ? -1 : 1;
+      return checkSigner || checkWritable;
+    });
+
+    allKeys.forEach(keySignerPair => {
+      const keyStr = keySignerPair.pubkey.toString();
+      if (!keys.includes(keyStr)) {
+        if (keySignerPair.isSigner) {
+          this.signatures.push({
+            signature: null,
+            publicKey: keySignerPair.pubkey,
+          });
+          if (!keySignerPair.isWritable) {
+            numReadonlySignedAccounts += 1;
+          }
+        } else {
+          if (!keySignerPair.isWritable) {
+            numReadonlyUnsignedAccounts += 1;
+          }
+        }
+        keys.push(keyStr);
       }
     });
 

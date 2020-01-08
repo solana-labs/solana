@@ -13,7 +13,7 @@ import {PublicKey} from './publickey';
 const NonceAccountLayout = BufferLayout.struct([
   BufferLayout.u32('state'),
   Layout.publicKey('authorizedPubkey'),
-  Layout.publicKey('hash'),
+  Layout.publicKey('nonce'),
 ]);
 
 /**
