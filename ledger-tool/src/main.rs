@@ -515,7 +515,7 @@ fn open_database(ledger_path: &Path) -> Database {
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
-    solana_logger::setup_with_filter("solana=info");
+    solana_logger::setup_with_default("solana=info");
 
     let starting_slot_arg = Arg::with_name("starting_slot")
         .long("starting-slot")

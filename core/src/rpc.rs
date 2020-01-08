@@ -1023,7 +1023,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn set_log_filter(&self, _meta: Self::Metadata, filter: String) -> Result<()> {
-        solana_logger::setup_with_filter(&filter);
+        solana_logger::setup_with(&filter);
         Ok(())
     }
 
