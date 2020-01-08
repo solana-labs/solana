@@ -625,6 +625,8 @@ fn get_stake_percent_in_gossip(
                 activated_stake
             );
             gossip_stake += activated_stake;
+        } else if vote_state.node_pubkey == cluster_info.read().unwrap().id() {
+            gossip_stake += activated_stake;
         }
     }
 
