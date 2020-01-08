@@ -18,7 +18,7 @@ fn test_rpc_send_tx() {
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
@@ -27,7 +27,7 @@ fn test_rpc_send_tx() {
     });
     let rpc_addr = leader_data.rpc;
     let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let mut response = client
+    let response = client
         .post(&rpc_string)
         .header(CONTENT_TYPE, "application/json")
         .body(request.to_string())
@@ -44,7 +44,7 @@ fn test_rpc_send_tx() {
     let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
     let serial_tx = serialize(&tx).unwrap();
 
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
@@ -53,7 +53,7 @@ fn test_rpc_send_tx() {
     });
     let rpc_addr = leader_data.rpc;
     let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let mut response = client
+    let response = client
         .post(&rpc_string)
         .header(CONTENT_TYPE, "application/json")
         .body(request.to_string())
@@ -64,7 +64,7 @@ fn test_rpc_send_tx() {
 
     let mut confirmed_tx = false;
 
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
@@ -73,7 +73,7 @@ fn test_rpc_send_tx() {
     });
 
     for _ in 0..solana_sdk::clock::DEFAULT_TICKS_PER_SLOT {
-        let mut response = client
+        let response = client
             .post(&rpc_string)
             .header(CONTENT_TYPE, "application/json")
             .body(request.to_string())
@@ -104,7 +104,7 @@ fn test_rpc_invalid_requests() {
     let bob_pubkey = Pubkey::new_rand();
 
     // test invalid get_balance request
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
@@ -113,7 +113,7 @@ fn test_rpc_invalid_requests() {
     });
     let rpc_addr = leader_data.rpc;
     let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let mut response = client
+    let response = client
         .post(&rpc_string)
         .header(CONTENT_TYPE, "application/json")
         .body(request.to_string())
@@ -124,7 +124,7 @@ fn test_rpc_invalid_requests() {
     assert_eq!(the_error, "Invalid request");
 
     // test invalid get_account_info request
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
@@ -133,7 +133,7 @@ fn test_rpc_invalid_requests() {
     });
     let rpc_addr = leader_data.rpc;
     let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let mut response = client
+    let response = client
         .post(&rpc_string)
         .header(CONTENT_TYPE, "application/json")
         .body(request.to_string())
@@ -144,7 +144,7 @@ fn test_rpc_invalid_requests() {
     assert_eq!(the_error, "Invalid request");
 
     // test invalid get_account_info request
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
@@ -153,7 +153,7 @@ fn test_rpc_invalid_requests() {
     });
     let rpc_addr = leader_data.rpc;
     let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let mut response = client
+    let response = client
         .post(&rpc_string)
         .header(CONTENT_TYPE, "application/json")
         .body(request.to_string())

@@ -12,7 +12,7 @@ edition = "2018"
 env_logger = "0.7.1"
 lazy_static = "1.4.0"
 log = "0.4.8"
-reqwest = { version = "0.9.24", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.10.0", default-features = false, features = ["blocking", "rustls-tls"] }
 solana-sdk = { path = "../sdk", version = "0.23.0" }
 sys-info = "0.5.8"
 

@@ -9,20 +9,20 @@ use solana_sdk::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
 use std::{thread::sleep, time::Duration};
 
 pub struct RpcClientRequest {
-    client: reqwest::Client,
+    client: reqwest::blocking::Client,
     url: String,
 }
 
 impl RpcClientRequest {
     pub fn new(url: String) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::blocking::Client::new(),
             url,
         }
     }
 
     pub fn new_with_timeout(url: String, timeout: Duration) -> Self {
-        let client = reqwest::Client::builder()
+        let client = reqwest::blocking::Client::builder()
             .timeout(timeout)
             .build()
             .expect("build rpc client");
@@ -51,7 +51,7 @@ impl GenericRpcClientRequest for RpcClientRequest {
                 .body(request_json.to_string())
                 .send()
             {
-                Ok(mut response) => {
+                Ok(response) => {
                     if !response.status().is_success() {
                         return Err(response.error_for_status().unwrap_err().into());
                     }

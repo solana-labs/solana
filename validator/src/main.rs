@@ -98,7 +98,7 @@ fn download_tar_bz2(
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Downloading {}...", TRUCK, url));
 
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let response = client
         .get(url.as_str())
         .send()

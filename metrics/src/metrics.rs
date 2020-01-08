@@ -97,12 +97,12 @@ impl MetricsWriter for InfluxDbMetricsWriter {
                 line.push_str(&format!(" {}\n", &point.timestamp));
             }
 
-            let client = reqwest::Client::builder()
+            let client = reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(5))
                 .build()
                 .unwrap();
             let response = client.post(write_url.as_str()).body(line).send();
-            if let Ok(mut resp) = response {
+            if let Ok(resp) = response {
                 info!(
                     "submit response: {} {}",
                     resp.status(),
@@ -402,7 +402,7 @@ pub fn query(q: &str) -> Result<String, String> {
         &config.host, &config.username, &config.password, &q
     );
 
-    let response = reqwest::get(query_url.as_str())
+    let response = reqwest::blocking::get(query_url.as_str())
         .map_err(|err| err.to_string())?
         .text()
         .map_err(|err| err.to_string())?;
