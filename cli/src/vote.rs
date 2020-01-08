@@ -302,7 +302,7 @@ pub fn process_create_vote_account(
     let vote_init = VoteInit {
         node_pubkey: *identity_pubkey,
         authorized_voter: authorized_voter.unwrap_or(vote_account_pubkey),
-        authorized_withdrawer: authorized_withdrawer.unwrap_or(config.keypair.pubkey()),
+        authorized_withdrawer: authorized_withdrawer.unwrap_or(vote_account_pubkey),
         commission,
     };
     let ixs = vote_instruction::create_account(

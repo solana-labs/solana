@@ -160,6 +160,7 @@ pub enum CliCommand {
     // Stake Commands
     CreateStakeAccount {
         stake_account: KeypairEq,
+        seed: Option<String>,
         staker: Option<Pubkey>,
         withdrawer: Option<Pubkey>,
         lockup: Lockup,
@@ -1256,6 +1257,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Create stake account
         CliCommand::CreateStakeAccount {
             stake_account,
+            seed,
             staker,
             withdrawer,
             lockup,
@@ -1264,6 +1266,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             stake_account,
+            seed,
             staker,
             withdrawer,
             lockup,
@@ -2567,6 +2570,7 @@ mod tests {
         let custodian = Pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: bob_keypair.into(),
+            seed: None,
             staker: None,
             withdrawer: None,
             lockup: Lockup {

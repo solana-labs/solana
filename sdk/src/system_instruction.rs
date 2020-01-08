@@ -173,7 +173,8 @@ pub fn create_account_with_seed(
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
-    ];
+    ]
+    .with_signer(base);
 
     Instruction::new(
         system_program::id(),
