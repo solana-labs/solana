@@ -325,9 +325,14 @@ impl ClusterInfoRepairListener {
             if slot > my_root
                 || num_slots_repaired >= num_slots_to_repair
                 || slot > max_confirmed_repairee_slot
+                // Don't repair if the next rooted slot jumps, because that means
+                // we started from a snapshot and don't have the immediate next
+                // slot that the repairee needs
+                || slot_meta.is_none()
             {
                 break;
             }
+            let slot_meta = slot_meta.unwrap();
             if !repairee_epoch_slots.slots.contains(&slot) {
                 // Calculate the shred indexes this node is responsible for repairing. Note that
                 // because we are only repairing slots that are before our root, the slot.received
@@ -338,7 +343,7 @@ impl ClusterInfoRepairListener {
                 // the cluster
                 let num_shreds_in_slot = slot_meta.received as usize;
 
-                // Check if I'm responsible for repairing this slots
+                // Check if I'm responsible for repairing this slot
                 if let Some(my_repair_indexes) = Self::calculate_my_repairman_index_for_slot(
                     my_pubkey,
                     &eligible_repairmen,
