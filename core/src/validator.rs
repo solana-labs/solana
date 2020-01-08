@@ -299,7 +299,7 @@ impl Validator {
 
         if config.wait_for_supermajority {
             info!(
-                "Waiting more than 66% of activated stake at slot {} to be in gossip...",
+                "Waiting for more than 66% of activated stake at slot {} to be in gossip...",
                 bank.slot()
             );
             loop {
@@ -629,6 +629,8 @@ fn get_stake_percent_in_gossip(
                 vote_state.node_pubkey,
                 activated_stake
             );
+            gossip_stake += activated_stake;
+        } else if vote_state.node_pubkey == cluster_info.read().unwrap().id() {
             gossip_stake += activated_stake;
         }
     }
