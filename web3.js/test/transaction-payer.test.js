@@ -98,7 +98,12 @@ test('transaction-payer', async () => {
     },
     {
       error: null,
-      result: true,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: true,
+      },
     },
   ]);
 
@@ -139,7 +144,12 @@ test('transaction-payer', async () => {
     },
     {
       error: null,
-      result: 99,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: 99,
+      },
     },
   ]);
 
@@ -158,7 +168,12 @@ test('transaction-payer', async () => {
     },
     {
       error: null,
-      result: 2,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: 2,
+      },
     },
   ]);
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(2);

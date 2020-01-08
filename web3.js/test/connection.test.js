@@ -123,7 +123,12 @@ test('get balance', async () => {
     },
     {
       error: null,
-      result: 0,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: 0,
+      },
     },
   ]);
 
@@ -518,7 +523,12 @@ test('request airdrop', async () => {
     },
     {
       error: null,
-      result: 42,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: 42,
+      },
     },
   ]);
 
@@ -537,43 +547,48 @@ test('request airdrop', async () => {
     {
       error: null,
       result: {
-        owner: [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-        ],
-        lamports: 42,
-        data: [],
-        executable: false,
+        context: {
+          slot: 11,
+        },
+        value: {
+          owner: [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+          ],
+          lamports: 42,
+          data: [],
+          executable: false,
+        },
       },
     },
   ]);
@@ -609,7 +624,12 @@ test('request airdrop - max commitment', async () => {
     },
     {
       error: null,
-      result: 40,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: 40,
+      },
     },
   ]);
 
@@ -647,7 +667,12 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: 100010,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: 100010,
+      },
     },
   ]);
   await connection.requestAirdrop(accountFrom.publicKey, 100010);
@@ -673,7 +698,12 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: 21,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: 21,
+      },
     },
   ]);
   await connection.requestAirdrop(accountTo.publicKey, 21);
@@ -710,7 +740,12 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: true,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: true,
+      },
     },
   ]);
 
@@ -751,7 +786,12 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: 2,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: 2,
+      },
     },
   ]);
 
@@ -768,7 +808,12 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: 31,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: 31,
+      },
     },
   ]);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(31);
