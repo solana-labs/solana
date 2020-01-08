@@ -4,7 +4,7 @@ use crate::{
 };
 use bincode::deserialize;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use reqwest::Client;
+use reqwest::blocking::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 

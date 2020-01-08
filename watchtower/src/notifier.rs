@@ -1,5 +1,5 @@
 use log::*;
-use reqwest::Client;
+use reqwest::blocking::Client;
 use serde_json::json;
 use std::env;
 

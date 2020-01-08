@@ -7,10 +7,10 @@ use std::io::prelude::*;
 
 fn get_block_raw(hash: &str) -> String {
     let qs = format!("https://blockchain.info/block/{}?format=hex", hash);
-    let body = reqwest::get(&qs);
+    let body = reqwest::blocking::get(&qs);
     match body {
         Err(e) => panic!("rest request failed {}", e),
-        Ok(mut n) => {
+        Ok(n) => {
             if n.status().is_success() {
                 n.text().unwrap()
             } else {

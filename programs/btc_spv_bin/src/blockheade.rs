@@ -28,10 +28,10 @@ struct JsonBH {
 #[allow(dead_code)]
 fn get_header_json(hash: &str) -> JsonBH {
     let qs = format!("https://www.blockchain.info/rawblock/{}", hash);
-    let body = reqwest::get(&qs);
+    let body = reqwest::blocking::get(&qs);
     match body {
         Err(e) => panic!("rest request failed {}", e),
-        Ok(mut n) => {
+        Ok(n) => {
             if n.status().is_success() {
                 let jsonbh: JsonBH = n.json().unwrap();
                 jsonbh
@@ -44,10 +44,10 @@ fn get_header_json(hash: &str) -> JsonBH {
 
 fn get_header_raw(hash: &str) -> String {
     let qs = format!("https://blockchain.info/block/{}?format=hex", hash);
-    let body = reqwest::get(&qs);
+    let body = reqwest::blocking::get(&qs);
     match body {
         Err(e) => panic!("rest request failed {}", e),
-        Ok(mut n) => {
+        Ok(n) => {
             if n.status().is_success() {
                 let textbh: String = n.text().unwrap();
                 let hs = &textbh[0..160]; // 160 characters since it's in hex format
