@@ -12,7 +12,7 @@ use std::{
 };
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    solana_logger::setup_with_filter("solana=info");
+    solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("faucet");
     let matches = App::new(crate_name!())
         .about(crate_description!())

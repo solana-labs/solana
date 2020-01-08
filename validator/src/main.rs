@@ -692,7 +692,7 @@ pub fn main() {
         }
     };
 
-    solana_logger::setup_with_filter(
+    solana_logger::setup_with_default(
         &[
             "solana=info", /* info logging for all solana modules */
             "rpc=trace",   /* json_rpc request/response logging */

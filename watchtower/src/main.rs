@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let json_rpc_url = value_t_or_exit!(matches, "json_rpc_url", String);
     let validator_identity = pubkey_of(&matches, "validator_identity").map(|i| i.to_string());
 
-    solana_logger::setup_with_filter("solana=info");
+    solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower");
 
     let rpc_client = RpcClient::new(json_rpc_url);

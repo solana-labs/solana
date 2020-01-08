@@ -13,7 +13,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    solana_logger::setup_with_filter("solana=info");
+    solana_logger::setup_with_default("solana=info");
 
     let matches = App::new(crate_name!())
         .about(crate_description!())

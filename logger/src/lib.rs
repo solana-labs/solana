@@ -22,12 +22,7 @@ impl log::Log for LoggerShim {
     fn flush(&self) {}
 }
 
-// Configures logging with a specific filter.
-// May be called at any time to re-configure the log filter
-pub fn setup_with_filter(filter: &str) {
-    let logger = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
-        .format_timestamp_nanos()
-        .build();
+fn replace_logger(logger: env_logger::Logger) {
     let max_level = logger.filter();
     log::set_max_level(max_level);
     let mut rw = LOGGER.write().unwrap();
@@ -35,7 +30,26 @@ pub fn setup_with_filter(filter: &str) {
     let _ = log::set_boxed_logger(Box::new(LoggerShim {}));
 }
 
-// Configures logging with the default filter ("error")
+// Configures logging with a specific filter overriding RUST_LOG.  _RUST_LOG is used instead
+// so if set it takes precedence.
+// May be called at any time to re-configure the log filter
+pub fn setup_with(filter: &str) {
+    let logger =
+        env_logger::Builder::from_env(env_logger::Env::new().filter_or("_RUST_LOG", filter))
+            .format_timestamp_nanos()
+            .build();
+    replace_logger(logger);
+}
+
+// Configures logging with a default filter if RUST_LOG is not set
+pub fn setup_with_default(filter: &str) {
+    let logger = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
+        .format_timestamp_nanos()
+        .build();
+    replace_logger(logger);
+}
+
+// Configures logging with the default filter "error" if RUST_LOG is not set
 pub fn setup() {
-    setup_with_filter("error");
+    setup_with_default("error");
 }
