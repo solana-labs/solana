@@ -204,6 +204,7 @@ steps:
         TESTNET_DB_HOST: "$TESTNET_DB_HOST"
         GCE_NODE_COUNT: "$GCE_NODE_COUNT"
         GCE_LOW_QUOTA_NODE_COUNT: "$GCE_LOW_QUOTA_NODE_COUNT"
+        RUST_LOG: "$RUST_LOG"
 EOF
     ) | buildkite-agent pipeline upload
     exit 0
