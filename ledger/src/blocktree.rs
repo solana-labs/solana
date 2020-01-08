@@ -429,6 +429,16 @@ impl Blocktree {
         Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
     }
 
+    pub fn rooted_slot_iterator<'a>(
+        &'a self,
+        slot: Slot,
+    ) -> Result<impl Iterator<Item = u64> + 'a> {
+        let slot_iterator = self
+            .db
+            .iter::<cf::Root>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+        Ok(slot_iterator.map(move |(rooted_slot, _)| rooted_slot))
+    }
+
     fn try_shred_recovery(
         db: &Database,
         erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
