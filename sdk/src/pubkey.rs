@@ -56,12 +56,6 @@ impl Pubkey {
         Self::new(&rand::random::<[u8; 32]>())
     }
 
-    pub fn log(&self) {
-        use crate::log::sol_log_64;
-        for (i, k) in self.0.iter().enumerate() {
-            sol_log_64(0, 0, 0, i as u64, u64::from(*k));
-        }
-    }
     pub fn to_bytes(self) -> [u8; 32] {
         self.0
     }
