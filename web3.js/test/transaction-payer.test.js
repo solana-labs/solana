@@ -19,6 +19,23 @@ test('transaction-payer', async () => {
   mockRpc.push([
     url,
     {
+      method: 'getMinimumBalanceForRentExemption',
+      params: [0, {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result: 50,
+    },
+  ]);
+
+  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+    0,
+    'recent',
+  );
+
+  mockRpc.push([
+    url,
+    {
       method: 'requestAirdrop',
       params: [
         accountPayer.publicKey.toBase58(),
@@ -38,7 +55,11 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountFrom.publicKey.toBase58(), 12, {commitment: 'recent'}],
+      params: [
+        accountFrom.publicKey.toBase58(),
+        minimumAmount + 12,
+        {commitment: 'recent'},
+      ],
     },
     {
       error: null,
@@ -46,13 +67,17 @@ test('transaction-payer', async () => {
         '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
-  await connection.requestAirdrop(accountFrom.publicKey, 12);
+  await connection.requestAirdrop(accountFrom.publicKey, minimumAmount + 12);
 
   mockRpc.push([
     url,
     {
       method: 'requestAirdrop',
-      params: [accountTo.publicKey.toBase58(), 21, {commitment: 'recent'}],
+      params: [
+        accountTo.publicKey.toBase58(),
+        minimumAmount + 21,
+        {commitment: 'recent'},
+      ],
     },
     {
       error: null,
@@ -60,7 +85,7 @@ test('transaction-payer', async () => {
         '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     },
   ]);
-  await connection.requestAirdrop(accountTo.publicKey, 21);
+  await connection.requestAirdrop(accountTo.publicKey, minimumAmount + 21);
 
   mockGetRecentBlockhash('recent');
   mockRpc.push([
@@ -148,12 +173,12 @@ test('transaction-payer', async () => {
         context: {
           slot: 11,
         },
-        value: 99,
+        value: LAMPORTS_PER_SOL - 1,
       },
     },
   ]);
 
-  // accountPayer could be less than 100 as it paid for the transaction
+  // accountPayer should be less than LAMPORTS_PER_SOL as it paid for the transaction
   // (exact amount less depends on the current cluster fees)
   const balance = await connection.getBalance(accountPayer.publicKey);
   expect(balance).toBeGreaterThan(0);
@@ -172,9 +197,11 @@ test('transaction-payer', async () => {
         context: {
           slot: 11,
         },
-        value: 2,
+        value: minimumAmount + 2,
       },
     },
   ]);
-  expect(await connection.getBalance(accountFrom.publicKey)).toBe(2);
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(
+    minimumAmount + 2,
+  );
 });
