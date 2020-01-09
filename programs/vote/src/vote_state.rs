@@ -236,7 +236,7 @@ impl VoteState {
     fn check_slots_are_valid(
         &self,
         vote: &Vote,
-        slot_hashes: &[(Slot, Hash)],
+        slot_hashes: &[SlotHash],
     ) -> Result<(), VoteError> {
         let mut i = 0; // index into the vote's slots
         let mut j = slot_hashes.len(); // index into the slot_hashes
