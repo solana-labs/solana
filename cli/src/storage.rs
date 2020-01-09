@@ -166,11 +166,14 @@ pub fn process_create_storage_account(
 
     if let Ok(storage_account) = rpc_client.get_account(&storage_account_pubkey) {
         let err_msg = if storage_account.owner == solana_storage_program::id() {
-            "storage account already exists"
+            format!("Storage account {} already exists", storage_account_pubkey)
         } else {
-            "account already exists and is not a storage account"
+            format!(
+                "Account {} already exists and is not a storage account",
+                storage_account_pubkey
+            )
         };
-        return Err(CliError::BadParameter(err_msg.to_string()).into());
+        return Err(CliError::BadParameter(err_msg).into());
     }
 
     use solana_storage_program::storage_contract::STORAGE_ACCOUNT_SPACE;

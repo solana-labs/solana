@@ -320,11 +320,14 @@ pub fn process_create_vote_account(
 
     if let Ok(vote_account) = rpc_client.get_account(&vote_account_address) {
         let err_msg = if vote_account.owner == solana_vote_program::id() {
-            "vote account already exists"
+            format!("Vote account {} already exists", vote_account_pubkey)
         } else {
-            "account already exists and is not a vote account"
+            format!(
+                "Account {} already exists and is not a vote account",
+                vote_account_pubkey
+            )
         };
-        return Err(CliError::BadParameter(err_msg.to_string()).into());
+        return Err(CliError::BadParameter(err_msg).into());
     }
 
     let required_balance = rpc_client
