@@ -77,7 +77,8 @@ ARGS+=(
 
 # Also propagate environment variables needed for codecov
 # https://docs.codecov.io/docs/testing-with-docker#section-codecov-inside-docker
-CODECOV_ENVS=$(bash <(curl -s https://codecov.io/env))
+# We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...
+CODECOV_ENVS=$(CI=true bash <(curl -s https://codecov.io/env))
 
 if $INTERACTIVE; then
   if [[ -n $1 ]]; then
