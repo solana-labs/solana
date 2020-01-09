@@ -19,7 +19,11 @@ _ cargo +"$rust_stable" clippy --all --exclude solana-sdk-c -- --deny=warnings
 _ cargo +"$rust_stable" clippy --manifest-path sdk-c/Cargo.toml -- --deny=warnings
 
 _ cargo +"$rust_stable" audit --version
+<<<<<<< HEAD
 _ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0013 --ignore RUSTSEC-2018-0015
+=======
+_ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0013 --ignore RUSTSEC-2018-0015 --ignore RUSTSEC-2019-0031 --ignore RUSTSEC-2019-0033 --ignore RUSTSEC-2019-0034
+>>>>>>> 719785a8d... Update http crate to fix security vulnerability (#7725)
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
@@ -28,7 +32,11 @@ _ ci/check-ssh-keys.sh
 
 {
   cd programs/bpf
+<<<<<<< HEAD
   _ cargo +"$rust_stable" audit
+=======
+  _ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0031 --ignore RUSTSEC-2019-0033 --ignore RUSTSEC-2019-0034
+>>>>>>> 719785a8d... Update http crate to fix security vulnerability (#7725)
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
