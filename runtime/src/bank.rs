@@ -1627,12 +1627,21 @@ impl Bank {
         let accounts_delta_hash = self.rc.accounts.bank_hash_at(self.slot());
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
-        hashv(&[
+        let hash = hashv(&[
             self.parent_hash.as_ref(),
             accounts_delta_hash.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
-        ])
+        ]);
+        info!(
+            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {}",
+            self.slot(),
+            hash,
+            accounts_delta_hash,
+            self.signature_count(),
+            self.last_blockhash()
+        );
+        hash
     }
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
