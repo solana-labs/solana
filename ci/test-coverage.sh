@@ -41,7 +41,8 @@ if [[ -z "$CODECOV_TOKEN" ]]; then
   echo "^^^ +++"
   echo CODECOV_TOKEN undefined, codecov.io upload skipped
 else
-  bash <(curl -s https://codecov.io/bash) -X gcov -f target/cov/lcov.info
+  # We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...
+  CI=true bash <(curl -s https://codecov.io/bash) -X gcov -f target/cov/lcov.info
 
   annotate --style success --context codecov.io \
     "CodeCov report: https://codecov.io/github/solana-labs/solana/commit/${CI_COMMIT:0:9}"
