@@ -41,7 +41,7 @@ solana-stake-program = { path = "../programs/stake", version = "0.23.0" }
 solana-storage-program = { path = "../programs/storage", version = "0.23.0" }
 solana-vote-program = { path = "../programs/vote", version = "0.23.0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.23.0" }
-url = "2.1.0"
+url = "2.1.1"
 
 [dev-dependencies]
 solana-core = { path = "../core", version = "0.23.0" }
