@@ -76,7 +76,7 @@ reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "4.0
 [dev-dependencies]
 hex-literal = "0.2.1"
 matches = "0.1.6"
-reqwest = { version = "0.10.0", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "rustls-tls"] }
 serial_test = "0.3.2"
 serial_test_derive = "0.3.1"
 systemstat = "0.1.5"
