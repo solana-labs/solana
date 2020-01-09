@@ -72,9 +72,13 @@ ARGS+=(
   --env CI_JOB_ID
   --env CI_PULL_REQUEST
   --env CI_REPO_SLUG
-  --env CODECOV_TOKEN
   --env CRATES_IO_TOKEN
 )
+
+# Also propagate environment variables needed for codecov
+# https://docs.codecov.io/docs/testing-with-docker#section-codecov-inside-docker
+# We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...
+CODECOV_ENVS=$(CI=true bash <(curl -s https://codecov.io/env))
 
 if $INTERACTIVE; then
   if [[ -n $1 ]]; then
@@ -83,8 +87,10 @@ if $INTERACTIVE; then
     echo
   fi
   set -x
-  exec docker run --interactive --tty "${ARGS[@]}" "$IMAGE" bash
+  # shellcheck disable=SC2086
+  exec docker run --interactive --tty "${ARGS[@]}" $CODECOV_ENVS "$IMAGE" bash
 fi
 
 set -x
-exec docker run "${ARGS[@]}" "$IMAGE" "$@"
+# shellcheck disable=SC2086
+exec docker run "${ARGS[@]}" $CODECOV_ENVS "$IMAGE" "$@"
