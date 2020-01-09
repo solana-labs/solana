@@ -60,6 +60,7 @@
   * [Slashing](proposals/slashing.md)
   * [Tick Verification](proposals/tick-verification.md)
   * [Block Confirmation](proposals/block-confirmation.md)
+  * [ABI Management](proposals/abi-management.md)
 * [Implemented Design Proposals](implemented-proposals/README.md)
   * [Blocktree](implemented-proposals/blocktree.md)
   * [Cluster Software Installation and Updates](implemented-proposals/installer.md)
