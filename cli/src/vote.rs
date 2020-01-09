@@ -11,7 +11,10 @@ use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 use solana_sdk::{
-    account::Account, pubkey::Pubkey, signature::KeypairUtil, system_instruction::SystemError,
+    account::Account,
+    pubkey::Pubkey,
+    signature::KeypairUtil,
+    system_instruction::{create_address_with_seed, SystemError},
     transaction::Transaction,
 };
 use solana_vote_program::{
@@ -69,6 +72,13 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Public key of the authorized withdrawer (defaults to cli config pubkey)"),
+                )
+                .arg(
+                    Arg::with_name("seed")
+                        .long("seed")
+                        .value_name("SEED STRING")
+                        .takes_value(true)
+                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the VOTE ACCOUNT pubkey")
                 ),
         )
         .subcommand(
@@ -195,6 +205,7 @@ impl VoteSubCommands for App<'_, '_> {
 
 pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let vote_account = keypair_of(matches, "vote_account").unwrap();
+    let seed = matches.value_of("seed").map(|s| s.to_string());
     let identity_pubkey = pubkey_of(matches, "identity_pubkey").unwrap();
     let commission = value_t_or_exit!(matches, "commission", u8);
     let authorized_voter = pubkey_of(matches, "authorized_voter");
@@ -203,6 +214,7 @@ pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandI
     Ok(CliCommandInfo {
         command: CliCommand::CreateVoteAccount {
             vote_account: vote_account.into(),
+            seed,
             node_pubkey: identity_pubkey,
             authorized_voter,
             authorized_withdrawer,
@@ -280,20 +292,35 @@ pub fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     vote_account: &Keypair,
+    seed: &Option<String>,
     identity_pubkey: &Pubkey,
     authorized_voter: &Option<Pubkey>,
     authorized_withdrawer: &Option<Pubkey>,
     commission: u8,
 ) -> ProcessResult {
     let vote_account_pubkey = vote_account.pubkey();
-    check_unique_pubkeys(
-        (&vote_account_pubkey, "vote_account_pubkey".to_string()),
-        (&identity_pubkey, "identity_pubkey".to_string()),
-    )?;
+    let vote_account_address = if let Some(seed) = seed {
+        create_address_with_seed(&vote_account_pubkey, &seed, &solana_vote_program::id())?
+    } else {
+        vote_account_pubkey
+    };
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
-        (&vote_account_pubkey, "vote_account_pubkey".to_string()),
+        (&vote_account_address, "vote_account".to_string()),
     )?;
+
+    check_unique_pubkeys(
+        (&vote_account_address, "vote_account".to_string()),
+        (&identity_pubkey, "identity_pubkey".to_string()),
+    )?;
+
+    if rpc_client.get_account(&vote_account_address).is_ok() {
+        return Err(CliError::BadParameter(format!(
+            "Unable to create vote account. Vote account already exists: {}",
+            vote_account_address
+        ))
+        .into());
+    }
 
     let required_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(VoteState::size_of())?
@@ -302,28 +329,43 @@ pub fn process_create_vote_account(
     let vote_init = VoteInit {
         node_pubkey: *identity_pubkey,
         authorized_voter: authorized_voter.unwrap_or(vote_account_pubkey),
-        authorized_withdrawer: authorized_withdrawer.unwrap_or(config.keypair.pubkey()),
+        authorized_withdrawer: authorized_withdrawer.unwrap_or(vote_account_pubkey),
         commission,
     };
-    let ixs = vote_instruction::create_account(
-        &config.keypair.pubkey(),
-        &vote_account_pubkey,
-        &vote_init,
-        required_balance,
-    );
+
+    let ixs = if let Some(seed) = seed {
+        vote_instruction::create_account_with_seed(
+            &config.keypair.pubkey(), // from
+            &vote_account_address,    // to
+            &vote_account_pubkey,     // base
+            seed,                     // seed
+            &vote_init,
+            required_balance,
+        )
+    } else {
+        vote_instruction::create_account(
+            &config.keypair.pubkey(),
+            &vote_account_pubkey,
+            &vote_init,
+            required_balance,
+        )
+    };
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let mut tx = Transaction::new_signed_instructions(
-        &[&config.keypair, vote_account],
-        ixs,
-        recent_blockhash,
-    );
+
+    let signers = if vote_account_pubkey != config.keypair.pubkey() {
+        vec![&config.keypair, vote_account] // both must sign if `from` and `to` differ
+    } else {
+        vec![&config.keypair] // when stake_account == config.keypair and there's a seed, we only need one signature
+    };
+
+    let mut tx = Transaction::new_signed_instructions(&signers, ixs, recent_blockhash);
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, vote_account]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &signers);
     log_instruction_custom_error::<SystemError>(result)
 }
 
@@ -583,6 +625,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     vote_account: keypair.into(),
+                    seed: None,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
@@ -607,6 +650,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     vote_account: keypair.into(),
+                    seed: None,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
@@ -635,6 +679,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     vote_account: keypair.into(),
+                    seed: None,
                     node_pubkey,
                     authorized_voter: Some(authed),
                     authorized_withdrawer: None,
@@ -661,6 +706,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     vote_account: keypair.into(),
+                    seed: None,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),

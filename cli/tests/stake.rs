@@ -8,6 +8,7 @@ use solana_sdk::{
     nonce_state::NonceState,
     pubkey::Pubkey,
     signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil, Signature},
+    system_instruction::create_address_with_seed,
 };
 use solana_stake_program::stake_state::Lockup;
 use std::fs::remove_dir_all;
@@ -37,6 +38,101 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
         }
         sleep(Duration::from_millis(500));
     });
+}
+
+#[test]
+fn test_seed_stake_delegation_and_deactivation() {
+    solana_logger::setup();
+
+    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (sender, receiver) = channel();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+
+    let mut config_validator = CliConfig::default();
+    config_validator.json_rpc_url =
+        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+
+    let (validator_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&config_validator.keypair, tmp_file.as_file_mut()).unwrap();
+
+    let mut config_vote = CliConfig::default();
+    config_vote.json_rpc_url =
+        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    let (vote_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&config_vote.keypair, tmp_file.as_file_mut()).unwrap();
+
+    let mut config_stake = CliConfig::default();
+    config_stake.json_rpc_url =
+        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config_validator.keypair.pubkey(),
+        100_000,
+    )
+    .unwrap();
+    check_balance(100_000, &rpc_client, &config_validator.keypair.pubkey());
+
+    // Create vote account
+    config_validator.command = CliCommand::CreateVoteAccount {
+        vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        seed: None,
+        node_pubkey: config_validator.keypair.pubkey(),
+        authorized_voter: None,
+        authorized_withdrawer: None,
+        commission: 0,
+    };
+    process_command(&config_validator).unwrap();
+
+    let stake_address = create_address_with_seed(
+        &config_validator.keypair.pubkey(),
+        "hi there",
+        &solana_stake_program::id(),
+    )
+    .expect("bad seed");
+
+    // Create stake account with a seed, uses the validator config as the base,
+    //   which is nice ;)
+    config_validator.command = CliCommand::CreateStakeAccount {
+        stake_account: read_keypair_file(&validator_keypair_file).unwrap().into(),
+        seed: Some("hi there".to_string()),
+        staker: None,
+        withdrawer: None,
+        lockup: Lockup::default(),
+        lamports: 50_000,
+    };
+    process_command(&config_validator).unwrap();
+
+    // Delegate stake
+    config_validator.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_address,
+        vote_account_pubkey: config_vote.keypair.pubkey(),
+        force: true,
+        sign_only: false,
+        signers: None,
+        blockhash: None,
+        nonce_account: None,
+        nonce_authority: None,
+    };
+    process_command(&config_validator).unwrap();
+
+    // Deactivate stake
+    config_validator.command = CliCommand::DeactivateStake {
+        stake_account_pubkey: stake_address,
+        sign_only: false,
+        signers: None,
+        blockhash: None,
+        nonce_account: None,
+        nonce_authority: None,
+    };
+    process_command(&config_validator).unwrap();
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
 }
 
 #[test]
@@ -78,6 +174,7 @@ fn test_stake_delegation_and_deactivation() {
     // Create vote account
     config_validator.command = CliCommand::CreateVoteAccount {
         vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        seed: None,
         node_pubkey: config_validator.keypair.pubkey(),
         authorized_voter: None,
         authorized_withdrawer: None,
@@ -88,6 +185,7 @@ fn test_stake_delegation_and_deactivation() {
     // Create stake account
     config_validator.command = CliCommand::CreateStakeAccount {
         stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        seed: None,
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
@@ -124,7 +222,7 @@ fn test_stake_delegation_and_deactivation() {
 }
 
 #[test]
-fn test_stake_delegation_and_deactivation_offline() {
+fn test_offline_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
@@ -166,6 +264,7 @@ fn test_stake_delegation_and_deactivation_offline() {
     // Create vote account
     config_validator.command = CliCommand::CreateVoteAccount {
         vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        seed: None,
         node_pubkey: config_validator.keypair.pubkey(),
         authorized_voter: None,
         authorized_withdrawer: None,
@@ -176,6 +275,7 @@ fn test_stake_delegation_and_deactivation_offline() {
     // Create stake account
     config_validator.command = CliCommand::CreateStakeAccount {
         stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        seed: None,
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
@@ -286,6 +386,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     write_keypair(&vote_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateVoteAccount {
         vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        seed: None,
         node_pubkey: config.keypair.pubkey(),
         authorized_voter: None,
         authorized_withdrawer: None,
@@ -299,6 +400,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateStakeAccount {
         stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        seed: None,
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
@@ -312,6 +414,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        seed: None,
         nonce_authority: Some(config.keypair.pubkey()),
         lamports: minimum_nonce_balance,
     };

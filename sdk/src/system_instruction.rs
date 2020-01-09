@@ -161,9 +161,11 @@ pub fn create_account(
     )
 }
 
+// we accept `to` as a parameter so that callers do their own error handling when
+//   calling create_address_with_seed()
 pub fn create_account_with_seed(
     from_pubkey: &Pubkey,
-    to_pubkey: &Pubkey,
+    to_pubkey: &Pubkey, // must match create_address_with_seed(base, seed, program_id)
     base: &Pubkey,
     seed: &str,
     lamports: u64,
@@ -173,7 +175,8 @@ pub fn create_account_with_seed(
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
-    ];
+    ]
+    .with_signer(base);
 
     Instruction::new(
         system_program::id(),
@@ -231,6 +234,36 @@ pub fn create_address_with_seed(
     Ok(Pubkey::new(
         hashv(&[from_pubkey.as_ref(), seed.as_ref(), program_id.as_ref()]).as_ref(),
     ))
+}
+
+pub fn create_nonce_account_with_seed(
+    from_pubkey: &Pubkey,
+    nonce_pubkey: &Pubkey,
+    base: &Pubkey,
+    seed: &str,
+    authority: &Pubkey,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        create_account_with_seed(
+            from_pubkey,
+            nonce_pubkey,
+            base,
+            seed,
+            lamports,
+            NonceState::size() as u64,
+            &system_program::id(),
+        ),
+        Instruction::new(
+            system_program::id(),
+            &SystemInstruction::NonceInitialize(*authority),
+            vec![
+                AccountMeta::new(*nonce_pubkey, false),
+                AccountMeta::new_readonly(recent_blockhashes::id(), false),
+                AccountMeta::new_readonly(rent::id(), false),
+            ],
+        ),
+    ]
 }
 
 pub fn create_nonce_account(

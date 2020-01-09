@@ -17,7 +17,7 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::KeypairUtil,
-    system_instruction::SystemError,
+    system_instruction::{create_address_with_seed, SystemError},
     sysvar::{
         stake_history::{self, StakeHistory},
         Sysvar,
@@ -74,6 +74,13 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Identity of the custodian (can withdraw before lockup expires)")
+                )
+                .arg(
+                    Arg::with_name("seed")
+                        .long("seed")
+                        .value_name("SEED STRING")
+                        .takes_value(true)
+                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the STAKE ACCOUNT pubkey")
                 )
                 .arg(
                     Arg::with_name("lockup_epoch")
@@ -367,6 +374,7 @@ impl StakeSubCommands for App<'_, '_> {
 
 pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account = keypair_of(matches, "stake_account").unwrap();
+    let seed = matches.value_of("seed").map(|s| s.to_string());
     let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
     let unix_timestamp = unix_timestamp_from_rfc3339_datetime(&matches, "lockup_date").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
@@ -377,6 +385,7 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
             stake_account: stake_account.into(),
+            seed,
             staker,
             withdrawer,
             lockup: Lockup {
@@ -516,21 +525,27 @@ pub fn process_create_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account: &Keypair,
+    seed: &Option<String>,
     staker: &Option<Pubkey>,
     withdrawer: &Option<Pubkey>,
     lockup: &Lockup,
     lamports: u64,
 ) -> ProcessResult {
     let stake_account_pubkey = stake_account.pubkey();
+    let stake_account_address = if let Some(seed) = seed {
+        create_address_with_seed(&stake_account_pubkey, &seed, &solana_stake_program::id())?
+    } else {
+        stake_account_pubkey
+    };
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
-        (&stake_account_pubkey, "stake_account_pubkey".to_string()),
+        (&stake_account_address, "stake_account".to_string()),
     )?;
 
-    if rpc_client.get_account(&stake_account_pubkey).is_ok() {
+    if rpc_client.get_account(&stake_account_address).is_ok() {
         return Err(CliError::BadParameter(format!(
             "Unable to create stake account. Stake account already exists: {}",
-            stake_account_pubkey
+            stake_account_address
         ))
         .into());
     }
@@ -551,18 +566,37 @@ pub fn process_create_stake_account(
         withdrawer: withdrawer.unwrap_or(config.keypair.pubkey()),
     };
 
-    let ixs = stake_instruction::create_account(
-        &config.keypair.pubkey(),
-        &stake_account_pubkey,
-        &authorized,
-        lockup,
-        lamports,
-    );
+    let ixs = if let Some(seed) = seed {
+        stake_instruction::create_account_with_seed(
+            &config.keypair.pubkey(), // from
+            &stake_account_address,   // to
+            &stake_account_pubkey,    // base
+            seed,                     // seed
+            &authorized,
+            lockup,
+            lamports,
+        )
+    } else {
+        stake_instruction::create_account(
+            &config.keypair.pubkey(),
+            &stake_account_pubkey,
+            &authorized,
+            lockup,
+            lamports,
+        )
+    };
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    let signers = if stake_account_pubkey != config.keypair.pubkey() {
+        vec![&config.keypair, stake_account] // both must sign if `from` and `to` differ
+    } else {
+        vec![&config.keypair] // when stake_account == config.keypair and there's a seed, we only need one signature
+    };
+
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
         Some(&config.keypair.pubkey()),
-        &[&config.keypair, stake_account],
+        &signers,
         recent_blockhash,
     );
     check_account_for_fee(
@@ -571,8 +605,7 @@ pub fn process_create_stake_account(
         &fee_calculator,
         &tx.message,
     )?;
-    let result =
-        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, stake_account]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &signers);
     log_instruction_custom_error::<SystemError>(result)
 }
 
@@ -1023,6 +1056,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
                     stake_account: stake_account_keypair.into(),
+                    seed: None,
                     staker: Some(authorized),
                     withdrawer: Some(authorized),
                     lockup: Lockup {
@@ -1055,6 +1089,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
                     stake_account: stake_account_keypair.into(),
+                    seed: None,
                     staker: None,
                     withdrawer: None,
                     lockup: Lockup::default(),

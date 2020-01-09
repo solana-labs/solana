@@ -137,6 +137,7 @@ pub enum CliCommand {
     },
     CreateNonceAccount {
         nonce_account: KeypairEq,
+        seed: Option<String>,
         nonce_authority: Option<Pubkey>,
         lamports: u64,
     },
@@ -160,6 +161,7 @@ pub enum CliCommand {
     // Stake Commands
     CreateStakeAccount {
         stake_account: KeypairEq,
+        seed: Option<String>,
         staker: Option<Pubkey>,
         withdrawer: Option<Pubkey>,
         lockup: Lockup,
@@ -214,6 +216,7 @@ pub enum CliCommand {
     // Vote Commands
     CreateVoteAccount {
         vote_account: KeypairEq,
+        seed: Option<String>,
         node_pubkey: Pubkey,
         authorized_voter: Option<Pubkey>,
         authorized_withdrawer: Option<Pubkey>,
@@ -1201,12 +1204,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Create nonce account
         CliCommand::CreateNonceAccount {
             nonce_account,
+            seed,
             nonce_authority,
             lamports,
         } => process_create_nonce_account(
             &rpc_client,
             config,
             nonce_account,
+            seed.clone(),
             *nonce_authority,
             *lamports,
         ),
@@ -1256,6 +1261,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Create stake account
         CliCommand::CreateStakeAccount {
             stake_account,
+            seed,
             staker,
             withdrawer,
             lockup,
@@ -1264,6 +1270,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             stake_account,
+            seed,
             staker,
             withdrawer,
             lockup,
@@ -1401,6 +1408,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Create vote account
         CliCommand::CreateVoteAccount {
             vote_account,
+            seed,
             node_pubkey,
             authorized_voter,
             authorized_withdrawer,
@@ -1409,6 +1417,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             vote_account,
+            seed,
             &node_pubkey,
             authorized_voter,
             authorized_withdrawer,
@@ -2536,6 +2545,7 @@ mod tests {
         let node_pubkey = Pubkey::new_rand();
         config.command = CliCommand::CreateVoteAccount {
             vote_account: bob_keypair.into(),
+            seed: None,
             node_pubkey,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),
@@ -2567,6 +2577,7 @@ mod tests {
         let custodian = Pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: bob_keypair.into(),
+            seed: None,
             staker: None,
             withdrawer: None,
             lockup: Lockup {
@@ -2774,6 +2785,7 @@ mod tests {
         let bob_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
             vote_account: bob_keypair.into(),
+            seed: None,
             node_pubkey,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),

@@ -14,8 +14,8 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_instruction::{
-        create_nonce_account, nonce_advance, nonce_authorize, nonce_withdraw, NonceError,
-        SystemError,
+        create_address_with_seed, create_nonce_account, create_nonce_account_with_seed,
+        nonce_advance, nonce_authorize, nonce_withdraw, NonceError, SystemError,
     },
     system_program,
     transaction::Transaction,
@@ -80,6 +80,13 @@ impl NonceSubCommands for App<'_, '_> {
                         .required(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Account to be granted authority of the nonce account"),
+                )
+                .arg(
+                    Arg::with_name("seed")
+                        .long("seed")
+                        .value_name("SEED STRING")
+                        .takes_value(true)
+                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the NONCE_ACCOUNT pubkey")
                 )
                 .arg(nonce_authority_arg()),
         )
@@ -227,12 +234,14 @@ pub fn parse_authorize_nonce_account(matches: &ArgMatches<'_>) -> Result<CliComm
 
 pub fn parse_nonce_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
+    let seed = matches.value_of("seed").map(|s| s.to_string());
     let lamports = required_lamports_from(matches, "amount", "unit")?;
     let nonce_authority = pubkey_of(matches, "nonce_authority");
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateNonceAccount {
             nonce_account: nonce_account.into(),
+            seed,
             nonce_authority,
             lamports,
         },
@@ -354,16 +363,23 @@ pub fn process_create_nonce_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     nonce_account: &Keypair,
+    seed: Option<String>,
     nonce_authority: Option<Pubkey>,
     lamports: u64,
 ) -> ProcessResult {
     let nonce_account_pubkey = nonce_account.pubkey();
+    let nonce_account_address = if let Some(seed) = seed.clone() {
+        create_address_with_seed(&nonce_account_pubkey, &seed, &system_program::id())?
+    } else {
+        nonce_account_pubkey
+    };
+
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
-        (&nonce_account_pubkey, "nonce_account_pubkey".to_string()),
+        (&nonce_account_address, "nonce_account".to_string()),
     )?;
 
-    if rpc_client.get_account(&nonce_account_pubkey).is_ok() {
+    if rpc_client.get_account(&nonce_account_address).is_ok() {
         return Err(CliError::BadParameter(format!(
             "Unable to create nonce account. Nonce account already exists: {}",
             nonce_account_pubkey,
@@ -381,17 +397,37 @@ pub fn process_create_nonce_account(
     }
 
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.pubkey());
-    let ixs = create_nonce_account(
-        &config.keypair.pubkey(),
-        &nonce_account_pubkey,
-        &nonce_authority,
-        lamports,
-    );
+
+    let ixs = if let Some(seed) = seed {
+        create_nonce_account_with_seed(
+            &config.keypair.pubkey(), // from
+            &nonce_account_address,   // to
+            &nonce_account_pubkey,    // base
+            &seed,                    // seed
+            &nonce_authority,
+            lamports,
+        )
+    } else {
+        create_nonce_account(
+            &config.keypair.pubkey(),
+            &nonce_account_pubkey,
+            &nonce_authority,
+            lamports,
+        )
+    };
+
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    let signers = if nonce_account_pubkey != config.keypair.pubkey() {
+        vec![&config.keypair, nonce_account] // both must sign if `from` and `to` differ
+    } else {
+        vec![&config.keypair] // when stake_account == config.keypair and there's a seed, we only need one signature
+    };
+
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
         Some(&config.keypair.pubkey()),
-        &[&config.keypair, nonce_account],
+        &signers,
         recent_blockhash,
     );
     check_account_for_fee(
@@ -400,8 +436,7 @@ pub fn process_create_nonce_account(
         &fee_calculator,
         &tx.message,
     )?;
-    let result =
-        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, nonce_account]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &signers);
     log_instruction_custom_error::<SystemError>(result)
 }
 
@@ -626,6 +661,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().into(),
+                    seed: None,
                     nonce_authority: None,
                     lamports: 50,
                 },
@@ -648,6 +684,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().into(),
+                    seed: None,
                     nonce_authority: Some(
                         read_keypair_file(&authority_keypair_file).unwrap().pubkey()
                     ),
