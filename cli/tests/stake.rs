@@ -80,6 +80,7 @@ fn test_seed_stake_delegation_and_deactivation() {
     // Create vote account
     config_validator.command = CliCommand::CreateVoteAccount {
         vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        seed: None,
         node_pubkey: config_validator.keypair.pubkey(),
         authorized_voter: None,
         authorized_withdrawer: None,
@@ -173,6 +174,7 @@ fn test_stake_delegation_and_deactivation() {
     // Create vote account
     config_validator.command = CliCommand::CreateVoteAccount {
         vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        seed: None,
         node_pubkey: config_validator.keypair.pubkey(),
         authorized_voter: None,
         authorized_withdrawer: None,
@@ -262,6 +264,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     // Create vote account
     config_validator.command = CliCommand::CreateVoteAccount {
         vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        seed: None,
         node_pubkey: config_validator.keypair.pubkey(),
         authorized_voter: None,
         authorized_withdrawer: None,
@@ -383,6 +386,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     write_keypair(&vote_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateVoteAccount {
         vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        seed: None,
         node_pubkey: config.keypair.pubkey(),
         authorized_voter: None,
         authorized_withdrawer: None,
@@ -410,6 +414,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        seed: None,
         nonce_authority: Some(config.keypair.pubkey()),
         lamports: minimum_nonce_balance,
     };

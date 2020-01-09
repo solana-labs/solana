@@ -374,13 +374,13 @@ impl StakeSubCommands for App<'_, '_> {
 
 pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account = keypair_of(matches, "stake_account").unwrap();
+    let seed = matches.value_of("seed").map(|s| s.to_string());
     let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
     let unix_timestamp = unix_timestamp_from_rfc3339_datetime(&matches, "lockup_date").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
     let staker = pubkey_of(matches, "authorized_staker");
     let withdrawer = pubkey_of(matches, "authorized_withdrawer");
     let lamports = required_lamports_from(matches, "amount", "unit")?;
-    let seed = matches.value_of("seed").map(|s| s.to_string());
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
