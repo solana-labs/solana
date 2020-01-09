@@ -72,8 +72,13 @@ ARGS+=(
   --env CI_JOB_ID
   --env CI_PULL_REQUEST
   --env CI_REPO_SLUG
-  --env CODECOV_TOKEN
   --env CRATES_IO_TOKEN
+)
+
+# Also propagate environment variables needed for codecov
+# https://docs.codecov.io/docs/testing-with-docker#section-codecov-inside-docker
+ARGS+=(
+  $(bash <(curl -s https://codecov.io/env))
 )
 
 if $INTERACTIVE; then
