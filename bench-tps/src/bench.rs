@@ -1039,7 +1039,9 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
             funding_key_balance, max_fee, lamports_per_account, extra, total
         );
 
-        airdrop_lamports(client.as_ref(), &faucet_addr.unwrap(), funding_key, total)?;
+        if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
+            airdrop_lamports(client.as_ref(), &faucet_addr.unwrap(), funding_key, total)?;
+        }
 
         #[cfg(feature = "move")]
         {
@@ -1130,23 +1132,24 @@ mod tests {
         config.duration = Duration::from_secs(5);
 
         let keypair_count = config.tx_count * config.keypair_multiplier;
-        let (keypairs, _move_keypairs, _keypair_balance) =
-            generate_and_fund_keypairs(&clients[0], None, &config.id, keypair_count, 20, false)
+        let (keypairs, _move_keypairs) =
+            generate_and_fund_keypairs(client.clone(), None, &config.id, keypair_count, 20, false)
                 .unwrap();
 
-        do_bench_tps(clients, config, keypairs, None);
+        do_bench_tps(client, config, keypairs, None);
     }
 
     #[test]
     fn test_bench_tps_fund_keys() {
         let (genesis_config, id) = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
-        let client = BankClient::new(bank);
+        let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;
         let lamports = 20;
 
-        let (keypairs, _move_keypairs, _keypair_balance) =
-            generate_and_fund_keypairs(&client, None, &id, keypair_count, lamports, false).unwrap();
+        let (keypairs, _move_keypairs) =
+            generate_and_fund_keypairs(client.clone(), None, &id, keypair_count, lamports, false)
+                .unwrap();
 
         for kp in &keypairs {
             assert_eq!(
@@ -1164,23 +1167,16 @@ mod tests {
         let fee_calculator = FeeCalculator::new(11, 0);
         genesis_config.fee_calculator = fee_calculator;
         let bank = Bank::new(&genesis_config);
-        let client = BankClient::new(bank);
+        let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;
         let lamports = 20;
 
-        let (keypairs, _move_keypairs, _keypair_balance) =
-            generate_and_fund_keypairs(&client, None, &id, keypair_count, lamports, false).unwrap();
+        let (keypairs, _move_keypairs) =
+            generate_and_fund_keypairs(client.clone(), None, &id, keypair_count, lamports, false)
+                .unwrap();
 
-        let max_fee = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
-            .unwrap()
-            .1
-            .max_lamports_per_signature;
         for kp in &keypairs {
-            assert_eq!(
-                client.get_balance(&kp.pubkey()).unwrap(),
-                lamports + max_fee
-            );
+            assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports);
         }
     }
 }
