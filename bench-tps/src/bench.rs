@@ -21,8 +21,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::{
-    cmp,
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     net::SocketAddr,
     process::exit,
     sync::{
@@ -66,10 +65,9 @@ fn get_recent_blockhash<T: Client>(client: &T) -> (Hash, FeeCalculator) {
 }
 
 pub fn do_bench_tps<T>(
-    clients: Vec<T>,
+    client: Arc<T>,
     config: Config,
     gen_keypairs: Vec<Keypair>,
-    keypair0_balance: u64,
     libra_args: Option<LibraKeys>,
 ) -> u64
 where
@@ -85,9 +83,6 @@ where
         num_lamports_per_account,
         ..
     } = config;
-
-    let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
-    let client = &clients[0];
 
     let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
     let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
@@ -115,20 +110,17 @@ where
     let maxes = Arc::new(RwLock::new(Vec::new()));
     let sample_period = 1; // in seconds
     info!("Sampling TPS every {} second...", sample_period);
-    let v_threads: Vec<_> = clients
-        .iter()
-        .map(|client| {
-            let exit_signal = exit_signal.clone();
-            let maxes = maxes.clone();
-            let client = client.clone();
-            Builder::new()
-                .name("solana-client-sample".to_string())
-                .spawn(move || {
-                    sample_txs(&exit_signal, &maxes, sample_period, &client);
-                })
-                .unwrap()
-        })
-        .collect();
+    let sample_thread = {
+        let exit_signal = exit_signal.clone();
+        let maxes = maxes.clone();
+        let client = client.clone();
+        Builder::new()
+            .name("solana-client-sample".to_string())
+            .spawn(move || {
+                sample_txs(&exit_signal, &maxes, sample_period, &client);
+            })
+            .unwrap()
+    };
 
     let shared_txs: SharedTransactions = Arc::new(RwLock::new(VecDeque::new()));
 
@@ -176,7 +168,7 @@ where
     let start = Instant::now();
     let keypair_chunks = source_keypair_chunks.len() as u64;
     let mut reclaim_lamports_back_to_source_account = false;
-    let mut i = keypair0_balance;
+    let mut i = 0;
     while start.elapsed() < duration {
         let chunk_index = (i % keypair_chunks) as usize;
         generate_txs(
@@ -215,11 +207,9 @@ where
     // Stop the sampling threads so it will collect the stats
     exit_signal.store(true, Ordering::Relaxed);
 
-    info!("Waiting for validator threads...");
-    for t in v_threads {
-        if let Err(err) = t.join() {
-            info!("  join() failed with: {:?}", err);
-        }
+    info!("Waiting for sampler threads...");
+    if let Err(err) = sample_thread.join() {
+        info!("  join() failed with: {:?}", err);
     }
 
     // join the tx send threads
@@ -500,14 +490,17 @@ fn do_tx_transfers<T: Client>(
     }
 }
 
-fn verify_funding_transfer<T: Client>(client: &T, tx: &Transaction, amount: u64) -> bool {
+fn verify_funding_transfer<T: Client>(client: &Arc<T>, tx: &Transaction, amount: u64) -> bool {
     for a in &tx.message().account_keys[1..] {
-        if client
-            .get_balance_with_commitment(a, CommitmentConfig::recent())
-            .unwrap_or(0)
-            >= amount
-        {
-            return true;
+        match client.get_balance_with_commitment(a, CommitmentConfig::recent()) {
+            Ok(balance) if balance >= amount => return true,
+            Ok(too_low) => {
+                info!("balance: {} was lower than {}", too_low, amount);
+                return false;
+            }
+            Err(err) => {
+                error!("failed to get balance {:?}", err);
+            }
         }
     }
     false
@@ -516,70 +509,43 @@ fn verify_funding_transfer<T: Client>(client: &T, tx: &Transaction, amount: u64)
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
-pub fn fund_keys<T: Client>(
-    client: &T,
+pub fn fund_keys<T: 'static + Client + Send + Sync>(
+    client: Arc<T>,
     source: &Keypair,
     dests: &[Keypair],
     total: u64,
     max_fee: u64,
-    mut extra: u64,
+    lamports_per_account: u64,
 ) {
-    let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
-    let mut notfunded: Vec<&Keypair> = dests.iter().collect();
-    let lamports_per_account = (total - (extra * max_fee)) / (notfunded.len() as u64 + 1);
-
-    info!(
-        "funding keys {} with lamports: {:?} total: {}",
-        dests.len(),
-        client.get_balance(&source.pubkey()),
-        total
-    );
-    while !notfunded.is_empty() {
-        let mut new_funded: Vec<(&Keypair, u64)> = vec![];
-        let mut to_fund = vec![];
-        info!("creating from... {}", funded.len());
-        let mut build_to_fund = Measure::start("build_to_fund");
-        for f in &mut funded {
-            let max_units = cmp::min(notfunded.len() as u64, MAX_SPENDS_PER_TX);
-            if max_units == 0 {
-                break;
-            }
-            let start = notfunded.len() - max_units as usize;
-            let fees = if extra > 0 { max_fee } else { 0 };
-            let per_unit = (f.1 - lamports_per_account - fees) / max_units;
-            let moves: Vec<_> = notfunded[start..]
-                .iter()
-                .map(|k| (k.pubkey(), per_unit))
-                .collect();
-            notfunded[start..]
-                .iter()
-                .for_each(|k| new_funded.push((k, per_unit)));
-            notfunded.truncate(start);
-            if !moves.is_empty() {
-                to_fund.push((f.0, moves));
-            }
-            extra -= 1;
+    let mut funded: Vec<&Keypair> = vec![source];
+    let mut funded_funds = total;
+    let mut not_funded: Vec<&Keypair> = dests.iter().collect();
+    while !not_funded.is_empty() {
+        // Build to fund list and prepare funding sources for next iteration
+        let mut new_funded: Vec<&Keypair> = vec![];
+        let mut to_fund: Vec<(&Keypair, Vec<(Pubkey, u64)>)> = vec![];
+        let to_lamports = (funded_funds - lamports_per_account - max_fee) / MAX_SPENDS_PER_TX;
+        for f in funded {
+            let start = not_funded.len() - MAX_SPENDS_PER_TX as usize;
+            let dests: Vec<_> = not_funded.drain(start..).collect();
+            let spends: Vec<_> = dests.iter().map(|k| (k.pubkey(), to_lamports)).collect();
+            to_fund.push((f, spends));
+            new_funded.extend(dests.into_iter());
         }
-        build_to_fund.stop();
-        debug!("build to_fund vec: {}us", build_to_fund.as_us());
 
         // try to transfer a "few" at a time with recent blockhash
         //  assume 4MB network buffers, and 512 byte packets
         const FUND_CHUNK_LEN: usize = 4 * 1024 * 1024 / 512;
 
         to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
-            let mut tries = 0;
-
             let mut make_txs = Measure::start("make_txs");
-            // this set of transactions just initializes us for bookkeeping
-            #[allow(clippy::clone_double_ref)] // sigh
-            let mut to_fund_txs: Vec<_> = chunk
+            let mut to_fund_txs: Vec<(&Keypair, Transaction)> = chunk
                 .par_iter()
-                .map(|(k, m)| {
+                .map(|(k, t)| {
                     let tx = Transaction::new_unsigned_instructions(
-                        system_instruction::transfer_many(&k.pubkey(), &m),
+                        system_instruction::transfer_many(&k.pubkey(), &t),
                     );
-                    (k.clone(), tx)
+                    (*k, tx)
                 })
                 .collect();
             make_txs.stop();
@@ -589,26 +555,21 @@ pub fn fund_keys<T: Client>(
                 make_txs.as_us()
             );
 
-            let amount = chunk[0].1[0].1;
-
+            let mut tries = 0;
             while !to_fund_txs.is_empty() {
-                let receivers = to_fund_txs
-                    .iter()
-                    .fold(0, |len, (_, tx)| len + tx.message().instructions.len());
-
                 info!(
-                    "{} {} to {} in {} txs",
+                    "{} {} each to {} accounts in {} txs",
                     if tries == 0 {
                         "transferring"
                     } else {
                         " retrying"
                     },
-                    amount,
-                    receivers,
+                    to_lamports,
+                    to_fund_txs.len() * MAX_SPENDS_PER_TX as usize,
                     to_fund_txs.len(),
                 );
 
-                let (blockhash, _fee_calculator) = get_recent_blockhash(client);
+                let (blockhash, _fee_calculator) = get_recent_blockhash(client.as_ref());
 
                 // re-sign retained to_fund_txes with updated blockhash
                 let mut sign_txs = Measure::start("sign_txs");
@@ -625,42 +586,73 @@ pub fn fund_keys<T: Client>(
                 send_txs.stop();
                 debug!("send {} txs: {}us", to_fund_txs.len(), send_txs.as_us());
 
+                // Sleep a few slots to allow transactions to process
+                sleep(Duration::from_secs(1));
+
                 let mut verify_txs = Measure::start("verify_txs");
-                let mut starting_txs = to_fund_txs.len();
-                let mut verified_txs = 0;
-                let mut failed_verify = 0;
+                let starting_txs = to_fund_txs.len();
+                let verified_txs = Arc::new(AtomicUsize::new(0));
+                let too_many_failures = Arc::new(AtomicBool::new(false));
                 // Only loop multiple times for small (quick) transaction batches
                 for _ in 0..(if starting_txs < 1000 { 3 } else { 1 }) {
-                    let mut timer = Instant::now();
-                    to_fund_txs.retain(|(_, tx)| {
-                        if timer.elapsed() >= Duration::from_secs(5) {
-                            if failed_verify > 0 {
-                                debug!("total txs failed verify: {}", failed_verify);
+                    let failed_verify = Arc::new(AtomicUsize::new(0));
+                    let verified_set: HashSet<Option<Pubkey>> = {
+                        let client = client.clone();
+                        let verified_txs = &verified_txs;
+                        let failed_verify = &failed_verify;
+                        let too_many_failures = &too_many_failures;
+                        to_fund_txs.par_iter().map(move |(k, tx)| {
+                            if too_many_failures.load(Ordering::Relaxed) {
+                                return None;
                             }
-                            info!(
-                                "Verifying transfers... {} remaining",
-                                starting_txs - verified_txs
-                            );
-                            timer = Instant::now();
-                        }
-                        let verified = verify_funding_transfer(client, &tx, amount);
-                        if verified {
-                            verified_txs += 1;
-                        } else {
-                            failed_verify += 1;
-                        }
-                        !verified
-                    });
+
+                            let verified = if verify_funding_transfer(&client, &tx, to_lamports) {
+                                verified_txs.fetch_add(1, Ordering::Relaxed);
+                                Some(k.pubkey())
+                            } else {
+                                failed_verify.fetch_add(1, Ordering::Relaxed);
+                                None
+                            };
+
+                            let verified_txs = verified_txs.load(Ordering::Relaxed);
+                            let failed_verify = failed_verify.load(Ordering::Relaxed);
+                            let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
+                            if failed_verify > 100 && failed_verify > verified_txs {
+                                too_many_failures.store(true, Ordering::Relaxed);
+                                warn!(
+                                    "Too many failed transfers... {} remaining, {} verified, {} failures",
+                                    remaining_count, verified_txs, failed_verify
+                                );
+                            }
+                            if remaining_count % 100 == 0 {
+                                info!(
+                                    "Verifying transfers... {} remaining, {} verified, {} failures",
+                                    remaining_count, verified_txs, failed_verify
+                                );
+                            }
+
+                            verified
+                        }).collect()
+                    };
+
+                    to_fund_txs.retain(|(k, _)| !verified_set.contains(&Some(k.pubkey())));
                     if to_fund_txs.is_empty() {
                         break;
                     }
-                    debug!("Looping verifications");
-                    info!("Verifying transfers... {} remaining", to_fund_txs.len());
+                    info!("Looping verifications");
+
+                    let verified_txs = verified_txs.load(Ordering::Relaxed);
+                    let failed_verify = failed_verify.load(Ordering::Relaxed);
+                    let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
+                    info!(
+                        "Verifying transfers... {} remaining, {} verified, {} failures",
+                        remaining_count, verified_txs, failed_verify
+                    );
                     sleep(Duration::from_millis(100));
                 }
-                starting_txs -= to_fund_txs.len();
                 verify_txs.stop();
-                debug!("verified {} txs: {}us", starting_txs, verify_txs.as_us());
+                let verified_txs = verified_txs.load(Ordering::Relaxed);
+                debug!("verified {} txs: {}us", verified_txs, verify_txs.as_us());
 
                 // retry anything that seems to have dropped through cracks
                 //  again since these txs are all or nothing, they're fine to
@@ -669,8 +661,10 @@ pub fn fund_keys<T: Client>(
             }
             info!("transferred");
         });
-        info!("funded: {} left: {}", new_funded.len(), notfunded.len());
+
+        info!("funded: {} left: {}", new_funded.len(), not_funded.len());
         funded = new_funded;
+        funded_funds = to_lamports;
     }
 }
 
@@ -678,14 +672,14 @@ pub fn airdrop_lamports<T: Client>(
     client: &T,
     faucet_addr: &SocketAddr,
     id: &Keypair,
-    tx_count: u64,
+    desired_balance: u64,
 ) -> Result<()> {
     let starting_balance = client.get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_lamport_balance(starting_balance);
     info!("starting balance {}", starting_balance);
 
-    if starting_balance < tx_count {
-        let airdrop_amount = tx_count - starting_balance;
+    if starting_balance < desired_balance {
+        let airdrop_amount = desired_balance - starting_balance;
         info!(
             "Airdropping {:?} lamports from {} for {}",
             airdrop_amount,
@@ -1004,23 +998,24 @@ fn fund_move_keys<T: Client>(
     info!("done funding keys, took {} ms", funding_time.as_ms());
 }
 
-pub fn generate_and_fund_keypairs<T: Client>(
-    client: &T,
+pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
+    client: Arc<T>,
     faucet_addr: Option<SocketAddr>,
     funding_key: &Keypair,
     keypair_count: usize,
     lamports_per_account: u64,
     use_move: bool,
-) -> Result<(Vec<Keypair>, Option<LibraKeys>, u64)> {
+) -> Result<(Vec<Keypair>, Option<LibraKeys>)> {
     info!("Creating {} keypairs...", keypair_count);
     let (mut keypairs, extra) = generate_keypairs(funding_key, keypair_count as u64);
     info!("Get lamports...");
 
-    // Sample the first keypair, see if it has lamports, if so then resume.
-    // This logic is to prevent lamport loss on repeated solana-bench-tps executions
-    let last_keypair_balance = client
-        .get_balance(&keypairs[keypair_count - 1].pubkey())
-        .unwrap_or(0);
+    // Sample the first keypair, to prevent lamport loss on repeated solana-bench-tps executions
+    let first_key = keypairs[0].pubkey();
+    let first_keypair_balance = client.get_balance(&first_key).unwrap_or(0);
+    // Sample the last keypair, to check if funding was already completed
+    let last_key = keypairs[keypair_count - 1].pubkey();
+    let last_keypair_balance = client.get_balance(&last_key).unwrap_or(0);
 
     #[cfg(feature = "move")]
     let mut move_keypairs_ret = None;
@@ -1028,24 +1023,23 @@ pub fn generate_and_fund_keypairs<T: Client>(
     #[cfg(not(feature = "move"))]
     let move_keypairs_ret = None;
 
-    if lamports_per_account > last_keypair_balance {
-        let (_blockhash, fee_calculator) = get_recent_blockhash(client);
-        let account_desired_balance =
-            lamports_per_account - last_keypair_balance + fee_calculator.max_lamports_per_signature;
-        let extra_fees = extra * fee_calculator.max_lamports_per_signature;
-        let mut total = account_desired_balance * (1 + keypairs.len() as u64) + extra_fees;
+    if lamports_per_account > first_keypair_balance || lamports_per_account > last_keypair_balance {
+        let (_blockhash, fee_calculator) = get_recent_blockhash(client.as_ref());
+        let max_fee = fee_calculator.max_lamports_per_signature;
+        let extra_fees = extra * max_fee;
+        let total_keypairs = keypairs.len() as u64 + 1; // Add one for funding keypair
+        let mut total = lamports_per_account * total_keypairs + extra_fees;
         if use_move {
             total *= 3;
         }
 
-        info!("Previous key balance: {} max_fee: {} lamports_per_account: {} extra: {} desired_balance: {} total: {}",
-                 last_keypair_balance, fee_calculator.max_lamports_per_signature, lamports_per_account, extra,
-                 account_desired_balance, total
-                 );
+        let funding_key_balance = client.get_balance(&funding_key.pubkey()).unwrap_or(0);
+        info!(
+            "Funding keypair balance: {} max_fee: {} lamports_per_account: {} extra: {} total: {}",
+            funding_key_balance, max_fee, lamports_per_account, extra, total
+        );
 
-        if client.get_balance(&funding_key.pubkey()).unwrap_or(0) < total {
-            airdrop_lamports(client, &faucet_addr.unwrap(), funding_key, total)?;
-        }
+        airdrop_lamports(client.as_ref(), &faucet_addr.unwrap(), funding_key, total)?;
 
         #[cfg(feature = "move")]
         {
@@ -1085,15 +1079,15 @@ pub fn generate_and_fund_keypairs<T: Client>(
             funding_key,
             &keypairs,
             total,
-            fee_calculator.max_lamports_per_signature,
-            extra,
+            max_fee,
+            lamports_per_account,
         );
     }
 
     // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
     keypairs.truncate(keypair_count);
 
-    Ok((keypairs, move_keypairs_ret, last_keypair_balance))
+    Ok((keypairs, move_keypairs_ret))
 }
 
 #[cfg(test)]
@@ -1128,7 +1122,7 @@ mod tests {
     fn test_bench_tps_bank_client() {
         let (genesis_config, id) = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
-        let clients = vec![BankClient::new(bank)];
+        let client = Arc::new(BankClient::new(bank));
 
         let mut config = Config::default();
         config.id = id;
@@ -1140,7 +1134,7 @@ mod tests {
             generate_and_fund_keypairs(&clients[0], None, &config.id, keypair_count, 20, false)
                 .unwrap();
 
-        do_bench_tps(clients, config, keypairs, 0, None);
+        do_bench_tps(clients, config, keypairs, None);
     }
 
     #[test]
