@@ -494,8 +494,29 @@ test('request airdrop', async () => {
   mockRpc.push([
     url,
     {
+      method: 'getMinimumBalanceForRentExemption',
+      params: [0, {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result: 50,
+    },
+  ]);
+
+  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+    0,
+    'recent',
+  );
+
+  mockRpc.push([
+    url,
+    {
       method: 'requestAirdrop',
-      params: [account.publicKey.toBase58(), 40, {commitment: 'recent'}],
+      params: [
+        account.publicKey.toBase58(),
+        minimumAmount + 40,
+        {commitment: 'recent'},
+      ],
     },
     {
       error: null,
@@ -527,16 +548,16 @@ test('request airdrop', async () => {
         context: {
           slot: 11,
         },
-        value: 42,
+        value: minimumAmount + 42,
       },
     },
   ]);
 
-  await connection.requestAirdrop(account.publicKey, 40);
+  await connection.requestAirdrop(account.publicKey, minimumAmount + 40);
   await connection.requestAirdrop(account.publicKey, 2);
 
   const balance = await connection.getBalance(account.publicKey);
-  expect(balance).toBe(42);
+  expect(balance).toBe(minimumAmount + 42);
 
   mockRpc.push([
     url,
@@ -585,7 +606,7 @@ test('request airdrop', async () => {
             0,
             0,
           ],
-          lamports: 42,
+          lamports: minimumAmount + 42,
           data: [],
           executable: false,
         },
@@ -594,7 +615,7 @@ test('request airdrop', async () => {
   ]);
 
   const accountInfo = await connection.getAccountInfo(account.publicKey);
-  expect(accountInfo.lamports).toBe(42);
+  expect(accountInfo.lamports).toBe(minimumAmount + 42);
   expect(accountInfo.data).toHaveLength(0);
   expect(accountInfo.owner).toEqual(SystemProgram.programId);
 });
@@ -607,8 +628,29 @@ test('request airdrop - max commitment', async () => {
   mockRpc.push([
     url,
     {
+      method: 'getMinimumBalanceForRentExemption',
+      params: [0, {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result: 50,
+    },
+  ]);
+
+  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+    0,
+    'recent',
+  );
+
+  mockRpc.push([
+    url,
+    {
       method: 'requestAirdrop',
-      params: [account.publicKey.toBase58(), 40, {commitment: 'max'}],
+      params: [
+        account.publicKey.toBase58(),
+        minimumAmount + 40,
+        {commitment: 'max'},
+      ],
     },
     {
       error: null,
@@ -628,14 +670,14 @@ test('request airdrop - max commitment', async () => {
         context: {
           slot: 11,
         },
-        value: 40,
+        value: minimumAmount + 40,
       },
     },
   ]);
 
-  await connection.requestAirdrop(account.publicKey, 40);
+  await connection.requestAirdrop(account.publicKey, minimumAmount + 40);
   const balance = await connection.getBalance(account.publicKey);
-  expect(balance).toBe(40);
+  expect(balance).toBe(minimumAmount + 40);
 });
 
 test('transaction', async () => {
@@ -646,10 +688,27 @@ test('transaction', async () => {
   mockRpc.push([
     url,
     {
+      method: 'getMinimumBalanceForRentExemption',
+      params: [0, {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result: 50,
+    },
+  ]);
+
+  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+    0,
+    'recent',
+  );
+
+  mockRpc.push([
+    url,
+    {
       method: 'requestAirdrop',
       params: [
         accountFrom.publicKey.toBase58(),
-        100010,
+        minimumAmount + 100010,
         {commitment: 'recent'},
       ],
     },
@@ -671,18 +730,27 @@ test('transaction', async () => {
         context: {
           slot: 11,
         },
-        value: 100010,
+        value: minimumAmount + 100010,
       },
     },
   ]);
-  await connection.requestAirdrop(accountFrom.publicKey, 100010);
-  expect(await connection.getBalance(accountFrom.publicKey)).toBe(100010);
+  await connection.requestAirdrop(
+    accountFrom.publicKey,
+    minimumAmount + 100010,
+  );
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(
+    minimumAmount + 100010,
+  );
 
   mockRpc.push([
     url,
     {
       method: 'requestAirdrop',
-      params: [accountTo.publicKey.toBase58(), 21, {commitment: 'recent'}],
+      params: [
+        accountTo.publicKey.toBase58(),
+        minimumAmount + 21,
+        {commitment: 'recent'},
+      ],
     },
     {
       error: null,
@@ -702,12 +770,14 @@ test('transaction', async () => {
         context: {
           slot: 11,
         },
-        value: 21,
+        value: minimumAmount + 21,
       },
     },
   ]);
-  await connection.requestAirdrop(accountTo.publicKey, 21);
-  expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
+  await connection.requestAirdrop(accountTo.publicKey, minimumAmount + 21);
+  expect(await connection.getBalance(accountTo.publicKey)).toBe(
+    minimumAmount + 21,
+  );
 
   mockGetRecentBlockhash('recent');
   mockRpc.push([
@@ -790,7 +860,7 @@ test('transaction', async () => {
         context: {
           slot: 11,
         },
-        value: 2,
+        value: minimumAmount + 2,
       },
     },
   ]);
@@ -798,7 +868,7 @@ test('transaction', async () => {
   // accountFrom may have less than 100000 due to transaction fees
   const balance = await connection.getBalance(accountFrom.publicKey);
   expect(balance).toBeGreaterThan(0);
-  expect(balance).toBeLessThanOrEqual(100000);
+  expect(balance).toBeLessThanOrEqual(minimumAmount + 100000);
 
   mockRpc.push([
     url,
@@ -812,11 +882,13 @@ test('transaction', async () => {
         context: {
           slot: 11,
         },
-        value: 31,
+        value: minimumAmount + 31,
       },
     },
   ]);
-  expect(await connection.getBalance(accountTo.publicKey)).toBe(31);
+  expect(await connection.getBalance(accountTo.publicKey)).toBe(
+    minimumAmount + 31,
+  );
 });
 
 test('multi-instruction transaction', async () => {
@@ -834,8 +906,15 @@ test('multi-instruction transaction', async () => {
     LAMPORTS_PER_SOL,
   );
 
-  await connection.requestAirdrop(accountTo.publicKey, 21);
-  expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
+  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+    0,
+    'recent',
+  );
+
+  await connection.requestAirdrop(accountTo.publicKey, minimumAmount + 21);
+  expect(await connection.getBalance(accountTo.publicKey)).toBe(
+    minimumAmount + 21,
+  );
 
   // 1. Move(accountFrom, accountTo)
   // 2. Move(accountTo, accountFrom)
@@ -871,7 +950,9 @@ test('multi-instruction transaction', async () => {
     await connection.getBalance(accountFrom.publicKey),
   ).toBeLessThanOrEqual(LAMPORTS_PER_SOL);
 
-  expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
+  expect(await connection.getBalance(accountTo.publicKey)).toBe(
+    minimumAmount + 21,
+  );
 });
 
 test('account change notification', async () => {
