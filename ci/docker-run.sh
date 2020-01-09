@@ -77,9 +77,7 @@ ARGS+=(
 
 # Also propagate environment variables needed for codecov
 # https://docs.codecov.io/docs/testing-with-docker#section-codecov-inside-docker
-ARGS+=(
-  $(bash <(curl -s https://codecov.io/env))
-)
+CODECOV_ENVS=$(bash <(curl -s https://codecov.io/env))
 
 if $INTERACTIVE; then
   if [[ -n $1 ]]; then
@@ -88,8 +86,10 @@ if $INTERACTIVE; then
     echo
   fi
   set -x
-  exec docker run --interactive --tty "${ARGS[@]}" "$IMAGE" bash
+  # shellcheck disable=SC2086
+  exec docker run --interactive --tty "${ARGS[@]}" $CODECOV_ENVS "$IMAGE" bash
 fi
 
 set -x
-exec docker run "${ARGS[@]}" "$IMAGE" "$@"
+# shellcheck disable=SC2086
+exec docker run "${ARGS[@]}" $CODECOV_ENVS "$IMAGE" "$@"
