@@ -542,12 +542,13 @@ pub fn process_create_stake_account(
         (&stake_account_address, "stake_account".to_string()),
     )?;
 
-    if rpc_client.get_account(&stake_account_address).is_ok() {
-        return Err(CliError::BadParameter(format!(
-            "Unable to create stake account. Stake account already exists: {}",
-            stake_account_address
-        ))
-        .into());
+    if let Ok(stake_account) = rpc_client.get_account(&stake_account_address) {
+        let err_msg = if stake_account.owner == solana_stake_program::id() {
+            "stake account already exists"
+        } else {
+            "account already exists and is not a stake account"
+        };
+        return Err(CliError::BadParameter(err_msg.to_string()).into());
     }
 
     let minimum_balance =
