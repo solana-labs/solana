@@ -4965,10 +4965,11 @@ mod tests {
             bank.process_transaction(&durable_tx),
             Err(TransactionError::BlockhashNotFound)
         );
-        /* Check fee not charged */
+        /* Check fee not charged and nonce not advanced */
         assert_eq!(bank.get_balance(&custodian_pubkey), 4_640_000);
+        assert_eq!(new_nonce, get_nonce(&bank, &nonce_pubkey).unwrap());
 
-        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let nonce_hash = new_nonce;
 
         /* Kick nonce hash off the blockhash_queue */
         for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
@@ -4992,8 +4993,16 @@ mod tests {
                 system_instruction::SystemError::ResultWithNegativeLamports.into()
             ))
         );
-        /* Check fee charged */
+        /* Check fee charged and nonce has advanced */
         assert_eq!(bank.get_balance(&custodian_pubkey), 4_630_000);
+        assert_ne!(nonce_hash, get_nonce(&bank, &nonce_pubkey).unwrap());
+        /* Confirm replaying a TX that failed with InstructionError::* now
+         * fails with TransactionError::BlockhashNotFound
+         */
+        assert_eq!(
+            bank.process_transaction(&durable_tx),
+            Err(TransactionError::BlockhashNotFound),
+        );
     }
 
     #[test]
