@@ -1,6 +1,4 @@
-solana_sdk::declare_id!(
-    "LibraPay11111111111111111111111111111111111"
-);
+solana_sdk::declare_id!("LibraPay11111111111111111111111111111111111");
 
 pub mod librapay_instruction;
 pub mod librapay_transaction;
@@ -9,13 +7,15 @@ extern crate solana_move_loader_program;
 
 use solana_move_loader_program::account_state::LibraAccountState;
 use solana_runtime::loader_utils::load_program;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::client::Client;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction;
+use solana_sdk::{
+    account::KeyedAccount,
+    client::Client,
+    instruction::InstructionError,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    system_instruction,
+};
 
 use types::account_config;
 

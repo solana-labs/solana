@@ -14,10 +14,11 @@ use solana_sdk::{
     pubkey::Pubkey,
     sysvar::rent,
 };
-use std::convert::TryFrom;
-use std::io::prelude::*;
-use std::io::Error;
-use std::mem;
+use std::{
+    convert::TryFrom,
+    io::{prelude::*, Error},
+    mem,
+};
 
 solana_sdk::declare_program!(
     solana_sdk::bpf_loader::ID,

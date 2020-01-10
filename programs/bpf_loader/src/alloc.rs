@@ -1,5 +1,4 @@
-use std::alloc::Layout;
-use std::fmt;
+use std::{alloc::Layout, fmt};
 
 /// Based loosely on the unstable std::alloc::Alloc trait
 pub trait Alloc {

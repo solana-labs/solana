@@ -7,12 +7,14 @@ use solana_rbpf::{
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
-use std::alloc::Layout;
-use std::ffi::CStr;
-use std::io::{Error, ErrorKind};
-use std::mem;
-use std::slice::from_raw_parts;
-use std::str::from_utf8;
+use std::{
+    alloc::Layout,
+    ffi::CStr,
+    io::{Error, ErrorKind},
+    mem,
+    slice::from_raw_parts,
+    str::from_utf8,
+};
 
 /// Program heap allocators are intended to allocate/free from a given
 /// chunk of memory.  The specific allocator implementation is
