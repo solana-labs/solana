@@ -9,9 +9,12 @@ use crate::{
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::signature::Keypair;
 use solana_sdk::{
-    account::Account, pubkey::Pubkey, signature::KeypairUtil, system_instruction::SystemError,
+    account::Account,
+    pubkey::Pubkey,
+    signature::Keypair,
+    signature::KeypairUtil,
+    system_instruction::{create_address_with_seed, SystemError},
     transaction::Transaction,
 };
 use solana_vote_program::{
@@ -294,6 +297,18 @@ pub fn process_create_vote_account(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
         (&vote_account_pubkey, "vote_account_pubkey".to_string()),
     )?;
+
+    if let Ok(vote_account) = rpc_client.get_account(&vote_account_pubkey) {
+        let err_msg = if vote_account.owner == solana_vote_program::id() {
+            format!("Vote account {} already exists", vote_account_pubkey)
+        } else {
+            format!(
+                "Account {} already exists and is not a vote account",
+                vote_account_pubkey
+            )
+        };
+        return Err(CliError::BadParameter(err_msg).into());
+    }
 
     let required_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(VoteState::size_of())?
