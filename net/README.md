@@ -93,3 +93,53 @@ Then run the following for details on how to ssh into any testnet node to access
 ```bash
 $ ./ssh.sh
 ```
+
+### Partition testing
+
+To induce the partition `net.sh netem --config-file <config file path>`
+To remove partition `net.sh netem --config-file <config file path> --netem-cmd cleanup`
+The partitioning is also removed if you do `net.sh stop` or `restart`.
+
+An example config that produces 3 almost equal partitions:
+
+```
+{
+      "partitions":[
+         34,
+         33,
+         33
+      ],
+      "interconnects":[
+         {
+            "a":0,
+            "b":1,
+            "config":"loss 15% delay 25ms"
+         },
+         {
+            "a":1,
+            "b":0,
+            "config":"loss 15% delay 25ms"
+         },
+         {
+            "a":0,
+            "b":2,
+            "config":"loss 10% delay 15ms"
+         },
+         {
+            "a":2,
+            "b":0,
+            "config":"loss 10% delay 15ms"
+         },
+         {
+            "a":2,
+            "b":1,
+            "config":"loss 5% delay 5ms"
+         },
+         {
+            "a":1,
+            "b":2,
+            "config":"loss 5% delay 5ms"
+         }
+      ]
+}
+```
