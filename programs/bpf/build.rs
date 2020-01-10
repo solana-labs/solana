@@ -83,12 +83,11 @@ fn main() {
                 "cargo:warning=(not a warning) Building Rust-based BPF programs: solana_bpf_rust_{}",
                 program
             );
-            assert!(Command::new("./do.sh")
+            assert!(Command::new("bash")
                 .current_dir("rust")
-                .arg("build")
-                .arg(program)
+                .args(&["./do.sh", "build", program])
                 .status()
-                .expect("Error calling rust/do.sh")
+                .expect("Error calling do.sh from build.rs")
                 .success());
             let src = format!(
                 "target/bpfel-unknown-unknown/release/solana_bpf_rust_{}.so",
