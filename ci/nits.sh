@@ -20,6 +20,7 @@ declare prints=(
 declare print_free_tree=(
   'core/src'
   'faucet/src'
+  'ledger/src'
   'metrics/src'
   'net-utils/src'
   'runtime/src'
