@@ -40,8 +40,6 @@ schedule.
 
 ## Notable changes
 
-* No threads are shut down to switch out of leader mode. Instead, FetchStage
-  should forward transactions to the next leader.
 * Hoist FetchStage and BroadcastStage out of TPU
 * Blocktree renamed to Blockstore
 * BankForks renamed to Banktree
