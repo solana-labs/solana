@@ -7,8 +7,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount,
     instruction::InstructionError,
-    instruction_processor_utils::{limited_deserialize, next_keyed_account},
-    loader_instruction::LoaderInstruction,
+    instruction_processor_utils::{is_executable, limited_deserialize, next_keyed_account},
     move_loader::id,
     pubkey::Pubkey,
     sysvar::rent,
@@ -36,38 +35,44 @@ use vm_runtime::{
 };
 use vm_runtime_types::value::Value;
 
-pub fn process_instruction(
-    _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
-) -> Result<(), InstructionError> {
-    solana_logger::setup();
+/// Instruction data passed to perform an loader operation, must be based
+/// on solana_sdk::loader_instruction::LoaderInstruction
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub enum MoveLoaderInstruction {
+    /// Write program data into an account
+    ///
+    /// * key[0] - the account to write into.
+    ///
+    /// The transaction must be signed by key[0]
+    Write {
+        offset: u32,
+        #[serde(with = "serde_bytes")]
+        bytes: Vec<u8>,
+    },
 
-    match limited_deserialize(data)? {
-        LoaderInstruction::Write { offset, bytes } => {
-            MoveProcessor::do_write(keyed_accounts, offset, &bytes)
-        }
-        LoaderInstruction::Finalize => MoveProcessor::do_finalize(keyed_accounts),
-        LoaderInstruction::InvokeMain { data } => {
-            MoveProcessor::do_invoke_main(keyed_accounts, &data)
-        }
-    }
-}
+    /// Finalize an account loaded with program data for execution.
+    /// The exact preparation steps is loader specific but on success the loader must set the executable
+    /// bit of the Account
+    ///
+    /// * key[0] - the account to prepare for execution
+    /// * key[1] - rent sysvar account
+    ///
+    /// The transaction must be signed by key[0]
+    Finalize,
 
-/// Command to invoke
-#[derive(Debug, Serialize, Deserialize)]
-pub enum InvokeCommand {
     /// Create a new genesis account
     CreateGenesis(u64),
-    /// run a Move script
-    RunScript {
-        /// Sender of the "transaction", the "sender" who is running this script
-        sender_address: AccountAddress,
-        /// Name of the script's function to call
-        function_name: String,
-        /// Arguments to pass to the script being called
-        args: Vec<TransactionArgument>,
-    },
+}
+
+/// Instruction data passed when executing a Move script
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RunScript {
+    /// Sender of the "transaction", the "sender" who is running this script
+    pub sender_address: AccountAddress,
+    /// Name of the script's function to call
+    pub function_name: String,
+    /// Arguments to pass to the script being called
+    pub args: Vec<TransactionArgument>,
 }
 
 pub struct MoveProcessor {}
@@ -349,32 +354,36 @@ impl MoveProcessor {
         Ok(())
     }
 
+    pub fn do_create_genesis(
+        keyed_accounts: &mut [KeyedAccount],
+        amount: u64,
+    ) -> Result<(), InstructionError> {
+        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let script = next_keyed_account(&mut keyed_accounts_iter)?;
+
+        if script.account.owner != id() {
+            debug!("Error: Move script account not owned by Move loader");
+            return Err(InstructionError::InvalidArgument);
+        }
+
+        match limited_deserialize(&script.account.data)? {
+            LibraAccountState::Unallocated => Self::serialize_and_enforce_length(
+                &LibraAccountState::create_genesis(amount)?,
+                &mut script.account.data,
+            ),
+            _ => {
+                debug!("Error: Must provide an unallocated account");
+                Err(InstructionError::InvalidArgument)
+            }
+        }
+    }
+
     pub fn do_invoke_main(
         keyed_accounts: &mut [KeyedAccount],
         data: &[u8],
     ) -> Result<(), InstructionError> {
         match limited_deserialize(&data)? {
-            InvokeCommand::CreateGenesis(amount) => {
-                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
-                let script = next_keyed_account(&mut keyed_accounts_iter)?;
-
-                if script.account.owner != id() {
-                    debug!("Error: Move script account not owned by Move loader");
-                    return Err(InstructionError::InvalidArgument);
-                }
-
-                match limited_deserialize(&script.account.data)? {
-                    LibraAccountState::Unallocated => Self::serialize_and_enforce_length(
-                        &LibraAccountState::create_genesis(amount)?,
-                        &mut script.account.data,
-                    ),
-                    _ => {
-                        debug!("Error: Must provide an unallocated account");
-                        Err(InstructionError::InvalidArgument)
-                    }
-                }
-            }
-            InvokeCommand::RunScript {
+            RunScript {
                 sender_address,
                 function_name,
                 args,
@@ -415,6 +424,29 @@ impl MoveProcessor {
 
                 data_store.apply_write_set(&output.write_set());
                 Self::data_store_to_keyed_accounts(data_store, data_accounts)
+            }
+        }
+    }
+
+    pub fn process_instruction(
+        _program_id: &Pubkey,
+        keyed_accounts: &mut [KeyedAccount],
+        instruction_data: &[u8],
+    ) -> Result<(), InstructionError> {
+        solana_logger::setup();
+
+        if is_executable(keyed_accounts) {
+            Self::do_invoke_main(keyed_accounts, instruction_data)
+        } else {
+            println!("data: {:?}", instruction_data);
+            match limited_deserialize(instruction_data)? {
+                MoveLoaderInstruction::Write { offset, bytes } => {
+                    Self::do_write(keyed_accounts, offset, &bytes)
+                }
+                MoveLoaderInstruction::Finalize => Self::do_finalize(keyed_accounts),
+                MoveLoaderInstruction::CreateGenesis(amount) => {
+                    Self::do_create_genesis(keyed_accounts, amount)
+                }
             }
         }
     }
@@ -484,11 +516,7 @@ mod tests {
             false,
             &mut unallocated.account,
         )];
-        MoveProcessor::do_invoke_main(
-            &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::CreateGenesis(amount)).unwrap(),
-        )
-        .unwrap();
+        MoveProcessor::do_create_genesis(&mut keyed_accounts, amount).unwrap();
 
         assert_eq!(
             bincode::deserialize::<LibraAccountState>(
@@ -524,7 +552,7 @@ mod tests {
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunScript {
+            &bincode::serialize(&RunScript {
                 sender_address,
                 function_name: "main".to_string(),
                 args: vec![],
@@ -588,7 +616,7 @@ mod tests {
         assert_eq!(
             MoveProcessor::do_invoke_main(
                 &mut keyed_accounts,
-                &bincode::serialize(&InvokeCommand::RunScript {
+                &bincode::serialize(&RunScript {
                     sender_address,
                     function_name: "main".to_string(),
                     args: vec![],
@@ -668,7 +696,7 @@ mod tests {
         let amount = 2;
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunScript {
+            &bincode::serialize(&RunScript {
                 sender_address: sender.address.clone(),
                 function_name: "main".to_string(),
                 args: vec![
@@ -768,7 +796,7 @@ mod tests {
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunScript {
+            &bincode::serialize(&RunScript {
                 sender_address: sender.address.clone(),
                 function_name: "main".to_string(),
                 args: vec![TransactionArgument::Address(payee.address.clone())],
@@ -819,7 +847,7 @@ mod tests {
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&InvokeCommand::RunScript {
+            &bincode::serialize(&RunScript {
                 sender_address: account_config::association_address(),
                 function_name: "main".to_string(),
                 args: vec![

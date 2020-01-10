@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+# TODO #!/usr/bin/env bash
 
 cd "$(dirname "$0")"
 
@@ -121,3 +121,5 @@ else
     # Build requested project
     perform_action "$1" "$PWD/$2" "$2"
 fi
+
+echo finished

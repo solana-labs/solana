@@ -24,14 +24,6 @@ pub enum LoaderInstruction {
     ///
     /// The transaction must be signed by key[0]
     Finalize,
-
-    /// Invoke the "main" entrypoint with the given data.
-    ///
-    /// * key[0] - an executable account
-    InvokeMain {
-        #[serde(with = "serde_bytes")]
-        data: Vec<u8>,
-    },
 }
 
 pub fn write(
