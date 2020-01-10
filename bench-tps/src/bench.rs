@@ -197,7 +197,9 @@ where
                 sleep(Duration::from_millis(1));
             }
         } else {
-            while shared_tx_active_thread_count.load(Ordering::Relaxed) > 0 {
+            while !shared_txs.read().unwrap().is_empty()
+                || shared_tx_active_thread_count.load(Ordering::Relaxed) > 0
+            {
                 sleep(Duration::from_millis(1));
             }
         }
