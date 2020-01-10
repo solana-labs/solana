@@ -41,6 +41,7 @@ pub enum BlocktreeError {
     InvalidShredData(Box<bincode::ErrorKind>),
     RocksDb(#[from] rocksdb::Error),
     SlotNotRooted,
+    DeadSlot,
     IO(#[from] std::io::Error),
     Serialize(#[from] Box<bincode::ErrorKind>),
     FsExtraError(#[from] fs_extra::error::Error),
