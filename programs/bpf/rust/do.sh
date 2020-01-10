@@ -121,5 +121,3 @@ else
     # Build requested project
     perform_action "$1" "$PWD/$2" "$2"
 fi
-
-echo finished
