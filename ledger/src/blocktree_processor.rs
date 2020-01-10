@@ -1243,7 +1243,6 @@ pub mod tests {
         .unwrap();
 
         // Should see only the parent of the dead children
-        println!("{:?}", bank_forks_info);
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 0 },);
         verify_fork_infos(&bank_forks, &bank_forks_info);
