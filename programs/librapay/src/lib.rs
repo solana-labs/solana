@@ -5,7 +5,7 @@ pub mod librapay_transaction;
 
 extern crate solana_move_loader_program;
 
-use solana_move_loader_program::account_state::LibraAccountState;
+use solana_move_loader_program::{account_state::LibraAccountState, processor::MoveProcessor};
 use solana_runtime::loader_utils::load_program;
 use solana_sdk::{
     account::KeyedAccount,
@@ -86,5 +86,5 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    solana_move_loader_program::processor::process_instruction(program_id, keyed_accounts, data)
+    MoveProcessor::process_instruction(program_id, keyed_accounts, data)
 }

@@ -9,7 +9,7 @@ use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::{
     account::KeyedAccount,
     instruction::InstructionError,
-    instruction_processor_utils::{limited_deserialize, next_keyed_account},
+    instruction_processor_utils::{is_executable, limited_deserialize, next_keyed_account},
     loader_instruction::LoaderInstruction,
     pubkey::Pubkey,
     sysvar::rent,
@@ -92,12 +92,57 @@ pub fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]
 pub fn process_instruction(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    ix_data: &[u8],
+    instruction_data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup_with_default("solana=info");
 
-    if let Ok(instruction) = limited_deserialize(ix_data) {
-        match instruction {
+    if keyed_accounts.is_empty() {
+        warn!("No account keys");
+        return Err(InstructionError::NotEnoughAccountKeys);
+    }
+
+    if is_executable(keyed_accounts) {
+        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let program = next_keyed_account(&mut keyed_accounts_iter)?;
+
+        if !program.account.executable {
+            warn!("BPF program account not executable");
+            return Err(InstructionError::AccountNotExecutable);
+        }
+        let (mut vm, heap_region) = match create_vm(&program.account.data) {
+            Ok(info) => info,
+            Err(e) => {
+                warn!("Failed to create BPF VM: {}", e);
+                return Err(InstructionError::GenericError);
+            }
+        };
+        let parameter_accounts = keyed_accounts_iter.into_slice();
+        let mut parameter_bytes =
+            serialize_parameters(program_id, parameter_accounts, &instruction_data);
+
+        info!("Call BPF program");
+        match vm.execute_program(parameter_bytes.as_mut_slice(), &[], &[heap_region]) {
+            Ok(status) => match u32::try_from(status) {
+                Ok(status) => {
+                    if status > 0 {
+                        warn!("BPF program failed: {}", status);
+                        return Err(InstructionError::CustomError(status));
+                    }
+                }
+                Err(e) => {
+                    warn!("BPF VM encountered invalid status: {}", e);
+                    return Err(InstructionError::GenericError);
+                }
+            },
+            Err(e) => {
+                warn!("BPF VM failed to run program: {}", e);
+                return Err(InstructionError::GenericError);
+            }
+        }
+        deserialize_parameters(parameter_accounts, &parameter_bytes);
+        info!("BPF program success");
+    } else if !keyed_accounts.is_empty() {
+        match limited_deserialize(instruction_data)? {
             LoaderInstruction::Write { offset, bytes } => {
                 let mut keyed_accounts_iter = keyed_accounts.iter_mut();
                 let program = next_keyed_account(&mut keyed_accounts_iter)?;
@@ -138,51 +183,7 @@ pub fn process_instruction(
                 program.account.executable = true;
                 info!("Finalize: account {:?}", program.signer_key().unwrap());
             }
-            LoaderInstruction::InvokeMain { data } => {
-                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
-                let program = next_keyed_account(&mut keyed_accounts_iter)?;
-
-                if !program.account.executable {
-                    warn!("BPF program account not executable");
-                    return Err(InstructionError::AccountNotExecutable);
-                }
-                let (mut vm, heap_region) = match create_vm(&program.account.data) {
-                    Ok(info) => info,
-                    Err(e) => {
-                        warn!("Failed to create BPF VM: {}", e);
-                        return Err(InstructionError::GenericError);
-                    }
-                };
-                let parameter_accounts = keyed_accounts_iter.into_slice();
-                let mut parameter_bytes =
-                    serialize_parameters(program_id, parameter_accounts, &data);
-
-                info!("Call BPF program");
-                match vm.execute_program(parameter_bytes.as_mut_slice(), &[], &[heap_region]) {
-                    Ok(status) => match u32::try_from(status) {
-                        Ok(status) => {
-                            if status > 0 {
-                                warn!("BPF program failed: {}", status);
-                                return Err(InstructionError::CustomError(status));
-                            }
-                        }
-                        Err(e) => {
-                            warn!("BPF VM encountered invalid status: {}", e);
-                            return Err(InstructionError::GenericError);
-                        }
-                    },
-                    Err(e) => {
-                        warn!("BPF VM failed to run program: {}", e);
-                        return Err(InstructionError::GenericError);
-                    }
-                }
-                deserialize_parameters(parameter_accounts, &parameter_bytes);
-                info!("BPF program success");
-            }
         }
-    } else {
-        warn!("Invalid instruction data: {:?}", ix_data);
-        return Err(InstructionError::InvalidInstructionData);
     }
     Ok(())
 }
@@ -218,7 +219,7 @@ mod tests {
         let program_key = Pubkey::new_rand();
         let mut program_account = Account::new(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
-        let ix_data = bincode::serialize(&LoaderInstruction::Write {
+        let instruction_data = bincode::serialize(&LoaderInstruction::Write {
             offset: 3,
             bytes: vec![1, 2, 3],
         })
@@ -227,13 +228,13 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &mut vec![], &ix_data)
+            process_instruction(&program_id, &mut vec![], &instruction_data)
         );
 
         // Case: Not signed
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
         );
 
         // Case: Write bytes to an offset
@@ -241,7 +242,7 @@ mod tests {
         keyed_accounts[0].account.data = vec![0; 6];
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
         );
         assert_eq!(vec![0, 0, 0, 1, 2, 3], keyed_accounts[0].account.data);
 
@@ -250,7 +251,7 @@ mod tests {
         keyed_accounts[0].account.data = vec![0; 5];
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
-            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
         );
     }
 
@@ -266,12 +267,12 @@ mod tests {
         let mut program_account = Account::new(rent.minimum_balance(elf.len()), 0, &program_id);
         program_account.data = elf;
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
-        let ix_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
+        let instruction_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
 
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &mut vec![], &ix_data)
+            process_instruction(&program_id, &mut vec![], &instruction_data)
         );
 
         let mut rent_account = rent::create_account(1, &rent);
@@ -280,7 +281,7 @@ mod tests {
         // Case: Not signed
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
         );
 
         // Case: Finalize
@@ -290,9 +291,10 @@ mod tests {
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
         );
         assert!(keyed_accounts[0].account.executable);
+        program_account.executable = false; // Un-finalize the account
 
         // Case: Finalize
         program_account.data[0] = 0; // bad elf
@@ -302,7 +304,7 @@ mod tests {
         ];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
         );
     }
 
@@ -320,25 +322,24 @@ mod tests {
         program_account.executable = true;
 
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
-        let ix_data = bincode::serialize(&LoaderInstruction::InvokeMain { data: vec![] }).unwrap();
 
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &mut vec![], &ix_data)
+            process_instruction(&program_id, &mut vec![], &vec![])
         );
 
         // Case: Only a program account
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+            process_instruction(&program_id, &mut keyed_accounts, &vec![])
         );
 
         // Case: Account not executable
         keyed_accounts[0].account.executable = false;
         assert_eq!(
-            Err(InstructionError::AccountNotExecutable),
-            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+            Err(InstructionError::InvalidInstructionData),
+            process_instruction(&program_id, &mut keyed_accounts, &vec![])
         );
         keyed_accounts[0].account.executable = true;
 
@@ -351,7 +352,7 @@ mod tests {
         ));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &ix_data)
+            process_instruction(&program_id, &mut keyed_accounts, &vec![])
         );
     }
 }

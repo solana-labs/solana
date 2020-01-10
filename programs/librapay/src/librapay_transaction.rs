@@ -151,6 +151,7 @@ pub fn get_libra_balance<T: Client>(
 mod tests {
     use super::*;
     use crate::{create_genesis, upload_mint_script, upload_payment_script};
+    use solana_move_loader_program::processor::MoveProcessor;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_config::create_genesis_config;
@@ -163,7 +164,7 @@ mod tests {
         let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(
             solana_sdk::move_loader::id(),
-            solana_move_loader_program::processor::process_instruction,
+            MoveProcessor::process_instruction,
         );
         let shared_bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&shared_bank);
