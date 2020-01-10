@@ -2126,6 +2126,9 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk 0.23.0",
+ "sys-info 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
 [[package]]
 name = "solana-rayon-threadlimit"
 version = "0.23.0"
