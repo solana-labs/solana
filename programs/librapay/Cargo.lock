@@ -1122,6 +1122,9 @@ dependencies = [
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-service 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "want 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
 [[package]]
 name = "hyper-rustls"
 version = "0.17.1"

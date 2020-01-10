@@ -1,17 +1,9 @@
-<<<<<<< HEAD
-use bincode;
-use solana_move_loader_program::{account_state::pubkey_to_address, processor::InvokeCommand};
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    loader_instruction::LoaderInstruction,
-=======
 use solana_move_loader_program::{
     account_state::pubkey_to_address,
     processor::{MoveLoaderInstruction, RunScript},
 };
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
->>>>>>> Untangle runtime from LoaderInstruction
     pubkey::Pubkey,
 };
 use types::{account_config, transaction::TransactionArgument};
