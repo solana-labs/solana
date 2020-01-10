@@ -3,7 +3,6 @@ use jsonrpc_core::Result as JsonResult;
 use serde_json::{json, Value};
 use solana_sdk::{
     clock::{Epoch, Slot},
-    hash::Hash,
     message::MessageHeader,
     transaction::{Result, Transaction},
 };
@@ -26,8 +25,8 @@ pub struct Response<T> {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedBlock {
-    pub previous_blockhash: RpcEncodedHash,
-    pub blockhash: RpcEncodedHash,
+    pub previous_blockhash: String,
+    pub blockhash: String,
     pub parent_slot: Slot,
     pub transactions: Vec<(RpcEncodedTransaction, Option<RpcTransactionStatus>)>,
 }
@@ -39,17 +38,10 @@ pub enum RpcTransactionEncoding {
     Json,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase", untagged)]
-pub enum RpcEncodedHash {
-    Binary(Hash),
-    Json(String),
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum RpcEncodedTransaction {
-    Binary(Vec<u8>),
+    Binary(String),
     Json(RpcTransaction),
 }
 
@@ -78,13 +70,15 @@ impl RpcEncodedTransaction {
                         .map(|instruction| RpcCompiledInstruction {
                             program_id_index: instruction.program_id_index,
                             accounts: instruction.accounts.clone(),
-                            data: instruction.data.clone(),
+                            data: bs58::encode(instruction.data.clone()).into_string(),
                         })
                         .collect(),
                 },
             })
         } else {
-            RpcEncodedTransaction::Binary(serialize(&transaction).unwrap())
+            RpcEncodedTransaction::Binary(
+                bs58::encode(serialize(&transaction).unwrap()).into_string(),
+            )
         }
     }
 }
@@ -113,7 +107,7 @@ pub struct RpcMessage {
 pub struct RpcCompiledInstruction {
     pub program_id_index: u8,
     pub accounts: Vec<u8>,
-    pub data: Vec<u8>,
+    pub data: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -22,8 +22,7 @@ use rayon::{
 };
 use rocksdb::DBRawIterator;
 use solana_client::rpc_request::{
-    RpcConfirmedBlock, RpcEncodedHash, RpcEncodedTransaction, RpcTransactionEncoding,
-    RpcTransactionStatus,
+    RpcConfirmedBlock, RpcEncodedTransaction, RpcTransactionEncoding, RpcTransactionStatus,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
@@ -1351,23 +1350,13 @@ impl Blocktree {
                 } else {
                     Hash::default()
                 };
-                let previous_blockhash = if encoding == RpcTransactionEncoding::Json {
-                    RpcEncodedHash::Json(previous_blockhash.to_string())
-                } else {
-                    RpcEncodedHash::Binary(previous_blockhash)
-                };
 
                 let blockhash = get_last_hash(slot_entries.iter())
                     .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
-                let blockhash = if encoding == RpcTransactionEncoding::Json {
-                    RpcEncodedHash::Json(blockhash.to_string())
-                } else {
-                    RpcEncodedHash::Binary(blockhash)
-                };
 
                 let block = RpcConfirmedBlock {
-                    previous_blockhash,
-                    blockhash,
+                    previous_blockhash: previous_blockhash.to_string(),
+                    blockhash: blockhash.to_string(),
                     parent_slot: slot_meta.parent_slot,
                     transactions: self.map_transactions_to_statuses(
                         slot,
@@ -4678,8 +4667,8 @@ pub mod tests {
                 })
                 .collect(),
             parent_slot: slot - 1,
-            blockhash: RpcEncodedHash::Json(blockhash.to_string()),
-            previous_blockhash: RpcEncodedHash::Json(Hash::default().to_string()),
+            blockhash: blockhash.to_string(),
+            previous_blockhash: Hash::default().to_string(),
         };
         // The previous_blockhash of `expected_block` is default because its parent slot is a
         // root, but empty of entries. This is special handling for snapshot root slots.
@@ -4700,8 +4689,8 @@ pub mod tests {
                 })
                 .collect(),
             parent_slot: slot,
-            blockhash: RpcEncodedHash::Json(blockhash.to_string()),
-            previous_blockhash: RpcEncodedHash::Json(blockhash.to_string()),
+            blockhash: blockhash.to_string(),
+            previous_blockhash: blockhash.to_string(),
         };
         assert_eq!(confirmed_block, expected_block);
 

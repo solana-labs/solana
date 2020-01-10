@@ -2057,7 +2057,8 @@ pub mod tests {
 
         for (transaction, result) in confirmed_block.transactions.into_iter() {
             if let RpcEncodedTransaction::Binary(transaction) = transaction {
-                let decoded_transaction: Transaction = deserialize(&transaction).unwrap();
+                let decoded_transaction: Transaction =
+                    deserialize(&bs58::decode(&transaction).into_vec().unwrap()).unwrap();
                 if decoded_transaction.signatures[0] == confirmed_block_signatures[0] {
                     assert_eq!(decoded_transaction.message.recent_blockhash, blockhash);
                     assert_eq!(result.unwrap().status, Ok(()));
