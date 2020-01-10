@@ -13,7 +13,7 @@ use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
     blockstore::{Blockstore, BlockstoreError},
-    blockstore_processor::{self, TransactionStatusSender},
+    blockstore_processor::{self, verify_ticks, TransactionStatusSender},
     entry::{Entry, EntrySlice, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::SnapshotPackageSender,
@@ -1000,41 +1000,6 @@ impl ReplayStage {
         result
     }
 
-    fn verify_ticks(
-        bank: &Arc<Bank>,
-        entries: &[Entry],
-        slot_full: bool,
-        tick_hash_count: &mut u64,
-    ) -> std::result::Result<(), BlockError> {
-        let next_bank_tick_height = bank.tick_height() + entries.tick_count();
-        let max_bank_tick_height = bank.max_tick_height();
-        if next_bank_tick_height > max_bank_tick_height {
-            return Err(BlockError::InvalidTickCount);
-        }
-
-        if next_bank_tick_height < max_bank_tick_height && slot_full {
-            return Err(BlockError::InvalidTickCount);
-        }
-
-        if next_bank_tick_height == max_bank_tick_height {
-            let has_trailing_entry = !entries.last().unwrap().is_tick();
-            if has_trailing_entry {
-                return Err(BlockError::TrailingEntry);
-            }
-
-            if !slot_full {
-                return Err(BlockError::InvalidLastTick);
-            }
-        }
-
-        let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
-        if !entries.verify_tick_hash_count(tick_hash_count, hashes_per_tick) {
-            return Err(BlockError::InvalidTickHashCount);
-        }
-
-        Ok(())
-    }
-
     fn verify_and_process_entries(
         bank: &Arc<Bank>,
         entries: &[Entry],
@@ -1068,7 +1033,7 @@ impl ReplayStage {
             Err(Error::BlockError(block_error))
         };
 
-        if let Err(block_error) = Self::verify_ticks(bank, entries, slot_full, tick_hash_count) {
+        if let Err(block_error) = verify_ticks(bank, entries, slot_full, tick_hash_count) {
             return handle_block_error(block_error);
         }
 

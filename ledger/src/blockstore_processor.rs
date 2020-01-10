@@ -366,6 +366,50 @@ pub fn process_blockstore_from_root(
     Ok((bank_forks, bank_forks_info, leader_schedule_cache))
 }
 
+/// Verify that a segment of entries has the correct number of ticks and hashes
+pub fn verify_ticks(
+    bank: &Arc<Bank>,
+    entries: &[Entry],
+    slot_full: bool,
+    tick_hash_count: &mut u64,
+) -> std::result::Result<(), BlockError> {
+    let next_bank_tick_height = bank.tick_height() + entries.tick_count();
+    let max_bank_tick_height = bank.max_tick_height();
+    if next_bank_tick_height > max_bank_tick_height {
+        warn!("Too many entry ticks found in slot: {}", bank.slot());
+        return Err(BlockError::InvalidTickCount);
+    }
+
+    if next_bank_tick_height < max_bank_tick_height && slot_full {
+        warn!("Too few entry ticks found in slot: {}", bank.slot());
+        return Err(BlockError::InvalidTickCount);
+    }
+
+    if next_bank_tick_height == max_bank_tick_height {
+        let has_trailing_entry = !entries.last().unwrap().is_tick();
+        if has_trailing_entry {
+            warn!("Slot: {} did not end with a tick entry", bank.slot());
+            return Err(BlockError::TrailingEntry);
+        }
+
+        if !slot_full {
+            warn!("Slot: {} was not marked full", bank.slot());
+            return Err(BlockError::InvalidLastTick);
+        }
+    }
+
+    let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
+    if !entries.verify_tick_hash_count(tick_hash_count, hashes_per_tick) {
+        warn!(
+            "Tick with invalid number of hashes found in slot: {}",
+            bank.slot()
+        );
+        return Err(BlockError::InvalidTickHashCount);
+    }
+
+    Ok(())
+}
+
 fn verify_and_process_slot_entries(
     bank: &Arc<Bank>,
     entries: &[Entry],
@@ -375,29 +419,7 @@ fn verify_and_process_slot_entries(
     assert!(!entries.is_empty());
 
     if opts.poh_verify {
-        let next_bank_tick_height = bank.tick_height() + entries.tick_count();
-        let max_bank_tick_height = bank.max_tick_height();
-        if next_bank_tick_height != max_bank_tick_height {
-            warn!(
-                "Invalid number of entry ticks found in slot: {}",
-                bank.slot()
-            );
-            return Err(BlockError::InvalidTickCount.into());
-        } else if !entries.last().unwrap().is_tick() {
-            warn!("Slot: {} did not end with a tick entry", bank.slot());
-            return Err(BlockError::TrailingEntry.into());
-        }
-
-        if let Some(hashes_per_tick) = bank.hashes_per_tick() {
-            if !entries.verify_tick_hash_count(&mut 0, *hashes_per_tick) {
-                warn!(
-                    "Tick with invalid number of hashes found in slot: {}",
-                    bank.slot()
-                );
-                return Err(BlockError::InvalidTickHashCount.into());
-            }
-        }
-
+        verify_ticks(bank, entries, true, &mut 0)?;
         if !entries.verify(&last_entry_hash) {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
             return Err(BlockError::InvalidEntryHash.into());
