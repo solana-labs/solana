@@ -1,13 +1,10 @@
-use bincode::serialize_into;
 use solana_ledger::snapshot_package::{SnapshotPackage, SnapshotPackageReceiver};
-use solana_ledger::snapshot_utils::{self, SnapshotError, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
+use solana_ledger::snapshot_utils::{
+    serialize_status_cache, SnapshotError, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR,
+};
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
-use solana_runtime::status_cache::SlotDelta;
-use solana_sdk::transaction::Result as TransactionResult;
 use std::fs;
-use std::fs::File;
-use std::io::BufWriter;
 use std::process::ExitStatus;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
@@ -76,7 +73,8 @@ impl SnapshotPackagerService {
             snapshot_package.root
         );
 
-        Self::serialize_status_cache(
+        serialize_status_cache(
+            snapshot_package.root,
             &snapshot_package.slot_deltas,
             &snapshot_package.snapshot_links,
         )?;
@@ -175,30 +173,6 @@ impl SnapshotPackagerService {
         Ok(())
     }
 
-    fn serialize_status_cache(
-        slot_deltas: &[SlotDelta<TransactionResult<()>>],
-        snapshot_links: &TempDir,
-    ) -> Result<()> {
-        // the status cache is stored as snapshot_path/status_cache
-        let snapshot_status_cache_file_path = snapshot_links
-            .path()
-            .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME);
-
-        let status_cache = File::create(&snapshot_status_cache_file_path)?;
-        // status cache writer
-        let mut status_cache_stream = BufWriter::new(status_cache);
-
-        let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
-        // write the status cache
-        serialize_into(&mut status_cache_stream, slot_deltas)?;
-        status_cache_serialize.stop();
-        inc_new_counter_info!(
-            "serialize-status-cache-ms",
-            status_cache_serialize.as_ms() as usize
-        );
-        Ok(())
-    }
-
     pub fn join(self) -> thread::Result<()> {
         self.t_snapshot_packager.join()
     }
@@ -207,8 +181,13 @@ impl SnapshotPackagerService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::snapshot_utils;
-    use solana_runtime::accounts_db::AccountStorageEntry;
+    use bincode::serialize_into;
+    use solana_ledger::snapshot_utils::{self, SNAPSHOT_STATUS_CACHE_FILE_NAME};
+    use solana_runtime::{
+        accounts_db::AccountStorageEntry, bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
+        status_cache::SlotDelta,
+    };
+    use solana_sdk::transaction::Result as TransactionResult;
     use std::{
         fs::{remove_dir_all, OpenOptions},
         io::Write,
@@ -294,11 +273,16 @@ mod tests {
         // before we compare, stick an empty status_cache in this dir so that the package comparision works
         // This is needed since the status_cache is added by the packager and is not collected from
         // the source dir for snapshots
-        let slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
-        let dummy_status_cache = File::create(snapshots_dir.join("status_cache")).unwrap();
-        let mut status_cache_stream = BufWriter::new(dummy_status_cache);
-        serialize_into(&mut status_cache_stream, &slot_deltas).unwrap();
-        status_cache_stream.flush().unwrap();
+        let dummy_slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
+        snapshot_utils::serialize_snapshot_data_file(
+            &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
+            MAX_SNAPSHOT_DATA_FILE_SIZE,
+            |stream| {
+                serialize_into(stream, &dummy_slot_deltas)?;
+                Ok(())
+            },
+        )
+        .unwrap();
 
         // Check tarball is correct
         snapshot_utils::verify_snapshot_tar(output_tar_path, snapshots_dir, accounts_dir);

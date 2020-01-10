@@ -59,6 +59,7 @@ use std::{
 };
 
 pub const SECONDS_PER_YEAR: f64 = (365.25 * 24.0 * 60.0 * 60.0);
+pub const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
@@ -1876,6 +1877,19 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
+// This guards against possible memory exhaustions in bincode when restoring
+// the full state from snapshot data files by imposing a fixed hard limit with
+// ample of headrooms for such a usecase.
+pub fn deserialize_from_snapshot<R, T>(reader: R) -> bincode::Result<T>
+where
+    R: Read,
+    T: serde::de::DeserializeOwned,
+{
+    bincode::config()
+        .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+        .deserialize_from(reader)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1887,7 +1901,7 @@ mod tests {
         },
         status_cache::MAX_CACHE_ENTRIES,
     };
-    use bincode::{deserialize_from, serialize_into, serialized_size};
+    use bincode::{serialize_into, serialized_size};
     use solana_sdk::instruction::AccountMeta;
     use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
@@ -4318,7 +4332,7 @@ mod tests {
         serialize_into(&mut writer, &bank2.rc).unwrap();
 
         let mut rdr = Cursor::new(&buf[..]);
-        let mut dbank: Bank = deserialize_from(&mut rdr).unwrap();
+        let mut dbank: Bank = deserialize_from_snapshot(&mut rdr).unwrap();
         let mut reader = BufReader::new(&buf[rdr.position() as usize..]);
 
         // Create a new set of directories for this bank's accounts
