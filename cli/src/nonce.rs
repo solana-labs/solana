@@ -383,11 +383,11 @@ pub fn process_create_nonce_account(
         let err_msg = if nonce_account.owner == system_program::id()
             && State::<NonceState>::state(&nonce_account).is_ok()
         {
-            format!("Nonce account {} already exists", nonce_account_pubkey)
+            format!("Nonce account {} already exists", nonce_account_address)
         } else {
             format!(
                 "Account {} already exists and is not a nonce account",
-                nonce_account_pubkey
+                nonce_account_address
             )
         };
         return Err(CliError::BadParameter(err_msg).into());
