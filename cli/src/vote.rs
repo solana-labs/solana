@@ -10,12 +10,8 @@ use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    account::Account,
-    pubkey::Pubkey,
-    signature::Keypair,
-    signature::KeypairUtil,
-    system_instruction::{create_address_with_seed, SystemError},
-    transaction::Transaction,
+    account::Account, pubkey::Pubkey, signature::Keypair, signature::KeypairUtil,
+    system_instruction::SystemError, transaction::Transaction,
 };
 use solana_vote_program::{
     vote_instruction::{self, VoteError},
