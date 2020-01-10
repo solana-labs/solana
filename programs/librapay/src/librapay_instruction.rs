@@ -1,11 +1,11 @@
 use bincode;
-use solana_move_loader_program::account_state::pubkey_to_address;
-use solana_move_loader_program::processor::InvokeCommand;
-use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::loader_instruction::LoaderInstruction;
-use solana_sdk::pubkey::Pubkey;
-use types::account_config;
-use types::transaction::TransactionArgument;
+use solana_move_loader_program::{account_state::pubkey_to_address, processor::InvokeCommand};
+use solana_sdk::{
+    instruction::{AccountMeta, Instruction},
+    loader_instruction::LoaderInstruction,
+    pubkey::Pubkey,
+};
+use types::{account_config, transaction::TransactionArgument};
 
 pub fn genesis(genesis_pubkey: &Pubkey, microlibras: u64) -> Instruction {
     let data = bincode::serialize(&InvokeCommand::CreateGenesis(microlibras)).unwrap();
