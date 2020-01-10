@@ -185,7 +185,16 @@ pub type TransactionBalances = Vec<Vec<u64>>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HashAgeKind {
     Extant,
-    DurableNonce,
+    DurableNonce(Pubkey, Account),
+}
+
+impl HashAgeKind {
+    pub fn is_durable_nonce(&self) -> bool {
+        match self {
+            HashAgeKind::DurableNonce(_, _) => true,
+            _ => false,
+        }
+    }
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
@@ -982,8 +991,8 @@ impl Bank {
                     let message = tx.message();
                     if hash_queue.check_hash_age(&message.recent_blockhash, max_age) {
                         (Ok(()), Some(HashAgeKind::Extant))
-                    } else if self.check_tx_durable_nonce(&tx) {
-                        (Ok(()), Some(HashAgeKind::DurableNonce))
+                    } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(&tx) {
+                        (Ok(()), Some(HashAgeKind::DurableNonce(pubkey, acc)))
                     } else {
                         error_counters.reserve_blockhash += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
@@ -1037,16 +1046,16 @@ impl Bank {
             .check_hash_age(hash, max_age)
     }
 
-    pub fn check_tx_durable_nonce(&self, tx: &Transaction) -> bool {
+    pub fn check_tx_durable_nonce(&self, tx: &Transaction) -> Option<(Pubkey, Account)> {
         nonce_utils::transaction_uses_durable_nonce(&tx)
             .and_then(|nonce_ix| nonce_utils::get_nonce_pubkey_from_instruction(&nonce_ix, &tx))
-            .and_then(|nonce_pubkey| self.get_account(&nonce_pubkey))
-            .map_or_else(
-                || false,
-                |nonce_account| {
-                    nonce_utils::verify_nonce(&nonce_account, &tx.message().recent_blockhash)
-                },
-            )
+            .and_then(|nonce_pubkey| {
+                self.get_account(&nonce_pubkey)
+                    .map(|acc| (*nonce_pubkey, acc))
+            })
+            .filter(|(_pubkey, nonce_account)| {
+                nonce_utils::verify_nonce(nonce_account, &tx.message().recent_blockhash)
+            })
     }
 
     pub fn check_transactions(
@@ -1236,7 +1245,11 @@ impl Bank {
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
             .map(|(tx, (res, hash_age_kind))| {
-                let fee_hash = if let Some(HashAgeKind::DurableNonce) = hash_age_kind {
+                let is_durable_nonce = hash_age_kind
+                    .as_ref()
+                    .map(|hash_age_kind| hash_age_kind.is_durable_nonce())
+                    .unwrap_or(false);
+                let fee_hash = if is_durable_nonce {
                     self.last_blockhash()
                 } else {
                     tx.message().recent_blockhash
@@ -1252,7 +1265,12 @@ impl Bank {
                         // credit the transaction fee even in case of InstructionError
                         // necessary to withdraw from account[0] here because previous
                         // work of doing so (in accounts.load()) is ignored by store_account()
-                        self.withdraw(&message.account_keys[0], fee)?;
+                        //
+                        // ...except nonce accounts, which will have their post-load,
+                        // pre-execute account state stored
+                        if !is_durable_nonce {
+                            self.withdraw(&message.account_keys[0], fee)?;
+                        }
                         fees += fee;
                         Ok(())
                     }
@@ -1304,6 +1322,7 @@ impl Bank {
             executed,
             loaded_accounts,
             &self.rent_collector,
+            &self.last_blockhash(),
         );
         self.collect_rent(executed, loaded_accounts);
 
@@ -1930,6 +1949,14 @@ mod tests {
     };
     use std::{io::Cursor, result, time::Duration};
     use tempfile::TempDir;
+
+    #[test]
+    fn test_hash_age_kind_is_durable_nonce() {
+        assert!(
+            HashAgeKind::DurableNonce(Pubkey::default(), Account::default()).is_durable_nonce()
+        );
+        assert!(!HashAgeKind::Extant.is_durable_nonce());
+    }
 
     #[test]
     fn test_bank_unix_timestamp() {
@@ -4739,7 +4766,11 @@ mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        assert!(bank.check_tx_durable_nonce(&tx));
+        let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
+        assert_eq!(
+            bank.check_tx_durable_nonce(&tx),
+            Some((nonce_pubkey, nonce_account))
+        );
     }
 
     #[test]
@@ -4759,7 +4790,7 @@ mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        assert!(!bank.check_tx_durable_nonce(&tx));
+        assert!(bank.check_tx_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -4780,7 +4811,7 @@ mod tests {
             nonce_hash,
         );
         tx.message.instructions[0].accounts.clear();
-        assert!(!bank.check_tx_durable_nonce(&tx));
+        assert!(bank.check_tx_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -4802,7 +4833,7 @@ mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        assert!(!bank.check_tx_durable_nonce(&tx));
+        assert!(bank.check_tx_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -4821,7 +4852,7 @@ mod tests {
             &[&custodian_keypair, &nonce_keypair],
             Hash::default(),
         );
-        assert!(!bank.check_tx_durable_nonce(&tx));
+        assert!(bank.check_tx_durable_nonce(&tx).is_none());
     }
 
     #[test]
@@ -4934,10 +4965,11 @@ mod tests {
             bank.process_transaction(&durable_tx),
             Err(TransactionError::BlockhashNotFound)
         );
-        /* Check fee not charged */
+        /* Check fee not charged and nonce not advanced */
         assert_eq!(bank.get_balance(&custodian_pubkey), 4_640_000);
+        assert_eq!(new_nonce, get_nonce(&bank, &nonce_pubkey).unwrap());
 
-        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let nonce_hash = new_nonce;
 
         /* Kick nonce hash off the blockhash_queue */
         for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
@@ -4961,8 +4993,16 @@ mod tests {
                 system_instruction::SystemError::ResultWithNegativeLamports.into()
             ))
         );
-        /* Check fee charged */
+        /* Check fee charged and nonce has advanced */
         assert_eq!(bank.get_balance(&custodian_pubkey), 4_630_000);
+        assert_ne!(nonce_hash, get_nonce(&bank, &nonce_pubkey).unwrap());
+        /* Confirm replaying a TX that failed with InstructionError::* now
+         * fails with TransactionError::BlockhashNotFound
+         */
+        assert_eq!(
+            bank.process_transaction(&durable_tx),
+            Err(TransactionError::BlockhashNotFound),
+        );
     }
 
     #[test]
