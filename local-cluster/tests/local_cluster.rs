@@ -10,7 +10,7 @@ use solana_core::{
     validator::ValidatorConfig,
 };
 use solana_ledger::{
-    bank_forks::SnapshotConfig, blocktree::Blocktree, leader_schedule::FixedSchedule,
+    bank_forks::SnapshotConfig, blockstore::Blockstore, leader_schedule::FixedSchedule,
     leader_schedule::LeaderSchedule, snapshot_utils,
 };
 use solana_local_cluster::{
@@ -67,12 +67,12 @@ fn test_ledger_cleanup_service() {
     //check everyone's ledgers and make sure only ~100 slots are stored
     for (_, info) in &cluster.validators {
         let mut slots = 0;
-        let blocktree = Blocktree::open(&info.info.ledger_path).unwrap();
-        blocktree
+        let blockstore = Blockstore::open(&info.info.ledger_path).unwrap();
+        blockstore
             .slot_meta_iterator(0)
             .unwrap()
             .for_each(|_| slots += 1);
-        // with 3 nodes upto 3 slots can be in progress and not complete so max slots in blocktree should be upto 103
+        // with 3 nodes upto 3 slots can be in progress and not complete so max slots in blockstore should be upto 103
         assert!(slots <= 103, "got {}", slots);
     }
 }
@@ -674,7 +674,7 @@ fn test_snapshot_restart_tower() {
 
 #[test]
 #[serial]
-fn test_snapshots_blocktree_floor() {
+fn test_snapshots_blockstore_floor() {
     // First set up the cluster with 1 snapshotting leader
     let snapshot_interval_slots = 10;
     let num_account_paths = 4;
@@ -747,10 +747,10 @@ fn test_snapshots_blocktree_floor() {
     // Check the validator ledger doesn't contain any slots < slot_floor
     cluster.close_preserve_ledgers();
     let validator_ledger_path = &cluster.validators[&validator_id];
-    let blocktree = Blocktree::open(&validator_ledger_path.info.ledger_path).unwrap();
+    let blockstore = Blockstore::open(&validator_ledger_path.info.ledger_path).unwrap();
 
-    // Skip the zeroth slot in blocktree that the ledger is initialized with
-    let (first_slot, _) = blocktree.slot_meta_iterator(1).unwrap().next().unwrap();
+    // Skip the zeroth slot in blockstore that the ledger is initialized with
+    let (first_slot, _) = blockstore.slot_meta_iterator(1).unwrap().next().unwrap();
 
     assert_eq!(first_slot, slot_floor);
 }
@@ -932,7 +932,7 @@ fn test_no_voting() {
     cluster.close_preserve_ledgers();
     let leader_pubkey = cluster.entry_point_info.id;
     let ledger_path = cluster.validators[&leader_pubkey].info.ledger_path.clone();
-    let ledger = Blocktree::open(&ledger_path).unwrap();
+    let ledger = Blockstore::open(&ledger_path).unwrap();
     for i in 0..2 * VOTE_THRESHOLD_DEPTH {
         let meta = ledger.meta(i as u64).unwrap().unwrap();
         let parent = meta.parent_slot;

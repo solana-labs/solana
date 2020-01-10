@@ -6,7 +6,7 @@ use crate::streamer;
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blocktree::Blocktree;
+use solana_ledger::blockstore::Blockstore;
 use solana_perf::recycler::Recycler;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -24,7 +24,7 @@ pub struct GossipService {
 impl GossipService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        blocktree: Option<Arc<Blocktree>>,
+        blockstore: Option<Arc<Blockstore>>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         gossip_socket: UdpSocket,
         exit: &Arc<AtomicBool>,
@@ -47,7 +47,7 @@ impl GossipService {
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),
-            blocktree,
+            blockstore,
             bank_forks.clone(),
             request_receiver,
             response_sender.clone(),

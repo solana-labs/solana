@@ -3,7 +3,7 @@
 use crate::cluster_info;
 use crate::poh_recorder;
 use solana_ledger::block_error;
-use solana_ledger::blocktree;
+use solana_ledger::blockstore;
 use solana_ledger::snapshot_utils;
 use solana_sdk::transaction;
 use std::any::Any;
@@ -27,7 +27,7 @@ pub enum Error {
     SendError,
     PohRecorderError(poh_recorder::PohRecorderError),
     BlockError(block_error::BlockError),
-    BlocktreeError(blocktree::BlocktreeError),
+    BlockstoreError(blockstore::BlockstoreError),
     FsExtra(fs_extra::error::Error),
     SnapshotError(snapshot_utils::SnapshotError),
 }
@@ -127,9 +127,9 @@ impl std::convert::From<poh_recorder::PohRecorderError> for Error {
         Error::PohRecorderError(e)
     }
 }
-impl std::convert::From<blocktree::BlocktreeError> for Error {
-    fn from(e: blocktree::BlocktreeError) -> Error {
-        Error::BlocktreeError(e)
+impl std::convert::From<blockstore::BlockstoreError> for Error {
+    fn from(e: blockstore::BlockstoreError) -> Error {
+        Error::BlockstoreError(e)
     }
 }
 impl std::convert::From<snapshot_utils::SnapshotError> for Error {

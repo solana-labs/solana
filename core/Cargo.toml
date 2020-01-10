@@ -85,7 +85,7 @@ systemstat = "0.1.5"
 name = "banking_stage"
 
 [[bench]]
-name = "blocktree"
+name = "blockstore"
 
 [[bench]]
 name = "gen_keys"

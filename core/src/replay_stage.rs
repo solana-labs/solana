@@ -12,8 +12,8 @@ use solana_ledger::entry::EntryVerificationStatus;
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
-    blocktree::{Blocktree, BlocktreeError},
-    blocktree_processor::{self, TransactionStatusSender},
+    blockstore::{Blockstore, BlockstoreError},
+    blockstore_processor::{self, TransactionStatusSender},
     entry::{Entry, EntrySlice, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::SnapshotPackageSender,
@@ -180,7 +180,7 @@ impl ReplayStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         config: ReplayStageConfig,
-        blocktree: Arc<Blocktree>,
+        blockstore: Arc<Blockstore>,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         ledger_signal_receiver: Receiver<bool>,
@@ -237,7 +237,7 @@ impl ReplayStage {
 
                     let start = allocated.get();
                     Self::generate_new_bank_forks(
-                        &blocktree,
+                        &blockstore,
                         &bank_forks,
                         &leader_schedule_cache,
                         &subscriptions,
@@ -255,7 +255,7 @@ impl ReplayStage {
 
                     let start = allocated.get();
                     let did_complete_bank = Self::replay_active_banks(
-                        &blocktree,
+                        &blockstore,
                         &bank_forks,
                         &my_pubkey,
                         &mut progress,
@@ -311,7 +311,7 @@ impl ReplayStage {
                                 &vote_account,
                                 &voting_keypair,
                                 &cluster_info,
-                                &blocktree,
+                                &blockstore,
                                 &leader_schedule_cache,
                                 &root_bank_sender,
                                 stats.total_staked,
@@ -328,7 +328,7 @@ impl ReplayStage {
                         if last_reset != bank.last_blockhash() {
                             Self::reset_poh_recorder(
                                 &my_pubkey,
-                                &blocktree,
+                                &blockstore,
                                 &bank,
                                 &poh_recorder,
                                 &leader_schedule_cache,
@@ -409,7 +409,7 @@ impl ReplayStage {
                     match result {
                         Err(RecvTimeoutError::Timeout) => continue,
                         Err(_) => break,
-                        Ok(_) => trace!("blocktree signal"),
+                        Ok(_) => trace!("blockstore signal"),
                     };
                 }
                 Ok(())
@@ -535,16 +535,16 @@ impl ReplayStage {
                 !Bank::can_commit(&tx_error)
             }
             Err(Error::BlockError(_)) => true,
-            Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(_))) => true,
-            Err(Error::BlocktreeError(BlocktreeError::DeadSlot)) => true,
+            Err(Error::BlockstoreError(BlockstoreError::InvalidShredData(_))) => true,
+            Err(Error::BlockstoreError(BlockstoreError::DeadSlot)) => true,
             _ => false,
         }
     }
 
     // Returns the replay result and the number of replayed transactions
-    fn replay_blocktree_into_bank(
+    fn replay_blockstore_into_bank(
         bank: &Arc<Bank>,
-        blocktree: &Blocktree,
+        blockstore: &Blockstore,
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
@@ -552,7 +552,7 @@ impl ReplayStage {
         let mut tx_count = 0;
         let now = Instant::now();
         let load_result =
-            Self::load_blocktree_entries_with_shred_info(bank, blocktree, bank_progress);
+            Self::load_blockstore_entries_with_shred_info(bank, blockstore, bank_progress);
         let fetch_entries_elapsed = now.elapsed().as_micros();
         if load_result.is_err() {
             bank_progress.stats.fetch_entries_fail_elapsed += fetch_entries_elapsed as u64;
@@ -591,17 +591,17 @@ impl ReplayStage {
                 ("error", format!("error: {:?}", replay_result), String),
                 ("slot", bank.slot(), i64)
             );
-            Self::mark_dead_slot(bank.slot(), blocktree, bank_progress);
+            Self::mark_dead_slot(bank.slot(), blockstore, bank_progress);
         }
 
         (replay_result, tx_count)
     }
 
-    fn mark_dead_slot(slot: Slot, blocktree: &Blocktree, bank_progress: &mut ForkProgress) {
+    fn mark_dead_slot(slot: Slot, blockstore: &Blockstore, bank_progress: &mut ForkProgress) {
         bank_progress.is_dead = true;
-        blocktree
+        blockstore
             .set_dead_slot(slot)
-            .expect("Failed to mark slot as dead in blocktree");
+            .expect("Failed to mark slot as dead in blockstore");
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -613,7 +613,7 @@ impl ReplayStage {
         vote_account: &Pubkey,
         voting_keypair: &Option<Arc<Keypair>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
         total_staked: u64,
@@ -637,12 +637,12 @@ impl ReplayStage {
             let mut rooted_banks = root_bank.parents();
             rooted_banks.push(root_bank);
             let rooted_slots: Vec<_> = rooted_banks.iter().map(|bank| bank.slot()).collect();
-            // Call leader schedule_cache.set_root() before blocktree.set_root() because
+            // Call leader schedule_cache.set_root() before blockstore.set_root() because
             // bank_forks.root is consumed by repair_service to update gossip, so we don't want to
             // get shreds for repair on gossip before we update leader schedule, otherwise they may
             // get dropped.
             leader_schedule_cache.set_root(rooted_banks.last().unwrap());
-            blocktree
+            blockstore
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
             bank_forks
@@ -699,13 +699,17 @@ impl ReplayStage {
 
     fn reset_poh_recorder(
         my_pubkey: &Pubkey,
-        blocktree: &Blocktree,
+        blockstore: &Blockstore,
         bank: &Arc<Bank>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
-        let next_leader_slot =
-            leader_schedule_cache.next_leader_slot(&my_pubkey, bank.slot(), &bank, Some(blocktree));
+        let next_leader_slot = leader_schedule_cache.next_leader_slot(
+            &my_pubkey,
+            bank.slot(),
+            &bank,
+            Some(blockstore),
+        );
         poh_recorder
             .lock()
             .unwrap()
@@ -727,7 +731,7 @@ impl ReplayStage {
     }
 
     fn replay_active_banks(
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         bank_forks: &Arc<RwLock<BankForks>>,
         my_pubkey: &Pubkey,
         progress: &mut HashMap<u64, ForkProgress>,
@@ -756,9 +760,9 @@ impl ReplayStage {
                 .entry(bank.slot())
                 .or_insert_with(|| ForkProgress::new(bank.slot(), bank.last_blockhash()));
             if bank.collector_id() != my_pubkey {
-                let (replay_result, replay_tx_count) = Self::replay_blocktree_into_bank(
+                let (replay_result, replay_tx_count) = Self::replay_blockstore_into_bank(
                     &bank,
-                    &blocktree,
+                    &blockstore,
                     bank_progress,
                     transaction_status_sender.clone(),
                     verify_recyclers,
@@ -959,12 +963,12 @@ impl ReplayStage {
         }
     }
 
-    fn load_blocktree_entries_with_shred_info(
+    fn load_blockstore_entries_with_shred_info(
         bank: &Bank,
-        blocktree: &Blocktree,
+        blockstore: &Blockstore,
         bank_progress: &mut ForkProgress,
     ) -> Result<(Vec<Entry>, usize, bool)> {
-        blocktree
+        blockstore
             .get_slot_entries_with_shred_info(bank.slot(), bank_progress.num_shreds as u64)
             .map_err(|err| err.into())
     }
@@ -1078,7 +1082,7 @@ impl ReplayStage {
 
         let mut replay_elapsed = Measure::start("replay_elapsed");
         let res =
-            blocktree_processor::process_entries(bank, entries, true, transaction_status_sender);
+            blockstore_processor::process_entries(bank, entries, true, transaction_status_sender);
         replay_elapsed.stop();
         bank_progress.stats.replay_elapsed += replay_elapsed.as_us();
 
@@ -1116,7 +1120,7 @@ impl ReplayStage {
     }
 
     fn generate_new_bank_forks(
-        blocktree: &Blocktree,
+        blockstore: &Blockstore,
         forks_lock: &RwLock<BankForks>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
@@ -1125,7 +1129,7 @@ impl ReplayStage {
         let forks = forks_lock.read().unwrap();
         let frozen_banks = forks.frozen_banks();
         let frozen_bank_slots: Vec<u64> = frozen_banks.keys().cloned().collect();
-        let next_slots = blocktree
+        let next_slots = blockstore
             .get_slots_since(&frozen_bank_slots)
             .expect("Db error");
         // Filter out what we've already seen
@@ -1188,8 +1192,8 @@ pub(crate) mod tests {
     use crossbeam_channel::unbounded;
     use solana_client::rpc_request::RpcEncodedTransaction;
     use solana_ledger::{
-        blocktree::make_slot_entries,
-        blocktree::{entries_to_test_shreds, BlocktreeError},
+        blockstore::make_slot_entries,
+        blockstore::{entries_to_test_shreds, BlockstoreError},
         create_new_tmp_ledger,
         entry::{self, next_entry},
         get_tmp_ledger_path,
@@ -1499,8 +1503,9 @@ pub(crate) mod tests {
     fn test_child_slots_of_same_parent() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree = Arc::new(
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            let blockstore = Arc::new(
+                Blockstore::open(&ledger_path)
+                    .expect("Expected to be able to open database ledger"),
             );
 
             let genesis_config = create_genesis_config(10_000).genesis_config;
@@ -1512,11 +1517,11 @@ pub(crate) mod tests {
 
             // Insert shred for slot 1, generate new forks, check result
             let (shreds, _) = make_slot_entries(1, 0, 8);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
             assert!(bank_forks.get(1).is_none());
             let bank_forks = RwLock::new(bank_forks);
             ReplayStage::generate_new_bank_forks(
-                &blocktree,
+                &blockstore,
                 &bank_forks,
                 &leader_schedule_cache,
                 &subscriptions,
@@ -1525,10 +1530,10 @@ pub(crate) mod tests {
 
             // Insert shred for slot 3, generate new forks, check result
             let (shreds, _) = make_slot_entries(2, 0, 8);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
             assert!(bank_forks.read().unwrap().get(2).is_none());
             ReplayStage::generate_new_bank_forks(
-                &blocktree,
+                &blockstore,
                 &bank_forks,
                 &leader_schedule_cache,
                 &subscriptions,
@@ -1750,7 +1755,7 @@ pub(crate) mod tests {
 
         assert_matches!(
             res,
-            Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(_)))
+            Err(Error::BlockstoreError(BlockstoreError::InvalidShredData(_)))
         );
     }
 
@@ -1762,8 +1767,9 @@ pub(crate) mod tests {
     {
         let ledger_path = get_tmp_ledger_path!();
         let res = {
-            let blocktree = Arc::new(
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            let blockstore = Arc::new(
+                Blockstore::open(&ledger_path)
+                    .expect("Expected to be able to open database ledger"),
             );
             let GenesisConfigInfo {
                 mut genesis_config,
@@ -1778,10 +1784,10 @@ pub(crate) mod tests {
                 .entry(bank0.slot())
                 .or_insert_with(|| ForkProgress::new(0, last_blockhash));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
-            blocktree.insert_shreds(shreds, None, false).unwrap();
-            let (res, _tx_count) = ReplayStage::replay_blocktree_into_bank(
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            let (res, _tx_count) = ReplayStage::replay_blockstore_into_bank(
                 &bank0,
-                &blocktree,
+                &blockstore,
                 &mut bank0_progress,
                 None,
                 &VerifyRecyclers::default(),
@@ -1793,8 +1799,8 @@ pub(crate) mod tests {
                 .map(|b| b.is_dead)
                 .unwrap_or(false));
 
-            // Check that the erroring bank was marked as dead in blocktree
-            assert!(blocktree.is_dead(bank0.slot()));
+            // Check that the erroring bank was marked as dead in blockstore
+            assert!(blockstore.is_dead(bank0.slot()));
             res
         };
         let _ignored = remove_dir_all(&ledger_path);
@@ -1902,11 +1908,11 @@ pub(crate) mod tests {
         );
     }
 
-    pub fn create_test_transactions_and_populate_blocktree(
+    pub fn create_test_transactions_and_populate_blockstore(
         keypairs: Vec<&Keypair>,
         previous_slot: Slot,
         bank: Arc<Bank>,
-        blocktree: Arc<Blocktree>,
+        blockstore: Arc<Blockstore>,
     ) -> Vec<Signature> {
         let mint_keypair = keypairs[0];
         let keypair1 = keypairs[1];
@@ -1933,19 +1939,19 @@ pub(crate) mod tests {
         let entries = vec![entry_1, entry_2, entry_3];
 
         let shreds = entries_to_test_shreds(entries.clone(), slot, previous_slot, true, 0);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
-        blocktree.set_roots(&[slot]).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore.set_roots(&[slot]).unwrap();
 
         let (transaction_status_sender, transaction_status_receiver) = unbounded();
         let transaction_status_service = TransactionStatusService::new(
             transaction_status_receiver,
-            blocktree.clone(),
+            blockstore.clone(),
             &Arc::new(AtomicBool::new(false)),
         );
 
         // Check that process_entries successfully writes can_commit transactions statuses, and
         // that they are matched properly by get_confirmed_block
-        let _result = blocktree_processor::process_entries(
+        let _result = blockstore_processor::process_entries(
             &bank,
             &entries,
             true,
@@ -1966,9 +1972,9 @@ pub(crate) mod tests {
         } = create_genesis_config(1000);
         let (ledger_path, _) = create_new_tmp_ledger!(&genesis_config);
         {
-            let blocktree = Blocktree::open(&ledger_path)
+            let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to successfully open database ledger");
-            let blocktree = Arc::new(blocktree);
+            let blockstore = Arc::new(blockstore);
 
             let keypair1 = Keypair::new();
             let keypair2 = Keypair::new();
@@ -1982,14 +1988,14 @@ pub(crate) mod tests {
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             let slot = bank1.slot();
 
-            let signatures = create_test_transactions_and_populate_blocktree(
+            let signatures = create_test_transactions_and_populate_blockstore(
                 vec![&mint_keypair, &keypair1, &keypair2, &keypair3],
                 bank0.slot(),
                 bank1,
-                blocktree.clone(),
+                blockstore.clone(),
             );
 
-            let confirmed_block = blocktree.get_confirmed_block(slot, None).unwrap();
+            let confirmed_block = blockstore.get_confirmed_block(slot, None).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for (transaction, result) in confirmed_block.transactions.into_iter() {
@@ -2010,6 +2016,6 @@ pub(crate) mod tests {
                 }
             }
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 }

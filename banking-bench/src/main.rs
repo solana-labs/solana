@@ -10,7 +10,7 @@ use solana_core::packet::to_packets_chunked;
 use solana_core::poh_recorder::PohRecorder;
 use solana_core::poh_recorder::WorkingBankEntry;
 use solana_ledger::bank_forks::BankForks;
-use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
+use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
 use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
@@ -139,11 +139,11 @@ fn main() {
     let mut verified: Vec<_> = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH);
     let ledger_path = get_tmp_ledger_path!();
     {
-        let blocktree = Arc::new(
-            Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+        let blockstore = Arc::new(
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, &blocktree, None);
+            create_test_recorder(&bank, &blockstore, None);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         let banking_stage = BankingStage::new(
@@ -302,5 +302,5 @@ fn main() {
         sleep(Duration::from_secs(1));
         debug!("waited for poh_service");
     }
-    let _unused = Blocktree::destroy(&ledger_path);
+    let _unused = Blockstore::destroy(&ledger_path);
 }

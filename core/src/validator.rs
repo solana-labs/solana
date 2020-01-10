@@ -23,8 +23,8 @@ use crossbeam_channel::unbounded;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
-    blocktree::{Blocktree, CompletedSlotsReceiver},
-    blocktree_processor::{self, BankForksInfo},
+    blockstore::{Blockstore, CompletedSlotsReceiver},
+    blockstore_processor::{self, BankForksInfo},
     create_new_tmp_ledger,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
@@ -156,12 +156,12 @@ impl Validator {
             genesis_hash,
             bank_forks,
             bank_forks_info,
-            blocktree,
+            blockstore,
             ledger_signal_receiver,
             completed_slots_receiver,
             leader_schedule_cache,
             poh_config,
-        ) = new_banks_from_blocktree(
+        ) = new_banks_from_blockstore(
             config.expected_genesis_hash,
             ledger_path,
             config.account_paths.clone(),
@@ -197,7 +197,7 @@ impl Validator {
             bank.slots_per_segment(),
         );
 
-        let blocktree = Arc::new(blocktree);
+        let blockstore = Arc::new(blockstore);
 
         let rpc_service = if node.info.rpc.port() == 0 {
             None
@@ -207,7 +207,7 @@ impl Validator {
                 config.rpc_config.clone(),
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
-                blocktree.clone(),
+                blockstore.clone(),
                 cluster_info.clone(),
                 genesis_hash,
                 ledger_path,
@@ -237,7 +237,7 @@ impl Validator {
                     Some(transaction_status_sender),
                     Some(TransactionStatusService::new(
                         transaction_status_receiver,
-                        blocktree.clone(),
+                        blockstore.clone(),
                         &exit,
                     )),
                 )
@@ -265,11 +265,11 @@ impl Validator {
             bank.tick_height(),
             bank.last_blockhash(),
             bank.slot(),
-            leader_schedule_cache.next_leader_slot(&id, bank.slot(), &bank, Some(&blocktree)),
+            leader_schedule_cache.next_leader_slot(&id, bank.slot(), &bank, Some(&blockstore)),
             bank.ticks_per_slot(),
             &id,
-            &blocktree,
-            blocktree.new_shreds_signals.first().cloned(),
+            &blockstore,
+            blockstore.new_shreds_signals.first().cloned(),
             &leader_schedule_cache,
             &poh_config,
         );
@@ -282,7 +282,7 @@ impl Validator {
 
         let gossip_service = GossipService::new(
             &cluster_info,
-            Some(blocktree.clone()),
+            Some(blockstore.clone()),
             Some(bank_forks.clone()),
             node.sockets.gossip,
             &exit,
@@ -347,7 +347,7 @@ impl Validator {
 
         let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
         assert_eq!(
-            blocktree.new_shreds_signals.len(),
+            blockstore.new_shreds_signals.len(),
             1,
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
@@ -359,7 +359,7 @@ impl Validator {
             &bank_forks,
             &cluster_info,
             sockets,
-            blocktree.clone(),
+            blockstore.clone(),
             &storage_state,
             config.blockstream_unix_socket.as_ref(),
             config.max_ledger_slots,
@@ -389,7 +389,7 @@ impl Validator {
             node.sockets.broadcast,
             config.dev_sigverify_disabled,
             transaction_status_sender,
-            &blocktree,
+            &blockstore,
             &config.broadcast_stage_type,
             &exit,
             shred_version,
@@ -470,9 +470,9 @@ impl Validator {
     }
 }
 
-pub fn new_banks_from_blocktree(
+pub fn new_banks_from_blockstore(
     expected_genesis_hash: Option<Hash>,
-    blocktree_path: &Path,
+    blockstore_path: &Path,
     account_paths: Vec<PathBuf>,
     snapshot_config: Option<SnapshotConfig>,
     poh_verify: bool,
@@ -482,14 +482,14 @@ pub fn new_banks_from_blocktree(
     Hash,
     BankForks,
     Vec<BankForksInfo>,
-    Blocktree,
+    Blockstore,
     Receiver<bool>,
     CompletedSlotsReceiver,
     LeaderScheduleCache,
     PohConfig,
 ) {
-    let genesis_config = GenesisConfig::load(blocktree_path).unwrap_or_else(|err| {
-        error!("Failed to load genesis from {:?}: {}", blocktree_path, err);
+    let genesis_config = GenesisConfig::load(blockstore_path).unwrap_or_else(|err| {
+        error!("Failed to load genesis from {:?}: {}", blockstore_path, err);
         process::exit(1);
     });
     let genesis_hash = genesis_config.hash();
@@ -500,24 +500,24 @@ pub fn new_banks_from_blocktree(
             error!("genesis hash mismatch: expected {}", expected_genesis_hash);
             error!(
                 "Delete the ledger directory to continue: {:?}",
-                blocktree_path
+                blockstore_path
             );
             process::exit(1);
         }
     }
 
-    let (blocktree, ledger_signal_receiver, completed_slots_receiver) =
-        Blocktree::open_with_signal(blocktree_path).expect("Failed to open ledger database");
+    let (blockstore, ledger_signal_receiver, completed_slots_receiver) =
+        Blockstore::open_with_signal(blockstore_path).expect("Failed to open ledger database");
 
-    let process_options = blocktree_processor::ProcessOptions {
+    let process_options = blockstore_processor::ProcessOptions {
         poh_verify,
         dev_halt_at_slot,
-        ..blocktree_processor::ProcessOptions::default()
+        ..blockstore_processor::ProcessOptions::default()
     };
 
     let (mut bank_forks, bank_forks_info, mut leader_schedule_cache) = bank_forks_utils::load(
         &genesis_config,
-        &blocktree,
+        &blockstore,
         account_paths,
         snapshot_config.as_ref(),
         process_options,
@@ -535,7 +535,7 @@ pub fn new_banks_from_blocktree(
         genesis_hash,
         bank_forks,
         bank_forks_info,
-        blocktree,
+        blockstore,
         ledger_signal_receiver,
         completed_slots_receiver,
         leader_schedule_cache,

@@ -8,7 +8,7 @@ use crate::blockstream::MockBlockstream as Blockstream;
 #[cfg(not(test))]
 use crate::blockstream::SocketBlockstream as Blockstream;
 use crate::result::{Error, Result};
-use solana_ledger::blocktree::Blocktree;
+use solana_ledger::blockstore::Blockstore;
 use solana_sdk::pubkey::Pubkey;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -25,7 +25,7 @@ impl BlockstreamService {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         slot_full_receiver: Receiver<(u64, Pubkey)>,
-        blocktree: Arc<Blocktree>,
+        blockstore: Arc<Blockstore>,
         unix_socket: &Path,
         exit: &Arc<AtomicBool>,
     ) -> Self {
@@ -38,7 +38,7 @@ impl BlockstreamService {
                     break;
                 }
                 if let Err(e) =
-                    Self::process_entries(&slot_full_receiver, &blocktree, &mut blockstream)
+                    Self::process_entries(&slot_full_receiver, &blockstore, &mut blockstream)
                 {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -52,18 +52,18 @@ impl BlockstreamService {
     }
     fn process_entries(
         slot_full_receiver: &Receiver<(u64, Pubkey)>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         blockstream: &mut Blockstream,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let (slot, slot_leader) = slot_full_receiver.recv_timeout(timeout)?;
 
-        let entries = blocktree.get_slot_entries(slot, 0, None).unwrap();
-        let blocktree_meta = blocktree.meta(slot).unwrap().unwrap();
+        let entries = blockstore.get_slot_entries(slot, 0, None).unwrap();
+        let blockstore_meta = blockstore.meta(slot).unwrap().unwrap();
         let _parent_slot = if slot == 0 {
             None
         } else {
-            Some(blocktree_meta.parent_slot)
+            Some(blockstore_meta.parent_slot)
         };
         let ticks_per_slot = entries.iter().filter(|entry| entry.is_tick()).count() as u64;
         let mut tick_height = ticks_per_slot * slot;
@@ -113,14 +113,14 @@ mod test {
         let ticks_per_slot = 5;
         let leader_pubkey = Pubkey::new_rand();
 
-        // Set up genesis config and blocktree
+        // Set up genesis config and blockstore
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config(1000);
         genesis_config.ticks_per_slot = ticks_per_slot;
 
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
 
         // Set up blockstream
         let mut blockstream = Blockstream::new(&PathBuf::from("test_stream"));
@@ -143,7 +143,7 @@ mod test {
         let expected_entries = entries.clone();
         let expected_tick_heights = [6, 7, 8, 9, 9, 10];
 
-        blocktree
+        blockstore
             .write_entries(
                 1,
                 0,
@@ -160,7 +160,7 @@ mod test {
         slot_full_sender.send((1, leader_pubkey)).unwrap();
         BlockstreamService::process_entries(
             &slot_full_receiver,
-            &Arc::new(blocktree),
+            &Arc::new(blockstore),
             &mut blockstream,
         )
         .unwrap();

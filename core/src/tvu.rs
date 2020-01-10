@@ -21,8 +21,8 @@ use crossbeam_channel::unbounded;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::{
     bank_forks::BankForks,
-    blocktree::{Blocktree, CompletedSlotsReceiver},
-    blocktree_processor::TransactionStatusSender,
+    blockstore::{Blockstore, CompletedSlotsReceiver},
+    blockstore_processor::TransactionStatusSender,
 };
 use solana_sdk::{
     pubkey::Pubkey,
@@ -63,7 +63,7 @@ impl Tvu {
     /// # Arguments
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - fetch, repair, and retransmit sockets
-    /// * `blocktree` - the ledger itself
+    /// * `blockstore` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         vote_account: &Pubkey,
@@ -72,7 +72,7 @@ impl Tvu {
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
-        blocktree: Arc<Blocktree>,
+        blockstore: Arc<Blockstore>,
         storage_state: &StorageState,
         blockstream_unix_socket: Option<&PathBuf>,
         max_ledger_slots: Option<u64>,
@@ -133,7 +133,7 @@ impl Tvu {
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
             leader_schedule_cache,
-            blocktree.clone(),
+            blockstore.clone(),
             &cluster_info,
             Arc::new(retransmit_sockets),
             repair_socket,
@@ -175,7 +175,7 @@ impl Tvu {
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
             replay_stage_config,
-            blocktree.clone(),
+            blockstore.clone(),
             bank_forks.clone(),
             cluster_info.clone(),
             ledger_signal_receiver,
@@ -185,7 +185,7 @@ impl Tvu {
         let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
             let blockstream_service = BlockstreamService::new(
                 blockstream_slot_receiver,
-                blocktree.clone(),
+                blockstore.clone(),
                 blockstream_unix_socket,
                 &exit,
             );
@@ -197,7 +197,7 @@ impl Tvu {
         let ledger_cleanup_service = max_ledger_slots.map(|max_ledger_slots| {
             LedgerCleanupService::new(
                 ledger_cleanup_slot_receiver,
-                blocktree.clone(),
+                blockstore.clone(),
                 max_ledger_slots,
                 &exit,
             )
@@ -206,7 +206,7 @@ impl Tvu {
         let storage_stage = StorageStage::new(
             storage_state,
             root_bank_receiver,
-            Some(blocktree),
+            Some(blockstore),
             &keypair,
             storage_keypair,
             &exit,
@@ -272,14 +272,14 @@ pub mod tests {
         cluster_info1.insert_info(leader.info.clone());
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
-        let (blocktree_path, _) = create_new_tmp_ledger!(&genesis_config);
-        let (blocktree, l_receiver, completed_slots_receiver) =
-            Blocktree::open_with_signal(&blocktree_path)
+        let (blockstore_path, _) = create_new_tmp_ledger!(&genesis_config);
+        let (blockstore, l_receiver, completed_slots_receiver) =
+            Blockstore::open_with_signal(&blockstore_path)
                 .expect("Expected to successfully open ledger");
-        let blocktree = Arc::new(blocktree);
+        let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, &blocktree, None);
+            create_test_recorder(&bank, &blockstore, None);
         let voting_keypair = Keypair::new();
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
@@ -298,7 +298,7 @@ pub mod tests {
                     forwards: target1.sockets.tvu_forwards,
                 }
             },
-            blocktree,
+            blockstore,
             &StorageState::default(),
             None,
             None,

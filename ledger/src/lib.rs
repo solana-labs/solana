@@ -2,10 +2,10 @@ pub mod bank_forks;
 pub mod bank_forks_utils;
 pub mod block_error;
 #[macro_use]
-pub mod blocktree;
-pub mod blocktree_db;
-mod blocktree_meta;
-pub mod blocktree_processor;
+pub mod blockstore;
+pub mod blockstore_db;
+mod blockstore_meta;
+pub mod blockstore_processor;
 pub mod entry;
 pub mod erasure;
 pub mod genesis_utils;

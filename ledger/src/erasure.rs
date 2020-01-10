@@ -135,7 +135,7 @@ pub mod test {
     use solana_sdk::clock::Slot;
 
     /// Specifies the contents of a 16-data-shred and 4-coding-shred erasure set
-    /// Exists to be passed to `generate_blocktree_with_coding`
+    /// Exists to be passed to `generate_blockstore_with_coding`
     #[derive(Debug, Copy, Clone)]
     pub struct ErasureSpec {
         /// Which 16-shred erasure set this represents
@@ -145,7 +145,7 @@ pub mod test {
     }
 
     /// Specifies the contents of a slot
-    /// Exists to be passed to `generate_blocktree_with_coding`
+    /// Exists to be passed to `generate_blockstore_with_coding`
     #[derive(Debug, Clone)]
     pub struct SlotSpec {
         pub slot: Slot,

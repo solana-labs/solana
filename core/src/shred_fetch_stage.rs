@@ -2,7 +2,7 @@
 
 use crate::packet::{Packet, PacketsRecycler};
 use crate::streamer::{self, PacketReceiver, PacketSender};
-use solana_ledger::blocktree::MAX_DATA_SHREDS_PER_SLOT;
+use solana_ledger::blockstore::MAX_DATA_SHREDS_PER_SLOT;
 use solana_ledger::shred::{OFFSET_OF_SHRED_INDEX, SIZE_OF_SHRED_INDEX};
 use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::packet::limited_deserialize;
