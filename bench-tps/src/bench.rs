@@ -1046,7 +1046,8 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
         #[cfg(feature = "move")]
         {
             if use_move {
-                let libra_genesis_keypair = create_genesis(&funding_key, client.as_ref(), 10_000_000);
+                let libra_genesis_keypair =
+                    create_genesis(&funding_key, client.as_ref(), 10_000_000);
                 let libra_mint_program_id = upload_mint_script(&funding_key, client.as_ref());
                 let libra_pay_program_id = upload_payment_script(&funding_key, client.as_ref());
 
