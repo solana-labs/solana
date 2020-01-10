@@ -37,7 +37,6 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     hash::{hashv, Hash},
     inflation::Inflation,
-    instruction::InstructionError,
     native_loader,
     nonce_state::NonceState,
     pubkey::Pubkey,
