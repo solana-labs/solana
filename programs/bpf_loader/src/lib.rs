@@ -141,7 +141,7 @@ pub fn process_instruction(
         }
         deserialize_parameters(parameter_accounts, &parameter_bytes);
         info!("BPF program success");
-    } else {
+    } else if !keyed_accounts.is_empty() {
         match limited_deserialize(instruction_data)? {
             LoaderInstruction::Write { offset, bytes } => {
                 let mut keyed_accounts_iter = keyed_accounts.iter_mut();
@@ -322,25 +322,24 @@ mod tests {
         program_account.executable = true;
 
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
-        let instruction_data = vec![];
 
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &mut vec![], &instruction_data)
+            process_instruction(&program_id, &mut vec![], &vec![])
         );
 
         // Case: Only a program account
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
+            process_instruction(&program_id, &mut keyed_accounts, &vec![])
         );
 
         // Case: Account not executable
         keyed_accounts[0].account.executable = false;
         assert_eq!(
             Err(InstructionError::InvalidInstructionData),
-            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
+            process_instruction(&program_id, &mut keyed_accounts, &vec![])
         );
         keyed_accounts[0].account.executable = true;
 
@@ -353,7 +352,7 @@ mod tests {
         ));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
+            process_instruction(&program_id, &mut keyed_accounts, &vec![])
         );
     }
 }

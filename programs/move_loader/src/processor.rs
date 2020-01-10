@@ -35,9 +35,9 @@ use vm_runtime::{
 };
 use vm_runtime_types::value::Value;
 
-/// Instruction data passed to perform an loader operation, must be based
+/// Instruction data passed to perform a loader operation, must be based
 /// on solana_sdk::loader_instruction::LoaderInstruction
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum MoveLoaderInstruction {
     /// Write program data into an account
     ///
@@ -61,18 +61,24 @@ pub enum MoveLoaderInstruction {
     Finalize,
 
     /// Create a new genesis account
+    ///
+    /// * key[0] - the account to write the genesis into
+    ///
+    /// The transaction must be signed by key[0]
     CreateGenesis(u64),
 }
 
 /// Instruction data passed when executing a Move script
 #[derive(Serialize, Deserialize, Debug)]
-pub struct RunScript {
-    /// Sender of the "transaction", the "sender" who is running this script
-    pub sender_address: AccountAddress,
-    /// Name of the script's function to call
-    pub function_name: String,
-    /// Arguments to pass to the script being called
-    pub args: Vec<TransactionArgument>,
+pub enum Executable {
+    RunScript {
+        /// Sender of the "transaction", the "sender" who is running this script
+        sender_address: AccountAddress,
+        /// Name of the script's function to call
+        function_name: String,
+        /// Arguments to pass to the script being called
+        args: Vec<TransactionArgument>,
+    },
 }
 
 pub struct MoveProcessor {}
@@ -380,52 +386,46 @@ impl MoveProcessor {
 
     pub fn do_invoke_main(
         keyed_accounts: &mut [KeyedAccount],
-        data: &[u8],
+        sender_address: AccountAddress,
+        function_name: String,
+        args: Vec<TransactionArgument>,
     ) -> Result<(), InstructionError> {
-        match limited_deserialize(&data)? {
-            RunScript {
-                sender_address,
-                function_name,
-                args,
-            } => {
-                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
-                let script = next_keyed_account(&mut keyed_accounts_iter)?;
+        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let script = next_keyed_account(&mut keyed_accounts_iter)?;
 
-                trace!(
-                    "Run script {:?} with entrypoint {:?}",
-                    script.unsigned_key(),
-                    function_name
-                );
+        trace!(
+            "Run script {:?} with entrypoint {:?}",
+            script.unsigned_key(),
+            function_name
+        );
 
-                if script.account.owner != id() {
-                    debug!("Error: Move script account not owned by Move loader");
-                    return Err(InstructionError::InvalidArgument);
-                }
-                if !script.account.executable {
-                    debug!("Error: Move script account not executable");
-                    return Err(InstructionError::AccountNotExecutable);
-                }
-
-                let data_accounts = keyed_accounts_iter.into_slice();
-
-                let mut data_store = Self::keyed_accounts_to_data_store(&data_accounts)?;
-                let verified_script = Self::deserialize_verified_script(&script.account.data)?;
-
-                let output = Self::execute(
-                    sender_address,
-                    &function_name,
-                    args,
-                    verified_script,
-                    &data_store,
-                )?;
-                for event in output.events() {
-                    trace!("Event: {:?}", event);
-                }
-
-                data_store.apply_write_set(&output.write_set());
-                Self::data_store_to_keyed_accounts(data_store, data_accounts)
-            }
+        if script.account.owner != id() {
+            debug!("Error: Move script account not owned by Move loader");
+            return Err(InstructionError::InvalidArgument);
         }
+        if !script.account.executable {
+            debug!("Error: Move script account not executable");
+            return Err(InstructionError::AccountNotExecutable);
+        }
+
+        let data_accounts = keyed_accounts_iter.into_slice();
+
+        let mut data_store = Self::keyed_accounts_to_data_store(&data_accounts)?;
+        let verified_script = Self::deserialize_verified_script(&script.account.data)?;
+
+        let output = Self::execute(
+            sender_address,
+            &function_name,
+            args,
+            verified_script,
+            &data_store,
+        )?;
+        for event in output.events() {
+            trace!("Event: {:?}", event);
+        }
+
+        data_store.apply_write_set(&output.write_set());
+        Self::data_store_to_keyed_accounts(data_store, data_accounts)
     }
 
     pub fn process_instruction(
@@ -436,9 +436,14 @@ impl MoveProcessor {
         solana_logger::setup();
 
         if is_executable(keyed_accounts) {
-            Self::do_invoke_main(keyed_accounts, instruction_data)
+            match limited_deserialize(&instruction_data)? {
+                Executable::RunScript {
+                    sender_address,
+                    function_name,
+                    args,
+                } => Self::do_invoke_main(keyed_accounts, sender_address, function_name, args),
+            }
         } else {
-            println!("data: {:?}", instruction_data);
             match limited_deserialize(instruction_data)? {
                 MoveLoaderInstruction::Write { offset, bytes } => {
                     Self::do_write(keyed_accounts, offset, &bytes)
@@ -552,12 +557,9 @@ mod tests {
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&RunScript {
-                sender_address,
-                function_name: "main".to_string(),
-                args: vec![],
-            })
-            .unwrap(),
+            sender_address,
+            "main".to_string(),
+            vec![],
         )
         .unwrap();
     }
@@ -616,12 +618,9 @@ mod tests {
         assert_eq!(
             MoveProcessor::do_invoke_main(
                 &mut keyed_accounts,
-                &bincode::serialize(&RunScript {
-                    sender_address,
-                    function_name: "main".to_string(),
-                    args: vec![],
-                })
-                .unwrap(),
+                sender_address,
+                "main".to_string(),
+                vec![],
             ),
             Err(InstructionError::CustomError(4002))
         );
@@ -696,15 +695,12 @@ mod tests {
         let amount = 2;
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&RunScript {
-                sender_address: sender.address.clone(),
-                function_name: "main".to_string(),
-                args: vec![
-                    TransactionArgument::Address(payee.address.clone()),
-                    TransactionArgument::U64(amount),
-                ],
-            })
-            .unwrap(),
+            sender.address.clone(),
+            "main".to_string(),
+            vec![
+                TransactionArgument::Address(payee.address.clone()),
+                TransactionArgument::U64(amount),
+            ],
         )
         .unwrap();
 
@@ -796,12 +792,9 @@ mod tests {
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&RunScript {
-                sender_address: sender.address.clone(),
-                function_name: "main".to_string(),
-                args: vec![TransactionArgument::Address(payee.address.clone())],
-            })
-            .unwrap(),
+            sender.address.clone(),
+            "main".to_string(),
+            vec![TransactionArgument::Address(payee.address.clone())],
         )
         .unwrap();
 
@@ -847,15 +840,12 @@ mod tests {
 
         MoveProcessor::do_invoke_main(
             &mut keyed_accounts,
-            &bincode::serialize(&RunScript {
-                sender_address: account_config::association_address(),
-                function_name: "main".to_string(),
-                args: vec![
-                    TransactionArgument::Address(pubkey_to_address(&payee.key)),
-                    TransactionArgument::U64(amount),
-                ],
-            })
-            .unwrap(),
+            account_config::association_address(),
+            "main".to_string(),
+            vec![
+                TransactionArgument::Address(pubkey_to_address(&payee.key)),
+                TransactionArgument::U64(amount),
+            ],
         )
         .unwrap();
 

@@ -1,6 +1,6 @@
 use solana_move_loader_program::{
     account_state::pubkey_to_address,
-    processor::{MoveLoaderInstruction, RunScript},
+    processor::{Executable, MoveLoaderInstruction},
 };
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -25,7 +25,7 @@ pub fn mint(
         TransactionArgument::U64(microlibras),
     ];
 
-    let instruction_data = RunScript {
+    let instruction_data = Executable::RunScript {
         sender_address: account_config::association_address(),
         function_name: "main".to_string(),
         args,
@@ -52,7 +52,7 @@ pub fn transfer(
         TransactionArgument::U64(microlibras),
     ];
 
-    let instruction_data = RunScript {
+    let instruction_data = Executable::RunScript {
         sender_address: pubkey_to_address(from_pubkey),
         function_name: "main".to_string(),
         args,
