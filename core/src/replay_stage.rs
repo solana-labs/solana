@@ -1186,6 +1186,7 @@ pub(crate) mod tests {
         transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
+    use solana_client::rpc_request::RpcEncodedTransaction;
     use solana_ledger::{
         blocktree::make_slot_entries,
         blocktree::{entries_to_test_shreds, BlocktreeError},
@@ -1988,22 +1989,24 @@ pub(crate) mod tests {
                 blocktree.clone(),
             );
 
-            let confirmed_block = blocktree.get_confirmed_block(slot).unwrap();
+            let confirmed_block = blocktree.get_confirmed_block(slot, None).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for (transaction, result) in confirmed_block.transactions.into_iter() {
-                if transaction.signatures[0] == signatures[0] {
-                    assert_eq!(result.unwrap().status, Ok(()));
-                } else if transaction.signatures[0] == signatures[1] {
-                    assert_eq!(
-                        result.unwrap().status,
-                        Err(TransactionError::InstructionError(
-                            0,
-                            InstructionError::CustomError(1)
-                        ))
-                    );
-                } else {
-                    assert_eq!(result, None);
+                if let RpcEncodedTransaction::Json(transaction) = transaction {
+                    if transaction.signatures[0] == signatures[0].to_string() {
+                        assert_eq!(result.unwrap().status, Ok(()));
+                    } else if transaction.signatures[0] == signatures[1].to_string() {
+                        assert_eq!(
+                            result.unwrap().status,
+                            Err(TransactionError::InstructionError(
+                                0,
+                                InstructionError::CustomError(1)
+                            ))
+                        );
+                    } else {
+                        assert_eq!(result, None);
+                    }
                 }
             }
         }
