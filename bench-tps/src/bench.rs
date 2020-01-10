@@ -1046,9 +1046,9 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
         #[cfg(feature = "move")]
         {
             if use_move {
-                let libra_genesis_keypair = create_genesis(&funding_key, client, 10_000_000);
-                let libra_mint_program_id = upload_mint_script(&funding_key, client);
-                let libra_pay_program_id = upload_payment_script(&funding_key, client);
+                let libra_genesis_keypair = create_genesis(&funding_key, client.as_ref(), 10_000_000);
+                let libra_mint_program_id = upload_mint_script(&funding_key, client.as_ref());
+                let libra_pay_program_id = upload_payment_script(&funding_key, client.as_ref());
 
                 // Generate another set of keypairs for move accounts.
                 // Still fund the solana ones which will be used for fees.
@@ -1056,7 +1056,7 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
                 let mut rnd = GenKeys::new(seed);
                 let move_keypairs = rnd.gen_n_keypairs(keypair_count as u64);
                 fund_move_keys(
-                    client,
+                    client.as_ref(),
                     funding_key,
                     &move_keypairs,
                     total / 3,
