@@ -9,10 +9,10 @@ use crate::{
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::signature::Keypair;
 use solana_sdk::{
     account::Account,
     pubkey::Pubkey,
+    signature::Keypair,
     signature::KeypairUtil,
     system_instruction::{create_address_with_seed, SystemError},
     transaction::Transaction,
@@ -314,12 +314,16 @@ pub fn process_create_vote_account(
         (&identity_pubkey, "identity_pubkey".to_string()),
     )?;
 
-    if rpc_client.get_account(&vote_account_address).is_ok() {
-        return Err(CliError::BadParameter(format!(
-            "Unable to create vote account. Vote account already exists: {}",
-            vote_account_address
-        ))
-        .into());
+    if let Ok(vote_account) = rpc_client.get_account(&vote_account_address) {
+        let err_msg = if vote_account.owner == solana_vote_program::id() {
+            format!("Vote account {} already exists", vote_account_address)
+        } else {
+            format!(
+                "Account {} already exists and is not a vote account",
+                vote_account_address
+            )
+        };
+        return Err(CliError::BadParameter(err_msg).into());
     }
 
     let required_balance = rpc_client

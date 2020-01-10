@@ -379,12 +379,18 @@ pub fn process_create_nonce_account(
         (&nonce_account_address, "nonce_account".to_string()),
     )?;
 
-    if rpc_client.get_account(&nonce_account_address).is_ok() {
-        return Err(CliError::BadParameter(format!(
-            "Unable to create nonce account. Nonce account already exists: {}",
-            nonce_account_pubkey,
-        ))
-        .into());
+    if let Ok(nonce_account) = rpc_client.get_account(&nonce_account_address) {
+        let err_msg = if nonce_account.owner == system_program::id()
+            && State::<NonceState>::state(&nonce_account).is_ok()
+        {
+            format!("Nonce account {} already exists", nonce_account_address)
+        } else {
+            format!(
+                "Account {} already exists and is not a nonce account",
+                nonce_account_address
+            )
+        };
+        return Err(CliError::BadParameter(err_msg).into());
     }
 
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(NonceState::size())?;
