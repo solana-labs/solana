@@ -163,7 +163,28 @@ pub fn process_create_storage_account(
             "storage_account_pubkey".to_string(),
         ),
     )?;
+<<<<<<< HEAD
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+=======
+
+    if let Ok(storage_account) = rpc_client.get_account(&storage_account_pubkey) {
+        let err_msg = if storage_account.owner == solana_storage_program::id() {
+            format!("Storage account {} already exists", storage_account_pubkey)
+        } else {
+            format!(
+                "Account {} already exists and is not a storage account",
+                storage_account_pubkey
+            )
+        };
+        return Err(CliError::BadParameter(err_msg).into());
+    }
+
+    use solana_storage_program::storage_contract::STORAGE_ACCOUNT_SPACE;
+    let required_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(STORAGE_ACCOUNT_SPACE as usize)?
+        .max(1);
+
+>>>>>>> bcd072c5e... Clarify account creation error messages in CLI (#7719)
     let ixs = storage_instruction::create_storage_account(
         &config.keypair.pubkey(),
         &account_owner,
