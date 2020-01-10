@@ -3,6 +3,7 @@ use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
+use rand::{thread_rng, Rng};
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_keypair, is_pubkey_or_keypair},
@@ -217,15 +218,16 @@ fn get_rpc_addr(
             .any(|contact_info| contact_info.gossip == *entrypoint_gossip);
 
         if found_entrypoint & !rpc_peers.is_empty() {
-            // Prefer the entrypoint's RPC service it it has one, otherwise pick the first RPC
-            // service found
+            // Prefer the entrypoint's RPC service if present, otherwise pick a node at random
             if let Some(contact_info) = rpc_peers
                 .iter()
                 .find(|contact_info| contact_info.gossip == *entrypoint_gossip)
             {
                 break (contact_info.id, contact_info.rpc);
             }
-            break (rpc_peers[0].id, rpc_peers[0].rpc);
+
+            let i = thread_rng().gen_range(0, rpc_peers.len());
+            break (rpc_peers[i].id, rpc_peers[i].rpc);
         }
 
         sleep(Duration::from_secs(1));
