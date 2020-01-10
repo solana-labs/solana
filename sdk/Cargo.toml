@@ -53,4 +53,4 @@ solana-logger = { path = "../logger", version = "0.23.0", optional = true }
 solana-sdk-macro = { path = "macro", version = "0.23.0" }
 
 [dev-dependencies]
-tiny-bip39 = "0.6.2"
+tiny-bip39 = "0.7.0"

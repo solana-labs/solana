@@ -16,7 +16,7 @@ num_cpus = "1.11.1"
 rpassword = "4.0"
 solana-clap-utils = { path = "../clap-utils", version = "0.23.0" }
 solana-sdk = { path = "../sdk", version = "0.23.0" }
-tiny-bip39 = "0.6.2"
+tiny-bip39 = "0.7.0"
 
 [[bin]]
 name = "solana-keygen"
