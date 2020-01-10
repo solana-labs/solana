@@ -269,7 +269,8 @@ pub fn process_blockstore(
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     opts: ProcessOptions,
-) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError> {
+) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError>
+{
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
             *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
@@ -292,7 +293,8 @@ pub fn process_blockstore_from_root(
     blockstore: &Blockstore,
     bank: Arc<Bank>,
     opts: &ProcessOptions,
-) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError> {
+) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError>
+{
     info!("processing ledger from root slot {}...", bank.slot());
     let allocated = thread_mem_usage::Allocatedp::default();
     let initial_allocation = allocated.get();
@@ -974,14 +976,24 @@ pub mod tests {
         // Fork 1, ending at slot 3
         let last_slot1_entry_hash =
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, last_entry_hash);
-        last_entry_hash =
-            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 1, last_slot1_entry_hash);
+        last_entry_hash = fill_blockstore_slot_with_ticks(
+            &blockstore,
+            ticks_per_slot,
+            2,
+            1,
+            last_slot1_entry_hash,
+        );
         let last_fork1_entry_hash =
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 2, last_entry_hash);
 
         // Fork 2, ending at slot 4
-        let last_fork2_entry_hash =
-            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 4, 1, last_slot1_entry_hash);
+        let last_fork2_entry_hash = fill_blockstore_slot_with_ticks(
+            &blockstore,
+            ticks_per_slot,
+            4,
+            1,
+            last_slot1_entry_hash,
+        );
 
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
@@ -1048,14 +1060,24 @@ pub mod tests {
         // Fork 1, ending at slot 3
         let last_slot1_entry_hash =
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, last_entry_hash);
-        last_entry_hash =
-            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 1, last_slot1_entry_hash);
+        last_entry_hash = fill_blockstore_slot_with_ticks(
+            &blockstore,
+            ticks_per_slot,
+            2,
+            1,
+            last_slot1_entry_hash,
+        );
         let last_fork1_entry_hash =
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 2, last_entry_hash);
 
         // Fork 2, ending at slot 4
-        let last_fork2_entry_hash =
-            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 4, 1, last_slot1_entry_hash);
+        let last_fork2_entry_hash = fill_blockstore_slot_with_ticks(
+            &blockstore,
+            ticks_per_slot,
+            4,
+            1,
+            last_slot1_entry_hash,
+        );
 
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);

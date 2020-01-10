@@ -133,7 +133,8 @@ impl BroadcastStage {
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
-            let res = broadcast_stage_run.run(blockstore, receiver, socket_sender, blockstore_sender);
+            let res =
+                broadcast_stage_run.run(blockstore, receiver, socket_sender, blockstore_sender);
             let res = Self::handle_error(res);
             if let Some(res) = res {
                 return res;
@@ -192,7 +193,13 @@ impl BroadcastStage {
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit);
-                Self::run(&btree, &receiver, &socket_sender, &blockstore_sender, bs_run)
+                Self::run(
+                    &btree,
+                    &receiver,
+                    &socket_sender,
+                    &blockstore_sender,
+                    bs_run,
+                )
             })
             .unwrap();
         let mut thread_hdls = vec![thread_hdl];

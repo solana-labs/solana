@@ -1330,7 +1330,8 @@ impl ClusterInfo {
                         );
                     }
                     _ => {
-                        let rsp = Self::handle_repair(me, recycler, &from_addr, blockstore, request);
+                        let rsp =
+                            Self::handle_repair(me, recycler, &from_addr, blockstore, request);
                         if let Some(rsp) = rsp {
                             let _ignore_disconnect = response_sender.send(rsp);
                         }
@@ -2187,7 +2188,8 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            let rv = ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 2, 0);
+            let rv =
+                ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 2, 0);
             assert!(rv.is_none());
 
             // Create slots 1, 2, 3 with 5 shreds apiece
@@ -2198,7 +2200,8 @@ mod tests {
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset
-            let rv = ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 4, 5);
+            let rv =
+                ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 4, 5);
             assert!(rv.is_none());
 
             // For slot 3, we should return the highest shreds from slots 3, 2, 1 respectively

@@ -63,8 +63,13 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
     )));
     let path = get_tmp_ledger_path!();
     let blockstore = Arc::new(Blockstore::open(&path).unwrap());
-    Archiver::download_from_archiver(&cluster_info, &archiver_info, &blockstore, slots_per_segment)
-        .unwrap();
+    Archiver::download_from_archiver(
+        &cluster_info,
+        &archiver_info,
+        &blockstore,
+        slots_per_segment,
+    )
+    .unwrap();
 }
 
 #[test]

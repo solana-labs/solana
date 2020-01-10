@@ -323,7 +323,12 @@ impl BroadcastRun for StandardBroadcastRun {
         blockstore_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
-        self.process_receive_results(blockstore, socket_sender, blockstore_sender, receive_results)
+        self.process_receive_results(
+            blockstore,
+            socket_sender,
+            blockstore_sender,
+            receive_results,
+        )
     }
     fn transmit(
         &self,

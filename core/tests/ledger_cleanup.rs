@@ -352,7 +352,8 @@ mod tests {
 
         if config.cleanup_blockstore {
             drop(blockstore);
-            Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+            Blockstore::destroy(&blockstore_path)
+                .expect("Expected successful database destruction");
         }
     }
 }

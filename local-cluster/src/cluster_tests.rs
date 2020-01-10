@@ -301,7 +301,11 @@ fn poll_all_nodes_for_signature(
     Ok(())
 }
 
-fn get_and_verify_slot_entries(blockstore: &Blockstore, slot: Slot, last_entry: &Hash) -> Vec<Entry> {
+fn get_and_verify_slot_entries(
+    blockstore: &Blockstore,
+    slot: Slot,
+    last_entry: &Hash,
+) -> Vec<Entry> {
     let entries = blockstore.get_slot_entries(slot, 0, None).unwrap();
     assert_eq!(entries.verify(last_entry), true);
     entries

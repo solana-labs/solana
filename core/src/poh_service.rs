@@ -137,8 +137,8 @@ mod tests {
         let prev_hash = bank.last_blockhash();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blockstore =
-                Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
             let poh_config = Arc::new(PohConfig {
                 hashes_per_tick: Some(2),
                 target_tick_duration: Duration::from_millis(42),
