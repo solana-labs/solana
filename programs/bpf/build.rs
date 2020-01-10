@@ -88,7 +88,7 @@ fn main() {
                 .arg("build")
                 .arg(program)
                 .status()
-                .expect("Failed to call do.sh")
+                .expect("Error calling rust/do.sh")
                 .success());
             let src = format!(
                 "target/bpfel-unknown-unknown/release/solana_bpf_rust_{}.so",
