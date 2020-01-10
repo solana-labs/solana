@@ -1427,6 +1427,9 @@ impl Blocktree {
         slot: Slot,
         start_index: u64,
     ) -> Result<(Vec<Entry>, usize, bool)> {
+        if self.is_dead(slot) {
+            return Err(BlocktreeError::DeadSlot);
+        }
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
         let slot_meta = slot_meta_cf.get(slot)?;
         if slot_meta.is_none() {
