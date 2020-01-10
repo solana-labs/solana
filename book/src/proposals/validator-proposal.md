@@ -41,7 +41,6 @@ schedule.
 ## Notable changes
 
 * Hoist FetchStage and BroadcastStage out of TPU
-* Blockstore renamed to Blockstore
 * BankForks renamed to Banktree
 * TPU moves to new socket-free crate called solana-tpu.
 * TPU's BankingStage absorbs ReplayStage
