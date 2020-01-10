@@ -2127,8 +2127,8 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
     if !output.status.success() {
         use std::io::{Error as IOError, ErrorKind};
         use std::str::from_utf8;
-        eprintln!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
-        eprintln!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
+        error!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
+        error!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
 
         return Err(BlocktreeError::IO(IOError::new(
             ErrorKind::Other,
