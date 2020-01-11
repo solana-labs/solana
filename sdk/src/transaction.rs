@@ -9,9 +9,10 @@ use crate::signature::{KeypairUtil, Signature};
 use crate::system_instruction;
 use bincode::serialize;
 use std::result;
+use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionError {
     /// This Pubkey is being processed in another transaction
     AccountInUse,
@@ -58,6 +59,12 @@ pub enum TransactionError {
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
+
+impl std::fmt::Display for TransactionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "transaction error")
+    }
+}
 
 /// An atomic transaction
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]

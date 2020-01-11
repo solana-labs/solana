@@ -2,8 +2,9 @@ use crate::{
     bank_forks::BankForks,
     block_error::BlockError,
     blockstore::Blockstore,
+    blockstore_db::BlockstoreError,
     blockstore_meta::SlotMeta,
-    entry::{create_ticks, Entry, EntrySlice},
+    entry::{create_ticks, Entry, EntrySlice, EntryVerificationStatus, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
 };
 use crossbeam_channel::Sender;
@@ -11,7 +12,7 @@ use itertools::Itertools;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
-use solana_measure::thread_mem_usage;
+use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
@@ -24,7 +25,7 @@ use solana_sdk::{
     hash::Hash,
     signature::{Keypair, KeypairUtil},
     timing::duration_as_ms,
-    transaction::{Result, Transaction},
+    transaction::{Result, Transaction, TransactionError},
 };
 use std::{
     cell::RefCell,
@@ -234,10 +235,10 @@ pub struct BankForksInfo {
     pub bank_slot: u64,
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug)]
 pub enum BlockstoreProcessorError {
     #[error("failed to load entries")]
-    FailedToLoadEntries,
+    FailedToLoadEntries(#[from] BlockstoreError),
 
     #[error("failed to load meta")]
     FailedToLoadMeta,
@@ -246,7 +247,7 @@ pub enum BlockstoreProcessorError {
     InvalidBlock(#[from] BlockError),
 
     #[error("invalid transaction")]
-    InvalidTransaction,
+    InvalidTransaction(#[from] TransactionError),
 
     #[error("no valid forks found")]
     NoValidForksFound,
@@ -283,8 +284,9 @@ pub fn process_blockstore(
     // Setup bank for slot 0
     let bank0 = Arc::new(Bank::new_with_paths(&genesis_config, account_paths));
     info!("processing ledger for slot 0...");
-    process_bank_0(&bank0, blockstore, &opts)?;
-    process_blockstore_from_root(genesis_config, blockstore, bank0, &opts)
+    let recyclers = VerifyRecyclers::default();
+    process_bank_0(&bank0, blockstore, &opts, &recyclers)?;
+    process_blockstore_from_root(genesis_config, blockstore, bank0, &opts, &recyclers)
 }
 
 // Process blockstore from a known root bank
@@ -293,6 +295,7 @@ pub fn process_blockstore_from_root(
     blockstore: &Blockstore,
     bank: Arc<Bank>,
     opts: &ProcessOptions,
+    recyclers: &VerifyRecyclers,
 ) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError>
 {
     info!("processing ledger from root slot {}...", bank.slot());
@@ -330,6 +333,7 @@ pub fn process_blockstore_from_root(
                 &mut leader_schedule_cache,
                 &mut rooted_path,
                 opts,
+                recyclers,
             )?;
             let (banks, bank_forks_info): (Vec<_>, Vec<_>) =
                 fork_info.into_iter().map(|(_, v)| v).unzip();
@@ -386,7 +390,7 @@ pub fn verify_ticks(
     }
 
     if next_bank_tick_height == max_bank_tick_height {
-        let has_trailing_entry = !entries.last().unwrap().is_tick();
+        let has_trailing_entry = entries.last().map(|e| !e.is_tick()).unwrap_or_default();
         if has_trailing_entry {
             warn!("Slot: {} did not end with a tick entry", bank.slot());
             return Err(BlockError::TrailingEntry);
@@ -413,30 +417,74 @@ pub fn verify_ticks(
 fn verify_and_process_slot_entries(
     bank: &Arc<Bank>,
     entries: &[Entry],
-    last_entry_hash: Hash,
+    last_entry_hash: &Hash,
     opts: &ProcessOptions,
-) -> result::Result<Hash, BlockstoreProcessorError> {
-    assert!(!entries.is_empty());
-
+    recyclers: &VerifyRecyclers,
+) -> result::Result<(), BlockstoreProcessorError> {
     if opts.poh_verify {
-        verify_ticks(bank, entries, true, &mut 0)?;
-        if !entries.verify(&last_entry_hash) {
-            warn!("Ledger proof of history failed at slot: {}", bank.slot());
-            return Err(BlockError::InvalidEntryHash.into());
-        }
+        let slot_full = true;
+        let mut tick_hash_count = 0;
+        verify_and_process_entries(
+            bank,
+            entries,
+            last_entry_hash,
+            slot_full,
+            &mut tick_hash_count,
+            None,
+            opts.entry_callback.as_ref(),
+            recyclers,
+        )
+        .map(|_| ())
+    } else {
+        process_entries_with_callback(bank, entries, true, opts.entry_callback.as_ref(), None)
+            .map_err(BlockstoreProcessorError::from)
+    }
+}
+
+pub fn verify_and_process_entries(
+    bank: &Arc<Bank>,
+    entries: &[Entry],
+    last_entry: &Hash,
+    slot_full: bool,
+    tick_hash_count: &mut u64,
+    transaction_status_sender: Option<TransactionStatusSender>,
+    entry_callback: Option<&ProcessCallback>,
+    recyclers: &VerifyRecyclers,
+) -> result::Result<(u64, u64), BlockstoreProcessorError> {
+    verify_ticks(bank, entries, slot_full, tick_hash_count)?;
+
+    datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
+    let mut verify_total = Measure::start("verify_and_process_entries");
+    let mut entry_state = entries.start_verify(last_entry, recyclers.clone());
+
+    if entry_state.status() == EntryVerificationStatus::Failure {
+        warn!("Ledger proof of history failed at slot: {}", bank.slot());
+        return Err(BlockError::InvalidEntryHash.into());
     }
 
-    process_entries_with_callback(bank, &entries, true, opts.entry_callback.as_ref(), None)
-        .map_err(|err| {
-            warn!(
-                "Failed to process entries for slot {}: {:?}",
-                bank.slot(),
-                err
-            );
-            BlockstoreProcessorError::InvalidTransaction
-        })?;
+    let mut processing_elapsed = Measure::start("processing_elapsed");
+    let process_result = process_entries_with_callback(
+        bank,
+        entries,
+        true,
+        entry_callback,
+        transaction_status_sender,
+    )
+    .map_err(BlockstoreProcessorError::from);
+    processing_elapsed.stop();
 
-    Ok(entries.last().unwrap().hash)
+    if !entry_state.finish_verify(entries) {
+        warn!("Ledger proof of history failed at slot: {}", bank.slot());
+        return Err(BlockError::InvalidEntryHash.into());
+    }
+    verify_total.stop();
+
+    process_result?;
+
+    Ok((
+        processing_elapsed.as_us(),
+        verify_total.as_us() - processing_elapsed.as_us(),
+    ))
 }
 
 // Special handling required for processing the entries in slot 0
@@ -444,17 +492,21 @@ fn process_bank_0(
     bank0: &Arc<Bank>,
     blockstore: &Blockstore,
     opts: &ProcessOptions,
+    recyclers: &VerifyRecyclers,
 ) -> result::Result<(), BlockstoreProcessorError> {
     assert_eq!(bank0.slot(), 0);
 
     // Fetch all entries for this slot
     let entries = blockstore.get_slot_entries(0, 0, None).map_err(|err| {
         warn!("Failed to load entries for slot 0, err: {:?}", err);
-        BlockstoreProcessorError::FailedToLoadEntries
+        BlockstoreProcessorError::from(err)
     })?;
 
-    verify_and_process_slot_entries(bank0, &entries, bank0.last_blockhash(), opts)
-        .expect("processing for bank 0 must succceed");
+    let result =
+        verify_and_process_slot_entries(bank0, &entries, &bank0.last_blockhash(), opts, recyclers);
+    if is_result_fatal(&result) {
+        panic!("processing for bank 0 must succceed");
+    }
 
     bank0.freeze();
 
@@ -530,6 +582,7 @@ fn process_pending_slots(
     leader_schedule_cache: &mut LeaderScheduleCache,
     rooted_path: &mut Vec<u64>,
     opts: &ProcessOptions,
+    recyclers: &VerifyRecyclers,
 ) -> result::Result<HashMap<u64, (Arc<Bank>, BankForksInfo)>, BlockstoreProcessorError> {
     let mut fork_info = HashMap::new();
     let mut last_status_report = Instant::now();
@@ -559,7 +612,8 @@ fn process_pending_slots(
         let allocated = thread_mem_usage::Allocatedp::default();
         let initial_allocation = allocated.get();
 
-        if process_single_slot(blockstore, &bank, &last_entry_hash, opts).is_err() {
+        let slot_result = process_single_slot(blockstore, &bank, &last_entry_hash, opts, recyclers);
+        if is_result_fatal(&slot_result) {
             continue;
         }
 
@@ -606,25 +660,48 @@ fn process_single_slot(
     bank: &Arc<Bank>,
     last_entry_hash: &Hash,
     opts: &ProcessOptions,
+    recyclers: &VerifyRecyclers,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
     // Fetch all entries for this slot
     let entries = blockstore.get_slot_entries(slot, 0, None).map_err(|err| {
         warn!("Failed to load entries for slot {}: {:?}", slot, err);
-        BlockstoreProcessorError::FailedToLoadEntries
+        BlockstoreProcessorError::from(err)
     })?;
 
-    // If this errors with a fatal error, should mark the slot as dead so
-    // validators don't replay this slot and  see DuplicateSignature errors
-    // later in ReplayStage
-    verify_and_process_slot_entries(&bank, &entries, *last_entry_hash, opts).map_err(|err| {
-        warn!("slot {} failed to verify: {}", slot, err);
-        err
-    })?;
+    // Mark corrupt slots as dead so validators don't replay this slot and
+    // see DuplicateSignature errors later in ReplayStage
+    let result = verify_and_process_slot_entries(&bank, &entries, last_entry_hash, opts, recyclers);
+    if is_result_fatal(&result) {
+        blockstore
+            .set_dead_slot(slot)
+            .expect("Failed to mark slot as dead in blockstore");
+        if let Err(err) = &result {
+            warn!("slot {} failed to verify: {}", slot, err);
+        }
+        result?;
+    }
 
     bank.freeze(); // all banks handled by this routine are created from complete slots
     Ok(())
+}
+
+// Returns true if the `result` is an error that will cause a bank to be marked as dead
+pub fn is_result_fatal<T>(result: &result::Result<T, BlockstoreProcessorError>) -> bool {
+    match result {
+        Err(BlockstoreProcessorError::InvalidTransaction(e)) => {
+            // Transactions with any transaction errors mean this fork is bogus
+            let tx_error = Err(e.clone());
+            !Bank::can_commit(&tx_error)
+        }
+        Err(BlockstoreProcessorError::InvalidBlock(_)) => true,
+        Err(BlockstoreProcessorError::FailedToLoadEntries(BlockstoreError::InvalidShredData(_))) => {
+            true
+        }
+        Err(BlockstoreProcessorError::FailedToLoadEntries(BlockstoreError::DeadSlot)) => true,
+        _ => false,
+    }
 }
 
 pub struct TransactionStatusBatch {
@@ -2268,16 +2345,24 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        process_bank_0(&bank0, &blockstore, &opts).unwrap();
+        let recyclers = VerifyRecyclers::default();
+        process_bank_0(&bank0, &blockstore, &opts, &recyclers).unwrap();
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
         let slot1_entries = blockstore.get_slot_entries(1, 0, None).unwrap();
-        verify_and_process_slot_entries(&bank1, &slot1_entries, bank0.last_blockhash(), &opts)
-            .unwrap();
+        verify_and_process_slot_entries(
+            &bank1,
+            &slot1_entries,
+            &bank0.last_blockhash(),
+            &opts,
+            &recyclers,
+        )
+        .unwrap();
         bank1.squash();
 
         // Test process_blockstore_from_root() from slot 1 onwards
         let (bank_forks, bank_forks_info, _) =
-            process_blockstore_from_root(&genesis_config, &blockstore, bank1, &opts).unwrap();
+            process_blockstore_from_root(&genesis_config, &blockstore, bank1, &opts, &recyclers)
+                .unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // One fork
         assert_eq!(

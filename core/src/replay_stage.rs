@@ -5,20 +5,21 @@ use crate::{
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
     consensus::{StakeLockout, Tower},
     poh_recorder::PohRecorder,
-    result::{Error, Result},
+    result::Result,
     rpc_subscriptions::RpcSubscriptions,
 };
-use solana_ledger::entry::EntryVerificationStatus;
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
     blockstore::{Blockstore, BlockstoreError},
-    blockstore_processor::{self, verify_ticks, TransactionStatusSender},
-    entry::{Entry, EntrySlice, VerifyRecyclers},
+    blockstore_processor::{
+        self, is_result_fatal, BlockstoreProcessorError, TransactionStatusSender,
+    },
+    entry::{Entry, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::SnapshotPackageSender,
 };
-use solana_measure::{measure::Measure, thread_mem_usage};
+use solana_measure::thread_mem_usage;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -32,6 +33,7 @@ use solana_sdk::{
 use solana_vote_program::vote_instruction;
 use std::{
     collections::{HashMap, HashSet},
+    result,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{channel, Receiver, RecvTimeoutError, Sender},
@@ -525,22 +527,6 @@ impl ReplayStage {
         }
     }
 
-    // Returns Some(result) if the `result` is a fatal error, which is an error that will cause a
-    // bank to be marked as dead/corrupted
-    fn is_replay_result_fatal(result: &Result<()>) -> bool {
-        match result {
-            Err(Error::TransactionError(e)) => {
-                // Transactions withand transaction errors mean this fork is bogus
-                let tx_error = Err(e.clone());
-                !Bank::can_commit(&tx_error)
-            }
-            Err(Error::BlockError(_)) => true,
-            Err(Error::BlockstoreError(BlockstoreError::InvalidShredData(_))) => true,
-            Err(Error::BlockstoreError(BlockstoreError::DeadSlot)) => true,
-            _ => false,
-        }
-    }
-
     // Returns the replay result and the number of replayed transactions
     fn replay_blockstore_into_bank(
         bank: &Arc<Bank>,
@@ -548,11 +534,12 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
-    ) -> (Result<()>, usize) {
+    ) -> (result::Result<(), BlockstoreProcessorError>, usize) {
         let mut tx_count = 0;
         let now = Instant::now();
         let load_result =
-            Self::load_blockstore_entries_with_shred_info(bank, blockstore, bank_progress);
+            Self::load_blockstore_entries_with_shred_info(bank, blockstore, bank_progress)
+                .map_err(BlockstoreProcessorError::FailedToLoadEntries);
         let fetch_entries_elapsed = now.elapsed().as_micros();
         if load_result.is_err() {
             bank_progress.stats.fetch_entries_fail_elapsed += fetch_entries_elapsed as u64;
@@ -580,7 +567,7 @@ impl ReplayStage {
             )
         });
 
-        if Self::is_replay_result_fatal(&replay_result) {
+        if is_result_fatal(&replay_result) {
             warn!(
                 "Fatal replay result in slot: {}, result: {:?}",
                 bank.slot(),
@@ -768,7 +755,7 @@ impl ReplayStage {
                     verify_recyclers,
                 );
                 tx_count += replay_tx_count;
-                if Self::is_replay_result_fatal(&replay_result) {
+                if is_result_fatal(&replay_result) {
                     trace!("replay_result_fatal slot {}", bank_slot);
                     // If the bank was corrupted, don't try to run the below logic to check if the
                     // bank is completed
@@ -967,10 +954,9 @@ impl ReplayStage {
         bank: &Bank,
         blockstore: &Blockstore,
         bank_progress: &mut ForkProgress,
-    ) -> Result<(Vec<Entry>, usize, bool)> {
+    ) -> result::Result<(Vec<Entry>, usize, bool), BlockstoreError> {
         blockstore
             .get_slot_entries_with_shred_info(bank.slot(), bank_progress.num_shreds as u64)
-            .map_err(|err| err.into())
     }
 
     fn replay_entries_into_bank(
@@ -981,46 +967,19 @@ impl ReplayStage {
         slot_full: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
-    ) -> Result<()> {
-        let result = Self::verify_and_process_entries(
-            &bank,
-            &entries,
-            slot_full,
-            bank_progress.num_shreds,
-            bank_progress,
-            transaction_status_sender,
-            verify_recyclers,
-        );
-        bank_progress.num_shreds += num_shreds;
-        bank_progress.num_entries += entries.len();
-        if let Some(last_entry) = entries.last() {
-            bank_progress.last_entry = last_entry.hash;
-        }
-
-        result
-    }
-
-    fn verify_and_process_entries(
-        bank: &Arc<Bank>,
-        entries: &[Entry],
-        slot_full: bool,
-        shred_index: usize,
-        bank_progress: &mut ForkProgress,
-        transaction_status_sender: Option<TransactionStatusSender>,
-        recyclers: &VerifyRecyclers,
-    ) -> Result<()> {
+    ) -> result::Result<(), BlockstoreProcessorError> {
+        let num_entries = entries.len();
         let last_entry = &bank_progress.last_entry;
-        let tick_hash_count = &mut bank_progress.tick_hash_count;
-        let handle_block_error = move |block_error: BlockError| -> Result<()> {
+        let report_block_error = move |block_error: &BlockError| {
             warn!(
                 "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}, slot_full: {}",
                 block_error,
                 bank.slot(),
-                entries.len(),
+                num_entries,
                 bank.tick_height(),
                 last_entry,
                 bank.last_blockhash(),
-                shred_index,
+                num_shreds,
                 slot_full,
             );
 
@@ -1029,38 +988,33 @@ impl ReplayStage {
                 ("slot", bank.slot(), i64),
                 ("last_entry", last_entry.to_string(), String),
             );
-
-            Err(Error::BlockError(block_error))
         };
 
-        if let Err(block_error) = verify_ticks(bank, entries, slot_full, tick_hash_count) {
-            return handle_block_error(block_error);
+        let result = blockstore_processor::verify_and_process_entries(
+            bank,
+            &entries,
+            &bank_progress.last_entry,
+            slot_full,
+            &mut bank_progress.tick_hash_count,
+            transaction_status_sender,
+            None,
+            verify_recyclers,
+        );
+
+        if let Err(BlockstoreProcessorError::InvalidBlock(err)) = &result {
+            report_block_error(err);
         }
 
-        datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
-        let mut verify_total = Measure::start("verify_and_process_entries");
-        let mut entry_state = entries.start_verify(last_entry, recyclers.clone());
-
-        if entry_state.status() == EntryVerificationStatus::Failure {
-            return handle_block_error(BlockError::InvalidEntryHash);
+        bank_progress.num_shreds += num_shreds;
+        bank_progress.num_entries += entries.len();
+        if let Some(last_entry) = entries.last() {
+            bank_progress.last_entry = last_entry.hash;
         }
 
-        let mut replay_elapsed = Measure::start("replay_elapsed");
-        let res =
-            blockstore_processor::process_entries(bank, entries, true, transaction_status_sender);
-        replay_elapsed.stop();
-        bank_progress.stats.replay_elapsed += replay_elapsed.as_us();
-
-        if !entry_state.finish_verify(entries) {
-            return handle_block_error(BlockError::InvalidEntryHash);
-        }
-
-        verify_total.stop();
-        bank_progress.stats.entry_verification_elapsed =
-            verify_total.as_us() - replay_elapsed.as_us();
-
-        res?;
-        Ok(())
+        result.map(|(processing_us, verification_us)| {
+            bank_progress.stats.entry_verification_elapsed += verification_us;
+            bank_progress.stats.replay_elapsed += processing_us;
+        })
     }
 
     fn handle_new_root(
@@ -1550,7 +1504,9 @@ pub(crate) mod tests {
 
         assert_matches!(
             res,
-            Err(Error::TransactionError(TransactionError::AccountNotFound))
+            Err(BlockstoreProcessorError::InvalidTransaction(
+                TransactionError::AccountNotFound
+            ))
         );
     }
 
@@ -1576,7 +1532,7 @@ pub(crate) mod tests {
             entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
         });
 
-        if let Err(Error::BlockError(block_error)) = res {
+        if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidEntryHash);
         } else {
             assert!(false);
@@ -1601,7 +1557,7 @@ pub(crate) mod tests {
             )
         });
 
-        if let Err(Error::BlockError(block_error)) = res {
+        if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidTickHashCount);
         } else {
             assert!(false);
@@ -1624,7 +1580,7 @@ pub(crate) mod tests {
             )
         });
 
-        if let Err(Error::BlockError(block_error)) = res {
+        if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidTickCount);
         } else {
             assert!(false);
@@ -1644,7 +1600,7 @@ pub(crate) mod tests {
             )
         });
 
-        if let Err(Error::BlockError(block_error)) = res {
+        if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidTickCount);
         } else {
             assert!(false);
@@ -1666,7 +1622,7 @@ pub(crate) mod tests {
             )
         });
 
-        if let Err(Error::BlockError(block_error)) = res {
+        if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::InvalidLastTick);
         } else {
             assert!(false);
@@ -1690,7 +1646,7 @@ pub(crate) mod tests {
             entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0)
         });
 
-        if let Err(Error::BlockError(block_error)) = res {
+        if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
             assert_eq!(block_error, BlockError::TrailingEntry);
         } else {
             assert!(false);
@@ -1720,13 +1676,13 @@ pub(crate) mod tests {
 
         assert_matches!(
             res,
-            Err(Error::BlockstoreError(BlockstoreError::InvalidShredData(_)))
+            Err(BlockstoreProcessorError::FailedToLoadEntries(BlockstoreError::InvalidShredData(_)))
         );
     }
 
     // Given a shred and a fatal expected error, check that replaying that shred causes causes the fork to be
     // marked as dead. Returns the error for caller to verify.
-    fn check_dead_fork<F>(shred_to_insert: F) -> Result<()>
+    fn check_dead_fork<F>(shred_to_insert: F) -> result::Result<(), BlockstoreProcessorError>
     where
         F: Fn(&Keypair, Arc<Bank>) -> Vec<Shred>,
     {
@@ -1766,7 +1722,7 @@ pub(crate) mod tests {
 
             // Check that the erroring bank was marked as dead in blockstore
             assert!(blockstore.is_dead(bank0.slot()));
-            res
+            res.map(|_| ())
         };
         let _ignored = remove_dir_all(&ledger_path);
         res
