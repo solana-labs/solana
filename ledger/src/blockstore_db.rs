@@ -21,6 +21,10 @@ const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 const META_CF: &str = "meta";
 // Column family for slots that have been marked as dead
 const DEAD_SLOTS_CF: &str = "dead_slots";
+// Column family for storing proof that there were multiple
+// versions of a slot
+const DUPLICATE_SLOTS_CF: &str = "duplicate_slots";
+// Column family storing erasure metadata for a slot
 const ERASURE_META_CF: &str = "erasure_meta";
 // Column family for orphans data
 const ORPHANS_CF: &str = "orphans";
@@ -62,16 +66,20 @@ pub enum IteratorMode<Index> {
 
 pub mod columns {
     #[derive(Debug)]
-    /// SlotMeta Column
+    /// The slot metadata column
     pub struct SlotMeta;
 
     #[derive(Debug)]
-    /// Orphans Column
+    /// The orphans column
     pub struct Orphans;
 
     #[derive(Debug)]
-    /// Data Column
+    /// The dead slots column
     pub struct DeadSlots;
+
+    #[derive(Debug)]
+    /// The duplicate slots column
+    pub struct DuplicateSlots;
 
     #[derive(Debug)]
     /// The erasure meta column
@@ -104,8 +112,8 @@ struct Rocks(rocksdb::DB);
 impl Rocks {
     fn open(path: &Path) -> Result<Rocks> {
         use columns::{
-            DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
-            TransactionStatus,
+            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
+            SlotMeta, TransactionStatus,
         };
 
         fs::create_dir_all(&path)?;
@@ -117,6 +125,8 @@ impl Rocks {
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
         let dead_slots_cf_descriptor =
             ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options());
+        let duplicate_slots_cf_descriptor =
+            ColumnFamilyDescriptor::new(DuplicateSlots::NAME, get_cf_options());
         let erasure_meta_cf_descriptor =
             ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
         let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
@@ -132,6 +142,7 @@ impl Rocks {
         let cfs = vec![
             meta_cf_descriptor,
             dead_slots_cf_descriptor,
+            duplicate_slots_cf_descriptor,
             erasure_meta_cf_descriptor,
             orphans_cf_descriptor,
             root_cf_descriptor,
@@ -149,13 +160,14 @@ impl Rocks {
 
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
-            DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
-            TransactionStatus,
+            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
+            SlotMeta, TransactionStatus,
         };
 
         vec![
             ErasureMeta::NAME,
             DeadSlots::NAME,
+            DuplicateSlots::NAME,
             Index::NAME,
             Orphans::NAME,
             Root::NAME,
@@ -372,6 +384,33 @@ impl Column for columns::DeadSlots {
 
 impl TypedColumn for columns::DeadSlots {
     type Type = bool;
+}
+
+impl Column for columns::DuplicateSlots {
+    const NAME: &'static str = DUPLICATE_SLOTS_CF;
+    type Index = u64;
+
+    fn key(slot: Slot) -> Vec<u8> {
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[..], slot);
+        key
+    }
+
+    fn index(key: &[u8]) -> u64 {
+        BigEndian::read_u64(&key[..8])
+    }
+
+    fn slot(index: Self::Index) -> Slot {
+        index
+    }
+
+    fn as_index(slot: Slot) -> Self::Index {
+        slot
+    }
+}
+
+impl TypedColumn for columns::DuplicateSlots {
+    type Type = blocktree_meta::DuplicateSlotProof;
 }
 
 impl Column for columns::Orphans {

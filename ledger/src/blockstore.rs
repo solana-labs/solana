@@ -77,6 +77,7 @@ pub struct Blockstore {
     db: Arc<Database>,
     meta_cf: LedgerColumn<cf::SlotMeta>,
     dead_slots_cf: LedgerColumn<cf::DeadSlots>,
+    duplicate_slots_cf: LedgerColumn<cf::DuplicateSlots>,
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
     orphans_cf: LedgerColumn<cf::Orphans>,
     index_cf: LedgerColumn<cf::Index>,
@@ -179,7 +180,7 @@ impl Blockstore {
 
         // Create the dead slots column family
         let dead_slots_cf = db.column();
-
+        let duplicate_slots_cf = db.column();
         let erasure_meta_cf = db.column();
 
         // Create the orphans column family. An "orphan" is defined as
@@ -208,6 +209,7 @@ impl Blockstore {
             db,
             meta_cf,
             dead_slots_cf,
+            duplicate_slots_cf,
             erasure_meta_cf,
             orphans_cf,
             index_cf,
@@ -322,6 +324,10 @@ impl Blockstore {
                 .unwrap_or_else(|_| false)
             & self
                 .db
+                .delete_range_cf::<cf::DuplicateSlots>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or_else(|_| false)
+            & self
+                .db
                 .delete_range_cf::<cf::ErasureMeta>(&mut write_batch, from_slot, to_slot)
                 .unwrap_or_else(|_| false)
             & self
@@ -366,6 +372,10 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .dead_slots_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .duplicate_slots_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self
@@ -1626,6 +1636,32 @@ impl Blockstore {
         self.dead_slots_cf.put(slot, &true)
     }
 
+    pub fn store_duplicate_slot(&self, slot: Slot, shred1: Vec<u8>, shred2: Vec<u8>) -> Result<()> {
+        let duplicate_slot_proof = DuplicateSlotProof::new(shred1, shred2);
+        self.duplicate_slots_cf.put(slot, &duplicate_slot_proof)
+    }
+
+    pub fn is_shred_duplicate(&self, slot: u64, index: u64, new_shred: &[u8]) -> bool {
+        let res = self
+            .get_data_shred(slot, index)
+            .expect("fetch from DuplicateSlots column family failed");
+
+        res.map(|existing_shred| existing_shred == new_shred)
+            .unwrap_or(false)
+    }
+
+    pub fn is_duplicate_slot(&self, slot: Slot) -> bool {
+        if let Some(_) = self
+            .duplicate_slots_cf
+            .get(slot)
+            .expect("fetch from DuplicateSlots column family failed")
+        {
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn get_orphans(&self, max: Option<usize>) -> Vec<u64> {
         let mut results = vec![];
 
@@ -2412,6 +2448,13 @@ pub mod tests {
                 .map(|(slot, _)| slot >= min_slot)
                 .unwrap_or(true)
             & blockstore
+                .db
+                .iter::<cf::DuplicateSlots>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|(slot, _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blocktree
                 .db
                 .iter::<cf::ErasureMeta>(IteratorMode::Start)
                 .unwrap()

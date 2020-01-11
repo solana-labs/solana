@@ -60,6 +60,14 @@ pub struct ErasureMeta {
     pub config: ErasureConfig,
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct DuplicateSlotProof {
+    #[serde(with = "serde_bytes")]
+    pub shred1: Vec<u8>,
+    #[serde(with = "serde_bytes")]
+    pub shred2: Vec<u8>,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ErasureMetaStatus {
     CanRecover,
@@ -206,6 +214,12 @@ impl ErasureMeta {
 
     pub fn size(&self) -> usize {
         self.size
+    }
+}
+
+impl DuplicateSlotProof {
+    pub(crate) fn new(shred1: Vec<u8>, shred2: Vec<u8>) -> Self {
+        DuplicateSlotProof { shred1, shred2 }
     }
 }
 
