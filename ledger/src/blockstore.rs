@@ -1641,25 +1641,30 @@ impl Blockstore {
         self.duplicate_slots_cf.put(slot, &duplicate_slot_proof)
     }
 
+    pub fn get_duplicate_slot(&self, slot: u64) -> Option<DuplicateSlotProof> {
+        self.duplicate_slots_cf
+            .get(slot)
+            .expect("fetch from DuplicateSlots column family failed")
+    }
+
+    // `new_shred` is asssumed to have slot and index equal to the given slot and index.
+    // Returns true if `new_shred` is not equal to the existing shred at the given
+    // slot and index as this implies the leader generated two different shreds with
+    // the same slot and index
     pub fn is_shred_duplicate(&self, slot: u64, index: u64, new_shred: &[u8]) -> bool {
         let res = self
             .get_data_shred(slot, index)
             .expect("fetch from DuplicateSlots column family failed");
 
-        res.map(|existing_shred| existing_shred == new_shred)
+        res.map(|existing_shred| existing_shred != new_shred)
             .unwrap_or(false)
     }
 
     pub fn is_duplicate_slot(&self, slot: Slot) -> bool {
-        if let Some(_) = self
-            .duplicate_slots_cf
+        self.duplicate_slots_cf
             .get(slot)
             .expect("fetch from DuplicateSlots column family failed")
-        {
-            true
-        } else {
-            false
-        }
+            .is_some()
     }
 
     pub fn get_orphans(&self, max: Option<usize>) -> Vec<u64> {
@@ -5235,5 +5240,50 @@ pub mod tests {
         // Test the data index doesn't have anything extra
         let num_coding_in_index = index.coding().num_shreds();
         assert_eq!(num_coding_in_index, num_coding);
+    }
+
+    #[test]
+    fn test_duplicate_slot() {
+        let slot = 0;
+        let entries1 = make_slot_entries_with_transactions(1);
+        let entries2 = make_slot_entries_with_transactions(1);
+        let leader_keypair = Arc::new(Keypair::new());
+        let shredder = Shredder::new(slot, 0, 1.0, leader_keypair.clone(), 0, 0)
+            .expect("Failed in creating shredder");
+        let (shreds, _, _) = shredder.entries_to_shreds(&entries1, true, 0);
+        let (duplicate_shreds, _, _) = shredder.entries_to_shreds(&entries2, true, 0);
+        let shred = shreds[0].clone();
+        let duplicate_shred = duplicate_shreds[0].clone();
+        let non_duplicate_shred = shred.clone();
+
+        let blocktree_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            blocktree
+                .insert_shreds(vec![shred.clone()], None, false)
+                .unwrap();
+
+            // No duplicate shreds exist yet
+            assert!(!blocktree.is_duplicate_slot(slot));
+
+            // Check if shreds are duplicated
+            assert!(blocktree.is_shred_duplicate(slot, 0, &duplicate_shred.payload));
+            assert!(!blocktree.is_shred_duplicate(slot, 0, &non_duplicate_shred.payload));
+
+            // Store a duplicate shred
+            blocktree
+                .store_duplicate_slot(slot, shred.payload.clone(), duplicate_shred.payload.clone())
+                .unwrap();
+
+            // Slot is now marked as duplicate
+            assert!(blocktree.is_duplicate_slot(slot));
+
+            // Check ability to fetch the duplicates
+            let duplicate_proof = blocktree.get_duplicate_slot(slot).unwrap();
+            assert_eq!(duplicate_proof.shred1, shred.payload);
+            assert_eq!(duplicate_proof.shred2, duplicate_shred.payload);
+        }
+
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 }
