@@ -305,43 +305,43 @@ impl Blockstore {
         let columns_empty = self
             .db
             .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
-            .unwrap_or_else(|_| false)
+            .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::ShredData>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::ShredCode>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::DeadSlots>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::DuplicateSlots>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::ErasureMeta>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::Orphans>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::Index>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false);
+                .unwrap_or(false);
         if let Err(e) = self.db.write(write_batch) {
             error!(
                 "Error: {:?} while submitting write batch for slot {:?} retrying...",
