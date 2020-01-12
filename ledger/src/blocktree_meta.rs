@@ -37,20 +37,13 @@ pub struct SlotMeta {
 /// Index recording presence/absence of shreds
 pub struct Index {
     pub slot: Slot,
-    data: DataIndex,
-    coding: CodingIndex,
+    data: ShredIndex,
+    coding: ShredIndex,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub struct DataIndex {
-    /// Map representing presence/absence of data shreds
-    index: BTreeSet<u64>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-/// Erasure coding information
-pub struct CodingIndex {
-    /// Map from set index, to hashmap from shred index to presence bool
+pub struct ShredIndex {
+    /// Map representing presence/absence of shreds
     index: BTreeSet<u64>,
 }
 
@@ -78,56 +71,28 @@ impl Index {
     pub(crate) fn new(slot: Slot) -> Self {
         Index {
             slot,
-            data: DataIndex::default(),
-            coding: CodingIndex::default(),
+            data: ShredIndex::default(),
+            coding: ShredIndex::default(),
         }
     }
 
-    pub fn data(&self) -> &DataIndex {
+    pub fn data(&self) -> &ShredIndex {
         &self.data
     }
-    pub fn coding(&self) -> &CodingIndex {
+    pub fn coding(&self) -> &ShredIndex {
         &self.coding
     }
 
-    pub fn data_mut(&mut self) -> &mut DataIndex {
+    pub fn data_mut(&mut self) -> &mut ShredIndex {
         &mut self.data
     }
-    pub fn coding_mut(&mut self) -> &mut CodingIndex {
+    pub fn coding_mut(&mut self) -> &mut ShredIndex {
         &mut self.coding
     }
 }
 
-impl CodingIndex {
-    pub fn num_coding(&self) -> usize {
-        self.index.len()
-    }
-
-    pub fn present_in_bounds(&self, bounds: impl RangeBounds<u64>) -> usize {
-        self.index.range(bounds).count()
-    }
-
-    pub fn is_present(&self, index: u64) -> bool {
-        self.index.contains(&index)
-    }
-
-    pub fn set_present(&mut self, index: u64, presence: bool) {
-        if presence {
-            self.index.insert(index);
-        } else {
-            self.index.remove(&index);
-        }
-    }
-
-    pub fn set_many_present(&mut self, presence: impl IntoIterator<Item = (u64, bool)>) {
-        for (idx, present) in presence.into_iter() {
-            self.set_present(idx, present);
-        }
-    }
-}
-
-impl DataIndex {
-    pub fn num_data(&self) -> usize {
+impl ShredIndex {
+    pub fn num_shreds(&self) -> usize {
         self.index.len()
     }
 
