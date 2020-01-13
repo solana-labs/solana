@@ -278,16 +278,17 @@ Returns identity and transaction information about a confirmed block in the ledg
 #### Parameters:
 
 * `integer` - slot, as u64 integer
+* `string` - (optional) encoding for each returned Transaction, either "json" or "binary". If not provided, the default encoding is JSON.
 
 #### Results:
 
 The result field will be an object with the following fields:
 
-* `blockhash` - the blockhash of this block
-* `previousBlockhash` - the blockhash of this block's parent
+* `blockhash` - the blockhash of this block, as base-58 encoded string
+* `previousBlockhash` - the blockhash of this block's parent, as base-58 encoded string
 * `parentSlot` - the slot index of this block's parent
 * `transactions` - an array of tuples containing:
-  * [Transaction](transaction-api.md) object, in JSON format
+  * [Transaction](transaction-api.md) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
   * Transaction status object, containing:
      * `status` - Transaction status:
        * `"Ok": null` - Transaction was successful

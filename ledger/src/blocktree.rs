@@ -21,7 +21,9 @@ use rayon::{
     ThreadPool,
 };
 use rocksdb::DBRawIterator;
-use solana_client::rpc_request::{RpcConfirmedBlock, RpcTransactionStatus};
+use solana_client::rpc_request::{
+    RpcConfirmedBlock, RpcEncodedTransaction, RpcTransactionEncoding, RpcTransactionStatus,
+};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
@@ -1324,7 +1326,12 @@ impl Blocktree {
             .collect()
     }
 
-    pub fn get_confirmed_block(&self, slot: Slot) -> Result<RpcConfirmedBlock> {
+    pub fn get_confirmed_block(
+        &self,
+        slot: Slot,
+        encoding: Option<RpcTransactionEncoding>,
+    ) -> Result<RpcConfirmedBlock> {
+        let encoding = encoding.unwrap_or(RpcTransactionEncoding::Json);
         if self.is_root(slot) {
             let slot_meta_cf = self.db.column::<cf::SlotMeta>();
             let slot_meta = slot_meta_cf
@@ -1344,13 +1351,18 @@ impl Blocktree {
                     Hash::default()
                 };
 
+                let blockhash = get_last_hash(slot_entries.iter())
+                    .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
+
                 let block = RpcConfirmedBlock {
-                    previous_blockhash,
-                    blockhash: get_last_hash(slot_entries.iter())
-                        .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot)),
+                    previous_blockhash: previous_blockhash.to_string(),
+                    blockhash: blockhash.to_string(),
                     parent_slot: slot_meta.parent_slot,
-                    transactions: self
-                        .map_transactions_to_statuses(slot, slot_transaction_iterator),
+                    transactions: self.map_transactions_to_statuses(
+                        slot,
+                        encoding,
+                        slot_transaction_iterator,
+                    ),
                 };
                 return Ok(block);
             }
@@ -1361,13 +1373,16 @@ impl Blocktree {
     fn map_transactions_to_statuses<'a>(
         &self,
         slot: Slot,
+        encoding: RpcTransactionEncoding,
         iterator: impl Iterator<Item = Transaction> + 'a,
-    ) -> Vec<(Transaction, Option<RpcTransactionStatus>)> {
+    ) -> Vec<(RpcEncodedTransaction, Option<RpcTransactionStatus>)> {
         iterator
             .map(|transaction| {
                 let signature = transaction.signatures[0];
+                let encoded_transaction =
+                    RpcEncodedTransaction::encode(transaction, encoding.clone());
                 (
-                    transaction,
+                    encoded_transaction,
                     self.transaction_status_cf
                         .get((slot, signature))
                         .expect("Expect database get to succeed"),
@@ -4634,31 +4649,52 @@ pub mod tests {
             .collect();
 
         // Even if marked as root, a slot that is empty of entries should return an error
-        let confirmed_block_err = ledger.get_confirmed_block(slot - 1).unwrap_err();
+        let confirmed_block_err = ledger.get_confirmed_block(slot - 1, None).unwrap_err();
         assert_matches!(confirmed_block_err, BlocktreeError::SlotNotRooted);
 
-        let confirmed_block = ledger.get_confirmed_block(slot).unwrap();
+        let confirmed_block = ledger.get_confirmed_block(slot, None).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
-        let mut expected_block = RpcConfirmedBlock::default();
-        expected_block.transactions = expected_transactions.clone();
-        expected_block.parent_slot = slot - 1;
-        expected_block.blockhash = blockhash;
+        let expected_block = RpcConfirmedBlock {
+            transactions: expected_transactions
+                .iter()
+                .cloned()
+                .map(|(tx, status)| {
+                    (
+                        RpcEncodedTransaction::encode(tx, RpcTransactionEncoding::Json),
+                        status,
+                    )
+                })
+                .collect(),
+            parent_slot: slot - 1,
+            blockhash: blockhash.to_string(),
+            previous_blockhash: Hash::default().to_string(),
+        };
         // The previous_blockhash of `expected_block` is default because its parent slot is a
         // root, but empty of entries. This is special handling for snapshot root slots.
         assert_eq!(confirmed_block, expected_block);
 
-        let confirmed_block = ledger.get_confirmed_block(slot + 1).unwrap();
+        let confirmed_block = ledger.get_confirmed_block(slot + 1, None).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
-        let mut expected_block = RpcConfirmedBlock::default();
-        expected_block.transactions = expected_transactions;
-        expected_block.parent_slot = slot;
-        expected_block.previous_blockhash = blockhash;
-        expected_block.blockhash = blockhash;
+        let expected_block = RpcConfirmedBlock {
+            transactions: expected_transactions
+                .iter()
+                .cloned()
+                .map(|(tx, status)| {
+                    (
+                        RpcEncodedTransaction::encode(tx, RpcTransactionEncoding::Json),
+                        status,
+                    )
+                })
+                .collect(),
+            parent_slot: slot,
+            blockhash: blockhash.to_string(),
+            previous_blockhash: blockhash.to_string(),
+        };
         assert_eq!(confirmed_block, expected_block);
 
-        let not_root = ledger.get_confirmed_block(slot + 2).unwrap_err();
+        let not_root = ledger.get_confirmed_block(slot + 2, None).unwrap_err();
         assert_matches!(not_root, BlocktreeError::SlotNotRooted);
 
         drop(ledger);
@@ -4875,7 +4911,11 @@ pub mod tests {
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             ));
 
-            let map = blocktree.map_transactions_to_statuses(slot, transactions.into_iter());
+            let map = blocktree.map_transactions_to_statuses(
+                slot,
+                RpcTransactionEncoding::Json,
+                transactions.into_iter(),
+            );
             assert_eq!(map.len(), 5);
             for x in 0..4 {
                 assert_eq!(map[x].1.as_ref().unwrap().fee, x as u64);
