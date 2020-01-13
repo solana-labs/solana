@@ -81,9 +81,7 @@ fn retransmit(
                 continue;
             }
             if packet.meta.repair {
-                total_packets -= 1;
                 repair_total += 1;
-                continue;
             }
 
             let mut compute_turbine_peers = Measure::start("turbine_start");
@@ -111,7 +109,8 @@ fn retransmit(
             let leader =
                 leader_schedule_cache.slot_leader_at(packet.meta.slot, Some(r_bank.as_ref()));
             let mut retransmit_time = Measure::start("retransmit_to");
-            if !packet.meta.forward {
+            // If I am on the critical path for this packet, send it to everyone
+            if my_index % DATA_PLANE_FANOUT == 0 {
                 ClusterInfo::retransmit_to(&neighbors, packet, leader, sock, true)?;
                 ClusterInfo::retransmit_to(&children, packet, leader, sock, false)?;
             } else {

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
 
-type Nodes = HashMap<Pubkey, (bool, HashSet<i32>, Receiver<(i32, bool)>)>;
+type Nodes = HashMap<Pubkey, (bool, HashSet<i32>, Receiver<i32>)>;
 
 fn num_threads() -> usize {
     sys_info::cpu_num().unwrap_or(10) as usize
@@ -29,11 +29,10 @@ fn find_insert_shred(id: &Pubkey, shred: i32, batches: &mut [Nodes]) {
 
 fn retransmit(
     mut shuffled_nodes: Vec<ContactInfo>,
-    senders: &HashMap<Pubkey, Sender<(i32, bool)>>,
+    senders: &HashMap<Pubkey, Sender<i32>>,
     cluster: &ClusterInfo,
     fanout: usize,
     shred: i32,
-    retransmit: bool,
 ) -> i32 {
     let mut seed = [0; 32];
     let mut my_index = 0;
@@ -48,17 +47,18 @@ fn retransmit(
         }
     });
     seed[0..4].copy_from_slice(&shred.to_le_bytes());
+    let retransmit = my_index % fanout == 0;
     let shuffled_indices = (0..shuffled_nodes.len()).collect();
     let (neighbors, children) = compute_retransmit_peers(fanout, my_index, shuffled_indices);
     children.into_iter().for_each(|i| {
         let s = senders.get(&shuffled_nodes[i].id).unwrap();
-        let _ = s.send((shred, retransmit));
+        let _ = s.send(shred);
     });
 
     if retransmit {
         neighbors.into_iter().for_each(|i| {
             let s = senders.get(&shuffled_nodes[i].id).unwrap();
-            let _ = s.send((shred, false));
+            let _ = s.send(shred);
         });
     }
 
@@ -79,8 +79,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
 
     // setup accounts for all nodes (leader has 0 bal)
     let (s, r) = channel();
-    let senders: Arc<Mutex<HashMap<Pubkey, Sender<(i32, bool)>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    let senders: Arc<Mutex<HashMap<Pubkey, Sender<i32>>>> = Arc::new(Mutex::new(HashMap::new()));
     senders.lock().unwrap().insert(leader_info.id, s);
     let mut batches: Vec<Nodes> = Vec::with_capacity(num_threads);
     (0..num_threads).for_each(|_| batches.push(HashMap::new()));
@@ -159,7 +158,6 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                             &cluster,
                             fanout,
                             *i,
-                            true,
                         );
                     });
                     *layer1_done = true;
@@ -169,7 +167,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                 if recv.len() < shreds_len {
                     loop {
                         match r.try_recv() {
-                            Ok((data, retx)) => {
+                            Ok(data) => {
                                 if recv.insert(data) {
                                     let _ = retransmit(
                                         shuffled_peers[data as usize].clone(),
@@ -177,7 +175,6 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                                         &cluster,
                                         fanout,
                                         data,
-                                        retx,
                                     );
                                 }
                                 if recv.len() == shreds_len {
