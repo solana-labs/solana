@@ -105,7 +105,7 @@ type TransactionCtorFields = {|
  *
  * @typedef {Object} NonceInformation
  * @property {nonce} The current Nonce blockhash
- * @property {nonceInstruction} The NonceAdvance Instruction
+ * @property {nonceInstruction} The AdvanceNonceAccount Instruction
  */
 type NonceInformation = {|
   nonce: Blockhash,

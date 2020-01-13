@@ -67,7 +67,7 @@ export class SystemInstruction extends TransactionInstruction {
     if (
       this.type == SystemInstructionLayout.Create ||
       this.type == SystemInstructionLayout.CreateWithSeed ||
-      this.type == SystemInstructionLayout.NonceWithdraw ||
+      this.type == SystemInstructionLayout.WithdrawNonceAccount ||
       this.type == SystemInstructionLayout.Transfer
     ) {
       return this.keys[0].pubkey;
@@ -83,7 +83,7 @@ export class SystemInstruction extends TransactionInstruction {
     if (
       this.type == SystemInstructionLayout.Create ||
       this.type == SystemInstructionLayout.CreateWithSeed ||
-      this.type == SystemInstructionLayout.NonceWithdraw ||
+      this.type == SystemInstructionLayout.WithdrawNonceAccount ||
       this.type == SystemInstructionLayout.Transfer
     ) {
       return this.keys[1].pubkey;
@@ -100,7 +100,7 @@ export class SystemInstruction extends TransactionInstruction {
     if (
       this.type == SystemInstructionLayout.Create ||
       this.type == SystemInstructionLayout.CreateWithSeed ||
-      this.type == SystemInstructionLayout.NonceWithdraw ||
+      this.type == SystemInstructionLayout.WithdrawNonceAccount ||
       this.type == SystemInstructionLayout.Transfer
     ) {
       return data.lamports;
@@ -147,25 +147,25 @@ const SystemInstructionLayout = Object.freeze({
       Layout.publicKey('programId'),
     ]),
   },
-  NonceAdvance: {
+  AdvanceNonceAccount: {
     index: 4,
     layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
   },
-  NonceWithdraw: {
+  WithdrawNonceAccount: {
     index: 5,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
     ]),
   },
-  NonceInitialize: {
+  InitializeNonceAccount: {
     index: 6,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
       Layout.publicKey('authorized'),
     ]),
   },
-  NonceAuthorize: {
+  AuthorizeNonceAccount: {
     index: 7,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
@@ -305,7 +305,7 @@ export class SystemProgram {
       this.programId,
     );
 
-    const type = SystemInstructionLayout.NonceInitialize;
+    const type = SystemInstructionLayout.InitializeNonceAccount;
     const data = encodeData(type, {
       authorized: authorizedPubkey.toBuffer(),
     });
@@ -332,7 +332,7 @@ export class SystemProgram {
     nonceAccount: PublicKey,
     authorizedPubkey: PublicKey,
   ): TransactionInstruction {
-    const type = SystemInstructionLayout.NonceAdvance;
+    const type = SystemInstructionLayout.AdvanceNonceAccount;
     const data = encodeData(type);
     const instructionData = {
       keys: [
@@ -359,7 +359,7 @@ export class SystemProgram {
     to: PublicKey,
     lamports: number,
   ): Transaction {
-    const type = SystemInstructionLayout.NonceWithdraw;
+    const type = SystemInstructionLayout.WithdrawNonceAccount;
     const data = encodeData(type, {lamports});
 
     return new Transaction().add({
@@ -392,7 +392,7 @@ export class SystemProgram {
     authorizedPubkey: PublicKey,
     newAuthorized: PublicKey,
   ): Transaction {
-    const type = SystemInstructionLayout.NonceAuthorize;
+    const type = SystemInstructionLayout.AuthorizeNonceAccount;
     const data = encodeData(type, {
       newAuthorized: newAuthorized.toBuffer(),
     });
