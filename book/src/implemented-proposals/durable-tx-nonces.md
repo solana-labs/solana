@@ -65,20 +65,20 @@ WithdrawInstruction(to, lamports)
 
 A client wishing to use this feature starts by creating a nonce account under 
 the system program. This account will be in the `Uninitialized` state with no
-stored hash and thus unusable.
+stored hash, and thus unusable.
 
 To initialize a newly created account, a `NonceInitialize` instruction must be
 issued. This instruction takes one parameter, the `Pubkey` of the account's
-[ authority](../offline-signing/durable-nonce.md#nonce-authority). Nonce accounts
+[authority](../offline-signing/durable-nonce.md#nonce-authority). Nonce accounts
 must be [rent-exempt](rent.md#two-tiered-rent-regime) to meet the data-persistence
-requirements of the feature and as such, require that sufficient lamports be
-deposited into the account before it can be initialized. Upon successful
-initialization, the cluster's most recent blockhash is stored along with specified
-nonce authority `Pubkey`.
+requirements of the feature, and as such, require that sufficient lamports be
+deposited before they can be initialized. Upon successful initialization, the
+cluster's most recent blockhash is stored along with specified nonce authority
+`Pubkey`.
 
 The `NonceAdvance` instruction is used to manage the account's stored nonce
-value. It stores the cluster's most recent blockhash with the account's state
-data, failing if that matches the value already stored there. This check prevents
+value. It stores the cluster's most recent blockhash in the account's state data,
+failing if that matches the value already stored there. This check prevents
 replaying transactions within the same block.
 
 Due to nonce accounts' [rent-exempt](rent.md#two-tiered-rent-regime) requirement,
@@ -87,13 +87,13 @@ The `NonceWithdraw` instruction takes a single argument, lamports to withdraw,
 and enforces rent-exemption by preventing the account's balance from falling
 below the rent-exempt minimum. An exception to this check is if the final balance
 would be zero lamports, which makes the account eligible for deletion. This
-account closure detail has an additional requirement that the stored nonce
-value be advanceable as per `NonceAdvance`.
+account closure detail has an additional requirement that the stored nonce value
+must not match the cluster's most recent blockhash, as per `NonceAdvance`.
 
 The account's [nonce authority](../offline-signing/durable-nonce.md#nonce-authority)
 can be changed using the `NonceAuthorize` instruction. It takes one parameter,
 the `Pubkey` of the new authority. Executing this instruction grants full
-control over the account and it's balance to the new authority.
+control over the account and its balance to the new authority.
 
 {% hint style="info" %}
 `NonceAdvance`, `NonceWithdraw` and `NonceAuthorize` all require the current
@@ -108,13 +108,11 @@ an extant `recent_blockhash` on the transaction and prevent fee theft via
 failed transaction replay, runtime modifications are necessary.
 
 Any transaction failing the usual `check_hash_age` validation will be tested
-for a Durable Transaction Nonce. This is signaled by the issuance of a
-`NonceAdvance` instruction as the first in the transaction and specifying the
-nonce account's stored blockhash value in the transaction's `recent_blockhash`
-field.
+for a Durable Transaction Nonce. This is signaled by including a `NonceAdvance`
+instruction as the first instruction in the transaction.
 
-If it is determined that a Durable Transaction Nonce is in use, the runtime
-will take the following additional actions to validate the transaction:
+If the runtime determines that a Durable Transaction Nonce is in use, it will
+take the following additional actions to validate the transaction:
 
   1) The `NonceAccount` specified in the `Nonce` instruction is loaded.
   2) The `NonceState` is deserialized from the `NonceAccount`'s data field and
@@ -126,10 +124,10 @@ If all three of the above checks succeed, the transaction is allowed to continue
 validation.
 
 Since transactions that fail with an `InstructionError` are charged a fee and
-changes to their state rolled back, an opportunity for fee theft is presented
-in the case of durable nonce transactions as the `NonceAdvance` instruction's
-effects are reverted. This leaves a failed transaction free to be replayed and
-fees charged, repeatedly, until the stored nonce is successfully advanced. To
-prevent this behavior, in the event of a durable nonce instruction failing with
-an `InstructionError`, the nonce account is rolled back to its pre-execution
-state, the runtime advances its nonce value and it is stored as if it succeeded.
+changes to their state rolled back, there is an opportunity for fee theft if a
+`NonceAdvance` instruction is reverted. A malicious validator could replay the
+failed transaction until the stored nonce is successfully advanced. Runtime
+changes prevent this behavior. When a durable nonce transaction fails with an
+`InstructionError` aside from the `NonceAdvance` instruction, the nonce account
+is rolled back to its pre-execution state as usual. Then the runtime advances
+its nonce value and the advanced nonce account stored as if it succeeded.
