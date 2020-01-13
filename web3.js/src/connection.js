@@ -437,15 +437,15 @@ const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult('number');
  */
 export const GetConfirmedBlockRpcResult = jsonRpcResult(
   struct({
-    blockhash: struct.list(['number']),
-    previousBlockhash: struct.list(['number']),
+    blockhash: 'string',
+    previousBlockhash: 'string',
     parentSlot: 'number',
     transactions: struct.list([
       struct.tuple([
         struct({
-          signatures: struct.list([struct.list(['number'])]),
+          signatures: struct.list(['string']),
           message: struct({
-            accountKeys: struct.list([struct.list(['number'])]),
+            accountKeys: struct.list(['string']),
             header: struct({
               numRequiredSignatures: 'number',
               numReadonlySignedAccounts: 'number',
@@ -455,17 +455,13 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
               struct.union([
                 struct.list(['number']),
                 struct({
-                  accounts: struct.list([
-                    struct.union([struct.list(['number']), 'number']),
-                  ]),
-                  data: struct.list([
-                    struct.union([struct.list(['number']), 'number']),
-                  ]),
+                  accounts: struct.list(['number']),
+                  data: 'string',
                   programIdIndex: 'number',
                 }),
               ]),
             ]),
-            recentBlockhash: struct.list(['number']),
+            recentBlockhash: 'string',
           }),
         }),
         struct.union([
