@@ -29,7 +29,7 @@ use std::time::Instant;
 use thiserror::Error;
 
 const GRACE_TICKS_FACTOR: u64 = 2;
-const MAX_GRACE_SLOTS: u64 = 3;
+const MAX_GRACE_SLOTS: u64 = 2;
 
 #[derive(Error, Debug, Clone)]
 pub enum PohRecorderError {
@@ -136,6 +136,33 @@ impl PohRecorder {
         self.ticks_per_slot
     }
 
+    fn received_any_previous_leader_data(&self, slot: Slot) -> bool {
+        (slot.saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)..slot).any(|i| {
+            // Check if we have received any data in previous leader's slots
+            if let Ok(slot_meta) = self.blockstore.meta(i as Slot) {
+                if let Some(slot_meta) = slot_meta {
+                    slot_meta.received > 0
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
+    }
+
+    fn reached_leader_tick(&self, leader_first_tick_height: u64) -> bool {
+        let target_tick_height = leader_first_tick_height.saturating_sub(1);
+        let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
+        let current_slot = self.tick_height / self.ticks_per_slot;
+        // we've approached target_tick_height OR poh was reset to run immediately
+        // Or, previous leader didn't transmit in any of its leader slots, so ignore grace ticks
+        self.tick_height >= target_tick_height
+            || self.start_tick_height + self.grace_ticks == leader_first_tick_height
+            || (self.tick_height >= ideal_target_tick_height
+                && !self.received_any_previous_leader_data(current_slot))
+    }
+
     /// returns if leader slot has been reached, how many grace ticks were afforded,
     ///   imputed leader_slot and self.start_slot
     /// reached_leader_slot() == true means "ready for a bank"
@@ -153,10 +180,7 @@ impl PohRecorder {
         let next_leader_slot = (next_tick_height - 1) / self.ticks_per_slot;
         if let Some(leader_first_tick_height) = self.leader_first_tick_height {
             let target_tick_height = leader_first_tick_height.saturating_sub(1);
-            // we've approached target_tick_height OR poh was reset to run immediately
-            if self.tick_height >= target_tick_height
-                || self.start_tick_height + self.grace_ticks == leader_first_tick_height
-            {
+            if self.reached_leader_tick(leader_first_tick_height) {
                 assert!(next_tick_height >= self.start_tick_height);
                 let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
 
@@ -475,7 +499,8 @@ impl PohRecorder {
 mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+    use bincode::serialize;
+    use solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta, get_tmp_ledger_path};
     use solana_perf::test_tx::test_tx;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::hash;
@@ -1095,6 +1120,60 @@ mod tests {
     }
 
     #[test]
+    fn test_reached_leader_tick() {
+        solana_logger::setup();
+
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
+            let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
+            let bank = Arc::new(Bank::new(&genesis_config));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                None,
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
+
+            assert_eq!(poh_recorder.reached_leader_tick(0), true);
+
+            let grace_ticks = bank.ticks_per_slot() * MAX_GRACE_SLOTS;
+            let new_tick_height = NUM_CONSECUTIVE_LEADER_SLOTS * bank.ticks_per_slot();
+            for _ in 0..new_tick_height {
+                poh_recorder.tick();
+            }
+
+            poh_recorder.grace_ticks = grace_ticks;
+            // True, as previous leader did not transmit in its slots
+            assert_eq!(
+                poh_recorder.reached_leader_tick(new_tick_height + grace_ticks),
+                true
+            );
+
+            let mut parent_meta = SlotMeta::default();
+            parent_meta.received = 1;
+            poh_recorder
+                .blockstore
+                .put_meta_bytes(0, &serialize(&parent_meta).unwrap())
+                .unwrap();
+
+            // False, as previous leader transmitted in one of its recent slots
+            // and grace ticks have not expired
+            assert_eq!(
+                poh_recorder.reached_leader_tick(new_tick_height + grace_ticks),
+                false
+            );
+        }
+    }
+
+    #[test]
     fn test_reached_leader_slot() {
         solana_logger::setup();
 
@@ -1139,6 +1218,13 @@ mod tests {
                 poh_recorder.tick_height(),
                 init_ticks + bank.ticks_per_slot()
             );
+
+            let mut parent_meta = SlotMeta::default();
+            parent_meta.received = 1;
+            poh_recorder
+                .blockstore
+                .put_meta_bytes(0, &serialize(&parent_meta).unwrap())
+                .unwrap();
 
             // Test that we don't reach the leader slot because of grace ticks
             assert_eq!(poh_recorder.reached_leader_slot().0, false);
