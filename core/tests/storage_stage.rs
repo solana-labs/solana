@@ -7,9 +7,9 @@ mod tests {
     use solana_core::storage_stage::{test_cluster_info, SLOTS_PER_TURN_TEST};
     use solana_core::storage_stage::{StorageStage, StorageState};
     use solana_ledger::bank_forks::BankForks;
-    use solana_ledger::blocktree_processor;
+    use solana_ledger::blockstore_processor;
     use solana_ledger::entry;
-    use solana_ledger::{blocktree::Blocktree, create_new_tmp_ledger};
+    use solana_ledger::{blockstore::Blockstore, create_new_tmp_ledger};
     use solana_runtime::bank::Bank;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::Hash;
@@ -44,7 +44,7 @@ mod tests {
             .push(solana_storage_program::solana_storage_program!());
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
         let bank = Bank::new(&genesis_config);
         let bank = Arc::new(bank);
@@ -63,7 +63,7 @@ mod tests {
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,
-            Some(blocktree.clone()),
+            Some(blockstore.clone()),
             &keypair,
             &storage_keypair,
             &exit.clone(),
@@ -109,7 +109,7 @@ mod tests {
 
         let next_bank = Arc::new(Bank::new_from_parent(&bank, &keypair.pubkey(), 2));
         //register ticks so the program reports a different segment
-        blocktree_processor::process_entries(
+        blockstore_processor::process_entries(
             &next_bank,
             &entry::create_ticks(
                 DEFAULT_TICKS_PER_SLOT * next_bank.slots_per_segment() + 1,
@@ -164,7 +164,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let slot = 1;
         let bank = Arc::new(Bank::new(&genesis_config));
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
@@ -182,7 +182,7 @@ mod tests {
         let storage_stage = StorageStage::new(
             &storage_state,
             bank_receiver,
-            Some(blocktree.clone()),
+            Some(blockstore.clone()),
             &keypair,
             &storage_keypair,
             &exit.clone(),
@@ -203,7 +203,7 @@ mod tests {
         let rooted_banks = (slot..slot + last_bank.slots_per_segment() + 1)
             .map(|i| {
                 let bank = Arc::new(Bank::new_from_parent(&last_bank, &keypair.pubkey(), i));
-                blocktree_processor::process_entries(
+                blockstore_processor::process_entries(
                     &bank,
                     &entry::create_ticks(64, 0, bank.last_blockhash()),
                     true,

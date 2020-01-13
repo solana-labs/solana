@@ -26,17 +26,17 @@ impl BroadcastFakeShredsRun {
 impl BroadcastRun for BroadcastFakeShredsRun {
     fn run(
         &mut self,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<TransmitShreds>,
-        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
+        blockstore_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 
-        let next_shred_index = blocktree
+        let next_shred_index = blockstore
             .meta(bank.slot())
             .expect("Database error")
             .map(|meta| meta.consumed)
@@ -83,7 +83,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         }
 
         let data_shreds = Arc::new(data_shreds);
-        blocktree_sender.send(data_shreds.clone())?;
+        blockstore_sender.send(data_shreds.clone())?;
 
         // 3) Start broadcast step
         //some indicates fake shreds
@@ -121,10 +121,10 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     fn record(
         &self,
         receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         for data_shreds in receiver.lock().unwrap().iter() {
-            blocktree.insert_shreds(data_shreds.to_vec(), None, true)?;
+            blockstore.insert_shreds(data_shreds.to_vec(), None, true)?;
         }
         Ok(())
     }

@@ -1,24 +1,24 @@
-use crate::blocktree_db::Result;
-use crate::{blocktree::*, blocktree_meta::SlotMeta};
+use crate::blockstore_db::Result;
+use crate::{blockstore::*, blockstore_meta::SlotMeta};
 use log::*;
 use solana_sdk::clock::Slot;
 
 pub struct RootedSlotIterator<'a> {
     next_slots: Vec<Slot>,
     prev_root: Slot,
-    blocktree: &'a Blocktree,
+    blockstore: &'a Blockstore,
 }
 
 impl<'a> RootedSlotIterator<'a> {
-    pub fn new(start_slot: Slot, blocktree: &'a Blocktree) -> Result<Self> {
-        if blocktree.is_root(start_slot) {
+    pub fn new(start_slot: Slot, blockstore: &'a Blockstore) -> Result<Self> {
+        if blockstore.is_root(start_slot) {
             Ok(Self {
                 next_slots: vec![start_slot],
                 prev_root: start_slot,
-                blocktree,
+                blockstore,
             })
         } else {
-            Err(BlocktreeError::SlotNotRooted)
+            Err(BlockstoreError::SlotNotRooted)
         }
     }
 }
@@ -31,11 +31,11 @@ impl<'a> Iterator for RootedSlotIterator<'a> {
         let (rooted_slot, slot_skipped) = self
             .next_slots
             .iter()
-            .find(|x| self.blocktree.is_root(**x))
+            .find(|x| self.blockstore.is_root(**x))
             .map(|x| (Some(*x), false))
             .unwrap_or_else(|| {
                 let mut iter = self
-                    .blocktree
+                    .blockstore
                     .rooted_slot_iterator(
                         // First iteration the root always exists as guaranteed by the constructor,
                         // so this unwrap_or_else cases won't be hit. Every subsequent iteration
@@ -49,7 +49,7 @@ impl<'a> Iterator for RootedSlotIterator<'a> {
 
         let slot_meta = rooted_slot
             .map(|r| {
-                self.blocktree
+                self.blockstore
                     .meta(r)
                     .expect("Database failure, couldnt fetch SlotMeta")
             })
@@ -77,17 +77,17 @@ impl<'a> Iterator for RootedSlotIterator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree_processor::fill_blocktree_slot_with_ticks;
+    use crate::blockstore_processor::fill_blockstore_slot_with_ticks;
     use solana_sdk::hash::Hash;
 
     #[test]
     fn test_rooted_slot_iterator() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        blocktree.set_roots(&[0]).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        blockstore.set_roots(&[0]).unwrap();
         let ticks_per_slot = 5;
         /*
-            Build a blocktree in the ledger with the following fork structure:
+            Build a blockstore in the ledger with the following fork structure:
 
                  slot 0
                    |
@@ -113,8 +113,8 @@ mod tests {
                     slot - 1
                 }
             };
-            let last_entry_hash = fill_blocktree_slot_with_ticks(
-                &blocktree,
+            let last_entry_hash = fill_blockstore_slot_with_ticks(
+                &blockstore,
                 ticks_per_slot,
                 slot,
                 parent,
@@ -128,16 +128,16 @@ mod tests {
 
         // Fork 2, ending at slot 4
         let _ =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 4, fork_point, fork_hash);
+            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 4, fork_point, fork_hash);
 
         // Set a root
-        blocktree.set_roots(&[1, 2, 3]).unwrap();
+        blockstore.set_roots(&[1, 2, 3]).unwrap();
 
         // Trying to get an iterator on a different fork will error
-        assert!(RootedSlotIterator::new(4, &blocktree).is_err());
+        assert!(RootedSlotIterator::new(4, &blockstore).is_err());
 
         // Trying to get an iterator on any slot on the root fork should succeed
-        let result: Vec<_> = RootedSlotIterator::new(3, &blocktree)
+        let result: Vec<_> = RootedSlotIterator::new(3, &blockstore)
             .unwrap()
             .into_iter()
             .map(|(slot, _)| slot)
@@ -145,7 +145,7 @@ mod tests {
         let expected = vec![3];
         assert_eq!(result, expected);
 
-        let result: Vec<_> = RootedSlotIterator::new(0, &blocktree)
+        let result: Vec<_> = RootedSlotIterator::new(0, &blockstore)
             .unwrap()
             .into_iter()
             .map(|(slot, _)| slot)
@@ -153,17 +153,17 @@ mod tests {
         let expected = vec![0, 1, 2, 3];
         assert_eq!(result, expected);
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_skipping_rooted_slot_iterator() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let ticks_per_slot = 5;
         /*
-            Build a blocktree in the ledger with the following fork structure:
+            Build a blockstore in the ledger with the following fork structure:
                  slot 0
                    |
                  slot 1
@@ -188,8 +188,8 @@ mod tests {
                     slot - 1
                 }
             };
-            fill_blocktree_slot_with_ticks(
-                &blocktree,
+            fill_blockstore_slot_with_ticks(
+                &blockstore,
                 ticks_per_slot,
                 slot,
                 parent,
@@ -198,14 +198,14 @@ mod tests {
         }
 
         // Set roots
-        blocktree.set_roots(&[0, 1, 2, 3]).unwrap();
+        blockstore.set_roots(&[0, 1, 2, 3]).unwrap();
 
         // Create one post-skip slot at 10, simulating starting from a snapshot
         // at 10
-        blocktree.set_roots(&[10]).unwrap();
+        blockstore.set_roots(&[10]).unwrap();
         // Try to get an iterator from before the skip. The post-skip slot
         // should not return a SlotMeta
-        let result: Vec<_> = RootedSlotIterator::new(3, &blocktree)
+        let result: Vec<_> = RootedSlotIterator::new(3, &blockstore)
             .unwrap()
             .into_iter()
             .map(|(slot, meta)| (slot, meta.is_some()))
@@ -214,12 +214,12 @@ mod tests {
         assert_eq!(result, expected);
 
         // Create one more post-skip slot at 11 with parent equal to 10
-        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 11, 10, Hash::default());
+        fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 11, 10, Hash::default());
 
         // Set roots
-        blocktree.set_roots(&[11]).unwrap();
+        blockstore.set_roots(&[11]).unwrap();
 
-        let result: Vec<_> = RootedSlotIterator::new(0, &blocktree)
+        let result: Vec<_> = RootedSlotIterator::new(0, &blockstore)
             .unwrap()
             .into_iter()
             .map(|(slot, meta)| (slot, meta.is_some()))
@@ -234,7 +234,7 @@ mod tests {
         ];
         assert_eq!(result, expected);
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }

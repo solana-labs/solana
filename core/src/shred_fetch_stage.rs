@@ -2,6 +2,11 @@
 
 use crate::packet::{Packet, PacketsRecycler};
 use crate::streamer::{self, PacketReceiver, PacketSender};
+<<<<<<< HEAD
+=======
+use solana_ledger::blockstore::MAX_DATA_SHREDS_PER_SLOT;
+use solana_ledger::shred::{OFFSET_OF_SHRED_INDEX, SIZE_OF_SHRED_INDEX};
+>>>>>>> b5dba7705... Rename blocktree to blockstore (#7757)
 use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::recycler::Recycler;
 use std::net::UdpSocket;

@@ -21,7 +21,6 @@ We unwrap the many abstraction layers and build a single pipeline that can toggl
   should forward transactions to the next leader.
 
 * Hoist FetchStage and BroadcastStage out of TPU
-* Blocktree renamed to Blockstore
 * BankForks renamed to Banktree
 * TPU moves to new socket-free crate called solana-tpu.
 * TPU's BankingStage absorbs ReplayStage

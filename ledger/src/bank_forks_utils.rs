@@ -1,7 +1,7 @@
 use crate::{
     bank_forks::{BankForks, SnapshotConfig},
-    blocktree::Blocktree,
-    blocktree_processor::{self, BankForksInfo, BlocktreeProcessorError, ProcessOptions},
+    blockstore::Blockstore,
+    blockstore_processor::{self, BankForksInfo, BlockstoreProcessorError, ProcessOptions},
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_utils,
 };
@@ -11,11 +11,11 @@ use std::{fs, path::PathBuf, sync::Arc};
 
 pub fn load(
     genesis_config: &GenesisConfig,
-    blocktree: &Blocktree,
+    blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
-) -> Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
+) -> Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError> {
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
             "Initializing snapshot path: {:?}",
@@ -42,9 +42,9 @@ pub fn load(
             )
             .expect("Load from snapshot failed");
 
-            return blocktree_processor::process_blocktree_from_root(
+            return blockstore_processor::process_blockstore_from_root(
                 genesis_config,
-                blocktree,
+                blockstore,
                 Arc::new(deserialized_bank),
                 &process_options,
             );
@@ -56,9 +56,9 @@ pub fn load(
     }
 
     info!("Processing ledger from genesis");
-    blocktree_processor::process_blocktree(
+    blockstore_processor::process_blockstore(
         &genesis_config,
-        &blocktree,
+        &blockstore,
         account_paths,
         process_options,
     )

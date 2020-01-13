@@ -30,7 +30,7 @@ use bincode::{serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
 use rand::{thread_rng, Rng};
-use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree, staking_utils};
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore, staking_utils};
 use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
 use solana_net_utils::{
@@ -1113,12 +1113,12 @@ impl ClusterInfo {
     }
 
     fn get_data_shred_as_packet(
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         slot: Slot,
         shred_index: u64,
         dest: &SocketAddr,
     ) -> Result<Option<Packet>> {
-        let data = blocktree.get_data_shred(slot, shred_index)?;
+        let data = blockstore.get_data_shred(slot, shred_index)?;
         Ok(data.map(|data| {
             let mut packet = Packet::default();
             packet.meta.size = data.len();
@@ -1132,14 +1132,14 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         from: &ContactInfo,
         from_addr: &SocketAddr,
-        blocktree: Option<&Arc<Blocktree>>,
+        blockstore: Option<&Arc<Blockstore>>,
         me: &ContactInfo,
         slot: Slot,
         shred_index: u64,
     ) -> Option<Packets> {
-        if let Some(blocktree) = blocktree {
+        if let Some(blockstore) = blockstore {
             // Try to find the requested index in one of the slots
-            let packet = Self::get_data_shred_as_packet(blocktree, slot, shred_index, from_addr);
+            let packet = Self::get_data_shred_as_packet(blockstore, slot, shred_index, from_addr);
 
             if let Ok(Some(packet)) = packet {
                 inc_new_counter_debug!("cluster_info-window-request-ledger", 1);
@@ -1166,17 +1166,17 @@ impl ClusterInfo {
     fn run_highest_window_request(
         recycler: &PacketsRecycler,
         from_addr: &SocketAddr,
-        blocktree: Option<&Arc<Blocktree>>,
+        blockstore: Option<&Arc<Blockstore>>,
         slot: Slot,
         highest_index: u64,
     ) -> Option<Packets> {
-        let blocktree = blocktree?;
+        let blockstore = blockstore?;
         // Try to find the requested index in one of the slots
-        let meta = blocktree.meta(slot).ok()??;
+        let meta = blockstore.meta(slot).ok()??;
         if meta.received > highest_index {
             // meta.received must be at least 1 by this point
             let packet =
-                Self::get_data_shred_as_packet(blocktree, slot, meta.received - 1, from_addr)
+                Self::get_data_shred_as_packet(blockstore, slot, meta.received - 1, from_addr)
                     .ok()??;
             return Some(Packets::new_with_recycler_data(
                 recycler,
@@ -1190,19 +1190,19 @@ impl ClusterInfo {
     fn run_orphan(
         recycler: &PacketsRecycler,
         from_addr: &SocketAddr,
-        blocktree: Option<&Arc<Blocktree>>,
+        blockstore: Option<&Arc<Blockstore>>,
         mut slot: Slot,
         max_responses: usize,
     ) -> Option<Packets> {
         let mut res = Packets::new_with_recycler(recycler.clone(), 64, "run_orphan");
-        if let Some(blocktree) = blocktree {
+        if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
-            while let Ok(Some(meta)) = blocktree.meta(slot) {
+            while let Ok(Some(meta)) = blockstore.meta(slot) {
                 if meta.received == 0 {
                     break;
                 }
                 let packet =
-                    Self::get_data_shred_as_packet(blocktree, slot, meta.received - 1, from_addr);
+                    Self::get_data_shred_as_packet(blockstore, slot, meta.received - 1, from_addr);
                 if let Ok(Some(packet)) = packet {
                     res.packets.push(packet);
                 }
@@ -1222,7 +1222,7 @@ impl ClusterInfo {
     fn handle_packets(
         me: &Arc<RwLock<Self>>,
         recycler: &PacketsRecycler,
-        blocktree: Option<&Arc<Blocktree>>,
+        blockstore: Option<&Arc<Blockstore>>,
         stakes: &HashMap<Pubkey, u64>,
         packets: Packets,
         response_sender: &PacketSender,
@@ -1330,7 +1330,8 @@ impl ClusterInfo {
                         );
                     }
                     _ => {
-                        let rsp = Self::handle_repair(me, recycler, &from_addr, blocktree, request);
+                        let rsp =
+                            Self::handle_repair(me, recycler, &from_addr, blockstore, request);
                         if let Some(rsp) = rsp {
                             let _ignore_disconnect = response_sender.send(rsp);
                         }
@@ -1475,7 +1476,7 @@ impl ClusterInfo {
         me: &Arc<RwLock<Self>>,
         recycler: &PacketsRecycler,
         from_addr: &SocketAddr,
-        blocktree: Option<&Arc<Blocktree>>,
+        blockstore: Option<&Arc<Blockstore>>,
         request: Protocol,
     ) -> Option<Packets> {
         let now = Instant::now();
@@ -1511,7 +1512,7 @@ impl ClusterInfo {
                             recycler,
                             from,
                             &from_addr,
-                            blocktree,
+                            blockstore,
                             &my_info,
                             *slot,
                             *shred_index,
@@ -1526,7 +1527,7 @@ impl ClusterInfo {
                         Self::run_highest_window_request(
                             recycler,
                             &from_addr,
-                            blocktree,
+                            blockstore,
                             *slot,
                             *highest_index,
                         ),
@@ -1539,7 +1540,7 @@ impl ClusterInfo {
                         Self::run_orphan(
                             recycler,
                             &from_addr,
-                            blocktree,
+                            blockstore,
                             *slot,
                             MAX_ORPHAN_REPAIR_RESPONSES,
                         ),
@@ -1559,7 +1560,7 @@ impl ClusterInfo {
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
         recycler: &PacketsRecycler,
-        blocktree: Option<&Arc<Blocktree>>,
+        blockstore: Option<&Arc<Blockstore>>,
         bank_forks: Option<&Arc<RwLock<BankForks>>>,
         requests_receiver: &PacketReceiver,
         response_sender: &PacketSender,
@@ -1574,12 +1575,12 @@ impl ClusterInfo {
             None => HashMap::new(),
         };
 
-        Self::handle_packets(obj, &recycler, blocktree, &stakes, reqs, response_sender);
+        Self::handle_packets(obj, &recycler, blockstore, &stakes, reqs, response_sender);
         Ok(())
     }
     pub fn listen(
         me: Arc<RwLock<Self>>,
-        blocktree: Option<Arc<Blocktree>>,
+        blockstore: Option<Arc<Blockstore>>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         requests_receiver: PacketReceiver,
         response_sender: PacketSender,
@@ -1593,7 +1594,7 @@ impl ClusterInfo {
                 let e = Self::run_listen(
                     &me,
                     &recycler,
-                    blocktree.as_ref(),
+                    blockstore.as_ref(),
                     bank_forks.as_ref(),
                     &requests_receiver,
                     &response_sender,
@@ -1916,9 +1917,9 @@ mod tests {
     use crate::repair_service::RepairType;
     use crate::result::Error;
     use rayon::prelude::*;
-    use solana_ledger::blocktree::make_many_slot_entries;
-    use solana_ledger::blocktree::Blocktree;
-    use solana_ledger::blocktree_processor::fill_blocktree_slot_with_ticks;
+    use solana_ledger::blockstore::make_many_slot_entries;
+    use solana_ledger::blockstore::Blockstore;
+    use solana_ledger::blockstore_processor::fill_blockstore_slot_with_ticks;
     use solana_ledger::get_tmp_ledger_path;
     use solana_ledger::shred::{
         max_ticks_per_n_shreds, CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader,
@@ -2062,7 +2063,7 @@ mod tests {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
             let me = ContactInfo::new(
                 &Pubkey::new_rand(),
                 socketaddr!("127.0.0.1:1234"),
@@ -2080,7 +2081,7 @@ mod tests {
                 &recycler,
                 &me,
                 &socketaddr_any!(),
-                Some(&blocktree),
+                Some(&blockstore),
                 &me,
                 0,
                 0,
@@ -2097,7 +2098,7 @@ mod tests {
                 CodingShredHeader::default(),
             );
 
-            blocktree
+            blockstore
                 .insert_shreds(vec![shred_info], None, false)
                 .expect("Expect successful ledger write");
 
@@ -2105,7 +2106,7 @@ mod tests {
                 &recycler,
                 &me,
                 &socketaddr_any!(),
-                Some(&blocktree),
+                Some(&blockstore),
                 &me,
                 2,
                 1,
@@ -2121,7 +2122,7 @@ mod tests {
             assert_eq!(rv[0].slot(), 2);
         }
 
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     /// test run_window_requestwindow requests respond with the right shred, and do not overrun
@@ -2131,18 +2132,18 @@ mod tests {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
             let rv = ClusterInfo::run_highest_window_request(
                 &recycler,
                 &socketaddr_any!(),
-                Some(&blocktree),
+                Some(&blockstore),
                 0,
                 0,
             );
             assert!(rv.is_none());
 
-            let _ = fill_blocktree_slot_with_ticks(
-                &blocktree,
+            let _ = fill_blockstore_slot_with_ticks(
+                &blockstore,
                 max_ticks_per_n_shreds(1) + 1,
                 2,
                 1,
@@ -2152,7 +2153,7 @@ mod tests {
             let rv = ClusterInfo::run_highest_window_request(
                 &recycler,
                 &socketaddr_any!(),
-                Some(&blocktree),
+                Some(&blockstore),
                 2,
                 1,
             );
@@ -2163,21 +2164,21 @@ mod tests {
                 .filter_map(|b| Shred::new_from_serialized_shred(b.data.to_vec()).ok())
                 .collect();
             assert!(!rv.is_empty());
-            let index = blocktree.meta(2).unwrap().unwrap().received - 1;
+            let index = blockstore.meta(2).unwrap().unwrap().received - 1;
             assert_eq!(rv[0].index(), index as u32);
             assert_eq!(rv[0].slot(), 2);
 
             let rv = ClusterInfo::run_highest_window_request(
                 &recycler,
                 &socketaddr_any!(),
-                Some(&blocktree),
+                Some(&blockstore),
                 2,
                 index + 1,
             );
             assert!(rv.is_none());
         }
 
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -2186,25 +2187,27 @@ mod tests {
         let recycler = PacketsRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
-            let rv = ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blocktree), 2, 0);
+            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+            let rv =
+                ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 2, 0);
             assert!(rv.is_none());
 
             // Create slots 1, 2, 3 with 5 shreds apiece
             let (shreds, _) = make_many_slot_entries(1, 3, 5);
 
-            blocktree
+            blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset
-            let rv = ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blocktree), 4, 5);
+            let rv =
+                ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 4, 5);
             assert!(rv.is_none());
 
             // For slot 3, we should return the highest shreds from slots 3, 2, 1 respectively
             // for this request
             let rv: Vec<_> =
-                ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blocktree), 3, 5)
+                ClusterInfo::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 3, 5)
                     .expect("run_orphan packets")
                     .packets
                     .iter()
@@ -2213,9 +2216,9 @@ mod tests {
             let expected: Vec<_> = (1..=3)
                 .rev()
                 .map(|slot| {
-                    let index = blocktree.meta(slot).unwrap().unwrap().received - 1;
+                    let index = blockstore.meta(slot).unwrap().unwrap().received - 1;
                     ClusterInfo::get_data_shred_as_packet(
-                        &blocktree,
+                        &blockstore,
                         slot,
                         index,
                         &socketaddr_any!(),
@@ -2227,7 +2230,7 @@ mod tests {
             assert_eq!(rv, expected)
         }
 
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     fn assert_in_range(x: u16, range: (u16, u16)) {

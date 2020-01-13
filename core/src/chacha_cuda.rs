@@ -1,7 +1,7 @@
 // Module used by validators to approve storage mining proofs in parallel using the GPU
 
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
-use solana_ledger::blocktree::Blocktree;
+use solana_ledger::blockstore::Blockstore;
 use solana_perf::perf_libs;
 use solana_sdk::hash::Hash;
 use std::io;
@@ -13,7 +13,7 @@ use std::sync::Arc;
 // Then sample each block at the offsets provided by samples argument with sha256
 // and return the vec of sha states
 pub fn chacha_cbc_encrypt_file_many_keys(
-    blocktree: &Arc<Blocktree>,
+    blockstore: &Arc<Blockstore>,
     segment: u64,
     slots_per_segment: u64,
     ivecs: &mut [u8],
@@ -46,7 +46,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         (api.chacha_init_sha_state)(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match blocktree.get_data_shreds(current_slot, start_index, std::u64::MAX, &mut buffer) {
+        match blockstore.get_data_shreds(current_slot, start_index, std::u64::MAX, &mut buffer) {
             Ok((last_index, mut size)) => {
                 debug!(
                     "chacha_cuda: encrypting segment: {} num_shreds: {} data_len: {}",
@@ -134,9 +134,9 @@ mod tests {
         let entries = create_ticks(slots_per_segment, 0, Hash::default());
         let ledger_path = get_tmp_ledger_path!();
         let ticks_per_slot = 16;
-        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
-        blocktree
+        blockstore
             .write_entries(
                 0,
                 0,
@@ -160,7 +160,7 @@ mod tests {
 
         let mut cpu_iv = ivecs.clone();
         chacha_cbc_encrypt_ledger(
-            &blocktree,
+            &blockstore,
             0,
             slots_per_segment as u64,
             out_path,
@@ -171,7 +171,7 @@ mod tests {
         let ref_hash = sample_file(&out_path, &samples).unwrap();
 
         let hashes = chacha_cbc_encrypt_file_many_keys(
-            &blocktree,
+            &blockstore,
             0,
             slots_per_segment as u64,
             &mut ivecs,
@@ -196,8 +196,8 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let ticks_per_slot = 90;
         let entries = create_ticks(2 * ticks_per_slot, 0, Hash::default());
-        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
-        blocktree
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        blockstore
             .write_entries(
                 0,
                 0,
@@ -224,7 +224,7 @@ mod tests {
             ivec[0] = i;
             ivecs.extend(ivec.clone().iter());
             chacha_cbc_encrypt_ledger(
-                &blocktree.clone(),
+                &blockstore.clone(),
                 0,
                 DEFAULT_SLOTS_PER_SEGMENT,
                 out_path,
@@ -242,7 +242,7 @@ mod tests {
         }
 
         let hashes = chacha_cbc_encrypt_file_many_keys(
-            &blocktree,
+            &blockstore,
             0,
             DEFAULT_SLOTS_PER_SEGMENT,
             &mut ivecs,
@@ -267,9 +267,9 @@ mod tests {
         let mut keys = hex!("abc123");
         let ledger_path = get_tmp_ledger_path!();
         let samples = [0];
-        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         assert!(chacha_cbc_encrypt_file_many_keys(
-            &blocktree,
+            &blockstore,
             0,
             DEFAULT_SLOTS_PER_SEGMENT,
             &mut keys,
