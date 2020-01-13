@@ -67,11 +67,11 @@ pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 /// The maximum size of a bloom filter
-pub const MAX_BLOOM_SIZE: usize = 1030;
+pub const MAX_BLOOM_SIZE: usize = 1028;
 /// The maximum size of a protocol payload
 const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64 - MAX_PROTOCOL_HEADER_SIZE;
 /// The largest protocol header size
-const MAX_PROTOCOL_HEADER_SIZE: u64 = 202;
+const MAX_PROTOCOL_HEADER_SIZE: u64 = 204;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -272,7 +272,7 @@ impl ClusterInfo {
 
                 let ip_addr = node.gossip.ip();
                 format!(
-                    "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5} | {:5}| {:5} | {:5}| {:5} | {:5}| {:5}\n",
+                    "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5} | {:5}| {:5} | {:5}| {:5} | {:5}| {:5}| v{}\n",
                     if ContactInfo::is_valid_address(&node.gossip) {
                         ip_addr.to_string()
                     } else {
@@ -290,15 +290,16 @@ impl ClusterInfo {
                     addr_to_string(&ip_addr, &node.storage_addr),
                     addr_to_string(&ip_addr, &node.rpc),
                     addr_to_string(&ip_addr, &node.rpc_pubsub),
+                    node.shred_version,
                 )
             })
             .collect();
 
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
-             |Gossip| TPU  |TPU fwd| TVU  |TVU fwd|Repair|Storage| RPC  |PubSub\n\
+             |Gossip| TPU  |TPU fwd| TVU  |TVU fwd|Repair|Storage| RPC  |PubSub|ShredVer\n\
              ------------------+-------+----------------------------------------------+\
-             ------+------+-------+------+-------+------+-------+------+------\n\
+             ------+------+-------+------+-------+------+-------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
@@ -405,13 +406,13 @@ impl ClusterInfo {
     }
 
     pub fn rpc_peers(&self) -> Vec<ContactInfo> {
-        let me = self.my_data().id;
+        let me = self.my_data();
         self.gossip
             .crds
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me)
+            .filter(|x| x.id != me.id)
             .filter(|x| ContactInfo::is_valid_address(&x.rpc))
             .cloned()
             .collect()
@@ -446,7 +447,7 @@ impl ClusterInfo {
 
     /// all validators that have a valid tvu port.
     pub fn tvu_peers(&self) -> Vec<ContactInfo> {
-        let me = self.my_data().id;
+        let me = self.my_data();
         self.gossip
             .crds
             .table
@@ -454,34 +455,34 @@ impl ClusterInfo {
             .filter_map(|x| x.value.contact_info())
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
             .filter(|x| !ClusterInfo::is_archiver(x))
-            .filter(|x| x.id != me)
+            .filter(|x| x.id != me.id)
             .cloned()
             .collect()
     }
 
     /// all peers that have a valid storage addr
     pub fn storage_peers(&self) -> Vec<ContactInfo> {
-        let me = self.my_data().id;
+        let me = self.my_data();
         self.gossip
             .crds
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| ContactInfo::is_valid_address(&x.storage_addr))
-            .filter(|x| x.id != me)
+            .filter(|x| x.id != me.id)
             .cloned()
             .collect()
     }
 
     /// all peers that have a valid tvu
     pub fn retransmit_peers(&self) -> Vec<ContactInfo> {
-        let me = self.my_data().id;
+        let me = self.my_data();
         self.gossip
             .crds
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me)
+            .filter(|x| x.id != me.id)
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
             .filter(|x| ContactInfo::is_valid_address(&x.tvu_forwards))
             .cloned()
@@ -490,10 +491,10 @@ impl ClusterInfo {
 
     /// all tvu peers with valid gossip addrs that likely have the slot being requested
     fn repair_peers(&self, slot: Slot) -> Vec<ContactInfo> {
-        let me = self.my_data().id;
+        let me = self.my_data();
         ClusterInfo::tvu_peers(self)
             .into_iter()
-            .filter(|x| x.id != me)
+            .filter(|x| x.id != me.id)
             .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .filter(|x| {
                 self.get_epoch_state_for_node(&x.id, None)
@@ -2575,7 +2576,7 @@ mod tests {
 
     #[test]
     fn test_split_messages_packet_size() {
-        // Test that if a value is smaller than payload size but too large to be wrappe in a vec
+        // Test that if a value is smaller than payload size but too large to be wrapped in a vec
         // that it is still dropped
         let payload: Vec<CrdsValue> = vec![];
         let vec_size = serialized_size(&payload).unwrap();
@@ -2589,7 +2590,7 @@ mod tests {
         }));
 
         let mut i = 0;
-        while value.size() < desired_size {
+        while value.size() <= desired_size {
             let slots = (0..i).collect::<BTreeSet<_>>();
             if slots.len() > 200 {
                 panic!(
