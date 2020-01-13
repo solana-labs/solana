@@ -147,7 +147,7 @@ pub fn create_account(
     program_id: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_pubkey, true),
+        AccountMeta::new(*from_pubkey, lamports != 0), // no signature required if no transfer
         AccountMeta::new(*to_pubkey, true),
     ];
     Instruction::new(
@@ -173,7 +173,7 @@ pub fn create_account_with_seed(
     program_id: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_pubkey, true),
+        AccountMeta::new(*from_pubkey, lamports != 0),
         AccountMeta::new(*to_pubkey, false),
     ]
     .with_signer(base);
