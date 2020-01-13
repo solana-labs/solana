@@ -1660,7 +1660,7 @@ impl Blockstore {
             .unwrap_or(false)
     }
 
-    pub fn is_duplicate_slot(&self, slot: Slot) -> bool {
+    pub fn has_duplicate_shreds_in_slot(&self, slot: Slot) -> bool {
         self.duplicate_slots_cf
             .get(slot)
             .expect("fetch from DuplicateSlots column family failed")
@@ -2459,7 +2459,7 @@ pub mod tests {
                 .next()
                 .map(|(slot, _)| slot >= min_slot)
                 .unwrap_or(true)
-            & blocktree
+            & blockstore
                 .db
                 .iter::<cf::ErasureMeta>(IteratorMode::Start)
                 .unwrap()
@@ -5256,34 +5256,34 @@ pub mod tests {
         let duplicate_shred = duplicate_shreds[0].clone();
         let non_duplicate_shred = shred.clone();
 
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            blocktree
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            blockstore
                 .insert_shreds(vec![shred.clone()], None, false)
                 .unwrap();
 
             // No duplicate shreds exist yet
-            assert!(!blocktree.is_duplicate_slot(slot));
+            assert!(!blockstore.has_duplicate_shreds_in_slot(slot));
 
             // Check if shreds are duplicated
-            assert!(blocktree.is_shred_duplicate(slot, 0, &duplicate_shred.payload));
-            assert!(!blocktree.is_shred_duplicate(slot, 0, &non_duplicate_shred.payload));
+            assert!(blockstore.is_shred_duplicate(slot, 0, &duplicate_shred.payload));
+            assert!(!blockstore.is_shred_duplicate(slot, 0, &non_duplicate_shred.payload));
 
             // Store a duplicate shred
-            blocktree
+            blockstore
                 .store_duplicate_slot(slot, shred.payload.clone(), duplicate_shred.payload.clone())
                 .unwrap();
 
             // Slot is now marked as duplicate
-            assert!(blocktree.is_duplicate_slot(slot));
+            assert!(blockstore.has_duplicate_shreds_in_slot(slot));
 
             // Check ability to fetch the duplicates
-            let duplicate_proof = blocktree.get_duplicate_slot(slot).unwrap();
+            let duplicate_proof = blockstore.get_duplicate_slot(slot).unwrap();
             assert_eq!(duplicate_proof.shred1, shred.payload);
             assert_eq!(duplicate_proof.shred2, duplicate_shred.payload);
         }
 
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }

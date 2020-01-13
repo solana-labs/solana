@@ -394,7 +394,9 @@ fn graph_forks(
     dot.join("\n")
 }
 
-fn analyze_column<T: solana_ledger::blockstore_db::Column>(
+fn analyze_column<
+    T: solana_ledger::blockstore_db::Column + solana_ledger::blockstore_db::ColumnName,
+>(
     db: &Database,
     name: &str,
     key_size: usize,
