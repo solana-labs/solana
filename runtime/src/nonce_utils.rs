@@ -24,7 +24,7 @@ pub fn transaction_uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstr
             }
         })
         .filter(|maybe_ix| match limited_deserialize(&maybe_ix.data) {
-            Ok(SystemInstruction::NonceAdvance) => true,
+            Ok(SystemInstruction::AdvanceNonceAccount) => true,
             _ => false,
         })
 }

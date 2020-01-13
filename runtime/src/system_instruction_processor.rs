@@ -236,14 +236,14 @@ pub fn process_instruction(
             let to = next_keyed_account(keyed_accounts_iter)?;
             transfer_lamports(from, to, lamports)
         }
-        SystemInstruction::NonceAdvance => {
+        SystemInstruction::AdvanceNonceAccount => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
             me.nonce_advance(
                 &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
                 &signers,
             )
         }
-        SystemInstruction::NonceWithdraw(lamports) => {
+        SystemInstruction::WithdrawNonceAccount(lamports) => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
             let to = &mut next_keyed_account(keyed_accounts_iter)?;
             me.nonce_withdraw(
@@ -254,7 +254,7 @@ pub fn process_instruction(
                 &signers,
             )
         }
-        SystemInstruction::NonceInitialize(authorized) => {
+        SystemInstruction::InitializeNonceAccount(authorized) => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
             me.nonce_initialize(
                 &authorized,
@@ -262,7 +262,7 @@ pub fn process_instruction(
                 &Rent::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
             )
         }
-        SystemInstruction::NonceAuthorize(nonce_authority) => {
+        SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
             me.nonce_authorize(&nonce_authority, &signers)
         }
@@ -902,7 +902,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [],
-                &serialize(&SystemInstruction::NonceAdvance).unwrap()
+                &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -918,7 +918,7 @@ mod tests {
                     true,
                     &mut Account::default(),
                 ),],
-                &serialize(&SystemInstruction::NonceAdvance).unwrap(),
+                &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -937,7 +937,7 @@ mod tests {
                         &mut Account::default(),
                     ),
                 ],
-                &serialize(&SystemInstruction::NonceAdvance).unwrap(),
+                &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -964,7 +964,7 @@ mod tests {
                     &mut sysvar::rent::create_account(1, &Rent::free()),
                 ),
             ],
-            &serialize(&SystemInstruction::NonceInitialize(Pubkey::default())).unwrap(),
+            &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
         )
         .unwrap();
         assert_eq!(
@@ -981,7 +981,7 @@ mod tests {
                         ),
                     ),
                 ],
-                &serialize(&SystemInstruction::NonceAdvance).unwrap(),
+                &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             ),
             Ok(()),
         );
@@ -1006,7 +1006,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [],
-                &serialize(&SystemInstruction::NonceWithdraw(42)).unwrap(),
+                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1022,7 +1022,7 @@ mod tests {
                     true,
                     &mut Account::default(),
                 ),],
-                &serialize(&SystemInstruction::NonceWithdraw(42)).unwrap(),
+                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1042,7 +1042,7 @@ mod tests {
                         &mut Account::default(),
                     ),
                 ],
-                &serialize(&SystemInstruction::NonceWithdraw(42)).unwrap(),
+                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1070,7 +1070,7 @@ mod tests {
                     ),
                     KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
                 ],
-                &serialize(&SystemInstruction::NonceWithdraw(42)).unwrap(),
+                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1102,7 +1102,7 @@ mod tests {
                         &mut sysvar::rent::create_account(1, &Rent::free())
                     ),
                 ],
-                &serialize(&SystemInstruction::NonceWithdraw(42)).unwrap(),
+                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Ok(()),
         );
@@ -1114,7 +1114,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [],
-                &serialize(&SystemInstruction::NonceInitialize(Pubkey::default())).unwrap(),
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1130,7 +1130,7 @@ mod tests {
                     true,
                     &mut nonce_state::create_account(1_000_000),
                 ),],
-                &serialize(&SystemInstruction::NonceInitialize(Pubkey::default())).unwrap(),
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1153,7 +1153,7 @@ mod tests {
                         &mut Account::default(),
                     ),
                 ],
-                &serialize(&SystemInstruction::NonceInitialize(Pubkey::default())).unwrap(),
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1180,7 +1180,7 @@ mod tests {
                     ),
                     KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
                 ],
-                &serialize(&SystemInstruction::NonceInitialize(Pubkey::default())).unwrap(),
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1211,7 +1211,7 @@ mod tests {
                         &mut sysvar::rent::create_account(1, &Rent::free())
                     ),
                 ],
-                &serialize(&SystemInstruction::NonceInitialize(Pubkey::default())).unwrap(),
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Ok(()),
         );
@@ -1238,14 +1238,14 @@ mod tests {
                     &mut sysvar::rent::create_account(1, &Rent::free()),
                 ),
             ],
-            &serialize(&SystemInstruction::NonceInitialize(Pubkey::default())).unwrap(),
+            &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
         )
         .unwrap();
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc,),],
-                &serialize(&SystemInstruction::NonceAuthorize(Pubkey::default(),)).unwrap(),
+                &serialize(&SystemInstruction::AuthorizeNonceAccount(Pubkey::default(),)).unwrap(),
             ),
             Ok(()),
         );
