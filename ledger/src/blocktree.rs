@@ -867,7 +867,7 @@ impl Blocktree {
 
     fn should_insert_coding_shred(
         shred: &Shred,
-        coding_index: &CodingIndex,
+        coding_index: &ShredIndex,
         last_root: &RwLock<u64>,
     ) -> bool {
         let slot = shred.slot();
@@ -909,7 +909,7 @@ impl Blocktree {
     fn should_insert_data_shred(
         shred: &Shred,
         slot_meta: &SlotMeta,
-        data_index: &DataIndex,
+        data_index: &ShredIndex,
         last_root: &RwLock<u64>,
     ) -> bool {
         let shred_index = u64::from(shred.index());
@@ -967,7 +967,7 @@ impl Blocktree {
     fn insert_data_shred(
         &self,
         slot_meta: &mut SlotMeta,
-        data_index: &mut DataIndex,
+        data_index: &mut ShredIndex,
         shred: &Shred,
         write_batch: &mut WriteBatch,
     ) -> Result<()> {
@@ -5157,7 +5157,7 @@ pub mod tests {
         }
 
         // Test the data index doesn't have anything extra
-        let num_data_in_index = index.data().num_data();
+        let num_data_in_index = index.data().num_shreds();
         assert_eq!(num_data_in_index, num_data);
 
         // Test the set of coding shreds in the index and in the coding column
@@ -5170,7 +5170,7 @@ pub mod tests {
         }
 
         // Test the data index doesn't have anything extra
-        let num_coding_in_index = index.coding().num_coding();
+        let num_coding_in_index = index.coding().num_shreds();
         assert_eq!(num_coding_in_index, num_coding);
     }
 }
