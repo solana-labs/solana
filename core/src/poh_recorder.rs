@@ -10,12 +10,8 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
-<<<<<<< HEAD
 use crate::result::{Error, Result};
-use solana_ledger::blocktree::Blocktree;
-=======
 use solana_ledger::blockstore::Blockstore;
->>>>>>> b5dba7705... Rename blocktree to blockstore (#7757)
 use solana_ledger::entry::Entry;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::poh::Poh;

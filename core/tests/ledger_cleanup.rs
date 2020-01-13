@@ -317,20 +317,9 @@ mod tests {
             &sys.get_stats(),
         );
 
-<<<<<<< HEAD
         std::thread::sleep(std::time::Duration::from_secs(
             ROCKSDB_FLUSH_GRACE_PERIOD_SECS,
         ));
-=======
-        // Poll on some compaction happening
-        let start_poll = Instant::now();
-        while blockstore.storage_size().unwrap_or(0) >= u1 {
-            if start_poll.elapsed().as_secs() > ROCKSDB_FLUSH_GRACE_PERIOD_SECS {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(200));
-        }
->>>>>>> b5dba7705... Rename blocktree to blockstore (#7757)
 
         emit_stats(
             &time_initial,

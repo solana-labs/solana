@@ -47,13 +47,8 @@ impl TransactionStatusService {
 
     fn write_transaction_status_batch(
         write_transaction_status_receiver: &Receiver<TransactionStatusBatch>,
-<<<<<<< HEAD
-        blocktree: &Arc<Blocktree>,
-    ) -> Result<()> {
-=======
         blockstore: &Arc<Blockstore>,
-    ) -> Result<(), RecvTimeoutError> {
->>>>>>> b5dba7705... Rename blocktree to blockstore (#7757)
+    ) -> Result<()> {
         let TransactionStatusBatch {
             bank,
             transactions,

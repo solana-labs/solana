@@ -301,19 +301,13 @@ fn poll_all_nodes_for_signature(
     Ok(())
 }
 
-<<<<<<< HEAD
-fn get_and_verify_slot_entries(blocktree: &Blocktree, slot: Slot, last_entry: &Hash) -> Vec<Entry> {
-    let entries = blocktree.get_slot_entries(slot, 0, None).unwrap();
-    assert!(entries.verify(last_entry));
-=======
 fn get_and_verify_slot_entries(
     blockstore: &Blockstore,
     slot: Slot,
     last_entry: &Hash,
 ) -> Vec<Entry> {
-    let entries = blockstore.get_slot_entries(slot, 0, None).unwrap();
-    assert_eq!(entries.verify(last_entry), true);
->>>>>>> b5dba7705... Rename blocktree to blockstore (#7757)
+    let entries = blocktree.get_slot_entries(slot, 0, None).unwrap();
+    assert!(entries.verify(last_entry));
     entries
 }
 

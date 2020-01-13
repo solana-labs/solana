@@ -534,12 +534,7 @@ impl ReplayStage {
                 !Bank::can_commit(&tx_error)
             }
             Err(Error::BlockError(_)) => true,
-<<<<<<< HEAD
-            Err(Error::BlocktreeError(BlocktreeError::InvalidShredData(_))) => true,
-=======
             Err(Error::BlockstoreError(BlockstoreError::InvalidShredData(_))) => true,
-            Err(Error::BlockstoreError(BlockstoreError::DeadSlot)) => true,
->>>>>>> b5dba7705... Rename blocktree to blockstore (#7757)
             _ => false,
         }
     }

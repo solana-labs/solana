@@ -13,11 +13,7 @@ use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 use solana_ledger::bank_forks::BankForks;
-<<<<<<< HEAD
-use solana_ledger::blocktree::{self, Blocktree};
-=======
-use solana_ledger::blockstore::{self, Blockstore, MAX_DATA_SHREDS_PER_SLOT};
->>>>>>> b5dba7705... Rename blocktree to blockstore (#7757)
+use solana_ledger::blockstore::{self, Blockstore};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
@@ -134,16 +130,6 @@ where
                             Shred::new_from_serialized_shred(packet.data.to_vec())
                         {
                             if shred_filter(&shred, last_root) {
-<<<<<<< HEAD
-=======
-                                // Mark slot as dead if the current shred is on the boundary
-                                // of max shreds per slot. However, let the current shred
-                                // get retransmitted. It'll allow peer nodes to see this shred
-                                // and trigger them to mark the slot as dead.
-                                if shred.index() >= (MAX_DATA_SHREDS_PER_SLOT - 1) as u32 {
-                                    let _ = blockstore.set_dead_slot(shred.slot());
-                                }
->>>>>>> b5dba7705... Rename blocktree to blockstore (#7757)
                                 packet.meta.slot = shred.slot();
                                 packet.meta.seed = shred.seed();
                                 Some(shred)
