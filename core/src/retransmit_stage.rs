@@ -12,7 +12,7 @@ use crate::{
 use crossbeam_channel::Receiver as CrossbeamReceiver;
 use solana_ledger::{
     bank_forks::BankForks,
-    blocktree::{Blocktree, CompletedSlotsReceiver},
+    blockstore::{Blockstore, CompletedSlotsReceiver},
     leader_schedule_cache::LeaderScheduleCache,
     staking_utils,
 };
@@ -205,7 +205,7 @@ impl RetransmitStage {
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        blocktree: Arc<Blocktree>,
+        blockstore: Arc<Blockstore>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
@@ -234,7 +234,7 @@ impl RetransmitStage {
         };
         let leader_schedule_cache = leader_schedule_cache.clone();
         let window_service = WindowService::new(
-            blocktree,
+            blockstore,
             cluster_info.clone(),
             verified_receiver,
             retransmit_sender,
@@ -281,7 +281,7 @@ mod tests {
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::packet::{self, Meta, Packet, Packets};
-    use solana_ledger::blocktree_processor::{process_blocktree, ProcessOptions};
+    use solana_ledger::blockstore_processor::{process_blockstore, ProcessOptions};
     use solana_ledger::create_new_tmp_ledger;
     use solana_net_utils::find_available_port_in_range;
     use solana_sdk::pubkey::Pubkey;
@@ -290,13 +290,13 @@ mod tests {
     fn test_skip_repair() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
             full_leader_cache: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, _, cached_leader_schedule) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
         let leader_schedule_cache = Arc::new(cached_leader_schedule);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 

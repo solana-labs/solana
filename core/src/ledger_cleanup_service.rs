@@ -1,6 +1,6 @@
 //! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
 
-use solana_ledger::blocktree::Blocktree;
+use solana_ledger::blockstore::Blockstore;
 use solana_metrics::datapoint_debug;
 use solana_sdk::clock::Slot;
 use std::string::ToString;
@@ -27,7 +27,7 @@ pub struct LedgerCleanupService {
 impl LedgerCleanupService {
     pub fn new(
         new_root_receiver: Receiver<Slot>,
-        blocktree: Arc<Blocktree>,
+        blockstore: Arc<Blockstore>,
         max_ledger_slots: u64,
         exit: &Arc<AtomicBool>,
     ) -> Self {
@@ -45,7 +45,7 @@ impl LedgerCleanupService {
                 }
                 if let Err(e) = Self::cleanup_ledger(
                     &new_root_receiver,
-                    &blocktree,
+                    &blockstore,
                     max_ledger_slots,
                     &mut next_purge_batch,
                 ) {
@@ -61,20 +61,20 @@ impl LedgerCleanupService {
 
     fn cleanup_ledger(
         new_root_receiver: &Receiver<Slot>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         max_ledger_slots: u64,
         next_purge_batch: &mut u64,
     ) -> Result<(), RecvTimeoutError> {
-        let disk_utilization_pre = blocktree.storage_size();
+        let disk_utilization_pre = blockstore.storage_size();
 
         let root = new_root_receiver.recv_timeout(Duration::from_secs(1))?;
         if root > *next_purge_batch {
             //cleanup
-            blocktree.purge_slots(0, Some(root - max_ledger_slots));
+            blockstore.purge_slots(0, Some(root - max_ledger_slots));
             *next_purge_batch += DEFAULT_PURGE_BATCH_SIZE;
         }
 
-        let disk_utilization_post = blocktree.storage_size();
+        let disk_utilization_post = blockstore.storage_size();
 
         if let (Ok(disk_utilization_pre), Ok(disk_utilization_post)) =
             (disk_utilization_pre, disk_utilization_post)
@@ -101,39 +101,39 @@ impl LedgerCleanupService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::blocktree::make_many_slot_entries;
+    use solana_ledger::blockstore::make_many_slot_entries;
     use solana_ledger::get_tmp_ledger_path;
     use std::sync::mpsc::channel;
 
     #[test]
     fn test_cleanup() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
-        let blocktree = Arc::new(blocktree);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let blockstore = Arc::new(blockstore);
         let (sender, receiver) = channel();
 
         //send a signal to kill slots 0-40
         let mut next_purge_slot = 0;
         sender.send(50).unwrap();
-        LedgerCleanupService::cleanup_ledger(&receiver, &blocktree, 10, &mut next_purge_slot)
+        LedgerCleanupService::cleanup_ledger(&receiver, &blockstore, 10, &mut next_purge_slot)
             .unwrap();
 
         //check that 0-40 don't exist
-        blocktree
+        blockstore
             .slot_meta_iterator(0)
             .unwrap()
             .for_each(|(slot, _)| assert!(slot > 40));
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_compaction() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Arc::new(Blocktree::open(&blocktree_path).unwrap());
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
 
         let n = 10_000;
         let batch_size = 100;
@@ -142,10 +142,10 @@ mod tests {
 
         for i in 0..batches {
             let (shreds, _) = make_many_slot_entries(i * batch_size, batch_size, 1);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
         }
 
-        let u1 = blocktree.storage_size().unwrap() as f64;
+        let u1 = blockstore.storage_size().unwrap() as f64;
 
         // send signal to cleanup slots
         let (sender, receiver) = channel();
@@ -153,7 +153,7 @@ mod tests {
         let mut next_purge_batch = 0;
         LedgerCleanupService::cleanup_ledger(
             &receiver,
-            &blocktree,
+            &blockstore,
             max_ledger_slots,
             &mut next_purge_batch,
         )
@@ -161,18 +161,18 @@ mod tests {
 
         thread::sleep(Duration::from_secs(2));
 
-        let u2 = blocktree.storage_size().unwrap() as f64;
+        let u2 = blockstore.storage_size().unwrap() as f64;
 
         assert!(u2 < u1, "insufficient compaction! pre={},post={}", u1, u2,);
 
         // check that early slots don't exist
         let max_slot = n - max_ledger_slots;
-        blocktree
+        blockstore
             .slot_meta_iterator(0)
             .unwrap()
             .for_each(|(slot, _)| assert!(slot > max_slot));
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }

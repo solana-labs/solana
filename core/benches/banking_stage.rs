@@ -12,9 +12,9 @@ use solana_core::cluster_info::Node;
 use solana_core::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_core::packet::to_packets_chunked;
 use solana_core::poh_recorder::WorkingBankEntry;
-use solana_ledger::blocktree_processor::process_entries;
+use solana_ledger::blockstore_processor::process_entries;
 use solana_ledger::entry::{next_hash, Entry};
-use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
+use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
 use solana_perf::test_tx::test_tx;
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_config::GenesisConfig;
@@ -57,11 +57,11 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path!();
     let my_pubkey = Pubkey::new_rand();
     {
-        let blocktree = Arc::new(
-            Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+        let blockstore = Arc::new(
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, _signal_receiver) =
-            create_test_recorder(&bank, &blocktree, None);
+            create_test_recorder(&bank, &blockstore, None);
 
         let tx = test_tx();
         let len = 4096;
@@ -87,7 +87,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         exit.store(true, Ordering::Relaxed);
         poh_service.join().unwrap();
     }
-    let _unused = Blocktree::destroy(&ledger_path);
+    let _unused = Blockstore::destroy(&ledger_path);
 }
 
 fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Transaction> {
@@ -184,11 +184,11 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     let verified: Vec<_> = to_packets_chunked(&transactions.clone(), PACKETS_PER_BATCH);
     let ledger_path = get_tmp_ledger_path!();
     {
-        let blocktree = Arc::new(
-            Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+        let blockstore = Arc::new(
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
-            create_test_recorder(&bank, &blocktree, None);
+            create_test_recorder(&bank, &blockstore, None);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         let _banking_stage = BankingStage::new(
@@ -244,7 +244,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         exit.store(true, Ordering::Relaxed);
         poh_service.join().unwrap();
     }
-    let _unused = Blocktree::destroy(&ledger_path);
+    let _unused = Blockstore::destroy(&ledger_path);
 }
 
 #[bench]

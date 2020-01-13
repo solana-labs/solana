@@ -1,4 +1,4 @@
-use crate::blocktree_meta;
+use crate::blockstore_meta;
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
 use fs_extra;
@@ -36,7 +36,7 @@ const CODE_SHRED_CF: &str = "code_shred";
 const TRANSACTION_STATUS_CF: &str = "transaction_status";
 
 #[derive(Error, Debug)]
-pub enum BlocktreeError {
+pub enum BlockstoreError {
     ShredForIndexExists,
     InvalidShredData(Box<bincode::ErrorKind>),
     RocksDb(#[from] rocksdb::Error),
@@ -46,11 +46,11 @@ pub enum BlocktreeError {
     Serialize(#[from] Box<bincode::ErrorKind>),
     FsExtraError(#[from] fs_extra::error::Error),
 }
-pub(crate) type Result<T> = std::result::Result<T, BlocktreeError>;
+pub(crate) type Result<T> = std::result::Result<T, BlockstoreError>;
 
-impl std::fmt::Display for BlocktreeError {
+impl std::fmt::Display for BlockstoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "blocktree error")
+        write!(f, "blockstore error")
     }
 }
 
@@ -344,7 +344,7 @@ impl Column for columns::Index {
 }
 
 impl TypedColumn for columns::Index {
-    type Type = blocktree_meta::Index;
+    type Type = blockstore_meta::Index;
 }
 
 impl Column for columns::DeadSlots {
@@ -452,7 +452,7 @@ impl Column for columns::SlotMeta {
 }
 
 impl TypedColumn for columns::SlotMeta {
-    type Type = blocktree_meta::SlotMeta;
+    type Type = blockstore_meta::SlotMeta;
 }
 
 impl Column for columns::ErasureMeta {
@@ -483,7 +483,7 @@ impl Column for columns::ErasureMeta {
 }
 
 impl TypedColumn for columns::ErasureMeta {
-    type Type = blocktree_meta::ErasureMeta;
+    type Type = blockstore_meta::ErasureMeta;
 }
 
 #[derive(Debug, Clone)]

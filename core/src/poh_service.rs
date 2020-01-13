@@ -123,7 +123,7 @@ mod tests {
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::poh_recorder::WorkingBank;
     use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-    use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
+    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
     use solana_perf::test_tx::test_tx;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::hash;
@@ -137,8 +137,8 @@ mod tests {
         let prev_hash = bank.last_blockhash();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree =
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
             let poh_config = Arc::new(PohConfig {
                 hashes_per_tick: Some(2),
                 target_tick_duration: Duration::from_millis(42),
@@ -151,7 +151,7 @@ mod tests {
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
-                &Arc::new(blocktree),
+                &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &poh_config,
             );
@@ -230,6 +230,6 @@ mod tests {
             let _ = poh_service.join().unwrap();
             let _ = entry_producer.join().unwrap();
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 }

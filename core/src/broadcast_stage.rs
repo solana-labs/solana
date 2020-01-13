@@ -5,7 +5,7 @@ use self::standard_broadcast_run::StandardBroadcastRun;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::{Error, Result};
-use solana_ledger::blocktree::Blocktree;
+use solana_ledger::blockstore::Blockstore;
 use solana_ledger::shred::Shred;
 use solana_ledger::staking_utils;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
@@ -44,7 +44,7 @@ impl BroadcastStageType {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         shred_version: u16,
     ) -> BroadcastStage {
         let keypair = cluster_info.read().unwrap().keypair.clone();
@@ -54,7 +54,7 @@ impl BroadcastStageType {
                 cluster_info,
                 receiver,
                 exit_sender,
-                blocktree,
+                blockstore,
                 StandardBroadcastRun::new(keypair, shred_version),
             ),
 
@@ -63,7 +63,7 @@ impl BroadcastStageType {
                 cluster_info,
                 receiver,
                 exit_sender,
-                blocktree,
+                blockstore,
                 FailEntryVerificationBroadcastRun::new(keypair, shred_version),
             ),
 
@@ -72,7 +72,7 @@ impl BroadcastStageType {
                 cluster_info,
                 receiver,
                 exit_sender,
-                blocktree,
+                blockstore,
                 BroadcastFakeShredsRun::new(keypair, 0, shred_version),
             ),
         }
@@ -83,10 +83,10 @@ type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
 trait BroadcastRun {
     fn run(
         &mut self,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<TransmitShreds>,
-        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
+        blockstore_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()>;
     fn transmit(
         &self,
@@ -97,7 +97,7 @@ trait BroadcastRun {
     fn record(
         &self,
         receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
     ) -> Result<()>;
 }
 
@@ -126,14 +126,15 @@ pub struct BroadcastStage {
 impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn run(
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<TransmitShreds>,
-        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
+        blockstore_sender: &Sender<Arc<Vec<Shred>>>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
-            let res = broadcast_stage_run.run(blocktree, receiver, socket_sender, blocktree_sender);
+            let res =
+                broadcast_stage_run.run(blockstore, receiver, socket_sender, blockstore_sender);
             let res = Self::handle_error(res);
             if let Some(res) = res {
                 return res;
@@ -180,19 +181,25 @@ impl BroadcastStage {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntry>,
         exit_sender: &Arc<AtomicBool>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
     ) -> Self {
-        let btree = blocktree.clone();
+        let btree = blockstore.clone();
         let exit = exit_sender.clone();
         let (socket_sender, socket_receiver) = channel();
-        let (blocktree_sender, blocktree_receiver) = channel();
+        let (blockstore_sender, blockstore_receiver) = channel();
         let bs_run = broadcast_stage_run.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit);
-                Self::run(&btree, &receiver, &socket_sender, &blocktree_sender, bs_run)
+                Self::run(
+                    &btree,
+                    &receiver,
+                    &socket_sender,
+                    &blockstore_sender,
+                    bs_run,
+                )
             })
             .unwrap();
         let mut thread_hdls = vec![thread_hdl];
@@ -213,15 +220,15 @@ impl BroadcastStage {
                 .unwrap();
             thread_hdls.push(t);
         }
-        let blocktree_receiver = Arc::new(Mutex::new(blocktree_receiver));
+        let blockstore_receiver = Arc::new(Mutex::new(blockstore_receiver));
         for _ in 0..NUM_INSERT_THREADS {
-            let blocktree_receiver = blocktree_receiver.clone();
+            let blockstore_receiver = blockstore_receiver.clone();
             let bs_record = broadcast_stage_run.clone();
-            let btree = blocktree.clone();
+            let btree = blockstore.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-record".to_string())
                 .spawn(move || loop {
-                    let res = bs_record.record(&blocktree_receiver, &btree);
+                    let res = bs_record.record(&blockstore_receiver, &btree);
                     let res = Self::handle_error(res);
                     if let Some(res) = res {
                         return res;
@@ -248,7 +255,7 @@ mod test {
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::entry::create_ticks;
-    use solana_ledger::{blocktree::Blocktree, get_tmp_ledger_path};
+    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
@@ -261,7 +268,7 @@ mod test {
     use std::time::Duration;
 
     struct MockBroadcastStage {
-        blocktree: Arc<Blocktree>,
+        blockstore: Arc<Blockstore>,
         broadcast_service: BroadcastStage,
         bank: Arc<Bank>,
     }
@@ -272,7 +279,7 @@ mod test {
         entry_receiver: Receiver<WorkingBankEntry>,
     ) -> MockBroadcastStage {
         // Make the database ledger
-        let blocktree = Arc::new(Blocktree::open(ledger_path).unwrap());
+        let blockstore = Arc::new(Blockstore::open(ledger_path).unwrap());
 
         // Make the leader node and scheduler
         let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
@@ -298,12 +305,12 @@ mod test {
             cluster_info,
             entry_receiver,
             &exit_sender,
-            &blocktree,
+            &blockstore,
             StandardBroadcastRun::new(leader_keypair, 0),
         );
 
         MockBroadcastStage {
-            blocktree,
+            blockstore,
             broadcast_service,
             bank,
         }
@@ -350,8 +357,8 @@ mod test {
                 ticks_per_slot,
             );
 
-            let blocktree = broadcast_service.blocktree;
-            let (entries, _, _) = blocktree
+            let blockstore = broadcast_service.blockstore;
+            let (entries, _, _) = blockstore
                 .get_slot_entries_with_shred_info(slot, 0)
                 .expect("Expect entries to be present");
             assert_eq!(entries.len(), max_tick_height as usize);
@@ -363,6 +370,6 @@ mod test {
                 .expect("Expect successful join of broadcast service");
         }
 
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 }

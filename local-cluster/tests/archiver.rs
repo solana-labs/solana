@@ -9,7 +9,7 @@ use solana_core::{
     storage_stage::SLOTS_PER_TURN_TEST,
     validator::ValidatorConfig,
 };
-use solana_ledger::{blocktree::Blocktree, create_new_tmp_ledger, get_tmp_ledger_path};
+use solana_ledger::{blockstore::Blockstore, create_new_tmp_ledger, get_tmp_ledger_path};
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
@@ -62,9 +62,14 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
         cluster_nodes[0].clone(),
     )));
     let path = get_tmp_ledger_path!();
-    let blocktree = Arc::new(Blocktree::open(&path).unwrap());
-    Archiver::download_from_archiver(&cluster_info, &archiver_info, &blocktree, slots_per_segment)
-        .unwrap();
+    let blockstore = Arc::new(Blockstore::open(&path).unwrap());
+    Archiver::download_from_archiver(
+        &cluster_info,
+        &archiver_info,
+        &blockstore,
+        slots_per_segment,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -113,8 +118,8 @@ fn test_archiver_startup_leader_hang() {
         assert!(archiver_res.is_err());
     }
 
-    let _ignored = Blocktree::destroy(&leader_ledger_path);
-    let _ignored = Blocktree::destroy(&archiver_ledger_path);
+    let _ignored = Blockstore::destroy(&leader_ledger_path);
+    let _ignored = Blockstore::destroy(&archiver_ledger_path);
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&archiver_ledger_path);
 }

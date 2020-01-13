@@ -10,7 +10,7 @@ use solana_core::{
     gossip_service::discover_cluster,
 };
 use solana_ledger::{
-    blocktree::Blocktree,
+    blockstore::Blockstore,
     entry::{Entry, EntrySlice},
 };
 use solana_sdk::{
@@ -140,7 +140,7 @@ pub fn validator_exit(entry_point_info: &ContactInfo, nodes: usize) {
 }
 
 pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
-    let ledger = Blocktree::open(ledger_path).unwrap();
+    let ledger = Blockstore::open(ledger_path).unwrap();
     let zeroth_slot = ledger.get_slot_entries(0, 0, None).unwrap();
     let last_id = zeroth_slot.last().unwrap().hash;
     let next_slots = ledger.get_slots_since(&[0]).unwrap().remove(&0).unwrap();
@@ -301,19 +301,23 @@ fn poll_all_nodes_for_signature(
     Ok(())
 }
 
-fn get_and_verify_slot_entries(blocktree: &Blocktree, slot: Slot, last_entry: &Hash) -> Vec<Entry> {
-    let entries = blocktree.get_slot_entries(slot, 0, None).unwrap();
+fn get_and_verify_slot_entries(
+    blockstore: &Blockstore,
+    slot: Slot,
+    last_entry: &Hash,
+) -> Vec<Entry> {
+    let entries = blockstore.get_slot_entries(slot, 0, None).unwrap();
     assert_eq!(entries.verify(last_entry), true);
     entries
 }
 
 fn verify_slot_ticks(
-    blocktree: &Blocktree,
+    blockstore: &Blockstore,
     slot: Slot,
     last_entry: &Hash,
     expected_num_ticks: Option<usize>,
 ) -> Hash {
-    let entries = get_and_verify_slot_entries(blocktree, slot, last_entry);
+    let entries = get_and_verify_slot_entries(blockstore, slot, last_entry);
     let num_ticks: usize = entries.iter().map(|entry| entry.is_tick() as usize).sum();
     if let Some(expected_num_ticks) = expected_num_ticks {
         assert_eq!(num_ticks, expected_num_ticks);

@@ -1,8 +1,8 @@
 use crate::{
     bank_forks::BankForks,
     block_error::BlockError,
-    blocktree::Blocktree,
-    blocktree_meta::SlotMeta,
+    blockstore::Blockstore,
+    blockstore_meta::SlotMeta,
     entry::{create_ticks, Entry, EntrySlice},
     leader_schedule_cache::LeaderScheduleCache,
 };
@@ -235,7 +235,7 @@ pub struct BankForksInfo {
 }
 
 #[derive(Error, Debug, PartialEq)]
-pub enum BlocktreeProcessorError {
+pub enum BlockstoreProcessorError {
     #[error("failed to load entries")]
     FailedToLoadEntries,
 
@@ -252,7 +252,7 @@ pub enum BlocktreeProcessorError {
     NoValidForksFound,
 }
 
-/// Callback for accessing bank state while processing the blocktree
+/// Callback for accessing bank state while processing the blockstore
 pub type ProcessCallback = Arc<dyn Fn(&Bank) -> () + Sync + Send>;
 
 #[derive(Default, Clone)]
@@ -264,12 +264,13 @@ pub struct ProcessOptions {
     pub override_num_threads: Option<usize>,
 }
 
-pub fn process_blocktree(
+pub fn process_blockstore(
     genesis_config: &GenesisConfig,
-    blocktree: &Blocktree,
+    blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     opts: ProcessOptions,
-) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
+) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError>
+{
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
             *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
@@ -282,17 +283,18 @@ pub fn process_blocktree(
     // Setup bank for slot 0
     let bank0 = Arc::new(Bank::new_with_paths(&genesis_config, account_paths));
     info!("processing ledger for slot 0...");
-    process_bank_0(&bank0, blocktree, &opts)?;
-    process_blocktree_from_root(genesis_config, blocktree, bank0, &opts)
+    process_bank_0(&bank0, blockstore, &opts)?;
+    process_blockstore_from_root(genesis_config, blockstore, bank0, &opts)
 }
 
-// Process blocktree from a known root bank
-pub fn process_blocktree_from_root(
+// Process blockstore from a known root bank
+pub fn process_blockstore_from_root(
     genesis_config: &GenesisConfig,
-    blocktree: &Blocktree,
+    blockstore: &Blockstore,
     bank: Arc<Bank>,
     opts: &ProcessOptions,
-) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
+) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError>
+{
     info!("processing ledger from root slot {}...", bank.slot());
     let allocated = thread_mem_usage::Allocatedp::default();
     let initial_allocation = allocated.get();
@@ -307,13 +309,13 @@ pub fn process_blocktree_from_root(
         genesis_config.operating_mode,
     ));
 
-    blocktree
+    blockstore
         .set_roots(&[start_slot])
         .expect("Couldn't set root slot on startup");
 
-    let meta = blocktree.meta(start_slot).unwrap();
+    let meta = blockstore.meta(start_slot).unwrap();
 
-    // Iterate and replay slots from blocktree starting from `start_slot`
+    // Iterate and replay slots from blockstore starting from `start_slot`
     let (bank_forks, bank_forks_info, leader_schedule_cache) = {
         if let Some(meta) = meta {
             let epoch_schedule = bank.epoch_schedule();
@@ -324,7 +326,7 @@ pub fn process_blocktree_from_root(
             let fork_info = process_pending_slots(
                 &bank,
                 &meta,
-                blocktree,
+                blockstore,
                 &mut leader_schedule_cache,
                 &mut rooted_path,
                 opts,
@@ -332,13 +334,13 @@ pub fn process_blocktree_from_root(
             let (banks, bank_forks_info): (Vec<_>, Vec<_>) =
                 fork_info.into_iter().map(|(_, v)| v).unzip();
             if banks.is_empty() {
-                return Err(BlocktreeProcessorError::NoValidForksFound);
+                return Err(BlockstoreProcessorError::NoValidForksFound);
             }
             let bank_forks = BankForks::new_from_banks(&banks, rooted_path);
             (bank_forks, bank_forks_info, leader_schedule_cache)
         } else {
             // If there's no meta for the input `start_slot`, then we started from a snapshot
-            // and there's no point in processing the rest of blocktree and implies blocktree
+            // and there's no point in processing the rest of blockstore and implies blockstore
             // should be empty past this point.
             let bfi = BankForksInfo {
                 bank_slot: start_slot,
@@ -369,7 +371,7 @@ fn verify_and_process_slot_entries(
     entries: &[Entry],
     last_entry_hash: Hash,
     opts: &ProcessOptions,
-) -> result::Result<Hash, BlocktreeProcessorError> {
+) -> result::Result<Hash, BlockstoreProcessorError> {
     assert!(!entries.is_empty());
 
     if opts.poh_verify {
@@ -409,7 +411,7 @@ fn verify_and_process_slot_entries(
                 bank.slot(),
                 err
             );
-            BlocktreeProcessorError::InvalidTransaction
+            BlockstoreProcessorError::InvalidTransaction
         })?;
 
     Ok(entries.last().unwrap().hash)
@@ -418,15 +420,15 @@ fn verify_and_process_slot_entries(
 // Special handling required for processing the entries in slot 0
 fn process_bank_0(
     bank0: &Arc<Bank>,
-    blocktree: &Blocktree,
+    blockstore: &Blockstore,
     opts: &ProcessOptions,
-) -> result::Result<(), BlocktreeProcessorError> {
+) -> result::Result<(), BlockstoreProcessorError> {
     assert_eq!(bank0.slot(), 0);
 
     // Fetch all entries for this slot
-    let entries = blocktree.get_slot_entries(0, 0, None).map_err(|err| {
+    let entries = blockstore.get_slot_entries(0, 0, None).map_err(|err| {
         warn!("Failed to load entries for slot 0, err: {:?}", err);
-        BlocktreeProcessorError::FailedToLoadEntries
+        BlockstoreProcessorError::FailedToLoadEntries
     })?;
 
     verify_and_process_slot_entries(bank0, &entries, bank0.last_blockhash(), opts)
@@ -442,11 +444,11 @@ fn process_bank_0(
 fn process_next_slots(
     bank: &Arc<Bank>,
     meta: &SlotMeta,
-    blocktree: &Blocktree,
+    blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     pending_slots: &mut Vec<(SlotMeta, Arc<Bank>, Hash)>,
     fork_info: &mut HashMap<u64, (Arc<Bank>, BankForksInfo)>,
-) -> result::Result<(), BlocktreeProcessorError> {
+) -> result::Result<(), BlockstoreProcessorError> {
     if let Some(parent) = bank.parent() {
         fork_info.remove(&parent.slot());
     }
@@ -461,15 +463,15 @@ fn process_next_slots(
 
     // This is a fork point if there are multiple children, create a new child bank for each fork
     for next_slot in &meta.next_slots {
-        let next_meta = blocktree
+        let next_meta = blockstore
             .meta(*next_slot)
             .map_err(|err| {
                 warn!("Failed to load meta for slot {}: {:?}", next_slot, err);
-                BlocktreeProcessorError::FailedToLoadMeta
+                BlockstoreProcessorError::FailedToLoadMeta
             })?
             .unwrap();
 
-        // Only process full slots in blocktree_processor, replay_stage
+        // Only process full slots in blockstore_processor, replay_stage
         // handles any partials
         if next_meta.is_full() {
             let allocated = thread_mem_usage::Allocatedp::default();
@@ -497,16 +499,16 @@ fn process_next_slots(
     Ok(())
 }
 
-// Iterate through blocktree processing slots starting from the root slot pointed to by the
+// Iterate through blockstore processing slots starting from the root slot pointed to by the
 // given `meta`
 fn process_pending_slots(
     root_bank: &Arc<Bank>,
     root_meta: &SlotMeta,
-    blocktree: &Blocktree,
+    blockstore: &Blockstore,
     leader_schedule_cache: &mut LeaderScheduleCache,
     rooted_path: &mut Vec<u64>,
     opts: &ProcessOptions,
-) -> result::Result<HashMap<u64, (Arc<Bank>, BankForksInfo)>, BlocktreeProcessorError> {
+) -> result::Result<HashMap<u64, (Arc<Bank>, BankForksInfo)>, BlockstoreProcessorError> {
     let mut fork_info = HashMap::new();
     let mut last_status_report = Instant::now();
     let mut pending_slots = vec![];
@@ -514,7 +516,7 @@ fn process_pending_slots(
     process_next_slots(
         root_bank,
         root_meta,
-        blocktree,
+        blockstore,
         leader_schedule_cache,
         &mut pending_slots,
         &mut fork_info,
@@ -535,11 +537,11 @@ fn process_pending_slots(
         let allocated = thread_mem_usage::Allocatedp::default();
         let initial_allocation = allocated.get();
 
-        if process_single_slot(blocktree, &bank, &last_entry_hash, opts).is_err() {
+        if process_single_slot(blockstore, &bank, &last_entry_hash, opts).is_err() {
             continue;
         }
 
-        if blocktree.is_root(slot) {
+        if blockstore.is_root(slot) {
             let parents = bank.parents().into_iter().map(|b| b.slot()).rev().skip(1);
             let parents: Vec<_> = parents.collect();
             rooted_path.extend(parents);
@@ -565,7 +567,7 @@ fn process_pending_slots(
         process_next_slots(
             &bank,
             &meta,
-            blocktree,
+            blockstore,
             leader_schedule_cache,
             &mut pending_slots,
             &mut fork_info,
@@ -578,17 +580,17 @@ fn process_pending_slots(
 // Processes and replays the contents of a single slot, returns Error
 // if failed to play the slot
 fn process_single_slot(
-    blocktree: &Blocktree,
+    blockstore: &Blockstore,
     bank: &Arc<Bank>,
     last_entry_hash: &Hash,
     opts: &ProcessOptions,
-) -> result::Result<(), BlocktreeProcessorError> {
+) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
     // Fetch all entries for this slot
-    let entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
+    let entries = blockstore.get_slot_entries(slot, 0, None).map_err(|err| {
         warn!("Failed to load entries for slot {}: {:?}", slot, err);
-        BlocktreeProcessorError::FailedToLoadEntries
+        BlockstoreProcessorError::FailedToLoadEntries
     })?;
 
     // If this errors with a fatal error, should mark the slot as dead so
@@ -634,8 +636,8 @@ pub fn send_transaction_status_batch(
 }
 
 // used for tests only
-pub fn fill_blocktree_slot_with_ticks(
-    blocktree: &Blocktree,
+pub fn fill_blockstore_slot_with_ticks(
+    blockstore: &Blockstore,
     ticks_per_slot: u64,
     slot: u64,
     parent_slot: u64,
@@ -647,7 +649,7 @@ pub fn fill_blocktree_slot_with_ticks(
     let entries = create_ticks(num_slots * ticks_per_slot, 0, last_entry_hash);
     let last_entry_hash = entries.last().unwrap().hash;
 
-    blocktree
+    blockstore
         .write_entries(
             slot,
             0,
@@ -688,7 +690,7 @@ pub mod tests {
     use std::sync::RwLock;
 
     #[test]
-    fn test_process_blocktree_with_missing_hashes() {
+    fn test_process_blockstore_with_missing_hashes() {
         solana_logger::setup();
 
         let hashes_per_tick = 2;
@@ -699,14 +701,14 @@ pub mod tests {
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blocktree =
-            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         let parent_slot = 0;
         let slot = 1;
         let entries = create_ticks(ticks_per_slot, hashes_per_tick - 1, blockhash);
         assert_matches!(
-            blocktree.write_entries(
+            blockstore.write_entries(
                 slot,
                 0,
                 0,
@@ -720,9 +722,9 @@ pub mod tests {
             Ok(_)
         );
 
-        let (_bank_forks, bank_forks_info, _) = process_blocktree(
+        let (_bank_forks, bank_forks_info, _) = process_blockstore(
             &genesis_config,
-            &blocktree,
+            &blockstore,
             Vec::new(),
             ProcessOptions {
                 poh_verify: true,
@@ -734,7 +736,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_blocktree_with_invalid_slot_tick_count() {
+    fn test_process_blockstore_with_invalid_slot_tick_count() {
         solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
@@ -742,14 +744,14 @@ pub mod tests {
 
         // Create a new ledger with slot 0 full of ticks
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
 
         // Write slot 1 with one tick missing
         let parent_slot = 0;
         let slot = 1;
         let entries = create_ticks(ticks_per_slot - 1, 0, blockhash);
         assert_matches!(
-            blocktree.write_entries(
+            blockstore.write_entries(
                 slot,
                 0,
                 0,
@@ -764,9 +766,9 @@ pub mod tests {
         );
 
         // Should return slot 0, the last slot on the fork that is valid
-        let (_bank_forks, bank_forks_info, _) = process_blocktree(
+        let (_bank_forks, bank_forks_info, _) = process_blockstore(
             &genesis_config,
-            &blocktree,
+            &blockstore,
             Vec::new(),
             ProcessOptions {
                 poh_verify: true,
@@ -778,11 +780,11 @@ pub mod tests {
 
         // Write slot 2 fully
         let _last_slot2_entry_hash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 0, blockhash);
+            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 0, blockhash);
 
-        let (_bank_forks, bank_forks_info, _) = process_blocktree(
+        let (_bank_forks, bank_forks_info, _) = process_blockstore(
             &genesis_config,
-            &blocktree,
+            &blockstore,
             Vec::new(),
             ProcessOptions {
                 poh_verify: true,
@@ -791,12 +793,12 @@ pub mod tests {
         )
         .unwrap();
 
-        // One valid fork, one bad fork.  process_blocktree() should only return the valid fork
+        // One valid fork, one bad fork.  process_blockstore() should only return the valid fork
         assert_eq!(bank_forks_info, vec![BankForksInfo { bank_slot: 2 }]);
     }
 
     #[test]
-    fn test_process_blocktree_with_slot_with_trailing_entry() {
+    fn test_process_blockstore_with_slot_with_trailing_entry() {
         solana_logger::setup();
 
         let GenesisConfigInfo {
@@ -807,7 +809,7 @@ pub mod tests {
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
 
         let mut entries = create_ticks(ticks_per_slot, 0, blockhash);
         let trailing_entry = {
@@ -817,12 +819,12 @@ pub mod tests {
         };
         entries.push(trailing_entry);
 
-        // Tricks blocktree into writing the trailing entry by lying that there is one more tick
+        // Tricks blockstore into writing the trailing entry by lying that there is one more tick
         // per slot.
         let parent_slot = 0;
         let slot = 1;
         assert_matches!(
-            blocktree.write_entries(
+            blockstore.write_entries(
                 slot,
                 0,
                 0,
@@ -841,19 +843,19 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (_bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
         assert_eq!(bank_forks_info, vec![BankForksInfo { bank_slot: 0 }]);
     }
 
     #[test]
-    fn test_process_blocktree_with_incomplete_slot() {
+    fn test_process_blockstore_with_incomplete_slot() {
         solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
         /*
-          Build a blocktree in the ledger with the following fork structure:
+          Build a blockstore in the ledger with the following fork structure:
 
                slot 0 (all ticks)
                  |
@@ -868,8 +870,8 @@ pub mod tests {
         let (ledger_path, mut blockhash) = create_new_tmp_ledger!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
 
-        let blocktree =
-            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         // Write slot 1
         // slot 1, points at slot 0.  Missing one tick
@@ -883,7 +885,7 @@ pub mod tests {
             entries.pop();
 
             assert_matches!(
-                blocktree.write_entries(
+                blockstore.write_entries(
                     slot,
                     0,
                     0,
@@ -899,14 +901,14 @@ pub mod tests {
         }
 
         // slot 2, points at slot 1
-        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, blockhash);
+        fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 1, blockhash);
 
         let opts = ProcessOptions {
             poh_verify: true,
             ..ProcessOptions::default()
         };
         let (mut _bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts.clone()).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone()).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
@@ -928,10 +930,10 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 0, blockhash);
+        fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 0, blockhash);
         // Slot 0 should not show up in the ending bank_forks_info
         let (mut _bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
@@ -943,7 +945,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_blocktree_with_two_forks_and_squash() {
+    fn test_process_blockstore_with_two_forks_and_squash() {
         solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
@@ -955,7 +957,7 @@ pub mod tests {
         let mut last_entry_hash = blockhash;
 
         /*
-            Build a blocktree in the ledger with the following fork structure:
+            Build a blockstore in the ledger with the following fork structure:
 
                  slot 0
                    |
@@ -968,32 +970,42 @@ pub mod tests {
                    slot 4 <-- set_root(true)
 
         */
-        let blocktree =
-            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         // Fork 1, ending at slot 3
         let last_slot1_entry_hash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, last_entry_hash);
-        last_entry_hash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, last_slot1_entry_hash);
+            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, last_entry_hash);
+        last_entry_hash = fill_blockstore_slot_with_ticks(
+            &blockstore,
+            ticks_per_slot,
+            2,
+            1,
+            last_slot1_entry_hash,
+        );
         let last_fork1_entry_hash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 2, last_entry_hash);
+            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 2, last_entry_hash);
 
         // Fork 2, ending at slot 4
-        let last_fork2_entry_hash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 4, 1, last_slot1_entry_hash);
+        let last_fork2_entry_hash = fill_blockstore_slot_with_ticks(
+            &blockstore,
+            ticks_per_slot,
+            4,
+            1,
+            last_slot1_entry_hash,
+        );
 
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blocktree.set_roots(&[0, 1, 4]).unwrap();
+        blockstore.set_roots(&[0, 1, 4]).unwrap();
 
         let opts = ProcessOptions {
             poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // One fork, other one is ignored b/c not a descendant of the root
 
@@ -1017,7 +1029,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_blocktree_with_two_forks() {
+    fn test_process_blockstore_with_two_forks() {
         solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
@@ -1029,7 +1041,7 @@ pub mod tests {
         let mut last_entry_hash = blockhash;
 
         /*
-            Build a blocktree in the ledger with the following fork structure:
+            Build a blockstore in the ledger with the following fork structure:
 
                  slot 0
                    |
@@ -1042,32 +1054,42 @@ pub mod tests {
                    slot 4
 
         */
-        let blocktree =
-            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         // Fork 1, ending at slot 3
         let last_slot1_entry_hash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, last_entry_hash);
-        last_entry_hash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, last_slot1_entry_hash);
+            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, last_entry_hash);
+        last_entry_hash = fill_blockstore_slot_with_ticks(
+            &blockstore,
+            ticks_per_slot,
+            2,
+            1,
+            last_slot1_entry_hash,
+        );
         let last_fork1_entry_hash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 2, last_entry_hash);
+            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 2, last_entry_hash);
 
         // Fork 2, ending at slot 4
-        let last_fork2_entry_hash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 4, 1, last_slot1_entry_hash);
+        let last_fork2_entry_hash = fill_blockstore_slot_with_ticks(
+            &blockstore,
+            ticks_per_slot,
+            4,
+            1,
+            last_slot1_entry_hash,
+        );
 
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blocktree.set_roots(&[0, 1]).unwrap();
+        blockstore.set_roots(&[0, 1]).unwrap();
 
         let opts = ProcessOptions {
             poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, mut bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
         bank_forks_info.sort_by(|a, b| a.bank_slot.cmp(&b.bank_slot));
         assert_eq!(bank_forks_info.len(), 2); // There are two forks
@@ -1107,7 +1129,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_blocktree_with_dead_slot() {
+    fn test_process_blockstore_with_dead_slot() {
         solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
@@ -1125,16 +1147,16 @@ pub mod tests {
                            \
                         slot 3
         */
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
         let slot1_blockhash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, blockhash);
-        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, slot1_blockhash);
-        blocktree.set_dead_slot(2).unwrap();
-        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 1, slot1_blockhash);
+            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, blockhash);
+        fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 1, slot1_blockhash);
+        blockstore.set_dead_slot(2).unwrap();
+        fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
-        let (bank_forks, bank_forks_info, _) = process_blocktree(
+        let (bank_forks, bank_forks_info, _) = process_blockstore(
             &genesis_config,
-            &blocktree,
+            &blockstore,
             Vec::new(),
             ProcessOptions::default(),
         )
@@ -1154,7 +1176,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_blocktree_with_dead_child() {
+    fn test_process_blockstore_with_dead_child() {
         solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
@@ -1172,18 +1194,18 @@ pub mod tests {
                /           \
            slot 4 (dead)   slot 3
         */
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
         let slot1_blockhash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, blockhash);
+            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, blockhash);
         let slot2_blockhash =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, slot1_blockhash);
-        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 4, 2, slot2_blockhash);
-        blocktree.set_dead_slot(4).unwrap();
-        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 1, slot1_blockhash);
+            fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 1, slot1_blockhash);
+        fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 4, 2, slot2_blockhash);
+        blockstore.set_dead_slot(4).unwrap();
+        fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
-        let (bank_forks, mut bank_forks_info, _) = process_blocktree(
+        let (bank_forks, mut bank_forks_info, _) = process_blockstore(
             &genesis_config,
-            &blocktree,
+            &blockstore,
             Vec::new(),
             ProcessOptions::default(),
         )
@@ -1229,14 +1251,14 @@ pub mod tests {
                 /          \
            slot 1 (dead)  slot 2 (dead)
         */
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
-        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, blockhash);
-        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 0, blockhash);
-        blocktree.set_dead_slot(1).unwrap();
-        blocktree.set_dead_slot(2).unwrap();
-        let (bank_forks, bank_forks_info, _) = process_blocktree(
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, blockhash);
+        fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 0, blockhash);
+        blockstore.set_dead_slot(1).unwrap();
+        blockstore.set_dead_slot(2).unwrap();
+        let (bank_forks, bank_forks_info, _) = process_blockstore(
             &genesis_config,
-            &blocktree,
+            &blockstore,
             Vec::new(),
             ProcessOptions::default(),
         )
@@ -1249,7 +1271,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_blocktree_epoch_boundary_root() {
+    fn test_process_blockstore_epoch_boundary_root() {
         solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
@@ -1259,8 +1281,8 @@ pub mod tests {
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
         let mut last_entry_hash = blockhash;
 
-        let blocktree =
-            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         // Let last_slot be the number of slots in the first two epochs
         let epoch_schedule = get_epoch_schedule(&genesis_config, Vec::new());
@@ -1268,8 +1290,8 @@ pub mod tests {
 
         // Create a single chain of slots with all indexes in the range [0, last_slot + 1]
         for i in 1..=last_slot + 1 {
-            last_entry_hash = fill_blocktree_slot_with_ticks(
-                &blocktree,
+            last_entry_hash = fill_blockstore_slot_with_ticks(
+                &blockstore,
                 ticks_per_slot,
                 i,
                 i - 1,
@@ -1279,10 +1301,10 @@ pub mod tests {
 
         // Set a root on the last slot of the last confirmed epoch
         let rooted_slots: Vec<_> = (0..=last_slot).collect();
-        blocktree.set_roots(&rooted_slots).unwrap();
+        blockstore.set_roots(&rooted_slots).unwrap();
 
         // Set a root on the next slot of the confrimed epoch
-        blocktree.set_roots(&[last_slot + 1]).unwrap();
+        blockstore.set_roots(&[last_slot + 1]).unwrap();
 
         // Check that we can properly restart the ledger / leader scheduler doesn't fail
         let opts = ProcessOptions {
@@ -1290,7 +1312,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // There is one fork
         assert_eq!(
@@ -1418,9 +1440,9 @@ pub mod tests {
         ));
         let last_blockhash = entries.last().unwrap().hash;
 
-        let blocktree =
-            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
-        blocktree
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
+        blockstore
             .write_entries(
                 1,
                 0,
@@ -1438,7 +1460,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks.root(), 0);
@@ -1461,13 +1483,13 @@ pub mod tests {
         genesis_config.ticks_per_slot = 1;
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
             poh_verify: true,
             ..ProcessOptions::default()
         };
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 0 });
@@ -1480,12 +1502,12 @@ pub mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
             override_num_threads: Some(1),
             ..ProcessOptions::default()
         };
-        process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+        process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
         PAR_THREAD_POOL.with(|pool| {
             assert_eq!(pool.borrow().current_num_threads(), 1);
         });
@@ -1496,13 +1518,13 @@ pub mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
         let opts = ProcessOptions {
             full_leader_cache: true,
             ..ProcessOptions::default()
         };
         let (_bank_forks, _bank_forks_info, cached_leader_schedule) =
-            process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
         assert_eq!(cached_leader_schedule.max_schedules(), std::usize::MAX);
     }
 
@@ -1514,8 +1536,8 @@ pub mod tests {
             ..
         } = create_genesis_config(100);
         let (ledger_path, last_entry_hash) = create_new_tmp_ledger!(&genesis_config);
-        let blocktree =
-            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
         let blockhash = genesis_config.hash();
         let keypairs = [Keypair::new(), Keypair::new(), Keypair::new()];
 
@@ -1531,7 +1553,7 @@ pub mod tests {
             0,
             last_entry_hash,
         ));
-        blocktree
+        blockstore
             .write_entries(
                 1,
                 0,
@@ -1562,7 +1584,7 @@ pub mod tests {
             entry_callback: Some(entry_callback),
             ..ProcessOptions::default()
         };
-        process_blocktree(&genesis_config, &blocktree, Vec::new(), opts).unwrap();
+        process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
         assert_eq!(*callback_counter.write().unwrap(), 2);
     }
 
@@ -2183,7 +2205,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_blocktree_from_root() {
+    fn test_process_blockstore_from_root() {
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config(123);
@@ -2191,10 +2213,10 @@ pub mod tests {
         let ticks_per_slot = 1;
         genesis_config.ticks_per_slot = ticks_per_slot;
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
 
         /*
-          Build a blocktree in the ledger with the following fork structure:
+          Build a blockstore in the ledger with the following fork structure:
 
                slot 0 (all ticks)
                  |
@@ -2214,9 +2236,9 @@ pub mod tests {
         let mut last_hash = blockhash;
         for i in 0..6 {
             last_hash =
-                fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, i + 1, i, last_hash);
+                fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, i + 1, i, last_hash);
         }
-        blocktree.set_roots(&[3, 5]).unwrap();
+        blockstore.set_roots(&[3, 5]).unwrap();
 
         // Set up bank1
         let bank0 = Arc::new(Bank::new(&genesis_config));
@@ -2224,16 +2246,16 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        process_bank_0(&bank0, &blocktree, &opts).unwrap();
+        process_bank_0(&bank0, &blockstore, &opts).unwrap();
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-        let slot1_entries = blocktree.get_slot_entries(1, 0, None).unwrap();
+        let slot1_entries = blockstore.get_slot_entries(1, 0, None).unwrap();
         verify_and_process_slot_entries(&bank1, &slot1_entries, bank0.last_blockhash(), &opts)
             .unwrap();
         bank1.squash();
 
-        // Test process_blocktree_from_root() from slot 1 onwards
+        // Test process_blockstore_from_root() from slot 1 onwards
         let (bank_forks, bank_forks_info, _) =
-            process_blocktree_from_root(&genesis_config, &blocktree, bank1, &opts).unwrap();
+            process_blockstore_from_root(&genesis_config, &blockstore, bank1, &opts).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1); // One fork
         assert_eq!(

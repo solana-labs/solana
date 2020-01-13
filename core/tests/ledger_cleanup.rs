@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use solana_core::ledger_cleanup_service::LedgerCleanupService;
-    use solana_ledger::blocktree::{make_many_slot_entries, Blocktree};
+    use solana_ledger::blockstore::{make_many_slot_entries, Blockstore};
     use solana_ledger::get_tmp_ledger_path;
     use solana_ledger::shred::Shred;
     use std::collections::VecDeque;
@@ -33,7 +33,7 @@ mod tests {
         pub stop_size_bytes: u64,
         pub stop_size_iterations: u64,
         pub pre_generate_data: bool,
-        pub cleanup_blocktree: bool,
+        pub cleanup_blockstore: bool,
         pub emit_cpu_info: bool,
         pub assert_compaction: bool,
     }
@@ -150,7 +150,7 @@ mod tests {
         let stop_size_bytes = read_env("STOP_SIZE_BYTES", DEFAULT_STOP_SIZE_BYTES);
         let stop_size_iterations = read_env("STOP_SIZE_ITERATIONS", DEFAULT_STOP_SIZE_ITERATIONS);
         let pre_generate_data = read_env("PRE_GENERATE_DATA", false);
-        let cleanup_blocktree = read_env("CLEANUP_BLOCKTREE", true);
+        let cleanup_blockstore = read_env("CLEANUP_BLOCKSTORE", true);
         let emit_cpu_info = read_env("EMIT_CPU_INFO", true);
         // set default to `true` once compaction is merged
         let assert_compaction = read_env("ASSERT_COMPACTION", false);
@@ -163,7 +163,7 @@ mod tests {
             stop_size_bytes,
             stop_size_iterations,
             pre_generate_data,
-            cleanup_blocktree,
+            cleanup_blockstore,
             emit_cpu_info,
             assert_compaction,
         }
@@ -181,11 +181,11 @@ mod tests {
         batch_size: u64,
         entries: u64,
         max_slots: i64,
-        blocktree: &Blocktree,
+        blockstore: &Blockstore,
         cpu: &CpuStatsInner,
     ) {
         let time_now = Instant::now();
-        let storage_now = blocktree.storage_size().unwrap_or(0);
+        let storage_now = blockstore.storage_size().unwrap_or(0);
         let (cpu_user, cpu_system, cpu_idle) = (cpu.cpu_user, cpu.cpu_system, cpu.cpu_idle);
 
         println!(
@@ -209,11 +209,11 @@ mod tests {
 
     #[test]
     fn test_ledger_cleanup_compaction() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Arc::new(Blocktree::open(&blocktree_path).unwrap());
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
         let config = get_benchmark_config();
         eprintln!("BENCHMARK CONFIG: {:?}", config);
-        eprintln!("LEDGER_PATH: {:?}", &blocktree_path);
+        eprintln!("LEDGER_PATH: {:?}", &blockstore_path);
 
         let benchmark_slots = config.benchmark_slots;
         let batch_size = config.batch_size;
@@ -227,7 +227,7 @@ mod tests {
         let (sender, receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let cleaner =
-            LedgerCleanupService::new(receiver, blocktree.clone(), max_ledger_slots, &exit);
+            LedgerCleanupService::new(receiver, blockstore.clone(), max_ledger_slots, &exit);
 
         let exit_cpu = Arc::new(AtomicBool::new(false));
         let sys = CpuStatsUpdater::new(&exit_cpu);
@@ -259,7 +259,7 @@ mod tests {
             0,
             0,
             0,
-            &blocktree,
+            &blockstore,
             &sys.get_stats(),
         );
 
@@ -272,7 +272,7 @@ mod tests {
                 make_many_slot_entries(x, batch_size, entries_per_slot).0
             };
 
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
             sender.send(x).unwrap();
 
             emit_stats(
@@ -283,7 +283,7 @@ mod tests {
                 batch_size,
                 batch_size,
                 max_ledger_slots as i64,
-                &blocktree,
+                &blockstore,
                 &sys.get_stats(),
             );
 
@@ -313,13 +313,13 @@ mod tests {
             0,
             0,
             max_ledger_slots as i64,
-            &blocktree,
+            &blockstore,
             &sys.get_stats(),
         );
 
         // Poll on some compaction happening
         let start_poll = Instant::now();
-        while blocktree.storage_size().unwrap_or(0) >= u1 {
+        while blockstore.storage_size().unwrap_or(0) >= u1 {
             if start_poll.elapsed().as_secs() > ROCKSDB_FLUSH_GRACE_PERIOD_SECS {
                 break;
             }
@@ -334,7 +334,7 @@ mod tests {
             0,
             0,
             max_ledger_slots as i64,
-            &blocktree,
+            &blockstore,
             &sys.get_stats(),
         );
 
@@ -350,9 +350,10 @@ mod tests {
             assert!(u2 < u1, "expected compaction! pre={},post={}", u1, u2);
         }
 
-        if config.cleanup_blocktree {
-            drop(blocktree);
-            Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        if config.cleanup_blockstore {
+            drop(blockstore);
+            Blockstore::destroy(&blockstore_path)
+                .expect("Expected successful database destruction");
         }
     }
 }

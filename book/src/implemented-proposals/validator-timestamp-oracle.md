@@ -84,7 +84,7 @@ let timestamp_slot = floor(current_slot / timestamp_interval);
 ```
 
 Then the validator needs to gather all Vote WithTimestamp transactions from the
-ledger that reference that slot, using `Blocktree::get_slot_entries()`. As these
+ledger that reference that slot, using `Blockstore::get_slot_entries()`. As these
 transactions could have taken some time to reach and be processed by the leader,
 the validator needs to scan several completed blocks after the timestamp\_slot to
 get a reasonable set of Timestamps. The exact number of slots will need to be

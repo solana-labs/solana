@@ -21,10 +21,10 @@ impl FailEntryVerificationBroadcastRun {
 impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<TransmitShreds>,
-        blocktree_sender: &Sender<Arc<Vec<Shred>>>,
+        blockstore_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
@@ -38,7 +38,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             last_entry.hash = Hash::default();
         }
 
-        let next_shred_index = blocktree
+        let next_shred_index = blockstore
             .meta(bank.slot())
             .expect("Database error")
             .map(|meta| meta.consumed)
@@ -61,7 +61,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         );
 
         let data_shreds = Arc::new(data_shreds);
-        blocktree_sender.send(data_shreds.clone())?;
+        blockstore_sender.send(data_shreds.clone())?;
         // 3) Start broadcast step
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
@@ -90,12 +90,12 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn record(
         &self,
         receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         let all_shreds = receiver.lock().unwrap().recv()?;
-        blocktree
+        blockstore
             .insert_shreds(all_shreds.to_vec(), None, true)
-            .expect("Failed to insert shreds in blocktree");
+            .expect("Failed to insert shreds in blockstore");
         Ok(())
     }
 }
