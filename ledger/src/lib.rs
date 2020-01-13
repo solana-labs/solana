@@ -4,7 +4,7 @@ pub mod block_error;
 #[macro_use]
 pub mod blockstore;
 pub mod blockstore_db;
-mod blockstore_meta;
+pub mod blockstore_meta;
 pub mod blockstore_processor;
 pub mod entry;
 pub mod erasure;
