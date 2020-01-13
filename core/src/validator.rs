@@ -145,8 +145,6 @@ impl Validator {
 
         info!("entrypoint: {:?}", entrypoint_info_option);
 
-        Self::print_node_info(&node);
-
         info!("Initializing sigverify, this could take a while...");
         sigverify::init();
         info!("Done.");
@@ -177,8 +175,6 @@ impl Validator {
         let bank = bank_forks[bank_info.bank_slot].clone();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-        // The version used by shreds, derived from genesis
-        let shred_version = Shred::version_from_hash(&genesis_hash);
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
@@ -186,6 +182,9 @@ impl Validator {
         let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
         node.info.wallclock = timestamp();
+        node.info.shred_version = Shred::version_from_hash(&genesis_hash);
+        Self::print_node_info(&node);
+
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
             node.info.clone(),
             keypair.clone(),
@@ -372,7 +371,7 @@ impl Validator {
             block_commitment_cache,
             config.dev_sigverify_disabled,
             config.partition_cfg.clone(),
-            shred_version,
+            node.info.shred_version,
             transaction_status_sender.clone(),
         );
 
@@ -392,7 +391,7 @@ impl Validator {
             &blockstore,
             &config.broadcast_stage_type,
             &exit,
-            shred_version,
+            node.info.shred_version,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
@@ -615,6 +614,7 @@ fn get_stake_percent_in_gossip(
     let mut gossip_stake = 0;
     let mut total_activated_stake = 0;
     let tvu_peers = cluster_info.read().unwrap().tvu_peers();
+    let me = cluster_info.read().unwrap().my_data();
 
     for (activated_stake, vote_account) in bank.vote_accounts().values() {
         let vote_state =
@@ -622,6 +622,7 @@ fn get_stake_percent_in_gossip(
         total_activated_stake += activated_stake;
         if tvu_peers
             .iter()
+            .filter(|peer| peer.shred_version == me.shred_version)
             .any(|peer| peer.id == vote_state.node_pubkey)
         {
             trace!(

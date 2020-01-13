@@ -199,7 +199,6 @@ fn spy(
             .unwrap()
             .tvu_peers()
             .into_iter()
-            .filter(|node| !ClusterInfo::is_archiver(&node))
             .collect::<Vec<_>>();
         archivers = spy_ref.read().unwrap().storage_peers();
         if let Some(num) = num_nodes {
