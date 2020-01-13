@@ -49,6 +49,7 @@ if [[ -z "$installDir" ]]; then
 fi
 
 installDir="$(mkdir -p "$installDir"; cd "$installDir"; pwd)"
+mkdir -p "$installDir/bin/deps"
 cargo=cargo
 
 echo "Install location: $installDir ($buildVariant)"
@@ -64,8 +65,10 @@ SECONDS=0
   $cargo $maybeRustVersion build $maybeReleaseFlag
 
   if $useMove; then
+    moveLoaderDir=programs/move_loader
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path programs/move_loader/Cargo.toml
+    $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path "$moveLoaderDir/Cargo.toml"
+    cp -fv $moveLoaderDir/target/$buildVariant/libsolana_move_loader_program.* "$installDir/bin/deps"
   fi
 )
 
@@ -112,7 +115,6 @@ if [[ -d target/perf-libs ]]; then
 fi
 
 set -x
-mkdir -p "$installDir/bin/deps"
 cp -fv target/$buildVariant/deps/libsolana*program.* "$installDir/bin/deps"
 
 echo "Done after $SECONDS seconds"
