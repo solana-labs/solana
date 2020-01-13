@@ -414,77 +414,174 @@ pub fn verify_ticks(
     Ok(())
 }
 
-fn verify_and_process_slot_entries(
+fn confirm_full_slot(
+    blockstore: &Blockstore,
     bank: &Arc<Bank>,
-    entries: &[Entry],
     last_entry_hash: &Hash,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    if opts.poh_verify {
-        let slot_full = true;
-        let mut tick_hash_count = 0;
-        verify_and_process_entries(
-            bank,
-            entries,
-            last_entry_hash,
-            slot_full,
-            &mut tick_hash_count,
-            None,
-            opts.entry_callback.as_ref(),
-            recyclers,
-        )
-        .map(|_| ())
+    let mut timing = ConfirmationTiming::default();
+    let mut progress = ConfirmationProgress::new(*last_entry_hash);
+    let skip_verification = !opts.poh_verify;
+    confirm_slot(
+        blockstore,
+        bank,
+        &mut timing,
+        &mut progress,
+        skip_verification,
+        None,
+        opts.entry_callback.as_ref(),
+        recyclers,
+    )?;
+    if !progress.is_full {
+        Err(BlockstoreProcessorError::InvalidBlock(
+            BlockError::Incomplete,
+        ))
     } else {
-        process_entries_with_callback(bank, entries, true, opts.entry_callback.as_ref(), None)
-            .map_err(BlockstoreProcessorError::from)
+        Ok(())
     }
 }
 
-pub fn verify_and_process_entries(
+pub struct ConfirmationTiming {
+    pub started: Instant,
+    pub replay_elapsed: u64,
+    pub verify_elapsed: u64,
+    pub fetch_elapsed: u64,
+    pub fetch_fail_elapsed: u64,
+}
+
+impl Default for ConfirmationTiming {
+    fn default() -> Self {
+        Self {
+            started: Instant::now(),
+            replay_elapsed: 0,
+            verify_elapsed: 0,
+            fetch_elapsed: 0,
+            fetch_fail_elapsed: 0,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct ConfirmationProgress {
+    pub is_full: bool,
+    pub last_entry: Hash,
+    pub tick_hash_count: u64,
+    pub num_shreds: u64,
+    pub num_entries: usize,
+    pub num_txs: usize,
+}
+
+impl ConfirmationProgress {
+    pub fn new(last_entry: Hash) -> Self {
+        Self {
+            last_entry,
+            ..Self::default()
+        }
+    }
+}
+
+pub fn confirm_slot(
+    blockstore: &Blockstore,
     bank: &Arc<Bank>,
-    entries: &[Entry],
-    last_entry: &Hash,
-    slot_full: bool,
-    tick_hash_count: &mut u64,
+    timing: &mut ConfirmationTiming,
+    progress: &mut ConfirmationProgress,
+    skip_verification: bool,
     transaction_status_sender: Option<TransactionStatusSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
-) -> result::Result<(u64, u64), BlockstoreProcessorError> {
-    verify_ticks(bank, entries, slot_full, tick_hash_count)?;
+) -> result::Result<(), BlockstoreProcessorError> {
+    let slot = bank.slot();
 
-    datapoint_debug!("verify-batch-size", ("size", entries.len() as i64, i64));
-    let mut verify_total = Measure::start("verify_and_process_entries");
-    let mut entry_state = entries.start_verify(last_entry, recyclers.clone());
+    let (entries, num_shreds, slot_full) = {
+        let mut load_elapsed = Measure::start("load_elapsed");
+        let load_result = blockstore
+            .get_slot_entries_with_shred_info(slot, progress.num_shreds)
+            .map_err(BlockstoreProcessorError::FailedToLoadEntries);
+        load_elapsed.stop();
+        if load_result.is_err() {
+            timing.fetch_fail_elapsed += load_elapsed.as_us();
+        } else {
+            timing.fetch_elapsed += load_elapsed.as_us();
+        }
+        load_result
+    }?;
 
-    if entry_state.status() == EntryVerificationStatus::Failure {
-        warn!("Ledger proof of history failed at slot: {}", bank.slot());
-        return Err(BlockError::InvalidEntryHash.into());
+    let num_entries = entries.len();
+    let num_txs = entries.iter().map(|e| e.transactions.len()).sum::<usize>();
+    trace!(
+        "Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {}",
+        slot,
+        num_entries,
+        num_shreds,
+        num_txs,
+        slot_full,
+    );
+
+    if !skip_verification {
+        let tick_hash_count = &mut progress.tick_hash_count;
+        verify_ticks(bank, &entries, slot_full, tick_hash_count).map_err(|err| {
+            warn!(
+                "{:#?}, slot: {}, entry len: {}, tick_height: {}, last entry: {}, last_blockhash: {}, shred_index: {}, slot_full: {}",
+                err,
+                slot,
+                num_entries,
+                bank.tick_height(),
+                progress.last_entry,
+                bank.last_blockhash(),
+                num_shreds,
+                slot_full,
+            );
+            err
+        })?;
     }
 
-    let mut processing_elapsed = Measure::start("processing_elapsed");
+    let mut verify_total = Measure::start("verify_and_process_entries");
+    let verifier = if !skip_verification {
+        datapoint_debug!("verify-batch-size", ("size", num_entries as i64, i64));
+        let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
+        if entry_state.status() == EntryVerificationStatus::Failure {
+            warn!("Ledger proof of history failed at slot: {}", slot);
+            return Err(BlockError::InvalidEntryHash.into());
+        }
+        Some(entry_state)
+    } else {
+        None
+    };
+
+    let mut replay_elapsed = Measure::start("replay_elapsed");
     let process_result = process_entries_with_callback(
         bank,
-        entries,
+        &entries,
         true,
         entry_callback,
         transaction_status_sender,
     )
     .map_err(BlockstoreProcessorError::from);
-    processing_elapsed.stop();
+    replay_elapsed.stop();
+    timing.replay_elapsed += replay_elapsed.as_us();
 
-    if !entry_state.finish_verify(entries) {
-        warn!("Ledger proof of history failed at slot: {}", bank.slot());
-        return Err(BlockError::InvalidEntryHash.into());
+    if let Some(mut verifier) = verifier {
+        if !verifier.finish_verify(&entries) {
+            warn!("Ledger proof of history failed at slot: {}", bank.slot());
+            return Err(BlockError::InvalidEntryHash.into());
+        }
+        verify_total.stop();
+        timing.verify_elapsed += verify_total.as_us() - replay_elapsed.as_us();
     }
-    verify_total.stop();
 
     process_result?;
 
-    Ok((
-        processing_elapsed.as_us(),
-        verify_total.as_us() - processing_elapsed.as_us(),
-    ))
+    progress.is_full = slot_full;
+    progress.num_shreds += num_shreds;
+    progress.num_entries += num_entries;
+    progress.num_txs += num_txs;
+    if let Some(last_entry) = entries.last() {
+        progress.last_entry = last_entry.hash;
+    }
+
+    Ok(())
 }
 
 // Special handling required for processing the entries in slot 0
@@ -495,21 +592,9 @@ fn process_bank_0(
     recyclers: &VerifyRecyclers,
 ) -> result::Result<(), BlockstoreProcessorError> {
     assert_eq!(bank0.slot(), 0);
-
-    // Fetch all entries for this slot
-    let entries = blockstore.get_slot_entries(0, 0, None).map_err(|err| {
-        warn!("Failed to load entries for slot 0, err: {:?}", err);
-        BlockstoreProcessorError::from(err)
-    })?;
-
-    let result =
-        verify_and_process_slot_entries(bank0, &entries, &bank0.last_blockhash(), opts, recyclers);
-    if is_result_fatal(&result) {
-        panic!("processing for bank 0 must succceed");
-    }
-
+    confirm_full_slot(blockstore, bank0, &bank0.last_blockhash(), opts, recyclers)
+        .expect("processing for bank 0 must succceed");
     bank0.freeze();
-
     Ok(())
 }
 
@@ -612,8 +697,7 @@ fn process_pending_slots(
         let allocated = thread_mem_usage::Allocatedp::default();
         let initial_allocation = allocated.get();
 
-        let slot_result = process_single_slot(blockstore, &bank, &last_entry_hash, opts, recyclers);
-        if is_result_fatal(&slot_result) {
+        if process_single_slot(blockstore, &bank, &last_entry_hash, opts, recyclers).is_err() {
             continue;
         }
 
@@ -662,46 +746,19 @@ fn process_single_slot(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    let slot = bank.slot();
-
-    // Fetch all entries for this slot
-    let entries = blockstore.get_slot_entries(slot, 0, None).map_err(|err| {
-        warn!("Failed to load entries for slot {}: {:?}", slot, err);
-        BlockstoreProcessorError::from(err)
-    })?;
-
     // Mark corrupt slots as dead so validators don't replay this slot and
     // see DuplicateSignature errors later in ReplayStage
-    let result = verify_and_process_slot_entries(&bank, &entries, last_entry_hash, opts, recyclers);
-    if is_result_fatal(&result) {
+    confirm_full_slot(blockstore, bank, last_entry_hash, opts, recyclers).map_err(|err| {
+        let slot = bank.slot();
         blockstore
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blockstore");
-        if let Err(err) = &result {
-            warn!("slot {} failed to verify: {}", slot, err);
-        }
-        result?;
-    }
+        warn!("slot {} failed to verify: {}", slot, err);
+        err
+    })?;
 
     bank.freeze(); // all banks handled by this routine are created from complete slots
     Ok(())
-}
-
-// Returns true if the `result` is an error that will cause a bank to be marked as dead
-pub fn is_result_fatal<T>(result: &result::Result<T, BlockstoreProcessorError>) -> bool {
-    match result {
-        Err(BlockstoreProcessorError::InvalidTransaction(e)) => {
-            // Transactions with any transaction errors mean this fork is bogus
-            let tx_error = Err(e.clone());
-            !Bank::can_commit(&tx_error)
-        }
-        Err(BlockstoreProcessorError::InvalidBlock(_)) => true,
-        Err(BlockstoreProcessorError::FailedToLoadEntries(BlockstoreError::InvalidShredData(_))) => {
-            true
-        }
-        Err(BlockstoreProcessorError::FailedToLoadEntries(BlockstoreError::DeadSlot)) => true,
-        _ => false,
-    }
 }
 
 pub struct TransactionStatusBatch {
@@ -1017,7 +1074,7 @@ pub mod tests {
             }
         );
 
-        /* Add a complete slot such that the tree looks like:
+        /* Add a complete slot such that the store looks like:
 
                                  slot 0 (all ticks)
                                /                  \
@@ -2348,10 +2405,9 @@ pub mod tests {
         let recyclers = VerifyRecyclers::default();
         process_bank_0(&bank0, &blockstore, &opts, &recyclers).unwrap();
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-        let slot1_entries = blockstore.get_slot_entries(1, 0, None).unwrap();
-        verify_and_process_slot_entries(
+        confirm_full_slot(
+            &blockstore,
             &bank1,
-            &slot1_entries,
             &bank0.last_blockhash(),
             &opts,
             &recyclers,
