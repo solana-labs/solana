@@ -139,7 +139,7 @@ impl PohRecorder {
     fn received_any_previous_leader_data(&self, slot: Slot) -> bool {
         (slot.saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)..slot).any(|i| {
             // Check if we have received any data in previous leader's slots
-            if let Ok(slot_meta) = self.blocktree.meta(i as Slot) {
+            if let Ok(slot_meta) = self.blockstore.meta(i as Slot) {
                 if let Some(slot_meta) = slot_meta {
                     slot_meta.received > 0
                 } else {
@@ -1125,8 +1125,8 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree =
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
             let prev_hash = bank.last_blockhash();
@@ -1137,7 +1137,7 @@ mod tests {
                 None,
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
-                &Arc::new(blocktree),
+                &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
             );
@@ -1160,7 +1160,7 @@ mod tests {
             let mut parent_meta = SlotMeta::default();
             parent_meta.received = 1;
             poh_recorder
-                .blocktree
+                .blockstore
                 .put_meta_bytes(0, &serialize(&parent_meta).unwrap())
                 .unwrap();
 
@@ -1222,7 +1222,7 @@ mod tests {
             let mut parent_meta = SlotMeta::default();
             parent_meta.received = 1;
             poh_recorder
-                .blocktree
+                .blockstore
                 .put_meta_bytes(0, &serialize(&parent_meta).unwrap())
                 .unwrap();
 
