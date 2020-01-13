@@ -136,8 +136,8 @@ impl PohRecorder {
         self.ticks_per_slot
     }
 
-    fn ignore_grace_ticks(&self, slot: Slot) -> bool {
-        !(slot.saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)..slot).any(|i| {
+    fn received_any_previous_leader_data(&self, slot: Slot) -> bool {
+        (slot.saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)..slot).any(|i| {
             // Check if we have received any data in previous leader's slots
             if let Ok(slot_meta) = self.blocktree.meta(i as Slot) {
                 if let Some(slot_meta) = slot_meta {
@@ -160,7 +160,7 @@ impl PohRecorder {
         self.tick_height >= target_tick_height
             || self.start_tick_height + self.grace_ticks == leader_first_tick_height
             || (self.tick_height >= ideal_target_tick_height
-                && self.ignore_grace_ticks(current_slot))
+                && !self.received_any_previous_leader_data(current_slot))
     }
 
     /// returns if leader slot has been reached, how many grace ticks were afforded,
