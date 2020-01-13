@@ -13,7 +13,8 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{
     Response, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule,
-    RpcResponseContext, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
+    RpcResponseContext, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
+    RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -312,8 +313,12 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_confirmed_block(&self, slot: Slot) -> Result<Option<RpcConfirmedBlock>> {
-        Ok(self.blocktree.get_confirmed_block(slot).ok())
+    pub fn get_confirmed_block(
+        &self,
+        slot: Slot,
+        encoding: Option<RpcTransactionEncoding>,
+    ) -> Result<Option<RpcConfirmedBlock>> {
+        Ok(self.blocktree.get_confirmed_block(slot, encoding).ok())
     }
 
     pub fn get_confirmed_blocks(
@@ -562,6 +567,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         slot: Slot,
+        encoding: Option<RpcTransactionEncoding>,
     ) -> Result<Option<RpcConfirmedBlock>>;
 
     #[rpc(meta, name = "getBlockTime")]
@@ -1031,11 +1037,12 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         slot: Slot,
+        encoding: Option<RpcTransactionEncoding>,
     ) -> Result<Option<RpcConfirmedBlock>> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_confirmed_block(slot)
+            .get_confirmed_block(slot, encoding)
     }
 
     fn get_confirmed_blocks(
@@ -1063,7 +1070,9 @@ pub mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         replay_stage::tests::create_test_transactions_and_populate_blocktree,
     };
+    use bincode::deserialize;
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
+    use solana_client::rpc_request::RpcEncodedTransaction;
     use solana_ledger::{
         blocktree::entries_to_test_shreds, blocktree_processor::fill_blocktree_slot_with_ticks,
         entry::next_entry_mut, get_tmp_ledger_path,
@@ -2008,6 +2017,36 @@ pub mod tests {
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0]}}"#);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_block: Option<RpcConfirmedBlock> =
+            serde_json::from_value(result["result"].clone()).unwrap();
+        let confirmed_block = confirmed_block.unwrap();
+        assert_eq!(confirmed_block.transactions.len(), 3);
+
+        for (transaction, result) in confirmed_block.transactions.into_iter() {
+            if let RpcEncodedTransaction::Json(transaction) = transaction {
+                if transaction.signatures[0] == confirmed_block_signatures[0].to_string() {
+                    assert_eq!(transaction.message.recent_blockhash, blockhash.to_string());
+                    assert_eq!(result.unwrap().status, Ok(()));
+                } else if transaction.signatures[0] == confirmed_block_signatures[1].to_string() {
+                    assert_eq!(
+                        result.unwrap().status,
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::CustomError(1)
+                        ))
+                    );
+                } else {
+                    assert_eq!(result, None);
+                }
+            }
+        }
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0, "binary"]}}"#
+        );
         let res = io.handle_request_sync(&req, meta);
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -2017,19 +2056,23 @@ pub mod tests {
         assert_eq!(confirmed_block.transactions.len(), 3);
 
         for (transaction, result) in confirmed_block.transactions.into_iter() {
-            if transaction.signatures[0] == confirmed_block_signatures[0] {
-                assert_eq!(transaction.message.recent_blockhash, blockhash);
-                assert_eq!(result.unwrap().status, Ok(()));
-            } else if transaction.signatures[0] == confirmed_block_signatures[1] {
-                assert_eq!(
-                    result.unwrap().status,
-                    Err(TransactionError::InstructionError(
-                        0,
-                        InstructionError::CustomError(1)
-                    ))
-                );
-            } else {
-                assert_eq!(result, None);
+            if let RpcEncodedTransaction::Binary(transaction) = transaction {
+                let decoded_transaction: Transaction =
+                    deserialize(&bs58::decode(&transaction).into_vec().unwrap()).unwrap();
+                if decoded_transaction.signatures[0] == confirmed_block_signatures[0] {
+                    assert_eq!(decoded_transaction.message.recent_blockhash, blockhash);
+                    assert_eq!(result.unwrap().status, Ok(()));
+                } else if decoded_transaction.signatures[0] == confirmed_block_signatures[1] {
+                    assert_eq!(
+                        result.unwrap().status,
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::CustomError(1)
+                        ))
+                    );
+                } else {
+                    assert_eq!(result, None);
+                }
             }
         }
     }
