@@ -21,7 +21,7 @@ export type TransactionSignature = string;
  *
  * Signatures are 64 bytes in length
  */
-const DEFAULT_SIGNATURE = Array(64).fill(0);
+const DEFAULT_SIGNATURE = Buffer.alloc(64).fill(0);
 
 /**
  * Maximum over-the-wire size of a Transaction
@@ -489,7 +489,7 @@ export class Transaction {
     for (let i = 0; i < signatureCount; i++) {
       const signature = byteArray.slice(0, SIGNATURE_LENGTH);
       byteArray = byteArray.slice(SIGNATURE_LENGTH);
-      signatures.push(signature);
+      signatures.push(bs58.encode(Buffer.from(signature)));
     }
 
     const numRequiredSignatures = byteArray.shift();
@@ -504,7 +504,7 @@ export class Transaction {
     for (let i = 0; i < accountCount; i++) {
       const account = byteArray.slice(0, PUBKEY_LENGTH);
       byteArray = byteArray.slice(PUBKEY_LENGTH);
-      accounts.push(account);
+      accounts.push(bs58.encode(Buffer.from(account)));
     }
 
     const recentBlockhash = byteArray.slice(0, PUBKEY_LENGTH);
@@ -519,7 +519,8 @@ export class Transaction {
       instruction.accounts = byteArray.slice(0, accountCount);
       byteArray = byteArray.slice(accountCount);
       const dataLength = shortvec.decodeLength(byteArray);
-      instruction.data = byteArray.slice(0, dataLength);
+      const data = byteArray.slice(0, dataLength);
+      instruction.data = bs58.encode(Buffer.from(data));
       byteArray = byteArray.slice(dataLength);
       instructions.push(instruction);
     }
@@ -539,13 +540,9 @@ export class Transaction {
    * Parse an RPC result into a Transaction object.
    */
   static fromRpcResult(rpcResult: any): Transaction {
-    const signatures = rpcResult.signatures.slice(1);
-    const accounts = rpcResult.message.accountKeys.slice(1);
-    const instructions = rpcResult.message.instructions.slice(1).map(ix => {
-      ix.accounts.shift();
-      ix.data.shift();
-      return ix;
-    });
+    const signatures = rpcResult.signatures;
+    const accounts = rpcResult.message.accountKeys;
+    const instructions = rpcResult.message.instructions;
     const recentBlockhash = rpcResult.message.recentBlockhash;
     const numRequiredSignatures =
       rpcResult.message.header.numRequiredSignatures;
@@ -569,8 +566,8 @@ export class Transaction {
    * @private
    */
   static _populate(
-    signatures: Array<Array<number>>,
-    accounts: Array<Array<number>>,
+    signatures: Array<string>,
+    accounts: Array<string>,
     instructions: Array<any>,
     recentBlockhash: Array<number>,
     numRequiredSignatures: number,
@@ -596,9 +593,9 @@ export class Transaction {
     for (let i = 0; i < signatures.length; i++) {
       const sigPubkeyPair = {
         signature:
-          signatures[i].toString() == DEFAULT_SIGNATURE.toString()
+          signatures[i] == bs58.encode(DEFAULT_SIGNATURE)
             ? null
-            : Buffer.from(signatures[i]),
+            : bs58.decode(signatures[i]),
         publicKey: new PublicKey(accounts[i]),
       };
       transaction.signatures.push(sigPubkeyPair);
@@ -607,7 +604,7 @@ export class Transaction {
       let instructionData = {
         keys: [],
         programId: new PublicKey(accounts[instructions[i].programIndex]),
-        data: Buffer.from(instructions[i].data),
+        data: bs58.decode(instructions[i].data),
       };
       for (let j = 0; j < instructions[i].accounts.length; j++) {
         const pubkey = new PublicKey(accounts[instructions[i].accounts[j]]);

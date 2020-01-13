@@ -1,4 +1,5 @@
 // @flow
+import bs58 from 'bs58';
 import nacl from 'tweetnacl';
 
 import {Account} from '../src/account';
@@ -155,12 +156,11 @@ test('transaction from rpc result', () => {
   const rpcResult = {
     message: {
       accountKeys: [
-        [5],
-        new PublicKey(1).toBuffer(),
-        new PublicKey(2).toBuffer(),
-        new PublicKey(3).toBuffer(),
-        new PublicKey(4).toBuffer(),
-        new PublicKey(5).toBuffer(),
+        new PublicKey(1).toString(),
+        new PublicKey(2).toString(),
+        new PublicKey(3).toString(),
+        new PublicKey(4).toString(),
+        new PublicKey(5).toString(),
       ],
       header: {
         num_ReadonlySignedAccounts: 0,
@@ -168,16 +168,18 @@ test('transaction from rpc result', () => {
         numRequiredSignatures: 2,
       },
       instructions: [
-        [1],
         {
-          accounts: [[3], 1, 2, 3],
-          data: [[1], 0],
+          accounts: [1, 2, 3],
+          data: bs58.encode(Buffer.alloc(5).fill(9)),
           programIdIndex: 4,
         },
       ],
       recentBlockhash: rawBlockhash,
     },
-    signatures: [[2], Array(64).fill(1), Array(64).fill(2)],
+    signatures: [
+      bs58.encode(Buffer.alloc(64).fill(1)),
+      bs58.encode(Buffer.alloc(64).fill(2)),
+    ],
   };
 
   const recentBlockhash = new PublicKey(rawBlockhash).toBase58();
