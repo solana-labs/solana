@@ -306,7 +306,7 @@ fn get_and_verify_slot_entries(
     slot: Slot,
     last_entry: &Hash,
 ) -> Vec<Entry> {
-    let entries = blocktree.get_slot_entries(slot, 0, None).unwrap();
+    let entries = blockstore.get_slot_entries(slot, 0, None).unwrap();
     assert!(entries.verify(last_entry));
     entries
 }
