@@ -991,6 +991,38 @@ mod tests {
         (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
     }
 
+    fn parse_authorize_tests(
+        test_commands: &App,
+        stake_account_pubkey: Pubkey,
+        stake_authorize: StakeAuthorize,
+    ) {
+        let stake_account_string = stake_account_pubkey.to_string();
+
+        let subcommand = match stake_authorize {
+            StakeAuthorize::Staker => "stake-authorize-staker",
+            StakeAuthorize::Withdrawer => "stake-authorize-withdrawer",
+        };
+
+        // Test Staker Subcommand
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            &subcommand,
+            &stake_account_string,
+            &stake_account_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorized_pubkey: stake_account_pubkey,
+                    stake_authorize,
+                },
+                require_keypair: true
+            }
+        );
+    }
+
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
@@ -998,41 +1030,12 @@ mod tests {
         let stake_account_keypair = Keypair::new();
         write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
         let stake_account_pubkey = stake_account_keypair.pubkey();
-        let stake_account_string = stake_account_pubkey.to_string();
 
-        let test_authorize_staker = test_commands.clone().get_matches_from(vec![
-            "test",
-            "stake-authorize-staker",
-            &stake_account_string,
-            &stake_account_string,
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize_staker).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize: StakeAuthorize::Staker,
-                },
-                require_keypair: true
-            }
-        );
-        let test_authorize_withdrawer = test_commands.clone().get_matches_from(vec![
-            "test",
-            "stake-authorize-withdrawer",
-            &stake_account_string,
-            &stake_account_string,
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize_withdrawer).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize: StakeAuthorize::Withdrawer,
-                },
-                require_keypair: true
-            }
+        parse_authorize_tests(&test_commands, stake_account_pubkey, StakeAuthorize::Staker);
+        parse_authorize_tests(
+            &test_commands,
+            stake_account_pubkey,
+            StakeAuthorize::Withdrawer,
         );
 
         // Test CreateStakeAccount SubCommand
