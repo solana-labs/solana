@@ -1668,16 +1668,22 @@ impl Blockstore {
     }
 
     // `new_shred` is asssumed to have slot and index equal to the given slot and index.
-    // Returns true if `new_shred` is not equal to the existing shred at the given
-    // slot and index as this implies the leader generated two different shreds with
+    // Returns the existing shred if `new_shred` is not equal to the existing shred at the
+    // given slot and index as this implies the leader generated two different shreds with
     // the same slot and index
-    pub fn is_shred_duplicate(&self, slot: u64, index: u64, new_shred: &[u8]) -> bool {
+    pub fn is_shred_duplicate(&self, slot: u64, index: u32, new_shred: &[u8]) -> Option<Vec<u8>> {
         let res = self
-            .get_data_shred(slot, index)
+            .get_data_shred(slot, index as u64)
             .expect("fetch from DuplicateSlots column family failed");
 
-        res.map(|existing_shred| existing_shred != new_shred)
-            .unwrap_or(false)
+        res.map(|existing_shred| {
+            if existing_shred != new_shred {
+                Some(existing_shred)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(None)
     }
 
     pub fn has_duplicate_shreds_in_slot(&self, slot: Slot) -> bool {
@@ -5286,8 +5292,13 @@ pub mod tests {
             assert!(!blockstore.has_duplicate_shreds_in_slot(slot));
 
             // Check if shreds are duplicated
-            assert!(blockstore.is_shred_duplicate(slot, 0, &duplicate_shred.payload));
-            assert!(!blockstore.is_shred_duplicate(slot, 0, &non_duplicate_shred.payload));
+            assert_eq!(
+                blockstore.is_shred_duplicate(slot, 0, &duplicate_shred.payload),
+                Some(shred.payload.clone())
+            );
+            assert!(blockstore
+                .is_shred_duplicate(slot, 0, &non_duplicate_shred.payload)
+                .is_none());
 
             // Store a duplicate shred
             blockstore
