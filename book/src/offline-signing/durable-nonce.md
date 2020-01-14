@@ -5,32 +5,6 @@ short lifetime of a transaction's [`recent_blockhash`](../transaction.md#recent-
 They are implemented as a Solana Program, the mechanics of which can be read
 about in the [proposal](../implemented-proposals/durable-tx-nonces.md).
 
-## Known Issues
-
-### Fee Theft Opportunity
-
-The durable nonce implementation contains a vulernability which allows for fees
-to be stolen by a transaction using the feature under certain conditions. If the
-transaction fails with an instruction error, the runtime rolls back the step
-that advanced the stored nonce, allowing it to be replayed and fees charged.
-This can be repeated until the stored nonce is successfully advanced.
-
-- Mitigation
-
-To minimize loss of funds, use a low-balance account to pay fees on a durable
-nonce transaction.
-
-If a transaction using the durable nonce feature fails with an instruction error,
-immediately submit a new transaction that advances the nonce and will certainly
-succeed. The simplest way to do this is with a single-instruction
-`NonceInstruction::Nonce` transaction, which can be sent using the CLI
-[`new-nonce`](#advancing-the-stored-nonce-value) command.
-
-- Issue Tracking
-
-This issue is being actively addressed, progress can be followed on
-[Github](https://github.com/solana-labs/solana/issues/7443).
-
 ## Usage Examples
 
 Full usage details for durable nonce CLI commands can be found in the
