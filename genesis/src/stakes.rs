@@ -91,7 +91,6 @@ pub fn create_and_add_stakes(
 
     let mut address_generator = AddressGenerator::new(
         &authorized.staker,
-        staker_info.name,
         &solana_stake_program::id(),
     );
 
