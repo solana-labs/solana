@@ -505,7 +505,6 @@ impl ReplayStage {
         }
     }
 
-    // Returns the replay result and the number of replayed transactions
     fn replay_blockstore_into_bank(
         bank: &Arc<Bank>,
         blockstore: &Blockstore,
@@ -728,14 +727,12 @@ impl ReplayStage {
                 }
             }
             assert_eq!(*bank_slot, bank.slot());
-            if bank.tick_height() == bank.max_tick_height() {
-                if let Some(bank_progress) = &mut progress.get(&bank.slot()) {
-                    bank_progress.replay_stats.report_stats(
-                        bank.slot(),
-                        bank_progress.replay_progress.num_entries,
-                        bank_progress.replay_progress.num_shreds,
-                    );
-                }
+            if bank.is_complete() {
+                bank_progress.replay_stats.report_stats(
+                    bank.slot(),
+                    bank_progress.replay_progress.num_entries,
+                    bank_progress.replay_progress.num_shreds,
+                );
                 did_complete_bank = true;
                 Self::process_completed_bank(my_pubkey, bank, slot_full_senders);
             } else {

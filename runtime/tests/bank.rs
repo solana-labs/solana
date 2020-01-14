@@ -20,7 +20,7 @@ fn test_race_register_tick_freeze() {
         let freeze_thread = Builder::new()
             .name("freeze".to_string())
             .spawn(move || loop {
-                if bank0_.tick_height() == bank0_.max_tick_height() {
+                if bank0_.is_complete() {
                     assert_eq!(bank0_.last_blockhash(), hash);
                     break;
                 }

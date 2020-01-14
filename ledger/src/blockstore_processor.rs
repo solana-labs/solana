@@ -434,7 +434,8 @@ fn confirm_full_slot(
         opts.entry_callback.as_ref(),
         recyclers,
     )?;
-    if !progress.is_full {
+
+    if !bank.is_complete() {
         Err(BlockstoreProcessorError::InvalidBlock(
             BlockError::Incomplete,
         ))
@@ -465,7 +466,6 @@ impl Default for ConfirmationTiming {
 
 #[derive(Default)]
 pub struct ConfirmationProgress {
-    pub is_full: bool,
     pub last_entry: Hash,
     pub tick_hash_count: u64,
     pub num_shreds: u64,
@@ -573,7 +573,6 @@ pub fn confirm_slot(
 
     process_result?;
 
-    progress.is_full = slot_full;
     progress.num_shreds += num_shreds;
     progress.num_entries += num_entries;
     progress.num_txs += num_txs;

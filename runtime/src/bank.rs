@@ -902,6 +902,10 @@ impl Bank {
         }
     }
 
+    pub fn is_complete(&self) -> bool {
+        self.tick_height() == self.max_tick_height()
+    }
+
     pub fn is_block_boundary(&self, tick_height: u64) -> bool {
         tick_height % self.ticks_per_slot == 0
     }
