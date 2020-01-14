@@ -110,9 +110,10 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
                 } else {
                     let default_keypair_path = CliConfig::default_keypair_path();
                     if !std::path::Path::new(&default_keypair_path).exists() {
-                        return Err(CliError::KeypairFileNotFound(
-                            "Generate a new keypair with `solana-keygen new`".to_string(),
-                        )
+                        return Err(CliError::KeypairFileNotFound(format!(
+                            "Generate a new keypair at {} with `solana-keygen new`",
+                            default_keypair_path
+                        ))
                         .into());
                     }
                     default_keypair_path
