@@ -2,6 +2,7 @@ use bincode::serialize;
 use jsonrpc_core::Result as JsonResult;
 use serde_json::{json, Value};
 use solana_sdk::{
+    account::Account,
     clock::{Epoch, Slot},
     fee_calculator::FeeCalculator,
     message::MessageHeader,
@@ -132,6 +133,13 @@ pub struct RpcTransactionStatus {
 pub struct RpcBlockhashFeeCalculator {
     pub blockhash: String,
     pub fee_calculator: FeeCalculator,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcKeyedAccount {
+    pub pubkey: String,
+    pub account: Account,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

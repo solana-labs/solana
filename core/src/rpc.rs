@@ -13,7 +13,7 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{
     Response, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo,
-    RpcLeaderSchedule, RpcResponseContext, RpcTransactionEncoding, RpcVersionInfo,
+    RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcTransactionEncoding, RpcVersionInfo,
     RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -133,12 +133,15 @@ impl JsonRpcRequestProcessor {
         &self,
         program_id: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<(String, Account)>> {
+    ) -> Result<Vec<RpcKeyedAccount>> {
         Ok(self
             .bank(commitment)
             .get_program_accounts(&program_id)
             .into_iter()
-            .map(|(pubkey, account)| (pubkey.to_string(), account))
+            .map(|(pubkey, account)| RpcKeyedAccount {
+                pubkey: pubkey.to_string(),
+                account,
+            })
             .collect())
     }
 
@@ -412,7 +415,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         program_id_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<(String, Account)>>;
+    ) -> Result<Vec<RpcKeyedAccount>>;
 
     #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
     fn get_minimum_balance_for_rent_exemption(
@@ -640,7 +643,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         program_id_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<(String, Account)>> {
+    ) -> Result<Vec<RpcKeyedAccount>> {
         debug!(
             "get_program_accounts rpc request received: {:?}",
             program_id_str
@@ -1543,7 +1546,7 @@ pub mod tests {
                 "lamports": 20,
                 "data": [],
                 "executable": false,
-                "rent_epoch": 0
+                "rentEpoch": 0
             },
                 },
             "id": 1,
@@ -1577,13 +1580,18 @@ pub mod tests {
         let expected = format!(
             r#"{{
                 "jsonrpc":"2.0",
-                "result":[["{}", {{
-                    "owner": {:?},
-                    "lamports": 20,
-                    "data": [],
-                    "executable": false,
-                    "rent_epoch": 0
-                }}]],
+                "result":[
+                    {{
+                        "pubkey": "{}",
+                        "account": {{
+                            "owner": {:?},
+                            "lamports": 20,
+                            "data": [],
+                            "executable": false,
+                            "rentEpoch": 0
+                        }}
+                    }}
+                ],
                 "id":1}}
             "#,
             bob.pubkey(),
