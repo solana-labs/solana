@@ -155,7 +155,7 @@ pub struct VerificationData {
     verification_status: EntryVerificationStatus,
     hashes: Option<Arc<Mutex<PinnedVec<Hash>>>>,
     tx_hashes: Vec<Option<Hash>>,
-    start_time_ms: u64,
+    duration_ms: u64,
 }
 
 #[derive(Default, Clone)]
@@ -181,6 +181,13 @@ impl EntryVerificationState {
         match self {
             EntryVerificationState::CPU(state) => state.verification_status,
             EntryVerificationState::GPU(state) => state.verification_status,
+        }
+    }
+
+    pub fn duration_ms(&self) -> u64 {
+        match self {
+            EntryVerificationState::CPU(state) => state.duration_ms,
+            EntryVerificationState::GPU(state) => state.duration_ms,
         }
     }
 
@@ -217,10 +224,10 @@ impl EntryVerificationState {
                 });
 
                 verify_check_time.stop();
+                verification_state.duration_ms += gpu_time_ms + verify_check_time.as_ms();
                 inc_new_counter_warn!(
                     "entry_verify-duration",
-                    (gpu_time_ms + verify_check_time.as_ms() + verification_state.start_time_ms)
-                        as usize
+                    verification_state.duration_ms as usize
                 );
 
                 verification_state.verification_status = if res {
@@ -281,10 +288,8 @@ impl EntrySlice for [Entry] {
                 })
             })
         });
-        inc_new_counter_warn!(
-            "entry_verify-duration",
-            timing::duration_as_ms(&now.elapsed()) as usize
-        );
+        let duration_ms = timing::duration_as_ms(&now.elapsed());
+        inc_new_counter_warn!("entry_verify-duration", duration_ms as usize);
         EntryVerificationState::CPU(VerificationData {
             thread_h: None,
             verification_status: if res {
@@ -294,7 +299,7 @@ impl EntrySlice for [Entry] {
             },
             hashes: None,
             tx_hashes: vec![],
-            start_time_ms: 0,
+            duration_ms,
         })
     }
 
@@ -382,7 +387,7 @@ impl EntrySlice for [Entry] {
             thread_h: Some(gpu_verify_thread),
             verification_status: EntryVerificationStatus::Pending,
             tx_hashes,
-            start_time_ms: timing::duration_as_ms(&start.elapsed()),
+            duration_ms: timing::duration_as_ms(&start.elapsed()),
             hashes: Some(hashes),
         })
     }

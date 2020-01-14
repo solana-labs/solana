@@ -537,7 +537,6 @@ pub fn confirm_slot(
         })?;
     }
 
-    let mut verify_total = Measure::start("verify_and_process_entries");
     let verifier = if !skip_verification {
         datapoint_debug!("verify-batch-size", ("size", num_entries as i64, i64));
         let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
@@ -567,8 +566,7 @@ pub fn confirm_slot(
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
             return Err(BlockError::InvalidEntryHash.into());
         }
-        verify_total.stop();
-        timing.verify_elapsed += verify_total.as_us() - replay_elapsed.as_us();
+        timing.verify_elapsed += verifier.duration_ms();
     }
 
     process_result?;

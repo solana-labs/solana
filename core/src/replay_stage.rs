@@ -529,15 +529,6 @@ impl ReplayStage {
         confirm_result.map_err(|err| {
             let slot = bank.slot();
             warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
-            if let BlockstoreProcessorError::InvalidBlock(_) = &err {
-                let last_entry = &bank_progress.replay_progress.last_entry;
-                datapoint_error!(
-                    "replay-stage-block-error",
-                    ("slot", slot, i64),
-                    ("last_entry", last_entry.to_string(), String),
-                );
-            }
-
             datapoint_error!(
                 "replay-stage-mark_dead_slot",
                 ("error", format!("error: {:?}", err), String),
