@@ -25,6 +25,13 @@ pub struct Response<T> {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcBlockCommitment<T> {
+    pub commitment: Option<T>,
+    pub total_stake: u64,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedBlock {
     pub previous_blockhash: String,
     pub blockhash: String,

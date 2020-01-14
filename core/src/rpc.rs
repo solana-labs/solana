@@ -12,8 +12,8 @@ use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_response::{
-    Response, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo,
-    RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
+    Response, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
+    RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
     RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -200,12 +200,12 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    fn get_block_commitment(&self, block: Slot) -> (Option<BlockCommitment>, u64) {
+    fn get_block_commitment(&self, block: Slot) -> RpcBlockCommitment<BlockCommitment> {
         let r_block_commitment = self.block_commitment_cache.read().unwrap();
-        (
-            r_block_commitment.get_block_commitment(block).cloned(),
-            r_block_commitment.total_stake(),
-        )
+        RpcBlockCommitment {
+            commitment: r_block_commitment.get_block_commitment(block).cloned(),
+            total_stake: r_block_commitment.total_stake(),
+        }
     }
 
     pub fn get_signature_confirmation_status(
@@ -462,7 +462,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         block: Slot,
-    ) -> Result<(Option<BlockCommitment>, u64)>;
+    ) -> Result<RpcBlockCommitment<BlockCommitment>>;
 
     #[rpc(meta, name = "getGenesisHash")]
     fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
@@ -746,7 +746,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         block: Slot,
-    ) -> Result<(Option<BlockCommitment>, u64)> {
+    ) -> Result<RpcBlockCommitment<BlockCommitment>> {
         Ok(meta
             .request_processor
             .read()
@@ -1961,13 +1961,25 @@ pub mod tests {
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
-            (Some(commitment_slot0), 42)
+            RpcBlockCommitment {
+                commitment: Some(commitment_slot0),
+                total_stake: 42,
+            }
         );
         assert_eq!(
             request_processor.get_block_commitment(1),
-            (Some(commitment_slot1), 42)
+            RpcBlockCommitment {
+                commitment: Some(commitment_slot1),
+                total_stake: 42,
+            }
         );
-        assert_eq!(request_processor.get_block_commitment(2), (None, 42));
+        assert_eq!(
+            request_processor.get_block_commitment(2),
+            RpcBlockCommitment {
+                commitment: None,
+                total_stake: 42,
+            }
+        );
     }
 
     #[test]
@@ -1985,16 +1997,18 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let (commitment, total_staked): (Option<BlockCommitment>, u64) =
-            if let Response::Single(res) = result {
-                if let Output::Success(res) = res {
-                    serde_json::from_value(res.result).unwrap()
-                } else {
-                    panic!("Expected success");
-                }
+        let RpcBlockCommitment {
+            commitment,
+            total_stake,
+        } = if let Response::Single(res) = result {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
             } else {
-                panic!("Expected single response");
-            };
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
         assert_eq!(
             commitment,
             block_commitment_cache
@@ -2003,14 +2017,14 @@ pub mod tests {
                 .get_block_commitment(0)
                 .cloned()
         );
-        assert_eq!(total_staked, 42);
+        assert_eq!(total_stake, 42);
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[2]}}"#);
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let (commitment, total_staked): (Option<BlockCommitment>, u64) =
+        let commitment_response: RpcBlockCommitment<BlockCommitment> =
             if let Response::Single(res) = result {
                 if let Output::Success(res) = res {
                     serde_json::from_value(res.result).unwrap()
@@ -2020,8 +2034,8 @@ pub mod tests {
             } else {
                 panic!("Expected single response");
             };
-        assert_eq!(commitment, None);
-        assert_eq!(total_staked, 42);
+        assert_eq!(commitment_response.commitment, None);
+        assert_eq!(commitment_response.total_stake, 42);
     }
 
     #[test]
