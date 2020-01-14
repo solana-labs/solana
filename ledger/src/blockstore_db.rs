@@ -21,6 +21,10 @@ const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 const META_CF: &str = "meta";
 // Column family for slots that have been marked as dead
 const DEAD_SLOTS_CF: &str = "dead_slots";
+// Column family for storing proof that there were multiple
+// versions of a slot
+const DUPLICATE_SLOTS_CF: &str = "duplicate_slots";
+// Column family storing erasure metadata for a slot
 const ERASURE_META_CF: &str = "erasure_meta";
 // Column family for orphans data
 const ORPHANS_CF: &str = "orphans";
@@ -62,16 +66,20 @@ pub enum IteratorMode<Index> {
 
 pub mod columns {
     #[derive(Debug)]
-    /// SlotMeta Column
+    /// The slot metadata column
     pub struct SlotMeta;
 
     #[derive(Debug)]
-    /// Orphans Column
+    /// The orphans column
     pub struct Orphans;
 
     #[derive(Debug)]
-    /// Data Column
+    /// The dead slots column
     pub struct DeadSlots;
+
+    #[derive(Debug)]
+    /// The duplicate slots column
+    pub struct DuplicateSlots;
 
     #[derive(Debug)]
     /// The erasure meta column
@@ -104,8 +112,8 @@ struct Rocks(rocksdb::DB);
 impl Rocks {
     fn open(path: &Path) -> Result<Rocks> {
         use columns::{
-            DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
-            TransactionStatus,
+            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
+            SlotMeta, TransactionStatus,
         };
 
         fs::create_dir_all(&path)?;
@@ -117,6 +125,8 @@ impl Rocks {
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
         let dead_slots_cf_descriptor =
             ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options());
+        let duplicate_slots_cf_descriptor =
+            ColumnFamilyDescriptor::new(DuplicateSlots::NAME, get_cf_options());
         let erasure_meta_cf_descriptor =
             ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
         let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
@@ -132,6 +142,7 @@ impl Rocks {
         let cfs = vec![
             meta_cf_descriptor,
             dead_slots_cf_descriptor,
+            duplicate_slots_cf_descriptor,
             erasure_meta_cf_descriptor,
             orphans_cf_descriptor,
             root_cf_descriptor,
@@ -149,13 +160,14 @@ impl Rocks {
 
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
-            DeadSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData, SlotMeta,
-            TransactionStatus,
+            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
+            SlotMeta, TransactionStatus,
         };
 
         vec![
             ErasureMeta::NAME,
             DeadSlots::NAME,
+            DuplicateSlots::NAME,
             Index::NAME,
             Orphans::NAME,
             Root::NAME,
@@ -226,7 +238,6 @@ impl Rocks {
 }
 
 pub trait Column {
-    const NAME: &'static str;
     type Index;
 
     fn key_size() -> usize {
@@ -239,6 +250,10 @@ pub trait Column {
     fn as_index(slot: Slot) -> Self::Index;
 }
 
+pub trait ColumnName {
+    const NAME: &'static str;
+}
+
 pub trait TypedColumn: Column {
     type Type: Serialize + DeserializeOwned;
 }
@@ -247,8 +262,31 @@ impl TypedColumn for columns::TransactionStatus {
     type Type = RpcTransactionStatus;
 }
 
+pub trait SlotColumn<Index = u64> {}
+
+impl<T: SlotColumn> Column for T {
+    type Index = u64;
+
+    fn key(slot: u64) -> Vec<u8> {
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[..], slot);
+        key
+    }
+
+    fn index(key: &[u8]) -> u64 {
+        BigEndian::read_u64(&key[..8])
+    }
+
+    fn slot(index: u64) -> Slot {
+        index
+    }
+
+    fn as_index(slot: Slot) -> u64 {
+        slot
+    }
+}
+
 impl Column for columns::TransactionStatus {
-    const NAME: &'static str = TRANSACTION_STATUS_CF;
     type Index = (Slot, Signature);
 
     fn key((slot, index): (Slot, Signature)) -> Vec<u8> {
@@ -273,8 +311,11 @@ impl Column for columns::TransactionStatus {
     }
 }
 
+impl ColumnName for columns::TransactionStatus {
+    const NAME: &'static str = TRANSACTION_STATUS_CF;
+}
+
 impl Column for columns::ShredCode {
-    const NAME: &'static str = CODE_SHRED_CF;
     type Index = (u64, u64);
 
     fn key(index: (u64, u64)) -> Vec<u8> {
@@ -294,8 +335,11 @@ impl Column for columns::ShredCode {
     }
 }
 
+impl ColumnName for columns::ShredCode {
+    const NAME: &'static str = CODE_SHRED_CF;
+}
+
 impl Column for columns::ShredData {
-    const NAME: &'static str = DATA_SHRED_CF;
     type Index = (u64, u64);
 
     fn key((slot, index): (u64, u64)) -> Vec<u8> {
@@ -320,143 +364,59 @@ impl Column for columns::ShredData {
     }
 }
 
-impl Column for columns::Index {
-    const NAME: &'static str = INDEX_CF;
-    type Index = u64;
-
-    fn key(slot: Slot) -> Vec<u8> {
-        let mut key = vec![0; 8];
-        BigEndian::write_u64(&mut key[..], slot);
-        key
-    }
-
-    fn index(key: &[u8]) -> u64 {
-        BigEndian::read_u64(&key[..8])
-    }
-
-    fn slot(index: Self::Index) -> Slot {
-        index
-    }
-
-    fn as_index(slot: Slot) -> Self::Index {
-        slot
-    }
+impl ColumnName for columns::ShredData {
+    const NAME: &'static str = DATA_SHRED_CF;
 }
 
+impl SlotColumn for columns::Index {}
+impl ColumnName for columns::Index {
+    const NAME: &'static str = INDEX_CF;
+}
 impl TypedColumn for columns::Index {
     type Type = blockstore_meta::Index;
 }
 
-impl Column for columns::DeadSlots {
+impl SlotColumn for columns::DeadSlots {}
+impl ColumnName for columns::DeadSlots {
     const NAME: &'static str = DEAD_SLOTS_CF;
-    type Index = u64;
-
-    fn key(slot: Slot) -> Vec<u8> {
-        let mut key = vec![0; 8];
-        BigEndian::write_u64(&mut key[..], slot);
-        key
-    }
-
-    fn index(key: &[u8]) -> u64 {
-        BigEndian::read_u64(&key[..8])
-    }
-
-    fn slot(index: Self::Index) -> Slot {
-        index
-    }
-
-    fn as_index(slot: Slot) -> Self::Index {
-        slot
-    }
 }
-
 impl TypedColumn for columns::DeadSlots {
     type Type = bool;
 }
 
-impl Column for columns::Orphans {
-    const NAME: &'static str = ORPHANS_CF;
-    type Index = u64;
-
-    fn key(slot: Slot) -> Vec<u8> {
-        let mut key = vec![0; 8];
-        BigEndian::write_u64(&mut key[..], slot);
-        key
-    }
-
-    fn index(key: &[u8]) -> u64 {
-        BigEndian::read_u64(&key[..8])
-    }
-
-    fn slot(index: Self::Index) -> Slot {
-        index
-    }
-
-    fn as_index(slot: Slot) -> Self::Index {
-        slot
-    }
+impl SlotColumn for columns::DuplicateSlots {}
+impl ColumnName for columns::DuplicateSlots {
+    const NAME: &'static str = DUPLICATE_SLOTS_CF;
+}
+impl TypedColumn for columns::DuplicateSlots {
+    type Type = blockstore_meta::DuplicateSlotProof;
 }
 
+impl SlotColumn for columns::Orphans {}
+impl ColumnName for columns::Orphans {
+    const NAME: &'static str = ORPHANS_CF;
+}
 impl TypedColumn for columns::Orphans {
     type Type = bool;
 }
 
-impl Column for columns::Root {
+impl SlotColumn for columns::Root {}
+impl ColumnName for columns::Root {
     const NAME: &'static str = ROOT_CF;
-    type Index = u64;
-
-    fn key(slot: Slot) -> Vec<u8> {
-        let mut key = vec![0; 8];
-        BigEndian::write_u64(&mut key[..], slot);
-        key
-    }
-
-    fn index(key: &[u8]) -> u64 {
-        BigEndian::read_u64(&key[..8])
-    }
-
-    fn slot(index: Self::Index) -> Slot {
-        index
-    }
-
-    fn as_index(slot: Slot) -> Self::Index {
-        slot
-    }
 }
-
 impl TypedColumn for columns::Root {
     type Type = bool;
 }
 
-impl Column for columns::SlotMeta {
+impl SlotColumn for columns::SlotMeta {}
+impl ColumnName for columns::SlotMeta {
     const NAME: &'static str = META_CF;
-    type Index = u64;
-
-    fn key(slot: Slot) -> Vec<u8> {
-        let mut key = vec![0; 8];
-        BigEndian::write_u64(&mut key[..], slot);
-        key
-    }
-
-    fn index(key: &[u8]) -> u64 {
-        BigEndian::read_u64(&key[..8])
-    }
-
-    fn slot(index: Self::Index) -> Slot {
-        index
-    }
-
-    fn as_index(slot: Slot) -> Self::Index {
-        slot
-    }
 }
-
 impl TypedColumn for columns::SlotMeta {
     type Type = blockstore_meta::SlotMeta;
 }
 
 impl Column for columns::ErasureMeta {
-    const NAME: &'static str = ERASURE_META_CF;
     type Index = (u64, u64);
 
     fn index(key: &[u8]) -> (u64, u64) {
@@ -481,7 +441,9 @@ impl Column for columns::ErasureMeta {
         (slot, 0)
     }
 }
-
+impl ColumnName for columns::ErasureMeta {
+    const NAME: &'static str = ERASURE_META_CF;
+}
 impl TypedColumn for columns::ErasureMeta {
     type Type = blockstore_meta::ErasureMeta;
 }
@@ -524,7 +486,7 @@ impl Database {
 
     pub fn get<C>(&self, key: C::Index) -> Result<Option<C::Type>>
     where
-        C: TypedColumn,
+        C: TypedColumn + ColumnName,
     {
         if let Some(serialized_value) = self.backend.get_cf(self.cf_handle::<C>(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
@@ -540,7 +502,7 @@ impl Database {
         iterator_mode: IteratorMode<C::Index>,
     ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + 'a>
     where
-        C: Column,
+        C: Column + ColumnName,
     {
         let cf = self.cf_handle::<C>();
         let iter = self.backend.iterator_cf::<C>(cf, iterator_mode)?;
@@ -548,16 +510,16 @@ impl Database {
     }
 
     #[inline]
-    pub fn cf_handle<C>(&self) -> &ColumnFamily
+    pub fn cf_handle<C: ColumnName>(&self) -> &ColumnFamily
     where
-        C: Column,
+        C: Column + ColumnName,
     {
         self.backend.cf_handle(C::NAME)
     }
 
     pub fn column<C>(&self) -> LedgerColumn<C>
     where
-        C: Column,
+        C: Column + ColumnName,
     {
         LedgerColumn {
             backend: Arc::clone(&self.backend),
@@ -594,7 +556,7 @@ impl Database {
     // its end
     pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<bool>
     where
-        C: Column,
+        C: Column + ColumnName,
     {
         let cf = self.cf_handle::<C>();
         let from_index = C::as_index(from);
@@ -612,7 +574,7 @@ impl Database {
 
 impl<C> LedgerColumn<C>
 where
-    C: Column,
+    C: Column + ColumnName,
 {
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
         self.backend.get_cf(self.handle(), &C::key(key))
@@ -634,7 +596,7 @@ where
         to: Option<Slot>,
     ) -> Result<bool>
     where
-        C::Index: PartialOrd + Copy,
+        C::Index: PartialOrd + Copy + ColumnName,
     {
         let mut end = true;
         let iter_config = match from {
@@ -691,7 +653,7 @@ where
 
 impl<C> LedgerColumn<C>
 where
-    C: TypedColumn,
+    C: TypedColumn + ColumnName,
 {
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
         if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
@@ -712,19 +674,23 @@ where
 }
 
 impl<'a> WriteBatch<'a> {
-    pub fn put_bytes<C: Column>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
+    pub fn put_bytes<C: Column + ColumnName>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
             .put_cf(self.get_cf::<C>(), &C::key(key), bytes)?;
         Ok(())
     }
 
-    pub fn delete<C: Column>(&mut self, key: C::Index) -> Result<()> {
+    pub fn delete<C: Column + ColumnName>(&mut self, key: C::Index) -> Result<()> {
         self.write_batch
             .delete_cf(self.get_cf::<C>(), &C::key(key))?;
         Ok(())
     }
 
-    pub fn put<C: TypedColumn>(&mut self, key: C::Index, value: &C::Type) -> Result<()> {
+    pub fn put<C: TypedColumn + ColumnName>(
+        &mut self,
+        key: C::Index,
+        value: &C::Type,
+    ) -> Result<()> {
         let serialized_value = serialize(&value)?;
         self.write_batch
             .put_cf(self.get_cf::<C>(), &C::key(key), &serialized_value)?;
@@ -732,7 +698,7 @@ impl<'a> WriteBatch<'a> {
     }
 
     #[inline]
-    fn get_cf<C: Column>(&self) -> &'a ColumnFamily {
+    fn get_cf<C: Column + ColumnName>(&self) -> &'a ColumnFamily {
         self.map[C::NAME]
     }
 

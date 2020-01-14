@@ -77,6 +77,7 @@ pub struct Blockstore {
     db: Arc<Database>,
     meta_cf: LedgerColumn<cf::SlotMeta>,
     dead_slots_cf: LedgerColumn<cf::DeadSlots>,
+    duplicate_slots_cf: LedgerColumn<cf::DuplicateSlots>,
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
     orphans_cf: LedgerColumn<cf::Orphans>,
     index_cf: LedgerColumn<cf::Index>,
@@ -179,7 +180,7 @@ impl Blockstore {
 
         // Create the dead slots column family
         let dead_slots_cf = db.column();
-
+        let duplicate_slots_cf = db.column();
         let erasure_meta_cf = db.column();
 
         // Create the orphans column family. An "orphan" is defined as
@@ -208,6 +209,7 @@ impl Blockstore {
             db,
             meta_cf,
             dead_slots_cf,
+            duplicate_slots_cf,
             erasure_meta_cf,
             orphans_cf,
             index_cf,
@@ -303,39 +305,43 @@ impl Blockstore {
         let columns_empty = self
             .db
             .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
-            .unwrap_or_else(|_| false)
+            .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::ShredData>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::ShredCode>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::DeadSlots>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
+            & self
+                .db
+                .delete_range_cf::<cf::DuplicateSlots>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::ErasureMeta>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::Orphans>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::Index>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false)
+                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or_else(|_| false);
+                .unwrap_or(false);
         if let Err(e) = self.db.write(write_batch) {
             error!(
                 "Error: {:?} while submitting write batch for slot {:?} retrying...",
@@ -366,6 +372,10 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .dead_slots_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .duplicate_slots_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self
@@ -1626,6 +1636,37 @@ impl Blockstore {
         self.dead_slots_cf.put(slot, &true)
     }
 
+    pub fn store_duplicate_slot(&self, slot: Slot, shred1: Vec<u8>, shred2: Vec<u8>) -> Result<()> {
+        let duplicate_slot_proof = DuplicateSlotProof::new(shred1, shred2);
+        self.duplicate_slots_cf.put(slot, &duplicate_slot_proof)
+    }
+
+    pub fn get_duplicate_slot(&self, slot: u64) -> Option<DuplicateSlotProof> {
+        self.duplicate_slots_cf
+            .get(slot)
+            .expect("fetch from DuplicateSlots column family failed")
+    }
+
+    // `new_shred` is asssumed to have slot and index equal to the given slot and index.
+    // Returns true if `new_shred` is not equal to the existing shred at the given
+    // slot and index as this implies the leader generated two different shreds with
+    // the same slot and index
+    pub fn is_shred_duplicate(&self, slot: u64, index: u64, new_shred: &[u8]) -> bool {
+        let res = self
+            .get_data_shred(slot, index)
+            .expect("fetch from DuplicateSlots column family failed");
+
+        res.map(|existing_shred| existing_shred != new_shred)
+            .unwrap_or(false)
+    }
+
+    pub fn has_duplicate_shreds_in_slot(&self, slot: Slot) -> bool {
+        self.duplicate_slots_cf
+            .get(slot)
+            .expect("fetch from DuplicateSlots column family failed")
+            .is_some()
+    }
+
     pub fn get_orphans(&self, max: Option<usize>) -> Vec<u64> {
         let mut results = vec![];
 
@@ -2407,6 +2448,13 @@ pub mod tests {
             & blockstore
                 .db
                 .iter::<cf::DeadSlots>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|(slot, _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blockstore
+                .db
+                .iter::<cf::DuplicateSlots>(IteratorMode::Start)
                 .unwrap()
                 .next()
                 .map(|(slot, _)| slot >= min_slot)
@@ -5192,5 +5240,50 @@ pub mod tests {
         // Test the data index doesn't have anything extra
         let num_coding_in_index = index.coding().num_shreds();
         assert_eq!(num_coding_in_index, num_coding);
+    }
+
+    #[test]
+    fn test_duplicate_slot() {
+        let slot = 0;
+        let entries1 = make_slot_entries_with_transactions(1);
+        let entries2 = make_slot_entries_with_transactions(1);
+        let leader_keypair = Arc::new(Keypair::new());
+        let shredder = Shredder::new(slot, 0, 1.0, leader_keypair.clone(), 0, 0)
+            .expect("Failed in creating shredder");
+        let (shreds, _, _) = shredder.entries_to_shreds(&entries1, true, 0);
+        let (duplicate_shreds, _, _) = shredder.entries_to_shreds(&entries2, true, 0);
+        let shred = shreds[0].clone();
+        let duplicate_shred = duplicate_shreds[0].clone();
+        let non_duplicate_shred = shred.clone();
+
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            blockstore
+                .insert_shreds(vec![shred.clone()], None, false)
+                .unwrap();
+
+            // No duplicate shreds exist yet
+            assert!(!blockstore.has_duplicate_shreds_in_slot(slot));
+
+            // Check if shreds are duplicated
+            assert!(blockstore.is_shred_duplicate(slot, 0, &duplicate_shred.payload));
+            assert!(!blockstore.is_shred_duplicate(slot, 0, &non_duplicate_shred.payload));
+
+            // Store a duplicate shred
+            blockstore
+                .store_duplicate_slot(slot, shred.payload.clone(), duplicate_shred.payload.clone())
+                .unwrap();
+
+            // Slot is now marked as duplicate
+            assert!(blockstore.has_duplicate_shreds_in_slot(slot));
+
+            // Check ability to fetch the duplicates
+            let duplicate_proof = blockstore.get_duplicate_slot(slot).unwrap();
+            assert_eq!(duplicate_proof.shred1, shred.payload);
+            assert_eq!(duplicate_proof.shred2, duplicate_shred.payload);
+        }
+
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }
