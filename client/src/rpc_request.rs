@@ -28,7 +28,14 @@ pub struct RpcConfirmedBlock {
     pub previous_blockhash: String,
     pub blockhash: String,
     pub parent_slot: Slot,
-    pub transactions: Vec<(RpcEncodedTransaction, Option<RpcTransactionStatus>)>,
+    pub transactions: Vec<RpcTransactionWithStatusMeta>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcTransactionWithStatusMeta {
+    pub transaction: RpcEncodedTransaction,
+    pub meta: Option<RpcTransactionStatus>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

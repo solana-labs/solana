@@ -1072,7 +1072,7 @@ pub mod tests {
     };
     use bincode::deserialize;
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
-    use solana_client::rpc_request::RpcEncodedTransaction;
+    use solana_client::rpc_request::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
         blockstore::entries_to_test_shreds, blockstore_processor::fill_blockstore_slot_with_ticks,
         entry::next_entry_mut, get_tmp_ledger_path,
@@ -2025,21 +2025,23 @@ pub mod tests {
         let confirmed_block = confirmed_block.unwrap();
         assert_eq!(confirmed_block.transactions.len(), 3);
 
-        for (transaction, result) in confirmed_block.transactions.into_iter() {
+        for RpcTransactionWithStatusMeta { transaction, meta } in
+            confirmed_block.transactions.into_iter()
+        {
             if let RpcEncodedTransaction::Json(transaction) = transaction {
                 if transaction.signatures[0] == confirmed_block_signatures[0].to_string() {
                     assert_eq!(transaction.message.recent_blockhash, blockhash.to_string());
-                    assert_eq!(result.unwrap().status, Ok(()));
+                    assert_eq!(meta.unwrap().status, Ok(()));
                 } else if transaction.signatures[0] == confirmed_block_signatures[1].to_string() {
                     assert_eq!(
-                        result.unwrap().status,
+                        meta.unwrap().status,
                         Err(TransactionError::InstructionError(
                             0,
                             InstructionError::CustomError(1)
                         ))
                     );
                 } else {
-                    assert_eq!(result, None);
+                    assert_eq!(meta, None);
                 }
             }
         }
@@ -2055,23 +2057,25 @@ pub mod tests {
         let confirmed_block = confirmed_block.unwrap();
         assert_eq!(confirmed_block.transactions.len(), 3);
 
-        for (transaction, result) in confirmed_block.transactions.into_iter() {
+        for RpcTransactionWithStatusMeta { transaction, meta } in
+            confirmed_block.transactions.into_iter()
+        {
             if let RpcEncodedTransaction::Binary(transaction) = transaction {
                 let decoded_transaction: Transaction =
                     deserialize(&bs58::decode(&transaction).into_vec().unwrap()).unwrap();
                 if decoded_transaction.signatures[0] == confirmed_block_signatures[0] {
                     assert_eq!(decoded_transaction.message.recent_blockhash, blockhash);
-                    assert_eq!(result.unwrap().status, Ok(()));
+                    assert_eq!(meta.unwrap().status, Ok(()));
                 } else if decoded_transaction.signatures[0] == confirmed_block_signatures[1] {
                     assert_eq!(
-                        result.unwrap().status,
+                        meta.unwrap().status,
                         Err(TransactionError::InstructionError(
                             0,
                             InstructionError::CustomError(1)
                         ))
                     );
                 } else {
-                    assert_eq!(result, None);
+                    assert_eq!(meta, None);
                 }
             }
         }
