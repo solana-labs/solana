@@ -191,7 +191,36 @@ pub fn split(
         system_instruction::create_account(
             stake_pubkey,
             split_stake_pubkey,
-            0, // creates an ephemeral, uninitialized Stake
+            0, // may create an ephemeral, uninitialized Stake
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
+        ),
+        {
+            let account_metas = vec![
+                AccountMeta::new(*stake_pubkey, false),
+                AccountMeta::new(*split_stake_pubkey, false),
+            ]
+            .with_signer(authorized_pubkey);
+            Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas)
+        },
+    ]
+}
+
+pub fn split_with_seed(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    lamports: u64,
+    split_stake_pubkey: &Pubkey, // derived using create_address_with_seed()
+    base: &Pubkey,               // base
+    seed: &str,                  // seed
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account_with_seed(
+            stake_pubkey,
+            split_stake_pubkey,
+            base,
+            seed,
+            0, // may create an ephemeral, uninitialized Stake
             std::mem::size_of::<StakeState>() as u64,
             &id(),
         ),
@@ -478,6 +507,19 @@ mod tests {
                     &Pubkey::default(),
                     100,
                     &Pubkey::default()
+                )[1]
+            ),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(
+                &split_with_seed(
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                    100,
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                    "seed"
                 )[1]
             ),
             Err(InstructionError::InvalidAccountData),

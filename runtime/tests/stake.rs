@@ -98,6 +98,67 @@ fn get_staked(bank: &Bank, stake_pubkey: &Pubkey) -> u64 {
 }
 
 #[test]
+fn test_stake_create_and_split_single_signature() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        mut genesis_config,
+        mint_keypair: staker_keypair,
+        ..
+    } = create_genesis_config_with_leader(100_000_000_000, &Pubkey::new_rand(), 1_000_000);
+    genesis_config
+        .native_instruction_processors
+        .push(solana_stake_program::solana_stake_program!());
+
+    let staker_pubkey = staker_keypair.pubkey();
+
+    let bank_client = BankClient::new_shared(&Arc::new(Bank::new(&genesis_config)));
+
+    let stake_address =
+        create_address_with_seed(&staker_pubkey, "stake", &solana_stake_program::id()).unwrap();
+
+    let authorized = stake_state::Authorized::auto(&staker_pubkey);
+
+    let lamports = 1_000_000;
+
+    // Create stake account with seed
+    let message = Message::new(stake_instruction::create_account_with_seed(
+        &staker_pubkey, // from
+        &stake_address, // to
+        &staker_pubkey, // base
+        "stake",        // seed
+        &authorized,
+        &stake_state::Lockup::default(),
+        lamports,
+    ));
+
+    // only one signature required
+    bank_client
+        .send_message(&[&staker_keypair], message)
+        .expect("failed to create and delegate stake account");
+
+    // split the stake
+    let split_stake_address =
+        create_address_with_seed(&staker_pubkey, "split_stake", &solana_stake_program::id())
+            .unwrap();
+    // Test split
+    let message = Message::new(stake_instruction::split_with_seed(
+        &stake_address, // original
+        &staker_pubkey, // authorized
+        lamports / 2,
+        &split_stake_address, // new address
+        &staker_pubkey,       // base
+        "split_stake",        // seed
+    ));
+
+    assert!(bank_client
+        .send_message(&[&staker_keypair], message)
+        .is_ok());
+
+    // w00t!
+}
+
+#[test]
 fn test_stake_account_lifetime() {
     let stake_keypair = Keypair::new();
     let stake_pubkey = stake_keypair.pubkey();
