@@ -1644,12 +1644,12 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let accounts_delta_hash = self.rc.accounts.bank_hash_at(self.slot());
+        let accounts_delta_hash = self.rc.accounts.bank_hash_info_at(self.slot());
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
         let hash = hashv(&[
             self.parent_hash.as_ref(),
-            accounts_delta_hash.as_ref(),
+            accounts_delta_hash.hash.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
         ]);
@@ -1657,9 +1657,14 @@ impl Bank {
             "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {}",
             self.slot(),
             hash,
-            accounts_delta_hash,
+            accounts_delta_hash.hash,
             self.signature_count(),
             self.last_blockhash()
+        );
+        info!(
+            "accounts hash slot: {} stats: {:?}",
+            self.slot(),
+            accounts_delta_hash.stats,
         );
         hash
     }
