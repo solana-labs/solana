@@ -1,7 +1,8 @@
-use crate::rpc_request::{Response, RpcResponseContext};
 use crate::{
-    client_error::ClientError, generic_rpc_client_request::GenericRpcClientRequest,
+    client_error::ClientError,
+    generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::RpcRequest,
+    rpc_response::{Response, RpcResponseContext},
 };
 use serde_json::{Number, Value};
 use solana_sdk::{

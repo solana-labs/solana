@@ -21,7 +21,7 @@ use rayon::{
     ThreadPool,
 };
 use rocksdb::DBRawIterator;
-use solana_client::rpc_request::{
+use solana_client::rpc_response::{
     RpcConfirmedBlock, RpcEncodedTransaction, RpcTransactionEncoding, RpcTransactionStatus,
     RpcTransactionWithStatusMeta,
 };

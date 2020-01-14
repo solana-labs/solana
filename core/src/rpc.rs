@@ -11,7 +11,7 @@ use crate::{
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_client::rpc_request::{
+use solana_client::rpc_response::{
     Response, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo,
     RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
     RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
@@ -1084,7 +1084,7 @@ pub mod tests {
     };
     use bincode::deserialize;
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
-    use solana_client::rpc_request::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
+    use solana_client::rpc_response::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
         blockstore::entries_to_test_shreds, blockstore_processor::fill_blockstore_slot_with_ticks,
         entry::next_entry_mut, get_tmp_ledger_path,

@@ -1,12 +1,12 @@
-use crate::rpc_request::{Response, RpcResponse};
 use crate::{
     client_error::ClientError,
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
-    rpc_request::{
-        RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo,
-        RpcLeaderSchedule, RpcRequest, RpcVersionInfo, RpcVoteAccountStatus,
+    rpc_request::RpcRequest,
+    rpc_response::{
+        Response, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo,
+        RpcLeaderSchedule, RpcResponse, RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
