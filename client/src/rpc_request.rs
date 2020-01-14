@@ -216,6 +216,13 @@ pub struct RpcVoteAccountInfo {
     pub root_slot: Slot,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSignatureConfirmation {
+    pub confirmations: usize,
+    pub status: Result<()>,
+}
+
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum RpcRequest {
     ConfirmTransaction,

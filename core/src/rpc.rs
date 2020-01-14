@@ -13,8 +13,8 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{
     Response, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo,
-    RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcTransactionEncoding, RpcVersionInfo,
-    RpcVoteAccountInfo, RpcVoteAccountStatus,
+    RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
+    RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -212,9 +212,13 @@ impl JsonRpcRequestProcessor {
         &self,
         signature: Signature,
         commitment: Option<CommitmentConfig>,
-    ) -> Option<(usize, transaction::Result<()>)> {
+    ) -> Option<RpcSignatureConfirmation> {
         self.bank(commitment)
             .get_signature_confirmation_status(&signature)
+            .map(|(confirmations, status)| RpcSignatureConfirmation {
+                confirmations,
+                status,
+            })
     }
 
     fn get_slot(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -562,7 +566,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<(usize, transaction::Result<()>)>>;
+    ) -> Result<Option<RpcSignatureConfirmation>>;
 
     #[rpc(meta, name = "getVersion")]
     fn get_version(&self, meta: Self::Metadata) -> Result<RpcVersionInfo>;
@@ -801,7 +805,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<transaction::Result<()>>> {
         self.get_signature_confirmation(meta, signature_str, commitment)
-            .map(|res| res.map(|x| x.1))
+            .map(|res| res.map(|x| x.status))
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -815,7 +819,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<usize>> {
         self.get_signature_confirmation(meta, signature_str, commitment)
-            .map(|res| res.map(|x| x.0))
+            .map(|res| res.map(|x| x.confirmations))
     }
 
     fn get_signature_confirmation(
@@ -823,7 +827,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<(usize, transaction::Result<()>)>> {
+    ) -> Result<Option<RpcSignatureConfirmation>> {
         debug!(
             "get_signature_confirmation rpc request received: {:?}",
             signature_str
@@ -923,7 +927,7 @@ impl RpcSol for RpcSolImpl {
                 .read()
                 .unwrap()
                 .get_signature_confirmation_status(signature, commitment.clone())
-                .map(|x| x.1);
+                .map(|x| x.status);
 
             if signature_status == Some(Ok(())) {
                 info!("airdrop signature ok");
