@@ -133,10 +133,10 @@ fn finish_create_account(
 }
 
 fn assign_account_to_program(
-    account: &mut KeyedAccount,
+    keyed_account: &mut KeyedAccount,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    if account.signer_key().is_none() {
+    if keyed_account.signer_key().is_none() {
         debug!("Assign: account must sign");
         return Err(InstructionError::MissingRequiredSignature);
     }
@@ -147,7 +147,7 @@ fn assign_account_to_program(
         return Err(SystemError::InvalidProgramId.into());
     }
 
-    account.account.owner = *program_id;
+    keyed_account.account.owner = *program_id;
     Ok(())
 }
 
@@ -186,9 +186,9 @@ fn transfer_lamports(
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
+    instruction_data: &[u8],
 ) -> Result<(), InstructionError> {
-    let instruction = limited_deserialize(data)?;
+    let instruction = limited_deserialize(instruction_data)?;
 
     trace!("process_instruction: {:?}", instruction);
     trace!("keyed_accounts: {:?}", keyed_accounts);
