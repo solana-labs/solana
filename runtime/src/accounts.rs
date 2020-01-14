@@ -1,4 +1,6 @@
-use crate::accounts_db::{AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters};
+use crate::accounts_db::{
+    AccountInfo, AccountStorage, AccountsDB, AppendVecId, BankHashInfo, ErrorCounters,
+};
 use crate::accounts_index::AccountsIndex;
 use crate::append_vec::StoredAccount;
 use crate::bank::{HashAgeKind, TransactionProcessResult};
@@ -489,10 +491,22 @@ impl Accounts {
     }
 
     pub fn bank_hash_at(&self, slot_id: Slot) -> BankHash {
+<<<<<<< HEAD
         let slot_hashes = self.accounts_db.slot_hashes.read().unwrap();
         *slot_hashes
             .get(&slot_id)
             .expect("No accounts hash was found for this bank, that should not be possible")
+=======
+        self.bank_hash_info_at(slot_id).hash
+    }
+
+    pub fn bank_hash_info_at(&self, slot_id: Slot) -> BankHashInfo {
+        let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
+        bank_hashes
+            .get(&slot_id)
+            .expect("No bank hash was found for this bank, that should not be possible")
+            .clone()
+>>>>>>> 3b78be83c... Add hash stats information to check hashes between validators (#7780)
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the
