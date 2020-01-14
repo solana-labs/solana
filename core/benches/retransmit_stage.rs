@@ -9,8 +9,10 @@ use solana_core::contact_info::ContactInfo;
 use solana_core::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_core::packet::to_packets_chunked;
 use solana_core::retransmit_stage::retransmitter;
+use solana_core::weighted_shuffle::weighted_best;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+use solana_ledger::staking_utils;
 use solana_measure::measure::Measure;
 use solana_perf::test_tx::test_tx;
 use solana_runtime::bank::Bank;
@@ -67,6 +69,23 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let chunk_size = NUM_PACKETS / (4 * NUM_THREADS);
     let batches = to_packets_chunked(&vec![tx; NUM_PACKETS], chunk_size);
     info!("batches: {}", batches.len());
+
+    // compute the selected index here, make sure to change cluster_info ownership to critical path id
+    let working_bank = bank_forks.read().unwrap().working_bank();
+    let bank_epoch = working_bank.get_leader_schedule_epoch(working_bank.slot());
+    let stakes = staking_utils::staked_nodes_at_epoch(&working_bank, bank_epoch);
+    let stakes = stakes.map(Arc::new);
+    let (peers, stakes_and_index) = cluster_info
+        .read()
+        .unwrap()
+        .sorted_retransmit_peers_and_stakes(stakes);
+    // the packet seeds are always zero, just find the id that gets picked first
+    let broadcast_index = weighted_best(&stakes_and_index, batches[0].packets[0].meta.seed);
+    {
+        let w_cinfo = cluster_info.write().unwrap();
+        w_cinfo.gossip.set_self(&peers[broadcast_index].id);
+        w_cinfo.insert_self(peers[broadcast_index].clone());
+    }
 
     let retransmitter_handles = retransmitter(
         Arc::new(sockets),
