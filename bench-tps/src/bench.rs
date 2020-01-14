@@ -80,7 +80,6 @@ where
         duration,
         tx_count,
         sustained,
-        num_lamports_per_account,
         ..
     } = config;
 
@@ -166,11 +165,10 @@ where
 
     // generate and send transactions for the specified duration
     let start = Instant::now();
-    let keypair_chunks = source_keypair_chunks.len() as u64;
+    let keypair_chunks = source_keypair_chunks.len();
     let mut reclaim_lamports_back_to_source_account = false;
-    let mut i = 0;
+    let mut chunk_index = 0;
     while start.elapsed() < duration {
-        let chunk_index = (i % keypair_chunks) as usize;
         generate_txs(
             &shared_txs,
             &recent_blockhash,
@@ -198,8 +196,11 @@ where
         // transaction signatures even when blockhash is reused.
         dest_keypair_chunks[chunk_index].rotate_left(1);
 
-        i += 1;
-        if should_switch_directions(num_lamports_per_account, keypair_chunks, i) {
+        // Move on to next chunk
+        chunk_index = (chunk_index + 1) % keypair_chunks;
+
+        // Switch directions after transfering for each "chunk"
+        if chunk_index == 0 {
             reclaim_lamports_back_to_source_account = !reclaim_lamports_back_to_source_account;
         }
     }
@@ -847,17 +848,6 @@ fn compute_and_report_stats(
     );
 }
 
-// First transfer 2/3 of the lamports to the dest accounts
-// then ping-pong 1/3 of the lamports back to the other account
-// this leaves 1/3 lamport buffer in each account
-fn should_switch_directions(num_lamports_per_account: u64, keypair_chunks: u64, i: u64) -> bool {
-    if i < keypair_chunks * (2 * num_lamports_per_account) / 3 {
-        return false;
-    }
-
-    i % (keypair_chunks * num_lamports_per_account / 3) == 0
-}
-
 pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
@@ -1056,6 +1046,7 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     // Sample the first keypair, to prevent lamport loss on repeated solana-bench-tps executions
     let first_key = keypairs[0].pubkey();
     let first_keypair_balance = client.get_balance(&first_key).unwrap_or(0);
+
     // Sample the last keypair, to check if funding was already completed
     let last_key = keypairs[keypair_count - 1].pubkey();
     let last_keypair_balance = client.get_balance(&last_key).unwrap_or(0);
@@ -1066,7 +1057,10 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     #[cfg(not(feature = "move"))]
     let move_keypairs_ret = None;
 
-    if lamports_per_account > first_keypair_balance || lamports_per_account > last_keypair_balance {
+    // 100 lamports should give enough wiggle room to handle source / dest keypair sets getting unbalanced
+    let minimum_balance = 100;
+
+    if first_keypair_balance < minimum_balance || last_keypair_balance < minimum_balance {
         let (_blockhash, fee_calculator) = get_recent_blockhash(client.as_ref());
         let max_fee = fee_calculator.max_lamports_per_signature;
         let extra_fees = extra * max_fee;
@@ -1144,25 +1138,6 @@ mod tests {
     use solana_sdk::client::SyncClient;
     use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::genesis_config::create_genesis_config;
-
-    #[test]
-    fn test_switch_directions() {
-        assert_eq!(should_switch_directions(30, 1, 0), false);
-        assert_eq!(should_switch_directions(30, 1, 1), false);
-        assert_eq!(should_switch_directions(30, 1, 20), true);
-        assert_eq!(should_switch_directions(30, 1, 21), false);
-        assert_eq!(should_switch_directions(30, 1, 30), true);
-        assert_eq!(should_switch_directions(30, 1, 90), true);
-        assert_eq!(should_switch_directions(30, 1, 91), false);
-
-        assert_eq!(should_switch_directions(30, 2, 0), false);
-        assert_eq!(should_switch_directions(30, 2, 1), false);
-        assert_eq!(should_switch_directions(30, 2, 20), false);
-        assert_eq!(should_switch_directions(30, 2, 40), true);
-        assert_eq!(should_switch_directions(30, 2, 90), false);
-        assert_eq!(should_switch_directions(30, 2, 100), true);
-        assert_eq!(should_switch_directions(30, 2, 101), false);
-    }
 
     #[test]
     fn test_bench_tps_bank_client() {
