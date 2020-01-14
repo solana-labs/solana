@@ -958,7 +958,7 @@ impl AccountsDB {
             let storage = self.find_storage_candidate(slot_id);
             let rvs = storage
                 .accounts
-                .append_accounts(&with_meta[infos.len()..], &hashes);
+                .append_accounts(&with_meta[infos.len()..], &hashes[infos.len()..]);
             if rvs.is_empty() {
                 storage.set_status(AccountStorageStatus::Full);
 
