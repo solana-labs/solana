@@ -356,6 +356,46 @@ impl<'a> Serialize for AccountsDBSerialize<'a> {
     }
 }
 
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
+pub struct BankHashStats {
+    pub num_removed_accounts: u64,
+    pub num_added_accounts: u64,
+    pub num_lamports_stored: u64,
+    pub total_data_len: u64,
+    pub num_executable_accounts: u64,
+}
+
+impl BankHashStats {
+    pub fn update(&mut self, account: &Account) {
+        if Hash::default() == account.hash {
+            self.num_added_accounts += 1;
+        } else {
+            self.num_removed_accounts += 1;
+        }
+        self.total_data_len = self.total_data_len.wrapping_add(account.data.len() as u64);
+        if account.executable {
+            self.num_executable_accounts += 1;
+        }
+        self.num_lamports_stored = self.num_lamports_stored.wrapping_add(account.lamports);
+    }
+
+    pub fn merge(&mut self, other: &BankHashStats) {
+        self.num_removed_accounts += other.num_removed_accounts;
+        self.num_added_accounts += other.num_added_accounts;
+        self.total_data_len = self.total_data_len.wrapping_add(other.total_data_len);
+        self.num_lamports_stored = self
+            .num_lamports_stored
+            .wrapping_add(other.num_lamports_stored);
+        self.num_executable_accounts += other.num_executable_accounts;
+    }
+}
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
+pub struct BankHashInfo {
+    pub hash: BankHash,
+    pub stats: BankHashStats,
+}
+
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDB {
@@ -385,7 +425,7 @@ pub struct AccountsDB {
     /// the accounts
     min_num_stores: usize,
 
-    pub bank_hashes: RwLock<HashMap<Slot, BankHash>>,
+    pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 }
 
 impl Default for AccountsDB {
@@ -522,7 +562,7 @@ impl AccountsDB {
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
 
-        let (slot, bank_hash): (Slot, BankHash) = deserialize_from(&mut stream)
+        let (slot, bank_hash): (Slot, BankHashInfo) = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("bank hashes deserialize error"))?;
         self.bank_hashes.write().unwrap().insert(slot, bank_hash);
 
@@ -716,10 +756,15 @@ impl AccountsDB {
 
     pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let hash = *bank_hashes
+        let hash_info = bank_hashes
             .get(&parent_slot)
             .expect("accounts_db::set_hash::no parent slot");
-        bank_hashes.insert(slot, hash);
+        let hash = hash_info.hash;
+        let new_hash_info = BankHashInfo {
+            hash,
+            stats: BankHashStats::default(),
+        };
+        bank_hashes.insert(slot, new_hash_info);
     }
 
     pub fn load(
@@ -1006,8 +1051,8 @@ impl AccountsDB {
             calculated_hash.xor(hash);
         }
         let bank_hashes = self.bank_hashes.read().unwrap();
-        if let Some(found_hash) = bank_hashes.get(&slot) {
-            if calculated_hash == *found_hash {
+        if let Some(found_hash_info) = bank_hashes.get(&slot) {
+            if calculated_hash == found_hash_info.hash {
                 Ok(())
             } else {
                 Err(MismatchedBankHash)
@@ -1017,10 +1062,14 @@ impl AccountsDB {
         }
     }
 
-    pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash) {
+    pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash, stats: &BankHashStats) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let bank_hash = bank_hashes.entry(slot_id).or_insert_with(BankHash::default);
-        bank_hash.xor(hash);
+        let bank_hash = bank_hashes
+            .entry(slot_id)
+            .or_insert_with(BankHashInfo::default);
+        bank_hash.hash.xor(hash);
+
+        bank_hash.stats.merge(stats);
     }
 
     fn update_index(
@@ -1109,11 +1158,13 @@ impl AccountsDB {
     fn hash_accounts(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) -> Vec<Hash> {
         let mut hash_state = BankHash::default();
         let mut had_account = false;
+        let mut stats = BankHashStats::default();
         let hashes: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
                 if !sysvar::check_id(&account.owner) {
                     let hash = BankHash::from_hash(&account.hash);
+                    stats.update(account);
                     let new_hash = Self::hash_account(slot_id, account, pubkey);
                     let new_bank_hash = BankHash::from_hash(&new_hash);
                     debug!(
@@ -1135,7 +1186,7 @@ impl AccountsDB {
             .collect();
 
         if had_account {
-            self.xor_in_hash_state(slot_id, hash_state);
+            self.xor_in_hash_state(slot_id, hash_state, &stats);
         }
         hashes
     }
@@ -2225,6 +2276,33 @@ pub mod tests {
     }
 
     #[test]
+    fn test_bank_hash_stats() {
+        solana_logger::setup();
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let some_data_len = 5;
+        let some_slot: Slot = 0;
+        let account = Account::new(1, some_data_len, &key);
+        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+
+        db.store(some_slot, &[(&key, &account)]);
+        let mut account = db.load_slow(&ancestors, &key).unwrap().0;
+        account.lamports += 1;
+        account.executable = true;
+        db.store(some_slot, &[(&key, &account)]);
+        db.add_root(some_slot);
+
+        let bank_hashes = db.bank_hashes.read().unwrap();
+        let bank_hash = bank_hashes.get(&some_slot).unwrap();
+        assert_eq!(bank_hash.stats.num_removed_accounts, 1);
+        assert_eq!(bank_hash.stats.num_added_accounts, 1);
+        assert_eq!(bank_hash.stats.num_lamports_stored, 3);
+        assert_eq!(bank_hash.stats.total_data_len, 2 * some_data_len as u64);
+        assert_eq!(bank_hash.stats.num_executable_accounts, 1);
+    }
+
+    #[test]
     fn test_verify_bank_hash() {
         use BankHashVerificatonError::*;
         solana_logger::setup();
@@ -2247,10 +2325,14 @@ pub mod tests {
         );
 
         let some_bank_hash = BankHash::from_hash(&Hash::new(&[0xca; HASH_BYTES]));
+        let bank_hash_info = BankHashInfo {
+            hash: some_bank_hash,
+            stats: BankHashStats::default(),
+        };
         db.bank_hashes
             .write()
             .unwrap()
-            .insert(some_slot, some_bank_hash);
+            .insert(some_slot, bank_hash_info);
         assert_matches!(
             db.verify_bank_hash(some_slot, &ancestors),
             Err(MismatchedBankHash)
@@ -2268,7 +2350,7 @@ pub mod tests {
         db.bank_hashes
             .write()
             .unwrap()
-            .insert(some_slot, BankHash::default());
+            .insert(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
         assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
     }
