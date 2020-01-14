@@ -12,9 +12,9 @@ use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_request::{
-    Response, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule,
-    RpcResponseContext, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
-    RpcVoteAccountStatus,
+    Response, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo,
+    RpcLeaderSchedule, RpcResponseContext, RpcTransactionEncoding, RpcVersionInfo,
+    RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -26,7 +26,6 @@ use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_schedule::EpochSchedule,
-    fee_calculator::FeeCalculator,
     hash::Hash,
     inflation::Inflation,
     pubkey::Pubkey,
@@ -168,10 +167,16 @@ impl JsonRpcRequestProcessor {
     fn get_recent_blockhash(
         &self,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<(String, FeeCalculator)> {
+    ) -> RpcResponse<RpcBlockhashFeeCalculator> {
         let bank = &*self.bank(commitment);
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
-        new_response(bank, (blockhash.to_string(), fee_calculator))
+        new_response(
+            bank,
+            RpcBlockhashFeeCalculator {
+                blockhash: blockhash.to_string(),
+                fee_calculator,
+            },
+        )
     }
 
     pub fn confirm_transaction(
@@ -468,7 +473,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<(String, FeeCalculator)>;
+    ) -> RpcResponse<RpcBlockhashFeeCalculator>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
@@ -778,7 +783,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<(String, FeeCalculator)> {
+    ) -> RpcResponse<RpcBlockhashFeeCalculator> {
         debug!("get_recent_blockhash rpc request received");
         meta.request_processor
             .read()
@@ -1709,14 +1714,17 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
             "context":{"slot":0},
-            "value":[ blockhash.to_string(), {
-                "burnPercent": DEFAULT_BURN_PERCENT,
-                "lamportsPerSignature": 0,
-                "maxLamportsPerSignature": 0,
-                "minLamportsPerSignature": 0,
-                "targetLamportsPerSignature": 0,
-                "targetSignaturesPerSlot": 0
-            }]},
+            "value":{
+                "blockhash": blockhash.to_string(),
+                "feeCalculator": {
+                    "burnPercent": DEFAULT_BURN_PERCENT,
+                    "lamportsPerSignature": 0,
+                    "maxLamportsPerSignature": 0,
+                    "minLamportsPerSignature": 0,
+                    "targetLamportsPerSignature": 0,
+                    "targetSignaturesPerSlot": 0
+                }
+            }},
             "id": 1
         });
         let expected: Response =

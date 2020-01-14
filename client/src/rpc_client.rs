@@ -5,8 +5,8 @@ use crate::{
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
     rpc_request::{
-        RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule, RpcRequest,
-        RpcVersionInfo, RpcVoteAccountStatus,
+        RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo,
+        RpcLeaderSchedule, RpcRequest, RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -753,8 +753,12 @@ impl RpcClient {
 
         let Response {
             context,
-            value: (blockhash_str, fee_calculator),
-        } = serde_json::from_value::<Response<(String, FeeCalculator)>>(response).map_err(
+            value:
+                RpcBlockhashFeeCalculator {
+                    blockhash,
+                    fee_calculator,
+                },
+        } = serde_json::from_value::<Response<RpcBlockhashFeeCalculator>>(response).map_err(
             |err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -762,7 +766,7 @@ impl RpcClient {
                 )
             },
         )?;
-        let blockhash = blockhash_str.parse().map_err(|err| {
+        let blockhash = blockhash.parse().map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetRecentBlockhash hash parse failure: {:?}", err),

@@ -3,6 +3,7 @@ use jsonrpc_core::Result as JsonResult;
 use serde_json::{json, Value};
 use solana_sdk::{
     clock::{Epoch, Slot},
+    fee_calculator::FeeCalculator,
     message::MessageHeader,
     transaction::{Result, Transaction},
 };
@@ -124,6 +125,13 @@ pub struct RpcTransactionStatus {
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcBlockhashFeeCalculator {
+    pub blockhash: String,
+    pub fee_calculator: FeeCalculator,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
