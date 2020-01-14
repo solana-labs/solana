@@ -82,7 +82,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     // the packet seeds are always zero, just find the id that gets picked first
     let broadcast_index = weighted_best(&stakes_and_index, batches[0].packets[0].meta.seed);
     {
-        let w_cinfo = cluster_info.write().unwrap();
+        let mut w_cinfo = cluster_info.write().unwrap();
         w_cinfo.gossip.set_self(&peers[broadcast_index].id);
         w_cinfo.insert_self(peers[broadcast_index].clone());
     }
