@@ -436,14 +436,14 @@ pub fn parse_stake_authorize(
     stake_authorize: StakeAuthorize,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let authorized_pubkey = pubkey_of(matches, "authorized_pubkey").unwrap();
+    let new_authorized_pubkey = pubkey_of(matches, "authorized_pubkey").unwrap();
 
     Ok(CliCommandInfo {
-        command: CliCommand::StakeAuthorize(
+        command: CliCommand::StakeAuthorize {
             stake_account_pubkey,
-            authorized_pubkey,
+            new_authorized_pubkey,
             stake_authorize,
-        ),
+        },
         require_keypair: true,
     })
 }
@@ -1009,11 +1009,11 @@ mod tests {
         assert_eq!(
             parse_command(&test_authorize_staker).unwrap(),
             CliCommandInfo {
-                command: CliCommand::StakeAuthorize(
+                command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    stake_account_pubkey,
-                    StakeAuthorize::Staker
-                ),
+                    new_authorized_pubkey: stake_account_pubkey,
+                    stake_authorize: StakeAuthorize::Staker,
+                },
                 require_keypair: true
             }
         );
@@ -1026,11 +1026,11 @@ mod tests {
         assert_eq!(
             parse_command(&test_authorize_withdrawer).unwrap(),
             CliCommandInfo {
-                command: CliCommand::StakeAuthorize(
+                command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    stake_account_pubkey,
-                    StakeAuthorize::Withdrawer
-                ),
+                    new_authorized_pubkey: stake_account_pubkey,
+                    stake_authorize: StakeAuthorize::Withdrawer,
+                },
                 require_keypair: true
             }
         );

@@ -193,7 +193,11 @@ pub enum CliCommand {
         pubkey: Pubkey,
         use_lamports_unit: bool,
     },
-    StakeAuthorize(Pubkey, Pubkey, StakeAuthorize),
+    StakeAuthorize {
+        stake_account_pubkey: Pubkey,
+        new_authorized_pubkey: Pubkey,
+        stake_authorize: StakeAuthorize,
+    },
     WithdrawStake(Pubkey, Pubkey, u64),
     // Storage Commands
     CreateStorageAccount {
@@ -1335,11 +1339,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowStakeHistory { use_lamports_unit } => {
             process_show_stake_history(&rpc_client, config, *use_lamports_unit)
         }
-        CliCommand::StakeAuthorize(
+        CliCommand::StakeAuthorize {
             stake_account_pubkey,
             new_authorized_pubkey,
             stake_authorize,
-        ) => process_stake_authorize(
+        } => process_stake_authorize(
             &rpc_client,
             config,
             &stake_account_pubkey,
