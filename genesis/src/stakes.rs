@@ -235,7 +235,6 @@ mod tests {
                 ..GenesisConfig::default()
             },
             &StakerInfo {
-                name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
                 lamports: total_lamports,
             },
@@ -260,7 +259,6 @@ mod tests {
                 ..GenesisConfig::default()
             },
             &StakerInfo {
-                name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
                 lamports: total_lamports,
             },
@@ -285,7 +283,6 @@ mod tests {
                 ..GenesisConfig::default()
             },
             &StakerInfo {
-                name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
                 lamports: total_lamports,
             },
@@ -309,7 +306,6 @@ mod tests {
                 ..GenesisConfig::default()
             },
             &StakerInfo {
-                name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
                 lamports: total_lamports,
             },
