@@ -255,6 +255,9 @@ pub enum BlockstoreProcessorError {
 
     #[error("no valid forks found")]
     NoValidForksFound,
+
+    #[error("invalid hard fork")]
+    InvalidHardFork(Slot),
 }
 
 /// Callback for accessing bank state while processing the blockstore
@@ -267,6 +270,7 @@ pub struct ProcessOptions {
     pub dev_halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
     pub override_num_threads: Option<usize>,
+    pub new_hard_forks: Option<Vec<Slot>>,
 }
 
 pub fn process_blockstore(
@@ -313,6 +317,23 @@ pub fn process_blockstore_from_root(
     bank.set_entered_epoch_callback(solana_genesis_programs::get_entered_epoch_callback(
         genesis_config.operating_mode,
     ));
+
+    if let Some(ref new_hard_forks) = opts.new_hard_forks {
+        let hard_forks = bank.hard_forks();
+
+        for hard_fork_slot in new_hard_forks.iter() {
+            // Ensure the user isn't trying to add new hard forks for a slot that's earlier than the current
+            // root slot.  Doing so won't cause any effect so emit an error
+            if *hard_fork_slot <= start_slot {
+                error!(
+                    "Unable to add new hard fork at {}, it must be greater than slot {}",
+                    hard_fork_slot, start_slot
+                );
+                return Err(BlockstoreProcessorError::InvalidHardFork(*hard_fork_slot));
+            }
+            hard_forks.write().unwrap().register(*hard_fork_slot);
+        }
+    }
 
     blockstore
         .set_roots(&[start_slot])

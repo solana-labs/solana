@@ -31,11 +31,11 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_metrics::datapoint_info;
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, hard_forks::HardForks};
 use solana_sdk::{
     clock::{Slot, DEFAULT_SLOTS_PER_TURN},
     genesis_config::GenesisConfig,
-    hash::Hash,
+    hash::{extend_and_hash, Hash},
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
@@ -69,6 +69,7 @@ pub struct ValidatorConfig {
     pub partition_cfg: Option<PartitionCfg>,
     pub fixed_leader_schedule: Option<FixedSchedule>,
     pub wait_for_supermajority: bool,
+    pub new_hard_forks: Option<Vec<Slot>>,
 }
 
 impl Default for ValidatorConfig {
@@ -89,6 +90,7 @@ impl Default for ValidatorConfig {
             partition_cfg: None,
             fixed_leader_schedule: None,
             wait_for_supermajority: false,
+            new_hard_forks: None,
         }
     }
 }
@@ -179,7 +181,8 @@ impl Validator {
         let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
         node.info.wallclock = timestamp();
-        node.info.shred_version = Shred::version_from_hash(&genesis_hash);
+        node.info.shred_version =
+            compute_shred_version(&genesis_hash, &bank.hard_forks().read().unwrap());
         Self::print_node_info(&node);
 
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
@@ -466,7 +469,21 @@ impl Validator {
     }
 }
 
-pub fn new_banks_from_blockstore(
+fn compute_shred_version(genesis_hash: &Hash, hard_forks: &HardForks) -> u16 {
+    use byteorder::{ByteOrder, LittleEndian};
+
+    let mut hash = *genesis_hash;
+    for (slot, count) in hard_forks.iter() {
+        let mut buf = [0u8; 16];
+        LittleEndian::write_u64(&mut buf[..7], *slot);
+        LittleEndian::write_u64(&mut buf[8..], *count as u64);
+        hash = extend_and_hash(&hash, &buf);
+    }
+
+    Shred::version_from_hash(&hash)
+}
+
+fn new_banks_from_blockstore(
     expected_genesis_hash: Option<Hash>,
     blockstore_path: &Path,
     poh_verify: bool,
@@ -505,6 +522,7 @@ pub fn new_banks_from_blockstore(
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify,
         dev_halt_at_slot: config.dev_halt_at_slot,
+        new_hard_forks: config.new_hard_forks.clone(),
         ..blockstore_processor::ProcessOptions::default()
     };
 

@@ -7,6 +7,7 @@ pub mod bank_client;
 mod blockhash_queue;
 pub mod bloom;
 pub mod genesis_utils;
+pub mod hard_forks;
 pub mod loader_utils;
 pub mod message_processor;
 mod native_loader;
