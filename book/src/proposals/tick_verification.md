@@ -28,17 +28,17 @@ slashing proof to punish this bad behavior.
 2) Otherwise, we can simply mark the slot as dead and not playable. A slashing
 proof may or may not be necessary depending on feasibility.
 
-# Blocktree receiving shreds
+# Blockstore receiving shreds
 
-When blocktree receives a new shred `s`, there are two cases:
+When blockstore receives a new shred `s`, there are two cases:
 
 1) `s` is marked as `LAST_SHRED_IN_SLOT`, then check if there exists a shred 
-`s'` in blocktree for that slot where `s'.index > s.index` If so, together `s`
+`s'` in blockstore for that slot where `s'.index > s.index` If so, together `s`
 and `s'` constitute a slashing proof.
 
-2) Blocktree has already received a shred `s'` marked as `LAST_SHRED_IN_SLOT`
+2) Blockstore has already received a shred `s'` marked as `LAST_SHRED_IN_SLOT`
 with index `i`. If `s.index > i`, then together `s` and `s'`constitute a 
-slashing proof. In this case, blocktree will also not insert `s`.
+slashing proof. In this case, blockstore will also not insert `s`.
 
 3) Duplicate shreds for the same index are ignored. Non-duplicate shreds for
 the same index are a slashable condition. Details for this case are covered
@@ -47,7 +47,7 @@ in the `Leader Duplicate Block Slashing` section.
 
 # Replaying and validating ticks
 
-1) Replay stage replays entries from blocktree, keeping track of the number of
+1) Replay stage replays entries from blockstore, keeping track of the number of
 ticks it has seen per slot, and verifying there are `hashes_per_tick` number of
 hashes between ticcks. After the tick from this last shred has been played, 
 replay stage then checks the total number of ticks.

@@ -10,7 +10,7 @@ use crate::{
 };
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_runtime::{bank::Bank, storage_utils::archiver_accounts};
 use solana_sdk::{
     account::Account,
@@ -177,7 +177,7 @@ impl StorageStage {
     pub fn new(
         storage_state: &StorageState,
         bank_receiver: Receiver<Vec<Arc<Bank>>>,
-        blocktree: Option<Arc<Blocktree>>,
+        blockstore: Option<Arc<Blockstore>>,
         keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         exit: &Arc<AtomicBool>,
@@ -197,12 +197,12 @@ impl StorageStage {
                     let mut current_key = 0;
                     let mut storage_slots = StorageSlots::default();
                     loop {
-                        if let Some(ref some_blocktree) = blocktree {
+                        if let Some(ref some_blockstore) = blockstore {
                             if let Err(e) = Self::process_entries(
                                 &storage_keypair,
                                 &storage_state_inner,
                                 &bank_receiver,
-                                &some_blocktree,
+                                &some_blockstore,
                                 &mut storage_slots,
                                 &mut current_key,
                                 slots_per_turn,
@@ -368,7 +368,7 @@ impl StorageStage {
     fn process_turn(
         storage_keypair: &Arc<Keypair>,
         state: &Arc<RwLock<StorageStateInner>>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         blockhash: Hash,
         slot: Slot,
         slots_per_segment: u64,
@@ -431,7 +431,7 @@ impl StorageStage {
             let mut statew = state.write().unwrap();
 
             match chacha_cbc_encrypt_file_many_keys(
-                blocktree,
+                blockstore,
                 segment as u64,
                 statew.slots_per_segment,
                 &mut statew.storage_keys,
@@ -502,7 +502,7 @@ impl StorageStage {
         storage_keypair: &Arc<Keypair>,
         storage_state: &Arc<RwLock<StorageStateInner>>,
         bank_receiver: &Receiver<Vec<Arc<Bank>>>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         storage_slots: &mut StorageSlots,
         current_key_idx: &mut usize,
         slots_per_turn: u64,
@@ -541,7 +541,7 @@ impl StorageStage {
                     let _ignored = Self::process_turn(
                         &storage_keypair,
                         &storage_state,
-                        &blocktree,
+                        &blockstore,
                         bank.last_blockhash(),
                         bank.slot(),
                         bank.slots_per_segment(),

@@ -9,7 +9,7 @@ use jsonrpc_http_server::{
     hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
     RequestMiddlewareAction, ServerBuilder,
 };
-use solana_ledger::{bank_forks::BankForks, blocktree::Blocktree};
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_sdk::hash::Hash;
 use std::{
     net::SocketAddr,
@@ -91,7 +91,7 @@ impl JsonRpcService {
         config: JsonRpcConfig,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-        blocktree: Arc<Blocktree>,
+        blockstore: Arc<Blockstore>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         genesis_hash: Hash,
         ledger_path: &Path,
@@ -104,7 +104,7 @@ impl JsonRpcService {
             config,
             bank_forks,
             block_commitment_cache,
-            blocktree,
+            blockstore,
             storage_state,
             validator_exit.clone(),
         )));
@@ -204,13 +204,13 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),
             bank_forks,
             block_commitment_cache,
-            Arc::new(blocktree),
+            Arc::new(blockstore),
             cluster_info,
             Hash::default(),
             &PathBuf::from("farf"),

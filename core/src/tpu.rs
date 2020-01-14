@@ -12,7 +12,7 @@ use crate::{
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
 };
 use crossbeam_channel::unbounded;
-use solana_ledger::{blocktree::Blocktree, blocktree_processor::TransactionStatusSender};
+use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
 use std::{
     net::UdpSocket,
     sync::{
@@ -42,7 +42,7 @@ impl Tpu {
         broadcast_sockets: Vec<UdpSocket>,
         sigverify_disabled: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
         shred_version: u16,
@@ -87,7 +87,7 @@ impl Tpu {
             cluster_info.clone(),
             entry_receiver,
             &exit,
-            blocktree,
+            blockstore,
             shred_version,
         );
 

@@ -5,7 +5,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use solana_ledger::blocktree::Blocktree;
+use solana_ledger::blockstore::Blockstore;
 use solana_ledger::rooted_slot_iterator::RootedSlotIterator;
 use solana_sdk::{epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
@@ -89,13 +89,13 @@ pub struct ClusterInfoRepairListener {
 
 impl ClusterInfoRepairListener {
     pub fn new(
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         epoch_schedule: EpochSchedule,
     ) -> Self {
         let exit = exit.clone();
-        let blocktree = blocktree.clone();
+        let blockstore = blockstore.clone();
         let thread = Builder::new()
             .name("solana-cluster_info_repair_listener".to_string())
             .spawn(move || {
@@ -105,7 +105,7 @@ impl ClusterInfoRepairListener {
                 // 2) The latest root the peer gossiped
                 let mut peer_infos: HashMap<Pubkey, RepaireeInfo> = HashMap::new();
                 let _ = Self::recv_loop(
-                    &blocktree,
+                    &blockstore,
                     &mut peer_infos,
                     &exit,
                     &cluster_info,
@@ -119,7 +119,7 @@ impl ClusterInfoRepairListener {
     }
 
     fn recv_loop(
-        blocktree: &Blocktree,
+        blockstore: &Blockstore,
         peer_infos: &mut HashMap<Pubkey, RepaireeInfo>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -134,7 +134,7 @@ impl ClusterInfoRepairListener {
                 return Ok(());
             }
 
-            let lowest_slot = blocktree.lowest_slot();
+            let lowest_slot = blockstore.lowest_slot();
             let peers = cluster_info.read().unwrap().gossip_peers();
             let mut peers_needing_repairs: HashMap<Pubkey, EpochSlots> = HashMap::new();
 
@@ -156,7 +156,7 @@ impl ClusterInfoRepairListener {
             // After updating all the peers, send out repairs to those that need it
             let _ = Self::serve_repairs(
                 &my_pubkey,
-                blocktree,
+                blockstore,
                 peer_infos,
                 &peers_needing_repairs,
                 &socket,
@@ -219,7 +219,7 @@ impl ClusterInfoRepairListener {
 
     fn serve_repairs(
         my_pubkey: &Pubkey,
-        blocktree: &Blocktree,
+        blockstore: &Blockstore,
         peer_infos: &mut HashMap<Pubkey, RepaireeInfo>,
         repairees: &HashMap<Pubkey, EpochSlots>,
         socket: &UdpSocket,
@@ -258,7 +258,7 @@ impl ClusterInfoRepairListener {
                     my_pubkey,
                     repairee_pubkey,
                     my_root,
-                    blocktree,
+                    blockstore,
                     &repairee_epoch_slots,
                     &eligible_repairmen,
                     socket,
@@ -286,7 +286,7 @@ impl ClusterInfoRepairListener {
         my_pubkey: &Pubkey,
         repairee_pubkey: &Pubkey,
         my_root: Slot,
-        blocktree: &Blocktree,
+        blockstore: &Blockstore,
         repairee_epoch_slots: &EpochSlots,
         eligible_repairmen: &[&Pubkey],
         socket: &UdpSocket,
@@ -295,7 +295,7 @@ impl ClusterInfoRepairListener {
         epoch_schedule: &EpochSchedule,
         last_repaired_slot_and_ts: (u64, u64),
     ) -> Result<Option<Slot>> {
-        let slot_iter = RootedSlotIterator::new(repairee_epoch_slots.root, &blocktree);
+        let slot_iter = RootedSlotIterator::new(repairee_epoch_slots.root, &blockstore);
         if slot_iter.is_err() {
             info!(
                 "Root for repairee is on different fork. My root: {}, repairee_root: {} repairee_pubkey: {:?}",
@@ -366,17 +366,17 @@ impl ClusterInfoRepairListener {
                             // a database iterator over the slots because by the time this node is
                             // sending the shreds in this slot for repair, we expect these slots
                             // to be full.
-                            if let Some(shred_data) = blocktree
+                            if let Some(shred_data) = blockstore
                                 .get_data_shred(slot, shred_index as u64)
-                                .expect("Failed to read data shred from blocktree")
+                                .expect("Failed to read data shred from blockstore")
                             {
                                 socket.send_to(&shred_data[..], repairee_addr)?;
                                 total_data_shreds_sent += 1;
                             }
 
-                            if let Some(coding_bytes) = blocktree
+                            if let Some(coding_bytes) = blockstore
                                 .get_coding_shred(slot, shred_index as u64)
-                                .expect("Failed to read coding shred from blocktree")
+                                .expect("Failed to read coding shred from blockstore")
                             {
                                 socket.send_to(&coding_bytes[..], repairee_addr)?;
                                 total_coding_shreds_sent += 1;
@@ -550,7 +550,7 @@ mod tests {
     use crate::packet::Packets;
     use crate::streamer;
     use crate::streamer::PacketReceiver;
-    use solana_ledger::blocktree::make_many_slot_entries;
+    use solana_ledger::blockstore::make_many_slot_entries;
     use solana_ledger::get_tmp_ledger_path;
     use solana_perf::recycler::Recycler;
     use std::collections::BTreeSet;
@@ -699,16 +699,16 @@ mod tests {
 
     #[test]
     fn test_serve_same_repairs_to_repairee() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let num_slots = 2;
         let (shreds, _) = make_many_slot_entries(0, num_slots, 1);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
         let last_root = num_slots - 1;
         let roots: Vec<_> = (0..=last_root).collect();
-        blocktree.set_roots(&roots).unwrap();
+        blockstore.set_roots(&roots).unwrap();
 
         // Set up my information
         let my_pubkey = Pubkey::new_rand();
@@ -729,7 +729,7 @@ mod tests {
             &my_pubkey,
             &mock_repairee.id,
             num_slots - 1,
-            &blocktree,
+            &blockstore,
             &repairee_epoch_slots,
             &eligible_repairmen,
             &my_socket,
@@ -749,7 +749,7 @@ mod tests {
                 &my_pubkey,
                 &mock_repairee.id,
                 num_slots - 1,
-                &blocktree,
+                &blockstore,
                 &repairee_epoch_slots,
                 &eligible_repairmen,
                 &my_socket,
@@ -765,20 +765,20 @@ mod tests {
 
     #[test]
     fn test_serve_repairs_to_repairee() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let entries_per_slot = 5;
         let num_slots = 10;
         assert_eq!(num_slots % 2, 0);
         let (shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
         let num_shreds_per_slot = shreds.len() as u64 / num_slots;
 
-        // Write slots in the range [0, num_slots] to blocktree
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        // Write slots in the range [0, num_slots] to blockstore
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
         let roots: Vec<_> = (0..=num_slots - 1).collect();
-        blocktree.set_roots(&roots).unwrap();
+        blockstore.set_roots(&roots).unwrap();
 
         // Set up my information
         let my_pubkey = Pubkey::new_rand();
@@ -809,7 +809,7 @@ mod tests {
                 &repairman_pubkey,
                 &mock_repairee.id,
                 num_slots - 1,
-                &blocktree,
+                &blockstore,
                 &repairee_epoch_slots,
                 &eligible_repairmen_refs,
                 &my_socket,
@@ -848,26 +848,26 @@ mod tests {
 
         // Shutdown
         mock_repairee.close().unwrap();
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_no_repair_past_confirmed_epoch() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let stakers_slot_offset = 16;
         let slots_per_epoch = stakers_slot_offset * 2;
         let epoch_schedule = EpochSchedule::custom(slots_per_epoch, stakers_slot_offset, false);
 
-        // Create shreds for first two epochs and write them to blocktree
+        // Create shreds for first two epochs and write them to blockstore
         let total_slots = slots_per_epoch * 2;
         let (shreds, _) = make_many_slot_entries(0, total_slots, 1);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
         let roots: Vec<_> = (0..=slots_per_epoch * 2 - 1).collect();
-        blocktree.set_roots(&roots).unwrap();
+        blockstore.set_roots(&roots).unwrap();
 
         // Set up my information
         let my_pubkey = Pubkey::new_rand();
@@ -896,7 +896,7 @@ mod tests {
             &my_pubkey,
             &mock_repairee.id,
             total_slots - 1,
-            &blocktree,
+            &blockstore,
             &repairee_epoch_slots,
             &vec![&my_pubkey],
             &my_socket,
@@ -919,7 +919,7 @@ mod tests {
             &my_pubkey,
             &mock_repairee.id,
             total_slots - 1,
-            &blocktree,
+            &blockstore,
             &repairee_epoch_slots,
             &vec![&my_pubkey],
             &my_socket,
@@ -936,8 +936,8 @@ mod tests {
 
         // Shutdown
         mock_repairee.close().unwrap();
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]

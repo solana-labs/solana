@@ -1,6 +1,6 @@
 use solana_ledger::entry;
 use solana_ledger::{
-    blocktree::{self, Blocktree},
+    blockstore::{self, Blockstore},
     get_tmp_ledger_path,
 };
 use solana_sdk::hash::Hash;
@@ -9,8 +9,8 @@ use std::thread::Builder;
 
 #[test]
 fn test_multiple_threads_insert_shred() {
-    let blocktree_path = get_tmp_ledger_path!();
-    let blocktree = Arc::new(Blocktree::open(&blocktree_path).unwrap());
+    let blockstore_path = get_tmp_ledger_path!();
+    let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
 
     for _ in 0..100 {
         let num_threads = 10;
@@ -20,12 +20,12 @@ fn test_multiple_threads_insert_shred() {
         let threads: Vec<_> = (0..num_threads)
             .map(|i| {
                 let entries = entry::create_ticks(1, 0, Hash::default());
-                let shreds = blocktree::entries_to_test_shreds(entries, i + 1, 0, false, 0);
-                let blocktree_ = blocktree.clone();
+                let shreds = blockstore::entries_to_test_shreds(entries, i + 1, 0, false, 0);
+                let blockstore_ = blockstore.clone();
                 Builder::new()
-                    .name("blocktree-writer".to_string())
+                    .name("blockstore-writer".to_string())
                     .spawn(move || {
-                        blocktree_.insert_shreds(shreds, None, false).unwrap();
+                        blockstore_.insert_shreds(shreds, None, false).unwrap();
                     })
                     .unwrap()
             })
@@ -36,16 +36,16 @@ fn test_multiple_threads_insert_shred() {
         }
 
         // Check slot 0 has the correct children
-        let mut meta0 = blocktree.meta(0).unwrap().unwrap();
+        let mut meta0 = blockstore.meta(0).unwrap().unwrap();
         meta0.next_slots.sort();
         let expected_next_slots: Vec<_> = (1..num_threads + 1).collect();
         assert_eq!(meta0.next_slots, expected_next_slots);
 
         // Delete slots for next iteration
-        blocktree.purge_slots(0, None);
+        blockstore.purge_slots(0, None);
     }
 
     // Cleanup
-    drop(blocktree);
-    Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    drop(blockstore);
+    Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
 }

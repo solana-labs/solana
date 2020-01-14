@@ -11,8 +11,8 @@ use crate::{
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use solana_ledger::{
-    blocktree::Blocktree,
-    blocktree_processor::{send_transaction_status_batch, TransactionStatusSender},
+    blockstore::Blockstore,
+    blockstore_processor::{send_transaction_status_batch, TransactionStatusSender},
     entry::hash_transactions,
     leader_schedule_cache::LeaderScheduleCache,
 };
@@ -987,7 +987,7 @@ impl BankingStage {
 
 pub fn create_test_recorder(
     bank: &Arc<Bank>,
-    blocktree: &Arc<Blocktree>,
+    blockstore: &Arc<Blockstore>,
     poh_config: Option<PohConfig>,
 ) -> (
     Arc<AtomicBool>,
@@ -1004,7 +1004,7 @@ pub fn create_test_recorder(
         Some((4, 4)),
         bank.ticks_per_slot(),
         &Pubkey::default(),
-        blocktree,
+        blockstore,
         &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
         &poh_config,
     );
@@ -1030,7 +1030,7 @@ mod tests {
     use itertools::Itertools;
     use solana_client::rpc_request::RpcEncodedTransaction;
     use solana_ledger::{
-        blocktree::entries_to_test_shreds,
+        blockstore::entries_to_test_shreds,
         entry::{next_entry, Entry, EntrySlice},
         get_tmp_ledger_path,
     };
@@ -1051,11 +1051,12 @@ mod tests {
         let (vote_sender, vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree = Arc::new(
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            let blockstore = Arc::new(
+                Blockstore::open(&ledger_path)
+                    .expect("Expected to be able to open database ledger"),
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
-                create_test_recorder(&bank, &blocktree, None);
+                create_test_recorder(&bank, &blockstore, None);
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
             let cluster_info = Arc::new(RwLock::new(cluster_info));
             let banking_stage = BankingStage::new(
@@ -1071,7 +1072,7 @@ mod tests {
             banking_stage.join().unwrap();
             poh_service.join().unwrap();
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -1088,13 +1089,14 @@ mod tests {
         let (vote_sender, vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree = Arc::new(
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            let blockstore = Arc::new(
+                Blockstore::open(&ledger_path)
+                    .expect("Expected to be able to open database ledger"),
             );
             let mut poh_config = PohConfig::default();
             poh_config.target_tick_count = Some(bank.max_tick_height() + num_extra_ticks);
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, &blocktree, Some(poh_config));
+                create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
             let cluster_info = Arc::new(RwLock::new(cluster_info));
             let banking_stage = BankingStage::new(
@@ -1122,7 +1124,7 @@ mod tests {
             assert_eq!(entries[entries.len() - 1].hash, bank.last_blockhash());
             banking_stage.join().unwrap();
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 
     pub fn convert_from_old_verified(mut with_vers: Vec<(Packets, Vec<u8>)>) -> Vec<Packets> {
@@ -1149,14 +1151,15 @@ mod tests {
         let (vote_sender, vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree = Arc::new(
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            let blockstore = Arc::new(
+                Blockstore::open(&ledger_path)
+                    .expect("Expected to be able to open database ledger"),
             );
             let mut poh_config = PohConfig::default();
             // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
             poh_config.target_tick_count = Some(bank.max_tick_height() - 1);
             let (exit, poh_recorder, poh_service, entry_receiver) =
-                create_test_recorder(&bank, &blocktree, Some(poh_config));
+                create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
             let cluster_info = Arc::new(RwLock::new(cluster_info));
             let banking_stage = BankingStage::new(
@@ -1242,7 +1245,7 @@ mod tests {
 
             drop(entry_receiver);
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -1288,15 +1291,15 @@ mod tests {
             let entry_receiver = {
                 // start a banking_stage to eat verified receiver
                 let bank = Arc::new(Bank::new(&genesis_config));
-                let blocktree = Arc::new(
-                    Blocktree::open(&ledger_path)
+                let blockstore = Arc::new(
+                    Blockstore::open(&ledger_path)
                         .expect("Expected to be able to open database ledger"),
                 );
                 let mut poh_config = PohConfig::default();
                 // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
                 poh_config.target_tick_count = Some(bank.max_tick_height() - 1);
                 let (exit, poh_recorder, poh_service, entry_receiver) =
-                    create_test_recorder(&bank, &blocktree, Some(poh_config));
+                    create_test_recorder(&bank, &blockstore, Some(poh_config));
                 let cluster_info =
                     ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
                 let cluster_info = Arc::new(RwLock::new(cluster_info));
@@ -1339,7 +1342,7 @@ mod tests {
             // the account balance below zero before the credit is added.
             assert_eq!(bank.get_balance(&alice.pubkey()), 2);
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -1357,8 +1360,8 @@ mod tests {
         };
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree =
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
             let (poh_recorder, entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
@@ -1366,7 +1369,7 @@ mod tests {
                 None,
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
-                &Arc::new(blocktree),
+                &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
             );
@@ -1446,7 +1449,7 @@ mod tests {
             // Should receive nothing from PohRecorder b/c record failed
             assert!(entry_receiver.try_recv().is_err());
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -1696,8 +1699,8 @@ mod tests {
         };
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree =
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
             let (poh_recorder, entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
@@ -1705,7 +1708,7 @@ mod tests {
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &pubkey,
-                &Arc::new(blocktree),
+                &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
             );
@@ -1762,7 +1765,7 @@ mod tests {
 
             assert_eq!(bank.get_balance(&pubkey), 1);
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -1789,8 +1792,8 @@ mod tests {
         };
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree =
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
             let (poh_recorder, _entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
@@ -1798,7 +1801,7 @@ mod tests {
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &pubkey,
-                &Arc::new(blocktree),
+                &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
             );
@@ -1817,7 +1820,7 @@ mod tests {
             assert!(result.is_ok());
             assert_eq!(unprocessed.len(), 1);
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -1877,8 +1880,8 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree =
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
             let (poh_recorder, _entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
@@ -1886,7 +1889,7 @@ mod tests {
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::new_rand(),
-                &Arc::new(blocktree),
+                &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
             );
@@ -1905,7 +1908,7 @@ mod tests {
             assert_eq!(retryable_txs, expected);
         }
 
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -1944,9 +1947,9 @@ mod tests {
         };
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree =
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
-            let blocktree = Arc::new(blocktree);
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
+            let blockstore = Arc::new(blockstore);
             let (poh_recorder, _entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
@@ -1954,7 +1957,7 @@ mod tests {
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &pubkey,
-                &blocktree,
+                &blockstore,
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
             );
@@ -1963,13 +1966,13 @@ mod tests {
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
             let shreds = entries_to_test_shreds(entries.clone(), bank.slot(), 0, true, 0);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
-            blocktree.set_roots(&[bank.slot()]).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore.set_roots(&[bank.slot()]).unwrap();
 
             let (transaction_status_sender, transaction_status_receiver) = unbounded();
             let transaction_status_service = TransactionStatusService::new(
                 transaction_status_receiver,
-                blocktree.clone(),
+                blockstore.clone(),
                 &Arc::new(AtomicBool::new(false)),
             );
 
@@ -1983,7 +1986,7 @@ mod tests {
 
             transaction_status_service.join().unwrap();
 
-            let confirmed_block = blocktree.get_confirmed_block(bank.slot(), None).unwrap();
+            let confirmed_block = blockstore.get_confirmed_block(bank.slot(), None).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for (transaction, result) in confirmed_block.transactions.into_iter() {
@@ -2004,6 +2007,6 @@ mod tests {
                 }
             }
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 }

@@ -1,13 +1,13 @@
-//! The `blocktree` module provides functions for parallel verification of the
+//! The `blockstore` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-pub use crate::{blocktree_db::BlocktreeError, blocktree_meta::SlotMeta};
+pub use crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta};
 use crate::{
-    blocktree_db::{
+    blockstore_db::{
         columns as cf, Column, Database, IteratorDirection, IteratorMode, LedgerColumn, Result,
         WriteBatch,
     },
-    blocktree_meta::*,
+    blockstore_meta::*,
     entry::{create_ticks, Entry},
     erasure::ErasureConfig,
     leader_schedule_cache::LeaderScheduleCache,
@@ -53,7 +53,7 @@ use std::{
     time::Duration,
 };
 
-pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
+pub const BLOCKSTORE_DIRECTORY: &str = "rocksdb";
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -68,7 +68,7 @@ const TIMESTAMP_SLOT_RANGE: usize = 50;
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
 
 // ledger window
-pub struct Blocktree {
+pub struct Blockstore {
     db: Arc<Database>,
     meta_cf: LedgerColumn<cf::SlotMeta>,
     dead_slots_cf: LedgerColumn<cf::DeadSlots>,
@@ -99,7 +99,7 @@ pub struct SlotMetaWorkingSetEntry {
     did_insert_occur: bool,
 }
 
-pub struct BlocktreeInsertionMetrics {
+pub struct BlockstoreInsertionMetrics {
     pub num_shreds: usize,
     pub insert_lock_elapsed: u64,
     pub insert_shreds_elapsed: u64,
@@ -123,7 +123,7 @@ impl SlotMetaWorkingSetEntry {
     }
 }
 
-impl BlocktreeInsertionMetrics {
+impl BlockstoreInsertionMetrics {
     pub fn report_metrics(&self, metric_name: &'static str) {
         datapoint_debug!(
             metric_name,
@@ -153,21 +153,21 @@ impl BlocktreeInsertionMetrics {
     }
 }
 
-impl Blocktree {
+impl Blockstore {
     pub fn db(self) -> Arc<Database> {
         self.db
     }
 
     /// Opens a Ledger in directory, provides "infinite" window of shreds
-    pub fn open(ledger_path: &Path) -> Result<Blocktree> {
+    pub fn open(ledger_path: &Path) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
-        let blocktree_path = ledger_path.join(BLOCKTREE_DIRECTORY);
+        let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
 
         adjust_ulimit_nofile();
 
         // Open the database
         let mut measure = Measure::start("open");
-        let db = Database::open(&blocktree_path)?;
+        let db = Database::open(&blockstore_path)?;
 
         // Create the metadata column family
         let meta_cf = db.column();
@@ -198,8 +198,8 @@ impl Blocktree {
         let last_root = Arc::new(RwLock::new(max_root));
 
         measure.stop();
-        info!("{:?} {}", blocktree_path, measure);
-        Ok(Blocktree {
+        info!("{:?} {}", blockstore_path, measure);
+        Ok(Blockstore {
             db,
             meta_cf,
             dead_slots_cf,
@@ -219,21 +219,21 @@ impl Blocktree {
     pub fn open_with_signal(
         ledger_path: &Path,
     ) -> Result<(Self, Receiver<bool>, CompletedSlotsReceiver)> {
-        let mut blocktree = Self::open(ledger_path)?;
+        let mut blockstore = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
-        blocktree.new_shreds_signals = vec![signal_sender];
-        blocktree.completed_slots_senders = vec![completed_slots_sender];
+        blockstore.new_shreds_signals = vec![signal_sender];
+        blockstore.completed_slots_senders = vec![completed_slots_sender];
 
-        Ok((blocktree, signal_receiver, completed_slots_receiver))
+        Ok((blockstore, signal_receiver, completed_slots_receiver))
     }
 
     pub fn destroy(ledger_path: &Path) -> Result<()> {
         // Database::destroy() fails if the path doesn't exist
         fs::create_dir_all(ledger_path)?;
-        let blocktree_path = ledger_path.join(BLOCKTREE_DIRECTORY);
-        Database::destroy(&blocktree_path)
+        let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
+        Database::destroy(&blockstore_path)
     }
 
     pub fn meta(&self, slot: Slot) -> Result<Option<SlotMeta>> {
@@ -249,7 +249,7 @@ impl Blocktree {
         false
     }
 
-    /// Silently deletes all blocktree column families starting at the given slot until the `to` slot
+    /// Silently deletes all blockstore column families starting at the given slot until the `to` slot
     /// Dangerous; Use with care:
     /// Does not check for integrity and does not update slot metas that refer to deleted slots
     /// Modifies multiple column families simultaneously
@@ -454,7 +454,7 @@ impl Blocktree {
         for (&(slot, set_index), erasure_meta) in erasure_metas.iter() {
             let submit_metrics = |attempted: bool, status: String, recovered: usize| {
                 datapoint_debug!(
-                    "blocktree-erasure",
+                    "blockstore-erasure",
                     ("slot", slot as i64, i64),
                     ("start_index", set_index as i64, i64),
                     (
@@ -503,7 +503,7 @@ impl Blocktree {
                                 .map(|s| {
                                     // Remove from the index so it doesn't get committed. We know
                                     // this is safe to do because everything in
-                                    // `prev_inserted_codes` does not yet exist in blocktree
+                                    // `prev_inserted_codes` does not yet exist in blockstore
                                     // (guaranteed by `check_cache_coding_shred`)
                                     index.coding_mut().set_present(i, false);
                                     s
@@ -548,7 +548,7 @@ impl Blocktree {
                             if prev_inserted_codes.remove(&(slot, i)).is_some() {
                                 // Remove from the index so it doesn't get committed. We know
                                 // this is safe to do because everything in
-                                // `prev_inserted_codes` does not yet exist in blocktree
+                                // `prev_inserted_codes` does not yet exist in blockstore
                                 // (guaranteed by `check_cache_coding_shred`)
                                 index.coding_mut().set_present(i, false);
                             }
@@ -569,9 +569,9 @@ impl Blocktree {
         shreds: Vec<Shred>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
-    ) -> Result<BlocktreeInsertionMetrics> {
+    ) -> Result<BlockstoreInsertionMetrics> {
         let mut total_start = Measure::start("Total elapsed");
-        let mut start = Measure::start("Blocktree lock");
+        let mut start = Measure::start("Blockstore lock");
         let _lock = self.insert_shreds_lock.lock().unwrap();
         start.stop();
         let insert_lock_elapsed = start.as_us();
@@ -703,7 +703,7 @@ impl Blocktree {
 
         total_start.stop();
 
-        Ok(BlocktreeInsertionMetrics {
+        Ok(BlockstoreInsertionMetrics {
             num_shreds,
             total_elapsed: total_start.as_us(),
             insert_lock_elapsed,
@@ -759,7 +759,7 @@ impl Blocktree {
         // This gives the index of first coding shred in this FEC block
         // So, all coding shreds in a given FEC block will have the same set index
         if is_trusted
-            || Blocktree::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root)
+            || Blockstore::should_insert_coding_shred(&shred, index_meta.coding(), &self.last_root)
         {
             let set_index = u64::from(shred.common_header.fec_set_index);
             let erasure_config = ErasureConfig::new(
@@ -828,7 +828,7 @@ impl Blocktree {
         let slot_meta = &mut slot_meta_entry.new_slot_meta.borrow_mut();
 
         if is_trusted
-            || Blocktree::should_insert_data_shred(
+            || Blockstore::should_insert_data_shred(
                 &shred,
                 slot_meta,
                 index_meta.data(),
@@ -916,7 +916,7 @@ impl Blocktree {
             false
         };
 
-        // Check that the data shred doesn't already exist in blocktree
+        // Check that the data shred doesn't already exist in blockstore
         if shred_index < slot_meta.consumed || data_index.is_present(shred_index) {
             return false;
         }
@@ -926,7 +926,7 @@ impl Blocktree {
         let last_index = slot_meta.last_index;
         if shred_index >= last_index {
             datapoint_error!(
-                "blocktree_error",
+                "blockstore_error",
                 (
                     "error",
                     format!(
@@ -942,7 +942,7 @@ impl Blocktree {
         // less than our current received
         if last_in_slot && shred_index < slot_meta.received {
             datapoint_error!(
-                "blocktree_error",
+                "blockstore_error",
                 (
                     "error",
                     format!(
@@ -1362,7 +1362,7 @@ impl Blocktree {
                 return Ok(block);
             }
         }
-        Err(BlocktreeError::SlotNotRooted)
+        Err(BlockstoreError::SlotNotRooted)
     }
 
     fn map_transactions_to_statuses<'a>(
@@ -1443,7 +1443,7 @@ impl Blocktree {
         start_index: u64,
     ) -> Result<(Vec<Entry>, usize, bool)> {
         if self.is_dead(slot) {
-            return Err(BlocktreeError::DeadSlot);
+            return Err(BlockstoreError::DeadSlot);
         }
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
         let slot_meta = slot_meta_cf.get(slot)?;
@@ -1526,7 +1526,7 @@ impl Blocktree {
                                 .expect("Shred must exist if shred index was included in a range"),
                         )
                         .map_err(|err| {
-                            BlocktreeError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
                                 format!(
                                     "Could not reconstruct shred from shred payload: {:?}",
                                     err
@@ -1541,14 +1541,14 @@ impl Blocktree {
         assert!(data_shreds.last().unwrap().data_complete());
 
         let deshred_payload = Shredder::deshred(&data_shreds).map_err(|_| {
-            BlocktreeError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
                 "Could not reconstruct data block from constituent shreds".to_string(),
             )))
         })?;
 
         debug!("{:?} shreds in last FEC set", data_shreds.len(),);
         bincode::deserialize::<Vec<Entry>>(&deshred_payload).map_err(|_| {
-            BlocktreeError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
                 "could not reconstruct entries".to_string(),
             )))
         })
@@ -1641,7 +1641,7 @@ impl Blocktree {
         results
     }
 
-    /// Prune blocktree such that slots higher than `target_slot` are deleted and all references to
+    /// Prune blockstore such that slots higher than `target_slot` are deleted and all references to
     /// higher slots are removed
     pub fn prune(&self, target_slot: Slot) {
         let mut meta = self
@@ -1678,7 +1678,7 @@ impl Blocktree {
         *self.last_root.read().unwrap()
     }
 
-    // find the first available slot in blocktree that has some data in it
+    // find the first available slot in blockstore that has some data in it
     pub fn lowest_slot(&self) -> Slot {
         for (slot, meta) in self
             .slot_meta_iterator(0)
@@ -1688,7 +1688,7 @@ impl Blocktree {
                 return slot;
             }
         }
-        // This means blocktree is empty, should never get here aside from right at boot.
+        // This means blockstore is empty, should never get here aside from right at boot.
         self.last_root()
     }
 
@@ -1825,7 +1825,7 @@ fn send_signals(
             let res = signal.try_send(slots);
             if let Err(TrySendError::Full(_)) = res {
                 datapoint_error!(
-                    "blocktree_error",
+                    "blockstore_error",
                     (
                         "error",
                         "Unable to send newly completed slot because channel is full".to_string(),
@@ -2100,11 +2100,11 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
 //
 // Returns the blockhash that can be used to append entries with.
 pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> Result<Hash> {
-    Blocktree::destroy(ledger_path)?;
+    Blockstore::destroy(ledger_path)?;
     genesis_config.write(&ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blocktree = Blocktree::open(ledger_path)?;
+    let blockstore = Blockstore::open(ledger_path)?;
     let ticks_per_slot = genesis_config.ticks_per_slot;
     let hashes_per_tick = genesis_config.poh_config.hashes_per_tick.unwrap_or(0);
     let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_config.hash());
@@ -2116,10 +2116,10 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
     let shreds = shredder.entries_to_shreds(&entries, true, 0).0;
     assert!(shreds.last().unwrap().last_in_slot());
 
-    blocktree.insert_shreds(shreds, None, false)?;
-    blocktree.set_roots(&[0])?;
-    // Explicitly close the blocktree before we create the archived genesis file
-    drop(blocktree);
+    blockstore.insert_shreds(shreds, None, false)?;
+    blockstore.set_roots(&[0])?;
+    // Explicitly close the blockstore before we create the archived genesis file
+    drop(blockstore);
 
     let archive_path = ledger_path.join("genesis.tar.bz2");
     let args = vec![
@@ -2140,7 +2140,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
         eprintln!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
         eprintln!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
 
-        return Err(BlocktreeError::IO(IOError::new(
+        return Err(BlockstoreError::IO(IOError::new(
             ErrorKind::Other,
             format!(
                 "Error trying to generate snapshot archive: {}",
@@ -2162,7 +2162,7 @@ macro_rules! tmp_ledger_name {
 #[macro_export]
 macro_rules! get_tmp_ledger_path {
     () => {
-        $crate::blocktree::get_ledger_path_from_name($crate::tmp_ledger_name!())
+        $crate::blockstore::get_ledger_path_from_name($crate::tmp_ledger_name!())
     };
 }
 
@@ -2188,7 +2188,7 @@ pub fn get_ledger_path_from_name(name: &str) -> PathBuf {
 #[macro_export]
 macro_rules! create_new_tmp_ledger {
     ($genesis_config:expr) => {
-        $crate::blocktree::create_new_ledger_from_name($crate::tmp_ledger_name!(), $genesis_config)
+        $crate::blockstore::create_new_ledger_from_name($crate::tmp_ledger_name!(), $genesis_config)
     };
 }
 
@@ -2329,7 +2329,7 @@ fn adjust_ulimit_nofile() {
 pub mod tests {
     use super::*;
     use crate::{
-        blocktree_processor::fill_blocktree_slot_with_ticks,
+        blockstore_processor::fill_blockstore_slot_with_ticks,
         entry::{next_entry, next_entry_mut},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule::{FixedSchedule, LeaderSchedule},
@@ -2370,64 +2370,64 @@ pub mod tests {
     }
 
     // check that all columns are either empty or start at `min_slot`
-    fn test_all_empty_or_min(blocktree: &Blocktree, min_slot: Slot) {
-        let condition_met = blocktree
+    fn test_all_empty_or_min(blockstore: &Blockstore, min_slot: Slot) {
+        let condition_met = blockstore
             .db
             .iter::<cf::SlotMeta>(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|(slot, _)| slot >= min_slot)
             .unwrap_or(true)
-            & blocktree
+            & blockstore
                 .db
                 .iter::<cf::Root>(IteratorMode::Start)
                 .unwrap()
                 .next()
                 .map(|(slot, _)| slot >= min_slot)
                 .unwrap_or(true)
-            & blocktree
+            & blockstore
                 .db
                 .iter::<cf::ShredData>(IteratorMode::Start)
                 .unwrap()
                 .next()
                 .map(|((slot, _), _)| slot >= min_slot)
                 .unwrap_or(true)
-            & blocktree
+            & blockstore
                 .db
                 .iter::<cf::ShredCode>(IteratorMode::Start)
                 .unwrap()
                 .next()
                 .map(|((slot, _), _)| slot >= min_slot)
                 .unwrap_or(true)
-            & blocktree
+            & blockstore
                 .db
                 .iter::<cf::DeadSlots>(IteratorMode::Start)
                 .unwrap()
                 .next()
                 .map(|(slot, _)| slot >= min_slot)
                 .unwrap_or(true)
-            & blocktree
+            & blockstore
                 .db
                 .iter::<cf::ErasureMeta>(IteratorMode::Start)
                 .unwrap()
                 .next()
                 .map(|((slot, _), _)| slot >= min_slot)
                 .unwrap_or(true)
-            & blocktree
+            & blockstore
                 .db
                 .iter::<cf::Orphans>(IteratorMode::Start)
                 .unwrap()
                 .next()
                 .map(|(slot, _)| slot >= min_slot)
                 .unwrap_or(true)
-            & blocktree
+            & blockstore
                 .db
                 .iter::<cf::Index>(IteratorMode::Start)
                 .unwrap()
                 .next()
                 .map(|(slot, _)| slot >= min_slot)
                 .unwrap_or(true)
-            & blocktree
+            & blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::Start)
                 .unwrap()
@@ -2442,7 +2442,7 @@ pub mod tests {
         let mint_total = 1_000_000_000_000;
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(mint_total);
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let ledger = Blocktree::open(&ledger_path).unwrap();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
 
         let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
         let entries = ledger.get_slot_entries(0, 0, None).unwrap();
@@ -2451,7 +2451,7 @@ pub mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -2463,7 +2463,7 @@ pub mod tests {
         let (mut shreds, _) = make_slot_entries(0, 0, num_entries);
 
         let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blocktree::open(&ledger_path).unwrap();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
 
         // Insert last shred, test we can retrieve it
         let last_shred = shreds.pop().unwrap();
@@ -2482,7 +2482,7 @@ pub mod tests {
         assert_eq!(last_shred, deserialized_shred);
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -2492,7 +2492,7 @@ pub mod tests {
         {
             let ticks_per_slot = 10;
             let num_slots = 10;
-            let ledger = Blocktree::open(&ledger_path).unwrap();
+            let ledger = Blockstore::open(&ledger_path).unwrap();
             let mut ticks = vec![];
             //let mut shreds_per_slot = 0 as u64;
             let mut shreds_per_slot = vec![];
@@ -2581,13 +2581,13 @@ pub mod tests {
                         );
             */
         }
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_put_get_simple() {
         let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blocktree::open(&ledger_path).unwrap();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
 
         // Test meta column family
         let meta = SlotMeta::new(0, 1);
@@ -2631,7 +2631,7 @@ pub mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -2642,7 +2642,7 @@ pub mod tests {
         let shred_bufs: Vec<_> = shreds.iter().map(|shred| shred.payload.clone()).collect();
 
         let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blocktree::open(&ledger_path).unwrap();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
         ledger.insert_shreds(shreds, None, false).unwrap();
 
         let mut buf = [0; 4096];
@@ -2691,7 +2691,7 @@ pub mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -2704,7 +2704,7 @@ pub mod tests {
         let num_shreds = shreds.len() as u64;
 
         let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blocktree::open(&ledger_path).unwrap();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
 
         // Insert last shred, we're missing the other shreds, so no consecutive
         // shreds starting from slot 0, index 0 should exist.
@@ -2738,7 +2738,7 @@ pub mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -2749,7 +2749,7 @@ pub mod tests {
         let num_shreds = shreds.len() as u64;
 
         let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blocktree::open(&ledger_path).unwrap();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
 
         // Insert shreds in reverse, check for consecutive returned shreds
         for i in (0..num_shreds).rev() {
@@ -2774,7 +2774,7 @@ pub mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -2787,9 +2787,9 @@ pub mod tests {
         #[test]
         pub fn test_iteration_order() {
             let slot = 0;
-            let blocktree_path = get_tmp_ledger_path!();
+            let blockstore_path = get_tmp_ledger_path!();
             {
-                let blocktree = Blocktree::open(&blocktree_path).unwrap();
+                let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
                 // Write entries
                 let num_entries = 8;
@@ -2801,11 +2801,11 @@ pub mod tests {
                     b.set_slot(0);
                 }
 
-                blocktree
+                blockstore
                     .write_shreds(&shreds)
                     .expect("Expected successful write of shreds");
 
-                let mut db_iterator = blocktree
+                let mut db_iterator = blockstore
                     .db
                     .cursor::<cf::Data>()
                     .expect("Expected to be able to open database iterator");
@@ -2820,18 +2820,18 @@ pub mod tests {
                     db_iterator.next();
                 }
             }
-            Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+            Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
         }
     */
 
     #[test]
     pub fn test_get_slot_entries1() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let entries = create_ticks(8, 0, Hash::default());
             let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false, 0);
-            blocktree
+            blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
 
@@ -2839,16 +2839,16 @@ pub mod tests {
             for (i, b) in shreds1.iter_mut().enumerate() {
                 b.set_index(8 + i as u32);
             }
-            blocktree
+            blockstore
                 .insert_shreds(shreds1, None, false)
                 .expect("Expected successful write of shreds");
 
             assert_eq!(
-                blocktree.get_slot_entries(1, 0, None).unwrap()[2..4],
+                blockstore.get_slot_entries(1, 0, None).unwrap()[2..4],
                 entries[2..4],
             );
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     // This test seems to be unnecessary with introduction of data shreds. There are no
@@ -2856,9 +2856,9 @@ pub mod tests {
     #[test]
     #[ignore]
     pub fn test_get_slot_entries2() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Write entries
             let num_slots = 5 as u64;
@@ -2873,26 +2873,26 @@ pub mod tests {
                     b.set_slot(slot as u64);
                     index += 1;
                 }
-                blocktree
+                blockstore
                     .insert_shreds(shreds, None, false)
                     .expect("Expected successful write of shreds");
                 assert_eq!(
-                    blocktree
+                    blockstore
                         .get_slot_entries(slot, u64::from(index - 1), None)
                         .unwrap(),
                     vec![last_entry],
                 );
             }
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_get_slot_entries3() {
         // Test inserting/fetching shreds which contain multiple entries per shred
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let num_slots = 5 as u64;
             let shreds_per_slot = 5 as u64;
             let entry_serialized_size =
@@ -2906,20 +2906,20 @@ pub mod tests {
                 let shreds =
                     entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false, 0);
                 assert!(shreds.len() as u64 >= shreds_per_slot);
-                blocktree
+                blockstore
                     .insert_shreds(shreds, None, false)
                     .expect("Expected successful write of shreds");
-                assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), entries);
+                assert_eq!(blockstore.get_slot_entries(slot, 0, None).unwrap(), entries);
             }
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_insert_data_shreds_consecutive() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
             // Create enough entries to ensure there are at least two shreds created
             let min_entries = max_ticks_per_n_shreds(1) + 1;
             for i in 0..4 {
@@ -2942,11 +2942,11 @@ pub mod tests {
                     }
                 }
 
-                blocktree.insert_shreds(odd_shreds, None, false).unwrap();
+                blockstore.insert_shreds(odd_shreds, None, false).unwrap();
 
-                assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), vec![]);
+                assert_eq!(blockstore.get_slot_entries(slot, 0, None).unwrap(), vec![]);
 
-                let meta = blocktree.meta(slot).unwrap().unwrap();
+                let meta = blockstore.meta(slot).unwrap().unwrap();
                 if num_shreds % 2 == 0 {
                     assert_eq!(meta.received, num_shreds);
                 } else {
@@ -2960,14 +2960,14 @@ pub mod tests {
                     assert_eq!(meta.last_index, std::u64::MAX);
                 }
 
-                blocktree.insert_shreds(even_shreds, None, false).unwrap();
+                blockstore.insert_shreds(even_shreds, None, false).unwrap();
 
                 assert_eq!(
-                    blocktree.get_slot_entries(slot, 0, None).unwrap(),
+                    blockstore.get_slot_entries(slot, 0, None).unwrap(),
                     original_entries,
                 );
 
-                let meta = blocktree.meta(slot).unwrap().unwrap();
+                let meta = blockstore.meta(slot).unwrap().unwrap();
                 assert_eq!(meta.received, num_shreds);
                 assert_eq!(meta.consumed, num_shreds);
                 assert_eq!(meta.parent_slot, parent_slot);
@@ -2975,15 +2975,15 @@ pub mod tests {
             }
         }
 
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_insert_data_shreds_duplicate() {
         // Create RocksDb ledger
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Make duplicate entries and shreds
             let num_unique_entries = 10;
@@ -2993,37 +2993,37 @@ pub mod tests {
             // Discard first shred
             original_shreds.remove(0);
 
-            blocktree
+            blockstore
                 .insert_shreds(original_shreds, None, false)
                 .unwrap();
 
-            assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), vec![]);
+            assert_eq!(blockstore.get_slot_entries(0, 0, None).unwrap(), vec![]);
 
             let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true, 0);
             let num_shreds = duplicate_shreds.len() as u64;
-            blocktree
+            blockstore
                 .insert_shreds(duplicate_shreds, None, false)
                 .unwrap();
 
             assert_eq!(
-                blocktree.get_slot_entries(0, 0, None).unwrap(),
+                blockstore.get_slot_entries(0, 0, None).unwrap(),
                 original_entries
             );
 
-            let meta = blocktree.meta(0).unwrap().unwrap();
+            let meta = blockstore.meta(0).unwrap().unwrap();
             assert_eq!(meta.consumed, num_shreds);
             assert_eq!(meta.received, num_shreds);
             assert_eq!(meta.parent_slot, 0);
             assert_eq!(meta.last_index, num_shreds - 1);
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_new_shreds_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, recvr, _) = Blocktree::open_with_signal(&ledger_path).unwrap();
+        let (ledger, recvr, _) = Blockstore::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 50;
@@ -3096,14 +3096,14 @@ pub mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_completed_shreds_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
+        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -3125,7 +3125,7 @@ pub mod tests {
     pub fn test_completed_shreds_signal_orphans() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
+        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -3165,7 +3165,7 @@ pub mod tests {
     pub fn test_completed_shreds_signal_many() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path!();
-        let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
+        let (ledger, _, recvr) = Blockstore::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -3194,11 +3194,11 @@ pub mod tests {
 
     #[test]
     pub fn test_handle_chaining_basic() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
             let entries_per_slot = 5;
             let num_slots = 3;
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Construct the shreds
             let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
@@ -3208,8 +3208,8 @@ pub mod tests {
             let shreds1 = shreds
                 .drain(shreds_per_slot..2 * shreds_per_slot)
                 .collect_vec();
-            blocktree.insert_shreds(shreds1, None, false).unwrap();
-            let s1 = blocktree.meta(1).unwrap().unwrap();
+            blockstore.insert_shreds(shreds1, None, false).unwrap();
+            let s1 = blockstore.meta(1).unwrap().unwrap();
             assert!(s1.next_slots.is_empty());
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s1.is_connected);
@@ -3220,8 +3220,8 @@ pub mod tests {
             let shreds2 = shreds
                 .drain(shreds_per_slot..2 * shreds_per_slot)
                 .collect_vec();
-            blocktree.insert_shreds(shreds2, None, false).unwrap();
-            let s2 = blocktree.meta(2).unwrap().unwrap();
+            blockstore.insert_shreds(shreds2, None, false).unwrap();
+            let s2 = blockstore.meta(2).unwrap().unwrap();
             assert!(s2.next_slots.is_empty());
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s2.is_connected);
@@ -3230,7 +3230,7 @@ pub mod tests {
 
             // Check the first slot again, it should chain to the second slot,
             // but still isn't part of the trunk
-            let s1 = blocktree.meta(1).unwrap().unwrap();
+            let s1 = blockstore.meta(1).unwrap().unwrap();
             assert_eq!(s1.next_slots, vec![2]);
             assert!(!s1.is_connected);
             assert_eq!(s1.parent_slot, 0);
@@ -3238,9 +3238,9 @@ pub mod tests {
 
             // 3) Write to the zeroth slot, check that every slot
             // is now part of the trunk
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
             for i in 0..3 {
-                let s = blocktree.meta(i).unwrap().unwrap();
+                let s = blockstore.meta(i).unwrap().unwrap();
                 // The last slot will not chain to any other slots
                 if i != 2 {
                     assert_eq!(s.next_slots, vec![i + 1]);
@@ -3254,14 +3254,14 @@ pub mod tests {
                 assert!(s.is_connected);
             }
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_handle_chaining_missing_slots() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let num_slots = 30;
             let entries_per_slot = 5;
 
@@ -3288,7 +3288,7 @@ pub mod tests {
             }
 
             // Write the shreds for every other slot
-            blocktree.insert_shreds(slots, None, false).unwrap();
+            blockstore.insert_shreds(slots, None, false).unwrap();
 
             // Check metadata
             for i in 0..num_slots {
@@ -3297,7 +3297,7 @@ pub mod tests {
                 // However, if it's a slot we haven't inserted, aka one of the gaps, then one of the
                 // slots we just inserted will chain to that gap, so next_slots for that orphan slot
                 // won't be empty, but the parent slot is unknown so should equal std::u64::MAX.
-                let s = blocktree.meta(i as u64).unwrap().unwrap();
+                let s = blockstore.meta(i as u64).unwrap().unwrap();
                 if i % 2 == 0 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
                     assert_eq!(s.parent_slot, std::u64::MAX);
@@ -3314,12 +3314,14 @@ pub mod tests {
             }
 
             // Write the shreds for the other half of the slots that we didn't insert earlier
-            blocktree.insert_shreds(missing_slots, None, false).unwrap();
+            blockstore
+                .insert_shreds(missing_slots, None, false)
+                .unwrap();
 
             for i in 0..num_slots {
                 // Check that all the slots chain correctly once the missing slots
                 // have been filled
-                let s = blocktree.meta(i as u64).unwrap().unwrap();
+                let s = blockstore.meta(i as u64).unwrap().unwrap();
                 if i != num_slots - 1 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
                 } else {
@@ -3336,14 +3338,14 @@ pub mod tests {
             }
         }
 
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_forward_chaining_is_connected() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let num_slots = 15;
             // Create enough entries to ensure there are at least two shreds created
             let entries_per_slot = max_ticks_per_n_shreds(1) + 1;
@@ -3360,11 +3362,11 @@ pub mod tests {
                 if slot % 3 == 0 {
                     let shred0 = shreds_for_slot.remove(0);
                     missing_shreds.push(shred0);
-                    blocktree
+                    blockstore
                         .insert_shreds(shreds_for_slot, None, false)
                         .unwrap();
                 } else {
-                    blocktree
+                    blockstore
                         .insert_shreds(shreds_for_slot, None, false)
                         .unwrap();
                 }
@@ -3372,7 +3374,7 @@ pub mod tests {
 
             // Check metadata
             for i in 0..num_slots {
-                let s = blocktree.meta(i as u64).unwrap().unwrap();
+                let s = blockstore.meta(i as u64).unwrap().unwrap();
                 // The last slot will not chain to any other slots
                 if i as u64 != num_slots - 1 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
@@ -3401,10 +3403,10 @@ pub mod tests {
             for slot_index in 0..num_slots {
                 if slot_index % 3 == 0 {
                     let shred = missing_shreds.remove(0);
-                    blocktree.insert_shreds(vec![shred], None, false).unwrap();
+                    blockstore.insert_shreds(vec![shred], None, false).unwrap();
 
                     for i in 0..num_slots {
-                        let s = blocktree.meta(i as u64).unwrap().unwrap();
+                        let s = blockstore.meta(i as u64).unwrap().unwrap();
                         if i != num_slots - 1 {
                             assert_eq!(s.next_slots, vec![i as u64 + 1]);
                         } else {
@@ -3427,14 +3429,14 @@ pub mod tests {
                 }
             }
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
     /*
         #[test]
         pub fn test_chaining_tree() {
-            let blocktree_path = get_tmp_ledger_path!();
+            let blockstore_path = get_tmp_ledger_path!();
             {
-                let blocktree = Blocktree::open(&blocktree_path).unwrap();
+                let blockstore = Blockstore::open(&blockstore_path).unwrap();
                 let num_tree_levels = 6;
                 assert!(num_tree_levels > 1);
                 let branching_factor: u64 = 4;
@@ -3480,11 +3482,11 @@ pub mod tests {
 
                     // Randomly pick whether to insert erasure or coding shreds first
                     if rng.gen_bool(0.5) {
-                        blocktree.write_shreds(slot_shreds).unwrap();
-                        blocktree.put_shared_coding_shreds(&coding_shreds).unwrap();
+                        blockstore.write_shreds(slot_shreds).unwrap();
+                        blockstore.put_shared_coding_shreds(&coding_shreds).unwrap();
                     } else {
-                        blocktree.put_shared_coding_shreds(&coding_shreds).unwrap();
-                        blocktree.write_shreds(slot_shreds).unwrap();
+                        blockstore.put_shared_coding_shreds(&coding_shreds).unwrap();
+                        blockstore.write_shreds(slot_shreds).unwrap();
                     }
                 }
 
@@ -3492,7 +3494,7 @@ pub mod tests {
                 let last_level =
                     (branching_factor.pow(num_tree_levels - 1) - 1) / (branching_factor - 1);
                 for slot in 0..num_slots {
-                    let slot_meta = blocktree.meta(slot).unwrap().unwrap();
+                    let slot_meta = blockstore.meta(slot).unwrap().unwrap();
                     assert_eq!(slot_meta.consumed, entries_per_slot);
                     assert_eq!(slot_meta.received, entries_per_slot);
                     assert!(slot_meta.is_connected);
@@ -3525,54 +3527,57 @@ pub mod tests {
                 }
 
                 // No orphan slots should exist
-                assert!(blocktree.orphans_cf.is_empty().unwrap())
+                assert!(blockstore.orphans_cf.is_empty().unwrap())
             }
 
-            Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+            Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
         }
     */
     #[test]
     pub fn test_get_slots_since() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
 
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Slot doesn't exist
-            assert!(blocktree.get_slots_since(&vec![0]).unwrap().is_empty());
+            assert!(blockstore.get_slots_since(&vec![0]).unwrap().is_empty());
 
             let mut meta0 = SlotMeta::new(0, 0);
-            blocktree.meta_cf.put(0, &meta0).unwrap();
+            blockstore.meta_cf.put(0, &meta0).unwrap();
 
             // Slot exists, chains to nothing
             let expected: HashMap<u64, Vec<u64>> =
                 HashMap::from_iter(vec![(0, vec![])].into_iter());
-            assert_eq!(blocktree.get_slots_since(&vec![0]).unwrap(), expected);
+            assert_eq!(blockstore.get_slots_since(&vec![0]).unwrap(), expected);
             meta0.next_slots = vec![1, 2];
-            blocktree.meta_cf.put(0, &meta0).unwrap();
+            blockstore.meta_cf.put(0, &meta0).unwrap();
 
             // Slot exists, chains to some other slots
             let expected: HashMap<u64, Vec<u64>> =
                 HashMap::from_iter(vec![(0, vec![1, 2])].into_iter());
-            assert_eq!(blocktree.get_slots_since(&vec![0]).unwrap(), expected);
-            assert_eq!(blocktree.get_slots_since(&vec![0, 1]).unwrap(), expected);
+            assert_eq!(blockstore.get_slots_since(&vec![0]).unwrap(), expected);
+            assert_eq!(blockstore.get_slots_since(&vec![0, 1]).unwrap(), expected);
 
             let mut meta3 = SlotMeta::new(3, 1);
             meta3.next_slots = vec![10, 5];
-            blocktree.meta_cf.put(3, &meta3).unwrap();
+            blockstore.meta_cf.put(3, &meta3).unwrap();
             let expected: HashMap<u64, Vec<u64>> =
                 HashMap::from_iter(vec![(0, vec![1, 2]), (3, vec![10, 5])].into_iter());
-            assert_eq!(blocktree.get_slots_since(&vec![0, 1, 3]).unwrap(), expected);
+            assert_eq!(
+                blockstore.get_slots_since(&vec![0, 1, 3]).unwrap(),
+                expected
+            );
         }
 
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_orphans() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Create shreds and entries
             let entries_per_slot = 1;
@@ -3582,61 +3587,61 @@ pub mod tests {
             // Write slot 2, which chains to slot 1. We're missing slot 0,
             // so slot 1 is the orphan
             let shreds_for_slot = shreds.drain((shreds_per_slot * 2)..).collect_vec();
-            blocktree
+            blockstore
                 .insert_shreds(shreds_for_slot, None, false)
                 .unwrap();
-            let meta = blocktree
+            let meta = blockstore
                 .meta(1)
                 .expect("Expect database get to succeed")
                 .unwrap();
             assert!(is_orphan(&meta));
-            assert_eq!(blocktree.get_orphans(None), vec![1]);
+            assert_eq!(blockstore.get_orphans(None), vec![1]);
 
             // Write slot 1 which chains to slot 0, so now slot 0 is the
             // orphan, and slot 1 is no longer the orphan.
             let shreds_for_slot = shreds.drain(shreds_per_slot..).collect_vec();
-            blocktree
+            blockstore
                 .insert_shreds(shreds_for_slot, None, false)
                 .unwrap();
-            let meta = blocktree
+            let meta = blockstore
                 .meta(1)
                 .expect("Expect database get to succeed")
                 .unwrap();
             assert!(!is_orphan(&meta));
-            let meta = blocktree
+            let meta = blockstore
                 .meta(0)
                 .expect("Expect database get to succeed")
                 .unwrap();
             assert!(is_orphan(&meta));
-            assert_eq!(blocktree.get_orphans(None), vec![0]);
+            assert_eq!(blockstore.get_orphans(None), vec![0]);
 
             // Write some slot that also chains to existing slots and orphan,
             // nothing should change
             let (shred4, _) = make_slot_entries(4, 0, 1);
             let (shred5, _) = make_slot_entries(5, 1, 1);
-            blocktree.insert_shreds(shred4, None, false).unwrap();
-            blocktree.insert_shreds(shred5, None, false).unwrap();
-            assert_eq!(blocktree.get_orphans(None), vec![0]);
+            blockstore.insert_shreds(shred4, None, false).unwrap();
+            blockstore.insert_shreds(shred5, None, false).unwrap();
+            assert_eq!(blockstore.get_orphans(None), vec![0]);
 
             // Write zeroth slot, no more orphans
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
             for i in 0..3 {
-                let meta = blocktree
+                let meta = blockstore
                     .meta(i)
                     .expect("Expect database get to succeed")
                     .unwrap();
                 assert!(!is_orphan(&meta));
             }
             // Orphans cf is empty
-            assert!(blocktree.orphans_cf.is_empty().unwrap())
+            assert!(blockstore.orphans_cf.is_empty().unwrap())
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     fn test_insert_data_shreds_slots(name: &str, should_bulk_write: bool) {
-        let blocktree_path = get_ledger_path_from_name(name);
+        let blockstore_path = get_ledger_path_from_name(name);
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Create shreds and entries
             let num_entries = 20 as u64;
@@ -3665,21 +3670,21 @@ pub mod tests {
             let num_shreds = shreds.len();
             // Write shreds to the database
             if should_bulk_write {
-                blocktree.insert_shreds(shreds, None, false).unwrap();
+                blockstore.insert_shreds(shreds, None, false).unwrap();
             } else {
                 for _ in 0..num_shreds {
                     let shred = shreds.remove(0);
-                    blocktree.insert_shreds(vec![shred], None, false).unwrap();
+                    blockstore.insert_shreds(vec![shred], None, false).unwrap();
                 }
             }
 
             for i in 0..num_entries - 1 {
                 assert_eq!(
-                    blocktree.get_slot_entries(i, 0, None).unwrap()[0],
+                    blockstore.get_slot_entries(i, 0, None).unwrap()[0],
                     entries[i as usize]
                 );
 
-                let meta = blocktree.meta(i).unwrap().unwrap();
+                let meta = blockstore.meta(i).unwrap().unwrap();
                 assert_eq!(meta.received, 1);
                 assert_eq!(meta.last_index, 0);
                 if i != 0 {
@@ -3691,14 +3696,14 @@ pub mod tests {
                 }
             }
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_find_missing_data_indexes() {
         let slot = 0;
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
         // Write entries
         let gap: u64 = 10;
@@ -3713,7 +3718,7 @@ pub mod tests {
             s.set_index(i as u32 * gap as u32);
             s.set_slot(slot);
         }
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
         // Index of the first shred is 0
         // Index of the second shred is "gap"
@@ -3721,27 +3726,27 @@ pub mod tests {
         // range of [0, gap)
         let expected: Vec<u64> = (1..gap).collect();
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, 0, gap, gap as usize),
+            blockstore.find_missing_data_indexes(slot, 0, 0, gap, gap as usize),
             expected
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, 1, gap, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(slot, 0, 1, gap, (gap - 1) as usize),
             expected,
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, 0, gap - 1, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(slot, 0, 0, gap - 1, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, gap - 2, gap, gap as usize),
+            blockstore.find_missing_data_indexes(slot, 0, gap - 2, gap, gap as usize),
             vec![gap - 2, gap - 1],
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, gap - 2, gap, 1),
+            blockstore.find_missing_data_indexes(slot, 0, gap - 2, gap, 1),
             vec![gap - 2],
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, 0, gap, 1),
+            blockstore.find_missing_data_indexes(slot, 0, 0, gap, 1),
             vec![1],
         );
 
@@ -3750,11 +3755,11 @@ pub mod tests {
         let mut expected: Vec<u64> = (1..gap).collect();
         expected.push(gap + 1);
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap + 2) as usize),
+            blockstore.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap + 2) as usize),
             expected,
         );
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
 
@@ -3768,7 +3773,7 @@ pub mod tests {
                     })
                     .collect();
                 assert_eq!(
-                    blocktree.find_missing_data_indexes(
+                    blockstore.find_missing_data_indexes(
                         slot,
                         0,
                         j * gap,
@@ -3780,15 +3785,15 @@ pub mod tests {
             }
         }
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_find_missing_data_indexes_timeout() {
         let slot = 0;
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
         // Write entries
         let gap: u64 = 10;
@@ -3807,36 +3812,48 @@ pub mod tests {
                 )
             })
             .collect();
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let empty: Vec<u64> = vec![];
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, timestamp(), 0, 50, 1),
+            blockstore.find_missing_data_indexes(slot, timestamp(), 0, 50, 1),
             empty
         );
         let expected: Vec<_> = (1..=9).collect();
         assert_eq!(
-            blocktree.find_missing_data_indexes(slot, timestamp() - 400, 0, 50, 9),
+            blockstore.find_missing_data_indexes(slot, timestamp() - 400, 0, 50, 9),
             expected
         );
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_find_missing_data_indexes_sanity() {
         let slot = 0;
 
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
         // Early exit conditions
         let empty: Vec<u64> = vec![];
-        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 0, 0, 1), empty);
-        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 5, 5, 1), empty);
-        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 4, 3, 1), empty);
-        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 1, 2, 0), empty);
+        assert_eq!(
+            blockstore.find_missing_data_indexes(slot, 0, 0, 0, 1),
+            empty
+        );
+        assert_eq!(
+            blockstore.find_missing_data_indexes(slot, 0, 5, 5, 1),
+            empty
+        );
+        assert_eq!(
+            blockstore.find_missing_data_indexes(slot, 0, 4, 3, 1),
+            empty
+        );
+        assert_eq!(
+            blockstore.find_missing_data_indexes(slot, 0, 1, 2, 0),
+            empty
+        );
 
         let entries = create_ticks(100, 0, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
@@ -3850,7 +3867,7 @@ pub mod tests {
         shreds[1].set_index(OTHER as u32);
 
         // Insert one shred at index = first_index
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
         const STARTS: u64 = OTHER * 2;
         const END: u64 = OTHER * 3;
@@ -3859,7 +3876,7 @@ pub mod tests {
         // given the input range of [i, first_index], the missing indexes should be
         // [i, first_index - 1]
         for start in 0..STARTS {
-            let result = blocktree.find_missing_data_indexes(
+            let result = blockstore.find_missing_data_indexes(
                 slot, 0, start, // start
                 END,   //end
                 MAX,   //max
@@ -3868,15 +3885,15 @@ pub mod tests {
             assert_eq!(result, expected);
         }
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_no_missing_shred_indexes() {
         let slot = 0;
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
         // Write entries
         let num_entries = 10;
@@ -3884,42 +3901,42 @@ pub mod tests {
         let shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
 
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let empty: Vec<u64> = vec![];
         for i in 0..num_shreds as u64 {
             for j in 0..i {
                 assert_eq!(
-                    blocktree.find_missing_data_indexes(slot, 0, j, i, (i - j) as usize),
+                    blockstore.find_missing_data_indexes(slot, 0, j, i, (i - j) as usize),
                     empty
                 );
             }
         }
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_should_insert_data_shred() {
         let (mut shreds, _) = make_slot_entries(0, 0, 200);
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let index_cf = blocktree.db.column::<cf::Index>();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let index_cf = blockstore.db.column::<cf::Index>();
             let last_root = RwLock::new(0);
 
             // Insert the first 5 shreds, we don't have a "is_last" shred yet
-            blocktree
+            blockstore
                 .insert_shreds(shreds[0..5].to_vec(), None, false)
                 .unwrap();
 
             // Trying to insert a shred less than `slot_meta.consumed` should fail
-            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            let slot_meta = blockstore.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
             assert_eq!(slot_meta.consumed, 5);
             assert_eq!(
-                Blocktree::should_insert_data_shred(
+                Blockstore::should_insert_data_shred(
                     &shreds[1],
                     &slot_meta,
                     index.data(),
@@ -3930,13 +3947,13 @@ pub mod tests {
 
             // Trying to insert the same shred again should fail
             // skip over shred 5 so the `slot_meta.consumed` doesn't increment
-            blocktree
+            blockstore
                 .insert_shreds(shreds[6..7].to_vec(), None, false)
                 .unwrap();
-            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            let slot_meta = blockstore.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
             assert_eq!(
-                Blocktree::should_insert_data_shred(
+                Blockstore::should_insert_data_shred(
                     &shreds[6],
                     &slot_meta,
                     index.data(),
@@ -3947,10 +3964,10 @@ pub mod tests {
 
             // Trying to insert another "is_last" shred with index < the received index should fail
             // skip over shred 7
-            blocktree
+            blockstore
                 .insert_shreds(shreds[8..9].to_vec(), None, false)
                 .unwrap();
-            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            let slot_meta = blockstore.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
             assert_eq!(slot_meta.received, 9);
             let shred7 = {
@@ -3962,14 +3979,14 @@ pub mod tests {
                 }
             };
             assert_eq!(
-                Blocktree::should_insert_data_shred(&shred7, &slot_meta, index.data(), &last_root),
+                Blockstore::should_insert_data_shred(&shred7, &slot_meta, index.data(), &last_root),
                 false
             );
 
             // Insert all pending shreds
             let mut shred8 = shreds[8].clone();
-            blocktree.insert_shreds(shreds, None, false).unwrap();
-            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            let slot_meta = blockstore.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
 
             // Trying to insert a shred with index > the "is_last" shred should fail
@@ -3979,19 +3996,19 @@ pub mod tests {
                 panic!("Shred in unexpected format")
             }
             assert_eq!(
-                Blocktree::should_insert_data_shred(&shred7, &slot_meta, index.data(), &last_root),
+                Blockstore::should_insert_data_shred(&shred7, &slot_meta, index.data(), &last_root),
                 false
             );
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_should_insert_coding_shred() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let index_cf = blocktree.db.column::<cf::Index>();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let index_cf = blockstore.db.column::<cf::Index>();
             let last_root = RwLock::new(0);
 
             let slot = 1;
@@ -4004,21 +4021,21 @@ pub mod tests {
             );
 
             // Insert a good coding shred
-            assert!(Blocktree::should_insert_coding_shred(
+            assert!(Blockstore::should_insert_coding_shred(
                 &coding_shred,
                 Index::new(slot).coding(),
                 &last_root
             ));
 
             // Insertion should succeed
-            blocktree
+            blockstore
                 .insert_shreds(vec![coding_shred.clone()], None, false)
                 .unwrap();
 
             // Trying to insert the same shred again should fail
             {
                 let index = index_cf.get(shred.slot).unwrap().unwrap();
-                assert!(!Blocktree::should_insert_coding_shred(
+                assert!(!Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     index.coding(),
                     &last_root
@@ -4035,7 +4052,7 @@ pub mod tests {
                     coding.clone(),
                 );
                 let index = index_cf.get(shred.slot).unwrap().unwrap();
-                assert!(Blocktree::should_insert_coding_shred(
+                assert!(Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     index.coding(),
                     &last_root
@@ -4053,7 +4070,7 @@ pub mod tests {
                 coding_shred.set_index(index as u32);
 
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
-                assert!(!Blocktree::should_insert_coding_shred(
+                assert!(!Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     index.coding(),
                     &last_root
@@ -4069,7 +4086,7 @@ pub mod tests {
                 );
                 coding_shred.coding_header.num_coding_shreds = 0;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
-                assert!(!Blocktree::should_insert_coding_shred(
+                assert!(!Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     index.coding(),
                     &last_root
@@ -4085,7 +4102,7 @@ pub mod tests {
                 );
                 coding_shred.coding_header.num_coding_shreds = coding_shred.coding_header.position;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
-                assert!(!Blocktree::should_insert_coding_shred(
+                assert!(!Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     index.coding(),
                     &last_root
@@ -4105,7 +4122,7 @@ pub mod tests {
                 coding_shred.common_header.index = std::u32::MAX - 1;
                 coding_shred.coding_header.position = 0;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
-                assert!(!Blocktree::should_insert_coding_shred(
+                assert!(!Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     index.coding(),
                     &last_root
@@ -4113,14 +4130,14 @@ pub mod tests {
 
                 // Decreasing the number of num_coding_shreds will put it within the allowed limit
                 coding_shred.coding_header.num_coding_shreds = 2;
-                assert!(Blocktree::should_insert_coding_shred(
+                assert!(Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     index.coding(),
                     &last_root
                 ));
 
                 // Insertion should succeed
-                blocktree
+                blockstore
                     .insert_shreds(vec![coding_shred], None, false)
                     .unwrap();
             }
@@ -4134,7 +4151,7 @@ pub mod tests {
                 );
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 coding_shred.set_slot(*last_root.read().unwrap());
-                assert!(!Blocktree::should_insert_coding_shred(
+                assert!(!Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     index.coding(),
                     &last_root
@@ -4142,18 +4159,18 @@ pub mod tests {
             }
         }
 
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_insert_multiple_is_last() {
         let (shreds, _) = make_slot_entries(0, 0, 20);
         let num_shreds = shreds.len() as u64;
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-        blocktree.insert_shreds(shreds, None, false).unwrap();
-        let slot_meta = blocktree.meta(0).unwrap().unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let slot_meta = blockstore.meta(0).unwrap().unwrap();
 
         assert_eq!(slot_meta.consumed, num_shreds);
         assert_eq!(slot_meta.received, num_shreds);
@@ -4161,82 +4178,82 @@ pub mod tests {
         assert!(slot_meta.is_full());
 
         let (shreds, _) = make_slot_entries(0, 0, 22);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
-        let slot_meta = blocktree.meta(0).unwrap().unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let slot_meta = blockstore.meta(0).unwrap().unwrap();
 
         assert_eq!(slot_meta.consumed, num_shreds);
         assert_eq!(slot_meta.received, num_shreds);
         assert_eq!(slot_meta.last_index, num_shreds - 1);
         assert!(slot_meta.is_full());
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_slot_data_iterator() {
         // Construct the shreds
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let shreds_per_slot = 10;
         let slots = vec![2, 4, 8, 12];
         let all_shreds = make_chaining_slot_entries(&slots, shreds_per_slot);
         let slot_8_shreds = all_shreds[2].0.clone();
         for (slot_shreds, _) in all_shreds {
-            blocktree.insert_shreds(slot_shreds, None, false).unwrap();
+            blockstore.insert_shreds(slot_shreds, None, false).unwrap();
         }
 
         // Slot doesnt exist, iterator should be empty
-        let shred_iter = blocktree.slot_data_iterator(5).unwrap();
+        let shred_iter = blockstore.slot_data_iterator(5).unwrap();
         let result: Vec<_> = shred_iter.collect();
         assert_eq!(result, vec![]);
 
         // Test that the iterator for slot 8 contains what was inserted earlier
-        let shred_iter = blocktree.slot_data_iterator(8).unwrap();
+        let shred_iter = blockstore.slot_data_iterator(8).unwrap();
         let result: Vec<Shred> = shred_iter
             .filter_map(|(_, bytes)| Shred::new_from_serialized_shred(bytes.to_vec()).ok())
             .collect();
         assert_eq!(result.len(), slot_8_shreds.len());
         assert_eq!(result, slot_8_shreds);
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_set_roots() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let chained_slots = vec![0, 2, 4, 7, 12, 15];
-        assert_eq!(blocktree.last_root(), 0);
+        assert_eq!(blockstore.last_root(), 0);
 
-        blocktree.set_roots(&chained_slots).unwrap();
+        blockstore.set_roots(&chained_slots).unwrap();
 
-        assert_eq!(blocktree.last_root(), 15);
+        assert_eq!(blockstore.last_root(), 15);
 
         for i in chained_slots {
-            assert!(blocktree.is_root(i));
+            assert!(blockstore.is_root(i));
         }
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_prune() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 6);
         let shreds_per_slot = shreds.len() as u64 / 50;
-        blocktree.insert_shreds(shreds, None, false).unwrap();
-        blocktree
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
             .slot_meta_iterator(0)
             .unwrap()
             .for_each(|(_, meta)| assert_eq!(meta.last_index, shreds_per_slot - 1));
 
-        blocktree.prune(5);
+        blockstore.prune(5);
 
-        blocktree
+        blockstore
             .slot_meta_iterator(0)
             .unwrap()
             .for_each(|(slot, meta)| {
@@ -4244,7 +4261,7 @@ pub mod tests {
                 assert_eq!(meta.last_index, shreds_per_slot - 1)
             });
 
-        let data_iter = blocktree
+        let data_iter = blockstore
             .data_shred_cf
             .iter(IteratorMode::From((0, 0), IteratorDirection::Forward))
             .unwrap();
@@ -4254,76 +4271,79 @@ pub mod tests {
             }
         }
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_purge_slots() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
-        blocktree.purge_slots(0, Some(5));
+        blockstore.purge_slots(0, Some(5));
 
-        test_all_empty_or_min(&blocktree, 6);
+        test_all_empty_or_min(&blockstore, 6);
 
-        blocktree.purge_slots(0, None);
+        blockstore.purge_slots(0, None);
 
-        // min slot shouldn't matter, blocktree should be empty
-        test_all_empty_or_min(&blocktree, 100);
-        test_all_empty_or_min(&blocktree, 0);
+        // min slot shouldn't matter, blockstore should be empty
+        test_all_empty_or_min(&blockstore, 100);
+        test_all_empty_or_min(&blockstore, 0);
 
-        blocktree.slot_meta_iterator(0).unwrap().for_each(|(_, _)| {
-            assert!(false);
-        });
+        blockstore
+            .slot_meta_iterator(0)
+            .unwrap()
+            .for_each(|(_, _)| {
+                assert!(false);
+            });
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_purge_huge() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 5000, 10);
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
-        blocktree.purge_slots(0, Some(4999));
+        blockstore.purge_slots(0, Some(4999));
 
-        test_all_empty_or_min(&blocktree, 5000);
+        test_all_empty_or_min(&blockstore, 5000);
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[should_panic]
     #[test]
     fn test_prune_out_of_bounds() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
         // slot 5 does not exist, prune should panic
-        blocktree.prune(5);
+        blockstore.prune(5);
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_iter_bounds() {
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
         // slot 5 does not exist, iter should be ok and should be a noop
-        blocktree
+        blockstore
             .slot_meta_iterator(5)
             .unwrap()
             .for_each(|_| assert!(false));
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -4334,7 +4354,7 @@ pub mod tests {
         let start_index = 0;
         let consumed = 1;
         assert_eq!(
-            Blocktree::get_completed_data_ranges(
+            Blockstore::get_completed_data_ranges(
                 start_index,
                 &completed_data_end_indexes[..],
                 consumed
@@ -4345,7 +4365,7 @@ pub mod tests {
         let start_index = 0;
         let consumed = 3;
         assert_eq!(
-            Blocktree::get_completed_data_ranges(
+            Blockstore::get_completed_data_ranges(
                 start_index,
                 &completed_data_end_indexes[..],
                 consumed
@@ -4375,7 +4395,7 @@ pub mod tests {
                 );
 
                 assert_eq!(
-                    Blocktree::get_completed_data_ranges(
+                    Blockstore::get_completed_data_ranges(
                         start_index,
                         &completed_data_end_indexes[..],
                         consumed
@@ -4388,19 +4408,19 @@ pub mod tests {
 
     #[test]
     fn test_get_slot_entries_with_shred_count_corruption() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let num_ticks = 8;
             let entries = create_ticks(num_ticks, 0, Hash::default());
             let slot = 1;
             let shreds = entries_to_test_shreds(entries, slot, 0, false, 0);
             let next_shred_index = shreds.len();
-            blocktree
+            blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
             assert_eq!(
-                blocktree.get_slot_entries(slot, 0, None).unwrap().len() as u64,
+                blockstore.get_slot_entries(slot, 0, None).unwrap().len() as u64,
                 num_ticks
             );
 
@@ -4419,12 +4439,12 @@ pub mod tests {
 
             // With the corruption, nothing should be returned, even though an
             // earlier data block was valid
-            blocktree
+            blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
-            assert!(blocktree.get_slot_entries(slot, 0, None).is_err());
+            assert!(blockstore.get_slot_entries(slot, 0, None).is_err());
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -4432,12 +4452,12 @@ pub mod tests {
         // This tests correctness of the SlotMeta in various cases in which a shred
         // that gets filtered out by checks
         let (shreds0, _) = make_slot_entries(0, 0, 200);
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Insert the first 5 shreds, we don't have a "is_last" shred yet
-            blocktree
+            blockstore
                 .insert_shreds(shreds0[0..5].to_vec(), None, false)
                 .unwrap();
 
@@ -4448,37 +4468,37 @@ pub mod tests {
             let (mut shreds3, _) = make_slot_entries(3, 0, 200);
             shreds2.push(shreds0[1].clone());
             shreds3.insert(0, shreds0[1].clone());
-            blocktree.insert_shreds(shreds2, None, false).unwrap();
-            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            blockstore.insert_shreds(shreds2, None, false).unwrap();
+            let slot_meta = blockstore.meta(0).unwrap().unwrap();
             assert_eq!(slot_meta.next_slots, vec![2]);
-            blocktree.insert_shreds(shreds3, None, false).unwrap();
-            let slot_meta = blocktree.meta(0).unwrap().unwrap();
+            blockstore.insert_shreds(shreds3, None, false).unwrap();
+            let slot_meta = blockstore.meta(0).unwrap().unwrap();
             assert_eq!(slot_meta.next_slots, vec![2, 3]);
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_trusted_insert_shreds() {
         // Make shred for slot 1
         let (shreds1, _) = make_slot_entries(1, 0, 1);
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         let last_root = 100;
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            blocktree.set_roots(&[last_root]).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            blockstore.set_roots(&[last_root]).unwrap();
 
             // Insert will fail, slot < root
-            blocktree
+            blockstore
                 .insert_shreds(shreds1.clone()[..].to_vec(), None, false)
                 .unwrap();
-            assert!(blocktree.get_data_shred(1, 0).unwrap().is_none());
+            assert!(blockstore.get_data_shred(1, 0).unwrap().is_none());
 
             // Insert through trusted path will succeed
-            blocktree
+            blockstore
                 .insert_shreds(shreds1[..].to_vec(), None, true)
                 .unwrap();
-            assert!(blocktree.get_data_shred(1, 0).unwrap().is_some());
+            assert!(blockstore.get_data_shred(1, 0).unwrap().is_some());
         }
     }
 
@@ -4486,14 +4506,14 @@ pub mod tests {
     fn test_get_timestamp_slots() {
         let timestamp_sample_range = 5;
         let ticks_per_slot = 5;
-        // Smaller interval than TIMESTAMP_SLOT_INTERVAL for convenience of building blocktree
+        // Smaller interval than TIMESTAMP_SLOT_INTERVAL for convenience of building blockstore
         let timestamp_interval = 7;
         /*
-            Build a blocktree with < TIMESTAMP_SLOT_RANGE roots
+            Build a blockstore with < TIMESTAMP_SLOT_RANGE roots
         */
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        blocktree.set_roots(&[0]).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        blockstore.set_roots(&[0]).unwrap();
         let mut last_entry_hash = Hash::default();
         for slot in 0..=3 {
             let parent = {
@@ -4503,36 +4523,36 @@ pub mod tests {
                     slot - 1
                 }
             };
-            last_entry_hash = fill_blocktree_slot_with_ticks(
-                &blocktree,
+            last_entry_hash = fill_blockstore_slot_with_ticks(
+                &blockstore,
                 ticks_per_slot,
                 slot,
                 parent,
                 last_entry_hash,
             );
         }
-        blocktree.set_roots(&[1, 2, 3]).unwrap();
+        blockstore.set_roots(&[1, 2, 3]).unwrap();
 
         assert_eq!(
-            blocktree.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
+            blockstore.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
             vec![1, 2]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(3, timestamp_interval, timestamp_sample_range),
+            blockstore.get_timestamp_slots(3, timestamp_interval, timestamp_sample_range),
             vec![1, 2, 3]
         );
 
-        drop(blocktree);
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
 
         /*
-            Build a blocktree in the ledger with the following rooted slots:
+            Build a blockstore in the ledger with the following rooted slots:
             [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 14, 15, 16, 17]
 
         */
-        let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        blocktree.set_roots(&[0]).unwrap();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        blockstore.set_roots(&[0]).unwrap();
         let desired_roots = vec![1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19];
         let mut last_entry_hash = Hash::default();
         for (i, slot) in desired_roots.iter().enumerate() {
@@ -4543,34 +4563,34 @@ pub mod tests {
                     desired_roots[i - 1]
                 }
             };
-            last_entry_hash = fill_blocktree_slot_with_ticks(
-                &blocktree,
+            last_entry_hash = fill_blockstore_slot_with_ticks(
+                &blockstore,
                 ticks_per_slot,
                 *slot,
                 parent,
                 last_entry_hash,
             );
         }
-        blocktree.set_roots(&desired_roots).unwrap();
+        blockstore.set_roots(&desired_roots).unwrap();
 
         assert_eq!(
-            blocktree.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
+            blockstore.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
             vec![1, 2]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(8, timestamp_interval, timestamp_sample_range),
+            blockstore.get_timestamp_slots(8, timestamp_interval, timestamp_sample_range),
             vec![1, 2, 3, 4, 5]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(13, timestamp_interval, timestamp_sample_range),
+            blockstore.get_timestamp_slots(13, timestamp_interval, timestamp_sample_range),
             vec![8, 9, 10, 11, 12]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(18, timestamp_interval, timestamp_sample_range),
+            blockstore.get_timestamp_slots(18, timestamp_interval, timestamp_sample_range),
             vec![8, 9, 10, 11, 12]
         );
         assert_eq!(
-            blocktree.get_timestamp_slots(19, timestamp_interval, timestamp_sample_range),
+            blockstore.get_timestamp_slots(19, timestamp_interval, timestamp_sample_range),
             vec![14, 16, 17, 18, 19]
         );
     }
@@ -4583,7 +4603,7 @@ pub mod tests {
         let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
         let more_shreds = entries_to_test_shreds(entries.clone(), slot + 1, slot, true, 0);
         let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blocktree::open(&ledger_path).unwrap();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
         ledger.insert_shreds(shreds, None, false).unwrap();
         ledger.insert_shreds(more_shreds, None, false).unwrap();
         ledger.set_roots(&[slot - 1, slot, slot + 1]).unwrap();
@@ -4645,7 +4665,7 @@ pub mod tests {
 
         // Even if marked as root, a slot that is empty of entries should return an error
         let confirmed_block_err = ledger.get_confirmed_block(slot - 1, None).unwrap_err();
-        assert_matches!(confirmed_block_err, BlocktreeError::SlotNotRooted);
+        assert_matches!(confirmed_block_err, BlockstoreError::SlotNotRooted);
 
         let confirmed_block = ledger.get_confirmed_block(slot, None).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
@@ -4690,10 +4710,10 @@ pub mod tests {
         assert_eq!(confirmed_block, expected_block);
 
         let not_root = ledger.get_confirmed_block(slot + 2, None).unwrap_err();
-        assert_matches!(not_root, BlocktreeError::SlotNotRooted);
+        assert_matches!(not_root, BlockstoreError::SlotNotRooted);
 
         drop(ledger);
-        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -4728,26 +4748,26 @@ pub mod tests {
         }
         let shreds = entries_to_test_shreds(vote_entries.clone(), 1, 0, true, 0);
         let ledger_path = get_tmp_ledger_path!();
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
-        blocktree.insert_shreds(shreds, None, false).unwrap();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
         // Populate slot 2 with ticks only
-        fill_blocktree_slot_with_ticks(&blocktree, 6, 2, 1, Hash::default());
-        blocktree.set_roots(&[0, 1, 2]).unwrap();
+        fill_blockstore_slot_with_ticks(&blockstore, 6, 2, 1, Hash::default());
+        blockstore.set_roots(&[0, 1, 2]).unwrap();
 
         assert_eq!(
-            blocktree.get_block_timestamps(1).unwrap(),
+            blockstore.get_block_timestamps(1).unwrap(),
             expected_timestamps
         );
-        assert_eq!(blocktree.get_block_timestamps(2).unwrap(), vec![]);
+        assert_eq!(blockstore.get_block_timestamps(2).unwrap(), vec![]);
 
         // Build epoch vote_accounts HashMap to test stake-weighted block time
-        blocktree.set_roots(&[3, 8]).unwrap();
+        blockstore.set_roots(&[3, 8]).unwrap();
         let mut stakes = HashMap::new();
         for (i, keypair) in vote_keypairs.iter().enumerate() {
             stakes.insert(keypair.pubkey(), (1 + i as u64, Account::default()));
         }
         let slot_duration = Duration::from_millis(400);
-        let block_time_slot_3 = blocktree.get_block_time(3, slot_duration.clone(), &stakes);
+        let block_time_slot_3 = blockstore.get_block_time(3, slot_duration.clone(), &stakes);
 
         let mut total_stake = 0;
         let mut expected_time: u64 = (0..6)
@@ -4763,7 +4783,7 @@ pub mod tests {
         expected_time /= total_stake;
         assert_eq!(block_time_slot_3.unwrap() as u64, expected_time);
         assert_eq!(
-            blocktree
+            blockstore
                 .get_block_time(8, slot_duration.clone(), &stakes)
                 .unwrap() as u64,
             expected_time + 2 // At 400ms block duration, 5 slots == 2sec
@@ -4772,10 +4792,10 @@ pub mod tests {
 
     #[test]
     fn test_persist_transaction_status() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let transaction_status_cf = blocktree.db.column::<cf::TransactionStatus>();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let transaction_status_cf = blockstore.db.column::<cf::TransactionStatus>();
 
             let pre_balances_vec = vec![1, 2, 3];
             let post_balances_vec = vec![3, 2, 1];
@@ -4846,7 +4866,7 @@ pub mod tests {
             assert_eq!(pre_balances, pre_balances_vec);
             assert_eq!(post_balances, post_balances_vec);
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -4867,10 +4887,10 @@ pub mod tests {
 
     #[test]
     fn test_map_transactions_to_statuses() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let transaction_status_cf = blocktree.db.column::<cf::TransactionStatus>();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let transaction_status_cf = blockstore.db.column::<cf::TransactionStatus>();
 
             let slot = 0;
             let mut transactions: Vec<Transaction> = vec![];
@@ -4906,7 +4926,7 @@ pub mod tests {
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             ));
 
-            let map = blocktree.map_transactions_to_statuses(
+            let map = blockstore.map_transactions_to_statuses(
                 slot,
                 RpcTransactionEncoding::Json,
                 transactions.into_iter(),
@@ -4917,24 +4937,24 @@ pub mod tests {
             }
             assert_eq!(map[4].1.as_ref(), None);
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_lowest_slot() {
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
             for i in 0..10 {
                 let slot = i;
                 let (shreds, _) = make_slot_entries(slot, 0, 1);
-                blocktree.insert_shreds(shreds, None, false).unwrap();
+                blockstore.insert_shreds(shreds, None, false).unwrap();
             }
-            assert_eq!(blocktree.lowest_slot(), 1);
-            blocktree.run_purge(0, 5).unwrap();
-            assert_eq!(blocktree.lowest_slot(), 6);
+            assert_eq!(blockstore.lowest_slot(), 1);
+            blockstore.run_purge(0, 5).unwrap();
+            assert_eq!(blockstore.lowest_slot(), 6);
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -4942,10 +4962,10 @@ pub mod tests {
         let slot = 1;
         let (data_shreds, coding_shreds, leader_schedule_cache) =
             setup_erasure_shreds(slot, 0, 100, 1.0);
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            blocktree
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            blockstore
                 .insert_shreds(coding_shreds, Some(&leader_schedule_cache), false)
                 .unwrap();
             let shred_bufs: Vec<_> = data_shreds
@@ -4956,7 +4976,7 @@ pub mod tests {
             // Check all the data shreds were recovered
             for (s, buf) in data_shreds.iter().zip(shred_bufs) {
                 assert_eq!(
-                    blocktree
+                    blockstore
                         .get_data_shred(s.slot(), s.index() as u64)
                         .unwrap()
                         .unwrap(),
@@ -4964,9 +4984,9 @@ pub mod tests {
                 );
             }
 
-            verify_index_integrity(&blocktree, slot);
+            verify_index_integrity(&blockstore, slot);
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -4977,38 +4997,38 @@ pub mod tests {
             setup_erasure_shreds(slot, 0, num_entries, 1.0);
         assert!(data_shreds.len() > 3);
         assert!(coding_shreds.len() > 3);
-        let blocktree_path = get_tmp_ledger_path!();
+        let blockstore_path = get_tmp_ledger_path!();
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
             // Test inserting all the shreds
             let all_shreds: Vec<_> = data_shreds
                 .iter()
                 .cloned()
                 .chain(coding_shreds.iter().cloned())
                 .collect();
-            blocktree
+            blockstore
                 .insert_shreds(all_shreds, Some(&leader_schedule_cache), false)
                 .unwrap();
-            verify_index_integrity(&blocktree, slot);
-            blocktree.purge_slots(0, Some(slot));
+            verify_index_integrity(&blockstore, slot);
+            blockstore.purge_slots(0, Some(slot));
 
             // Test inserting just the codes, enough for recovery
-            blocktree
+            blockstore
                 .insert_shreds(coding_shreds.clone(), Some(&leader_schedule_cache), false)
                 .unwrap();
-            verify_index_integrity(&blocktree, slot);
-            blocktree.purge_slots(0, Some(slot));
+            verify_index_integrity(&blockstore, slot);
+            blockstore.purge_slots(0, Some(slot));
 
             // Test inserting some codes, but not enough for recovery
-            blocktree
+            blockstore
                 .insert_shreds(
                     coding_shreds[..coding_shreds.len() - 1].to_vec(),
                     Some(&leader_schedule_cache),
                     false,
                 )
                 .unwrap();
-            verify_index_integrity(&blocktree, slot);
-            blocktree.purge_slots(0, Some(slot));
+            verify_index_integrity(&blockstore, slot);
+            blockstore.purge_slots(0, Some(slot));
 
             // Test inserting just the codes, and some data, enough for recovery
             let shreds: Vec<_> = data_shreds[..data_shreds.len() - 1]
@@ -5016,11 +5036,11 @@ pub mod tests {
                 .cloned()
                 .chain(coding_shreds[..coding_shreds.len() - 1].iter().cloned())
                 .collect();
-            blocktree
+            blockstore
                 .insert_shreds(shreds, Some(&leader_schedule_cache), false)
                 .unwrap();
-            verify_index_integrity(&blocktree, slot);
-            blocktree.purge_slots(0, Some(slot));
+            verify_index_integrity(&blockstore, slot);
+            blockstore.purge_slots(0, Some(slot));
 
             // Test inserting some codes, and some data, but enough for recovery
             let shreds: Vec<_> = data_shreds[..data_shreds.len() / 2 - 1]
@@ -5028,11 +5048,11 @@ pub mod tests {
                 .cloned()
                 .chain(coding_shreds[..coding_shreds.len() / 2 - 1].iter().cloned())
                 .collect();
-            blocktree
+            blockstore
                 .insert_shreds(shreds, Some(&leader_schedule_cache), false)
                 .unwrap();
-            verify_index_integrity(&blocktree, slot);
-            blocktree.purge_slots(0, Some(slot));
+            verify_index_integrity(&blockstore, slot);
+            blockstore.purge_slots(0, Some(slot));
 
             // Test inserting all shreds in 2 rounds, make sure nothing is lost
             let shreds1: Vec<_> = data_shreds[..data_shreds.len() / 2 - 1]
@@ -5045,14 +5065,14 @@ pub mod tests {
                 .cloned()
                 .chain(coding_shreds[coding_shreds.len() / 2 - 1..].iter().cloned())
                 .collect();
-            blocktree
+            blockstore
                 .insert_shreds(shreds1, Some(&leader_schedule_cache), false)
                 .unwrap();
-            blocktree
+            blockstore
                 .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
                 .unwrap();
-            verify_index_integrity(&blocktree, slot);
-            blocktree.purge_slots(0, Some(slot));
+            verify_index_integrity(&blockstore, slot);
+            blockstore.purge_slots(0, Some(slot));
 
             // Test not all, but enough data and coding shreds in 2 rounds to trigger recovery,
             // make sure nothing is lost
@@ -5070,14 +5090,14 @@ pub mod tests {
                         .cloned(),
                 )
                 .collect();
-            blocktree
+            blockstore
                 .insert_shreds(shreds1, Some(&leader_schedule_cache), false)
                 .unwrap();
-            blocktree
+            blockstore
                 .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
                 .unwrap();
-            verify_index_integrity(&blocktree, slot);
-            blocktree.purge_slots(0, Some(slot));
+            verify_index_integrity(&blockstore, slot);
+            blockstore.purge_slots(0, Some(slot));
 
             // Test insert shreds in 2 rounds, but not enough to trigger
             // recovery, make sure nothing is lost
@@ -5095,16 +5115,16 @@ pub mod tests {
                         .cloned(),
                 )
                 .collect();
-            blocktree
+            blockstore
                 .insert_shreds(shreds1, Some(&leader_schedule_cache), false)
                 .unwrap();
-            blocktree
+            blockstore
                 .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
                 .unwrap();
-            verify_index_integrity(&blocktree, slot);
-            blocktree.purge_slots(0, Some(slot));
+            verify_index_integrity(&blockstore, slot);
+            blockstore.purge_slots(0, Some(slot));
         }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     fn setup_erasure_shreds(
@@ -5140,15 +5160,15 @@ pub mod tests {
         (data_shreds, coding_shreds, Arc::new(leader_schedule_cache))
     }
 
-    fn verify_index_integrity(blocktree: &Blocktree, slot: u64) {
-        let index = blocktree.get_index(slot).unwrap().unwrap();
+    fn verify_index_integrity(blockstore: &Blockstore, slot: u64) {
+        let index = blockstore.get_index(slot).unwrap().unwrap();
         // Test the set of data shreds in the index and in the data column
         // family are the same
-        let data_iter = blocktree.slot_data_iterator(slot).unwrap();
+        let data_iter = blockstore.slot_data_iterator(slot).unwrap();
         let mut num_data = 0;
         for ((slot, index), _) in data_iter {
             num_data += 1;
-            assert!(blocktree.get_data_shred(slot, index).unwrap().is_some());
+            assert!(blockstore.get_data_shred(slot, index).unwrap().is_some());
         }
 
         // Test the data index doesn't have anything extra
@@ -5157,11 +5177,11 @@ pub mod tests {
 
         // Test the set of coding shreds in the index and in the coding column
         // family are the same
-        let coding_iter = blocktree.slot_coding_iterator(slot).unwrap();
+        let coding_iter = blockstore.slot_coding_iterator(slot).unwrap();
         let mut num_coding = 0;
         for ((slot, index), _) in coding_iter {
             num_coding += 1;
-            assert!(blocktree.get_coding_shred(slot, index).unwrap().is_some());
+            assert!(blockstore.get_coding_shred(slot, index).unwrap().is_some());
         }
 
         // Test the data index doesn't have anything extra

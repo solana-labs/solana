@@ -1,5 +1,5 @@
 use crate::{
-    blocktree::Blocktree,
+    blockstore::Blockstore,
     leader_schedule::{FixedSchedule, LeaderSchedule},
     leader_schedule_utils,
 };
@@ -105,7 +105,7 @@ impl LeaderScheduleCache {
         pubkey: &Pubkey,
         mut current_slot: Slot,
         bank: &Bank,
-        blocktree: Option<&Blocktree>,
+        blockstore: Option<&Blockstore>,
     ) -> Option<(Slot, Slot)> {
         let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
         let mut first_slot = None;
@@ -132,8 +132,8 @@ impl LeaderScheduleCache {
             for i in start_index..bank.get_slots_in_epoch(epoch) {
                 current_slot += 1;
                 if *pubkey == leader_schedule[i] {
-                    if let Some(blocktree) = blocktree {
-                        if let Some(meta) = blocktree.meta(current_slot).unwrap() {
+                    if let Some(blockstore) = blockstore {
+                        if let Some(meta) = blockstore.meta(current_slot).unwrap() {
                             // We have already sent a shred for this slot, so skip it
                             if meta.received > 0 {
                                 continue;
@@ -255,7 +255,7 @@ impl LeaderScheduleCache {
 mod tests {
     use super::*;
     use crate::{
-        blocktree::make_slot_entries,
+        blockstore::make_slot_entries,
         genesis_utils::{
             create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             BOOTSTRAP_LEADER_LAMPORTS,
@@ -424,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_leader_slot_blocktree() {
+    fn test_next_leader_slot_blockstore() {
         let pubkey = Pubkey::new_rand();
         let mut genesis_config = create_genesis_config_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
@@ -438,8 +438,9 @@ mod tests {
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let ledger_path = get_tmp_ledger_path!();
         {
-            let blocktree = Arc::new(
-                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            let blockstore = Arc::new(
+                Blockstore::open(&ledger_path)
+                    .expect("Expected to be able to open database ledger"),
             );
 
             assert_eq!(
@@ -449,7 +450,7 @@ mod tests {
             // Check that the next leader slot after 0 is slot 1
             assert_eq!(
                 cache
-                    .next_leader_slot(&pubkey, 0, &bank, Some(&blocktree))
+                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore))
                     .unwrap()
                     .0,
                 1
@@ -458,10 +459,10 @@ mod tests {
             // Write a shred into slot 2 that chains to slot 1,
             // but slot 1 is empty so should not be skipped
             let (shreds, _) = make_slot_entries(2, 1, 1);
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(
                 cache
-                    .next_leader_slot(&pubkey, 0, &bank, Some(&blocktree))
+                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore))
                     .unwrap()
                     .0,
                 1
@@ -471,10 +472,10 @@ mod tests {
             let (shreds, _) = make_slot_entries(1, 0, 1);
 
             // Check that slot 1 and 2 are skipped
-            blocktree.insert_shreds(shreds, None, false).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(
                 cache
-                    .next_leader_slot(&pubkey, 0, &bank, Some(&blocktree))
+                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore))
                     .unwrap()
                     .0,
                 3
@@ -486,7 +487,7 @@ mod tests {
                     &pubkey,
                     2 * genesis_config.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
                     &bank,
-                    Some(&blocktree)
+                    Some(&blockstore)
                 ),
                 None
             );
@@ -496,12 +497,12 @@ mod tests {
                     &Pubkey::new_rand(), // not in leader_schedule
                     0,
                     &bank,
-                    Some(&blocktree)
+                    Some(&blockstore)
                 ),
                 None
             );
         }
-        Blocktree::destroy(&ledger_path).unwrap();
+        Blockstore::destroy(&ledger_path).unwrap();
     }
 
     #[test]

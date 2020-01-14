@@ -19,7 +19,7 @@ use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_client::{rpc_client::RpcClient, rpc_request::RpcRequest, thin_client::ThinClient};
 use solana_ledger::{
-    blocktree::Blocktree, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
+    blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
 };
 use solana_net_utils::bind_in_range;
 use solana_perf::packet::Packets;
@@ -222,13 +222,13 @@ impl Archiver {
         // Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
-        let blocktree = Arc::new(
-            Blocktree::open(ledger_path).expect("Expected to be able to open database ledger"),
+        let blockstore = Arc::new(
+            Blockstore::open(ledger_path).expect("Expected to be able to open database ledger"),
         );
 
         let gossip_service = GossipService::new(
             &cluster_info,
-            Some(blocktree.clone()),
+            Some(blockstore.clone()),
             None,
             node.sockets.gossip,
             &exit,
@@ -294,7 +294,7 @@ impl Archiver {
                 let window_service = match Self::setup(
                     &mut meta,
                     cluster_info.clone(),
-                    &blocktree,
+                    &blockstore,
                     &exit,
                     &node_info,
                     &storage_keypair,
@@ -320,7 +320,7 @@ impl Archiver {
                 // run archiver
                 Self::run(
                     &mut meta,
-                    &blocktree,
+                    &blockstore,
                     cluster_info,
                     &keypair,
                     &storage_keypair,
@@ -344,14 +344,14 @@ impl Archiver {
 
     fn run(
         meta: &mut ArchiverMeta,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         archiver_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         exit: &Arc<AtomicBool>,
     ) {
         // encrypt segment
-        Self::encrypt_ledger(meta, blocktree).expect("ledger encrypt not successful");
+        Self::encrypt_ledger(meta, blockstore).expect("ledger encrypt not successful");
         let enc_file_path = meta.ledger_data_file_encrypted.clone();
         // do replicate
         loop {
@@ -443,7 +443,7 @@ impl Archiver {
     fn setup(
         meta: &mut ArchiverMeta,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
         node_info: &ContactInfo,
         storage_keypair: &Arc<Keypair>,
@@ -498,7 +498,7 @@ impl Archiver {
         );
 
         let window_service = WindowService::new(
-            blocktree.clone(),
+            blockstore.clone(),
             cluster_info.clone(),
             verified_receiver,
             retransmit_sender,
@@ -512,7 +512,7 @@ impl Archiver {
         Self::wait_for_segment_download(
             slot,
             slots_per_segment,
-            &blocktree,
+            &blockstore,
             &exit,
             &node_info,
             cluster_info,
@@ -523,7 +523,7 @@ impl Archiver {
     fn wait_for_segment_download(
         start_slot: Slot,
         slots_per_segment: u64,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
         node_info: &ContactInfo,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -534,7 +534,7 @@ impl Archiver {
         );
         let mut current_slot = start_slot;
         'outer: loop {
-            while blocktree.is_full(current_slot) {
+            while blockstore.is_full(current_slot) {
                 current_slot += 1;
                 info!("current slot: {}", current_slot);
                 if current_slot >= start_slot + slots_per_segment {
@@ -559,7 +559,7 @@ impl Archiver {
         }
     }
 
-    fn encrypt_ledger(meta: &mut ArchiverMeta, blocktree: &Arc<Blocktree>) -> Result<()> {
+    fn encrypt_ledger(meta: &mut ArchiverMeta, blockstore: &Arc<Blockstore>) -> Result<()> {
         meta.ledger_data_file_encrypted = meta.ledger_path.join(ENCRYPTED_FILENAME);
 
         {
@@ -567,7 +567,7 @@ impl Archiver {
             ivec.copy_from_slice(&meta.signature.as_ref());
 
             let num_encrypted_bytes = chacha_cbc_encrypt_ledger(
-                blocktree,
+                blockstore,
                 meta.slot,
                 meta.slots_per_segment,
                 &meta.ledger_data_file_encrypted,
@@ -844,15 +844,15 @@ impl Archiver {
         }
     }
 
-    /// Ask an archiver to populate a given blocktree with its segment.
+    /// Ask an archiver to populate a given blockstore with its segment.
     /// Return the slot at the start of the archiver's segment
     ///
-    /// It is recommended to use a temporary blocktree for this since the download will not verify
+    /// It is recommended to use a temporary blockstore for this since the download will not verify
     /// shreds received and might impact the chaining of shreds across slots
     pub fn download_from_archiver(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         archiver_info: &ContactInfo,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
         slots_per_segment: u64,
     ) -> Result<u64> {
         // Create a client which downloads from the archiver and see that it
@@ -884,7 +884,7 @@ impl Archiver {
         for _ in 0..120 {
             // Strategy used by archivers
             let repairs = RepairService::generate_repairs_in_range(
-                blocktree,
+                blockstore,
                 repair_service::MAX_REPAIR_LENGTH,
                 &repair_slot_range,
             );
@@ -930,10 +930,10 @@ impl Archiver {
                     .into_iter()
                     .filter_map(|p| Shred::new_from_serialized_shred(p.data.to_vec()).ok())
                     .collect();
-                blocktree.insert_shreds(shreds, None, false)?;
+                blockstore.insert_shreds(shreds, None, false)?;
             }
             // check if all the slots in the segment are complete
-            if Self::segment_complete(start_slot, slots_per_segment, blocktree) {
+            if Self::segment_complete(start_slot, slots_per_segment, blockstore) {
                 break;
             }
             sleep(Duration::from_millis(500));
@@ -942,7 +942,7 @@ impl Archiver {
         t_receiver.join().unwrap();
 
         // check if all the slots in the segment are complete
-        if !Self::segment_complete(start_slot, slots_per_segment, blocktree) {
+        if !Self::segment_complete(start_slot, slots_per_segment, blockstore) {
             return Err(
                 io::Error::new(ErrorKind::Other, "Unable to download the full segment").into(),
             );
@@ -953,10 +953,10 @@ impl Archiver {
     fn segment_complete(
         start_slot: Slot,
         slots_per_segment: u64,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
     ) -> bool {
         for slot in start_slot..(start_slot + slots_per_segment) {
-            if !blocktree.is_full(slot) {
+            if !blockstore.is_full(slot) {
                 return false;
             }
         }

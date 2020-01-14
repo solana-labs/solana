@@ -1,7 +1,7 @@
 use crate::result::{Error, Result};
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use solana_client::rpc_request::RpcTransactionStatus;
-use solana_ledger::{blocktree::Blocktree, blocktree_processor::TransactionStatusBatch};
+use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
 use solana_runtime::bank::{Bank, HashAgeKind};
 use std::{
     sync::{
@@ -20,7 +20,7 @@ impl TransactionStatusService {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         write_transaction_status_receiver: Receiver<TransactionStatusBatch>,
-        blocktree: Arc<Blocktree>,
+        blockstore: Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let exit = exit.clone();
@@ -32,7 +32,7 @@ impl TransactionStatusService {
                 }
                 if let Err(e) = Self::write_transaction_status_batch(
                     &write_transaction_status_receiver,
-                    &blocktree,
+                    &blockstore,
                 ) {
                     match e {
                         Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -47,7 +47,7 @@ impl TransactionStatusService {
 
     fn write_transaction_status_batch(
         write_transaction_status_receiver: &Receiver<TransactionStatusBatch>,
-        blocktree: &Arc<Blocktree>,
+        blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         let TransactionStatusBatch {
             bank,
@@ -73,7 +73,7 @@ impl TransactionStatusService {
                     .get_fee_calculator(&fee_hash)
                     .expect("FeeCalculator must exist");
                 let fee = fee_calculator.calculate_fee(transaction.message());
-                blocktree
+                blockstore
                     .write_transaction_status(
                         (slot, transaction.signatures[0]),
                         &RpcTransactionStatus {

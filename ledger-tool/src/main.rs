@@ -3,14 +3,14 @@ use clap::{
 };
 use histogram;
 use serde_json::json;
-use solana_ledger::blocktree_db::Database;
+use solana_ledger::blockstore_db::Database;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
-    blocktree::Blocktree,
-    blocktree_db,
-    blocktree_db::Column,
-    blocktree_processor,
+    blockstore::Blockstore,
+    blockstore_db,
+    blockstore_db::Column,
+    blockstore_processor,
     rooted_slot_iterator::RootedSlotIterator,
 };
 use solana_sdk::{
@@ -34,9 +34,9 @@ enum LedgerOutputMethod {
     Json,
 }
 
-fn output_slot(blocktree: &Blocktree, slot: Slot, method: &LedgerOutputMethod) {
-    println!("Slot Meta {:?}", blocktree.meta(slot));
-    let entries = blocktree
+fn output_slot(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod) {
+    println!("Slot Meta {:?}", blockstore.meta(slot));
+    let entries = blockstore
         .get_slot_entries(slot, 0, None)
         .unwrap_or_else(|err| {
             eprintln!("Failed to load entries for slot {}: {:?}", slot, err);
@@ -116,9 +116,9 @@ fn output_slot(blocktree: &Blocktree, slot: Slot, method: &LedgerOutputMethod) {
     }
 }
 
-fn output_ledger(blocktree: Blocktree, starting_slot: Slot, method: LedgerOutputMethod) {
+fn output_ledger(blockstore: Blockstore, starting_slot: Slot, method: LedgerOutputMethod) {
     let rooted_slot_iterator =
-        RootedSlotIterator::new(starting_slot, &blocktree).unwrap_or_else(|err| {
+        RootedSlotIterator::new(starting_slot, &blockstore).unwrap_or_else(|err| {
             eprintln!(
                 "Failed to load entries starting from slot {}: {:?}",
                 starting_slot, err
@@ -139,7 +139,7 @@ fn output_ledger(blocktree: Blocktree, starting_slot: Slot, method: LedgerOutput
             }
         }
 
-        output_slot(&blocktree, slot, &method);
+        output_slot(&blockstore, slot, &method);
     }
 
     if method == LedgerOutputMethod::Json {
@@ -174,7 +174,7 @@ fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result
 #[allow(clippy::cognitive_complexity)]
 fn graph_forks(
     bank_forks: BankForks,
-    bank_forks_info: Vec<blocktree_processor::BankForksInfo>,
+    bank_forks_info: Vec<blockstore_processor::BankForksInfo>,
     include_all_votes: bool,
 ) -> String {
     // Search all forks and collect the last vote made by each validator
@@ -394,7 +394,7 @@ fn graph_forks(
     dot.join("\n")
 }
 
-fn analyze_column<T: solana_ledger::blocktree_db::Column>(
+fn analyze_column<T: solana_ledger::blockstore_db::Column>(
     db: &Database,
     name: &str,
     key_size: usize,
@@ -404,7 +404,7 @@ fn analyze_column<T: solana_ledger::blocktree_db::Column>(
     let mut val_tot: u64 = 0;
     let mut row_hist = histogram::Histogram::new();
     let a = key_size as u64;
-    for (_x, y) in db.iter::<T>(blocktree_db::IteratorMode::Start).unwrap() {
+    for (_x, y) in db.iter::<T>(blockstore_db::IteratorMode::Start).unwrap() {
         let b = y.len() as u64;
         key_tot += a;
         val_hist.increment(b).unwrap();
@@ -464,7 +464,7 @@ fn analyze_column<T: solana_ledger::blocktree_db::Column>(
 }
 
 fn analyze_storage(database: &Database) -> Result<(), String> {
-    use blocktree_db::columns::*;
+    use blockstore_db::columns::*;
     analyze_column::<SlotMeta>(database, "SlotMeta", SlotMeta::key_size())?;
     analyze_column::<Orphans>(database, "Orphans", Orphans::key_size())?;
     analyze_column::<DeadSlots>(database, "DeadSlots", DeadSlots::key_size())?;
@@ -492,9 +492,9 @@ fn open_genesis_config(ledger_path: &Path) -> GenesisConfig {
     })
 }
 
-fn open_blocktree(ledger_path: &Path) -> Blocktree {
-    match Blocktree::open(ledger_path) {
-        Ok(blocktree) => blocktree,
+fn open_blockstore(ledger_path: &Path) -> Blockstore {
+    match Blockstore::open(ledger_path) {
+        Ok(blockstore) => blockstore,
         Err(err) => {
             eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
             exit(1);
@@ -669,7 +669,7 @@ fn main() {
         ("print", Some(args_matches)) => {
             let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
             output_ledger(
-                open_blocktree(&ledger_path),
+                open_blockstore(&ledger_path),
                 starting_slot,
                 LedgerOutputMethod::Print,
             );
@@ -682,7 +682,7 @@ fn main() {
             for slot in slots {
                 println!("Slot {}", slot);
                 output_slot(
-                    &open_blocktree(&ledger_path),
+                    &open_blockstore(&ledger_path),
                     slot,
                     &LedgerOutputMethod::Print,
                 );
@@ -691,7 +691,7 @@ fn main() {
         ("json", Some(args_matches)) => {
             let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
             output_ledger(
-                open_blocktree(&ledger_path),
+                open_blockstore(&ledger_path),
                 starting_slot,
                 LedgerOutputMethod::Json,
             );
@@ -717,15 +717,15 @@ fn main() {
                 vec![ledger_path.join("accounts")]
             };
 
-            let process_options = blocktree_processor::ProcessOptions {
+            let process_options = blockstore_processor::ProcessOptions {
                 poh_verify,
                 dev_halt_at_slot,
-                ..blocktree_processor::ProcessOptions::default()
+                ..blockstore_processor::ProcessOptions::default()
             };
 
             match bank_forks_utils::load(
                 &open_genesis_config(&ledger_path),
-                &open_blocktree(&ledger_path),
+                &open_blockstore(&ledger_path),
                 account_paths,
                 snapshot_config.as_ref(),
                 process_options,
@@ -764,17 +764,17 @@ fn main() {
         }
         ("prune", Some(args_matches)) => {
             if let Some(prune_file_path) = args_matches.value_of("slot_list") {
-                let blocktree = open_blocktree(&ledger_path);
+                let blockstore = open_blockstore(&ledger_path);
                 let prune_file = File::open(prune_file_path.to_string()).unwrap();
                 let slot_hashes: BTreeMap<u64, String> =
                     serde_yaml::from_reader(prune_file).unwrap();
 
                 let iter =
-                    RootedSlotIterator::new(0, &blocktree).expect("Failed to get rooted slot");
+                    RootedSlotIterator::new(0, &blockstore).expect("Failed to get rooted slot");
 
                 let potential_hashes: Vec<_> = iter
                     .filter_map(|(slot, _meta)| {
-                        let blockhash = blocktree
+                        let blockhash = blockstore
                             .get_slot_entries(slot, 0, None)
                             .unwrap()
                             .last()
@@ -796,11 +796,11 @@ fn main() {
                     .last()
                     .expect("Failed to find a valid slot");
                 println!("Prune at slot {:?} hash {:?}", target_slot, target_hash);
-                blocktree.prune(*target_slot);
+                blockstore.prune(*target_slot);
             }
         }
         ("list-roots", Some(args_matches)) => {
-            let blocktree = open_blocktree(&ledger_path);
+            let blockstore = open_blockstore(&ledger_path);
             let max_height = if let Some(height) = args_matches.value_of("max_height") {
                 usize::from_str(height).expect("Maximum height must be a number")
             } else {
@@ -812,12 +812,12 @@ fn main() {
                 usize::from_str(DEFAULT_ROOT_COUNT).unwrap()
             };
 
-            let iter = RootedSlotIterator::new(0, &blocktree).expect("Failed to get rooted slot");
+            let iter = RootedSlotIterator::new(0, &blockstore).expect("Failed to get rooted slot");
 
             let slot_hash: Vec<_> = iter
                 .filter_map(|(slot, _meta)| {
                     if slot <= max_height as u64 {
-                        let blockhash = blocktree
+                        let blockhash = blockstore
                             .get_slot_entries(slot, 0, None)
                             .unwrap()
                             .last()
@@ -853,7 +853,7 @@ fn main() {
                 });
         }
         ("bounds", Some(args_matches)) => {
-            match open_blocktree(&ledger_path).slot_meta_iterator(0) {
+            match open_blockstore(&ledger_path).slot_meta_iterator(0) {
                 Ok(metas) => {
                     let all = args_matches.is_present("all");
 
