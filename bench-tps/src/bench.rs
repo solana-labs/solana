@@ -506,6 +506,166 @@ fn verify_funding_transfer<T: Client>(client: &Arc<T>, tx: &Transaction, amount:
     false
 }
 
+trait FundingTransactions<'a> {
+    fn fund<T: 'static + Client + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)],
+        to_lamports: u64,
+    );
+    fn make(&mut self, to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)]);
+    fn sign(&mut self, blockhash: Hash);
+    fn send<T: Client>(&self, client: &Arc<T>);
+    fn verify<T: 'static + Client + Send + Sync>(&mut self, client: &Arc<T>, to_lamports: u64);
+}
+
+impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
+    fn fund<T: 'static + Client + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)],
+        to_lamports: u64,
+    ) {
+        self.make(to_fund);
+
+        let mut tries = 0;
+        while !self.is_empty() {
+            info!(
+                "{} {} each to {} accounts in {} txs",
+                if tries == 0 {
+                    "transferring"
+                } else {
+                    " retrying"
+                },
+                to_lamports,
+                self.len() * MAX_SPENDS_PER_TX as usize,
+                self.len(),
+            );
+
+            let (blockhash, _fee_calculator) = get_recent_blockhash(client.as_ref());
+
+            // re-sign retained to_fund_txes with updated blockhash
+            self.sign(blockhash);
+            self.send(&client);
+
+            // Sleep a few slots to allow transactions to process
+            sleep(Duration::from_secs(1));
+
+            self.verify(&client, to_lamports);
+
+            // retry anything that seems to have dropped through cracks
+            //  again since these txs are all or nothing, they're fine to
+            //  retry
+            tries += 1;
+        }
+        info!("transferred");
+    }
+
+    fn make(&mut self, to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)]) {
+        let mut make_txs = Measure::start("make_txs");
+        let to_fund_txs: Vec<(&Keypair, Transaction)> = to_fund
+            .par_iter()
+            .map(|(k, t)| {
+                let tx = Transaction::new_unsigned_instructions(system_instruction::transfer_many(
+                    &k.pubkey(),
+                    &t,
+                ));
+                (*k, tx)
+            })
+            .collect();
+        make_txs.stop();
+        debug!(
+            "make {} unsigned txs: {}us",
+            to_fund_txs.len(),
+            make_txs.as_us()
+        );
+        self.extend(to_fund_txs);
+    }
+
+    fn sign(&mut self, blockhash: Hash) {
+        let mut sign_txs = Measure::start("sign_txs");
+        self.par_iter_mut().for_each(|(k, tx)| {
+            tx.sign(&[*k], blockhash);
+        });
+        sign_txs.stop();
+        debug!("sign {} txs: {}us", self.len(), sign_txs.as_us());
+    }
+
+    fn send<T: Client>(&self, client: &Arc<T>) {
+        let mut send_txs = Measure::start("send_txs");
+        self.iter().for_each(|(_, tx)| {
+            client.async_send_transaction(tx.clone()).expect("transfer");
+        });
+        send_txs.stop();
+        debug!("send {} txs: {}us", self.len(), send_txs.as_us());
+    }
+
+    fn verify<T: 'static + Client + Send + Sync>(&mut self, client: &Arc<T>, to_lamports: u64) {
+        let starting_txs = self.len();
+        let verified_txs = Arc::new(AtomicUsize::new(0));
+        let too_many_failures = Arc::new(AtomicBool::new(false));
+        let loops = if starting_txs < 1000 { 3 } else { 1 };
+        // Only loop multiple times for small (quick) transaction batches
+        for _ in 0..loops {
+            let failed_verify = Arc::new(AtomicUsize::new(0));
+            let client = client.clone();
+            let verified_txs = &verified_txs;
+            let failed_verify = &failed_verify;
+            let too_many_failures = &too_many_failures;
+            let verified_set: HashSet<Pubkey> = self
+                .par_iter()
+                .filter_map(move |(k, tx)| {
+                    if too_many_failures.load(Ordering::Relaxed) {
+                        return None;
+                    }
+
+                    let verified = if verify_funding_transfer(&client, &tx, to_lamports) {
+                        verified_txs.fetch_add(1, Ordering::Relaxed);
+                        Some(k.pubkey())
+                    } else {
+                        failed_verify.fetch_add(1, Ordering::Relaxed);
+                        None
+                    };
+
+                    let verified_txs = verified_txs.load(Ordering::Relaxed);
+                    let failed_verify = failed_verify.load(Ordering::Relaxed);
+                    let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
+                    if failed_verify > 100 && failed_verify > verified_txs {
+                        too_many_failures.store(true, Ordering::Relaxed);
+                        warn!(
+                            "Too many failed transfers... {} remaining, {} verified, {} failures",
+                            remaining_count, verified_txs, failed_verify
+                        );
+                    }
+                    if remaining_count % 100 == 0 {
+                        info!(
+                            "Verifying transfers... {} remaining, {} verified, {} failures",
+                            remaining_count, verified_txs, failed_verify
+                        );
+                    }
+
+                    verified
+                })
+                .collect();
+
+            self.retain(|(k, _)| !verified_set.contains(&k.pubkey()));
+            if self.is_empty() {
+                break;
+            }
+            info!("Looping verifications");
+
+            let verified_txs = verified_txs.load(Ordering::Relaxed);
+            let failed_verify = failed_verify.load(Ordering::Relaxed);
+            let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
+            info!(
+                "Verifying transfers... {} remaining, {} verified, {} failures",
+                remaining_count, verified_txs, failed_verify
+            );
+            sleep(Duration::from_millis(100));
+        }
+    }
+}
+
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
@@ -538,128 +698,11 @@ pub fn fund_keys<T: 'static + Client + Send + Sync>(
         const FUND_CHUNK_LEN: usize = 4 * 1024 * 1024 / 512;
 
         to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
-            let mut make_txs = Measure::start("make_txs");
-            let mut to_fund_txs: Vec<(&Keypair, Transaction)> = chunk
-                .par_iter()
-                .map(|(k, t)| {
-                    let tx = Transaction::new_unsigned_instructions(
-                        system_instruction::transfer_many(&k.pubkey(), &t),
-                    );
-                    (*k, tx)
-                })
-                .collect();
-            make_txs.stop();
-            debug!(
-                "make {} unsigned txs: {}us",
-                to_fund_txs.len(),
-                make_txs.as_us()
+            Vec::<(&Keypair, Transaction)>::with_capacity(chunk.len()).fund(
+                &client,
+                chunk,
+                to_lamports,
             );
-
-            let mut tries = 0;
-            while !to_fund_txs.is_empty() {
-                info!(
-                    "{} {} each to {} accounts in {} txs",
-                    if tries == 0 {
-                        "transferring"
-                    } else {
-                        " retrying"
-                    },
-                    to_lamports,
-                    to_fund_txs.len() * MAX_SPENDS_PER_TX as usize,
-                    to_fund_txs.len(),
-                );
-
-                let (blockhash, _fee_calculator) = get_recent_blockhash(client.as_ref());
-
-                // re-sign retained to_fund_txes with updated blockhash
-                let mut sign_txs = Measure::start("sign_txs");
-                to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
-                    tx.sign(&[*k], blockhash);
-                });
-                sign_txs.stop();
-                debug!("sign {} txs: {}us", to_fund_txs.len(), sign_txs.as_us());
-
-                let mut send_txs = Measure::start("send_txs");
-                to_fund_txs.iter().for_each(|(_, tx)| {
-                    client.async_send_transaction(tx.clone()).expect("transfer");
-                });
-                send_txs.stop();
-                debug!("send {} txs: {}us", to_fund_txs.len(), send_txs.as_us());
-
-                // Sleep a few slots to allow transactions to process
-                sleep(Duration::from_secs(1));
-
-                let mut verify_txs = Measure::start("verify_txs");
-                let starting_txs = to_fund_txs.len();
-                let verified_txs = Arc::new(AtomicUsize::new(0));
-                let too_many_failures = Arc::new(AtomicBool::new(false));
-                // Only loop multiple times for small (quick) transaction batches
-                for _ in 0..(if starting_txs < 1000 { 3 } else { 1 }) {
-                    let failed_verify = Arc::new(AtomicUsize::new(0));
-                    let verified_set: HashSet<Option<Pubkey>> = {
-                        let client = client.clone();
-                        let verified_txs = &verified_txs;
-                        let failed_verify = &failed_verify;
-                        let too_many_failures = &too_many_failures;
-                        to_fund_txs.par_iter().map(move |(k, tx)| {
-                            if too_many_failures.load(Ordering::Relaxed) {
-                                return None;
-                            }
-
-                            let verified = if verify_funding_transfer(&client, &tx, to_lamports) {
-                                verified_txs.fetch_add(1, Ordering::Relaxed);
-                                Some(k.pubkey())
-                            } else {
-                                failed_verify.fetch_add(1, Ordering::Relaxed);
-                                None
-                            };
-
-                            let verified_txs = verified_txs.load(Ordering::Relaxed);
-                            let failed_verify = failed_verify.load(Ordering::Relaxed);
-                            let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
-                            if failed_verify > 100 && failed_verify > verified_txs {
-                                too_many_failures.store(true, Ordering::Relaxed);
-                                warn!(
-                                    "Too many failed transfers... {} remaining, {} verified, {} failures",
-                                    remaining_count, verified_txs, failed_verify
-                                );
-                            }
-                            if remaining_count % 100 == 0 {
-                                info!(
-                                    "Verifying transfers... {} remaining, {} verified, {} failures",
-                                    remaining_count, verified_txs, failed_verify
-                                );
-                            }
-
-                            verified
-                        }).collect()
-                    };
-
-                    to_fund_txs.retain(|(k, _)| !verified_set.contains(&Some(k.pubkey())));
-                    if to_fund_txs.is_empty() {
-                        break;
-                    }
-                    info!("Looping verifications");
-
-                    let verified_txs = verified_txs.load(Ordering::Relaxed);
-                    let failed_verify = failed_verify.load(Ordering::Relaxed);
-                    let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
-                    info!(
-                        "Verifying transfers... {} remaining, {} verified, {} failures",
-                        remaining_count, verified_txs, failed_verify
-                    );
-                    sleep(Duration::from_millis(100));
-                }
-                verify_txs.stop();
-                let verified_txs = verified_txs.load(Ordering::Relaxed);
-                debug!("verified {} txs: {}us", verified_txs, verify_txs.as_us());
-
-                // retry anything that seems to have dropped through cracks
-                //  again since these txs are all or nothing, they're fine to
-                //  retry
-                tries += 1;
-            }
-            info!("transferred");
         });
 
         info!("funded: {} left: {}", new_funded.len(), not_funded.len());
