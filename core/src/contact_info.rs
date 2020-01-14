@@ -31,6 +31,8 @@ pub struct ContactInfo {
     pub rpc_pubsub: SocketAddr,
     /// latest wallclock picked
     pub wallclock: u64,
+    /// node shred version
+    pub shred_version: u16,
 }
 
 impl Ord for ContactInfo {
@@ -84,6 +86,7 @@ impl Default for ContactInfo {
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
             wallclock: 0,
+            shred_version: 0,
         }
     }
 }
@@ -115,6 +118,7 @@ impl ContactInfo {
             rpc,
             rpc_pubsub,
             wallclock: now,
+            shred_version: 0,
         }
     }
 
