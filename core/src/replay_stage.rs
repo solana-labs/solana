@@ -1311,7 +1311,8 @@ pub(crate) mod tests {
             let genesis_config = create_genesis_config(10_000).genesis_config;
             let bank0 = Bank::new(&genesis_config);
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
-            let subscriptions = Arc::new(RpcSubscriptions::default());
+            let exit = Arc::new(AtomicBool::new(false));
+            let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
             let bank_forks = BankForks::new(0, bank0);
             bank_forks.working_bank().freeze();
 

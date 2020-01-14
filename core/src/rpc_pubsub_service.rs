@@ -68,9 +68,9 @@ mod tests {
 
     #[test]
     fn test_pubsub_new() {
-        let subscriptions = Arc::new(RpcSubscriptions::default());
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
+        let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
         let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
         let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-pubsub");

@@ -303,7 +303,7 @@ pub mod tests {
             None,
             None,
             l_receiver,
-            &Arc::new(RpcSubscriptions::default()),
+            &Arc::new(RpcSubscriptions::new(&exit)),
             &poh_recorder,
             &leader_schedule_cache,
             &exit,
