@@ -4,6 +4,7 @@ use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{typed::Sink, SubscriptionId};
 use serde::Serialize;
+use solana_client::rpc_response::RpcKeyedAccount;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -25,7 +26,7 @@ pub struct SlotInfo {
 type RpcAccountSubscriptions =
     RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Account>, Confirmations)>>>;
 type RpcProgramSubscriptions =
-    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<(String, Account)>, Confirmations)>>>;
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<RpcKeyedAccount>, Confirmations)>>>;
 type RpcSignatureSubscriptions = RwLock<
     HashMap<Signature, HashMap<SubscriptionId, (Sink<transaction::Result<()>>, Confirmations)>>,
 >;
@@ -147,11 +148,14 @@ where
     }
 }
 
-fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<(String, Account)>, _root: Slot) {
+fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<RpcKeyedAccount>, _root: Slot) {
     for (pubkey, account) in accounts.iter() {
-        sink.notify(Ok((pubkey.to_string(), account.clone())))
-            .wait()
-            .unwrap();
+        sink.notify(Ok(RpcKeyedAccount {
+            pubkey: pubkey.to_string(),
+            account: account.clone(),
+        }))
+        .wait()
+        .unwrap();
     }
 }
 
@@ -247,7 +251,7 @@ impl RpcSubscriptions {
         program_id: &Pubkey,
         confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
-        sink: &Sink<(String, Account)>,
+        sink: &Sink<RpcKeyedAccount>,
     ) {
         let mut subscriptions = self.program_subscriptions.write().unwrap();
         add_subscription(&mut subscriptions, program_id, confirmations, sub_id, sink);
@@ -433,7 +437,7 @@ mod tests {
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected = format!(
-                r#"{{"jsonrpc":"2.0","method":"programNotification","params":{{"result":["{:?}",{{"data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"executable":false,"lamports":1,"owner":[2,203,81,223,225,24,34,35,203,214,138,130,144,208,35,77,63,16,87,51,47,198,115,123,98,188,19,160,0,0,0,0],"rentEpoch":1}}],"subscription":0}}}}"#,
+                r#"{{"jsonrpc":"2.0","method":"programNotification","params":{{"result":{{"account":{{"data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"executable":false,"lamports":1,"owner":[2,203,81,223,225,24,34,35,203,214,138,130,144,208,35,77,63,16,87,51,47,198,115,123,98,188,19,160,0,0,0,0],"rentEpoch":1}},"pubkey":"{:?}"}},"subscription":0}}}}"#,
                 alice.pubkey()
             );
             assert_eq!(expected, response);

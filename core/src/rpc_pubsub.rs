@@ -3,12 +3,9 @@
 use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::typed::Subscriber;
-use jsonrpc_pubsub::{Session, SubscriptionId};
-use solana_sdk::account::Account;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::transaction;
+use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
+use solana_client::rpc_response::RpcKeyedAccount;
+use solana_sdk::{account::Account, pubkey::Pubkey, signature::Signature, transaction};
 use std::sync::{atomic, Arc};
 
 // Suppress needless_return due to
@@ -52,7 +49,7 @@ pub trait RpcSolPubSub {
     fn program_subscribe(
         &self,
         _: Self::Metadata,
-        _: Subscriber<(String, Account)>,
+        _: Subscriber<RpcKeyedAccount>,
         _: String,
         _: Option<Confirmations>,
     );
@@ -168,7 +165,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn program_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<(String, Account)>,
+        subscriber: Subscriber<RpcKeyedAccount>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     ) {
