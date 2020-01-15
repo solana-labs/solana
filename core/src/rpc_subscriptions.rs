@@ -11,8 +11,10 @@ use solana_sdk::{
     account::Account, clock::Slot, pubkey::Pubkey, signature::Signature, transaction,
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 pub type Confirmations = usize;
 
@@ -332,8 +334,10 @@ mod tests {
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_budget_program;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
+    use solana_sdk::{
+        signature::{Keypair, KeypairUtil},
+        system_transaction,
+    };
     use tokio::prelude::{Async, Stream};
 
     #[test]
