@@ -205,6 +205,7 @@ pub enum CliCommand {
         stake_account_pubkey: Pubkey,
         destination_account_pubkey: Pubkey,
         lamports: u64,
+        withdraw_authority: Option<KeypairEq>,
     },
     // Storage Commands
     CreateStorageAccount {
@@ -1368,12 +1369,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             stake_account_pubkey,
             destination_account_pubkey,
             lamports,
+            ref withdraw_authority,
         } => process_withdraw_stake(
             &rpc_client,
             config,
             &stake_account_pubkey,
             &destination_account_pubkey,
             *lamports,
+            withdraw_authority.as_deref(),
         ),
 
         // Storage Commands
@@ -2616,6 +2619,7 @@ mod tests {
             stake_account_pubkey: stake_pubkey,
             destination_account_pubkey: to_pubkey,
             lamports: 100,
+            withdraw_authority: None,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());

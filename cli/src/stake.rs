@@ -38,6 +38,12 @@ pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     help: "Public key of authorized staker (defaults to cli config pubkey)",
 };
 
+pub const WITHDRAW_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
+    name: "withdraw_authority",
+    long: "withdraw-authority",
+    help: "Public key of authorized withdrawer (defaults to cli config pubkey)",
+};
+
 fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(STAKE_AUTHORITY_ARG.name)
         .long(STAKE_AUTHORITY_ARG.long)
@@ -45,6 +51,15 @@ fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .value_name("KEYPAIR")
         .validator(is_keypair_or_ask_keyword)
         .help(STAKE_AUTHORITY_ARG.help)
+}
+
+fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
+        .long(WITHDRAW_AUTHORITY_ARG.long)
+        .takes_value(true)
+        .value_name("KEYPAIR")
+        .validator(is_keypair_or_ask_keyword)
+        .help(WITHDRAW_AUTHORITY_ARG.help)
 }
 
 pub trait StakeSubCommands {
@@ -121,12 +136,12 @@ impl StakeSubCommands for App<'_, '_> {
                         .help(STAKE_AUTHORITY_ARG.help)
                 )
                 .arg(
-                    Arg::with_name("authorized_withdrawer")
-                        .long("authorized-withdrawer")
+                    Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
+                        .long(WITHDRAW_AUTHORITY_ARG.long)
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to cli config pubkey)")
+                        .help(WITHDRAW_AUTHORITY_ARG.help)
                 )
         )
         .subcommand(
@@ -243,6 +258,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair)
                         .help("New authorized withdrawer")
                 )
+                .arg(withdraw_authority_arg())
         )
         .subcommand(
             SubCommand::with_name("deactivate-stake")
@@ -335,6 +351,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .possible_values(&["SOL", "lamports"])
                         .help("Specify unit to use for request")
                 )
+                .arg(withdraw_authority_arg())
            )
         .subcommand(
             SubCommand::with_name("redeem-vote-credits")
@@ -397,7 +414,7 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
     let unix_timestamp = unix_timestamp_from_rfc3339_datetime(&matches, "lockup_date").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
     let staker = pubkey_of(matches, STAKE_AUTHORITY_ARG.name);
-    let withdrawer = pubkey_of(matches, "authorized_withdrawer");
+    let withdrawer = pubkey_of(matches, WITHDRAW_AUTHORITY_ARG.name);
     let lamports = required_lamports_from(matches, "amount", "unit")?;
 
     Ok(CliCommandInfo {
@@ -463,9 +480,14 @@ pub fn parse_stake_authorize(
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let new_authorized_pubkey = pubkey_of(matches, "authorized_pubkey").unwrap();
-    let authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
-        let authority = keypair_of(&matches, STAKE_AUTHORITY_ARG.name)
-            .ok_or_else(|| CliError::BadParameter("Invalid keypair for stake-authority".into()))?;
+    let authority_flag = match stake_authorize {
+        StakeAuthorize::Staker => STAKE_AUTHORITY_ARG.name,
+        StakeAuthorize::Withdrawer => WITHDRAW_AUTHORITY_ARG.name,
+    };
+    let authority = if matches.is_present(authority_flag) {
+        let authority = keypair_of(&matches, authority_flag).ok_or_else(|| {
+            CliError::BadParameter(format!("Invalid keypair for {}", authority_flag))
+        })?;
         Some(authority.into())
     } else {
         None
@@ -532,12 +554,21 @@ pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
     let lamports = required_lamports_from(matches, "amount", "unit")?;
+    let withdraw_authority = if matches.is_present(WITHDRAW_AUTHORITY_ARG.name) {
+        let authority = keypair_of(&matches, WITHDRAW_AUTHORITY_ARG.name).ok_or_else(|| {
+            CliError::BadParameter("Invalid keypair for withdraw-authority".into())
+        })?;
+        Some(authority.into())
+    } else {
+        None
+    };
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawStake {
             stake_account_pubkey,
             destination_account_pubkey,
             lamports,
+            withdraw_authority,
         },
         require_keypair: true,
     })
@@ -756,12 +787,14 @@ pub fn process_withdraw_stake(
     stake_account_pubkey: &Pubkey,
     destination_account_pubkey: &Pubkey,
     lamports: u64,
+    withdraw_authority: Option<&Keypair>,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let withdraw_authority = withdraw_authority.unwrap_or(&config.keypair);
 
     let ixs = vec![stake_instruction::withdraw(
         stake_account_pubkey,
-        &config.keypair.pubkey(),
+        &withdraw_authority.pubkey(),
         destination_account_pubkey,
         lamports,
     )];
@@ -769,7 +802,7 @@ pub fn process_withdraw_stake(
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
         Some(&config.keypair.pubkey()),
-        &[&config.keypair],
+        &[&config.keypair, withdraw_authority],
         recent_blockhash,
     );
     check_account_for_fee(
@@ -1072,28 +1105,26 @@ mod tests {
             }
         );
         // Test Staker Subcommand w/ authority
-        if stake_authorize != StakeAuthorize::Withdrawer {
-            let test_authorize = test_commands.clone().get_matches_from(vec![
-                "test",
-                &subcommand,
-                &stake_account_string,
-                &stake_account_string,
-                &authority_flag,
-                &authority_keypair_file,
-            ]);
-            assert_eq!(
-                parse_command(&test_authorize).unwrap(),
-                CliCommandInfo {
-                    command: CliCommand::StakeAuthorize {
-                        stake_account_pubkey,
-                        new_authorized_pubkey: stake_account_pubkey,
-                        stake_authorize,
-                        authority: Some(read_keypair_file(&authority_keypair_file).unwrap().into()),
-                    },
-                    require_keypair: true
-                }
-            );
-        }
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            &subcommand,
+            &stake_account_string,
+            &stake_account_string,
+            &authority_flag,
+            &authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorized_pubkey: stake_account_pubkey,
+                    stake_authorize,
+                    authority: Some(read_keypair_file(&authority_keypair_file).unwrap().into()),
+                },
+                require_keypair: true
+            }
+        );
     }
 
     #[test]
@@ -1132,7 +1163,7 @@ mod tests {
             "50",
             "--stake-authority",
             &authorized_string,
-            "--authorized-withdrawer",
+            "--withdraw-authority",
             &authorized_string,
             "--custodian",
             &custodian_string,
@@ -1407,6 +1438,36 @@ mod tests {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
                     lamports: 42,
+                    withdraw_authority: None,
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test WithdrawStake Subcommand w/ authority
+        let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-stake",
+            &stake_account_string,
+            &stake_account_string,
+            "42",
+            "lamports",
+            "--withdraw-authority",
+            &stake_authority_keypair_file,
+        ]);
+
+        assert_eq!(
+            parse_command(&test_withdraw_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::WithdrawStake {
+                    stake_account_pubkey,
+                    destination_account_pubkey: stake_account_pubkey,
+                    lamports: 42,
+                    withdraw_authority: Some(
+                        read_keypair_file(&stake_authority_keypair_file)
+                            .unwrap()
+                            .into()
+                    ),
                 },
                 require_keypair: true
             }
