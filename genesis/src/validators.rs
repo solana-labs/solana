@@ -4,13 +4,6 @@ use solana_sdk::{
     timing::years_as_slots,
 };
 
-#[derive(Debug)]
-pub struct ValidatorInfo {
-    pub name: &'static str,
-    pub node: &'static str,
-    pub node_lamports: u64,
-}
-
 // the node's account needs carry enough
 //  lamports to cover TX fees for voting for one year,
 //  validators can vote once per slot
@@ -27,15 +20,16 @@ fn calculate_voting_fees(genesis_config: &GenesisConfig, years: f64) -> u64 {
 pub fn create_and_add_validator(
     genesis_config: &mut GenesisConfig,
     // information about this validator
-    validator_info: &ValidatorInfo,
+    validator_pubkey: &str,
+    validator_lamports: u64,
 ) -> u64 {
-    let node: Pubkey = validator_info.node.parse().expect("invalid node");
+    let node: Pubkey = validator_pubkey.parse().expect("invalid node");
 
     // node is the system account from which votes will be issued
     let node_rent_reserve = genesis_config.rent.minimum_balance(0).max(1);
     let node_voting_fees = calculate_voting_fees(genesis_config, 1.0);
 
-    let mut total_lamports = node_voting_fees + validator_info.node_lamports;
+    let mut total_lamports = node_voting_fees + validator_lamports;
 
     genesis_config
         .accounts
@@ -44,7 +38,7 @@ pub fn create_and_add_validator(
             total_lamports += node_rent_reserve;
             Account::new(node_rent_reserve, 0, &system_program::id())
         })
-        .lamports += node_voting_fees + validator_info.node_lamports;
+        .lamports += node_voting_fees + validator_lamports;
 
     total_lamports
 }
@@ -56,14 +50,19 @@ mod tests {
 
     fn create_and_check_validators(
         genesis_config: &mut GenesisConfig,
-        validator_infos: &[ValidatorInfo],
+        validator_pubkeys: &[&str],
+        validator_lamports: u64,
         total_lamports: u64,
         len: usize,
     ) {
         assert_eq!(
-            validator_infos
+            validator_pubkeys
                 .iter()
-                .map(|validator_info| create_and_add_validator(genesis_config, validator_info))
+                .map(|validator_pubkey| create_and_add_validator(
+                    genesis_config,
+                    validator_pubkey,
+                    validator_lamports
+                ))
                 .sum::<u64>(),
             total_lamports
         );
@@ -99,11 +98,10 @@ mod tests {
 
         create_and_check_validators(
             &mut genesis_config,
-            &[ValidatorInfo {
-                name: "fun",
-                node: "AiTDdNHW2vNtHt7PqWMHx3B8cMPRDNgc7kMiLPJM25QC", // random pubkey
-                node_lamports: 0,
-            }],
+            &[
+                "AiTDdNHW2vNtHt7PqWMHx3B8cMPRDNgc7kMiLPJM25QC", // random pubkey
+            ],
+            0,
             total_lamports,
             1,
         );
