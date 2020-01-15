@@ -84,10 +84,8 @@ fn finish_create_account(
     }
 
     // if it looks like the `to` account is already in use, bail
-    if to.account.lamports != 0
-        || !to.account.data.is_empty()
-        || !system_program::check_id(&to.account.owner)
-    {
+    //   (note that the id check is also enforced by message_processor)
+    if !to.account.data.is_empty() || !system_program::check_id(&to.account.owner) {
         debug!(
             "CreateAccount: invalid argument; account {} already in use",
             to.unsigned_key()
@@ -116,7 +114,7 @@ fn finish_create_account(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    // guard against sysvars being assigned
+    // guard against sysvars being made
     if sysvar::check_id(&program_id) {
         debug!("Assign: program id {} invalid", program_id);
         return Err(SystemError::InvalidProgramId.into());
@@ -141,7 +139,7 @@ fn assign_account_to_program(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    // guard against sysvars being assigned
+    // guard against sysvars being made
     if sysvar::check_id(&program_id) {
         debug!("Assign: program id {} invalid", program_id);
         return Err(SystemError::InvalidProgramId.into());
@@ -515,6 +513,7 @@ mod tests {
 
     #[test]
     fn test_create_already_in_use() {
+        solana_logger::setup();
         // Attempt to create system account in account already owned by another program
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
@@ -538,7 +537,8 @@ mod tests {
         assert_eq!(from_lamports, 100);
         assert_eq!(owned_account, unchanged_account);
 
-        let mut owned_account = Account::new(10, 0, &Pubkey::default());
+        // Attempt to create system account in account that already has data
+        let mut owned_account = Account::new(0, 1, &Pubkey::default());
         let unchanged_account = owned_account.clone();
         let result = create_account(
             &mut KeyedAccount::new(&from, true, &mut from_account),
@@ -551,6 +551,19 @@ mod tests {
         let from_lamports = from_account.lamports;
         assert_eq!(from_lamports, 100);
         assert_eq!(owned_account, unchanged_account);
+
+        // Verify that create_account works even if `to` has a non-zero balance
+        let mut owned_account = Account::new(1, 0, &Pubkey::default());
+        let result = create_account(
+            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&owned_key, true, &mut owned_account),
+            50,
+            2,
+            &new_program_owner,
+        );
+        assert_eq!(result, Ok(()));
+        assert_eq!(from_account.lamports, from_lamports - 50);
+        assert_eq!(owned_account.lamports, 1 + 50);
     }
 
     #[test]
