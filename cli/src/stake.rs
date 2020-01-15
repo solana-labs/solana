@@ -492,11 +492,11 @@ pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let lamports = required_lamports_from(matches, "amount", "unit")?;
 
     Ok(CliCommandInfo {
-        command: CliCommand::WithdrawStake(
+        command: CliCommand::WithdrawStake {
             stake_account_pubkey,
             destination_account_pubkey,
             lamports,
-        ),
+        },
         require_keypair: true,
     })
 }
@@ -1278,7 +1278,11 @@ mod tests {
         assert_eq!(
             parse_command(&test_withdraw_stake).unwrap(),
             CliCommandInfo {
-                command: CliCommand::WithdrawStake(stake_account_pubkey, stake_account_pubkey, 42),
+                command: CliCommand::WithdrawStake {
+                    stake_account_pubkey,
+                    destination_account_pubkey: stake_account_pubkey,
+                    lamports: 42,
+                },
                 require_keypair: true
             }
         );

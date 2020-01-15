@@ -198,7 +198,11 @@ pub enum CliCommand {
         new_authorized_pubkey: Pubkey,
         stake_authorize: StakeAuthorize,
     },
-    WithdrawStake(Pubkey, Pubkey, u64),
+    WithdrawStake {
+        stake_account_pubkey: Pubkey,
+        destination_account_pubkey: Pubkey,
+        lamports: u64,
+    },
     // Storage Commands
     CreateStorageAccount {
         account_owner: Pubkey,
@@ -1351,15 +1355,17 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *stake_authorize,
         ),
 
-        CliCommand::WithdrawStake(stake_account_pubkey, destination_account_pubkey, lamports) => {
-            process_withdraw_stake(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &destination_account_pubkey,
-                *lamports,
-            )
-        }
+        CliCommand::WithdrawStake {
+            stake_account_pubkey,
+            destination_account_pubkey,
+            lamports,
+        } => process_withdraw_stake(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            &destination_account_pubkey,
+            *lamports,
+        ),
 
         // Storage Commands
 
@@ -2597,7 +2603,11 @@ mod tests {
 
         let stake_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
-        config.command = CliCommand::WithdrawStake(stake_pubkey, to_pubkey, 100);
+        config.command = CliCommand::WithdrawStake {
+            stake_account_pubkey: stake_pubkey,
+            destination_account_pubkey: to_pubkey,
+            lamports: 100,
+        };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
