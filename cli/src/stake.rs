@@ -9,7 +9,7 @@ use crate::{
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use console::style;
-use solana_clap_utils::{input_parsers::*, input_validators::*};
+use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::{
@@ -31,6 +31,21 @@ use solana_stake_program::{
 };
 use solana_vote_program::vote_state::VoteState;
 use std::ops::Deref;
+
+pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
+    name: "stake_authority",
+    long: "stake-authority",
+    help: "Public key of authorized staker (defaults to cli config pubkey)",
+};
+
+fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(STAKE_AUTHORITY_ARG.name)
+        .long(STAKE_AUTHORITY_ARG.long)
+        .takes_value(true)
+        .value_name("KEYPAIR")
+        .validator(is_keypair_or_ask_keyword)
+        .help(STAKE_AUTHORITY_ARG.help)
+}
 
 pub trait StakeSubCommands {
     fn stake_subcommands(self) -> Self;
@@ -98,12 +113,12 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("The date and time at which this account will be available for withdrawal")
                 )
                 .arg(
-                    Arg::with_name("authorized_staker")
-                        .long("authorized-staker")
+                    Arg::with_name(STAKE_AUTHORITY_ARG.name)
+                        .long(STAKE_AUTHORITY_ARG.long)
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of authorized staker (defaults to cli config pubkey)")
+                        .help(STAKE_AUTHORITY_ARG.help)
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -142,6 +157,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair)
                         .help("The vote account to which the stake will be delegated")
                 )
+                .arg(stake_authority_arg())
                 .arg(
                     Arg::with_name("sign_only")
                         .long("sign-only")
@@ -204,6 +220,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair)
                         .help("New authorized staker")
                 )
+                .arg(stake_authority_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-authorize-withdrawer")
@@ -238,6 +255,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .required(true)
                         .help("Stake account to be deactivated.")
                 )
+                .arg(stake_authority_arg())
                 .arg(
                     Arg::with_name("sign_only")
                         .long("sign-only")
@@ -378,7 +396,7 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
     let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
     let unix_timestamp = unix_timestamp_from_rfc3339_datetime(&matches, "lockup_date").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
-    let staker = pubkey_of(matches, "authorized_staker");
+    let staker = pubkey_of(matches, STAKE_AUTHORITY_ARG.name);
     let withdrawer = pubkey_of(matches, "authorized_withdrawer");
     let lamports = required_lamports_from(matches, "amount", "unit")?;
 
@@ -402,6 +420,13 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
 pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+    let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
+        let authority = keypair_of(&matches, STAKE_AUTHORITY_ARG.name)
+            .ok_or_else(|| CliError::BadParameter("Invalid keypair for stake-authority".into()))?;
+        Some(authority.into())
+    } else {
+        None
+    };
     let force = matches.is_present("force");
     let sign_only = matches.is_present("sign_only");
     let signers = pubkeys_sigs_of(&matches, "signer");
@@ -420,6 +445,7 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
         command: CliCommand::DelegateStake {
             stake_account_pubkey,
             vote_account_pubkey,
+            stake_authority,
             force,
             sign_only,
             signers,
@@ -437,12 +463,20 @@ pub fn parse_stake_authorize(
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let new_authorized_pubkey = pubkey_of(matches, "authorized_pubkey").unwrap();
+    let authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
+        let authority = keypair_of(&matches, STAKE_AUTHORITY_ARG.name)
+            .ok_or_else(|| CliError::BadParameter("Invalid keypair for stake-authority".into()))?;
+        Some(authority.into())
+    } else {
+        None
+    };
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeAuthorize {
             stake_account_pubkey,
             new_authorized_pubkey,
             stake_authorize,
+            authority,
         },
         require_keypair: true,
     })
@@ -460,6 +494,13 @@ pub fn parse_redeem_vote_credits(matches: &ArgMatches<'_>) -> Result<CliCommandI
 
 pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+    let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
+        let authority = keypair_of(&matches, STAKE_AUTHORITY_ARG.name)
+            .ok_or_else(|| CliError::BadParameter("Invalid keypair for stake-authority".into()))?;
+        Some(authority.into())
+    } else {
+        None
+    };
     let sign_only = matches.is_present("sign_only");
     let signers = pubkeys_sigs_of(&matches, "signer");
     let blockhash = value_of(matches, "blockhash");
@@ -476,6 +517,7 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
     Ok(CliCommandInfo {
         command: CliCommand::DeactivateStake {
             stake_account_pubkey,
+            stake_authority,
             sign_only,
             signers,
             blockhash,
@@ -619,23 +661,25 @@ pub fn process_stake_authorize(
     stake_account_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
+    authority: Option<&Keypair>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
         (authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
+    let authority = authority.unwrap_or(&config.keypair);
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::authorize(
-        stake_account_pubkey,     // stake account to update
-        &config.keypair.pubkey(), // currently authorized
-        authorized_pubkey,        // new stake signer
-        stake_authorize,          // stake or withdraw
+        stake_account_pubkey, // stake account to update
+        &authority.pubkey(),  // currently authorized
+        authorized_pubkey,    // new stake signer
+        stake_authorize,      // stake or withdraw
     )];
 
     let mut tx = Transaction::new_signed_with_payer(
         ixs,
         Some(&config.keypair.pubkey()),
-        &[&config.keypair],
+        &[&config.keypair, authority],
         recent_blockhash,
     );
     check_account_for_fee(
@@ -652,6 +696,7 @@ pub fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
+    stake_authority: Option<&Keypair>,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash: Option<Hash>,
@@ -660,16 +705,17 @@ pub fn process_deactivate_stake_account(
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
         get_blockhash_fee_calculator(rpc_client, sign_only, blockhash)?;
+    let stake_authority = stake_authority.unwrap_or(&config.keypair);
     let ixs = vec![stake_instruction::deactivate_stake(
         stake_account_pubkey,
-        &config.keypair.pubkey(),
+        &stake_authority.pubkey(),
     )];
     let mut tx = if let Some(nonce_account) = &nonce_account {
         let nonce_authority: &Keypair = nonce_authority.unwrap_or(&config.keypair);
         Transaction::new_signed_with_nonce(
             ixs,
             Some(&config.keypair.pubkey()),
-            &[&config.keypair, nonce_authority],
+            &[&config.keypair, nonce_authority, stake_authority],
             nonce_account,
             &nonce_authority.pubkey(),
             recent_blockhash,
@@ -678,7 +724,7 @@ pub fn process_deactivate_stake_account(
         Transaction::new_signed_with_payer(
             ixs,
             Some(&config.keypair.pubkey()),
-            &[&config.keypair],
+            &[&config.keypair, stake_authority],
             recent_blockhash,
         )
     };
@@ -879,6 +925,7 @@ pub fn process_delegate_stake(
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     vote_account_pubkey: &Pubkey,
+    stake_authority: Option<&Keypair>,
     force: bool,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
@@ -890,6 +937,7 @@ pub fn process_delegate_stake(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
+    let stake_authority = stake_authority.unwrap_or(&config.keypair);
 
     // Sanity check the vote account to ensure it is attached to a validator that has recently
     // voted at the tip of the ledger
@@ -936,7 +984,7 @@ pub fn process_delegate_stake(
 
     let ixs = vec![stake_instruction::delegate_stake(
         stake_account_pubkey,
-        &config.keypair.pubkey(),
+        &stake_authority.pubkey(),
         vote_account_pubkey,
     )];
     let mut tx = if let Some(nonce_account) = &nonce_account {
@@ -944,7 +992,7 @@ pub fn process_delegate_stake(
         Transaction::new_signed_with_nonce(
             ixs,
             Some(&config.keypair.pubkey()),
-            &[&config.keypair, nonce_authority],
+            &[&config.keypair, nonce_authority, stake_authority],
             nonce_account,
             &nonce_authority.pubkey(),
             recent_blockhash,
@@ -953,7 +1001,7 @@ pub fn process_delegate_stake(
         Transaction::new_signed_with_payer(
             ixs,
             Some(&config.keypair.pubkey()),
-            &[&config.keypair],
+            &[&config.keypair, stake_authority],
             recent_blockhash,
         )
     };
@@ -983,7 +1031,7 @@ pub fn process_delegate_stake(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::write_keypair;
+    use solana_sdk::signature::{read_keypair_file, write_keypair};
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -994,13 +1042,14 @@ mod tests {
     fn parse_authorize_tests(
         test_commands: &App,
         stake_account_pubkey: Pubkey,
+        authority_keypair_file: &str,
         stake_authorize: StakeAuthorize,
     ) {
         let stake_account_string = stake_account_pubkey.to_string();
 
-        let subcommand = match stake_authorize {
-            StakeAuthorize::Staker => "stake-authorize-staker",
-            StakeAuthorize::Withdrawer => "stake-authorize-withdrawer",
+        let (subcommand, authority_flag) = match stake_authorize {
+            StakeAuthorize::Staker => ("stake-authorize-staker", "--stake-authority"),
+            StakeAuthorize::Withdrawer => ("stake-authorize-withdrawer", "--withdraw-authority"),
         };
 
         // Test Staker Subcommand
@@ -1017,10 +1066,34 @@ mod tests {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
+                    authority: None,
                 },
                 require_keypair: true
             }
         );
+        // Test Staker Subcommand w/ authority
+        if stake_authorize != StakeAuthorize::Withdrawer {
+            let test_authorize = test_commands.clone().get_matches_from(vec![
+                "test",
+                &subcommand,
+                &stake_account_string,
+                &stake_account_string,
+                &authority_flag,
+                &authority_keypair_file,
+            ]);
+            assert_eq!(
+                parse_command(&test_authorize).unwrap(),
+                CliCommandInfo {
+                    command: CliCommand::StakeAuthorize {
+                        stake_account_pubkey,
+                        new_authorized_pubkey: stake_account_pubkey,
+                        stake_authorize,
+                        authority: Some(read_keypair_file(&authority_keypair_file).unwrap().into()),
+                    },
+                    require_keypair: true
+                }
+            );
+        }
     }
 
     #[test]
@@ -1030,11 +1103,20 @@ mod tests {
         let stake_account_keypair = Keypair::new();
         write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
         let stake_account_pubkey = stake_account_keypair.pubkey();
+        let (stake_authority_keypair_file, mut tmp_file) = make_tmp_file();
+        let stake_authority_keypair = Keypair::new();
+        write_keypair(&stake_authority_keypair, tmp_file.as_file_mut()).unwrap();
 
-        parse_authorize_tests(&test_commands, stake_account_pubkey, StakeAuthorize::Staker);
         parse_authorize_tests(
             &test_commands,
             stake_account_pubkey,
+            &stake_authority_keypair_file,
+            StakeAuthorize::Staker,
+        );
+        parse_authorize_tests(
+            &test_commands,
+            stake_account_pubkey,
+            &stake_authority_keypair_file,
             StakeAuthorize::Withdrawer,
         );
 
@@ -1048,7 +1130,7 @@ mod tests {
             "create-stake-account",
             &keypair_file,
             "50",
-            "--authorized-staker",
+            "--stake-authority",
             &authorized_string,
             "--authorized-withdrawer",
             &authorized_string,
@@ -1121,6 +1203,7 @@ mod tests {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
+                    stake_authority: None,
                     force: false,
                     sign_only: false,
                     signers: None,
@@ -1132,6 +1215,40 @@ mod tests {
             }
         );
 
+        // Test DelegateStake Subcommand w/ authority
+        let vote_account_pubkey = Pubkey::new_rand();
+        let vote_account_string = vote_account_pubkey.to_string();
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            &stake_account_string,
+            &vote_account_string,
+            "--stake-authority",
+            &stake_authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_delegate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    stake_authority: Some(
+                        read_keypair_file(&stake_authority_keypair_file)
+                            .unwrap()
+                            .into()
+                    ),
+                    force: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None,
+                    nonce_account: None,
+                    nonce_authority: None,
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test DelegateStake Subcommand w/ force
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -1145,6 +1262,7 @@ mod tests {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
+                    stake_authority: None,
                     force: true,
                     sign_only: false,
                     signers: None,
@@ -1173,6 +1291,7 @@ mod tests {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
+                    stake_authority: None,
                     force: false,
                     sign_only: false,
                     signers: None,
@@ -1197,6 +1316,7 @@ mod tests {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
+                    stake_authority: None,
                     force: false,
                     sign_only: true,
                     signers: None,
@@ -1226,6 +1346,7 @@ mod tests {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
+                    stake_authority: None,
                     force: false,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1)]),
@@ -1257,6 +1378,7 @@ mod tests {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
+                    stake_authority: None,
                     force: false,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
@@ -1301,6 +1423,35 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
+                    stake_authority: None,
+                    sign_only: false,
+                    signers: None,
+                    blockhash: None,
+                    nonce_account: None,
+                    nonce_authority: None,
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test DeactivateStake Subcommand w/ authority
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &stake_account_string,
+            "--stake-authority",
+            &stake_authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_deactivate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DeactivateStake {
+                    stake_account_pubkey,
+                    stake_authority: Some(
+                        read_keypair_file(&stake_authority_keypair_file)
+                            .unwrap()
+                            .into()
+                    ),
                     sign_only: false,
                     signers: None,
                     blockhash: None,
@@ -1326,6 +1477,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
+                    stake_authority: None,
                     sign_only: false,
                     signers: None,
                     blockhash: Some(blockhash),
@@ -1347,6 +1499,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
+                    stake_authority: None,
                     sign_only: true,
                     signers: None,
                     blockhash: None,
@@ -1373,6 +1526,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
+                    stake_authority: None,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1)]),
                     blockhash: None,
@@ -1401,6 +1555,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
+                    stake_authority: None,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
                     blockhash: None,

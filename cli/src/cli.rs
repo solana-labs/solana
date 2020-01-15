@@ -169,6 +169,7 @@ pub enum CliCommand {
     },
     DeactivateStake {
         stake_account_pubkey: Pubkey,
+        stake_authority: Option<KeypairEq>,
         sign_only: bool,
         signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash: Option<Hash>,
@@ -178,6 +179,7 @@ pub enum CliCommand {
     DelegateStake {
         stake_account_pubkey: Pubkey,
         vote_account_pubkey: Pubkey,
+        stake_authority: Option<KeypairEq>,
         force: bool,
         sign_only: bool,
         signers: Option<Vec<(Pubkey, Signature)>>,
@@ -197,6 +199,7 @@ pub enum CliCommand {
         stake_account_pubkey: Pubkey,
         new_authorized_pubkey: Pubkey,
         stake_authorize: StakeAuthorize,
+        authority: Option<KeypairEq>,
     },
     WithdrawStake {
         stake_account_pubkey: Pubkey,
@@ -1287,6 +1290,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Deactivate stake account
         CliCommand::DeactivateStake {
             stake_account_pubkey,
+            ref stake_authority,
             sign_only,
             ref signers,
             blockhash,
@@ -1296,6 +1300,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             &stake_account_pubkey,
+            stake_authority.as_deref(),
             *sign_only,
             signers,
             *blockhash,
@@ -1305,6 +1310,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::DelegateStake {
             stake_account_pubkey,
             vote_account_pubkey,
+            ref stake_authority,
             force,
             sign_only,
             ref signers,
@@ -1316,6 +1322,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             config,
             &stake_account_pubkey,
             &vote_account_pubkey,
+            stake_authority.as_deref(),
             *force,
             *sign_only,
             signers,
@@ -1347,12 +1354,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             stake_account_pubkey,
             new_authorized_pubkey,
             stake_authorize,
+            ref authority,
         } => process_stake_authorize(
             &rpc_client,
             config,
             &stake_account_pubkey,
             &new_authorized_pubkey,
             *stake_authorize,
+            authority.as_deref(),
         ),
 
         CliCommand::WithdrawStake {
@@ -2614,6 +2623,7 @@ mod tests {
         let stake_pubkey = Pubkey::new_rand();
         config.command = CliCommand::DeactivateStake {
             stake_account_pubkey: stake_pubkey,
+            stake_authority: None,
             sign_only: false,
             signers: None,
             blockhash: None,

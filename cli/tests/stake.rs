@@ -111,6 +111,7 @@ fn test_seed_stake_delegation_and_deactivation() {
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_address,
         vote_account_pubkey: config_vote.keypair.pubkey(),
+        stake_authority: None,
         force: true,
         sign_only: false,
         signers: None,
@@ -123,6 +124,7 @@ fn test_seed_stake_delegation_and_deactivation() {
     // Deactivate stake
     config_validator.command = CliCommand::DeactivateStake {
         stake_account_pubkey: stake_address,
+        stake_authority: None,
         sign_only: false,
         signers: None,
         blockhash: None,
@@ -197,6 +199,7 @@ fn test_stake_delegation_and_deactivation() {
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
+        stake_authority: None,
         force: true,
         sign_only: false,
         signers: None,
@@ -209,6 +212,7 @@ fn test_stake_delegation_and_deactivation() {
     // Deactivate stake
     config_validator.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
+        stake_authority: None,
         sign_only: false,
         signers: None,
         blockhash: None,
@@ -287,6 +291,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
+        stake_authority: None,
         force: true,
         sign_only: true,
         signers: None,
@@ -312,6 +317,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     config_payer.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
+        stake_authority: None,
         force: true,
         sign_only: false,
         signers: Some(signers),
@@ -324,6 +330,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     // Deactivate stake offline
     config_validator.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
+        stake_authority: None,
         sign_only: true,
         signers: None,
         blockhash: None,
@@ -347,6 +354,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     // Deactivate stake online
     config_payer.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
+        stake_authority: None,
         sign_only: false,
         signers: Some(signers),
         blockhash: Some(blockhash_str.parse::<Hash>().unwrap()),
@@ -432,6 +440,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     config.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
         vote_account_pubkey: vote_keypair.pubkey(),
+        stake_authority: None,
         force: true,
         sign_only: false,
         signers: None,
@@ -453,6 +462,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     let config_keypair = Keypair::from_bytes(&config.keypair.to_bytes()).unwrap();
     config.command = CliCommand::DeactivateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
+        stake_authority: None,
         sign_only: false,
         signers: None,
         blockhash: Some(nonce_hash),
