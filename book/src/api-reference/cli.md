@@ -191,7 +191,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -269,7 +269,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -293,7 +293,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -323,7 +323,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -353,7 +353,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -380,7 +380,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -407,7 +407,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -434,7 +434,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -462,7 +462,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -486,7 +486,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -513,7 +513,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -543,7 +543,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -571,7 +571,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>     Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>     Recover a keypair using a seed phrase and optional passphrase
                                              [possible values: keypair]
     -C, --config <PATH>                      Configuration file to use [default:
                                              ~/.config/solana/cli/config.yml]
@@ -601,7 +601,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>     Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>     Recover a keypair using a seed phrase and optional passphrase
                                              [possible values: keypair]
         --authorized-staker <PUBKEY>         Public key of authorized staker (defaults to cli config pubkey)
         --authorized-withdrawer <PUBKEY>     Public key of the authorized withdrawer (defaults to cli config pubkey)
@@ -635,7 +635,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -663,7 +663,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
         --authorized-voter <PUBKEY>         Public key of the authorized voter (defaults to vote account)
         --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to cli config pubkey)
@@ -695,7 +695,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>       Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>       Recover a keypair using a seed phrase and optional passphrase
                                                [possible values: keypair]
         --blockhash <BLOCKHASH>                Use the supplied blockhash
     -C, --config <PATH>                        Configuration file to use [default:
@@ -731,7 +731,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>       Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>       Recover a keypair using a seed phrase and optional passphrase
                                                [possible values: keypair]
         --blockhash <BLOCKHASH>                Use the supplied blockhash
     -C, --config <PATH>                        Configuration file to use [default:
@@ -767,7 +767,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -794,7 +794,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -818,7 +818,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -845,7 +845,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -873,7 +873,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -897,7 +897,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -921,7 +921,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -949,7 +949,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -974,7 +974,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1010,7 +1010,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1040,7 +1040,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>        Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>        Recover a keypair using a seed phrase and optional passphrase
                                                 [possible values: keypair]
         --blockhash <BLOCKHASH>                 Use the supplied blockhash
     -C, --config <PATH>                         Configuration file to use [default:
@@ -1081,7 +1081,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1109,7 +1109,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1137,7 +1137,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1165,7 +1165,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1194,7 +1194,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1219,7 +1219,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1247,7 +1247,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1274,7 +1274,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1299,7 +1299,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1327,7 +1327,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1355,7 +1355,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1379,7 +1379,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1407,7 +1407,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1432,7 +1432,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1459,7 +1459,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1487,7 +1487,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1516,7 +1516,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1544,7 +1544,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1573,7 +1573,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1601,7 +1601,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1629,7 +1629,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1658,7 +1658,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
@@ -1689,7 +1689,7 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
                                             [possible values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
