@@ -2003,7 +2003,7 @@ mod tests {
     use solana_client::{
         mock_rpc_client_request::SIGNATURE,
         rpc_request::RpcRequest,
-        rpc_response::{Response, RpcResponseContext},
+        rpc_response::{Response, RpcAccount, RpcResponseContext},
     };
     use solana_sdk::{
         account::Account,
@@ -2689,12 +2689,14 @@ mod tests {
         let blockhash = Hash::default();
         let nonce_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
-            value: json!(Account::new_data(
-                1,
-                &NonceState::Initialized(NonceMeta::new(&config.keypair.pubkey()), blockhash),
-                &system_program::ID,
-            )
-            .unwrap()),
+            value: json!(RpcAccount::encode(
+                Account::new_data(
+                    1,
+                    &NonceState::Initialized(NonceMeta::new(&config.keypair.pubkey()), blockhash),
+                    &system_program::ID,
+                )
+                .unwrap()
+            )),
         });
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetAccountInfo, nonce_response);
@@ -2715,12 +2717,14 @@ mod tests {
         let blockhash = Hash::default();
         let nonce_authority_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
-            value: json!(Account::new_data(
-                1,
-                &NonceState::Initialized(NonceMeta::new(&bob_pubkey), blockhash),
-                &system_program::ID,
-            )
-            .unwrap()),
+            value: json!(RpcAccount::encode(
+                Account::new_data(
+                    1,
+                    &NonceState::Initialized(NonceMeta::new(&bob_pubkey), blockhash),
+                    &system_program::ID,
+                )
+                .unwrap()
+            )),
         });
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetAccountInfo, nonce_authority_response);

@@ -4,7 +4,7 @@ use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{typed::Sink, SubscriptionId};
 use serde::Serialize;
-use solana_client::rpc_response::RpcKeyedAccount;
+use solana_client::rpc_response::{RpcAccount, RpcKeyedAccount};
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -26,7 +26,7 @@ pub struct SlotInfo {
 }
 
 type RpcAccountSubscriptions =
-    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Account>, Confirmations)>>>;
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<RpcAccount>, Confirmations)>>>;
 type RpcProgramSubscriptions =
     RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<RpcKeyedAccount>, Confirmations)>>>;
 type RpcSignatureSubscriptions = RwLock<
@@ -130,13 +130,10 @@ fn check_confirmations_and_notify<K, S, F, N, X>(
     }
 }
 
-fn notify_account<S>(result: Option<(S, Slot)>, sink: &Sink<S>, root: Slot)
-where
-    S: Clone + Serialize,
-{
+fn notify_account(result: Option<(Account, Slot)>, sink: &Sink<RpcAccount>, root: Slot) {
     if let Some((account, fork)) = result {
         if fork >= root {
-            sink.notify(Ok(account)).wait().unwrap();
+            sink.notify(Ok(RpcAccount::encode(account))).wait().unwrap();
         }
     }
 }
@@ -154,7 +151,7 @@ fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<RpcKeyedAccount>
     for (pubkey, account) in accounts.iter() {
         sink.notify(Ok(RpcKeyedAccount {
             pubkey: pubkey.to_string(),
-            account: account.clone(),
+            account: RpcAccount::encode(account.clone()),
         }))
         .wait()
         .unwrap();
@@ -237,7 +234,7 @@ impl RpcSubscriptions {
         pubkey: &Pubkey,
         confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
-        sink: &Sink<Account>,
+        sink: &Sink<RpcAccount>,
     ) {
         let mut subscriptions = self.account_subscriptions.write().unwrap();
         add_subscription(&mut subscriptions, pubkey, confirmations, sub_id, sink);
@@ -384,7 +381,7 @@ mod tests {
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected = format!(
-                r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"executable":false,"lamports":1,"owner":[2,203,81,223,225,24,34,35,203,214,138,130,144,208,35,77,63,16,87,51,47,198,115,123,98,188,19,160,0,0,0,0],"rentEpoch":1}},"subscription":0}}}}"#
+                r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"data":"1111111111111111","executable":false,"lamports":1,"owner":"Budget1111111111111111111111111111111111111","rentEpoch":1}},"subscription":0}}}}"#
             );
             assert_eq!(expected, response);
         }
@@ -441,7 +438,7 @@ mod tests {
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected = format!(
-                r#"{{"jsonrpc":"2.0","method":"programNotification","params":{{"result":{{"account":{{"data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"executable":false,"lamports":1,"owner":[2,203,81,223,225,24,34,35,203,214,138,130,144,208,35,77,63,16,87,51,47,198,115,123,98,188,19,160,0,0,0,0],"rentEpoch":1}},"pubkey":"{:?}"}},"subscription":0}}}}"#,
+                r#"{{"jsonrpc":"2.0","method":"programNotification","params":{{"result":{{"account":{{"data":"1111111111111111","executable":false,"lamports":1,"owner":"Budget1111111111111111111111111111111111111","rentEpoch":1}},"pubkey":"{:?}"}},"subscription":0}}}}"#,
                 alice.pubkey()
             );
             assert_eq!(expected, response);
