@@ -89,11 +89,8 @@ pub fn create_and_add_stakes(
         genesis_config.ticks_per_slot,
     );
 
-    let mut address_generator = AddressGenerator::new(
-        &authorized.staker,
-        staker_info.name,
-        &solana_stake_program::id(),
-    );
+    let mut address_generator =
+        AddressGenerator::new(&authorized.staker, &solana_stake_program::id());
 
     let stake_rent_reserve = StakeState::get_rent_exempt_reserve(&genesis_config.rent);
 
