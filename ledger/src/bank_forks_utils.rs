@@ -2,6 +2,7 @@ use crate::{
     bank_forks::{BankForks, SnapshotConfig},
     blockstore::Blockstore,
     blockstore_processor::{self, BankForksInfo, BlockstoreProcessorError, ProcessOptions},
+    entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_utils,
 };
@@ -47,6 +48,7 @@ pub fn load(
                 blockstore,
                 Arc::new(deserialized_bank),
                 &process_options,
+                &VerifyRecyclers::default(),
             );
         } else {
             info!("Snapshot package does not exist: {:?}", tar);

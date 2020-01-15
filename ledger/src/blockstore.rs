@@ -1474,7 +1474,7 @@ impl Blockstore {
         &self,
         slot: Slot,
         start_index: u64,
-    ) -> Result<(Vec<Entry>, usize, bool)> {
+    ) -> Result<(Vec<Entry>, u64, bool)> {
         if self.is_dead(slot) {
             return Err(BlockstoreError::DeadSlot);
         }
@@ -1497,7 +1497,7 @@ impl Blockstore {
         let num_shreds = completed_ranges
             .last()
             .map(|(_, end_index)| u64::from(*end_index) - start_index + 1)
-            .unwrap_or(0) as usize;
+            .unwrap_or(0);
 
         let entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {

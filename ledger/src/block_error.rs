@@ -2,6 +2,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum BlockError {
+    /// Block did not have enough ticks or was not marked full
+    #[error("incomplete block")]
+    Incomplete,
+
     /// Block entries hashes must all be valid
     #[error("invalid entry hash")]
     InvalidEntryHash,
