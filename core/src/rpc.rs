@@ -12,10 +12,10 @@ use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_response::{
-    Response, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
-    RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
-    RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
-    RpcVoteAccountStatus,
+    Response, RpcAccount, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock,
+    RpcContactInfo, RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext,
+    RpcSignatureConfirmation, RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo,
+    RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -23,7 +23,6 @@ use solana_ledger::{
 };
 use solana_runtime::bank::Bank;
 use solana_sdk::{
-    account::Account,
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_schedule::EpochSchedule,
@@ -112,10 +111,10 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: Result<Pubkey>,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<Account>> {
+    ) -> RpcResponse<Option<RpcAccount>> {
         let bank = &*self.bank(commitment);
         match pubkey {
-            Ok(key) => new_response(bank, bank.get_account(&key)),
+            Ok(key) => new_response(bank, bank.get_account(&key).map(RpcAccount::encode)),
             Err(e) => Err(e),
         }
     }
@@ -141,7 +140,7 @@ impl JsonRpcRequestProcessor {
             .into_iter()
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account,
+                account: RpcAccount::encode(account),
             })
             .collect())
     }
@@ -412,7 +411,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<Account>>;
+    ) -> RpcResponse<Option<RpcAccount>>;
 
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(
@@ -618,7 +617,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<Account>> {
+    ) -> RpcResponse<Option<RpcAccount>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str);
         meta.request_processor
@@ -1547,9 +1546,9 @@ pub mod tests {
             "result": {
                 "context":{"slot":0},
                 "value":{
-                "owner": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "owner": "11111111111111111111111111111111",
                 "lamports": 20,
-                "data": [],
+                "data": "",
                 "executable": false,
                 "rentEpoch": 0
             },
@@ -1589,9 +1588,9 @@ pub mod tests {
                     {{
                         "pubkey": "{}",
                         "account": {{
-                            "owner": {:?},
+                            "owner": "{}",
                             "lamports": 20,
-                            "data": [],
+                            "data": "",
                             "executable": false,
                             "rentEpoch": 0
                         }}
@@ -1600,7 +1599,7 @@ pub mod tests {
                 "id":1}}
             "#,
             bob.pubkey(),
-            new_program_id.as_ref()
+            new_program_id
         );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");

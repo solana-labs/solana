@@ -4,8 +4,8 @@ use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
-use solana_client::rpc_response::RpcKeyedAccount;
-use solana_sdk::{account::Account, pubkey::Pubkey, signature::Signature, transaction};
+use solana_client::rpc_response::{RpcAccount, RpcKeyedAccount};
+use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction};
 use std::sync::{atomic, Arc};
 
 // Suppress needless_return due to
@@ -26,7 +26,7 @@ pub trait RpcSolPubSub {
     fn account_subscribe(
         &self,
         meta: Self::Metadata,
-        subscriber: Subscriber<Account>,
+        subscriber: Subscriber<RpcAccount>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     );
@@ -133,7 +133,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn account_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<Account>,
+        subscriber: Subscriber<RpcAccount>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     ) {
@@ -467,9 +467,9 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "owner": budget_program_id,
+                   "owner": budget_program_id.to_string(),
                    "lamports": 51,
-                   "data": expected_data,
+                   "data": bs58::encode(expected_data).into_string(),
                    "executable": false,
                    "rentEpoch": 1,
                },
@@ -614,9 +614,9 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "owner": system_program::id(),
+                   "owner": system_program::id().to_string(),
                    "lamports": 100,
-                   "data": [],
+                   "data": "",
                    "executable": false,
                    "rentEpoch": 1,
                },
