@@ -12,10 +12,10 @@ use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_response::{
-    Response, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
-    RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
-    RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
-    RpcVoteAccountStatus,
+    Response, RpcAccount, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock,
+    RpcContactInfo, RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext,
+    RpcSignatureConfirmation, RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo,
+    RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -23,7 +23,6 @@ use solana_ledger::{
 };
 use solana_runtime::bank::Bank;
 use solana_sdk::{
-    account::Account,
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_schedule::EpochSchedule,
@@ -112,10 +111,10 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkey: Result<Pubkey>,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<Account>> {
+    ) -> RpcResponse<Option<RpcAccount>> {
         let bank = &*self.bank(commitment);
         match pubkey {
-            Ok(key) => new_response(bank, bank.get_account(&key)),
+            Ok(key) => new_response(bank, bank.get_account(&key).map(RpcAccount::encode)),
             Err(e) => Err(e),
         }
     }
@@ -141,7 +140,7 @@ impl JsonRpcRequestProcessor {
             .into_iter()
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account,
+                account: RpcAccount::encode(account),
             })
             .collect())
     }
@@ -307,10 +306,14 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank(commitment).slots_per_segment())
     }
 
-    fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<Pubkey>> {
-        Ok(self
+    fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<String>> {
+        let pubkeys: Vec<String> = self
             .storage_state
-            .get_pubkeys_for_slot(slot, &self.bank_forks))
+            .get_pubkeys_for_slot(slot, &self.bank_forks)
+            .iter()
+            .map(|pubkey| pubkey.to_string())
+            .collect();
+        Ok(pubkeys)
     }
 
     pub fn validator_exit(&self) -> Result<bool> {
@@ -412,7 +415,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<Account>>;
+    ) -> RpcResponse<Option<RpcAccount>>;
 
     #[rpc(meta, name = "getProgramAccounts")]
     fn get_program_accounts(
@@ -548,7 +551,7 @@ pub trait RpcSol {
     ) -> Result<u64>;
 
     #[rpc(meta, name = "getStoragePubkeysForSlot")]
-    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<Pubkey>>;
+    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<String>>;
 
     #[rpc(meta, name = "validatorExit")]
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool>;
@@ -618,7 +621,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         pubkey_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<Option<Account>> {
+    ) -> RpcResponse<Option<RpcAccount>> {
         debug!("get_account_info rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str);
         meta.request_processor
@@ -1024,7 +1027,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         slot: Slot,
-    ) -> Result<Vec<Pubkey>> {
+    ) -> Result<Vec<String>> {
         meta.request_processor
             .read()
             .unwrap()
@@ -1547,9 +1550,9 @@ pub mod tests {
             "result": {
                 "context":{"slot":0},
                 "value":{
-                "owner": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "owner": "11111111111111111111111111111111",
                 "lamports": 20,
-                "data": [],
+                "data": "",
                 "executable": false,
                 "rentEpoch": 0
             },
@@ -1589,9 +1592,9 @@ pub mod tests {
                     {{
                         "pubkey": "{}",
                         "account": {{
-                            "owner": {:?},
+                            "owner": "{}",
                             "lamports": 20,
-                            "data": [],
+                            "data": "",
                             "executable": false,
                             "rentEpoch": 0
                         }}
@@ -1600,7 +1603,7 @@ pub mod tests {
                 "id":1}}
             "#,
             bob.pubkey(),
-            new_program_id.as_ref()
+            new_program_id
         );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");

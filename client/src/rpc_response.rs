@@ -1,3 +1,4 @@
+use crate::rpc_request::RpcError;
 use bincode::serialize;
 use jsonrpc_core::Result as JsonResult;
 use solana_sdk::{
@@ -5,9 +6,10 @@ use solana_sdk::{
     clock::{Epoch, Slot},
     fee_calculator::FeeCalculator,
     message::MessageHeader,
+    pubkey::Pubkey,
     transaction::{Result, Transaction},
 };
-use std::{collections::HashMap, io, net::SocketAddr};
+use std::{collections::HashMap, io, net::SocketAddr, str::FromStr};
 
 pub type RpcResponseIn<T> = JsonResult<Response<T>>;
 pub type RpcResponse<T> = io::Result<Response<T>>;
@@ -145,7 +147,45 @@ pub struct RpcBlockhashFeeCalculator {
 #[serde(rename_all = "camelCase")]
 pub struct RpcKeyedAccount {
     pub pubkey: String,
-    pub account: Account,
+    pub account: RpcAccount,
+}
+
+/// A duplicate representation of a Message for pretty JSON serialization
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcAccount {
+    pub lamports: u64,
+    pub data: String,
+    pub owner: String,
+    pub executable: bool,
+    pub rent_epoch: Epoch,
+}
+
+impl RpcAccount {
+    pub fn encode(account: Account) -> Self {
+        RpcAccount {
+            lamports: account.lamports,
+            data: bs58::encode(account.data.clone()).into_string(),
+            owner: account.owner.to_string(),
+            executable: account.executable,
+            rent_epoch: account.rent_epoch,
+        }
+    }
+
+    pub fn decode(&self) -> std::result::Result<Account, RpcError> {
+        Ok(Account {
+            lamports: self.lamports,
+            data: bs58::decode(self.data.clone()).into_vec().map_err(|_| {
+                RpcError::RpcRequestError("Could not parse encoded account data".to_string())
+            })?,
+            owner: Pubkey::from_str(&self.owner).map_err(|_| {
+                RpcError::RpcRequestError("Could not parse encoded account owner".to_string())
+            })?,
+            executable: self.executable,
+            rent_epoch: self.rent_epoch,
+            ..Account::default()
+        })
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
