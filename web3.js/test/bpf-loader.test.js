@@ -28,7 +28,7 @@ test('load BPF C program', async () => {
   const data = await fs.readFile('test/fixtures/noop-c/noop.so');
 
   const connection = new Connection(url, 'recent');
-  const [, feeCalculator] = await connection.getRecentBlockhash();
+  const {feeCalculator} = await connection.getRecentBlockhash();
   const fees =
     feeCalculator.lamportsPerSignature *
     (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);
@@ -56,7 +56,7 @@ test('load BPF Rust program', async () => {
   );
 
   const connection = new Connection(url, 'recent');
-  const [, feeCalculator] = await connection.getRecentBlockhash();
+  const {feeCalculator} = await connection.getRecentBlockhash();
   const fees =
     feeCalculator.lamportsPerSignature *
     (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);

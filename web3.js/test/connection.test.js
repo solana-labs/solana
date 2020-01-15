@@ -65,7 +65,7 @@ test('get program accounts', async () => {
   transaction = SystemProgram.assign(account1.publicKey, programId.publicKey);
   await sendAndConfirmTransaction(connection, transaction, account1);
 
-  const [, feeCalculator] = await connection.getRecentBlockhash();
+  const {feeCalculator} = await connection.getRecentBlockhash();
 
   const programAccounts = await connection.getProgramAccounts(
     programId.publicKey,
@@ -76,13 +76,13 @@ test('get program accounts', async () => {
     expect([
       account0.publicKey.toBase58(),
       account1.publicKey.toBase58(),
-    ]).toEqual(expect.arrayContaining([element[0]]));
-    if (element[0] == account0.publicKey) {
-      expect(element[1].lamports).toBe(
+    ]).toEqual(expect.arrayContaining([element.pubkey]));
+    if (element.pubkey == account0.publicKey) {
+      expect(element.account.lamports).toBe(
         LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
       );
     } else {
-      expect(element[1].lamports).toBe(
+      expect(element.account.lamports).toBe(
         0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
       );
     }
@@ -149,7 +149,7 @@ test('get inflation', async () => {
       error: null,
       result: {
         foundation: 0.05,
-        foundation_term: 7.0,
+        foundationTerm: 7.0,
         initial: 0.15,
         storage: 0.1,
         taper: 0.15,
@@ -165,7 +165,7 @@ test('get inflation', async () => {
     'terminal',
     'taper',
     'foundation',
-    'foundation_term',
+    'foundationTerm',
     'storage',
   ]) {
     expect(inflation).toHaveProperty(key);
@@ -213,10 +213,10 @@ test('get epoch schedule', async () => {
     {
       error: null,
       result: {
-        first_normal_epoch: 8,
-        first_normal_slot: 8160,
-        leader_schedule_slot_offset: 8192,
-        slots_per_epoch: 8192,
+        firstNormalEpoch: 8,
+        firstNormalSlot: 8160,
+        leaderScheduleSlotOffset: 8192,
+        slotsPerEpoch: 8192,
         warmup: true,
       },
     },
@@ -225,10 +225,10 @@ test('get epoch schedule', async () => {
   const epochSchedule = await connection.getEpochSchedule();
 
   for (const key of [
-    'first_normal_epoch',
-    'first_normal_slot',
-    'leader_schedule_slot_offset',
-    'slots_per_epoch',
+    'firstNormalEpoch',
+    'firstNormalSlot',
+    'leaderScheduleSlotOffset',
+    'slotsPerEpoch',
   ]) {
     expect(epochSchedule).toHaveProperty(key);
     expect(epochSchedule[key]).toBeGreaterThan(0);
@@ -449,6 +449,7 @@ test('get confirmed block', async () => {
       expect(block1.previousBlockhash).toBe(blockhash0);
       expect(block1.blockhash).not.toBeNull();
       expect(block1.parentSlot).toBe(0);
+      expect(block1.transactions[0].transaction).not.toBeNull();
       break;
     }
     x++;
@@ -460,11 +461,8 @@ test('get recent blockhash', async () => {
 
   mockGetRecentBlockhash();
 
-  const [
-    recentBlockhash,
-    feeCalculator,
-  ] = await connection.getRecentBlockhash();
-  expect(recentBlockhash.length).toBeGreaterThanOrEqual(43);
+  const {blockhash, feeCalculator} = await connection.getRecentBlockhash();
+  expect(blockhash.length).toBeGreaterThanOrEqual(43);
   expect(feeCalculator.lamportsPerSignature).toBeGreaterThanOrEqual(0);
 });
 
@@ -572,42 +570,9 @@ test('request airdrop', async () => {
           slot: 11,
         },
         value: {
-          owner: [
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-          ],
+          owner: '11111111111111111111111111111111',
           lamports: minimumAmount + 42,
-          data: [],
+          data: '',
           executable: false,
         },
       },

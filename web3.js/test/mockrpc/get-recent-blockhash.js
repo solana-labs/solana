@@ -24,9 +24,9 @@ export function mockGetRecentBlockhash(commitment: ?Commitment) {
         context: {
           slot: 11,
         },
-        value: [
-          recentBlockhash.publicKey.toBase58(),
-          {
+        value: {
+          blockhash: recentBlockhash.publicKey.toBase58(),
+          feeCalculator: {
             lamportsPerSignature: 42,
             burnPercent: 50,
             maxLamportsPerSignature: 42,
@@ -34,7 +34,7 @@ export function mockGetRecentBlockhash(commitment: ?Commitment) {
             targetLamportsPerSignature: 42,
             targetSignaturesPerSlot: 42,
           },
-        ],
+        },
       },
     },
   ]);
