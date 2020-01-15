@@ -306,10 +306,14 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank(commitment).slots_per_segment())
     }
 
-    fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<Pubkey>> {
-        Ok(self
+    fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<String>> {
+        let pubkeys: Vec<String> = self
             .storage_state
-            .get_pubkeys_for_slot(slot, &self.bank_forks))
+            .get_pubkeys_for_slot(slot, &self.bank_forks)
+            .iter()
+            .map(|pubkey| pubkey.to_string())
+            .collect();
+        Ok(pubkeys)
     }
 
     pub fn validator_exit(&self) -> Result<bool> {
@@ -547,7 +551,7 @@ pub trait RpcSol {
     ) -> Result<u64>;
 
     #[rpc(meta, name = "getStoragePubkeysForSlot")]
-    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<Pubkey>>;
+    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<String>>;
 
     #[rpc(meta, name = "validatorExit")]
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool>;
@@ -1023,7 +1027,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         slot: Slot,
-    ) -> Result<Vec<Pubkey>> {
+    ) -> Result<Vec<String>> {
         meta.request_processor
             .read()
             .unwrap()
