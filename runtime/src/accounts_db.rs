@@ -958,7 +958,7 @@ impl AccountsDB {
             let storage = self.find_storage_candidate(slot_id);
             let rvs = storage
                 .accounts
-                .append_accounts(&with_meta[infos.len()..], &hashes);
+                .append_accounts(&with_meta[infos.len()..], &hashes[infos.len()..]);
             if rvs.is_empty() {
                 storage.set_status(AccountStorageStatus::Full);
 
@@ -2378,5 +2378,41 @@ pub mod tests {
             db.verify_bank_hash(some_slot, &ancestors),
             Err(MismatchedAccountHash)
         );
+    }
+
+    #[test]
+    fn test_bad_bank_hash() {
+        use solana_sdk::signature::{Keypair, KeypairUtil};
+        let db = AccountsDB::new(Vec::new());
+
+        let some_slot: Slot = 0;
+        let ancestors = vec![(some_slot, 0)].into_iter().collect();
+
+        for _ in 0..10_000 {
+            let num_accounts = thread_rng().gen_range(0, 100);
+            let accounts_keys: Vec<_> = (0..num_accounts)
+                .into_iter()
+                .map(|_| {
+                    let key = Keypair::new().pubkey();
+                    let lamports = thread_rng().gen_range(0, 100);
+                    let some_data_len = thread_rng().gen_range(0, 1000);
+                    let account = Account::new(lamports, some_data_len, &key);
+                    (key, account)
+                })
+                .collect();
+            let account_refs: Vec<_> = accounts_keys
+                .iter()
+                .map(|(key, account)| (key, account))
+                .collect();
+            db.store(some_slot, &account_refs);
+
+            for (key, account) in &accounts_keys {
+                let loaded_account = db.load_slow(&ancestors, key).unwrap().0;
+                assert_eq!(
+                    loaded_account.hash,
+                    AccountsDB::hash_account(some_slot, &account, &key)
+                );
+            }
+        }
     }
 }
