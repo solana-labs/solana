@@ -1020,7 +1020,7 @@ mod tests {
     };
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
-    use solana_client::rpc_request::RpcEncodedTransaction;
+    use solana_client::rpc_response::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
         entry::{next_entry, Entry, EntrySlice},
@@ -1978,20 +1978,22 @@ mod tests {
             let confirmed_block = blockstore.get_confirmed_block(bank.slot(), None).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
-            for (transaction, result) in confirmed_block.transactions.into_iter() {
+            for RpcTransactionWithStatusMeta { transaction, meta } in
+                confirmed_block.transactions.into_iter()
+            {
                 if let RpcEncodedTransaction::Json(transaction) = transaction {
                     if transaction.signatures[0] == success_signature.to_string() {
-                        assert_eq!(result.unwrap().status, Ok(()));
+                        assert_eq!(meta.unwrap().status, Ok(()));
                     } else if transaction.signatures[0] == ix_error_signature.to_string() {
                         assert_eq!(
-                            result.unwrap().status,
+                            meta.unwrap().status,
                             Err(TransactionError::InstructionError(
                                 0,
                                 InstructionError::CustomError(1)
                             ))
                         );
                     } else {
-                        assert_eq!(result, None);
+                        assert_eq!(meta, None);
                     }
                 }
             }

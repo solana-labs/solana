@@ -1,5 +1,5 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError};
-use solana_client::rpc_request::RpcTransactionStatus;
+use solana_client::rpc_response::RpcTransactionStatus;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
 use solana_runtime::bank::{Bank, HashAgeKind};
 use std::{

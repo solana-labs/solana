@@ -13,6 +13,7 @@ pub const MINIMUM_SLOTS_PER_EPOCH: u64 = 32;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EpochSchedule {
     /// The maximum number of slots in each epoch.
     pub slots_per_epoch: u64,

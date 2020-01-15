@@ -21,8 +21,9 @@ use rayon::{
     ThreadPool,
 };
 use rocksdb::DBRawIterator;
-use solana_client::rpc_request::{
+use solana_client::rpc_response::{
     RpcConfirmedBlock, RpcEncodedTransaction, RpcTransactionEncoding, RpcTransactionStatus,
+    RpcTransactionWithStatusMeta,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
@@ -1403,18 +1404,19 @@ impl Blockstore {
         slot: Slot,
         encoding: RpcTransactionEncoding,
         iterator: impl Iterator<Item = Transaction> + 'a,
-    ) -> Vec<(RpcEncodedTransaction, Option<RpcTransactionStatus>)> {
+    ) -> Vec<RpcTransactionWithStatusMeta> {
         iterator
             .map(|transaction| {
                 let signature = transaction.signatures[0];
                 let encoded_transaction =
                     RpcEncodedTransaction::encode(transaction, encoding.clone());
-                (
-                    encoded_transaction,
-                    self.transaction_status_cf
+                RpcTransactionWithStatusMeta {
+                    transaction: encoded_transaction,
+                    meta: self
+                        .transaction_status_cf
                         .get((slot, signature))
                         .expect("Expect database get to succeed"),
-                )
+                }
             })
             .collect()
     }
@@ -4748,11 +4750,9 @@ pub mod tests {
             transactions: expected_transactions
                 .iter()
                 .cloned()
-                .map(|(tx, status)| {
-                    (
-                        RpcEncodedTransaction::encode(tx, RpcTransactionEncoding::Json),
-                        status,
-                    )
+                .map(|(tx, meta)| RpcTransactionWithStatusMeta {
+                    transaction: RpcEncodedTransaction::encode(tx, RpcTransactionEncoding::Json),
+                    meta,
                 })
                 .collect(),
             parent_slot: slot - 1,
@@ -4770,11 +4770,9 @@ pub mod tests {
             transactions: expected_transactions
                 .iter()
                 .cloned()
-                .map(|(tx, status)| {
-                    (
-                        RpcEncodedTransaction::encode(tx, RpcTransactionEncoding::Json),
-                        status,
-                    )
+                .map(|(tx, meta)| RpcTransactionWithStatusMeta {
+                    transaction: RpcEncodedTransaction::encode(tx, RpcTransactionEncoding::Json),
+                    meta,
                 })
                 .collect(),
             parent_slot: slot,
@@ -5007,9 +5005,9 @@ pub mod tests {
             );
             assert_eq!(map.len(), 5);
             for x in 0..4 {
-                assert_eq!(map[x].1.as_ref().unwrap().fee, x as u64);
+                assert_eq!(map[x].meta.as_ref().unwrap().fee, x as u64);
             }
-            assert_eq!(map[4].1.as_ref(), None);
+            assert_eq!(map[4].meta, None);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }

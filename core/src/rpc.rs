@@ -11,9 +11,10 @@ use crate::{
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_client::rpc_request::{
-    Response, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo, RpcLeaderSchedule,
-    RpcResponseContext, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
+use solana_client::rpc_response::{
+    Response, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
+    RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
+    RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
     RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -26,7 +27,6 @@ use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_schedule::EpochSchedule,
-    fee_calculator::FeeCalculator,
     hash::Hash,
     inflation::Inflation,
     pubkey::Pubkey,
@@ -134,12 +134,15 @@ impl JsonRpcRequestProcessor {
         &self,
         program_id: &Pubkey,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<(String, Account)>> {
+    ) -> Result<Vec<RpcKeyedAccount>> {
         Ok(self
             .bank(commitment)
             .get_program_accounts(&program_id)
             .into_iter()
-            .map(|(pubkey, account)| (pubkey.to_string(), account))
+            .map(|(pubkey, account)| RpcKeyedAccount {
+                pubkey: pubkey.to_string(),
+                account,
+            })
             .collect())
     }
 
@@ -168,10 +171,16 @@ impl JsonRpcRequestProcessor {
     fn get_recent_blockhash(
         &self,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<(String, FeeCalculator)> {
+    ) -> RpcResponse<RpcBlockhashFeeCalculator> {
         let bank = &*self.bank(commitment);
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
-        new_response(bank, (blockhash.to_string(), fee_calculator))
+        new_response(
+            bank,
+            RpcBlockhashFeeCalculator {
+                blockhash: blockhash.to_string(),
+                fee_calculator,
+            },
+        )
     }
 
     pub fn confirm_transaction(
@@ -192,21 +201,25 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    fn get_block_commitment(&self, block: Slot) -> (Option<BlockCommitment>, u64) {
+    fn get_block_commitment(&self, block: Slot) -> RpcBlockCommitment<BlockCommitment> {
         let r_block_commitment = self.block_commitment_cache.read().unwrap();
-        (
-            r_block_commitment.get_block_commitment(block).cloned(),
-            r_block_commitment.total_stake(),
-        )
+        RpcBlockCommitment {
+            commitment: r_block_commitment.get_block_commitment(block).cloned(),
+            total_stake: r_block_commitment.total_stake(),
+        }
     }
 
     pub fn get_signature_confirmation_status(
         &self,
         signature: Signature,
         commitment: Option<CommitmentConfig>,
-    ) -> Option<(usize, transaction::Result<()>)> {
+    ) -> Option<RpcSignatureConfirmation> {
         self.bank(commitment)
             .get_signature_confirmation_status(&signature)
+            .map(|(confirmations, status)| RpcSignatureConfirmation {
+                confirmations,
+                status,
+            })
     }
 
     fn get_slot(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -283,11 +296,11 @@ impl JsonRpcRequestProcessor {
         Ok(self.storage_state.get_storage_turn_rate())
     }
 
-    fn get_storage_turn(&self) -> Result<(String, u64)> {
-        Ok((
-            self.storage_state.get_storage_blockhash().to_string(),
-            self.storage_state.get_slot(),
-        ))
+    fn get_storage_turn(&self) -> Result<RpcStorageTurn> {
+        Ok(RpcStorageTurn {
+            blockhash: self.storage_state.get_storage_blockhash().to_string(),
+            slot: self.storage_state.get_slot(),
+        })
     }
 
     fn get_slots_per_segment(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -407,7 +420,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         program_id_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<(String, Account)>>;
+    ) -> Result<Vec<RpcKeyedAccount>>;
 
     #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
     fn get_minimum_balance_for_rent_exemption(
@@ -450,7 +463,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         block: Slot,
-    ) -> Result<(Option<BlockCommitment>, u64)>;
+    ) -> Result<RpcBlockCommitment<BlockCommitment>>;
 
     #[rpc(meta, name = "getGenesisHash")]
     fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
@@ -468,7 +481,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<(String, FeeCalculator)>;
+    ) -> RpcResponse<RpcBlockhashFeeCalculator>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
@@ -525,7 +538,7 @@ pub trait RpcSol {
     fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64>;
 
     #[rpc(meta, name = "getStorageTurn")]
-    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<(String, u64)>;
+    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<RpcStorageTurn>;
 
     #[rpc(meta, name = "getSlotsPerSegment")]
     fn get_slots_per_segment(
@@ -554,7 +567,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<(usize, transaction::Result<()>)>>;
+    ) -> Result<Option<RpcSignatureConfirmation>>;
 
     #[rpc(meta, name = "getVersion")]
     fn get_version(&self, meta: Self::Metadata) -> Result<RpcVersionInfo>;
@@ -635,7 +648,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         program_id_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<(String, Account)>> {
+    ) -> Result<Vec<RpcKeyedAccount>> {
         debug!(
             "get_program_accounts rpc request received: {:?}",
             program_id_str
@@ -734,7 +747,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         block: Slot,
-    ) -> Result<(Option<BlockCommitment>, u64)> {
+    ) -> Result<RpcBlockCommitment<BlockCommitment>> {
         Ok(meta
             .request_processor
             .read()
@@ -778,7 +791,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<(String, FeeCalculator)> {
+    ) -> RpcResponse<RpcBlockhashFeeCalculator> {
         debug!("get_recent_blockhash rpc request received");
         meta.request_processor
             .read()
@@ -793,7 +806,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<transaction::Result<()>>> {
         self.get_signature_confirmation(meta, signature_str, commitment)
-            .map(|res| res.map(|x| x.1))
+            .map(|res| res.map(|x| x.status))
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -807,7 +820,7 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<usize>> {
         self.get_signature_confirmation(meta, signature_str, commitment)
-            .map(|res| res.map(|x| x.0))
+            .map(|res| res.map(|x| x.confirmations))
     }
 
     fn get_signature_confirmation(
@@ -815,7 +828,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<(usize, transaction::Result<()>)>> {
+    ) -> Result<Option<RpcSignatureConfirmation>> {
         debug!(
             "get_signature_confirmation rpc request received: {:?}",
             signature_str
@@ -915,7 +928,7 @@ impl RpcSol for RpcSolImpl {
                 .read()
                 .unwrap()
                 .get_signature_confirmation_status(signature, commitment.clone())
-                .map(|x| x.1);
+                .map(|x| x.status);
 
             if signature_status == Some(Ok(())) {
                 info!("airdrop signature ok");
@@ -992,7 +1005,7 @@ impl RpcSol for RpcSolImpl {
             .get_storage_turn_rate()
     }
 
-    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<(String, u64)> {
+    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<RpcStorageTurn> {
         meta.request_processor.read().unwrap().get_storage_turn()
     }
 
@@ -1072,7 +1085,7 @@ pub mod tests {
     };
     use bincode::deserialize;
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
-    use solana_client::rpc_request::RpcEncodedTransaction;
+    use solana_client::rpc_response::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
         blockstore::entries_to_test_shreds, blockstore_processor::fill_blockstore_slot_with_ticks,
         entry::next_entry_mut, get_tmp_ledger_path,
@@ -1538,7 +1551,7 @@ pub mod tests {
                 "lamports": 20,
                 "data": [],
                 "executable": false,
-                "rent_epoch": 0
+                "rentEpoch": 0
             },
                 },
             "id": 1,
@@ -1572,13 +1585,18 @@ pub mod tests {
         let expected = format!(
             r#"{{
                 "jsonrpc":"2.0",
-                "result":[["{}", {{
-                    "owner": {:?},
-                    "lamports": 20,
-                    "data": [],
-                    "executable": false,
-                    "rent_epoch": 0
-                }}]],
+                "result":[
+                    {{
+                        "pubkey": "{}",
+                        "account": {{
+                            "owner": {:?},
+                            "lamports": 20,
+                            "data": [],
+                            "executable": false,
+                            "rentEpoch": 0
+                        }}
+                    }}
+                ],
                 "id":1}}
             "#,
             bob.pubkey(),
@@ -1709,14 +1727,17 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
             "context":{"slot":0},
-            "value":[ blockhash.to_string(), {
-                "burnPercent": DEFAULT_BURN_PERCENT,
-                "lamportsPerSignature": 0,
-                "maxLamportsPerSignature": 0,
-                "minLamportsPerSignature": 0,
-                "targetLamportsPerSignature": 0,
-                "targetSignaturesPerSlot": 0
-            }]},
+            "value":{
+                "blockhash": blockhash.to_string(),
+                "feeCalculator": {
+                    "burnPercent": DEFAULT_BURN_PERCENT,
+                    "lamportsPerSignature": 0,
+                    "maxLamportsPerSignature": 0,
+                    "minLamportsPerSignature": 0,
+                    "targetLamportsPerSignature": 0,
+                    "targetSignaturesPerSlot": 0
+                }
+            }},
             "id": 1
         });
         let expected: Response =
@@ -1941,13 +1962,25 @@ pub mod tests {
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
-            (Some(commitment_slot0), 42)
+            RpcBlockCommitment {
+                commitment: Some(commitment_slot0),
+                total_stake: 42,
+            }
         );
         assert_eq!(
             request_processor.get_block_commitment(1),
-            (Some(commitment_slot1), 42)
+            RpcBlockCommitment {
+                commitment: Some(commitment_slot1),
+                total_stake: 42,
+            }
         );
-        assert_eq!(request_processor.get_block_commitment(2), (None, 42));
+        assert_eq!(
+            request_processor.get_block_commitment(2),
+            RpcBlockCommitment {
+                commitment: None,
+                total_stake: 42,
+            }
+        );
     }
 
     #[test]
@@ -1965,16 +1998,18 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let (commitment, total_staked): (Option<BlockCommitment>, u64) =
-            if let Response::Single(res) = result {
-                if let Output::Success(res) = res {
-                    serde_json::from_value(res.result).unwrap()
-                } else {
-                    panic!("Expected success");
-                }
+        let RpcBlockCommitment {
+            commitment,
+            total_stake,
+        } = if let Response::Single(res) = result {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
             } else {
-                panic!("Expected single response");
-            };
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
         assert_eq!(
             commitment,
             block_commitment_cache
@@ -1983,14 +2018,14 @@ pub mod tests {
                 .get_block_commitment(0)
                 .cloned()
         );
-        assert_eq!(total_staked, 42);
+        assert_eq!(total_stake, 42);
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[2]}}"#);
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let (commitment, total_staked): (Option<BlockCommitment>, u64) =
+        let commitment_response: RpcBlockCommitment<BlockCommitment> =
             if let Response::Single(res) = result {
                 if let Output::Success(res) = res {
                     serde_json::from_value(res.result).unwrap()
@@ -2000,8 +2035,8 @@ pub mod tests {
             } else {
                 panic!("Expected single response");
             };
-        assert_eq!(commitment, None);
-        assert_eq!(total_staked, 42);
+        assert_eq!(commitment_response.commitment, None);
+        assert_eq!(commitment_response.total_stake, 42);
     }
 
     #[test]
@@ -2025,21 +2060,23 @@ pub mod tests {
         let confirmed_block = confirmed_block.unwrap();
         assert_eq!(confirmed_block.transactions.len(), 3);
 
-        for (transaction, result) in confirmed_block.transactions.into_iter() {
+        for RpcTransactionWithStatusMeta { transaction, meta } in
+            confirmed_block.transactions.into_iter()
+        {
             if let RpcEncodedTransaction::Json(transaction) = transaction {
                 if transaction.signatures[0] == confirmed_block_signatures[0].to_string() {
                     assert_eq!(transaction.message.recent_blockhash, blockhash.to_string());
-                    assert_eq!(result.unwrap().status, Ok(()));
+                    assert_eq!(meta.unwrap().status, Ok(()));
                 } else if transaction.signatures[0] == confirmed_block_signatures[1].to_string() {
                     assert_eq!(
-                        result.unwrap().status,
+                        meta.unwrap().status,
                         Err(TransactionError::InstructionError(
                             0,
                             InstructionError::CustomError(1)
                         ))
                     );
                 } else {
-                    assert_eq!(result, None);
+                    assert_eq!(meta, None);
                 }
             }
         }
@@ -2055,23 +2092,25 @@ pub mod tests {
         let confirmed_block = confirmed_block.unwrap();
         assert_eq!(confirmed_block.transactions.len(), 3);
 
-        for (transaction, result) in confirmed_block.transactions.into_iter() {
+        for RpcTransactionWithStatusMeta { transaction, meta } in
+            confirmed_block.transactions.into_iter()
+        {
             if let RpcEncodedTransaction::Binary(transaction) = transaction {
                 let decoded_transaction: Transaction =
                     deserialize(&bs58::decode(&transaction).into_vec().unwrap()).unwrap();
                 if decoded_transaction.signatures[0] == confirmed_block_signatures[0] {
                     assert_eq!(decoded_transaction.message.recent_blockhash, blockhash);
-                    assert_eq!(result.unwrap().status, Ok(()));
+                    assert_eq!(meta.unwrap().status, Ok(()));
                 } else if decoded_transaction.signatures[0] == confirmed_block_signatures[1] {
                     assert_eq!(
-                        result.unwrap().status,
+                        meta.unwrap().status,
                         Err(TransactionError::InstructionError(
                             0,
                             InstructionError::CustomError(1)
                         ))
                     );
                 } else {
-                    assert_eq!(result, None);
+                    assert_eq!(meta, None);
                 }
             }
         }

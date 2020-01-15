@@ -997,7 +997,7 @@ pub(crate) mod tests {
         transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
-    use solana_client::rpc_request::RpcEncodedTransaction;
+    use solana_client::rpc_response::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
         block_error::BlockError,
         blockstore::make_slot_entries,
@@ -1011,22 +1011,21 @@ pub(crate) mod tests {
         },
     };
     use solana_runtime::genesis_utils::GenesisConfigInfo;
-    use solana_sdk::account::Account;
-    use solana_sdk::rent::Rent;
     use solana_sdk::{
+        account::Account,
         hash::{hash, Hash},
         instruction::InstructionError,
         packet::PACKET_DATA_SIZE,
+        rent::Rent,
         signature::{Keypair, KeypairUtil, Signature},
         system_transaction,
         transaction::TransactionError,
     };
     use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state;
-    use solana_vote_program::vote_state::{Vote, VoteState};
-    use std::iter;
+    use solana_vote_program::vote_state::{self, Vote, VoteState};
     use std::{
         fs::remove_dir_all,
+        iter,
         sync::{Arc, RwLock},
     };
 
@@ -1803,20 +1802,22 @@ pub(crate) mod tests {
             let confirmed_block = blockstore.get_confirmed_block(slot, None).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
-            for (transaction, result) in confirmed_block.transactions.into_iter() {
+            for RpcTransactionWithStatusMeta { transaction, meta } in
+                confirmed_block.transactions.into_iter()
+            {
                 if let RpcEncodedTransaction::Json(transaction) = transaction {
                     if transaction.signatures[0] == signatures[0].to_string() {
-                        assert_eq!(result.unwrap().status, Ok(()));
+                        assert_eq!(meta.unwrap().status, Ok(()));
                     } else if transaction.signatures[0] == signatures[1].to_string() {
                         assert_eq!(
-                            result.unwrap().status,
+                            meta.unwrap().status,
                             Err(TransactionError::InstructionError(
                                 0,
                                 InstructionError::CustomError(1)
                             ))
                         );
                     } else {
-                        assert_eq!(result, None);
+                        assert_eq!(meta, None);
                     }
                 }
             }

@@ -3,8 +3,7 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::rpc_client::RpcClient;
-use crate::rpc_request::Response;
+use crate::{rpc_client::RpcClient, rpc_response::Response};
 use bincode::{serialize_into, serialized_size};
 use log::*;
 use solana_sdk::{

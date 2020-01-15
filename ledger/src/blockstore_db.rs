@@ -10,7 +10,7 @@ use rocksdb::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use solana_client::rpc_request::RpcTransactionStatus;
+use solana_client::rpc_response::RpcTransactionStatus;
 use solana_sdk::{clock::Slot, signature::Signature};
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;

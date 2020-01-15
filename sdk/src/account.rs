@@ -5,6 +5,7 @@ use std::{cmp, fmt, iter::FromIterator};
 /// An Account with data that is stored on chain
 #[repr(C)]
 #[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct Account {
     /// lamports in the account
     pub lamports: u64,

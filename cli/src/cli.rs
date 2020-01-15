@@ -1989,7 +1989,8 @@ mod tests {
     use serde_json::Value;
     use solana_client::{
         mock_rpc_client_request::SIGNATURE,
-        rpc_request::{self, RpcRequest, RpcResponseContext},
+        rpc_request::RpcRequest,
+        rpc_response::{Response, RpcResponseContext},
     };
     use solana_sdk::{
         account::Account,
@@ -2669,7 +2670,7 @@ mod tests {
 
         // Nonced pay
         let blockhash = Hash::default();
-        let nonce_response = json!(rpc_request::Response {
+        let nonce_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(Account::new_data(
                 1,
@@ -2695,7 +2696,7 @@ mod tests {
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
         let blockhash = Hash::default();
-        let nonce_authority_response = json!(rpc_request::Response {
+        let nonce_authority_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(Account::new_data(
                 1,
