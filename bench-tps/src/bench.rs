@@ -494,14 +494,8 @@ fn do_tx_transfers<T: Client>(
 fn verify_funding_transfer<T: Client>(client: &Arc<T>, tx: &Transaction, amount: u64) -> bool {
     for a in &tx.message().account_keys[1..] {
         match client.get_balance_with_commitment(a, CommitmentConfig::recent()) {
-            Ok(balance) if balance >= amount => return true,
-            Ok(too_low) => {
-                info!("balance: {} was lower than {}", too_low, amount);
-                return false;
-            }
-            Err(err) => {
-                error!("failed to get balance {:?}", err);
-            }
+            Ok(balance) => return balance >= amount,
+            Err(err) => error!("failed to get balance {:?}", err),
         }
     }
     false
@@ -1057,10 +1051,12 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     #[cfg(not(feature = "move"))]
     let move_keypairs_ret = None;
 
-    // 100 lamports should give enough wiggle room to handle source / dest keypair sets getting unbalanced
-    let minimum_balance = 100;
-
-    if first_keypair_balance < minimum_balance || last_keypair_balance < minimum_balance {
+    // Repeated runs will eat up keypair balances from transaction fees. In order to quickly
+    //   start another bench-tps run without re-funding all of the keypairs, check if the
+    //   keypairs still have at least 80% of the expected funds. That should be enough to
+    //   pay for the transaction fees in a new run.
+    let enough_lamports = 8 * lamports_per_account / 10;
+    if first_keypair_balance < enough_lamports || last_keypair_balance < enough_lamports {
         let (_blockhash, fee_calculator) = get_recent_blockhash(client.as_ref());
         let max_fee = fee_calculator.max_lamports_per_signature;
         let extra_fees = extra * max_fee;
