@@ -9,7 +9,7 @@ use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
-use solana_client::{rpc_client::RpcClient, rpc_request::RpcVoteAccountInfo};
+use solana_client::{rpc_client::RpcClient, rpc_response::RpcVoteAccountInfo};
 use solana_sdk::{
     clock::{self, Slot},
     commitment_config::CommitmentConfig,
