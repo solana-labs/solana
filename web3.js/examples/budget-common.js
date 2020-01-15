@@ -6,7 +6,7 @@
 
 function getTransactionFee(connection) {
   return connection.getRecentBlockhash().then(response => {
-    return response[1];
+    return response.feeCalculator;
   });
 }
 

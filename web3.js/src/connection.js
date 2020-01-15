@@ -1,6 +1,7 @@
 // @flow
 
 import assert from 'assert';
+import bs58 from 'bs58';
 import {parse as urlParse, format as urlFormat} from 'url';
 import fetch from 'node-fetch';
 import jayson from 'jayson/lib/client/browser';
@@ -131,7 +132,7 @@ type VoteAccountStatus = {
  */
 const GetInflationResult = struct({
   foundation: 'number',
-  foundation_term: 'number',
+  foundationTerm: 'number',
   initial: 'number',
   storage: 'number',
   taper: 'number',
@@ -167,11 +168,11 @@ const GetEpochInfoResult = struct({
  * @property {number} first_normal_slot
  */
 const GetEpochScheduleResult = struct({
-  slots_per_epoch: 'number',
-  leader_schedule_slot_offset: 'number',
+  slotsPerEpoch: 'number',
+  leaderScheduleSlotOffset: 'number',
   warmup: 'boolean',
-  first_normal_epoch: 'number',
-  first_normal_slot: 'number',
+  firstNormalEpoch: 'number',
+  firstNormalSlot: 'number',
 });
 
 /**
@@ -191,13 +192,21 @@ const Version = struct({
  * @property {Blockhash} blockhash Blockhash of this block
  * @property {Blockhash} previousBlockhash Blockhash of this block's parent
  * @property {number} parentSlot Slot index of this block's parent
- * @property {Array<Array<object>>} transactions Vector of transactions paired with statuses
+ * @property {Array<object>} transactions Vector of transactions and status metas
  */
 type ConfirmedBlock = {
   blockhash: Blockhash,
   previousBlockhash: Blockhash,
   parentSlot: number,
-  transactions: Array<[Transaction, GetSignatureStatusRpcResult]>,
+  transactions: Array<{
+    transaction: Transaction,
+    meta: {
+      fee: number,
+      preBalances: Array<number>,
+      postBalances: Array<number>,
+      status: SignatureStatusResult,
+    },
+  }>,
 };
 
 function createRpcRequest(url): RpcRequest {
@@ -282,10 +291,10 @@ const GetVersionRpcResult = struct({
  */
 const AccountInfoResult = struct({
   executable: 'boolean',
-  owner: 'array',
+  owner: 'string',
   lamports: 'number',
-  data: 'array',
-  rent_epoch: 'number?',
+  data: 'string',
+  rentEpoch: 'number?',
 });
 
 /**
@@ -306,7 +315,10 @@ const AccountNotificationResult = struct({
 /**
  * @private
  */
-const ProgramAccountInfoResult = struct(['string', AccountInfoResult]);
+const ProgramAccountInfoResult = struct({
+  pubkey: 'string',
+  account: AccountInfoResult,
+});
 
 /***
  * Expected JSON RPC response for the "programNotification" message
@@ -441,8 +453,8 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
     previousBlockhash: 'string',
     parentSlot: 'number',
     transactions: struct.array([
-      struct.tuple([
-        struct({
+      struct({
+        transaction: struct({
           signatures: struct.array(['string']),
           message: struct({
             accountKeys: struct.array(['string']),
@@ -464,7 +476,7 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
             recentBlockhash: 'string',
           }),
         }),
-        struct.union([
+        meta: struct.union([
           'null',
           struct({
             status: SignatureStatusResult,
@@ -473,7 +485,7 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
             postBalances: struct.array(['number']),
           }),
         ]),
-      ]),
+      }),
     ]),
   }),
 );
@@ -481,17 +493,19 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
 /**
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
-const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext([
-  'string',
+const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
   struct({
-    burnPercent: 'number',
-    lamportsPerSignature: 'number',
-    maxLamportsPerSignature: 'number',
-    minLamportsPerSignature: 'number',
-    targetLamportsPerSignature: 'number',
-    targetSignaturesPerSlot: 'number',
+    blockhash: 'string',
+    feeCalculator: struct({
+      burnPercent: 'number',
+      lamportsPerSignature: 'number',
+      maxLamportsPerSignature: 'number',
+      minLamportsPerSignature: 'number',
+      targetLamportsPerSignature: 'number',
+      targetSignaturesPerSlot: 'number',
+    }),
   }),
-]);
+);
 
 /**
  * Expected JSON RPC response for the "requestAirdrop" message
@@ -595,12 +609,18 @@ export type TransactionError = {|
 /**
  * @ignore
  */
-type BlockhashAndFeeCalculator = [Blockhash, FeeCalculator]; // This type exists to workaround an esdoc parse error
+type BlockhashAndFeeCalculator = {
+  blockhash: Blockhash,
+  feeCalculator: FeeCalculator,
+}; // This type exists to workaround an esdoc parse error
 
 /**
  * @ignore
  */
-type PublicKeyAndAccount = [PublicKey, AccountInfo]; // This type exists to workaround an esdoc parse error
+type PublicKeyAndAccount = {
+  pubkey: PublicKey,
+  account: AccountInfo,
+}; // This type exists to workaround an esdoc parse error
 
 /**
  * A connection to a fullnode JSON RPC endpoint
@@ -727,7 +747,7 @@ export class Connection {
       executable,
       owner: new PublicKey(owner),
       lamports,
-      data: Buffer.from(data),
+      data: bs58.decode(data),
     };
 
     return {
@@ -770,15 +790,15 @@ export class Connection {
     assert(typeof result !== 'undefined');
 
     return result.map(result => {
-      return [
-        result[0],
-        {
-          executable: result[1].executable,
-          owner: new PublicKey(result[1].owner),
-          lamports: result[1].lamports,
-          data: Buffer.from(result[1].data),
+      return {
+        pubkey: result.pubkey,
+        account: {
+          executable: result.account.executable,
+          owner: new PublicKey(result.account.owner),
+          lamports: result.account.lamports,
+          data: bs58.decode(result.account.data),
         },
-      ];
+      };
     });
   }
 
@@ -1039,7 +1059,10 @@ export class Connection {
       ).toString(),
       parentSlot: result.result.parentSlot,
       transactions: result.result.transactions.map(result => {
-        return [Transaction.fromRpcResult(result[0]), result[1]];
+        return {
+          transaction: Transaction.fromRpcResult(result.transaction),
+          meta: result.meta,
+        };
       }),
     };
   }
@@ -1066,7 +1089,7 @@ export class Connection {
     }
 
     const value = NonceAccount.fromAccountData(
-      Buffer.from(res.result.value.data),
+      bs58.decode(res.result.value.data),
     );
 
     return {
@@ -1148,14 +1171,11 @@ export class Connection {
         let attempts = 0;
         const startTime = Date.now();
         for (;;) {
-          const [
-            recentBlockhash,
-            //feeCalculator,
-          ] = await this.getRecentBlockhash();
+          const {blockhash} = await this.getRecentBlockhash();
 
-          if (this._blockhashInfo.recentBlockhash != recentBlockhash) {
+          if (this._blockhashInfo.recentBlockhash != blockhash) {
             this._blockhashInfo = {
-              recentBlockhash,
+              recentBlockhash: blockhash,
               seconds: new Date().getSeconds(),
               transactionSignatures: [],
             };
@@ -1343,7 +1363,7 @@ export class Connection {
           executable: result.executable,
           owner: new PublicKey(result.owner),
           lamports: result.lamports,
-          data: Buffer.from(result.data),
+          data: bs58.decode(result.data),
         });
         return true;
       }
@@ -1412,12 +1432,12 @@ export class Connection {
         assert(typeof result !== 'undefined');
 
         sub.callback({
-          accountId: result[0],
+          accountId: result.pubkey,
           accountInfo: {
-            executable: result[1].executable,
-            owner: new PublicKey(result[1].owner),
-            lamports: result[1].lamports,
-            data: Buffer.from(result[1].data),
+            executable: result.account.executable,
+            owner: new PublicKey(result.account.owner),
+            lamports: result.account.lamports,
+            data: bs58.decode(result.account.data),
           },
         });
         return true;
