@@ -134,11 +134,6 @@ fn assign_account_to_program(
     keyed_account: &mut KeyedAccount,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    // no work to do, just return
-    if keyed_account.account.owner == *program_id {
-        return Ok(());
-    }
-
     if keyed_account.signer_key().is_none() {
         debug!("Assign: account must sign");
         return Err(InstructionError::MissingRequiredSignature);
@@ -718,14 +713,6 @@ mod tests {
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
-        // no change, no signature needed
-        assert_eq!(
-            assign_account_to_program(
-                &mut KeyedAccount::new(&from, false, &mut from_account),
-                &system_program::id(),
-            ),
-            Ok(())
-        );
 
         assert_eq!(
             process_instruction(
@@ -840,45 +827,6 @@ mod tests {
             ),
             Err(InstructionError::InvalidArgument),
         )
-    }
-
-    #[test]
-    fn test_create_account_no_transfer() {
-        solana_logger::setup();
-        let (genesis_config, alice_keypair) = create_genesis_config(100);
-        let alice_pubkey = alice_keypair.pubkey();
-        let bob_keypair = Keypair::new();
-        let bob_pubkey = bob_keypair.pubkey();
-
-        // Fund to account to bypass AccountNotFound error
-        let bank = Bank::new(&genesis_config);
-        let bank_client = BankClient::new(bank);
-        bank_client
-            .transfer(50, &alice_keypair, &bob_pubkey)
-            .unwrap();
-        let program_id = Pubkey::new_rand();
-
-        // test system_instruction: that alice's signature is not asked for
-        let instruction =
-            system_instruction::create_account(&alice_pubkey, &bob_pubkey, 0, 1, &program_id);
-
-        assert!(!instruction.accounts[0].is_signer);
-
-        // test system_instruction_processor: that alice's signature is needed
-        assert!(bank_client
-            .send_instruction(&bob_keypair, instruction)
-            .is_ok());
-
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 50);
-        assert_eq!(
-            bank_client.get_account(&bob_pubkey).unwrap().unwrap(),
-            Account {
-                data: vec![0; 1],
-                owner: program_id,
-                lamports: 50,
-                ..Account::default()
-            }
-        );
     }
 
     #[test]
