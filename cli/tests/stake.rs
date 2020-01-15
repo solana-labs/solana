@@ -9,7 +9,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil, Signature},
 };
-use solana_stake_program::stake_state::Lockup;
+use solana_stake_program::stake_state::{Lockup, StakeAuthorize, StakeState};
 use std::fs::remove_dir_all;
 use std::str::FromStr;
 use std::sync::mpsc::channel;
@@ -99,6 +99,7 @@ fn test_stake_delegation_and_deactivation() {
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
+        stake_authority: None,
         force: true,
         sign_only: false,
         signers: None,
@@ -111,6 +112,7 @@ fn test_stake_delegation_and_deactivation() {
     // Deactivate stake
     config_validator.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
+        stake_authority: None,
         sign_only: false,
         signers: None,
         blockhash: None,
@@ -187,6 +189,7 @@ fn test_stake_delegation_and_deactivation_offline() {
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
+        stake_authority: None,
         force: true,
         sign_only: true,
         signers: None,
@@ -212,6 +215,7 @@ fn test_stake_delegation_and_deactivation_offline() {
     config_payer.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
+        stake_authority: None,
         force: true,
         sign_only: false,
         signers: Some(signers),
@@ -224,6 +228,7 @@ fn test_stake_delegation_and_deactivation_offline() {
     // Deactivate stake offline
     config_validator.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
+        stake_authority: None,
         sign_only: true,
         signers: None,
         blockhash: None,
@@ -247,6 +252,7 @@ fn test_stake_delegation_and_deactivation_offline() {
     // Deactivate stake online
     config_payer.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
+        stake_authority: None,
         sign_only: false,
         signers: Some(signers),
         blockhash: Some(blockhash_str.parse::<Hash>().unwrap()),
@@ -329,6 +335,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     config.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
         vote_account_pubkey: vote_keypair.pubkey(),
+        stake_authority: None,
         force: true,
         sign_only: false,
         signers: None,
@@ -350,6 +357,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     let config_keypair = Keypair::from_bytes(&config.keypair.to_bytes()).unwrap();
     config.command = CliCommand::DeactivateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
+        stake_authority: None,
         sign_only: false,
         signers: None,
         blockhash: Some(nonce_hash),
@@ -357,6 +365,81 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_authority: Some(config_keypair.into()),
     };
     process_command(&config).unwrap();
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+fn test_stake_authorize() {
+    solana_logger::setup();
+
+    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (sender, receiver) = channel();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+
+    let mut config = CliConfig::default();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
+        .unwrap();
+
+    // Create stake account, identity is authority
+    let stake_keypair = Keypair::new();
+    let stake_account_pubkey = stake_keypair.pubkey();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        staker: None,
+        withdrawer: None,
+        lockup: Lockup::default(),
+        lamports: 50_000,
+    };
+    process_command(&config).unwrap();
+
+    // Assign new online stake authority
+    let online_authority = Keypair::new();
+    let online_authority_pubkey = online_authority.pubkey();
+    let (online_authority_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&online_authority, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorized_pubkey: online_authority_pubkey,
+        stake_authorize: StakeAuthorize::Staker,
+        authority: None,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let current_authority = match stake_state {
+        StakeState::Initialized(meta) => meta.authorized.staker,
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(current_authority, online_authority_pubkey);
+
+    // Assign new offline stake authority
+    let offline_authority = Keypair::new();
+    let offline_authority_pubkey = offline_authority.pubkey();
+    let (_offline_authority_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&offline_authority, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorized_pubkey: offline_authority_pubkey,
+        stake_authorize: StakeAuthorize::Staker,
+        authority: Some(read_keypair_file(&online_authority_file).unwrap().into()),
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let current_authority = match stake_state {
+        StakeState::Initialized(meta) => meta.authorized.staker,
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(current_authority, offline_authority_pubkey);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
