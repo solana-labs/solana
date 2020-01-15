@@ -21,7 +21,7 @@ pub const ASK_KEYWORD: &str = "ASK";
 pub const ASK_SEED_PHRASE_ARG: ArgConstant<'static> = ArgConstant {
     long: "ask-seed-phrase",
     name: "ask_seed_phrase",
-    help: "Securely recover a keypair using a seed phrase and optional passphrase",
+    help: "Recover a keypair using a seed phrase and optional passphrase",
 };
 
 pub const SKIP_SEED_PHRASE_VALIDATION_ARG: ArgConstant<'static> = ArgConstant {
