@@ -193,13 +193,13 @@ Returns commitment for particular block
 
 #### Results:
 
-The result field will be an array with two fields:
+The result field will be a JSON object containing:
 
-* Commitment
+* `commitment` - commitment, comprising either:
   * `null` - Unknown block
   * `object` - BlockCommitment
     * `array` - commitment, array of u64 integers logging the amount of cluster stake in lamports that has voted on the block at each depth from 0 to `MAX_LOCKOUT_HISTORY`
-* 'integer' - total active stake, in lamports, of the current epoch
+* `totalStake` - total active stake, in lamports, of the current epoch
 
 #### Example:
 
@@ -287,9 +287,9 @@ The result field will be an object with the following fields:
 * `blockhash` - the blockhash of this block, as base-58 encoded string
 * `previousBlockhash` - the blockhash of this block's parent, as base-58 encoded string
 * `parentSlot` - the slot index of this block's parent
-* `transactions` - an array of tuples containing:
-  * [Transaction](transaction-api.md) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
-  * Transaction status object, containing:
+* `transactions` - an array of JSON objects containing:
+  * `transaction` - [Transaction](transaction-api.md) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
+  * `meta` - transaction status metadata object, containing `null` or:
      * `status` - Transaction status:
        * `"Ok": null` - Transaction was successful
        * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
@@ -376,11 +376,11 @@ None
 
 The result field will be an object with the following fields:
 
-* `slots_per_epoch`, the maximum number of slots in each epoch
-* `leader_schedule_slot_offset`, the number of slots before beginning of an epoch to calculate a leader schedule for that epoch
+* `slotsPerEpoch`, the maximum number of slots in each epoch
+* `leaderScheduleSlotOffset`, the number of slots before beginning of an epoch to calculate a leader schedule for that epoch
 * `warmup`, whether epochs start short and grow
-* `first_normal_epoch`, first normal-length epoch, log2(slots_per_epoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
-* `first_normal_slot`, MINIMUM_SLOTS_PER_EPOCH * (2.pow(first_normal_epoch) - 1)
+* `firstNormalEpoch`, first normal-length epoch, log2(slotsPerEpoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
+* `firstNormalSlot`, MINIMUM_SLOTS_PER_EPOCH * (2.pow(firstNormalEpoch) - 1)
 
 #### Example:
 
@@ -389,7 +389,7 @@ The result field will be an object with the following fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"first_normal_epoch":8,"first_normal_slot":8160,"leader_schedule_slot_offset":8192,"slots_per_epoch":8192,"warmup":true},"id":1}
+{"jsonrpc":"2.0","result":{"firstNormalEpoch":8,"firstNormalSlot":8160,"leaderScheduleSlotOffset":8192,"slotsPerEpoch":8192,"warmup":true},"id":1}
 ```
 
 ### getGenesisHash
@@ -526,9 +526,9 @@ Returns a recent block hash from the ledger, and a fee schedule that can be used
 
 An RpcResponse containing an array consisting of a string blockhash and FeeCalculator JSON object.
 
-* `RpcResponse<array>` - RpcResponse JSON object with `value` field set to an array including:
-* `string` - a Hash as base-58 encoded string
-* `FeeCalculator object` - the fee schedule for this block hash
+* `RpcResponse<array>` - RpcResponse JSON object with `value` field set to a JSON object including:
+* `blockhash` - a Hash as base-58 encoded string
+* `feeCalculator` - FeeCalculator object, the fee schedule for this block hash
 
 #### Example:
 
@@ -641,10 +641,10 @@ None
 
 #### Results:
 
-An array consisting of
+A JSON object consisting of
 
-* `string` - a Hash as base-58 encoded string indicating the blockhash of the turn slot
-* `u64` - the current storage turn slot
+* `blockhash` - a Hash as base-58 encoded string indicating the blockhash of the turn slot
+* `slot` - the current storage turn slot
 
 #### Example:
 
@@ -652,7 +652,7 @@ An array consisting of
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurn"}' http://localhost:8899
  // Result
-{"jsonrpc":"2.0","result":["GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC", "2048"],"id":1}
+{"jsonrpc":"2.0","result":{"blockhash": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC", "slot": "2048"},"id":1}
 ```
 
 ### getStorageTurnRate
@@ -673,7 +673,7 @@ None
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurnRate"}' http://localhost:8899
  // Result
-{"jsonrpc":"2.0","result":"1024","id":1}
+{"jsonrpc":"2.0","result":1024,"id":1}
 ```
 
 ### getTransactionCount
