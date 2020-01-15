@@ -40,6 +40,23 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     });
 }
 
+fn parse_sign_only_reply_string(reply: &str) -> (Hash, Vec<(Pubkey, Signature)>) {
+    let object: Value = serde_json::from_str(&reply).unwrap();
+    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
+    let blockhash = blockhash_str.parse::<Hash>().unwrap();
+    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
+    let signers = signer_strings
+        .iter()
+        .map(|signer_string| {
+            let mut signer = signer_string.as_str().unwrap().split('=');
+            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
+            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
+            (key, sig)
+        })
+        .collect();
+    (blockhash, signers)
+}
+
 #[test]
 fn test_seed_stake_delegation_and_deactivation() {
     solana_logger::setup();
@@ -300,18 +317,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
-    let object: Value = serde_json::from_str(&sig_response).unwrap();
-    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
-    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
-    let signers: Vec<_> = signer_strings
-        .iter()
-        .map(|signer_string| {
-            let mut signer = signer_string.as_str().unwrap().split('=');
-            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-            (key, sig)
-        })
-        .collect();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
 
     // Delegate stake online
     config_payer.command = CliCommand::DelegateStake {
@@ -321,7 +327,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         force: true,
         sign_only: false,
         signers: Some(signers),
-        blockhash: Some(blockhash_str.parse::<Hash>().unwrap()),
+        blockhash: Some(blockhash),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -338,18 +344,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
-    let object: Value = serde_json::from_str(&sig_response).unwrap();
-    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
-    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
-    let signers: Vec<_> = signer_strings
-        .iter()
-        .map(|signer_string| {
-            let mut signer = signer_string.as_str().unwrap().split('=');
-            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-            (key, sig)
-        })
-        .collect();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
 
     // Deactivate stake online
     config_payer.command = CliCommand::DeactivateStake {
@@ -357,7 +352,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_authority: None,
         sign_only: false,
         signers: Some(signers),
-        blockhash: Some(blockhash_str.parse::<Hash>().unwrap()),
+        blockhash: Some(blockhash),
         nonce_account: None,
         nonce_authority: None,
     };
