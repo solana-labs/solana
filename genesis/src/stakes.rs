@@ -14,6 +14,7 @@ use solana_stake_program::{
 
 #[derive(Debug)]
 pub struct StakerInfo {
+    pub name: &'static str,
     pub staker: &'static str,
     pub lamports: u64,
 }
@@ -88,8 +89,10 @@ pub fn create_and_add_stakes(
         genesis_config.ticks_per_slot,
     );
 
-    let mut address_generator =
-        AddressGenerator::new(&authorized.staker, &solana_stake_program::id());
+    let mut address_generator = AddressGenerator::new(
+        &authorized.staker,
+        &solana_stake_program::id(),
+    );
 
     let stake_rent_reserve = StakeState::get_rent_exempt_reserve(&genesis_config.rent);
 
