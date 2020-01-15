@@ -14,7 +14,8 @@ use jsonrpc_derive::rpc;
 use solana_client::rpc_response::{
     Response, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
     RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
-    RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
+    RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
+    RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -295,11 +296,11 @@ impl JsonRpcRequestProcessor {
         Ok(self.storage_state.get_storage_turn_rate())
     }
 
-    fn get_storage_turn(&self) -> Result<(String, u64)> {
-        Ok((
-            self.storage_state.get_storage_blockhash().to_string(),
-            self.storage_state.get_slot(),
-        ))
+    fn get_storage_turn(&self) -> Result<RpcStorageTurn> {
+        Ok(RpcStorageTurn {
+            blockhash: self.storage_state.get_storage_blockhash().to_string(),
+            slot: self.storage_state.get_slot(),
+        })
     }
 
     fn get_slots_per_segment(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -537,7 +538,7 @@ pub trait RpcSol {
     fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64>;
 
     #[rpc(meta, name = "getStorageTurn")]
-    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<(String, u64)>;
+    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<RpcStorageTurn>;
 
     #[rpc(meta, name = "getSlotsPerSegment")]
     fn get_slots_per_segment(
@@ -1004,7 +1005,7 @@ impl RpcSol for RpcSolImpl {
             .get_storage_turn_rate()
     }
 
-    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<(String, u64)> {
+    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<RpcStorageTurn> {
         meta.request_processor.read().unwrap().get_storage_turn()
     }
 

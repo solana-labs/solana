@@ -17,7 +17,10 @@ use crossbeam_channel::unbounded;
 use ed25519_dalek;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use solana_client::{rpc_client::RpcClient, rpc_request::RpcRequest, thin_client::ThinClient};
+use solana_client::{
+    rpc_client::RpcClient, rpc_request::RpcRequest, rpc_response::RpcStorageTurn,
+    thin_client::ThinClient,
+};
 use solana_ledger::{
     blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
 };
@@ -811,13 +814,15 @@ impl Archiver {
                         warn!("Error while making rpc request {:?}", err);
                         Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
                     })?;
-                let (storage_blockhash, turn_slot) =
-                    serde_json::from_value::<(String, u64)>(response).map_err(|err| {
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Couldn't parse response: {:?}", err),
-                        )
-                    })?;
+                let RpcStorageTurn {
+                    blockhash: storage_blockhash,
+                    slot: turn_slot,
+                } = serde_json::from_value::<RpcStorageTurn>(response).map_err(|err| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Couldn't parse response: {:?}", err),
+                    )
+                })?;
                 let turn_blockhash = storage_blockhash.parse().map_err(|err| {
                     io::Error::new(
                         io::ErrorKind::Other,

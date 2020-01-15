@@ -228,3 +228,10 @@ pub struct RpcSignatureConfirmation {
     pub confirmations: usize,
     pub status: Result<()>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcStorageTurn {
+    pub blockhash: String,
+    pub slot: Slot,
+}
