@@ -5,8 +5,9 @@ use crate::{
     rpc_client_request::RpcClientRequest,
     rpc_request::RpcRequest,
     rpc_response::{
-        Response, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo, RpcEpochInfo,
-        RpcLeaderSchedule, RpcResponse, RpcVersionInfo, RpcVoteAccountStatus,
+        Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
+        RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponse, RpcVersionInfo,
+        RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -578,9 +579,16 @@ impl RpcClient {
                         format!("AccountNotFound: pubkey={}", pubkey),
                     ));
                 }
-                let result = serde_json::from_value::<Response<Option<Account>>>(result_json)?;
-                trace!("Response account {:?} {:?}", pubkey, result);
-                Ok(result)
+                let Response {
+                    context,
+                    value: rpc_account,
+                } = serde_json::from_value::<Response<Option<RpcAccount>>>(result_json)?;
+                trace!("Response account {:?} {:?}", pubkey, rpc_account);
+                let account = rpc_account.and_then(|rpc_account| rpc_account.decode().ok());
+                Ok(Response {
+                    context,
+                    value: account,
+                })
             })
             .map_err(|err| {
                 io::Error::new(
@@ -675,8 +683,8 @@ impl RpcClient {
                 )
             })?;
 
-        let accounts: Vec<(String, Account)> =
-            serde_json::from_value::<Vec<(String, Account)>>(response).map_err(|err| {
+        let accounts: Vec<RpcKeyedAccount> =
+            serde_json::from_value::<Vec<RpcKeyedAccount>>(response).map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("GetProgramAccounts parse failure: {:?}", err),
@@ -684,14 +692,14 @@ impl RpcClient {
             })?;
 
         let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::new();
-        for (string, account) in accounts.into_iter() {
-            let pubkey = string.parse().map_err(|err| {
+        for RpcKeyedAccount { pubkey, account } in accounts.into_iter() {
+            let pubkey = pubkey.parse().map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("GetProgramAccounts parse failure: {:?}", err),
                 )
             })?;
-            pubkey_accounts.push((pubkey, account));
+            pubkey_accounts.push((pubkey, account.decode().unwrap()));
         }
         Ok(pubkey_accounts)
     }
