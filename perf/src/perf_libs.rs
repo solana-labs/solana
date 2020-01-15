@@ -121,6 +121,15 @@ fn locate_perf_libs() -> Option<PathBuf> {
 }
 
 fn find_cuda_home(perf_libs_path: &Path) -> Option<PathBuf> {
+    if let Ok(cuda_home) = env::var("CUDA_HOME") {
+        let path = PathBuf::from(cuda_home);
+        if path.is_dir() {
+            info!("Using CUDA_HOME: {:?}", path);
+            return Some(path);
+        }
+        warn!("Ignoring CUDA_HOME, not a path: {:?}", path);
+    }
+
     // Search /usr/local for a `cuda-` directory that matches a perf-libs subdirectory
     for entry in fs::read_dir(&perf_libs_path).unwrap() {
         if let Ok(entry) = entry {
@@ -138,6 +147,7 @@ fn find_cuda_home(perf_libs_path: &Path) -> Option<PathBuf> {
                 continue;
             }
 
+            info!("CUDA installation found at {:?}", cuda_home);
             return Some(cuda_home);
         }
     }
@@ -147,8 +157,6 @@ fn find_cuda_home(perf_libs_path: &Path) -> Option<PathBuf> {
 pub fn init_cuda() {
     if let Some(perf_libs_path) = locate_perf_libs() {
         if let Some(cuda_home) = find_cuda_home(&perf_libs_path) {
-            info!("CUDA installation found at {:?}", cuda_home);
-
             let cuda_lib64_dir = cuda_home.join("lib64");
             if cuda_lib64_dir.is_dir() {
                 let ld_library_path = cuda_lib64_dir.to_str().unwrap_or("").to_string()
@@ -160,7 +168,7 @@ pub fn init_cuda() {
                 // to ensure the correct CUDA version is used
                 env::set_var("LD_LIBRARY_PATH", ld_library_path)
             } else {
-                warn!("{:?} does not exist", cuda_lib64_dir);
+                warn!("CUDA lib64 directory does not exist: {:?}", cuda_lib64_dir);
             }
 
             let libcuda_crypt = perf_libs_path
