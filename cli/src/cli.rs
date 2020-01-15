@@ -169,6 +169,7 @@ pub enum CliCommand {
     },
     DeactivateStake {
         stake_account_pubkey: Pubkey,
+        stake_authority: Option<KeypairEq>,
         sign_only: bool,
         signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash: Option<Hash>,
@@ -178,6 +179,7 @@ pub enum CliCommand {
     DelegateStake {
         stake_account_pubkey: Pubkey,
         vote_account_pubkey: Pubkey,
+        stake_authority: Option<KeypairEq>,
         force: bool,
         sign_only: bool,
         signers: Option<Vec<(Pubkey, Signature)>>,
@@ -193,8 +195,18 @@ pub enum CliCommand {
         pubkey: Pubkey,
         use_lamports_unit: bool,
     },
-    StakeAuthorize(Pubkey, Pubkey, StakeAuthorize),
-    WithdrawStake(Pubkey, Pubkey, u64),
+    StakeAuthorize {
+        stake_account_pubkey: Pubkey,
+        new_authorized_pubkey: Pubkey,
+        stake_authorize: StakeAuthorize,
+        authority: Option<KeypairEq>,
+    },
+    WithdrawStake {
+        stake_account_pubkey: Pubkey,
+        destination_account_pubkey: Pubkey,
+        lamports: u64,
+        withdraw_authority: Option<KeypairEq>,
+    },
     // Storage Commands
     CreateStorageAccount {
         account_owner: Pubkey,
@@ -1279,6 +1291,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Deactivate stake account
         CliCommand::DeactivateStake {
             stake_account_pubkey,
+            ref stake_authority,
             sign_only,
             ref signers,
             blockhash,
@@ -1288,6 +1301,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             &stake_account_pubkey,
+            stake_authority.as_deref(),
             *sign_only,
             signers,
             *blockhash,
@@ -1297,6 +1311,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::DelegateStake {
             stake_account_pubkey,
             vote_account_pubkey,
+            ref stake_authority,
             force,
             sign_only,
             ref signers,
@@ -1308,6 +1323,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             config,
             &stake_account_pubkey,
             &vote_account_pubkey,
+            stake_authority.as_deref(),
             *force,
             *sign_only,
             signers,
@@ -1335,27 +1351,33 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowStakeHistory { use_lamports_unit } => {
             process_show_stake_history(&rpc_client, config, *use_lamports_unit)
         }
-        CliCommand::StakeAuthorize(
+        CliCommand::StakeAuthorize {
             stake_account_pubkey,
             new_authorized_pubkey,
             stake_authorize,
-        ) => process_stake_authorize(
+            ref authority,
+        } => process_stake_authorize(
             &rpc_client,
             config,
             &stake_account_pubkey,
             &new_authorized_pubkey,
             *stake_authorize,
+            authority.as_deref(),
         ),
 
-        CliCommand::WithdrawStake(stake_account_pubkey, destination_account_pubkey, lamports) => {
-            process_withdraw_stake(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &destination_account_pubkey,
-                *lamports,
-            )
-        }
+        CliCommand::WithdrawStake {
+            stake_account_pubkey,
+            destination_account_pubkey,
+            lamports,
+            ref withdraw_authority,
+        } => process_withdraw_stake(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            &destination_account_pubkey,
+            *lamports,
+            withdraw_authority.as_deref(),
+        ),
 
         // Storage Commands
 
@@ -2593,13 +2615,19 @@ mod tests {
 
         let stake_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
-        config.command = CliCommand::WithdrawStake(stake_pubkey, to_pubkey, 100);
+        config.command = CliCommand::WithdrawStake {
+            stake_account_pubkey: stake_pubkey,
+            destination_account_pubkey: to_pubkey,
+            lamports: 100,
+            withdraw_authority: None,
+        };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let stake_pubkey = Pubkey::new_rand();
         config.command = CliCommand::DeactivateStake {
             stake_account_pubkey: stake_pubkey,
+            stake_authority: None,
             sign_only: false,
             signers: None,
             blockhash: None,
