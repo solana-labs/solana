@@ -1,7 +1,7 @@
 use crate::{
     stakes::{create_and_add_stakes, StakerInfo},
     unlocks::UnlockInfo,
-    validators::{create_and_add_validator, ValidatorInfo},
+    validators::create_and_add_validator,
 };
 use solana_sdk::{genesis_config::GenesisConfig, native_token::LAMPORTS_PER_SOL};
 
@@ -198,63 +198,25 @@ fn add_stakes(
         .sum::<u64>()
 }
 
-pub const VALIDATOR_INFOS: &[ValidatorInfo] = &[
-    ValidatorInfo {
-        name: "01Node",
-        node: "5n8KCdzqtvTnhkvCrFR7errH6ZUp11kL97r2awXkfzFe",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
-    ValidatorInfo {
-        name: "Bison Trails",
-        node: "7suRNpX7bJsXphHJtBv4ZsLjJZ1dTGeX256pLqJZdEAm",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
-    ValidatorInfo {
-        name: "ChainFlow",
-        node: "2te46rxywMdCNdkvjumiBBPQoVczJFxhxEaxFavQNqe3",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
-    ValidatorInfo {
-        name: "ChorusOne",
-        node: "ChorusXqjLC2NbiStKR6k9WoD7wu6TVTtFG8qCL5XBVa",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
-    ValidatorInfo {
-        name: "Dokia Capital",
-        node: "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
-    ValidatorInfo {
-        name: "Forbole",
-        node: "Fe5sLQAAT7RBT8mcH1AAGCbExJQcYxcwXvp1GjrGbvxs",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
-    ValidatorInfo {
-        name: "P2P.ORG - Secure Non-custodial Staking",
-        node: "44e8VyWoyZSE2oYHxMHMedAiHkGJqJgPd3tdt6iKoAFL",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
-    ValidatorInfo {
-        name: "RockX",
-        node: "Ez4iUU87ViJLCnmSy1t1Ti3DLoysFXiBseNfnRfoehyY",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
-    ValidatorInfo {
-        name: "Stake Capital",
-        node: "HavuVVDXXsJqMzPwQ4KcF5kFm2xqjbChhyi1bgGeCQif",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
-    ValidatorInfo {
-        name: "Staking Facilities",
-        node: "pbAxyqHHPMwgEjv8kmjGxysk9rhNtN7q22eAjReq6Hj",
-        node_lamports: 500 * LAMPORTS_PER_SOL,
-    },
+pub const VALIDATOR_PUBKEYS: &[&'static str] = &[
+    "5n8KCdzqtvTnhkvCrFR7errH6ZUp11kL97r2awXkfzFe", // 01Node
+    "7suRNpX7bJsXphHJtBv4ZsLjJZ1dTGeX256pLqJZdEAm", // Bison Trails
+    "2te46rxywMdCNdkvjumiBBPQoVczJFxhxEaxFavQNqe3", // ChainFlow
+    "ChorusXqjLC2NbiStKR6k9WoD7wu6TVTtFG8qCL5XBVa", // ChorusOne
+    "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1", // Dokia Capital
+    "Fe5sLQAAT7RBT8mcH1AAGCbExJQcYxcwXvp1GjrGbvxs", // Forbole
+    "44e8VyWoyZSE2oYHxMHMedAiHkGJqJgPd3tdt6iKoAFL", // P2P.ORG - Secure Non-custodial Staking
+    "Ez4iUU87ViJLCnmSy1t1Ti3DLoysFXiBseNfnRfoehyY", // RockX
+    "HavuVVDXXsJqMzPwQ4KcF5kFm2xqjbChhyi1bgGeCQif", // Stake Capital
+    "pbAxyqHHPMwgEjv8kmjGxysk9rhNtN7q22eAjReq6Hj",  // Staking Facilities
 ];
 
-fn add_validators(genesis_config: &mut GenesisConfig, validator_infos: &[ValidatorInfo]) -> u64 {
-    validator_infos
+fn add_validators(genesis_config: &mut GenesisConfig, validator_pubkeys: &[&str]) -> u64 {
+    validator_pubkeys
         .iter()
-        .map(|validator_info| create_and_add_validator(genesis_config, validator_info))
+        .map(|validator_pubkey| {
+            create_and_add_validator(genesis_config, validator_pubkey, 500 * LAMPORTS_PER_SOL)
+        })
         .sum::<u64>()
 }
 
@@ -282,7 +244,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
         &COMMUNITY_STAKER_INFOS,
         &UNLOCKS_ALL_DAY_ZERO,
         1_000_000 * LAMPORTS_PER_SOL,
-    ) + add_validators(genesis_config, &VALIDATOR_INFOS);
+    ) + add_validators(genesis_config, &VALIDATOR_PUBKEYS);
 
     // "one thanks" (community pool) gets 500_000_000SOL (total) - above distributions
     create_and_add_stakes(
