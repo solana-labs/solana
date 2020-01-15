@@ -3,12 +3,9 @@
 use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::typed::Subscriber;
-use jsonrpc_pubsub::{Session, SubscriptionId};
-use solana_sdk::account::Account;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::transaction;
+use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
+use solana_client::rpc_response::RpcKeyedAccount;
+use solana_sdk::{account::Account, pubkey::Pubkey, signature::Signature, transaction};
 use std::sync::{atomic, Arc};
 
 // Suppress needless_return due to
@@ -28,10 +25,10 @@ pub trait RpcSolPubSub {
     )]
     fn account_subscribe(
         &self,
-        _: Self::Metadata,
-        _: Subscriber<Account>,
-        _: String,
-        _: Option<Confirmations>,
+        meta: Self::Metadata,
+        subscriber: Subscriber<Account>,
+        pubkey_str: String,
+        confirmations: Option<Confirmations>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -40,7 +37,8 @@ pub trait RpcSolPubSub {
         unsubscribe,
         name = "accountUnsubscribe"
     )]
-    fn account_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
+    fn account_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId)
+        -> Result<bool>;
 
     // Get notification every time account data owned by a particular program is changed
     // Accepts pubkey parameter as base-58 encoded string
@@ -51,10 +49,10 @@ pub trait RpcSolPubSub {
     )]
     fn program_subscribe(
         &self,
-        _: Self::Metadata,
-        _: Subscriber<(String, Account)>,
-        _: String,
-        _: Option<Confirmations>,
+        meta: Self::Metadata,
+        subscriber: Subscriber<RpcKeyedAccount>,
+        pubkey_str: String,
+        confirmations: Option<Confirmations>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -63,7 +61,8 @@ pub trait RpcSolPubSub {
         unsubscribe,
         name = "programUnsubscribe"
     )]
-    fn program_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
+    fn program_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId)
+        -> Result<bool>;
 
     // Get notification when signature is verified
     // Accepts signature parameter as base-58 encoded string
@@ -74,10 +73,10 @@ pub trait RpcSolPubSub {
     )]
     fn signature_subscribe(
         &self,
-        _: Self::Metadata,
-        _: Subscriber<transaction::Result<()>>,
-        _: String,
-        _: Option<Confirmations>,
+        meta: Self::Metadata,
+        subscriber: Subscriber<transaction::Result<()>>,
+        signature_str: String,
+        confirmations: Option<Confirmations>,
     );
 
     // Unsubscribe from signature notification subscription.
@@ -86,11 +85,15 @@ pub trait RpcSolPubSub {
         unsubscribe,
         name = "signatureUnsubscribe"
     )]
-    fn signature_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
+    fn signature_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: SubscriptionId,
+    ) -> Result<bool>;
 
     // Get notification when slot is encountered
     #[pubsub(subscription = "slotNotification", subscribe, name = "slotSubscribe")]
-    fn slot_subscribe(&self, _: Self::Metadata, _: Subscriber<SlotInfo>);
+    fn slot_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<SlotInfo>);
 
     // Unsubscribe from slot notification subscription.
     #[pubsub(
@@ -98,7 +101,7 @@ pub trait RpcSolPubSub {
         unsubscribe,
         name = "slotUnsubscribe"
     )]
-    fn slot_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
+    fn slot_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 }
 
 #[derive(Default)]
@@ -168,7 +171,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn program_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<(String, Account)>,
+        subscriber: Subscriber<RpcKeyedAccount>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     ) {
@@ -277,21 +280,18 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use jsonrpc_core::futures::sync::mpsc;
-    use jsonrpc_core::Response;
+    use jsonrpc_core::{futures::sync::mpsc, Response};
     use jsonrpc_pubsub::{PubSubHandler, Session};
-    use solana_budget_program;
-    use solana_budget_program::budget_instruction;
+    use solana_budget_program::{self, budget_instruction};
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::bank::Bank;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_program;
-    use solana_sdk::system_transaction;
-    use solana_sdk::transaction::{self, Transaction};
-    use std::sync::RwLock;
-    use std::thread::sleep;
-    use std::time::Duration;
+    use solana_sdk::{
+        pubkey::Pubkey,
+        signature::{Keypair, KeypairUtil},
+        system_program, system_transaction,
+        transaction::{self, Transaction},
+    };
+    use std::{sync::RwLock, thread::sleep, time::Duration};
     use tokio::prelude::{Async, Stream};
 
     fn process_transaction_and_notify(
