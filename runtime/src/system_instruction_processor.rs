@@ -134,6 +134,11 @@ fn assign_account_to_program(
     keyed_account: &mut KeyedAccount,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
+    // no work to do, just return
+    if keyed_account.account.owner == *program_id {
+        return Ok(());
+    }
+
     if keyed_account.signer_key().is_none() {
         debug!("Assign: account must sign");
         return Err(InstructionError::MissingRequiredSignature);
@@ -712,6 +717,14 @@ mod tests {
                 &new_program_owner,
             ),
             Err(InstructionError::MissingRequiredSignature)
+        );
+        // no change, no signature needed
+        assert_eq!(
+            assign_account_to_program(
+                &mut KeyedAccount::new(&from, false, &mut from_account),
+                &system_program::id(),
+            ),
+            Ok(())
         );
 
         assert_eq!(
