@@ -54,8 +54,8 @@ mkdir -p target/cov/tmp
 find target/cov -name \*.gcda -newer "$timing_file" -print0 |
   (while IFS= read -r -d '' gcda_file; do
     gcno_file="${gcda_file%.gcda}.gcno"
-    ln -s "../../../$gcda_file" "target/cov/tmp/$(basename "$gcda_file")"
-    ln -s "../../../$gcno_file" "target/cov/tmp/$(basename "$gcno_file")"
+    ln -sf "../../../$gcda_file" "target/cov/tmp/$(basename "$gcda_file")"
+    ln -sf "../../../$gcno_file" "target/cov/tmp/$(basename "$gcno_file")"
   done)
 
 _ grcov target/cov/tmp > target/cov/lcov-full.info
