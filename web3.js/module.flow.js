@@ -61,7 +61,7 @@ declare module '@solana/web3.js' {
     owner: PublicKey,
     lamports: number,
     data: Buffer,
-    rent_epoch: number | null,
+    rentEpoch: number | null,
   };
 
   declare export type ContactInfo = {
@@ -75,9 +75,15 @@ declare module '@solana/web3.js' {
     blockhash: Blockhash,
     previousBlockhash: Blockhash,
     parentSlot: number,
-    transactions: Array<
-      [Transaction, SignatureSuccess | TransactionError | null],
-    >,
+    transactions: Array<{
+      transaction: Transaction,
+      meta: {
+        fee: number,
+        preBalances: Array<number>,
+        postBalances: Array<number>,
+        status: SignatureStatusResult,
+      },
+    }>,
   };
 
   declare export type KeyedAccountInfo = {
@@ -117,7 +123,7 @@ declare module '@solana/web3.js' {
 
   declare export type Inflation = {
     foundation: number,
-    foundation_term: number,
+    foundationTerm: number,
     initial: number,
     storage: number,
     taper: number,
@@ -125,11 +131,11 @@ declare module '@solana/web3.js' {
   };
 
   declare export type EpochSchedule = {
-    slots_per_epoch: number,
-    leader_schedule_slot_offset: number,
+    slotsPerEpoch: number,
+    leaderScheduleSlotOffset: number,
     warmup: boolean,
-    first_normal_epoch: number,
-    first_normal_slot: number,
+    firstNormalEpoch: number,
+    firstNormalSlot: number,
   };
 
   declare export class Connection {
@@ -145,7 +151,7 @@ declare module '@solana/web3.js' {
     getProgramAccounts(
       programId: PublicKey,
       commitment: ?Commitment,
-    ): Promise<Array<[PublicKey, AccountInfo]>>;
+    ): Promise<Array<PublicKeyAndAccount>>;
     getBalanceAndContext(
       publicKey: PublicKey,
       commitment: ?Commitment,
@@ -175,10 +181,10 @@ declare module '@solana/web3.js' {
     getEpochSchedule(): Promise<EpochSchedule>;
     getRecentBlockhashAndContext(
       commitment: ?Commitment,
-    ): Promise<RpcResponseAndContext<[Blockhash, FeeCalculator]>>;
+    ): Promise<RpcResponseAndContext<BlockhashAndFeeCalculator>>;
     getRecentBlockhash(
       commitment: ?Commitment,
-    ): Promise<[Blockhash, FeeCalculator]>;
+    ): Promise<BlockhashAndFeeCalculator>;
     requestAirdrop(
       to: PublicKey,
       amount: number,
