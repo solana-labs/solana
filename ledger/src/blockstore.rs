@@ -1557,20 +1557,22 @@ impl Blockstore {
                 data_shred_cf
                     .get_bytes((slot, u64::from(i)))
                     .and_then(|serialized_shred| {
-                        Shred::new_from_serialized_shred(serialized_shred.expect(&format!(
-                            "Shred with 
-                            slot: {}, 
-                            index: {},
-                            consumed: {},
-                            completed_indexes: {:?}
-                            must exist if shred index was included in a range: {} {}",
-                            slot,
-                            i,
-                            slot_meta.consumed,
-                            slot_meta.completed_data_indexes,
-                            start_index,
-                            end_index
-                        )))
+                        Shred::new_from_serialized_shred(serialized_shred.unwrap_or_else(|| {
+                            panic!(
+                                "Shred with
+                        slot: {},
+                        index: {},
+                        consumed: {},
+                        completed_indexes: {:?}
+                        must exist if shred index was included in a range: {} {}",
+                                slot,
+                                i,
+                                slot_meta.consumed,
+                                slot_meta.completed_data_indexes,
+                                start_index,
+                                end_index
+                            )
+                        }))
                         .map_err(|err| {
                             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
                                 format!(
