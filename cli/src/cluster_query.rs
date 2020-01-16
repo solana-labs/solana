@@ -382,10 +382,10 @@ pub fn process_get_epoch_info(
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config.clone())?;
     println!();
-    println_name_value("Current slot:", &epoch_info.absolute_slot.to_string());
-    println_name_value("Current epoch:", &epoch_info.epoch.to_string());
+    println_name_value("Slot:", &epoch_info.absolute_slot.to_string());
+    println_name_value("Epoch:", &epoch_info.epoch.to_string());
     println_name_value(
-        "Current epoch in percent:",
+        "Epoch completed percent:",
         &format!(
             "{:>3.3}%",
             epoch_info.slot_index as f64 / epoch_info.slots_in_epoch as f64 * 100_f64
@@ -393,16 +393,16 @@ pub fn process_get_epoch_info(
     );
     let remaining_slots_in_epoch = epoch_info.slots_in_epoch - epoch_info.slot_index;
     println_name_value(
-        "Current epoch in slots:",
+        "Epoch completed slots:",
         &format!(
-            "{}/{} (-{})",
+            "{}/{} ({} remaining)",
             epoch_info.slot_index, epoch_info.slots_in_epoch, remaining_slots_in_epoch
         ),
     );
     println_name_value(
-        "Current epoch in time:",
+        "Epoch completed time:",
         &format!(
-            "{}/{} (-{})",
+            "{}/{} ({} remaining)",
             slot_to_human_time(epoch_info.slot_index),
             slot_to_human_time(epoch_info.slots_in_epoch),
             slot_to_human_time(remaining_slots_in_epoch)
