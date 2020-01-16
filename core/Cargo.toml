@@ -29,7 +29,6 @@ jsonrpc-derive = "14.0.5"
 jsonrpc-http-server = "14.0.5"
 jsonrpc-pubsub = "14.0.5"
 jsonrpc-ws-server = "14.0.5"
-lazy_static = "1.4.0"
 libc = "0.2.66"
 log = "0.4.8"
 memmap = { version = "0.7.0", optional = true }
