@@ -44,29 +44,141 @@ test('get account info - error', () => {
 });
 
 test('get program accounts', async () => {
-  if (mockRpcEnabled) {
-    console.log('non-live test skipped');
-    return;
-  }
-
   const connection = new Connection(url, 'recent');
   const account0 = new Account();
   const account1 = new Account();
   const programId = new Account();
+  mockRpc.push([
+    url,
+    {
+      method: 'requestAirdrop',
+      params: [
+        account0.publicKey.toBase58(),
+        LAMPORTS_PER_SOL,
+        {commitment: 'recent'},
+      ],
+    },
+    {
+      error: null,
+      result:
+        '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+  mockRpc.push([
+    url,
+    {
+      method: 'requestAirdrop',
+      params: [
+        account1.publicKey.toBase58(),
+        0.5 * LAMPORTS_PER_SOL,
+        {commitment: 'recent'},
+      ],
+    },
+    {
+      error: null,
+      result:
+        '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
   await connection.requestAirdrop(account0.publicKey, LAMPORTS_PER_SOL);
   await connection.requestAirdrop(account1.publicKey, 0.5 * LAMPORTS_PER_SOL);
 
+  mockGetRecentBlockhash('recent');
+  mockRpc.push([
+    url,
+    {
+      method: 'sendTransaction',
+    },
+    {
+      error: null,
+      result:
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+  mockRpc.push([
+    url,
+    {
+      method: 'getSignatureStatus',
+      params: [
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        {commitment: 'recent'},
+      ],
+    },
+    {
+      error: null,
+      result: {Ok: null},
+    },
+  ]);
   let transaction = SystemProgram.assign(
     account0.publicKey,
     programId.publicKey,
   );
   await sendAndConfirmTransaction(connection, transaction, account0);
 
+  mockRpc.push([
+    url,
+    {
+      method: 'sendTransaction',
+    },
+    {
+      error: null,
+      result:
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+  mockRpc.push([
+    url,
+    {
+      method: 'getSignatureStatus',
+      params: [
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        {commitment: 'recent'},
+      ],
+    },
+    {
+      error: null,
+      result: {Ok: null},
+    },
+  ]);
   transaction = SystemProgram.assign(account1.publicKey, programId.publicKey);
   await sendAndConfirmTransaction(connection, transaction, account1);
 
+  mockGetRecentBlockhash('recent');
   const {feeCalculator} = await connection.getRecentBlockhash();
 
+  mockRpc.push([
+    url,
+    {
+      method: 'getProgramAccounts',
+      params: [programId.publicKey.toBase58(), {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result: [
+        {
+          account: {
+            data: '',
+            executable: false,
+            lamports: LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+            owner: programId.publicKey.toBase58(),
+            rentEpoch: 20,
+          },
+          pubkey: account0.publicKey.toBase58(),
+        },
+        {
+          account: {
+            data: '',
+            executable: false,
+            lamports:
+              0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+            owner: programId.publicKey.toBase58(),
+            rentEpoch: 20,
+          },
+          pubkey: account1.publicKey.toBase58(),
+        },
+      ],
+    },
+  ]);
   const programAccounts = await connection.getProgramAccounts(
     programId.publicKey,
   );
@@ -423,15 +535,40 @@ test('get minimum balance for rent exemption', async () => {
 });
 
 test('get confirmed block', async () => {
-  if (mockRpcEnabled) {
-    console.log('non-live test skipped');
-    return;
-  }
   const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getSlot',
+      params: [],
+    },
+    {
+      error: null,
+      result: 1,
+    },
+  ]);
 
   while ((await connection.getSlot()) <= 0) {
     continue;
   }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedBlock',
+      params: [0],
+    },
+    {
+      error: null,
+      result: {
+        blockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 0,
+        transactions: [],
+      },
+    },
+  ]);
 
   // Block 0 never has any transactions in automation localnet
   const block0 = await connection.getConfirmedBlock(0);
@@ -440,6 +577,61 @@ test('get confirmed block', async () => {
   expect(blockhash0).not.toBeNull();
   expect(block0.previousBlockhash).not.toBeNull();
   expect(block0.parentSlot).toBe(0);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedBlock',
+      params: [1],
+    },
+    {
+      error: null,
+      result: {
+        blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 0,
+        transactions: [
+          {
+            meta: {
+              fee: 10000,
+              postBalances: [499260347380, 15298080, 1, 1, 1],
+              preBalances: [499260357380, 15298080, 1, 1, 1],
+              status: {Ok: null},
+            },
+            transaction: {
+              message: {
+                accountKeys: [
+                  'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                  '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+                  'SysvarS1otHashes111111111111111111111111111',
+                  'SysvarC1ock11111111111111111111111111111111',
+                  'Vote111111111111111111111111111111111111111',
+                ],
+                header: {
+                  numReadonlySignedAccounts: 0,
+                  numReadonlyUnsignedAccounts: 3,
+                  numRequiredSignatures: 2,
+                },
+                instructions: [
+                  {
+                    accounts: [1, 2, 3],
+                    data:
+                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    programIdIndex: 4,
+                  },
+                ],
+                recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+              },
+              signatures: [
+                'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+                '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ]);
 
   // Find a block that has a transaction, usually Block 1
   let x = 1;
