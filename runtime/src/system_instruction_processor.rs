@@ -786,7 +786,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(&from, true, &mut from_account)],
+                &mut [KeyedAccount::new(&pubkey, true, &mut account)],
                 &bincode::serialize(&SystemInstruction::Assign {
                     program_id: new_program_owner
                 })
