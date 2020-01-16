@@ -12,6 +12,7 @@ homepage = "https://solana.com/"
 itertools = "0.8.1"
 log = "0.4.8"
 rand = "0.6.5"
+solana-archiver-lib = { path = "../archiver-lib", version = "0.23.0" }
 solana-config-program = { path = "../programs/config", version = "0.23.0" }
 solana-core = { path = "../core", version = "0.23.0" }
 solana-client = { path = "../client", version = "0.23.0" }

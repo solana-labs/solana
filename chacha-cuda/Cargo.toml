@@ -1,0 +1,24 @@
+[package]
+name = "solana-chacha-cuda"
+version = "0.23.0"
+description = "Solana Chacha Cuda APIs"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+edition = "2018"
+
+[dependencies]
+log = "0.4.8"
+solana-archiver-utils = { path = "../archiver-utils", version = "0.23.0" }
+solana-chacha = { path = "../chacha", version = "0.23.0" }
+solana-ledger = { path = "../ledger", version = "0.23.0" }
+solana-logger = { path = "../logger", version = "0.23.0" }
+solana-perf = { path = "../perf", version = "0.23.0" }
+solana-sdk = { path = "../sdk", version = "0.23.0" }
+
+[dev-dependencies]
+hex-literal = "0.2.1"
+
+[lib]
+name = "solana_chacha_cuda"

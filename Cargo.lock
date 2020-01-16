@@ -3409,11 +3409,57 @@ version = "0.23.0"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "console 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-archiver-lib 0.23.0",
  "solana-clap-utils 0.23.0",
  "solana-core 0.23.0",
  "solana-logger 0.23.0",
  "solana-metrics 0.23.0",
  "solana-net-utils 0.23.0",
+ "solana-sdk 0.23.0",
+]
+
+[[package]]
+name = "solana-archiver-lib"
+version = "0.23.0"
+dependencies = [
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-channel 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ed25519-dalek 1.0.0-pre.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_chacha 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-archiver-utils 0.23.0",
+ "solana-chacha 0.23.0",
+ "solana-chacha-sys 0.23.0",
+ "solana-client 0.23.0",
+ "solana-core 0.23.0",
+ "solana-ledger 0.23.0",
+ "solana-logger 0.23.0",
+ "solana-metrics 0.23.0",
+ "solana-net-utils 0.23.0",
+ "solana-perf 0.23.0",
+ "solana-sdk 0.23.0",
+ "solana-storage-program 0.23.0",
+ "thiserror 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "solana-archiver-utils"
+version = "0.23.0"
+dependencies = [
+ "hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_chacha 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-chacha 0.23.0",
+ "solana-chacha-sys 0.23.0",
+ "solana-ledger 0.23.0",
+ "solana-logger 0.23.0",
+ "solana-perf 0.23.0",
  "solana-sdk 0.23.0",
 ]
 
@@ -3554,6 +3600,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-chacha"
+version = "0.23.0"
+dependencies = [
+ "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_chacha 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-chacha-sys 0.23.0",
+ "solana-ledger 0.23.0",
+ "solana-logger 0.23.0",
+ "solana-perf 0.23.0",
+ "solana-sdk 0.23.0",
+]
+
+[[package]]
+name = "solana-chacha-cuda"
+version = "0.23.0"
+dependencies = [
+ "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-archiver-utils 0.23.0",
+ "solana-chacha 0.23.0",
+ "solana-ledger 0.23.0",
+ "solana-logger 0.23.0",
+ "solana-perf 0.23.0",
+ "solana-sdk 0.23.0",
+]
+
+[[package]]
 name = "solana-chacha-sys"
 version = "0.23.0"
 dependencies = [
@@ -3661,7 +3736,6 @@ dependencies = [
  "crossbeam-channel 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "ed25519-dalek 1.0.0-pre.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "fs_extra 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "indexmap 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3685,7 +3759,7 @@ dependencies = [
  "serial_test 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test_derive 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-budget-program 0.23.0",
- "solana-chacha-sys 0.23.0",
+ "solana-chacha-cuda 0.23.0",
  "solana-clap-utils 0.23.0",
  "solana-client 0.23.0",
  "solana-faucet 0.23.0",
@@ -3972,6 +4046,7 @@ dependencies = [
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test_derive 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-archiver-lib 0.23.0",
  "solana-client 0.23.0",
  "solana-config-program 0.23.0",
  "solana-core 0.23.0",

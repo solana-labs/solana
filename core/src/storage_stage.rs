@@ -3,13 +3,13 @@
 // to submit its proof for mining to be rewarded.
 
 use crate::{
-    chacha_cuda::chacha_cbc_encrypt_file_many_keys,
     cluster_info::ClusterInfo,
     contact_info::ContactInfo,
     result::{Error, Result},
 };
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
+use solana_chacha_cuda::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_runtime::{bank::Bank, storage_utils::archiver_accounts};
 use solana_sdk::{

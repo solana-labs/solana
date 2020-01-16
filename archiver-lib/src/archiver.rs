@@ -1,25 +1,26 @@
-use crate::{
-    chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE},
+use crate::result::ArchiverError;
+use crossbeam_channel::unbounded;
+use ed25519_dalek;
+use rand::{thread_rng, Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
+use solana_archiver_utils::sample_file;
+use solana_chacha::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
+use solana_client::{
+    rpc_client::RpcClient, rpc_request::RpcRequest, rpc_response::RpcStorageTurn,
+    thin_client::ThinClient,
+};
+use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
     packet::{limited_deserialize, PACKET_DATA_SIZE},
     repair_service,
     repair_service::{RepairService, RepairSlotRange, RepairStrategy},
-    result::{Error, Result},
     shred_fetch_stage::ShredFetchStage,
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
     storage_stage::NUM_STORAGE_SAMPLES,
     streamer::{receiver, responder, PacketReceiver},
     window_service::WindowService,
-};
-use crossbeam_channel::unbounded;
-use ed25519_dalek;
-use rand::{thread_rng, Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
-use solana_client::{
-    rpc_client::RpcClient, rpc_request::RpcRequest, rpc_response::RpcStorageTurn,
-    thin_client::ThinClient,
 };
 use solana_ledger::{
     blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
@@ -33,7 +34,7 @@ use solana_sdk::{
     client::{AsyncClient, SyncClient},
     clock::{get_complete_segment_from_slot, get_segment_from_slot, Slot},
     commitment_config::CommitmentConfig,
-    hash::{Hash, Hasher},
+    hash::Hash,
     message::Message,
     signature::{Keypair, KeypairUtil, Signature},
     timing::timestamp,
@@ -45,9 +46,7 @@ use solana_storage_program::{
     storage_instruction::{self, StorageAccountType},
 };
 use std::{
-    fs::File,
-    io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom},
-    mem::size_of,
+    io::{self, ErrorKind},
     net::{SocketAddr, UdpSocket},
     path::{Path, PathBuf},
     result,
@@ -57,6 +56,8 @@ use std::{
     thread::{sleep, spawn, JoinHandle},
     time::Duration,
 };
+
+type Result<T> = std::result::Result<T, ArchiverError>;
 
 static ENCRYPTED_FILENAME: &str = "ledger.enc";
 
@@ -83,41 +84,6 @@ struct ArchiverMeta {
     sha_state: Hash,
     num_chacha_blocks: usize,
     client_commitment: CommitmentConfig,
-}
-
-pub(crate) fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
-    let in_file = File::open(in_path)?;
-    let metadata = in_file.metadata()?;
-    let mut buffer_file = BufReader::new(in_file);
-
-    let mut hasher = Hasher::default();
-    let sample_size = size_of::<Hash>();
-    let sample_size64 = sample_size as u64;
-    let mut buf = vec![0; sample_size];
-
-    let file_len = metadata.len();
-    if file_len < sample_size64 {
-        return Err(io::Error::new(ErrorKind::Other, "file too short!"));
-    }
-    for offset in sample_offsets {
-        if *offset > (file_len - sample_size64) / sample_size64 {
-            return Err(io::Error::new(ErrorKind::Other, "offset too large"));
-        }
-        buffer_file.seek(SeekFrom::Start(*offset * sample_size64))?;
-        trace!("sampling @ {} ", *offset);
-        match buffer_file.read(&mut buf) {
-            Ok(size) => {
-                assert_eq!(size, buf.len());
-                hasher.hash(&buf);
-            }
-            Err(e) => {
-                warn!("Error sampling file");
-                return Err(e);
-            }
-        }
-    }
-
-    Ok(hasher.result())
 }
 
 fn get_slot_from_signature(
@@ -239,16 +205,16 @@ impl Archiver {
 
         info!("Connecting to the cluster via {:?}", cluster_entrypoint);
         let (nodes, _) =
-            match crate::gossip_service::discover_cluster(&cluster_entrypoint.gossip, 1) {
+            match solana_core::gossip_service::discover_cluster(&cluster_entrypoint.gossip, 1) {
                 Ok(nodes_and_archivers) => nodes_and_archivers,
                 Err(e) => {
                     //shutdown services before exiting
                     exit.store(true, Ordering::Relaxed);
                     gossip_service.join()?;
-                    return Err(Error::from(e));
+                    return Err(e.into());
                 }
             };
-        let client = crate::gossip_service::get_client(&nodes);
+        let client = solana_core::gossip_service::get_client(&nodes);
 
         info!("Setting up mining account...");
         if let Err(e) = Self::setup_mining_account(
@@ -411,7 +377,7 @@ impl Archiver {
         client_commitment: CommitmentConfig,
     ) {
         let nodes = cluster_info.read().unwrap().tvu_peers();
-        let client = crate::gossip_service::get_client(&nodes);
+        let client = solana_core::gossip_service::get_client(&nodes);
 
         if let Ok(Some(account)) =
             client.get_account_with_commitment(&storage_keypair.pubkey(), client_commitment.clone())
@@ -622,9 +588,7 @@ impl Archiver {
             client_commitment.clone(),
         )? == 0
         {
-            return Err(
-                io::Error::new(io::ErrorKind::Other, "keypair account has no balance").into(),
-            );
+            return Err(ArchiverError::EmptyStorageAccountBalance);
         }
 
         info!("checking storage account keypair...");
@@ -635,11 +599,8 @@ impl Archiver {
             let blockhash =
                 match client.get_recent_blockhash_with_commitment(client_commitment.clone()) {
                     Ok((blockhash, _)) => blockhash,
-                    Err(_) => {
-                        return Err(Error::IO(<io::Error>::new(
-                            io::ErrorKind::Other,
-                            "unable to get recent blockhash, can't submit proof",
-                        )));
+                    Err(e) => {
+                        return Err(ArchiverError::TransportError(e));
                     }
                 };
 
@@ -673,7 +634,7 @@ impl Archiver {
     ) {
         // No point if we've got no storage account...
         let nodes = cluster_info.read().unwrap().tvu_peers();
-        let client = crate::gossip_service::get_client(&nodes);
+        let client = solana_core::gossip_service::get_client(&nodes);
         let storage_balance = client.poll_get_balance_with_commitment(
             &storage_keypair.pubkey(),
             meta.client_commitment.clone(),
@@ -737,7 +698,7 @@ impl Archiver {
     fn get_segment_config(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         client_commitment: CommitmentConfig,
-    ) -> result::Result<u64, Error> {
+    ) -> Result<u64> {
         let rpc_peers = {
             let cluster_info = cluster_info.read().unwrap();
             cluster_info.rpc_peers()
@@ -756,12 +717,12 @@ impl Archiver {
                 )
                 .map_err(|err| {
                     warn!("Error while making rpc request {:?}", err);
-                    Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
+                    ArchiverError::ClientError(err)
                 })?
                 .as_u64()
                 .unwrap())
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "No RPC peers...".to_string()).into())
+            Err(ArchiverError::NoRpcPeers)
         }
     }
 
@@ -771,7 +732,7 @@ impl Archiver {
         slots_per_segment: u64,
         previous_blockhash: &Hash,
         exit: &Arc<AtomicBool>,
-    ) -> result::Result<(Hash, u64), Error> {
+    ) -> Result<(Hash, u64)> {
         loop {
             let (blockhash, turn_slot) = Self::poll_for_blockhash_and_slot(
                 cluster_info,
@@ -791,7 +752,7 @@ impl Archiver {
         slots_per_segment: u64,
         previous_blockhash: &Hash,
         exit: &Arc<AtomicBool>,
-    ) -> result::Result<(Hash, u64), Error> {
+    ) -> Result<(Hash, u64)> {
         info!("waiting for the next turn...");
         loop {
             let rpc_peers = {
@@ -812,17 +773,13 @@ impl Archiver {
                     )
                     .map_err(|err| {
                         warn!("Error while making rpc request {:?}", err);
-                        Error::IO(io::Error::new(ErrorKind::Other, "rpc error"))
+                        ArchiverError::ClientError(err)
                     })?;
                 let RpcStorageTurn {
                     blockhash: storage_blockhash,
                     slot: turn_slot,
-                } = serde_json::from_value::<RpcStorageTurn>(response).map_err(|err| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Couldn't parse response: {:?}", err),
-                    )
-                })?;
+                } = serde_json::from_value::<RpcStorageTurn>(response)
+                    .map_err(ArchiverError::JsonError)?;
                 let turn_blockhash = storage_blockhash.parse().map_err(|err| {
                     io::Error::new(
                         io::ErrorKind::Other,
@@ -840,7 +797,7 @@ impl Archiver {
                 }
             }
             if exit.load(Ordering::Relaxed) {
-                return Err(Error::IO(io::Error::new(
+                return Err(ArchiverError::IO(io::Error::new(
                     ErrorKind::Other,
                     "exit signalled...",
                 )));
@@ -948,9 +905,7 @@ impl Archiver {
 
         // check if all the slots in the segment are complete
         if !Self::segment_complete(start_slot, slots_per_segment, blockstore) {
-            return Err(
-                io::Error::new(ErrorKind::Other, "Unable to download the full segment").into(),
-            );
+            return Err(ArchiverError::SegmentDownloadError);
         }
         Ok(start_slot)
     }
@@ -991,76 +946,5 @@ impl Archiver {
             sleep(Duration::from_millis(500));
         }
         panic!("Couldn't get segment slot from archiver!");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::{create_dir_all, remove_file};
-    use std::io::Write;
-
-    fn tmp_file_path(name: &str) -> PathBuf {
-        use std::env;
-        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
-
-        let mut path = PathBuf::new();
-        path.push(out_dir);
-        path.push("tmp");
-        create_dir_all(&path).unwrap();
-
-        path.push(format!("{}-{}", name, keypair.pubkey()));
-        path
-    }
-
-    #[test]
-    fn test_sample_file() {
-        solana_logger::setup();
-        let in_path = tmp_file_path("test_sample_file_input.txt");
-        let num_strings = 4096;
-        let string = "12foobar";
-        {
-            let mut in_file = File::create(&in_path).unwrap();
-            for _ in 0..num_strings {
-                in_file.write(string.as_bytes()).unwrap();
-            }
-        }
-        let num_samples = (string.len() * num_strings / size_of::<Hash>()) as u64;
-        let samples: Vec<_> = (0..num_samples).collect();
-        let res = sample_file(&in_path, samples.as_slice());
-        let ref_hash: Hash = Hash::new(&[
-            173, 251, 182, 165, 10, 54, 33, 150, 133, 226, 106, 150, 99, 192, 179, 1, 230, 144,
-            151, 126, 18, 191, 54, 67, 249, 140, 230, 160, 56, 30, 170, 52,
-        ]);
-        let res = res.unwrap();
-        assert_eq!(res, ref_hash);
-
-        // Sample just past the end
-        assert!(sample_file(&in_path, &[num_samples]).is_err());
-        remove_file(&in_path).unwrap();
-    }
-
-    #[test]
-    fn test_sample_file_invalid_offset() {
-        let in_path = tmp_file_path("test_sample_file_invalid_offset_input.txt");
-        {
-            let mut in_file = File::create(&in_path).unwrap();
-            for _ in 0..4096 {
-                in_file.write("123456foobar".as_bytes()).unwrap();
-            }
-        }
-        let samples = [0, 200000];
-        let res = sample_file(&in_path, &samples);
-        assert!(res.is_err());
-        remove_file(in_path).unwrap();
-    }
-
-    #[test]
-    fn test_sample_file_missing_file() {
-        let in_path = tmp_file_path("test_sample_file_that_doesnt_exist.txt");
-        let samples = [0, 5];
-        let res = sample_file(&in_path, &samples);
-        assert!(res.is_err());
     }
 }
