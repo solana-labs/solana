@@ -77,16 +77,20 @@ else
   solana-keygen new --no-passphrase -fso "$leader_storage_account_keypair"
 fi
 
-solana-genesis \
-  --hashes-per-tick sleep \
-  --faucet-pubkey "$dataDir"/faucet-keypair.json \
-  --faucet-lamports 500000000000000000 \
-  --bootstrap-leader-pubkey "$dataDir"/leader-keypair.json \
-  --bootstrap-vote-pubkey "$dataDir"/leader-vote-account-keypair.json \
-  --bootstrap-stake-pubkey "$dataDir"/leader-stake-account-keypair.json \
-  --bootstrap-storage-pubkey "$dataDir"/leader-storage-account-keypair.json \
-  --ledger "$ledgerDir" \
-  --operating-mode development
+if [[ -e "$ledgerDir"/genesis.bin ]]; then
+  echo "Use existing genesis"
+else
+  solana-genesis \
+    --hashes-per-tick sleep \
+    --faucet-pubkey "$dataDir"/faucet-keypair.json \
+    --faucet-lamports 500000000000000000 \
+    --bootstrap-leader-pubkey "$dataDir"/leader-keypair.json \
+    --bootstrap-vote-pubkey "$dataDir"/leader-vote-account-keypair.json \
+    --bootstrap-stake-pubkey "$dataDir"/leader-stake-account-keypair.json \
+    --bootstrap-storage-pubkey "$dataDir"/leader-storage-account-keypair.json \
+    --ledger "$ledgerDir" \
+    --operating-mode development
+fi
 
 abort() {
   set +e
