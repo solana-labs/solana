@@ -6,94 +6,81 @@ blocks.
 Leaders that produce multiple blocks for the same slot increase the number of
 potential forks that the cluster has to resolve.
 
-## Overview
+## Procedure
+1. Blockstore changes:
+    * a. Augment `DeadSlots` keyspace in Blockstore to be an Option<Blockhash>.
+    This is called the `approved_blockhash`.
+    * b. Augment the `Roots` column family to include the blockhash of the
+    rooted banks
 
-1. Slashing Condition: If you have voted on version `S` of a slot, it is a 
-slashing condition to vote on any descendant of another version `S'` of the
-slot, unless that descendant of version `S'` has seen supermajority (> 66%)
-of the stake voting on it (See section `Slashing Condition` below for how this
-proof is to be generated).
-2. If you see two blockhashes for the same block, and you are less than 
-`2^THRESHOLD` lockout on that block, drop it. Flag the block as "duplicated".
-3. Only repair a version of the "duplicated" block if you see a `Repair Proof`
-as outlined in the `Repair Proof` section below
+2. Once the CheckDuplicate thread detects a duplicate slot, it:
+    * a. Stores a proof of the two duplicate shreds for that slot
+    * b. Sends a signal to ReplayStage for that slot.
 
-## Primitives
+3. Once ReplayStage receives a signal about a duplicate slot, it checks if
+the current version with blockhash `B` has less than 2^THRESHOLD lockout. 
+    * a. If so, then remove that slot and all its children from the progress
+    map. Mark the slot as `dead` in `DeadSlots`, with `approved_blockhash`
+    set to `None`.
+    * b. Otherwise, check `!approved_blockhash.is_none()`.
+        * i. If true, set the `approved_blockhash` for that slot to `B` in 
+    `DeadSlots`. This is why `1b` is important, because banks for slots 
+    earlier than the root will have been purged by BankForks and thus 
+    the blockhash will not be available in memory.
+        * ii. If false, this hash must have been set by step `6b`, in which
+    case, check that the existing hash matches `B`. If not true, throw an
+    error because that meanss >33% of the cluster is malicious.
+    * c. When fetching new slots in ReplayStage, a slot is not replayed if it is
+    dead, unless an `approved_blockhash` is set.
 
-For a bank `B`, let `A` be the latest ancestor of `B` that has gotten 
-supermajority > 66% votes. 
+    Note: It's posssible the slot is already dead when ReplayStage receives
+    the duplicate signal. In this case the `approved_blockhash` in `DeadSlots`
+    will also be set as `None`. This case is be handled by step `5` below if another
+    playble version of this slot gains approvals (The "approved blockhash" 
+    will be set).
 
-1) Define the function `Confirmed` to be `Confirmed(B) = A`. 
-2) Define `parent(B)` to be the parent bank of `B`.
+4. WindowService will now stop accepting shreds for dead slots or shreds with
+parents chaining to dead slots, unless the shred is also: 
+    * a. A repair request
+    * b. For the `approved_blockhash` (TODO: Need a way to confirm this, as 
+    repair requests are currently too small to contain another hash.
+    Probably will need a merkle)
+    
+    Thus, a duplicate slot marked "dead" by ReplayStage will not receive further
+    shreds unless an "approved blockhassh" is set.
 
-The `bank_hash` of each bank `B` is now augmented to be: 
+5. Repair thread iterates over the set of slots in Blocktree that are:
+    * a. Greater than the root
+    * b. The slot exists in `DeadSlots` in Blockstore but the 
+       `approved_blockhash` in `DeadSlots` is `None` (implies ReplayStage 
+       has either gotten a signal from the CheckDuplicate thread, or
+       has seen a bad version of this slot).
+    * c. The slot exists in `DuplicateSlots` in Blockstore
 
-`hash(Confirmed(B).slot, state_hash(B), bank_hash(parent(B)), parent(B).slot)`.
+    For each of these slots that passes the above criteria, the repair thread
+    queries the cluster's validators about their `approved_blockhash`. 
 
-We include these components to support the proof generation described
-in the sections below.
+    If the repair thread sees >33% of validators with the same `approved_blockhash`
+    `B`, then that means the following condition must be true:
 
-## Proof of Repair Safety
+    `There are > 66% of people who have voted on blockhash B`
 
-Let `S'` be some version of slot `S` that a validator has already detected a
-duplicate version of and dropped and marked as "duplicate" (step 2 of the
-`Overview` section above).  A validator will only repair  `S'` if it's
-provided a proof that `S'` has been confirmed (been voted on by greater than
-66% of the stake).
+    This is because there are <= 33% malicious validators on the network, and
+    `> 33%` responded with the same `approved_blockhash`, so there is at least
+    one correct validator that saw the above condition hold. This is then a
+    safe version of the slot to repair because no correct validator can be locked
+    out more than `2^THRESHOLD` on another version of this slot, and thus all
+    correct validators will either repair this version off the slot, or skip 
+    this slot.
 
-Call such a proof `RepairProof(S')`.
+    The repair thread then sends an `Approved Blockhash` signal to ReplayStage
 
-This proof consists of a supermajority of validator's votes, where each vote `V`:
+6. Upon receiving the `Approved Blockhash` signal, ReplayStage checks if 
+an `approved_blockhash` is equal to `None`. If not:
+    * a. Clear the slot-related columns in Blockstore. This is safe because
+    there are no simultaneous writes to these columns from WindowService as 
+    guaranteed by step `4`. 
+    * b. Set the `approved_blockhash` in DeadSlots, allowing ReplayStage to once 
+    again replay this slot. (see step `3c`).
 
-* Contains a bank hash `H(B)` for some bank `B` such that
-`Confirmed(B).slot < S'.slot` (if a supermajority confirmed `S'`, then such a
-set must exist because there must have been some initial set of validators that
-voted on `S'` before it was confrmed). This can be confirmed for each vote if
-the prover provides `state_hash(B)`, `Confirmed(B).slot`,
-`bank_hash(parent(B))`, `parent(B).slot` such that
-
-`H(B) == hash(Confirmed(B).slot, state_hash(B), bank_hash(parent(B)), parent(B).slot)`.
-
-* Show that `V.slot` is descended from `S'` by proving the bank hash `H(B)`
-can be derived from the bank hash and slot of `S'`. This is done by providing
-the trail of bank hashes and parent slots to recreate the hash.
-
-## Slashing Condition
-
-### Goals
-The proof of slashing aims to show a validator signed two votes on two bank
-hashes `H1` and `H2` for two banks `B1` and `B2` where both:
-* Chain from two different versions of the same slot `S`.
-* `Confirmed(B1) < S.slot` and `Confirmed(B2) < S.slot`.
-
-### Contents of the Proof
-Let `S` and `S'` be two versions of some slot. A proof shows two signed votes for two 
-banks `B1` and `B2` with bank hashes `H(B1)` and `H(B2)`. The proof shows:
-s
-* `Proof of Unconfirmed`: For each of these hashes `H` and each bank `B`, show 
-that `Confirmed(B) < S` by providing `state_hash(B)`, `Confirmed(B).slot`, 
-`bank_hash(parent(B))`, `parent(B).slot` such that:
-
-`H(B) == hash(Confirmed(B).slot, state_hash(B), bank_hash(parent(B)), parent(B).slot)`.
-
-* `Proof of Chaining`: Prove that both banks are descended from a different
-version of `S.slot`
-
-From the protocol outlined in `Conditions for Repairing a Slot with Multiple Versions`,
-if a validator is shown valid `Repair Proof(S)` and `Repair Proof(S')`,
-then that means at least 33% of the validators must have votes for different
-versions of the slot in both repair proofs. We can then generate a slashing 
-proof for these 33% by comparing the overlapping validator's votes that were
-contained in both repair proofs (Both `Proof of Minority` and the conflicting
-`Proof of Chaining` will exist in the two `Repair Proof`'s).
-
-### Guarantees:
-
-1) If a correct validator in the cluster is locked out greater than `2^THRESHOLD`
-on a version "A" of a block, then that version is the only version that correct
-validators will repair, unless at least 33% of validators equivocate and get
-slashed.
-2) If no correct valdiator is locked out greater than `2^THRESHOLD`, then
-everybody must have dropped the block and picked another fork.
-
-
+  If the hash does exist, run step `3.b.ii` above.
