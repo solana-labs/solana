@@ -760,13 +760,13 @@ mod tests {
     fn test_assign() {
         let new_program_owner = Pubkey::new(&[9; 32]);
 
-        let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &system_program::id());
+        let pubkey = Pubkey::new_rand();
+        let mut account = Account::new(100, 0, &system_program::id());
 
         assert_eq!(
             assign(
-                &mut from_account,
-                &from.into(),
+                &mut account,
+                &pubkey.into(),
                 &new_program_owner,
                 &HashSet::new()
             ),
@@ -774,9 +774,11 @@ mod tests {
         );
         // no change, no signature needed
         assert_eq!(
-            assign_account_to_program(
-                &mut KeyedAccount::new(&from, false, &mut from_account),
+            assign(
+                &mut account,
+                &pubkey.into(),
                 &system_program::id(),
+                &HashSet::new()
             ),
             Ok(())
         );
