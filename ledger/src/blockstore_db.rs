@@ -26,6 +26,9 @@ const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 const META_CF: &str = "meta";
 // Column family for slots that have been marked as dead
 const DEAD_SLOTS_CF: &str = "dead_slots";
+// Column family for slots that have been confirmed by the
+// supermajority stake
+const SLOT_CONFIRMATION_STATUS_CF: &str = "slot_confirmation_status";
 // Column family for storing proof that there were multiple
 // versions of a slot
 const DUPLICATE_SLOTS_CF: &str = "duplicate_slots";
@@ -150,6 +153,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The performance samples column
     pub struct PerfSamples;
+
+    #[derive(Debug)]
+    /// The confirmed slots column
+    pub struct SlotConfirmationStatus;
 }
 
 pub enum AccessType {
@@ -212,8 +219,8 @@ impl Rocks {
     ) -> Result<Rocks> {
         use columns::{
             AddressSignatures, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans,
-            PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
-            TransactionStatusIndex,
+            PerfSamples, Rewards, Root, ShredCode, ShredData, SlotConfirmationStatus, SlotMeta,
+            TransactionStatus, TransactionStatusIndex,
         };
 
         fs::create_dir_all(&path)?;
@@ -258,6 +265,8 @@ impl Rocks {
             ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options(&access_type));
         let perf_samples_cf_descriptor =
             ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options(&access_type));
+        let slot_confirmation_status_cf_descriptor =
+            ColumnFamilyDescriptor::new(SlotConfirmationStatus::NAME, get_cf_options(&access_type));
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
@@ -278,6 +287,10 @@ impl Rocks {
             (Rewards::NAME, rewards_cf_descriptor),
             (Blocktime::NAME, blocktime_cf_descriptor),
             (PerfSamples::NAME, perf_samples_cf_descriptor),
+            (
+                SlotConfirmationStatus::NAME,
+                slot_confirmation_status_cf_descriptor,
+            ),
         ];
 
         // Open the database
@@ -316,13 +329,14 @@ impl Rocks {
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
             AddressSignatures, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans,
-            PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
-            TransactionStatusIndex,
+            PerfSamples, Rewards, Root, ShredCode, ShredData, SlotConfirmationStatus, SlotMeta,
+            TransactionStatus, TransactionStatusIndex,
         };
 
         vec![
             ErasureMeta::NAME,
             DeadSlots::NAME,
+            SlotConfirmationStatus::NAME,
             DuplicateSlots::NAME,
             Index::NAME,
             Orphans::NAME,
@@ -336,6 +350,7 @@ impl Rocks {
             Rewards::NAME,
             Blocktime::NAME,
             PerfSamples::NAME,
+            SlotConfirmationStatus::NAME,
         ]
     }
 
@@ -641,6 +656,14 @@ impl ColumnName for columns::DeadSlots {
 }
 impl TypedColumn for columns::DeadSlots {
     type Type = bool;
+}
+
+impl SlotColumn for columns::SlotConfirmationStatus {}
+impl ColumnName for columns::SlotConfirmationStatus {
+    const NAME: &'static str = SLOT_CONFIRMATION_STATUS_CF;
+}
+impl TypedColumn for columns::SlotConfirmationStatus {
+    type Type = blockstore_meta::SlotConfirmationStatus;
 }
 
 impl SlotColumn for columns::DuplicateSlots {}

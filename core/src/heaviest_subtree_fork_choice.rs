@@ -56,6 +56,9 @@ struct ForkInfo {
     best_slot: Slot,
     parent: Option<Slot>,
     children: Vec<Slot>,
+    // Whether the fork rooted at this slot is a valid contender
+    // for the best fork
+    is_candidate: bool,
 }
 
 pub struct HeaviestSubtreeForkChoice {
@@ -142,6 +145,12 @@ impl HeaviestSubtreeForkChoice {
             .map(|fork_info| fork_info.stake_voted_subtree)
     }
 
+    pub fn is_candidate_slot(&self, slot: Slot) -> Option<bool> {
+        self.fork_infos
+            .get(&slot)
+            .map(|fork_info| fork_info.is_candidate)
+    }
+
     pub fn root(&self) -> Slot {
         self.root
     }
@@ -205,6 +214,7 @@ impl HeaviestSubtreeForkChoice {
             best_slot: root_info.best_slot,
             children: vec![self.root],
             parent: None,
+            is_candidate: true,
         };
         self.fork_infos.insert(root_parent, root_parent_info);
         self.root = root_parent;
@@ -226,6 +236,7 @@ impl HeaviestSubtreeForkChoice {
                 best_slot: slot,
                 children: vec![],
                 parent,
+                is_candidate: true,
             });
 
         if parent.is_none() {
@@ -375,17 +386,43 @@ impl HeaviestSubtreeForkChoice {
             let mut best_child_slot = slot;
             for &child in &fork_info.children {
                 let child_stake_voted_subtree = self.stake_voted_subtree(child).unwrap();
+                // Child forks that are not candidates still contribute to the weight
+                // of the subtree rooted at `slot`. For instance:
+                /*
+                    Build fork structure:
+                          slot 0
+                            |
+                          slot 1
+                          /    \
+                    slot 2     |
+                        |     slot 3 (34%)
+                slot 4 (66%)
+
+                    If slot 4 is a duplicate slot, so no longer qualifies as a candidate until
+                    the slot is confirmed, the weight of votes on slot 4 should still count towards
+                    slot 2, otherwise we might pick slot 3 as the heaviest fork to build blocks on
+                */
+
+                // See comment above for why this check is outside of the `is_candidate` check.
                 stake_voted_subtree += child_stake_voted_subtree;
-                if best_child_slot == slot ||
-                child_stake_voted_subtree > best_child_stake_voted_subtree ||
-            // tiebreaker by slot height, prioritize earlier slot
-            (child_stake_voted_subtree == best_child_stake_voted_subtree && child < best_child_slot)
+
+                // Note: If there's no valid children, then the best slot should default to the
+                // input `slot` itself.
+                if self
+                    .is_candidate_slot(child)
+                    .expect("Child must exist in fork_info map")
+                    && (best_child_slot == slot ||
+                    child_stake_voted_subtree > best_child_stake_voted_subtree ||
+                // tiebreaker by slot height, prioritize earlier slot
+                (child_stake_voted_subtree == best_child_stake_voted_subtree && child < best_child_slot))
                 {
-                    best_child_stake_voted_subtree = child_stake_voted_subtree;
-                    best_child_slot = child;
-                    best_slot = self
-                        .best_slot(child)
-                        .expect("`child` must exist in `self.fork_infos`");
+                    {
+                        best_child_stake_voted_subtree = child_stake_voted_subtree;
+                        best_child_slot = child;
+                        best_slot = self
+                            .best_slot(child)
+                            .expect("`child` must exist in `self.fork_infos`");
+                    }
                 }
             }
         } else {
@@ -601,6 +638,35 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
                         .clone()
                 }),
         )
+    }
+
+    fn mark_slot_invalid_candidate(&mut self, invalid_slot: Slot) {
+        let fork_info = self.fork_infos.get_mut(&invalid_slot);
+        if let Some(fork_info) = fork_info {
+            if fork_info.is_candidate {
+                fork_info.is_candidate = false;
+                // Aggregate to find the new best slots excluding this fork
+                let mut aggregate_operations = BTreeMap::new();
+                self.insert_aggregate_operations(&mut aggregate_operations, invalid_slot);
+                self.process_update_operations(aggregate_operations);
+            }
+        }
+    }
+
+    fn mark_slots_valid_candidate(&mut self, valid_slots: &[Slot]) {
+        let mut aggregate_operations = BTreeMap::new();
+        for valid_slot in valid_slots {
+            let fork_info = self.fork_infos.get_mut(&valid_slot);
+            if let Some(fork_info) = fork_info {
+                if !fork_info.is_candidate {
+                    fork_info.is_candidate = true;
+                    self.insert_aggregate_operations(&mut aggregate_operations, *valid_slot);
+                }
+            }
+        }
+
+        // Aggregate to find the new best slots including this fork
+        self.process_update_operations(aggregate_operations);
     }
 }
 

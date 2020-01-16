@@ -137,6 +137,7 @@ pub struct Blockstore {
     rewards_cf: LedgerColumn<cf::Rewards>,
     blocktime_cf: LedgerColumn<cf::Blocktime>,
     perf_samples_cf: LedgerColumn<cf::PerfSamples>,
+    slot_confirmation_status_cf: LedgerColumn<cf::SlotConfirmationStatus>,
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
@@ -307,6 +308,7 @@ impl Blockstore {
         let rewards_cf = db.column();
         let blocktime_cf = db.column();
         let perf_samples_cf = db.column();
+        let slot_confirmation_status_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -354,6 +356,7 @@ impl Blockstore {
             rewards_cf,
             blocktime_cf,
             perf_samples_cf,
+            slot_confirmation_status_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
@@ -2672,6 +2675,18 @@ impl Blockstore {
         Ok(())
     }
 
+    pub fn is_slot_confirmed(&self, slot: Slot) -> bool {
+        self.get_slot_confirmation_status(slot)
+            .map(|status| status.confirmed_blockhash.is_some())
+            .unwrap_or(false)
+    }
+
+    pub fn get_slot_confirmation_status(&self, slot: Slot) -> Option<SlotConfirmationStatus> {
+        self.db
+            .get::<cf::SlotConfirmationStatus>(slot)
+            .expect("fetch from SlotConfirmationStatus column family failed")
+    }
+
     pub fn is_dead(&self, slot: Slot) -> bool {
         matches!(
             self.db
@@ -2681,8 +2696,66 @@ impl Blockstore {
         )
     }
 
+    pub fn get_confirmed_blockhash(&self, slot: Slot) -> Option<Hash> {
+        self.db
+            .get::<cf::SlotConfirmationStatus>(slot)
+            .expect("fetch from SlotConfirmationStatus column family failed")
+            .map(|confirmation_status| confirmation_status.confirmed_blockhash)
+            .unwrap_or(None)
+    }
+
     pub fn set_dead_slot(&self, slot: Slot) -> Result<()> {
-        self.dead_slots_cf.put(slot, &true)
+        let mut slot_confirmation_status = self
+            .slot_confirmation_status_cf
+            .get(slot)
+            .expect("Couldn't fetch from SlotConfirmationStatus column family")
+            .unwrap_or_default();
+        if let Some(existing_hash) = slot_confirmation_status.confirmed_blockhash {
+            // This should never happen, a validator should never replay another verison
+            // of a slot after one version has already been confirmed
+            error!(
+                "Another version of this dead slot was confirmed with hash {}",
+                existing_hash
+            );
+            Ok(())
+        } else {
+            slot_confirmation_status.is_dead = true;
+            let mut write_batch = self
+                .db
+                .batch()
+                .expect("Database Error: Failed to get write batch");
+            write_batch.put::<cf::SlotConfirmationStatus>(slot, &slot_confirmation_status)?;
+            write_batch.put::<cf::DeadSlots>(slot, &true)?;
+            self.db.write(write_batch)
+        }
+    }
+
+    pub fn set_confirmed_blockhash(&self, slot: Slot, confirmed_blockhash: Hash) {
+        let mut slot_confirmation_status = self
+            .slot_confirmation_status_cf
+            .get(slot)
+            .expect("Couldn't fetch from SlotConfirmationStatus column family")
+            .unwrap_or_default();
+        if let Some(existing_hash) = slot_confirmation_status.confirmed_blockhash {
+            if existing_hash != confirmed_blockhash {
+                panic!("Confirmed blockhash for another version of the slot with hash {} different than {} already exists!", existing_hash, confirmed_blockhash);
+            }
+        } else {
+            let mut write_batch = self
+                .db
+                .batch()
+                .expect("Database Error: Failed to get write batch");
+            slot_confirmation_status.confirmed_blockhash = Some(confirmed_blockhash);
+            write_batch
+                .put::<cf::SlotConfirmationStatus>(slot, &slot_confirmation_status)
+                .expect("Couldn't set confirmed blockhash");
+            write_batch
+                .delete::<cf::DeadSlots>(slot)
+                .expect("Couldn't delete dead slot");
+            self.db
+                .write(write_batch)
+                .expect("Couldn't commit write batch")
+        }
     }
 
     pub fn store_duplicate_if_not_existing(
@@ -2743,6 +2816,16 @@ impl Blockstore {
             .get(slot)
             .expect("fetch from DuplicateSlots column family failed")
             .is_some()
+    }
+
+    pub fn is_unconfirmed_duplicate(&self, slot: Slot) -> bool {
+        let slot_confirmation_status = self
+            .slot_confirmation_status_cf
+            .get(slot)
+            .expect("Couldn't fetch from SlotConfirmationStatus column family")
+            .unwrap_or_default();
+        slot_confirmation_status.confirmed_blockhash.is_none()
+            && self.has_duplicate_shreds_in_slot(slot)
     }
 
     pub fn orphans_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = u64> + '_> {

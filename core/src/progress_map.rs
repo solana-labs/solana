@@ -139,6 +139,7 @@ pub(crate) struct ForkProgress {
     pub(crate) propagated_stats: PropagatedStats,
     pub(crate) replay_stats: ReplaySlotStats,
     pub(crate) replay_progress: ConfirmationProgress,
+    pub(crate) duplicate_stats: DuplicateStats,
     // Note `num_blocks_on_fork` and `num_dropped_blocks_on_fork` only
     // count new blocks replayed since last restart, which won't include
     // blocks already existing in the ledger/before snapshot at start,
@@ -151,6 +152,7 @@ impl ForkProgress {
     pub fn new(
         last_entry: Hash,
         prev_leader_slot: Option<Slot>,
+        duplicate_stats: DuplicateStats,
         validator_stake_info: Option<ValidatorStakeInfo>,
         num_blocks_on_fork: u64,
         num_dropped_blocks_on_fork: u64,
@@ -184,6 +186,7 @@ impl ForkProgress {
             fork_stats: ForkStats::default(),
             replay_stats: ReplaySlotStats::default(),
             replay_progress: ConfirmationProgress::new(last_entry),
+            duplicate_stats,
             num_blocks_on_fork,
             num_dropped_blocks_on_fork,
             propagated_stats: PropagatedStats {
@@ -203,6 +206,7 @@ impl ForkProgress {
         my_pubkey: &Pubkey,
         voting_pubkey: &Pubkey,
         prev_leader_slot: Option<Slot>,
+        duplicate_stats: DuplicateStats,
         num_blocks_on_fork: u64,
         num_dropped_blocks_on_fork: u64,
     ) -> Self {
@@ -222,6 +226,7 @@ impl ForkProgress {
         Self::new(
             bank.last_blockhash(),
             prev_leader_slot,
+            duplicate_stats,
             validator_fork_info,
             num_blocks_on_fork,
             num_dropped_blocks_on_fork,
@@ -257,6 +262,11 @@ pub(crate) struct PropagatedStats {
     pub(crate) slot_vote_tracker: Option<Arc<RwLock<SlotVoteTracker>>>,
     pub(crate) cluster_slot_pubkeys: Option<Arc<RwLock<SlotPubkeys>>>,
     pub(crate) total_epoch_stake: u64,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct DuplicateStats {
+    pub(crate) latest_unconfirmed_duplicate_ancestor: Option<Slot>,
 }
 
 impl PropagatedStats {
@@ -378,6 +388,65 @@ impl ProgressMap {
         }
     }
 
+    pub fn latest_unconfirmed_duplicate_ancestor(&self, slot: Slot) -> Option<Slot> {
+        self.get(&slot)
+            .map(|p| p.duplicate_stats.latest_unconfirmed_duplicate_ancestor)
+            .unwrap_or(None)
+    }
+
+    pub fn set_unconfirmed_duplicate_slot(&mut self, slot: Slot, descendants: &HashSet<u64>) {
+        if let Some(fork_progress) = self.get_mut(&slot) {
+            fork_progress
+                .duplicate_stats
+                .latest_unconfirmed_duplicate_ancestor = Some(slot);
+        }
+
+        for d in descendants {
+            if let Some(fork_progress) = self.get_mut(&d) {
+                fork_progress
+                    .duplicate_stats
+                    .latest_unconfirmed_duplicate_ancestor = Some(std::cmp::max(
+                    fork_progress
+                        .duplicate_stats
+                        .latest_unconfirmed_duplicate_ancestor
+                        .unwrap_or(0),
+                    slot,
+                ));
+            }
+        }
+    }
+
+    pub fn set_confirmed_slot(&mut self, slot: Slot, descendants: &HashSet<u64>) {
+        {
+            let slot_progress = self.get_mut(&slot).unwrap();
+            slot_progress
+                .duplicate_stats
+                .latest_unconfirmed_duplicate_ancestor = None;
+            slot_progress.fork_stats.confirmation_reported = true;
+        }
+        for d in descendants {
+            if let Some(fork_progress) = self.get_mut(&d) {
+                if let Some(latest_unconfirmed_duplicate_ancestor) = fork_progress
+                    .duplicate_stats
+                    .latest_unconfirmed_duplicate_ancestor
+                {
+                    if latest_unconfirmed_duplicate_ancestor <= slot {
+                        fork_progress
+                            .duplicate_stats
+                            .latest_unconfirmed_duplicate_ancestor = None;
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn is_confirmed(&self, slot: Slot) -> Option<bool> {
+        self.progress_map
+            .get(&slot)
+            .map(|s| s.fork_stats.confirmation_reported)
+    }
+
     pub fn get_bank_prev_leader_slot(&self, bank: &Bank) -> Option<Slot> {
         let parent_slot = bank.parent_slot();
         self.get_propagated_stats(parent_slot)
@@ -420,6 +489,7 @@ impl ProgressMap {
 #[cfg(test)]
 mod test {
     use super::*;
+    use core::iter::once;
 
     #[test]
     fn test_add_vote_pubkey() {
@@ -510,13 +580,21 @@ mod test {
     fn test_is_propagated_status_on_construction() {
         // If the given ValidatorStakeInfo == None, then this is not
         // a leader slot and is_propagated == false
-        let progress = ForkProgress::new(Hash::default(), Some(9), None, 0, 0);
+        let progress = ForkProgress::new(
+            Hash::default(),
+            Some(9),
+            DuplicateStats::default(),
+            None,
+            0,
+            0,
+        );
         assert!(!progress.propagated_stats.is_propagated);
 
         // If the stake is zero, then threshold is always achieved
         let progress = ForkProgress::new(
             Hash::default(),
             Some(9),
+            DuplicateStats::default(),
             Some(ValidatorStakeInfo {
                 total_epoch_stake: 0,
                 ..ValidatorStakeInfo::default()
@@ -531,6 +609,7 @@ mod test {
         let progress = ForkProgress::new(
             Hash::default(),
             Some(9),
+            DuplicateStats::default(),
             Some(ValidatorStakeInfo {
                 total_epoch_stake: 2,
                 ..ValidatorStakeInfo::default()
@@ -544,6 +623,7 @@ mod test {
         let progress = ForkProgress::new(
             Hash::default(),
             Some(9),
+            DuplicateStats::default(),
             Some(ValidatorStakeInfo {
                 stake: 1,
                 total_epoch_stake: 2,
@@ -560,6 +640,7 @@ mod test {
         let progress = ForkProgress::new(
             Hash::default(),
             Some(9),
+            DuplicateStats::default(),
             Some(ValidatorStakeInfo::default()),
             0,
             0,
@@ -573,12 +654,23 @@ mod test {
 
         // Insert new ForkProgress for slot 10 (not a leader slot) and its
         // previous leader slot 9 (leader slot)
-        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), None, 0, 0));
+        progress_map.insert(
+            10,
+            ForkProgress::new(
+                Hash::default(),
+                Some(9),
+                DuplicateStats::default(),
+                None,
+                0,
+                0,
+            ),
+        );
         progress_map.insert(
             9,
             ForkProgress::new(
                 Hash::default(),
                 None,
+                DuplicateStats::default(),
                 Some(ValidatorStakeInfo::default()),
                 0,
                 0,
@@ -593,7 +685,17 @@ mod test {
         // The previous leader before 8, slot 7, does not exist in
         // progress map, so is_propagated(8) should return true as
         // this implies the parent is rooted
-        progress_map.insert(8, ForkProgress::new(Hash::default(), Some(7), None, 0, 0));
+        progress_map.insert(
+            8,
+            ForkProgress::new(
+                Hash::default(),
+                Some(7),
+                DuplicateStats::default(),
+                None,
+                0,
+                0,
+            ),
+        );
         assert!(progress_map.is_propagated(8));
 
         // If we set the is_propagated = true, is_propagated should return true
@@ -615,5 +717,94 @@ mod test {
             .unwrap()
             .is_leader_slot = true;
         assert!(!progress_map.is_propagated(10));
+    }
+
+    #[test]
+    fn test_set_unconfirmed_confirmed_duplicate_slot() {
+        let mut progress_map = ProgressMap::default();
+        let smaller_duplicate_slot = 8;
+        let all_descendants: HashSet<_> = vec![20, 21, 10, 9, 12, 15].into_iter().collect();
+        let larger_duplicate_slot = 15;
+        let larger_descendants: HashSet<_> = all_descendants
+            .iter()
+            .cloned()
+            .filter(|d| *d > larger_duplicate_slot)
+            .collect();
+        for d in all_descendants.iter().chain(once(&smaller_duplicate_slot)) {
+            let slot_progress =
+                ForkProgress::new(Hash::default(), None, DuplicateStats::default(), None, 0, 0);
+            progress_map.insert(*d, slot_progress);
+        }
+
+        // Mark the slots as unconfirmed duplicates
+        progress_map.set_unconfirmed_duplicate_slot(larger_duplicate_slot, &larger_descendants);
+        progress_map.set_unconfirmed_duplicate_slot(smaller_duplicate_slot, &all_descendants);
+
+        for d in all_descendants.iter().chain(once(&smaller_duplicate_slot)) {
+            if *d < larger_duplicate_slot {
+                assert_eq!(
+                    progress_map
+                        .latest_unconfirmed_duplicate_ancestor(*d)
+                        .unwrap(),
+                    smaller_duplicate_slot
+                );
+            } else {
+                assert_eq!(
+                    progress_map
+                        .latest_unconfirmed_duplicate_ancestor(*d)
+                        .unwrap(),
+                    larger_duplicate_slot
+                );
+            }
+        }
+
+        // Mark the smaller duplicate slot as confirmed
+        progress_map.set_confirmed_slot(smaller_duplicate_slot, &all_descendants);
+        for d in all_descendants.iter().chain(once(&smaller_duplicate_slot)) {
+            if *d == smaller_duplicate_slot {
+                assert!(progress_map
+                    .latest_unconfirmed_duplicate_ancestor(*d)
+                    .is_none());
+                assert!(progress_map.is_confirmed(*d).unwrap());
+            } else {
+                assert!(!progress_map.is_confirmed(*d).unwrap());
+            }
+
+            if *d < larger_duplicate_slot {
+                // The unconfirmedd duplicate flag has been cleared on the smaller
+                // descendants because their most recent duplicate ancestor has
+                // been confirmed
+                assert!(progress_map
+                    .latest_unconfirmed_duplicate_ancestor(*d)
+                    .is_none());
+            } else {
+                // The unconfirmedd duplicate flag has not been cleared on the smaller
+                // descendants because their most recent duplicate ancestor,
+                // `larger_duplicate_slot` has  not yet been confirmed
+                assert_eq!(
+                    progress_map
+                        .latest_unconfirmed_duplicate_ancestor(*d)
+                        .unwrap(),
+                    larger_duplicate_slot
+                );
+            }
+        }
+
+        // Mark the larger duplicate slot as confirmed
+        progress_map.set_confirmed_slot(larger_duplicate_slot, &larger_descendants);
+        for d in all_descendants.iter().chain(once(&smaller_duplicate_slot)) {
+            if *d == smaller_duplicate_slot || *d == larger_duplicate_slot {
+                assert!(progress_map
+                    .latest_unconfirmed_duplicate_ancestor(*d)
+                    .is_none());
+                assert!(progress_map.is_confirmed(*d).unwrap());
+            } else {
+                assert!(!progress_map.is_confirmed(*d).unwrap());
+            }
+
+            assert!(progress_map
+                .latest_unconfirmed_duplicate_ancestor(*d)
+                .is_none());
+        }
     }
 }

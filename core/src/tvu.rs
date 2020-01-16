@@ -159,6 +159,7 @@ impl Tvu {
         let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
         let compaction_interval = tvu_config.rocksdb_compaction_interval;
         let max_compaction_jitter = tvu_config.rocksdb_max_compaction_jitter;
+        let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
             leader_schedule_cache,
@@ -179,6 +180,7 @@ impl Tvu {
             completed_data_sets_sender,
             max_slots,
             Some(subscriptions.clone()),
+            duplicate_slots_sender,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
@@ -262,6 +264,7 @@ impl Tvu {
             bank_forks.clone(),
             cluster_info.clone(),
             ledger_signal_receiver,
+            duplicate_slots_receiver,
             poh_recorder.clone(),
             tower,
             vote_tracker,

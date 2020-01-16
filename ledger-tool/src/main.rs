@@ -593,6 +593,11 @@ fn analyze_storage(database: &Database) {
     analyze_column::<SlotMeta>(database, "SlotMeta", SlotMeta::key_size());
     analyze_column::<Orphans>(database, "Orphans", Orphans::key_size());
     analyze_column::<DeadSlots>(database, "DeadSlots", DeadSlots::key_size());
+    analyze_column::<SlotConfirmationStatus>(
+        database,
+        "SlotConfirmationStatus",
+        SlotConfirmationStatus::key_size(),
+    );
     analyze_column::<ErasureMeta>(database, "ErasureMeta", ErasureMeta::key_size());
     analyze_column::<Root>(database, "Root", Root::key_size());
     analyze_column::<Index>(database, "Index", Index::key_size());
