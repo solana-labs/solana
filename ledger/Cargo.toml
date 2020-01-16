@@ -20,7 +20,6 @@ dlopen_derive = "0.1.4"
 sha2 = "0.8.1"
 fs_extra = "1.1.0"
 itertools = "0.8.2"
-lazy_static = "1.4.0"
 libc = "0.2.66"
 log = { version = "0.4.8" }
 rand = "0.6.5"
