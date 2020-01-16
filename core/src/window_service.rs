@@ -19,6 +19,7 @@ use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
+use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -26,6 +27,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
+
+pub type DuplicateSlotSender = CrossbeamSender<Slot>;
+pub type DuplicateSlotReceiver = CrossbeamReceiver<Slot>;
 
 fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
     if shred.is_data() {
@@ -76,17 +80,21 @@ pub fn should_retransmit_and_persist(
 fn run_check_duplicate(
     blockstore: &Arc<Blockstore>,
     shred_receiver: &CrossbeamReceiver<Shred>,
+    duplicate_slot_sender: &DuplicateSlotSender,
 ) -> Result<()> {
     let check_duplicate = |shred: Shred| -> Result<()> {
         if !blockstore.has_duplicate_shreds_in_slot(shred.slot()) {
             if let Some(existing_shred_payload) =
                 blockstore.is_shred_duplicate(shred.slot(), shred.index(), &shred.payload)
             {
+                let shred_slot = shred.slot();
                 blockstore.store_duplicate_slot(
-                    shred.slot(),
+                    shred_slot,
                     existing_shred_payload,
                     shred.payload,
                 )?;
+
+                duplicate_slot_sender.send(shred_slot)?;
             }
         }
 
@@ -252,6 +260,7 @@ impl WindowService {
         repair_strategy: RepairStrategy,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         shred_filter: F,
+        duplicate_slots_sender: DuplicateSlotSender,
     ) -> WindowService
     where
         F: 'static
@@ -273,17 +282,21 @@ impl WindowService {
         );
 
         let (insert_sender, insert_receiver) = unbounded();
-        let (duplicate_sender, duplicate_receiver) = unbounded();
+        let (check_duplicate_sender, check_duplicate_receiver) = unbounded();
 
-        let t_check_duplicate =
-            Self::start_check_duplicate_thread(exit, &blockstore, duplicate_receiver);
+        let t_check_duplicate = Self::start_check_duplicate_thread(
+            exit,
+            &blockstore,
+            check_duplicate_receiver,
+            duplicate_slots_sender,
+        );
 
         let t_insert = Self::start_window_insert_thread(
             exit,
             &blockstore,
             leader_schedule_cache,
             insert_receiver,
-            duplicate_sender,
+            check_duplicate_sender,
         );
 
         let t_window = Self::start_recv_window_thread(
@@ -308,7 +321,8 @@ impl WindowService {
     fn start_check_duplicate_thread(
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
-        duplicate_receiver: CrossbeamReceiver<Shred>,
+        check_duplicate_receiver: CrossbeamReceiver<Shred>,
+        duplicate_slot_sender: DuplicateSlotSender,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
@@ -323,7 +337,11 @@ impl WindowService {
                 }
 
                 let mut noop = || {};
-                if let Err(e) = run_check_duplicate(&blockstore, &duplicate_receiver) {
+                if let Err(e) = run_check_duplicate(
+                    &blockstore,
+                    &check_duplicate_receiver,
+                    &duplicate_slot_sender,
+                ) {
                     if Self::should_exit_on_error(e, &mut noop, &handle_error) {
                         break;
                     }
@@ -337,7 +355,7 @@ impl WindowService {
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         insert_receiver: CrossbeamReceiver<Vec<Shred>>,
-        duplicate_sender: CrossbeamSender<Shred>,
+        check_duplicate_sender: CrossbeamSender<Shred>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
@@ -351,7 +369,7 @@ impl WindowService {
             .name("solana-window-insert".to_string())
             .spawn(move || {
                 let handle_duplicate = |shred| {
-                    let _ = duplicate_sender.send(shred);
+                    let _ = check_duplicate_sender.send(shred);
                 };
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -456,6 +474,7 @@ impl WindowService {
                 handle_timeout();
                 false
             }
+            Error::CrossbeamSendError => true,
             _ => {
                 handle_error();
                 error!("thread {:?} error {:?}", thread::current().name(), e);
@@ -491,7 +510,6 @@ mod test {
         shred::Shredder,
     };
     use solana_sdk::{
-        clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
         signature::{Keypair, KeypairUtil},
@@ -623,6 +641,7 @@ mod test {
             ContactInfo::new_localhost(&Pubkey::default(), 0),
         )));
         let repair_sock = Arc::new(UdpSocket::bind(socketaddr_any!()).unwrap());
+        let (duplicate_slots_sender, _) = unbounded();
         let window = WindowService::new(
             blockstore,
             cluster_info,
@@ -633,6 +652,7 @@ mod test {
             RepairStrategy::RepairRange(RepairSlotRange { start: 0, end: 0 }),
             &Arc::new(LeaderScheduleCache::default()),
             |_, _, _, _| true,
+            duplicate_slots_sender,
         );
         window
     }
@@ -677,6 +697,7 @@ mod test {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
         let (sender, receiver) = unbounded();
+        let (duplicate_slot_sender, duplicate_slot_receiver) = unbounded();
         let (shreds, _) = make_many_slot_entries(5, 5, 10);
         blockstore
             .insert_shreds(shreds.clone(), None, false)
@@ -686,7 +707,11 @@ mod test {
         let duplicate_shred_slot = duplicate_shred.slot();
         sender.send(duplicate_shred).unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));
-        run_check_duplicate(&blockstore, &receiver).unwrap();
+        run_check_duplicate(&blockstore, &receiver, &duplicate_slot_sender).unwrap();
         assert!(blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));
+        assert_eq!(
+            duplicate_slot_receiver.try_recv().unwrap(),
+            duplicate_shred_slot
+        );
     }
 }

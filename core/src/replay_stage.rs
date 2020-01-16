@@ -7,6 +7,7 @@ use crate::{
     poh_recorder::PohRecorder,
     result::Result,
     rpc_subscriptions::RpcSubscriptions,
+    window_service::DuplicateSlotReceiver,
 };
 use solana_ledger::{
     bank_forks::BankForks,
@@ -165,6 +166,7 @@ impl ReplayStage {
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         ledger_signal_receiver: Receiver<bool>,
+        duplicate_slots_receiver: DuplicateSlotReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
@@ -186,7 +188,6 @@ impl ReplayStage {
         let mut tower = Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
 
         // Start the replay stage loop
-
         let (lockouts_sender, commitment_service) =
             AggregateCommitmentService::new(&exit, block_commitment_cache);
 

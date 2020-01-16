@@ -129,6 +129,7 @@ impl Tvu {
             )
         };
 
+        let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
             leader_schedule_cache,
@@ -142,6 +143,7 @@ impl Tvu {
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
             shred_version,
+            duplicate_slots_sender,
         );
 
         let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
@@ -178,6 +180,7 @@ impl Tvu {
             bank_forks.clone(),
             cluster_info.clone(),
             ledger_signal_receiver,
+            duplicate_slots_receiver,
             poh_recorder.clone(),
         );
 

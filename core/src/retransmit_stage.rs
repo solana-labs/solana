@@ -8,7 +8,7 @@ use crate::{
     streamer::PacketReceiver,
     window_service::{should_retransmit_and_persist, WindowService},
 };
-use crossbeam_channel::Receiver as CrossbeamReceiver;
+use crossbeam_channel::{Receiver, Sender};
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver},
@@ -17,6 +17,7 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
+use solana_sdk::clock::Slot;
 use solana_sdk::epoch_schedule::EpochSchedule;
 use std::{
     cmp,
@@ -208,12 +209,13 @@ impl RetransmitStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
+        verified_receiver: Receiver<Vec<Packets>>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
+        duplicate_slots_sender: Sender<Slot>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -256,6 +258,7 @@ impl RetransmitStage {
                 );
                 rv && is_connected
             },
+            duplicate_slots_sender,
         );
 
         let thread_hdls = t_retransmit;

@@ -461,6 +461,7 @@ impl Archiver {
             DisabledSigVerifier::default(),
         );
 
+        let (duplicate_slots_sender, _) = unbounded();
         let window_service = WindowService::new(
             blockstore.clone(),
             cluster_info.clone(),
@@ -471,6 +472,7 @@ impl Archiver {
             RepairStrategy::RepairRange(repair_slot_range),
             &Arc::new(LeaderScheduleCache::default()),
             |_, _, _, _| true,
+            duplicate_slots_sender,
         );
         info!("waiting for ledger download");
         Self::wait_for_segment_download(
