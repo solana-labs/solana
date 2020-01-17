@@ -46,6 +46,8 @@ use std::{
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 
+type ProgressMap = HashMap<Slot, ForkProgress>;
+
 // Implement a destructor for the ReplayStage thread to signal it exited
 // even on panics
 struct Finalizer {
@@ -248,6 +250,22 @@ impl ReplayStage {
                     );
 
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
+
+                    // Check to abort any duplicated slots
+                    if !tpu_has_bank {
+                        Self::check_for_duplicate_slots(
+                            &my_pubkey,
+                            &duplicate_slots_receiver,
+                            &ancestors,
+                            &mut progress,
+                            &blockstore,
+                            &bank_forks,
+                            &poh_recorder,
+                            &tower,
+                            &leader_schedule_cache,
+                        );
+                    }
+
                     loop {
                         let start = allocated.get();
                         let mut frozen_banks: Vec<_> = bank_forks
@@ -437,6 +455,225 @@ impl ReplayStage {
             },
             root_bank_receiver,
         )
+    }
+
+    // Adds a slot `duplicate_slot` to the `unconfirmed_forks` list if no
+    // earlier ancestor of `duplicate_slot` exists in `unconfirmed_forks`
+    fn add_unconfirmed_duplicate_slot(
+        duplicate_slot: Slot,
+        unconfirmed_forks: &mut Vec<Slot>,
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+    ) {
+        let duplicate_slot_ancestors = ancestors.get(&duplicate_slot).unwrap_or_else(|| {
+            panic!(
+                "Slot {} exists in progress map but doesn't exist in the ancestors map",
+                duplicate_slot
+            )
+        });
+
+        for existing_slot in &*unconfirmed_forks {
+            // An ancestor off this slot already exists in `unconfirmed_forks`,
+            // no need to add this slot
+            if duplicate_slot_ancestors.contains(existing_slot) || *existing_slot == duplicate_slot
+            {
+                return;
+            }
+        }
+
+        // Check if an ancestor of this slot has already been marked duplicate, or
+        // if this slot is the earliest ancestor, remove the descendants
+        unconfirmed_forks.retain(|existing_slot| {
+            let existing_slot_ancestors = ancestors.get(&existing_slot).unwrap_or_else(|| {
+                panic!(
+                    "Slot {} exists unconfirmed_forks but doesn't exist in the ancestors map",
+                    existing_slot
+                )
+            });
+
+            // If `duplicate_slot` is the ancestor of some `existing_slot`,
+            // then we can delete `existing_slot` as the fork is now
+            // represented by `duplicate_slot`
+            !existing_slot_ancestors.contains(&duplicate_slot)
+        });
+
+        unconfirmed_forks.push(duplicate_slot);
+    }
+
+    fn purge_unconfirmed_duplicate_slot(
+        duplicate_slot: Slot,
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+        progress: &mut ProgressMap,
+        bank_forks: &RwLock<BankForks>,
+    ) {
+        // Get the descendants of `duplicate_slot`
+        let mut descendants: Vec<_> = ancestors
+            .iter()
+            .filter_map(|(descendant, ancestors)| {
+                if ancestors.contains(&duplicate_slot) {
+                    Some(descendant)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        descendants.push(&duplicate_slot);
+        for d in descendants {
+            // Clear the progress map of these forks
+            let _ = progress.remove(d);
+
+            // Clear the status cache for this fork. If this happens
+            // during a long running partition, this could be a lot of
+            // rollback...
+            // This can be offloaded to the repair thread after a
+            // slot is detected to be confirmed by the network
+            bank_forks
+                .read()
+                .unwrap()
+                .working_bank()
+                .clear_slot_signatures(*d);
+
+            // Clear the duplicate banks from BankForks
+            bank_forks
+                .write()
+                .unwrap()
+                .remove(*d)
+                .expect("Bank in descendants map must exist in BankForks");
+        }
+    }
+
+    // Purge the state data for the forks in `unconfirmed_forks`. If the
+    // current descends from a duplicate fork in `unconfirmed_forks`, then
+    // choose the best non-duplicate fork and return the bank at the tip of
+    // that fork.
+    fn process_duplicate_unconfirmed_forks(
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+        unconfirmed_forks: &[Slot],
+        progress: &mut ProgressMap,
+        bank_forks: &RwLock<BankForks>,
+        last_reset_slot: u64,
+        tower: &Tower,
+    ) -> Option<Arc<Bank>> {
+        let last_reset_slot_ancestors = ancestors.get(&last_reset_slot).unwrap_or_else(|| {
+            panic!(
+                "Poh was last reset to slot {} which doesn't exist in the ancestors map",
+                last_reset_slot
+            )
+        });
+        let mut reset_necessary = false;
+        for duplicate_slot in unconfirmed_forks {
+            // If duplicate_slot is not yet confirmed, the
+            // validator needs to purge the forks descending
+            // from this slot
+            Self::purge_unconfirmed_duplicate_slot(
+                *duplicate_slot,
+                ancestors,
+                progress,
+                bank_forks,
+            );
+
+            // Check if our Poh descends from any of these duplicate forks.
+            if *duplicate_slot == last_reset_slot
+                || last_reset_slot_ancestors.contains(&duplicate_slot)
+            {
+                reset_necessary = true;
+            }
+        }
+
+        // Reset Poh so validator doesn't create another block on this
+        // fork which includes a duplicate block
+        if reset_necessary {
+            // Vote and reset to the last heaviest fork that doesn't
+            // include an unconfirmed duplicate block (the duplicates
+            // have all been purged from the progress map so will be
+            // out of consideration).
+            let frozen_banks: Vec<_> = bank_forks
+                .read()
+                .unwrap()
+                .frozen_banks()
+                .values()
+                .cloned()
+                .collect();
+            let bank = Self::select_fork(&frozen_banks, &tower, progress).expect(
+                "There must exist an alternate fork or earlier parent of
+            the duplicate slots to choose from",
+            );
+            Some(bank)
+        } else {
+            None
+        }
+    }
+
+    // Checks for and handle forks with duplicate slots.
+    fn check_for_duplicate_slots(
+        my_pubkey: &Pubkey,
+        duplicate_slots_receiver: &DuplicateSlotReceiver,
+        ancestors: &HashMap<Slot, HashSet<Slot>>,
+        progress: &mut ProgressMap,
+        blockstore: &Blockstore,
+        bank_forks: &RwLock<BankForks>,
+        poh_recorder: &Mutex<PohRecorder>,
+        tower: &Tower,
+        leader_schedule_cache: &LeaderScheduleCache,
+    ) {
+        let mut unconfirmed_forks = vec![];
+        for duplicate_slot in duplicate_slots_receiver.try_iter() {
+            if blockstore.is_root(duplicate_slot) {
+                Self::handle_approved_duplicate_blockhash(
+                    blockstore,
+                    duplicate_slot,
+                    &Hash::default(),
+                );
+            } else {
+                if let Some(fork_progress) = progress.get(&duplicate_slot) {
+                    if fork_progress.fork_stats.confirmation_reported {
+                        Self::handle_approved_duplicate_blockhash(
+                            blockstore,
+                            duplicate_slot,
+                            &Hash::default(),
+                        );
+                    } else {
+                        Self::add_unconfirmed_duplicate_slot(
+                            duplicate_slot,
+                            &mut unconfirmed_forks,
+                            ancestors,
+                        );
+                    }
+                };
+
+                // Mark the duplicate as dead, signaling RepairService to query
+                // the cluster about alternate versions of this slot
+                blockstore
+                    .set_dead_slot(duplicate_slot)
+                    .expect("Failed to mark slot as dead in blockstore");
+
+                // Figure out if the validator needs to reset PoH
+                let last_reset_slot = poh_recorder.lock().unwrap().last_reset_slot();
+                if let Some(reset_bank) = Self::process_duplicate_unconfirmed_forks(
+                    ancestors,
+                    &unconfirmed_forks,
+                    progress,
+                    bank_forks,
+                    last_reset_slot,
+                    tower,
+                ) {
+                    Self::reset_poh_recorder(
+                        &my_pubkey,
+                        &blockstore,
+                        &reset_bank,
+                        poh_recorder,
+                        &leader_schedule_cache,
+                    )
+                };
+            }
+        }
+    }
+
+    fn handle_approved_duplicate_blockhash(
+        _blockstore: &Blockstore,
+        _slot: Slot,
+        _blockhash: &Hash,
+    ) {
     }
 
     fn log_leader_change(
@@ -675,8 +912,8 @@ impl ReplayStage {
         my_pubkey: &Pubkey,
         blockstore: &Blockstore,
         bank: &Arc<Bank>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        poh_recorder: &Mutex<PohRecorder>,
+        leader_schedule_cache: &LeaderScheduleCache,
     ) {
         let next_leader_slot = leader_schedule_cache.next_leader_slot(
             &my_pubkey,
@@ -705,8 +942,8 @@ impl ReplayStage {
     }
 
     fn replay_active_banks(
-        blockstore: &Arc<Blockstore>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        blockstore: &Blockstore,
+        bank_forks: &RwLock<BankForks>,
         my_pubkey: &Pubkey,
         progress: &mut HashMap<u64, ForkProgress>,
         slot_full_senders: &[Sender<(u64, Pubkey)>],
@@ -1960,5 +2197,295 @@ pub(crate) mod tests {
                 .fork_weight;
             assert!(second >= first);
         }
+    }
+
+    #[test]
+    fn test_add_unconfirmed_duplicate_slot() {
+        let (bank_forks, _) = setup_forks();
+        let ancestors = bank_forks.ancestors();
+
+        // Everything descends from slot 0, so nothing should be added
+        let mut unconfirmed_forks = vec![0];
+        for i in 1..=6 {
+            ReplayStage::add_unconfirmed_duplicate_slot(i, &mut unconfirmed_forks, &ancestors);
+        }
+        assert_eq!(unconfirmed_forks, vec![0]);
+
+        // 4 descends from 2, so 2 should replace 4
+        let mut unconfirmed_forks = vec![4];
+        ReplayStage::add_unconfirmed_duplicate_slot(2, &mut unconfirmed_forks, &ancestors);
+        assert_eq!(unconfirmed_forks, vec![2]);
+
+        // 2 and 3 descend from 1, so 1 should replace both 2 and 3
+        let mut unconfirmed_forks = vec![2, 3];
+        ReplayStage::add_unconfirmed_duplicate_slot(1, &mut unconfirmed_forks, &ancestors);
+        assert_eq!(unconfirmed_forks, vec![1]);
+
+        // 2 is on a different fork than 5, so both should exist in the
+        // end result
+        let mut unconfirmed_forks = vec![5];
+        ReplayStage::add_unconfirmed_duplicate_slot(2, &mut unconfirmed_forks, &ancestors);
+        assert_eq!(unconfirmed_forks, vec![5, 2]);
+
+        // Slot should not be added twice
+        let mut unconfirmed_forks = vec![6];
+        ReplayStage::add_unconfirmed_duplicate_slot(6, &mut unconfirmed_forks, &ancestors);
+        assert_eq!(unconfirmed_forks, vec![6]);
+    }
+
+    #[test]
+    fn test_purge_unconfirmed_duplicate_slot() {
+        let (bank_forks, mut progress) = setup_forks();
+
+        let ancestors = bank_forks.ancestors();
+        let bank_forks = RwLock::new(bank_forks);
+
+        // Purging slot 5 should purge only slots 5 and 6
+        ReplayStage::purge_unconfirmed_duplicate_slot(5, &ancestors, &mut progress, &bank_forks);
+        for i in 5..=6 {
+            assert!(bank_forks.read().unwrap().get(i).is_none());
+            assert!(progress.get(&i).is_none());
+        }
+        for i in 0..=4 {
+            assert!(bank_forks.read().unwrap().get(i).is_some());
+            assert!(progress.get(&i).is_some());
+        }
+
+        // Purging slot 4 should purge only slot 4
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        ReplayStage::purge_unconfirmed_duplicate_slot(4, &ancestors, &mut progress, &bank_forks);
+        for i in 4..=6 {
+            assert!(bank_forks.read().unwrap().get(i).is_none());
+            assert!(progress.get(&i).is_none());
+        }
+        for i in 0..=3 {
+            assert!(bank_forks.read().unwrap().get(i).is_some());
+            assert!(progress.get(&i).is_some());
+        }
+
+        // Purging slot 1 should purge both forks 2 and 3
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        ReplayStage::purge_unconfirmed_duplicate_slot(1, &ancestors, &mut progress, &bank_forks);
+        for i in 1..=6 {
+            assert!(bank_forks.read().unwrap().get(i).is_none());
+            assert!(progress.get(&i).is_none());
+        }
+        assert!(bank_forks.read().unwrap().get(0).is_some());
+        assert!(progress.get(&0).is_some());
+    }
+
+    #[test]
+    fn test_process_duplicate_unconfirmed_forks() {
+        // Current fork doesn't descend from the unconfirmed fork, no reset is
+        // necessary
+        let unconfirmed_forks = vec![6];
+        let last_reset_slot = 4;
+        assert!(
+            run_test_process_duplicate_unconfirmed_forks(unconfirmed_forks, last_reset_slot)
+                .is_none()
+        );
+
+        // Duplicate slot is a descendant of the last reset, no reset
+        // necessary
+        let unconfirmed_forks = vec![6];
+        let last_reset_slot = 5;
+        assert!(
+            run_test_process_duplicate_unconfirmed_forks(unconfirmed_forks, last_reset_slot)
+                .is_none()
+        );
+
+        // Duplicate slot is an ancestor of the last reset, reset is necessary
+        let unconfirmed_forks = vec![3];
+        let last_reset_slot = 5;
+        assert_eq!(
+            run_test_process_duplicate_unconfirmed_forks(unconfirmed_forks, last_reset_slot)
+                .unwrap()
+                .slot(),
+            4
+        );
+
+        // Duplicate slot is the same as the last reset, reset is necessary
+        let unconfirmed_forks = vec![5];
+        let last_reset_slot = 5;
+        assert_eq!(
+            run_test_process_duplicate_unconfirmed_forks(unconfirmed_forks, last_reset_slot)
+                .unwrap()
+                .slot(),
+            4
+        );
+
+        // Duplicate slot is an ancestor of the last reset, reset is necessary
+        let unconfirmed_forks = vec![4, 5];
+        let last_reset_slot = 6;
+        assert_eq!(
+            run_test_process_duplicate_unconfirmed_forks(unconfirmed_forks, last_reset_slot)
+                .unwrap()
+                .slot(),
+            2
+        );
+    }
+
+    #[test]
+    fn test_duplicate_slots_not_replayed() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+            let bank0 = Bank::new(&genesis_config);
+            let mut last_blockhash = bank0.last_blockhash();
+            let ticks_per_slot = bank0.ticks_per_slot();
+            let hashes_per_tick = bank0.hashes_per_tick().unwrap_or(0);
+            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
+            let bank_forks = RwLock::new(BankForks::new(0, bank0));
+            let subscriptions = Arc::new(RpcSubscriptions::default());
+            let mut progress = HashMap::new();
+            let blockstore = Arc::new(
+                Blockstore::open(&ledger_path)
+                    .expect("Expected to be able to open database ledger"),
+            );
+            let num_slots = 5;
+            for i in 0..num_slots {
+                let ticks = entry::create_ticks(ticks_per_slot, hashes_per_tick, last_blockhash);
+                last_blockhash = ticks.last().unwrap().hash;
+                let shreds =
+                    entries_to_test_shreds(ticks.to_vec(), i, i.saturating_sub(1), true, 0);
+                blockstore.insert_shreds(shreds, None, false).unwrap();
+            }
+
+            // Play every slot between 0..num_slots
+            for i in 0..num_slots {
+                ReplayStage::generate_new_bank_forks(
+                    &blockstore,
+                    &bank_forks,
+                    &leader_schedule_cache,
+                    &subscriptions,
+                );
+
+                // Should finish playing a slot every time
+                assert!(ReplayStage::replay_active_banks(
+                    &blockstore,
+                    &bank_forks,
+                    &Pubkey::default(),
+                    &mut progress,
+                    &[],
+                    None,
+                    &VerifyRecyclers::default(),
+                ));
+
+                assert!(progress.get(&i).is_some());
+                assert!(bank_forks.read().unwrap().get(i).is_some());
+            }
+
+            // Mark a slot as duplicate
+            let duplicate_slot = 1;
+            blockstore
+                .set_dead_slot(duplicate_slot)
+                .expect("Failed to mark slot as dead in blockstore");
+            let unconfirmed_forks = vec![duplicate_slot];
+            let last_reset_slot = 0;
+            let ancestors = bank_forks.read().unwrap().ancestors();
+            ReplayStage::process_duplicate_unconfirmed_forks(
+                &ancestors,
+                &unconfirmed_forks,
+                &mut progress,
+                &bank_forks,
+                last_reset_slot,
+                &Tower::new_for_tests(0, 0.67),
+            );
+            let verify_only_single_bank_0 =
+                |bank_forks: &RwLock<BankForks>, progress: &ProgressMap| {
+                    let bf = bank_forks.read().unwrap();
+                    assert_eq!(bf.frozen_banks().len(), 1);
+                    assert_eq!(bf.active_banks().len(), 0);
+                    assert!(bf.get(0).is_some());
+                    assert_eq!(progress.len(), 1);
+                    assert!(progress.get(&0).is_some());
+                };
+            verify_only_single_bank_0(&bank_forks, &progress);
+
+            // All future slots past the duplicate should no longer be played
+            for _ in 1..num_slots {
+                ReplayStage::generate_new_bank_forks(
+                    &blockstore,
+                    &bank_forks,
+                    &leader_schedule_cache,
+                    &subscriptions,
+                );
+
+                // Should not finish playing a slot as there are no
+                // more playable slots
+                assert!(!ReplayStage::replay_active_banks(
+                    &blockstore,
+                    &bank_forks,
+                    &Pubkey::default(),
+                    &mut progress,
+                    &[],
+                    None,
+                    &VerifyRecyclers::default(),
+                ));
+
+                verify_only_single_bank_0(&bank_forks, &progress);
+            }
+        }
+    }
+
+    fn run_test_process_duplicate_unconfirmed_forks(
+        unconfirmed_forks: Vec<u64>,
+        last_reset_slot: u64,
+    ) -> Option<Arc<Bank>> {
+        let (bank_forks, mut progress) = setup_forks();
+        let ancestors = bank_forks.ancestors();
+        let bank_forks = RwLock::new(bank_forks);
+        let tower = Tower::new_for_tests(0, 0.67);
+        ReplayStage::process_duplicate_unconfirmed_forks(
+            &ancestors,
+            &unconfirmed_forks,
+            &mut progress,
+            &bank_forks,
+            last_reset_slot,
+            &tower,
+        )
+    }
+
+    fn setup_forks() -> (BankForks, ProgressMap) {
+        /*
+            Build fork structure:
+
+                 slot 0
+                   |
+                 slot 1
+                 /    \
+            slot 2    |
+               |    slot 3
+            slot 4    |
+                    slot 5
+                      |
+                    slot 6
+        */
+
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank0 = Bank::new(&genesis_config);
+        let mut bank_forks = BankForks::new(0, bank0);
+        let bank0 = bank_forks.get(0).unwrap();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.insert(bank1);
+        let bank2 = Bank::new_from_parent(&bank_forks.get(1).unwrap(), &Pubkey::default(), 2);
+        bank_forks.insert(bank2);
+        let bank3 = Bank::new_from_parent(&bank_forks.get(1).unwrap(), &Pubkey::default(), 3);
+        bank_forks.insert(bank3);
+        let bank4 = Bank::new_from_parent(&bank_forks.get(2).unwrap(), &Pubkey::default(), 4);
+        bank_forks.insert(bank4);
+        bank_forks.get(4).unwrap().freeze();
+        let bank5 = Bank::new_from_parent(&bank_forks.get(3).unwrap(), &Pubkey::default(), 5);
+        bank_forks.insert(bank5);
+        let bank6 = Bank::new_from_parent(&bank_forks.get(5).unwrap(), &Pubkey::default(), 6);
+        bank_forks.insert(bank6);
+        bank_forks.get(6).unwrap().freeze();
+
+        let mut progress = HashMap::new();
+        for i in 0..=6 {
+            progress.insert(i, ForkProgress::new(Hash::default()));
+        }
+
+        (bank_forks, progress)
     }
 }
