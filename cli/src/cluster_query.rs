@@ -11,6 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::{rpc_client::RpcClient, rpc_response::RpcVoteAccountInfo};
 use solana_sdk::{
+    account_utils::State,
     clock::{self, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::{Epoch, EpochSchedule},
@@ -170,8 +171,27 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Show the current gossip network nodes"),
         )
         .subcommand(
+            SubCommand::with_name("show-stakes")
+                .about("Show stake account information")
+                .arg(
+                    Arg::with_name("vote_account_pubkeys")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEYS")
+                        .takes_value(true)
+                        .multiple(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Only show stake accounts delegated to the provided vote accounts"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("show-validators")
-                .about("Show information about the current validators")
+                .about("Show summary information about the current validators")
                 .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
@@ -256,6 +276,19 @@ pub fn parse_get_transaction_count(matches: &ArgMatches<'_>) -> Result<CliComman
     };
     Ok(CliCommandInfo {
         command: CliCommand::GetTransactionCount { commitment_config },
+        require_keypair: false,
+    })
+}
+
+pub fn parse_show_stakes(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let use_lamports_unit = matches.is_present("lamports");
+    let vote_account_pubkeys = pubkeys_of(matches, "vote_account_pubkeys");
+
+    Ok(CliCommandInfo {
+        command: CliCommand::ShowStakes {
+            use_lamports_unit,
+            vote_account_pubkeys,
+        },
         require_keypair: false,
     })
 }
@@ -752,6 +785,45 @@ pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
         s.join("\n"),
         s.len(),
     ))
+}
+
+pub fn process_show_stakes(
+    rpc_client: &RpcClient,
+    use_lamports_unit: bool,
+    vote_account_pubkeys: Option<&[Pubkey]>,
+) -> ProcessResult {
+    use crate::stake::print_stake_state;
+    use solana_stake_program::stake_state::StakeState;
+
+    let progress_bar = new_spinner_progress_bar();
+    progress_bar.set_message("Fetching stake accounts...");
+    let all_stake_accounts = rpc_client.get_program_accounts(&solana_stake_program::id())?;
+    progress_bar.finish_and_clear();
+
+    for (stake_pubkey, stake_account) in all_stake_accounts {
+        if let Ok(stake_state) = stake_account.state() {
+            match stake_state {
+                StakeState::Initialized(_) => {
+                    if vote_account_pubkeys.is_none() {
+                        println!("\nstake pubkey: {}", stake_pubkey);
+                        print_stake_state(stake_account.lamports, &stake_state, use_lamports_unit);
+                    }
+                }
+                StakeState::Stake(_, stake) => {
+                    if vote_account_pubkeys.is_none()
+                        || vote_account_pubkeys
+                            .unwrap()
+                            .contains(&stake.delegation.voter_pubkey)
+                    {
+                        println!("\nstake pubkey: {}", stake_pubkey);
+                        print_stake_state(stake_account.lamports, &stake_state, use_lamports_unit);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok("".to_string())
 }
 
 pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) -> ProcessResult {
