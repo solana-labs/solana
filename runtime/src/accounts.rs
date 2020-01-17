@@ -504,9 +504,11 @@ impl Accounts {
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
     ) -> Vec<Result<()>> {
-        let mut account_locks = &mut self.account_locks.lock().unwrap();
-        OrderedIterator::new(txs, txs_iteration_order)
+        let keys: Vec<_> = OrderedIterator::new(txs, txs_iteration_order)
             .map(|tx| tx.message().get_account_keys_by_lock_type())
+            .collect();
+        let mut account_locks = &mut self.account_locks.lock().unwrap();
+        keys.into_iter()
             .map(|(writable_keys, readonly_keys)| {
                 self.lock_account(&mut account_locks, writable_keys, readonly_keys)
             })
