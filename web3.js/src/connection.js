@@ -894,7 +894,7 @@ export class Connection {
   }
 
   /**
-   * Fetch the current transaction count of the cluster
+   * Fetch the current status of a signature
    */
   async getSignatureStatus(
     signature: TransactionSignature,
