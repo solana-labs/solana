@@ -91,15 +91,15 @@ pub enum SystemInstruction {
         space: u64,
         program_id: Pubkey,
     },
-    /// `NonceAdvance` consumes a stored nonce, replacing it with a successor
+    /// `AdvanceNonceAccount` consumes a stored nonce, replacing it with a successor
     ///
     /// Expects 2 Accounts:
     ///     0 - A NonceAccount
     ///     1 - RecentBlockhashes sysvar
     ///
     /// The current authority must sign a transaction executing this instrucion
-    NonceAdvance,
-    /// `NonceWithdraw` transfers funds out of the nonce account
+    AdvanceNonceAccount,
+    /// `WithdrawNonceAccount` transfers funds out of the nonce account
     ///
     /// Expects 4 Accounts:
     ///     0 - A NonceAccount
@@ -111,8 +111,8 @@ pub enum SystemInstruction {
     /// account balance above the rent exempt reserve or at zero.
     ///
     /// The current authority must sign a transaction executing this instruction
-    NonceWithdraw(u64),
-    /// `NonceInitialize` drives state of Uninitalized NonceAccount to Initialized,
+    WithdrawNonceAccount(u64),
+    /// `InitializeNonceAccount` drives state of Uninitalized NonceAccount to Initialized,
     /// setting the nonce value.
     ///
     /// Expects 3 Accounts:
@@ -125,8 +125,8 @@ pub enum SystemInstruction {
     ///
     /// No signatures are required to execute this instruction, enabling derived
     /// nonce account addresses
-    NonceInitialize(Pubkey),
-    /// `NonceAuthorize` changes the entity authorized to execute nonce instructions
+    InitializeNonceAccount(Pubkey),
+    /// `AuthorizeNonceAccount` changes the entity authorized to execute nonce instructions
     /// on the account
     ///
     /// Expects 1 Account:
@@ -135,7 +135,7 @@ pub enum SystemInstruction {
     /// The `Pubkey` parameter identifies the entity to authorize
     ///
     /// The current authority must sign a transaction executing this instruction
-    NonceAuthorize(Pubkey),
+    AuthorizeNonceAccount(Pubkey),
 }
 
 pub fn create_account(
@@ -246,7 +246,7 @@ pub fn create_nonce_account(
         ),
         Instruction::new(
             system_program::id(),
-            &SystemInstruction::NonceInitialize(*authority),
+            &SystemInstruction::InitializeNonceAccount(*authority),
             vec![
                 AccountMeta::new(*nonce_pubkey, false),
                 AccountMeta::new_readonly(recent_blockhashes::id(), false),
@@ -264,7 +264,7 @@ pub fn nonce_advance(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instr
     .with_signer(authorized_pubkey);
     Instruction::new(
         system_program::id(),
-        &SystemInstruction::NonceAdvance,
+        &SystemInstruction::AdvanceNonceAccount,
         account_metas,
     )
 }
@@ -284,7 +284,7 @@ pub fn nonce_withdraw(
     .with_signer(authorized_pubkey);
     Instruction::new(
         system_program::id(),
-        &SystemInstruction::NonceWithdraw(lamports),
+        &SystemInstruction::WithdrawNonceAccount(lamports),
         account_metas,
     )
 }
@@ -297,7 +297,7 @@ pub fn nonce_authorize(
     let account_metas = vec![AccountMeta::new(*nonce_pubkey, false)].with_signer(authorized_pubkey);
     Instruction::new(
         system_program::id(),
-        &SystemInstruction::NonceAuthorize(*new_authority),
+        &SystemInstruction::AuthorizeNonceAccount(*new_authority),
         account_metas,
     )
 }
