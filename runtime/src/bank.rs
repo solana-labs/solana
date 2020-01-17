@@ -993,12 +993,16 @@ impl Bank {
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
                     let message = tx.message();
-                    if hash_queue.check_hash_age(&message.recent_blockhash, max_age) {
+                    let hash_age = hash_queue.check_hash_age(&message.recent_blockhash, max_age);
+                    if hash_age == Some(true) {
                         (Ok(()), Some(HashAgeKind::Extant))
                     } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(&tx) {
                         (Ok(()), Some(HashAgeKind::DurableNonce(pubkey, acc)))
+                    } else if hash_age == Some(false) {
+                        error_counters.blockhash_too_old += 1;
+                        (Err(TransactionError::BlockhashNotFound), None)
                     } else {
-                        error_counters.reserve_blockhash += 1;
+                        error_counters.blockhash_not_found += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
                     }
                 }
@@ -1043,7 +1047,7 @@ impl Bank {
             .collect()
     }
 
-    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> bool {
+    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> Option<bool> {
         self.blockhash_queue
             .read()
             .unwrap()
@@ -1093,29 +1097,48 @@ impl Bank {
         balances
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn update_error_counters(error_counters: &ErrorCounters) {
+        if 0 != error_counters.total {
+            inc_new_counter_error!(
+                "bank-process_transactions-error_count",
+                error_counters.total
+            );
+        }
+        if 0 != error_counters.account_not_found {
+            inc_new_counter_error!(
+                "bank-process_transactions-account_not_found",
+                error_counters.account_not_found
+            );
+        }
+        if 0 != error_counters.account_in_use {
+            inc_new_counter_error!(
+                "bank-process_transactions-account_in_use",
+                error_counters.account_in_use
+            );
+        }
+        if 0 != error_counters.account_loaded_twice {
+            inc_new_counter_error!(
+                "bank-process_transactions-account_loaded_twice",
+                error_counters.account_loaded_twice
+            );
+        }
         if 0 != error_counters.blockhash_not_found {
             inc_new_counter_error!(
                 "bank-process_transactions-error-blockhash_not_found",
                 error_counters.blockhash_not_found
             );
         }
+        if 0 != error_counters.blockhash_too_old {
+            inc_new_counter_error!(
+                "bank-process_transactions-error-blockhash_too_old",
+                error_counters.blockhash_too_old
+            );
+        }
         if 0 != error_counters.invalid_account_index {
             inc_new_counter_error!(
                 "bank-process_transactions-error-invalid_account_index",
                 error_counters.invalid_account_index
-            );
-        }
-        if 0 != error_counters.reserve_blockhash {
-            inc_new_counter_error!(
-                "bank-process_transactions-error-reserve_blockhash",
-                error_counters.reserve_blockhash
-            );
-        }
-        if 0 != error_counters.duplicate_signature {
-            inc_new_counter_error!(
-                "bank-process_transactions-error-duplicate_signature",
-                error_counters.duplicate_signature
             );
         }
         if 0 != error_counters.invalid_account_for_fee {
@@ -1130,10 +1153,16 @@ impl Bank {
                 error_counters.insufficient_funds
             );
         }
-        if 0 != error_counters.account_loaded_twice {
+        if 0 != error_counters.instruction_error {
             inc_new_counter_error!(
-                "bank-process_transactions-account_loaded_twice",
-                error_counters.account_loaded_twice
+                "bank-process_transactions-error-instruction_error",
+                error_counters.instruction_error
+            );
+        }
+        if 0 != error_counters.duplicate_signature {
+            inc_new_counter_error!(
+                "bank-process_transactions-error-duplicate_signature",
+                error_counters.duplicate_signature
             );
         }
     }
@@ -1160,7 +1189,10 @@ impl Bank {
             OrderedIterator::new(batch.lock_results(), batch.iteration_order())
                 .enumerate()
                 .filter_map(|(index, res)| match res {
-                    Err(TransactionError::AccountInUse) => Some(index),
+                    Err(TransactionError::AccountInUse) => {
+                        error_counters.account_in_use += 1;
+                        Some(index)
+                    }
                     Ok(_) => None,
                     Err(_) => None,
                 })
@@ -1190,11 +1222,13 @@ impl Bank {
                 (Err(e), hash_age_kind) => (Err(e.clone()), hash_age_kind.clone()),
                 (Ok((accounts, loaders, _rents)), hash_age_kind) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
-                    (
+                    let process_result =
                         self.message_processor
-                            .process_message(tx.message(), loaders, accounts),
-                        hash_age_kind.clone(),
-                    )
+                            .process_message(tx.message(), loaders, accounts);
+                    if let Err(TransactionError::InstructionError(_, _)) = &process_result {
+                        error_counters.instruction_error += 1;
+                    }
+                    (process_result, hash_age_kind.clone())
                 }
             })
             .collect();
@@ -1208,26 +1242,24 @@ impl Bank {
             txs.len(),
         );
         let mut tx_count: u64 = 0;
-        let mut err_count = 0;
+        let err_count = &mut error_counters.total;
         for ((r, _hash_age_kind), tx) in executed.iter().zip(txs.iter()) {
             if r.is_ok() {
                 tx_count += 1;
             } else {
-                if err_count == 0 {
+                if *err_count == 0 {
                     debug!("tx error: {:?} {:?}", r, tx);
                 }
-                err_count += 1;
+                *err_count += 1;
             }
         }
-        if err_count > 0 {
-            debug!("{} errors of {} txs", err_count, err_count + tx_count);
-            inc_new_counter_error!(
-                "bank-process_transactions-account_not_found",
-                error_counters.account_not_found
+        if *err_count > 0 {
+            debug!(
+                "{} errors of {} txs",
+                *err_count,
+                *err_count as u64 + tx_count
             );
-            inc_new_counter_error!("bank-process_transactions-error_count", err_count as usize);
         }
-
         Self::update_error_counters(&error_counters);
         (
             loaded_accounts,
@@ -4591,7 +4623,7 @@ mod tests {
             assert_eq!(recent_blockhashes.len(), i);
             let most_recent_hash = recent_blockhashes.iter().nth(0).unwrap();
             // Check order
-            assert!(bank.check_hash_age(most_recent_hash, 0));
+            assert_eq!(Some(true), bank.check_hash_age(most_recent_hash, 0));
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             bank = Arc::new(new_from_parent(&bank));
         }

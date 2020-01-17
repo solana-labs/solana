@@ -3599,7 +3599,7 @@
           "policy": "default",
           "query": "SELECT sum(\"count\") AS \"total_errors\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error_count\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
           "rawQuery": true,
-          "refId": "B",
+          "refId": "A",
           "resultFormat": "time_series",
           "select": [
             [
@@ -3634,9 +3634,9 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\")  AS \"blockhash_too_old\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-reserve_blockhash\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"account_in_use\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-account_in_use\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n\n",
           "rawQuery": true,
-          "refId": "A",
+          "refId": "B",
           "resultFormat": "time_series",
           "select": [
             [
@@ -3708,7 +3708,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"blockhash_not_found\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-blockhash_not_found\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"account_not_found\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-account_not_found\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n\n\n",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series",
@@ -3745,7 +3745,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"duplicate_signature\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-duplicate_signature\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"blockhash_not_found\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-blockhash_not_found\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
           "rawQuery": true,
           "refId": "E",
           "resultFormat": "time_series",
@@ -3782,7 +3782,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"insufficient_funds\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-insufficient_funds\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "query": "SELECT sum(\"count\")  AS \"blockhash_too_old\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-blockhash_too_old\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
           "rawQuery": true,
           "refId": "F",
           "resultFormat": "time_series",
@@ -3819,7 +3819,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"account_in_use\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-account_in_use\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"duplicate_signature\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-duplicate_signature\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n\n\n\n",
           "rawQuery": true,
           "refId": "G",
           "resultFormat": "time_series",
@@ -3856,9 +3856,120 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"account_not_found\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-account_not_found\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n\n",
+          "query": "SELECT sum(\"count\") AS \"instruction_error\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-instruction_error\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
           "rawQuery": true,
           "refId": "H",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT sum(\"count\") AS \"insufficient_funds\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-insufficient_funds\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "rawQuery": true,
+          "refId": "I",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT sum(\"count\") AS \"invalid_account_for_fee\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-invalid_account_for_fee\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "rawQuery": true,
+          "refId": "J",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT sum(\"count\") AS \"invalid_account_index\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-invalid_account_index\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "rawQuery": true,
+          "refId": "K",
           "resultFormat": "time_series",
           "select": [
             [

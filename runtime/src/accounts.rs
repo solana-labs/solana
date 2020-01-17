@@ -11,7 +11,6 @@ use crate::rent_collector::RentCollector;
 use crate::system_instruction_processor::{get_system_account_kind, SystemAccountKind};
 use log::*;
 use rayon::slice::ParallelSliceMut;
-use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::bank_hash::BankHash;
 use solana_sdk::clock::Slot;
@@ -435,18 +434,15 @@ impl Accounts {
         locks: &mut HashSet<Pubkey>,
         writable_keys: Vec<&Pubkey>,
         readonly_keys: Vec<&Pubkey>,
-        error_counters: &mut ErrorCounters,
     ) -> Result<()> {
         for k in writable_keys.iter() {
             if locks.contains(k) || self.is_locked_readonly(k) {
-                error_counters.account_in_use += 1;
                 debug!("CD Account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
         for k in readonly_keys.iter() {
             if locks.contains(k) {
-                error_counters.account_in_use += 1;
                 debug!("CO Account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
@@ -508,36 +504,15 @@ impl Accounts {
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
     ) -> Vec<Result<()>> {
-        let mut error_counters = ErrorCounters::default();
         let keys: Vec<_> = OrderedIterator::new(txs, txs_iteration_order)
-            .map(|tx| {
-                let message = &tx.message();
-                message.get_account_keys_by_lock_type()
-            })
+            .map(|tx| tx.message().get_account_keys_by_lock_type())
             .collect();
-
-        let rv = {
-            let mut account_locks = &mut self.account_locks.lock().unwrap();
-            keys.into_iter()
-                .map(|(writable_keys, readonly_keys)| {
-                    self.lock_account(
-                        &mut account_locks,
-                        writable_keys,
-                        readonly_keys,
-                        &mut error_counters,
-                    )
-                })
-                .collect()
-        };
-        if error_counters.account_in_use != 0 {
-            inc_new_counter_error!(
-                "bank-process_transactions-account_in_use",
-                error_counters.account_in_use,
-                0,
-                100
-            );
-        }
-        rv
+        let mut account_locks = &mut self.account_locks.lock().unwrap();
+        keys.into_iter()
+            .map(|(writable_keys, readonly_keys)| {
+                self.lock_account(&mut account_locks, writable_keys, readonly_keys)
+            })
+            .collect()
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
