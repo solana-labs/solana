@@ -55,6 +55,7 @@ use std::{
 #[derive(Clone, Debug)]
 pub struct ValidatorConfig {
     pub dev_sigverify_disabled: bool,
+    pub dev_sigsign_disabled: bool,
     pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
     pub voting_disabled: bool,
@@ -75,6 +76,7 @@ impl Default for ValidatorConfig {
     fn default() -> Self {
         Self {
             dev_sigverify_disabled: false,
+            dev_sigsign_disabled: false,
             dev_halt_at_slot: None,
             expected_genesis_hash: None,
             voting_disabled: false,
@@ -351,6 +353,14 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
+        if config.dev_sigverify_disabled {
+            warn!("signature verification disabled");
+        }
+
+        if config.dev_sigsign_disabled {
+            warn!("dummy signature enabled");
+        }
+
         let tvu = Tvu::new(
             vote_account,
             voting_keypair,
@@ -375,10 +385,6 @@ impl Validator {
             transaction_status_sender.clone(),
         );
 
-        if config.dev_sigverify_disabled {
-            warn!("signature verification disabled");
-        }
-
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
@@ -387,6 +393,7 @@ impl Validator {
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
             config.dev_sigverify_disabled,
+            config.dev_sigsign_disabled,
             transaction_status_sender,
             &blockstore,
             &config.broadcast_stage_type,

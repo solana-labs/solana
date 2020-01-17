@@ -51,6 +51,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             self.keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
             self.shred_version,
+            false,
         )
         .expect("Expected to create a new shredder");
 

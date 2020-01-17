@@ -28,6 +28,15 @@ impl Signature {
         Self(GenericArray::clone_from_slice(&signature_slice))
     }
 
+    pub fn new_rand() -> Self {
+        let mut random_signature_bytes = [0u8; 64];
+        // Break into two slices because random just doesn't implement for [u8; 64]:
+        // ref: https://docs.rs/rand/0.7.3/rand/distributions/trait.Distribution.html#impl-Distribution%3C%5BT%3B%2032%5D%3E
+        random_signature_bytes[0..32].copy_from_slice(&rand::random::<[u8; 32]>());
+        random_signature_bytes[32..64].copy_from_slice(&rand::random::<[u8; 32]>());
+        Self::new(&random_signature_bytes)
+    }
+
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
         let pubkey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes);
         let signature = ed25519_dalek::Signature::from_bytes(self.0.as_slice());

@@ -11,7 +11,7 @@ use std::sync::Arc;
 fn test_multi_fec_block_coding() {
     let keypair = Arc::new(Keypair::new());
     let slot = 0x123456789abcdef0;
-    let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
+    let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0, false)
         .expect("Failed in creating shredder");
 
     let num_fec_sets = 100;

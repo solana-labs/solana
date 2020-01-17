@@ -454,6 +454,12 @@ pub fn main() {
                 .help("Run without signature verification"),
         )
         .arg(
+            Arg::with_name("dev_no_sigsign")
+                .long("dev-no-sigsign")
+                .takes_value(false)
+                .help("Run with dummy signature generation"),
+        )
+        .arg(
             Arg::with_name("dev_halt_at_slot")
                 .long("dev-halt-at-slot")
                 .value_name("SLOT")
@@ -613,6 +619,7 @@ pub fn main() {
 
     let mut validator_config = ValidatorConfig::default();
     validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
+    validator_config.dev_sigsign_disabled = matches.is_present("dev_no_sigsign");
     validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
 
     validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");

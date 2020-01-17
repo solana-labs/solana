@@ -46,6 +46,7 @@ impl BroadcastStageType {
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         shred_version: u16,
+        sigsign_disabled: bool,
     ) -> BroadcastStage {
         let keypair = cluster_info.read().unwrap().keypair.clone();
         match self {
@@ -55,7 +56,7 @@ impl BroadcastStageType {
                 receiver,
                 exit_sender,
                 blockstore,
-                StandardBroadcastRun::new(keypair, shred_version),
+                StandardBroadcastRun::new(keypair, shred_version, sigsign_disabled),
             ),
 
             BroadcastStageType::FailEntryVerification => BroadcastStage::new(
@@ -306,7 +307,7 @@ mod test {
             entry_receiver,
             &exit_sender,
             &blockstore,
-            StandardBroadcastRun::new(leader_keypair, 0),
+            StandardBroadcastRun::new(leader_keypair, 0, false),
         );
 
         MockBroadcastStage {

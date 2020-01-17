@@ -41,6 +41,7 @@ impl Tpu {
         tpu_forwards_sockets: Vec<UdpSocket>,
         broadcast_sockets: Vec<UdpSocket>,
         sigverify_disabled: bool,
+        sigsign_disabled: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
         blockstore: &Arc<Blockstore>,
         broadcast_type: &BroadcastStageType,
@@ -89,6 +90,7 @@ impl Tpu {
             &exit,
             blockstore,
             shred_version,
+            sigsign_disabled,
         );
 
         Self {

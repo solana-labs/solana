@@ -37,10 +37,11 @@ pub(super) struct StandardBroadcastRun {
     slot_broadcast_start: Option<Instant>,
     keypair: Arc<Keypair>,
     shred_version: u16,
+    sigsign_disabled: bool,
 }
 
 impl StandardBroadcastRun {
-    pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
+    pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16, sigsign_disabled: bool) -> Self {
         Self {
             stats: Arc::new(RwLock::new(BroadcastStats::default())),
             unfinished_slot: None,
@@ -48,6 +49,7 @@ impl StandardBroadcastRun {
             slot_broadcast_start: None,
             keypair,
             shred_version,
+            sigsign_disabled,
         }
     }
 
@@ -77,7 +79,11 @@ impl StandardBroadcastRun {
 
         // This shred should only be Some if the previous slot was interrupted
         if let Some(ref mut shred) = last_unfinished_slot_shred {
-            Shredder::sign_shred(&self.keypair, shred);
+            if !self.sigsign_disabled {
+                Shredder::sign_shred(&self.keypair, shred);
+            } else {
+                Shredder::sign_shred_dummy(shred);
+            }
             self.unfinished_slot = None;
         }
 
@@ -103,6 +109,7 @@ impl StandardBroadcastRun {
                 self.keypair.clone(),
                 reference_tick,
                 self.shred_version,
+                self.sigsign_disabled,
             )
             .expect("Expected to create a new shredder"),
             next_shred_index,
@@ -405,7 +412,7 @@ mod test {
     #[test]
     fn test_interrupted_slot_last_shred() {
         let keypair = Arc::new(Keypair::new());
-        let mut run = StandardBroadcastRun::new(keypair.clone(), 0);
+        let mut run = StandardBroadcastRun::new(keypair.clone(), 0, false);
 
         // Set up the slot to be interrupted
         let next_shred_index = 10;
@@ -451,7 +458,8 @@ mod test {
         };
 
         // Step 1: Make an incomplete transmission for slot 0
-        let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair.clone(), 0);
+        let mut standard_broadcast_run =
+            StandardBroadcastRun::new(leader_keypair.clone(), 0, false);
         standard_broadcast_run
             .test_process_receive_results(&cluster_info, &socket, &blockstore, receive_results)
             .unwrap();
@@ -534,7 +542,7 @@ mod test {
             last_tick_height: ticks.len() as u64,
         };
 
-        let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair, 0);
+        let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair, 0, false);
         standard_broadcast_run
             .test_process_receive_results(&cluster_info, &socket, &blockstore, receive_results)
             .unwrap();

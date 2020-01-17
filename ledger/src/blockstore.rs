@@ -1114,9 +1114,16 @@ impl Blockstore {
         let mut remaining_ticks_in_slot = num_slots * ticks_per_slot - num_ticks_in_start_slot;
 
         let mut current_slot = start_slot;
-        let mut shredder =
-            Shredder::new(current_slot, parent_slot, 0.0, keypair.clone(), 0, version)
-                .expect("Failed to create entry shredder");
+        let mut shredder = Shredder::new(
+            current_slot,
+            parent_slot,
+            0.0,
+            keypair.clone(),
+            0,
+            version,
+            false,
+        )
+        .expect("Failed to create entry shredder");
         let mut all_shreds = vec![];
         let mut slot_entries = vec![];
         // Find all the entries for start_slot
@@ -1145,6 +1152,7 @@ impl Blockstore {
                     keypair.clone(),
                     (ticks_per_slot - remaining_ticks_in_slot) as u8,
                     version,
+                    false,
                 )
                 .expect("Failed to create entry shredder");
             }
@@ -2196,7 +2204,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
     let last_hash = entries.last().unwrap().hash;
     let version = Shred::version_from_hash(&last_hash);
 
-    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0, version)
+    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0, version, false)
         .expect("Failed to create entry shredder");
     let shreds = shredder.entries_to_shreds(&entries, true, 0).0;
     assert!(shreds.last().unwrap().last_in_slot());
@@ -2312,8 +2320,16 @@ pub fn entries_to_test_shreds(
     is_full_slot: bool,
     version: u16,
 ) -> Vec<Shred> {
-    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()), 0, version)
-        .expect("Failed to create entry shredder");
+    let shredder = Shredder::new(
+        slot,
+        parent_slot,
+        0.0,
+        Arc::new(Keypair::new()),
+        0,
+        version,
+        false,
+    )
+    .expect("Failed to create entry shredder");
 
     shredder.entries_to_shreds(&entries, is_full_slot, 0).0
 }
@@ -5233,6 +5249,7 @@ pub mod tests {
             leader_keypair.clone(),
             0,
             0,
+            false,
         )
         .expect("Failed in creating shredder");
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
@@ -5286,7 +5303,7 @@ pub mod tests {
         let entries1 = make_slot_entries_with_transactions(1);
         let entries2 = make_slot_entries_with_transactions(1);
         let leader_keypair = Arc::new(Keypair::new());
-        let shredder = Shredder::new(slot, 0, 1.0, leader_keypair.clone(), 0, 0)
+        let shredder = Shredder::new(slot, 0, 1.0, leader_keypair.clone(), 0, 0, false)
             .expect("Failed in creating shredder");
         let (shreds, _, _) = shredder.entries_to_shreds(&entries1, true, 0);
         let (duplicate_shreds, _, _) = shredder.entries_to_shreds(&entries2, true, 0);
