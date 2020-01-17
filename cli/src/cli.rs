@@ -200,6 +200,11 @@ pub enum CliCommand {
         new_authorized_pubkey: Pubkey,
         stake_authorize: StakeAuthorize,
         authority: Option<KeypairEq>,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash: Option<Hash>,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: Option<KeypairEq>,
     },
     WithdrawStake {
         stake_account_pubkey: Pubkey,
@@ -1356,6 +1361,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             new_authorized_pubkey,
             stake_authorize,
             ref authority,
+            sign_only,
+            ref signers,
+            blockhash,
+            nonce_account,
+            ref nonce_authority,
         } => process_stake_authorize(
             &rpc_client,
             config,
@@ -1363,6 +1373,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &new_authorized_pubkey,
             *stake_authorize,
             authority.as_deref(),
+            *sign_only,
+            signers,
+            *blockhash,
+            *nonce_account,
+            nonce_authority.as_deref(),
         ),
 
         CliCommand::WithdrawStake {

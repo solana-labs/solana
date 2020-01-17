@@ -40,6 +40,23 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     });
 }
 
+fn parse_sign_only_reply_string(reply: &str) -> (Hash, Vec<(Pubkey, Signature)>) {
+    let object: Value = serde_json::from_str(&reply).unwrap();
+    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
+    let blockhash = blockhash_str.parse::<Hash>().unwrap();
+    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
+    let signers = signer_strings
+        .iter()
+        .map(|signer_string| {
+            let mut signer = signer_string.as_str().unwrap().split('=');
+            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
+            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
+            (key, sig)
+        })
+        .collect();
+    (blockhash, signers)
+}
+
 #[test]
 fn test_seed_stake_delegation_and_deactivation() {
     solana_logger::setup();
@@ -300,18 +317,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
-    let object: Value = serde_json::from_str(&sig_response).unwrap();
-    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
-    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
-    let signers: Vec<_> = signer_strings
-        .iter()
-        .map(|signer_string| {
-            let mut signer = signer_string.as_str().unwrap().split('=');
-            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-            (key, sig)
-        })
-        .collect();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
 
     // Delegate stake online
     config_payer.command = CliCommand::DelegateStake {
@@ -321,7 +327,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         force: true,
         sign_only: false,
         signers: Some(signers),
-        blockhash: Some(blockhash_str.parse::<Hash>().unwrap()),
+        blockhash: Some(blockhash),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -338,18 +344,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
-    let object: Value = serde_json::from_str(&sig_response).unwrap();
-    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
-    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
-    let signers: Vec<_> = signer_strings
-        .iter()
-        .map(|signer_string| {
-            let mut signer = signer_string.as_str().unwrap().split('=');
-            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-            (key, sig)
-        })
-        .collect();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
 
     // Deactivate stake online
     config_payer.command = CliCommand::DeactivateStake {
@@ -357,7 +352,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_authority: None,
         sign_only: false,
         signers: Some(signers),
-        blockhash: Some(blockhash_str.parse::<Hash>().unwrap()),
+        blockhash: Some(blockhash),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -517,6 +512,11 @@ fn test_stake_authorize() {
         new_authorized_pubkey: online_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
         authority: None,
+        sign_only: false,
+        signers: None,
+        blockhash: None,
+        nonce_account: None,
+        nonce_authority: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -530,13 +530,18 @@ fn test_stake_authorize() {
     // Assign new offline stake authority
     let offline_authority = Keypair::new();
     let offline_authority_pubkey = offline_authority.pubkey();
-    let (_offline_authority_file, mut tmp_file) = make_tmp_file();
+    let (offline_authority_file, mut tmp_file) = make_tmp_file();
     write_keypair(&offline_authority, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: offline_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
         authority: Some(read_keypair_file(&online_authority_file).unwrap().into()),
+        sign_only: false,
+        signers: None,
+        blockhash: None,
+        nonce_account: None,
+        nonce_authority: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -547,6 +552,115 @@ fn test_stake_authorize() {
     };
     assert_eq!(current_authority, offline_authority_pubkey);
 
+    // Offline assignment of new nonced stake authority
+    let nonced_authority = Keypair::new();
+    let nonced_authority_pubkey = nonced_authority.pubkey();
+    let (nonced_authority_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&nonced_authority, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorized_pubkey: nonced_authority_pubkey,
+        stake_authorize: StakeAuthorize::Staker,
+        authority: Some(read_keypair_file(&offline_authority_file).unwrap().into()),
+        sign_only: true,
+        signers: None,
+        blockhash: None,
+        nonce_account: None,
+        nonce_authority: None,
+    };
+    let sign_reply = process_command(&config).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorized_pubkey: nonced_authority_pubkey,
+        stake_authorize: StakeAuthorize::Staker,
+        // We need to be able to specify the authority by pubkey/sig pair here
+        authority: Some(read_keypair_file(&offline_authority_file).unwrap().into()),
+        sign_only: false,
+        signers: Some(signers),
+        blockhash: Some(blockhash),
+        nonce_account: None,
+        nonce_authority: None,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let current_authority = match stake_state {
+        StakeState::Initialized(meta) => meta.authorized.staker,
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(current_authority, nonced_authority_pubkey);
+
+    // Create nonce account
+    let minimum_nonce_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(NonceState::size())
+        .unwrap();
+    let nonce_account = Keypair::new();
+    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateNonceAccount {
+        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        seed: None,
+        nonce_authority: Some(config.keypair.pubkey()),
+        lamports: minimum_nonce_balance,
+    };
+    process_command(&config).unwrap();
+
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Nonced assignment of new nonced stake authority
+    let online_authority = Keypair::new();
+    let online_authority_pubkey = online_authority.pubkey();
+    let (_online_authority_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&online_authority, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorized_pubkey: online_authority_pubkey,
+        stake_authorize: StakeAuthorize::Staker,
+        authority: Some(read_keypair_file(&nonced_authority_file).unwrap().into()),
+        sign_only: true,
+        signers: None,
+        blockhash: Some(nonce_hash),
+        nonce_account: Some(nonce_account.pubkey()),
+        nonce_authority: None,
+        //nonce_authority: Some(read_keypair_file(&nonce_keypair_file).unwrap().into()),
+    };
+    let sign_reply = process_command(&config).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
+    assert_eq!(blockhash, nonce_hash);
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorized_pubkey: online_authority_pubkey,
+        stake_authorize: StakeAuthorize::Staker,
+        // We need to be able to specify the authority by pubkey/sig pair here
+        authority: Some(read_keypair_file(&nonced_authority_file).unwrap().into()),
+        sign_only: false,
+        signers: Some(signers),
+        blockhash: Some(blockhash),
+        nonce_account: Some(nonce_account.pubkey()),
+        nonce_authority: None,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let current_authority = match stake_state {
+        StakeState::Initialized(meta) => meta.authorized.staker,
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(current_authority, online_authority_pubkey);
+    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let new_nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+    assert_ne!(nonce_hash, new_nonce_hash);
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }
