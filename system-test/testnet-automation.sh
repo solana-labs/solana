@@ -218,7 +218,7 @@ function launchTestnet() {
       sleep "$PARTITION_INACTIVE_DURATION"
     done
     STATS_FINISH_SECONDS=$SECONDS
-    TEST_DURATION_SECONDS=$(($STATS_FINISH_SECONDS - $STATS_START_SECONDS))
+    TEST_DURATION_SECONDS=$((STATS_FINISH_SECONDS - STATS_START_SECONDS))
   else
     # We should never get here
     echo Test duration and partition config not defined
