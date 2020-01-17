@@ -64,6 +64,20 @@ pub fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
 }
 
+pub fn pubkeys_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Pubkey>> {
+    matches.values_of(name).map(|values| {
+        values
+            .map(|value| {
+                value.parse::<Pubkey>().unwrap_or_else(|_| {
+                    read_keypair_file(value)
+                        .expect("read_keypair_file failed")
+                        .pubkey()
+                })
+            })
+            .collect()
+    })
+}
+
 // Return pubkey/signature pairs for a string of the form pubkey=signature
 pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
     matches.values_of(name).map(|values| {
@@ -154,7 +168,7 @@ mod tests {
     #[test]
     fn test_keypair_of() {
         let keypair = Keypair::new();
-        let outfile = tmp_file_path("test_gen_keypair_file.json", &keypair.pubkey());
+        let outfile = tmp_file_path("test_keypair_of.json", &keypair.pubkey());
         let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
         let matches = app()
@@ -178,7 +192,7 @@ mod tests {
     #[test]
     fn test_pubkey_of() {
         let keypair = Keypair::new();
-        let outfile = tmp_file_path("test_gen_keypair_file.json", &keypair.pubkey());
+        let outfile = tmp_file_path("test_pubkey_of.json", &keypair.pubkey());
         let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
         let matches = app()
@@ -199,6 +213,26 @@ mod tests {
                 .get_matches_from(vec!["test", "--single", "random_keypair_file.json"]);
         assert_eq!(pubkey_of(&matches, "single"), None);
 
+        fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_pubkeys_of() {
+        let keypair = Keypair::new();
+        let outfile = tmp_file_path("test_pubkeys_of.json", &keypair.pubkey());
+        let _ = write_keypair_file(&keypair, &outfile).unwrap();
+
+        let matches = app().clone().get_matches_from(vec![
+            "test",
+            "--multiple",
+            &keypair.pubkey().to_string(),
+            "--multiple",
+            &outfile,
+        ]);
+        assert_eq!(
+            pubkeys_of(&matches, "multiple"),
+            Some(vec![keypair.pubkey(), keypair.pubkey()])
+        );
         fs::remove_file(&outfile).unwrap();
     }
 

@@ -126,6 +126,10 @@ pub enum CliCommand {
         slot_limit: Option<u64>,
     },
     ShowGossip,
+    ShowStakes {
+        use_lamports_unit: bool,
+        vote_account_pubkeys: Option<Vec<Pubkey>>,
+    },
     ShowValidators {
         use_lamports_unit: bool,
     },
@@ -380,6 +384,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             command: CliCommand::ShowGossip,
             require_keypair: false,
         }),
+        ("show-stakes", Some(matches)) => parse_show_stakes(matches),
         ("show-validators", Some(matches)) => parse_show_validators(matches),
         // Nonce Commands
         ("authorize-nonce-account", Some(matches)) => parse_authorize_nonce_account(matches),
@@ -1200,6 +1205,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
         }
         CliCommand::ShowGossip => process_show_gossip(&rpc_client),
+        CliCommand::ShowStakes {
+            use_lamports_unit,
+            vote_account_pubkeys,
+        } => process_show_stakes(
+            &rpc_client,
+            *use_lamports_unit,
+            vote_account_pubkeys.as_deref(),
+        ),
         CliCommand::ShowValidators { use_lamports_unit } => {
             process_show_validators(&rpc_client, *use_lamports_unit)
         }

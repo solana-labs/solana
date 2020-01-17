@@ -24,10 +24,9 @@ use solana_sdk::{
     },
     transaction::Transaction,
 };
-use solana_stake_program::stake_state::Meta;
 use solana_stake_program::{
     stake_instruction::{self, StakeError},
-    stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
+    stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
 };
 use solana_vote_program::vote_state::VoteState;
 use std::ops::Deref;
@@ -969,20 +968,7 @@ pub fn process_redeem_vote_credits(
     log_instruction_custom_error::<StakeError>(result)
 }
 
-pub fn process_show_stake_account(
-    rpc_client: &RpcClient,
-    _config: &CliConfig,
-    stake_account_pubkey: &Pubkey,
-    use_lamports_unit: bool,
-) -> ProcessResult {
-    let stake_account = rpc_client.get_account(stake_account_pubkey)?;
-    if stake_account.owner != solana_stake_program::id() {
-        return Err(CliError::RpcRequestError(format!(
-            "{:?} is not a stake account",
-            stake_account_pubkey
-        ))
-        .into());
-    }
+pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamports_unit: bool) {
     fn show_authorized(authorized: &Authorized) {
         println!("authorized staker: {}", authorized.staker);
         println!("authorized withdrawer: {}", authorized.staker);
@@ -991,16 +977,16 @@ pub fn process_show_stake_account(
         println!("lockup epoch: {}", lockup.epoch);
         println!("lockup custodian: {}", lockup.custodian);
     }
-    match stake_account.state() {
-        Ok(StakeState::Stake(
+    match stake_state {
+        StakeState::Stake(
             Meta {
                 authorized, lockup, ..
             },
             stake,
-        )) => {
+        ) => {
             println!(
                 "total stake: {}",
-                build_balance_message(stake_account.lamports, use_lamports_unit, true)
+                build_balance_message(stake_lamports, use_lamports_unit, true)
             );
             println!("credits observed: {}", stake.credits_observed);
             println!(
@@ -1026,16 +1012,40 @@ pub fn process_show_stake_account(
             }
             show_authorized(&authorized);
             show_lockup(&lockup);
-            Ok("".to_string())
         }
-        Ok(StakeState::RewardsPool) => Ok("Stake account is a rewards pool".to_string()),
-        Ok(StakeState::Uninitialized) => Ok("Stake account is uninitialized".to_string()),
-        Ok(StakeState::Initialized(Meta {
+        StakeState::RewardsPool => println!("stake account is a rewards pool"),
+        StakeState::Uninitialized => println!("stake account is uninitialized"),
+        StakeState::Initialized(Meta {
             authorized, lockup, ..
-        })) => {
-            println!("Stake account is undelegated");
+        }) => {
+            println!(
+                "total stake: {}",
+                build_balance_message(stake_lamports, use_lamports_unit, true)
+            );
+            println!("stake account is undelegated");
             show_authorized(&authorized);
             show_lockup(&lockup);
+        }
+    }
+}
+
+pub fn process_show_stake_account(
+    rpc_client: &RpcClient,
+    _config: &CliConfig,
+    stake_account_pubkey: &Pubkey,
+    use_lamports_unit: bool,
+) -> ProcessResult {
+    let stake_account = rpc_client.get_account(stake_account_pubkey)?;
+    if stake_account.owner != solana_stake_program::id() {
+        return Err(CliError::RpcRequestError(format!(
+            "{:?} is not a stake account",
+            stake_account_pubkey
+        ))
+        .into());
+    }
+    match stake_account.state() {
+        Ok(stake_state) => {
+            print_stake_state(stake_account.lamports, &stake_state, use_lamports_unit);
             Ok("".to_string())
         }
         Err(err) => Err(CliError::RpcRequestError(format!(
