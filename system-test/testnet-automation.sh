@@ -206,15 +206,15 @@ function launchTestnet() {
   elif [[ "$APPLY_PARTITIONS" = "true" ]]; then
     execution_step "Wait $PARTITION_INACTIVE_DURATION before beginning to apply partitions"
     sleep "$PARTITION_INACTIVE_DURATION"
-    for (( i=1; i<=$PARTITION_ITERATION_COUNT; i++ )); do
+    for (( i=1; i<=PARTITION_ITERATION_COUNT; i++ )); do
       execution_step "Partition Iteration $i of $PARTITION_ITERATION_COUNT"
       execution_step "Applying netem config $NETEM_CONFIG_FILE for $PARTITION_ACTIVE_DURATION seconds"
-      net/net.sh netem --config-file $NETEM_CONFIG_FILE
-      sleep $PARTITION_ACTIVE_DURATION
+      net/net.sh netem --config-file "$NETEM_CONFIG_FILE"
+      sleep "$PARTITION_ACTIVE_DURATION"
 
       execution_step "Resolving partitions for $PARTITION_INACTIVE_DURATION seconds"
-      net/net.sh netem --config-file $NETEM_CONFIG_FILE --netem-cmd cleanup
-      sleep $PARTITION_INACTIVE_DURATION
+      net/net.sh netem --config-file "$NETEM_CONFIG_FILE" --netem-cmd cleanup
+      sleep "$PARTITION_INACTIVE_DURATION"
     done
   else
     # We should never get here

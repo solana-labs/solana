@@ -1009,7 +1009,7 @@ logs)
   ;;
 netem)
   if [[ -n $netemConfigFile ]]; then
-    remoteNetemConfigFile="$(basename $netemConfigFile)"
+    remoteNetemConfigFile="$(basename "$netemConfigFile")"
     if [[ $netemCommand = "add" ]]; then
       for ipAddress in "${validatorIpList[@]}"; do
         "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":~/solana
