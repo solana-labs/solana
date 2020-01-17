@@ -572,9 +572,10 @@ fn test_softlaunch_operating_mode() {
 
     // Programs that are available at soft launch epoch 0
     for program_id in [
+        &solana_config_program::id(),
         &solana_sdk::system_program::id(),
-        &solana_vote_program::id(),
         &solana_stake_program::id(),
+        &solana_vote_program::id(),
     ]
     .iter()
     {
@@ -591,7 +592,6 @@ fn test_softlaunch_operating_mode() {
 
     // Programs that are not available at soft launch epoch 0
     for program_id in [
-        &solana_config_program::id(),
         &solana_sdk::bpf_loader::id(),
         &solana_storage_program::id(),
         &solana_vest_program::id(),

@@ -55,11 +55,11 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
             if epoch == 0 {
                 Some(vec![
                     // Enable all SoftLaunch programs
-                    solana_system_program(),
                     solana_bpf_loader_program!(),
                     solana_config_program!(),
                     solana_stake_program!(),
                     solana_storage_program!(),
+                    solana_system_program(),
                     solana_vest_program!(),
                     solana_vote_program!(),
                     // Programs that are only available in Development mode
@@ -73,25 +73,17 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
         }
         OperatingMode::SoftLaunch => {
             if epoch == 0 {
-                // Nonce, Voting, Staking and System Program only at epoch 0
                 Some(vec![
+                    solana_config_program!(),
                     solana_stake_program!(),
                     solana_system_program(),
                     solana_vote_program!(),
                 ])
             } else if epoch == std::u64::MAX - 1 {
-                // Archivers are activated next
-                //
                 // The epoch of std::u64::MAX - 1 is a placeholder and is expected to be reduced in
                 // a future hard fork.
-                Some(vec![
-                    solana_config_program!(),
-                    solana_storage_program!(),
-                    solana_vest_program!(),
-                ])
+                Some(vec![solana_storage_program!(), solana_vest_program!()])
             } else if epoch == std::u64::MAX {
-                // Finally 3rd party BPF programs are available
-                //
                 // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in a
                 // future hard fork.
                 Some(vec![solana_bpf_loader_program!()])
@@ -169,6 +161,7 @@ mod tests {
         assert_eq!(
             get_programs(OperatingMode::SoftLaunch, 0),
             Some(vec![
+                solana_config_program!(),
                 solana_stake_program!(),
                 solana_system_program(),
                 solana_vote_program!(),
