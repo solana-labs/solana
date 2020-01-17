@@ -82,7 +82,7 @@ Failure occured when running the following command:
 $(eval echo "$@")"
   fi
 
-  FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
+  TESTNET_FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
   if [[ "$UPLOAD_RESULTS_TO_SLACK" = "true" ]]; then
     upload_results_to_slack
   fi
@@ -204,6 +204,7 @@ function launchTestnet() {
     execution_step "Wait ${TEST_DURATION_SECONDS} seconds to complete test"
     sleep "$TEST_DURATION_SECONDS"
   elif [[ "$APPLY_PARTITIONS" = "true" ]]; then
+    STATS_START_SECONDS=$SECONDS
     execution_step "Wait $PARTITION_INACTIVE_DURATION before beginning to apply partitions"
     sleep "$PARTITION_INACTIVE_DURATION"
     for (( i=1; i<=PARTITION_ITERATION_COUNT; i++ )); do
@@ -216,6 +217,8 @@ function launchTestnet() {
       net/net.sh netem --config-file "$NETEM_CONFIG_FILE" --netem-cmd cleanup
       sleep "$PARTITION_INACTIVE_DURATION"
     done
+    STATS_FINISH_SECONDS=$SECONDS
+    TEST_DURATION_SECONDS=$(($STATS_FINISH_SECONDS - $STATS_START_SECONDS))
   else
     # We should never get here
     echo Test duration and partition config not defined
@@ -375,6 +378,6 @@ for i in "${TEST_PARAMS_TO_DISPLAY[@]}"; do
   fi
 done
 
-START_UNIX_MSECS="$(($(date +%s%N)/1000000))"
+TESTNET_START_UNIX_MSECS="$(($(date +%s%N)/1000000))"
 
 launchTestnet
