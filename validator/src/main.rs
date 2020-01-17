@@ -79,7 +79,7 @@ fn download_tar_bz2(
     rpc_addr: &SocketAddr,
     archive_name: &str,
     download_path: &Path,
-    extract: bool,
+    is_snapshot: bool,
 ) -> Result<(), String> {
     let archive_path = download_path.join(archive_name);
     if archive_path.is_file() {
@@ -103,7 +103,16 @@ fn download_tar_bz2(
     let response = client
         .get(url.as_str())
         .send()
-        .and_then(|response| response.error_for_status())
+        .map_err(|err| err.to_string())?;
+
+    if is_snapshot && response.status() == reqwest::StatusCode::NOT_FOUND {
+        progress_bar.finish_and_clear();
+        warn!("Snapshot not found at {}", url);
+        return Ok(());
+    }
+
+    let response = response
+        .error_for_status()
         .map_err(|err| format!("Unable to get: {:?}", err))?;
     let download_size = {
         response
@@ -162,7 +171,7 @@ fn download_tar_bz2(
         )
     );
 
-    if extract {
+    if !is_snapshot {
         info!("Extracting {:?}...", archive_path);
         let extract_start = Instant::now();
         let tar_bz2 = File::open(&temp_archive_path)
@@ -294,21 +303,21 @@ fn download_ledger(
     ledger_path: &Path,
     no_snapshot_fetch: bool,
 ) -> Result<(), String> {
-    download_tar_bz2(rpc_addr, "genesis.tar.bz2", ledger_path, true)?;
+    download_tar_bz2(rpc_addr, "genesis.tar.bz2", ledger_path, false)?;
 
     if !no_snapshot_fetch {
         let snapshot_package = solana_ledger::snapshot_utils::get_snapshot_tar_path(ledger_path);
         if snapshot_package.exists() {
             fs::remove_file(&snapshot_package)
-                .unwrap_or_else(|err| warn!("error removing {:?}: {}", snapshot_package, err));
+                .map_err(|err| format!("error removing {:?}: {}", snapshot_package, err))?;
         }
         download_tar_bz2(
             rpc_addr,
             snapshot_package.file_name().unwrap().to_str().unwrap(),
             snapshot_package.parent().unwrap(),
-            false,
+            true,
         )
-        .unwrap_or_else(|err| warn!("Unable to fetch snapshot: {:?}", err));
+        .map_err(|err| format!("Failed to fetch snapshot: {:?}", err))?;
     }
 
     Ok(())
