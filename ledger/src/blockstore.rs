@@ -1506,7 +1506,7 @@ impl Blockstore {
                 completed_ranges
                     .par_iter()
                     .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(slot, *start_index, *end_index)
+                        self.get_entries_in_data_block(slot, *start_index, *end_index, &slot_meta)
                     })
                     .collect()
             })
@@ -1547,6 +1547,7 @@ impl Blockstore {
         slot: Slot,
         start_index: u32,
         end_index: u32,
+        slot_meta: &SlotMeta,
     ) -> Result<Vec<Entry>> {
         let data_shred_cf = self.db.column::<cf::ShredData>();
 
@@ -1556,10 +1557,22 @@ impl Blockstore {
                 data_shred_cf
                     .get_bytes((slot, u64::from(i)))
                     .and_then(|serialized_shred| {
-                        Shred::new_from_serialized_shred(
-                            serialized_shred
-                                .expect("Shred must exist if shred index was included in a range"),
-                        )
+                        Shred::new_from_serialized_shred(serialized_shred.unwrap_or_else(|| {
+                            panic!(
+                                "Shred with
+                        slot: {},
+                        index: {},
+                        consumed: {},
+                        completed_indexes: {:?}
+                        must exist if shred index was included in a range: {} {}",
+                                slot,
+                                i,
+                                slot_meta.consumed,
+                                slot_meta.completed_data_indexes,
+                                start_index,
+                                end_index
+                            )
+                        }))
                         .map_err(|err| {
                             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
                                 format!(
