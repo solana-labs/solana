@@ -6,7 +6,7 @@ use solana_genesis::Base64Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_program;
-use std::{collections::HashMap, fs::File, io::prelude::*, path::Path, process::exit};
+use std::{collections::HashMap, fs::File, io::prelude::*, path::Path, process::exit, sync::Arc};
 
 /// Number of signatures for all transactions in ~1 week at ~100K TPS
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
@@ -82,12 +82,12 @@ fn main() {
             );
             exit(1);
         }
-        client
+        Arc::new(client)
     } else {
-        get_client(&nodes)
+        Arc::new(get_client(&nodes))
     };
 
-    let (keypairs, move_keypairs, keypair_balance) = if *read_from_client_file && !use_move {
+    let (keypairs, move_keypairs) = if *read_from_client_file && !use_move {
         let path = Path::new(&client_ids_and_stake_file);
         let file = File::open(path).unwrap();
 
@@ -117,10 +117,10 @@ fn main() {
         // This prevents the amount of storage needed for bench-tps accounts from creeping up
         // across multiple runs.
         keypairs.sort_by(|x, y| x.pubkey().to_string().cmp(&y.pubkey().to_string()));
-        (keypairs, None, last_balance)
+        (keypairs, None)
     } else {
         generate_and_fund_keypairs(
-            &client,
+            client.clone(),
             Some(*faucet_addr),
             &id,
             keypair_count,
@@ -133,11 +133,5 @@ fn main() {
         })
     };
 
-    do_bench_tps(
-        vec![client],
-        cli_config,
-        keypairs,
-        keypair_balance,
-        move_keypairs,
-    );
+    do_bench_tps(client, cli_config, keypairs, move_keypairs);
 }
