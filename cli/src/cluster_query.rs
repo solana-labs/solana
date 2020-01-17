@@ -369,30 +369,44 @@ pub fn process_get_block_time(rpc_client: &RpcClient, slot: Slot) -> ProcessResu
     Ok(timestamp.to_string())
 }
 
+fn slot_to_human_time(slot: Slot) -> String {
+    humantime::format_duration(Duration::from_secs(
+        slot * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
+    ))
+    .to_string()
+}
+
 pub fn process_get_epoch_info(
     rpc_client: &RpcClient,
     commitment_config: &CommitmentConfig,
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config.clone())?;
     println!();
-    println_name_value("Current epoch:", &epoch_info.epoch.to_string());
-    println_name_value("Current slot:", &epoch_info.absolute_slot.to_string());
+    println_name_value("Slot:", &epoch_info.absolute_slot.to_string());
+    println_name_value("Epoch:", &epoch_info.epoch.to_string());
     println_name_value(
-        "Total slots in current epoch:",
-        &epoch_info.slots_in_epoch.to_string(),
+        "Epoch completed percent:",
+        &format!(
+            "{:>3.3}%",
+            epoch_info.slot_index as f64 / epoch_info.slots_in_epoch as f64 * 100_f64
+        ),
     );
     let remaining_slots_in_epoch = epoch_info.slots_in_epoch - epoch_info.slot_index;
     println_name_value(
-        "Remaining slots in current epoch:",
-        &remaining_slots_in_epoch.to_string(),
-    );
-
-    let remaining_time_in_epoch = Duration::from_secs(
-        remaining_slots_in_epoch * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
+        "Epoch completed slots:",
+        &format!(
+            "{}/{} ({} remaining)",
+            epoch_info.slot_index, epoch_info.slots_in_epoch, remaining_slots_in_epoch
+        ),
     );
     println_name_value(
-        "Time remaining in current epoch:",
-        &humantime::format_duration(remaining_time_in_epoch).to_string(),
+        "Epoch completed time:",
+        &format!(
+            "{}/{} ({} remaining)",
+            slot_to_human_time(epoch_info.slot_index),
+            slot_to_human_time(epoch_info.slots_in_epoch),
+            slot_to_human_time(remaining_slots_in_epoch)
+        ),
     );
     Ok("".to_string())
 }
