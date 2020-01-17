@@ -9,7 +9,7 @@ use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 #[cfg(feature = "move")]
 use solana_sdk::move_loader::solana_move_loader_program;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use std::sync::mpsc::channel;
+use std::sync::{mpsc::channel, Arc};
 use std::time::Duration;
 
 fn test_bench_tps_local_cluster(config: Config) {
@@ -36,10 +36,10 @@ fn test_bench_tps_local_cluster(config: Config) {
         100_000_000,
     );
 
-    let client = create_client(
+    let client = Arc::new(create_client(
         (cluster.entry_point_info.rpc, cluster.entry_point_info.tpu),
         VALIDATOR_PORT_RANGE,
-    );
+    ));
 
     let (addr_sender, addr_receiver) = channel();
     run_local_faucet(faucet_keypair, addr_sender, None);
@@ -48,8 +48,8 @@ fn test_bench_tps_local_cluster(config: Config) {
     let lamports_per_account = 100;
 
     let keypair_count = config.tx_count * config.keypair_multiplier;
-    let (keypairs, move_keypairs, _keypair_balance) = generate_and_fund_keypairs(
-        &client,
+    let (keypairs, move_keypairs) = generate_and_fund_keypairs(
+        client.clone(),
         Some(faucet_addr),
         &config.id,
         keypair_count,
@@ -58,7 +58,7 @@ fn test_bench_tps_local_cluster(config: Config) {
     )
     .unwrap();
 
-    let _total = do_bench_tps(vec![client], config, keypairs, 0, move_keypairs);
+    let _total = do_bench_tps(client, config, keypairs, move_keypairs);
 
     #[cfg(not(debug_assertions))]
     assert!(_total > 100);
