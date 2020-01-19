@@ -1616,7 +1616,7 @@ impl ClusterInfo {
             .unwrap()
     }
 
-   fn gossip_contact_info(id: &Pubkey, gossip_addr: SocketAddr) -> ContactInfo {
+    fn gossip_contact_info(id: &Pubkey, gossip_addr: SocketAddr) -> ContactInfo {
         let dummy_addr = socketaddr_any!();
 
         ContactInfo::new(
