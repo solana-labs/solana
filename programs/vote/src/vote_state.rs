@@ -404,7 +404,8 @@ impl VoteState {
     ) -> Result<(), VoteError> {
         if (slot < self.last_timestamp.slot || timestamp < self.last_timestamp.timestamp)
             || ((slot == self.last_timestamp.slot || timestamp == self.last_timestamp.timestamp)
-                && BlockTimestamp { slot, timestamp } != self.last_timestamp)
+                && BlockTimestamp { slot, timestamp } != self.last_timestamp
+                && self.last_timestamp.slot != 0)
         {
             return Err(VoteError::TimestampTooOld);
         }
@@ -1403,5 +1404,9 @@ mod tests {
                 timestamp: timestamp + 1
             }
         );
+
+        // Test initial vote
+        vote_state.last_timestamp = BlockTimestamp::default();
+        assert_eq!(vote_state.process_timestamp(0, timestamp), Ok(()));
     }
 }
