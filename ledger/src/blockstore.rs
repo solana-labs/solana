@@ -1294,22 +1294,7 @@ impl Blockstore {
             .flat_map(|query_slot| self.get_block_timestamps(query_slot).unwrap_or_default())
             .collect();
 
-        let (stake_weighted_timestamps_sum, total_stake) = unique_timestamps
-            .into_iter()
-            .filter_map(|(vote_pubkey, (timestamp_slot, timestamp))| {
-                let offset = (slot - timestamp_slot) as u32 * slot_duration;
-                stakes
-                    .get(&vote_pubkey)
-                    .map(|(stake, _account)| ((timestamp as u64 + offset.as_secs()) * stake, stake))
-            })
-            .fold((0, 0), |(timestamps, stakes), (timestamp, stake)| {
-                (timestamps + timestamp, stakes + stake)
-            });
-        if total_stake > 0 {
-            Some((stake_weighted_timestamps_sum / total_stake) as i64)
-        } else {
-            None
-        }
+        calculate_stake_weighted_timestamp(unique_timestamps, stakes, slot, slot_duration)
     }
 
     fn get_timestamp_slots(
@@ -2179,6 +2164,30 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
         // OR
         // 2) The slot did exist, but now we have a new consecutive block for that slot
         (slot_meta_backup.is_some() && slot_meta_backup.as_ref().unwrap().consumed != slot_meta.consumed))
+}
+
+fn calculate_stake_weighted_timestamp(
+    unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)>,
+    stakes: &HashMap<Pubkey, (u64, Account)>,
+    slot: Slot,
+    slot_duration: Duration,
+) -> Option<UnixTimestamp> {
+    let (stake_weighted_timestamps_sum, total_stake) = unique_timestamps
+        .into_iter()
+        .filter_map(|(vote_pubkey, (timestamp_slot, timestamp))| {
+            let offset = (slot - timestamp_slot) as u32 * slot_duration;
+            stakes
+                .get(&vote_pubkey)
+                .map(|(stake, _account)| ((timestamp as u64 + offset.as_secs()) * stake, stake))
+        })
+        .fold((0, 0), |(timestamps, stakes), (timestamp, stake)| {
+            (timestamps + timestamp, stakes + stake)
+        });
+    if total_stake > 0 {
+        Some((stake_weighted_timestamps_sum / total_stake) as i64)
+    } else {
+        None
+    }
 }
 
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
