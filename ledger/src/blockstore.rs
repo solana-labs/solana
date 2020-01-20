@@ -2176,12 +2176,15 @@ fn calculate_stake_weighted_timestamp(
         .into_iter()
         .filter_map(|(vote_pubkey, (timestamp_slot, timestamp))| {
             let offset = (slot - timestamp_slot) as u32 * slot_duration;
-            stakes
-                .get(&vote_pubkey)
-                .map(|(stake, _account)| ((timestamp as u64 + offset.as_secs()) * stake, stake))
+            stakes.get(&vote_pubkey).map(|(stake, _account)| {
+                (
+                    (timestamp as u128 + offset.as_secs() as u128) * *stake as u128,
+                    stake,
+                )
+            })
         })
         .fold((0, 0), |(timestamps, stakes), (timestamp, stake)| {
-            (timestamps + timestamp, stakes + stake)
+            (timestamps + timestamp, stakes + *stake as u128)
         });
     if total_stake > 0 {
         Some((stake_weighted_timestamps_sum / total_stake) as i64)
@@ -4914,19 +4917,74 @@ pub mod tests {
         let stakes: HashMap<Pubkey, (u64, Account)> = [
             (
                 pubkey0,
-                (sol_to_lamports(3.0), Account::new(1, 0, &Pubkey::default())),
+                (
+                    sol_to_lamports(4_500_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
             ),
             (
                 pubkey1,
-                (sol_to_lamports(3.0), Account::new(1, 0, &Pubkey::default())),
+                (
+                    sol_to_lamports(4_500_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
             ),
             (
                 pubkey2,
-                (sol_to_lamports(3.0), Account::new(1, 0, &Pubkey::default())),
+                (
+                    sol_to_lamports(4_500_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
             ),
             (
                 pubkey3,
-                (sol_to_lamports(3.0), Account::new(1, 0, &Pubkey::default())),
+                (
+                    sol_to_lamports(4_500_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        assert_eq!(
+            calculate_stake_weighted_timestamp(
+                unique_timestamps.clone(),
+                &stakes,
+                slot as Slot,
+                slot_duration
+            ),
+            Some(recent_timestamp + expected_offset as i64)
+        );
+
+        let stakes: HashMap<Pubkey, (u64, Account)> = [
+            (
+                pubkey0,
+                (
+                    sol_to_lamports(15_000_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey1,
+                (
+                    sol_to_lamports(1_000_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey2,
+                (
+                    sol_to_lamports(1_000_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey3,
+                (
+                    sol_to_lamports(1_000_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
             ),
         ]
         .iter()
@@ -4940,7 +4998,7 @@ pub mod tests {
                 slot_duration
             ),
             Some(recent_timestamp + expected_offset as i64)
-        ); // Panics at 'attempt to add with overflow'
+        );
     }
 
     #[test]
