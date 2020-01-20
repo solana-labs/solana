@@ -53,6 +53,24 @@ function analyze_packet_loss {
   )
 }
 
+function wait_for_bootstrap_leader_stake_drop {
+  max_stake="$1"
+  source net/common.sh
+  loadConfigFile
+
+  while true; do
+    bootstrap_leader_validator_info="$(ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana show-validators | grep "$($HOME/.cargo/bin/solana-keygen pubkey ~/solana/config/bootstrap-leader/identity-keypair.json)"')"
+    bootstrap_leader_stake_percentage="$(echo "$bootstrap_leader_validator_info" | awk '{gsub(/[\(,\),\%]/,""); print $9}')"
+
+    if [[ $(echo "$bootstrap_leader_stake_percentage < $max_stake" | bc) -ne 0 ]]; then
+      echo "Bootstrap leader stake has fallen below $max_stake to $bootstrap_leader_stake_percentage"
+      break
+    fi
+    echo "Max bootstrap leader stake: $max_stake.  Current stake: $bootstrap_leader_stake_percentage.  Sleeping 30s for stake to distribute."
+    sleep 30
+  done
+}
+
 function cleanup_testnet {
   RC=$?
   if [[ $RC != 0 ]] ; then
@@ -179,8 +197,8 @@ function launchTestnet() {
       --gpu-mode $startGpuMode --client-delay-start $CLIENT_DELAY_START
   fi
 
-  execution_step "Wait ${RAMP_UP_TIME} seconds for network throughput to stabilize"
-  sleep "$RAMP_UP_TIME"
+  execution_step "Waiting for bootstrap leader's stake percentage to fall below $BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD %"
+  wait_for_bootstrap_leader_stake_drop "$BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD"
 
   execution_step "Wait ${TEST_DURATION_SECONDS} seconds to complete test"
   sleep "$TEST_DURATION_SECONDS"
@@ -239,7 +257,7 @@ cd "$(dirname "$0")/.."
 
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
-[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=0
+[[ -n $BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD ]] || BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD=66
 
 if [[ -z $TEST_DURATION_SECONDS ]] ; then
   echo TEST_DURATION_SECONDS not defined
