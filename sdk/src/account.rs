@@ -61,12 +61,12 @@ impl fmt::Debug for Account {
 }
 
 impl Account {
-    pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Account {
-        Account {
+    pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Self {
+        Self {
             lamports,
             data: vec![0u8; space],
             owner: *owner,
-            ..Account::default()
+            ..Self::default()
         }
     }
 
@@ -74,13 +74,13 @@ impl Account {
         lamports: u64,
         state: &T,
         owner: &Pubkey,
-    ) -> Result<Account, bincode::Error> {
+    ) -> Result<Self, bincode::Error> {
         let data = bincode::serialize(state)?;
-        Ok(Account {
+        Ok(Self {
             lamports,
             data,
             owner: *owner,
-            ..Account::default()
+            ..Self::default()
         })
     }
 
@@ -89,7 +89,7 @@ impl Account {
         state: &T,
         space: usize,
         owner: &Pubkey,
-    ) -> Result<Account, bincode::Error> {
+    ) -> Result<Self, bincode::Error> {
         let mut account = Self::new(lamports, space, owner);
 
         account.serialize_data(state)?;

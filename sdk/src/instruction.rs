@@ -73,7 +73,7 @@ pub enum InstructionError {
     /// A non-system program changed the size of the account data
     AccountDataSizeChanged,
 
-    /// the instruction expected an executable account
+    /// The instruction expected an executable account
     AccountNotExecutable,
 
     /// CustomError allows on-chain programs to implement program-specific error types and see
