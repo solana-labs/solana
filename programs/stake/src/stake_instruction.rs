@@ -128,7 +128,7 @@ pub enum StakeInstruction {
     Deactivate,
 }
 
-pub fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Lockup) -> Instruction {
+fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Lockup) -> Instruction {
     Instruction::new(
         id(),
         &StakeInstruction::Initialize(*authorized, *lockup),
@@ -181,21 +181,36 @@ pub fn create_account(
     ]
 }
 
+fn _split(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    lamports: u64,
+    split_stake_pubkey: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new(*split_stake_pubkey, false),
+    ]
+    .with_signer(authorized_pubkey);
+
+    Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas)
+}
+
 pub fn split(
     stake_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     lamports: u64,
     split_stake_pubkey: &Pubkey,
 ) -> Vec<Instruction> {
-    let account_metas = vec![
-        AccountMeta::new(*stake_pubkey, false),
-        AccountMeta::new(*split_stake_pubkey, false),
-    ]
-    .with_signer(authorized_pubkey);
     vec![
         system_instruction::allocate(split_stake_pubkey, std::mem::size_of::<StakeState>() as u64),
         system_instruction::assign(split_stake_pubkey, &id()),
-        Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas),
+        _split(
+            stake_pubkey,
+            authorized_pubkey,
+            lamports,
+            split_stake_pubkey,
+        ),
     ]
 }
 
@@ -207,11 +222,6 @@ pub fn split_with_seed(
     base: &Pubkey,               // base
     seed: &str,                  // seed
 ) -> Vec<Instruction> {
-    let account_metas = vec![
-        AccountMeta::new(*stake_pubkey, false),
-        AccountMeta::new(*split_stake_pubkey, false),
-    ]
-    .with_signer(authorized_pubkey);
     vec![
         system_instruction::allocate_with_seed(
             split_stake_pubkey,
@@ -220,7 +230,12 @@ pub fn split_with_seed(
             std::mem::size_of::<StakeState>() as u64,
             &id(),
         ),
-        Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas),
+        _split(
+            stake_pubkey,
+            authorized_pubkey,
+            lamports,
+            split_stake_pubkey,
+        ),
     ]
 }
 
