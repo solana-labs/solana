@@ -2437,6 +2437,7 @@ pub mod tests {
     use solana_sdk::{
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
+        native_token::sol_to_lamports,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::Signature,
@@ -4888,6 +4889,58 @@ pub mod tests {
                 .unwrap() as u64,
             expected_time + 2 // At 400ms block duration, 5 slots == 2sec
         );
+    }
+
+    #[test]
+    fn test_calculate_stake_weighted_timestamp() {
+        let recent_timestamp: UnixTimestamp = 1578909061;
+        let slot = 5;
+        let slot_duration = Duration::from_millis(400);
+        let expected_offset = (slot * slot_duration).as_secs();
+        let pubkey0 = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
+        let pubkey3 = Pubkey::new_rand();
+        let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
+            (pubkey0, (0, recent_timestamp)),
+            (pubkey1, (0, recent_timestamp)),
+            (pubkey2, (0, recent_timestamp)),
+            (pubkey3, (0, recent_timestamp)),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        let stakes: HashMap<Pubkey, (u64, Account)> = [
+            (
+                pubkey0,
+                (sol_to_lamports(3.0), Account::new(1, 0, &Pubkey::default())),
+            ),
+            (
+                pubkey1,
+                (sol_to_lamports(3.0), Account::new(1, 0, &Pubkey::default())),
+            ),
+            (
+                pubkey2,
+                (sol_to_lamports(3.0), Account::new(1, 0, &Pubkey::default())),
+            ),
+            (
+                pubkey3,
+                (sol_to_lamports(3.0), Account::new(1, 0, &Pubkey::default())),
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        assert_eq!(
+            calculate_stake_weighted_timestamp(
+                unique_timestamps,
+                &stakes,
+                slot as Slot,
+                slot_duration
+            ),
+            Some(recent_timestamp + expected_offset as i64)
+        ); // Panics at 'attempt to add with overflow'
     }
 
     #[test]
