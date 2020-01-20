@@ -215,7 +215,7 @@ impl Validator {
             ))
         };
 
-        let subscriptions = Arc::new(RpcSubscriptions::default());
+        let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
         let rpc_pubsub_service = if node.info.rpc_pubsub.port() == 0 {
             None
         } else {
