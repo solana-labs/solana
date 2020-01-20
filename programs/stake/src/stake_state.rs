@@ -2780,6 +2780,18 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
+    #[should_panic]
+    fn test_dbg_stake_minimum_balance() {
+        let minimum_balance = Rent::default().minimum_balance(std::mem::size_of::<StakeState>());
+        panic!(
+            "stake minimum_balance: {} lamports, {} SOL",
+            minimum_balance,
+            minimum_balance as f64 / solana_sdk::native_token::LAMPORTS_PER_SOL as f64
+        );
+    }
+
+    #[test]
     fn test_authorize_delegated_stake() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
