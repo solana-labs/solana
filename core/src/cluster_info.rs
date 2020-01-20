@@ -1616,6 +1616,30 @@ impl ClusterInfo {
             .unwrap()
     }
 
+    fn gossip_contact_info(id: &Pubkey, gossip_addr: SocketAddr) -> ContactInfo {
+        let dummy_addr = socketaddr_any!();
+
+        ContactInfo::new(
+            id,
+            gossip_addr,
+            dummy_addr,
+            dummy_addr,
+            dummy_addr,
+            dummy_addr,
+            dummy_addr,
+            dummy_addr,
+            dummy_addr,
+            dummy_addr,
+            timestamp(),
+        )
+    }
+
+    pub fn spy_contact_info(id: &Pubkey) -> ContactInfo {
+        let dummy_addr = socketaddr_any!();
+
+        Self::gossip_contact_info(id, dummy_addr)
+    }
+
     /// An alternative to Spy Node that has a valid gossip address and fully participate in Gossip.
     pub fn gossip_node(
         id: &Pubkey,
@@ -1623,43 +1647,17 @@ impl ClusterInfo {
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let (port, (gossip_socket, ip_echo)) =
             Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE);
-        let daddr = socketaddr_any!();
+        let contact_info = Self::gossip_contact_info(id, SocketAddr::new(gossip_addr.ip(), port));
 
-        let node = ContactInfo::new(
-            id,
-            SocketAddr::new(gossip_addr.ip(), port),
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            timestamp(),
-        );
-        (node, gossip_socket, Some(ip_echo))
+        (contact_info, gossip_socket, Some(ip_echo))
     }
 
-    /// A Node with invalid ports to spy on gossip via pull requests
+    /// A Node with dummy ports to spy on gossip via pull requests
     pub fn spy_node(id: &Pubkey) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let (_, gossip_socket) = bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
-        let daddr = socketaddr_any!();
+        let contact_info = Self::spy_contact_info(id);
 
-        let node = ContactInfo::new(
-            id,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            timestamp(),
-        );
-        (node, gossip_socket, None)
+        (contact_info, gossip_socket, None)
     }
 }
 
