@@ -606,6 +606,7 @@ pub fn main() {
     let rpc_port = value_t!(matches, "rpc_port", u16);
 
     // Canonicalize ledger path to avoid issues with symlink creation
+    let _ = fs::create_dir_all(&ledger_path);
     let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
         eprintln!("Unable to access ledger path: {:?}", err);
         exit(1);
