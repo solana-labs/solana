@@ -187,22 +187,15 @@ pub fn split(
     lamports: u64,
     split_stake_pubkey: &Pubkey,
 ) -> Vec<Instruction> {
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new(*split_stake_pubkey, false),
+    ]
+    .with_signer(authorized_pubkey);
     vec![
-        system_instruction::create_account(
-            stake_pubkey,
-            split_stake_pubkey,
-            0, // may create an ephemeral, uninitialized Stake
-            std::mem::size_of::<StakeState>() as u64,
-            &id(),
-        ),
-        {
-            let account_metas = vec![
-                AccountMeta::new(*stake_pubkey, false),
-                AccountMeta::new(*split_stake_pubkey, false),
-            ]
-            .with_signer(authorized_pubkey);
-            Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas)
-        },
+        system_instruction::allocate(split_stake_pubkey, std::mem::size_of::<StakeState>() as u64),
+        system_instruction::assign(split_stake_pubkey, &id()),
+        Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas),
     ]
 }
 
@@ -214,24 +207,20 @@ pub fn split_with_seed(
     base: &Pubkey,               // base
     seed: &str,                  // seed
 ) -> Vec<Instruction> {
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new(*split_stake_pubkey, false),
+    ]
+    .with_signer(authorized_pubkey);
     vec![
-        system_instruction::create_account_with_seed(
-            stake_pubkey,
+        system_instruction::allocate_with_seed(
             split_stake_pubkey,
             base,
             seed,
-            0, // may create an ephemeral, uninitialized Stake
             std::mem::size_of::<StakeState>() as u64,
             &id(),
         ),
-        {
-            let account_metas = vec![
-                AccountMeta::new(*stake_pubkey, false),
-                AccountMeta::new(*split_stake_pubkey, false),
-            ]
-            .with_signer(authorized_pubkey);
-            Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas)
-        },
+        Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas),
     ]
 }
 
@@ -507,7 +496,7 @@ mod tests {
                     &Pubkey::default(),
                     100,
                     &Pubkey::default()
-                )[1]
+                )[2]
             ),
             Err(InstructionError::InvalidAccountData),
         );
