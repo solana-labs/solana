@@ -16,7 +16,7 @@ use std::time::Duration;
 // - A validator to download a snapshot from a peer and boot from it
 // - To make sure that if a validator needs to reboot from its own snapshot, it has enough slots locally
 //   to catch back up to where it was when it stopped
-pub const MAX_LEDGER_SLOTS: u64 = 6400;
+pub const DEFAULT_MAX_LEDGER_SLOTS: u64 = 6400;
 // Remove a fixed number of slots at a time, it's more efficient than doing it one-by-one
 pub const DEFAULT_PURGE_BATCH_SIZE: u64 = 256;
 
