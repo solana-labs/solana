@@ -198,7 +198,10 @@ fn get_rpc_addr(
     identity_keypair: &Arc<Keypair>,
     entrypoint_gossip: &SocketAddr,
 ) -> (RpcClient, SocketAddr) {
-    let mut cluster_info = ClusterInfo::new(node.info.clone(), identity_keypair.clone());
+    let mut cluster_info = ClusterInfo::new(
+        ClusterInfo::spy_contact_info(&identity_keypair.pubkey()),
+        identity_keypair.clone(),
+    );
     cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint_gossip));
     let cluster_info = Arc::new(RwLock::new(cluster_info));
 
