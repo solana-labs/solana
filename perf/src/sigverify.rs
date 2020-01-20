@@ -18,14 +18,15 @@ use solana_sdk::short_vec::decode_len;
 use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
-use std::cell::RefCell;
 use std::mem::size_of;
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("sigverify_{}", ix))
-                    .build()
-                    .unwrap()));
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_thread_count())
+        .thread_name(|ix| format!("sigverify_{}", ix))
+        .build()
+        .unwrap();
+}
 
 pub type TxOffset = PinnedVec<u32>;
 
@@ -247,13 +248,11 @@ pub fn ed25519_verify_cpu(batches: &[Packets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("CPU ECDSA for {}", batch_size(batches));
-    let rv = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map(|p| p.packets.par_iter().map(verify_packet).collect())
-                .collect()
-        })
+    let rv = PAR_THREAD_POOL.install(|| {
+        batches
+            .into_par_iter()
+            .map(|p| p.packets.par_iter().map(verify_packet).collect())
+            .collect()
     });
     inc_new_counter_debug!("ed25519_verify_cpu", count);
     rv
