@@ -26,6 +26,7 @@ use std::{cmp, thread};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
+                    .thread_name(|ix| format!("entry_{}", ix))
                     .build()
                     .unwrap()));
 
