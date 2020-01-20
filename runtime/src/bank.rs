@@ -446,6 +446,7 @@ impl Bank {
             new.ancestors.insert(p.slot(), i + 1);
         });
 
+        new.update_slot_hashes(parent.slot(), parent.hash());
         new.update_rewards(parent.epoch());
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
@@ -513,40 +514,51 @@ impl Bank {
         self.genesis_creation_time + ((self.slot as u128 * self.ns_per_slot) / 1_000_000_000) as i64
     }
 
+    fn update_sysvar_account<F>(&self, pubkey: &Pubkey, updater: F)
+    where
+        F: Fn(&Option<Account>) -> Account,
+    {
+        let old_account = self.get_sysvar_account(pubkey);
+        let mut account = updater(&old_account);
+        if let Some(old_account) = old_account {
+            account.hash = old_account.hash;
+        }
+        self.store_account(pubkey, &account);
+    }
+
     fn update_clock(&self) {
-        self.store_account(
-            &sysvar::clock::id(),
-            &sysvar::clock::Clock {
+        self.update_sysvar_account(&sysvar::clock::id(), |_| {
+            sysvar::clock::Clock {
                 slot: self.slot,
                 segment: get_segment_from_slot(self.slot, self.slots_per_segment),
                 epoch: self.epoch_schedule.get_epoch(self.slot),
                 leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
                 unix_timestamp: self.unix_timestamp(),
             }
-            .create_account(1),
-        );
+            .create_account(1)
+        });
     }
 
     fn update_slot_history(&self) {
-        let mut slot_history = self
-            .get_account(&sysvar::slot_history::id())
-            .map(|account| SlotHistory::from_account(&account).unwrap())
-            .unwrap_or_default();
-
-        slot_history.add(self.slot());
-
-        self.store_account(&sysvar::slot_history::id(), &slot_history.create_account(1));
+        self.update_sysvar_account(&sysvar::slot_history::id(), |account| {
+            let mut slot_history = account
+                .as_ref()
+                .map(|account| SlotHistory::from_account(&account).unwrap())
+                .unwrap_or_default();
+            slot_history.add(self.slot());
+            slot_history.create_account(1)
+        });
     }
 
-    fn update_slot_hashes(&self) {
-        let mut slot_hashes = self
-            .get_account(&sysvar::slot_hashes::id())
-            .map(|account| SlotHashes::from_account(&account).unwrap())
-            .unwrap_or_default();
-
-        slot_hashes.add(self.slot(), self.hash());
-
-        self.store_account(&sysvar::slot_hashes::id(), &slot_hashes.create_account(1));
+    fn update_slot_hashes(&self, parent_slot: Slot, parent_hash: Hash) {
+        self.update_sysvar_account(&sysvar::slot_hashes::id(), |account| {
+            let mut slot_hashes = account
+                .as_ref()
+                .map(|account| SlotHashes::from_account(&account).unwrap())
+                .unwrap_or_default();
+            slot_hashes.add(parent_slot, parent_hash);
+            slot_hashes.create_account(1)
+        });
     }
 
     fn update_epoch_stakes(&mut self, leader_schedule_epoch: Epoch) {
@@ -564,24 +576,21 @@ impl Bank {
     }
 
     fn update_fees(&self) {
-        self.store_account(
-            &sysvar::fees::id(),
-            &sysvar::fees::create_account(1, &self.fee_calculator),
-        );
+        self.update_sysvar_account(&sysvar::fees::id(), |_| {
+            sysvar::fees::create_account(1, &self.fee_calculator)
+        });
     }
 
     fn update_rent(&self) {
-        self.store_account(
-            &sysvar::rent::id(),
-            &sysvar::rent::create_account(1, &self.rent_collector.rent),
-        );
+        self.update_sysvar_account(&sysvar::rent::id(), |_| {
+            sysvar::rent::create_account(1, &self.rent_collector.rent)
+        });
     }
 
     fn update_epoch_schedule(&self) {
-        self.store_account(
-            &sysvar::epoch_schedule::id(),
-            &sysvar::epoch_schedule::create_account(1, &self.epoch_schedule),
-        );
+        self.update_sysvar_account(&sysvar::epoch_schedule::id(), |_| {
+            sysvar::epoch_schedule::create_account(1, &self.epoch_schedule)
+        });
     }
 
     fn update_stake_history(&self, epoch: Option<Epoch>) {
@@ -589,10 +598,9 @@ impl Bank {
             return;
         }
         // if I'm the first Bank in an epoch, ensure stake_history is updated
-        self.store_account(
-            &sysvar::stake_history::id(),
-            &sysvar::stake_history::create_account(1, self.stakes.read().unwrap().history()),
-        );
+        self.update_sysvar_account(&sysvar::stake_history::id(), |_| {
+            sysvar::stake_history::create_account(1, self.stakes.read().unwrap().history())
+        });
     }
 
     // update reward for previous epoch
@@ -625,10 +633,9 @@ impl Bank {
             validator_rewards / validator_points as f64,
             storage_rewards / storage_points as f64,
         );
-        self.store_account(
-            &sysvar::rewards::id(),
-            &sysvar::rewards::create_account(1, validator_point_value, storage_point_value),
-        );
+        self.update_sysvar_account(&sysvar::rewards::id(), |_| {
+            sysvar::rewards::create_account(1, validator_point_value, storage_point_value)
+        });
 
         let validator_rewards = self.pay_validator_rewards(validator_point_value);
 
@@ -675,12 +682,11 @@ impl Bank {
     }
 
     pub fn update_recent_blockhashes(&self) {
-        let blockhash_queue = self.blockhash_queue.read().unwrap();
-        let recent_blockhash_iter = blockhash_queue.get_recent_blockhashes();
-        self.store_account(
-            &sysvar::recent_blockhashes::id(),
-            &sysvar::recent_blockhashes::create_account_with_data(1, recent_blockhash_iter),
-        );
+        self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |_| {
+            let blockhash_queue = self.blockhash_queue.read().unwrap();
+            let recent_blockhash_iter = blockhash_queue.get_recent_blockhashes();
+            sysvar::recent_blockhashes::create_account_with_data(1, recent_blockhash_iter)
+        });
     }
 
     // If the point values are not `normal`, bring them back into range and
@@ -716,7 +722,7 @@ impl Bank {
         }
     }
 
-    fn set_hash(&self) -> bool {
+    pub fn freeze(&self) {
         let mut hash = self.hash.write().unwrap();
 
         if *hash == Hash::default() {
@@ -727,15 +733,6 @@ impl Bank {
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn freeze(&self) {
-        if self.set_hash() {
-            self.update_slot_hashes();
         }
     }
 
@@ -1706,6 +1703,16 @@ impl Bank {
         self.rc
             .accounts
             .load_slow(&self.ancestors, pubkey)
+            .map(|(acc, _slot)| acc)
+    }
+
+    fn get_sysvar_account(&self, pubkey: &Pubkey) -> Option<Account> {
+        // Exclude the current really to fetch the parent Bank's sysvar hash
+        let mut ancestors = self.ancestors.clone();
+        ancestors.remove(&self.slot());
+        self.rc
+            .accounts
+            .load_slow(&ancestors, pubkey)
             .map(|(acc, _slot)| acc)
     }
 
@@ -3926,8 +3933,16 @@ mod tests {
         // Checkpointing should result in a new state
         let bank2 = new_from_parent(&bank0);
         assert_ne!(bank0_state, bank2.hash_internal_state());
-        // Checkpointing should never modify the checkpoint's state
+        // Checkpointing should modify the checkpoint's state when freezed
+        assert_ne!(bank0_state, bank0.hash_internal_state());
+
+        // Checkpointing should never modify the checkpoint's state once frozen
+        let bank0_state = bank0.hash_internal_state();
+        assert!(bank2.verify_hash_internal_state());
+        let bank3 = new_from_parent(&bank0);
         assert_eq!(bank0_state, bank0.hash_internal_state());
+        assert!(bank2.verify_hash_internal_state());
+        assert!(bank3.verify_hash_internal_state());
 
         let pubkey2 = Pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
