@@ -5,7 +5,7 @@ use num_traits::{FromPrimitive, ToPrimitive};
 pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
+    instruction_data: &[u8],
 ) -> Result<(), InstructionError>;
 
 /// Convenience macro to declare a native program
@@ -29,7 +29,7 @@ pub type Entrypoint = unsafe extern "C" fn(
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
 ///     keyed_accounts: &mut [KeyedAccount],
-///     data: &[u8],
+///     instruction_data: &[u8],
 /// ) -> Result<(), InstructionError> {
 ///   // Process an instruction
 ///   Ok(())
@@ -60,7 +60,7 @@ pub type Entrypoint = unsafe extern "C" fn(
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
 ///     keyed_accounts: &mut [KeyedAccount],
-///     data: &[u8],
+///     instruction_data: &[u8],
 /// ) -> Result<(), InstructionError> {
 ///   // Process an instruction
 ///   Ok(())
@@ -92,9 +92,9 @@ macro_rules! declare_program(
         pub extern "C" fn $name(
             program_id: &$crate::pubkey::Pubkey,
             keyed_accounts: &mut [$crate::account::KeyedAccount],
-            data: &[u8],
+            instruction_data: &[u8],
         ) -> Result<(), $crate::instruction::InstructionError> {
-            $entrypoint(program_id, keyed_accounts, data)
+            $entrypoint(program_id, keyed_accounts, instruction_data)
         }
     )
 );
@@ -119,14 +119,14 @@ pub fn is_executable(keyed_accounts: &[KeyedAccount]) -> bool {
     !keyed_accounts.is_empty() && keyed_accounts[0].account.executable
 }
 
-pub fn limited_deserialize<T>(data: &[u8]) -> Result<T, InstructionError>
+pub fn limited_deserialize<T>(instruction_data: &[u8]) -> Result<T, InstructionError>
 where
     T: serde::de::DeserializeOwned,
 {
     let limit = crate::packet::PACKET_DATA_SIZE as u64;
     bincode::config()
         .limit(limit)
-        .deserialize(data)
+        .deserialize(instruction_data)
         .map_err(|_| InstructionError::InvalidInstructionData)
 }
 
