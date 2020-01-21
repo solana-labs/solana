@@ -1988,6 +1988,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-dup-accounts"
+version = "0.23.0"
+dependencies = [
+ "solana-sdk 0.23.0",
+ "solana-sdk-bpf-test 0.23.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-external-spend"
 version = "0.23.0"
 dependencies = [
