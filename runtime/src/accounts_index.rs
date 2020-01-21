@@ -73,6 +73,9 @@ impl<T: Clone> AccountsIndex<T> {
         pubkey: &Pubkey,
         ancestors: &HashMap<Slot, usize>,
     ) -> Option<(RwLockReadGuard<SlotList<T>>, usize)> {
+        if ancestors.is_empty() {
+            return None;
+        }
         self.account_maps.get(pubkey).and_then(|list| {
             let lock = list.read().unwrap();
             let found_index = self.latest_slot(ancestors, &lock)?;
@@ -264,7 +267,7 @@ mod tests {
         index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
 
-        let ancestors = vec![].into_iter().collect();
+        let ancestors = vec![(0, 0)].into_iter().collect();
         index.add_root(0);
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
         assert_eq!(list[idx], (0, true));
@@ -366,7 +369,7 @@ mod tests {
         index.add_root(3);
         index.insert(4, &key.pubkey(), true, &mut gc);
         assert_eq!(gc, vec![(0, true), (1, false), (2, true)]);
-        let ancestors = vec![].into_iter().collect();
+        let ancestors = vec![(0, 0)].into_iter().collect();
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
         assert_eq!(list[idx], (3, true));
 

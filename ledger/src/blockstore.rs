@@ -4503,7 +4503,7 @@ pub mod tests {
                 &completed_data_end_indexes[..],
                 consumed
             ),
-            vec![]
+            Vec::<(u32, u32)>::new()
         );
 
         let start_index = 0;

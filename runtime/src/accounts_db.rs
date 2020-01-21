@@ -18,6 +18,11 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
+use accumulator::group::{ElemFrom, Rsa2048};
+use accumulator::Accumulator;
+use rug::integer::ParseIntegerError;
+use rug::Integer;
+
 use crate::{
     accounts_index::AccountsIndex,
     append_vec::{AppendVec, StoredAccount, StoredMeta},
@@ -38,7 +43,6 @@ use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     account::Account,
-    bank_hash::BankHash,
     clock::{Epoch, Slot},
     hash::{Hash, Hasher},
     pubkey::Pubkey,
@@ -181,11 +185,21 @@ pub enum AccountStorageStatus {
     Candidate = 2,
 }
 
-#[derive(Debug)]
+use thiserror::Error;
+
+#[derive(Error, Debug)]
 pub enum BankHashVerificationError {
+    #[error("Mismatched account hash")]
     MismatchedAccountHash,
+
+    #[error("Mismatched bank hash")]
     MismatchedBankHash,
+
+    #[error("Missing bank hash")]
     MissingBankHash,
+
+    #[error("Bank hash parsing error")]
+    BankHashParsingError(#[from] ParseIntegerError),
 }
 
 /// Persistent storage structure holding the accounts
@@ -350,15 +364,10 @@ impl<'a> Serialize for AccountsDBSerialize<'a> {
         let account_storage_serialize = AccountStorageSerialize::new(&*storage, self.slot);
         serialize_into(&mut wr, &account_storage_serialize).map_err(Error::custom)?;
         serialize_into(&mut wr, &version).map_err(Error::custom)?;
-        let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
+        let bank_accumulators = self.accounts_db.bank_accumulators.read().unwrap();
         serialize_into(
             &mut wr,
-            &(
-                self.slot,
-                &*bank_hashes
-                    .get(&self.slot)
-                    .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", self.slot)),
-            ),
+            &(self.slot, &*bank_accumulators.get(&self.slot).unwrap()),
         )
         .map_err(Error::custom)?;
         let len = wr.position() as usize;
@@ -400,9 +409,32 @@ impl BankHashStats {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
+type AccountAccumulator = Accumulator<Rsa2048, Hash>;
+
+// Stored in large ints in hex string
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Accumulators {
+    pub add: String,
+    pub delete: String,
+}
+
+impl Default for Accumulators {
+    fn default() -> Self {
+        let acc = Accumulator::<Rsa2048, Hash>::empty();
+        let acc_default = acc.value.0.to_string_radix(16);
+        Accumulators {
+            add: acc_default.clone(),
+            delete: acc_default,
+        }
+    }
+}
+
+// Accumulators stored as large ints in hex string.
+#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct BankHashInfo {
-    pub hash: BankHash,
+    pub start: Accumulators,
+    pub end: Accumulators,
+    pub hash: Hash,
     pub stats: BankHashStats,
 }
 
@@ -435,7 +467,7 @@ pub struct AccountsDB {
     /// the accounts
     min_num_stores: usize,
 
-    pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
+    pub bank_accumulators: RwLock<HashMap<Slot, BankHashInfo>>,
 }
 
 impl Default for AccountsDB {
@@ -455,7 +487,7 @@ impl Default for AccountsDB {
                 .build()
                 .unwrap(),
             min_num_stores: num_threads,
-            bank_hashes: RwLock::new(HashMap::default()),
+            bank_accumulators: RwLock::new(HashMap::default()),
         }
     }
 }
@@ -572,9 +604,12 @@ impl AccountsDB {
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
 
-        let (slot, bank_hash): (Slot, BankHashInfo) = deserialize_from(&mut stream)
+        let (slot, bank_accumulators): (Slot, BankHashInfo) = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("bank hashes deserialize error"))?;
-        self.bank_hashes.write().unwrap().insert(slot, bank_hash);
+        self.bank_accumulators
+            .write()
+            .unwrap()
+            .insert(slot, bank_accumulators);
 
         // Process deserialized data, set necessary fields in self
         *self.paths.write().unwrap() = local_account_paths.to_vec();
@@ -765,24 +800,23 @@ impl AccountsDB {
     }
 
     pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
-        let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let hash_info = bank_hashes
+        let mut accumulators = self.bank_accumulators.write().unwrap();
+        let accumulator = accumulators
             .get(&parent_slot)
             .expect("accounts_db::set_hash::no parent slot");
-        if bank_hashes.get(&slot).is_some() {
-            error!(
-                "set_hash: already exists; multiple forks with shared slot {} as child (parent: {})!?",
-                slot, parent_slot,
-            );
-            return;
-        }
-
-        let hash = hash_info.hash;
+        let add = accumulator.end.add.clone();
+        let delete = accumulator.end.delete.clone();
+        trace!("setting hash on slot {}", slot);
+        trace!("add: {}", add);
+        trace!("delete: {}", delete);
+        let start_accumulators = Accumulators { add, delete };
         let new_hash_info = BankHashInfo {
-            hash,
+            start: start_accumulators,
+            end: Accumulators::default(),
             stats: BankHashStats::default(),
+            hash: Hash::default(),
         };
-        bank_hashes.insert(slot, new_hash_info);
+        accumulators.insert(slot, new_hash_info);
     }
 
     pub fn load(
@@ -1034,6 +1068,103 @@ impl AccountsDB {
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
     }
 
+    fn accumulator_from_str(value: &str) -> Result<AccountAccumulator, BankHashVerificationError> {
+        let elem = Rsa2048::elem(Integer::from_str_radix(value, 16)?);
+        Ok(Accumulator::<Rsa2048, Hash>::new_from(elem))
+    }
+
+    pub fn get_end_delete_accumulator(
+        &self,
+        slot: Slot,
+    ) -> Result<AccountAccumulator, BankHashVerificationError> {
+        if let Some(accumulator) = self.bank_accumulators.read().unwrap().get(&slot) {
+            trace!("{} delete_str:{}", slot, accumulator.end.delete);
+            Self::accumulator_from_str(&accumulator.end.delete)
+        } else {
+            Err(BankHashVerificationError::MissingBankHash)
+        }
+    }
+
+    pub fn update_accumulators(
+        &self,
+        slot: Slot,
+        ancestors: &HashMap<Slot, usize>,
+    ) -> Result<(), BankHashVerificationError> {
+        let accumulators_r = self.bank_accumulators.read().unwrap();
+        if let Some(accumulators) = accumulators_r.get(&slot) {
+            trace!("{} starting from: add: {}", slot, accumulators.start.add);
+            trace!("starting from: delete: {}", accumulators.start.delete);
+            let add_accumulator = Self::accumulator_from_str(&accumulators.start.add)?;
+            let delete_accumulator = Self::accumulator_from_str(&accumulators.start.delete)?;
+            drop(accumulators_r);
+            self.update_accumulators_from_values(
+                slot,
+                ancestors,
+                add_accumulator,
+                delete_accumulator,
+            );
+            Ok(())
+        } else {
+            Err(BankHashVerificationError::MissingBankHash)
+        }
+    }
+
+    pub fn update_accumulators_from_values(
+        &self,
+        slot: Slot,
+        ancestors: &HashMap<Slot, usize>,
+        mut add_accumulator: AccountAccumulator,
+        mut delete_accumulator: AccountAccumulator,
+    ) {
+        let accumulator = self.scan_accounts(
+            ancestors,
+            |collector: &mut Vec<(Pubkey, Hash, bool, Account)>,
+             option: Option<(&Pubkey, Account, Slot)>| {
+                if let Some((pubkey, account, account_slot)) = option {
+                    if slot == account_slot {
+                        collector.push((*pubkey, account.hash, account.lamports == 0, account));
+                    }
+                }
+            },
+        );
+
+        for (_pubkey, hash, has_zero_lamports, account) in &accumulator {
+            if !has_zero_lamports {
+                trace!(
+                    "added: {} key: {} zero: {} account: {:?}",
+                    hash,
+                    _pubkey,
+                    has_zero_lamports,
+                    account
+                );
+                add_accumulator = add_accumulator.add(&[*hash]);
+            }
+        }
+
+        let mut ancestors_prev = ancestors.clone();
+        ancestors_prev.remove(&slot);
+        trace!("ancestors: {:?}", ancestors_prev);
+        {
+            for (pubkey, _hash, _has_zero_lamports, _account) in &accumulator {
+                if let Some((account, _slot)) = self.load_slow(&ancestors_prev, pubkey) {
+                    trace!("deleted: hash: {} account: {:?}", account.hash, account);
+                    delete_accumulator = delete_accumulator.add(&[account.hash]);
+                }
+            }
+        }
+        let add_accumulator = add_accumulator.value.0.to_string_radix(16);
+        let delete_accumulator = delete_accumulator.value.0.to_string_radix(16);
+        let mut accumulators = self.bank_accumulators.write().unwrap();
+        let slot_accumulators = accumulators
+            .get_mut(&slot)
+            .expect("accumulator should exist");
+        trace!("Updated accumulators {}", slot);
+        trace!("add: {}", add_accumulator);
+        trace!("delete: {}", delete_accumulator);
+        slot_accumulators.end.add = add_accumulator;
+        slot_accumulators.end.delete = delete_accumulator;
+    }
+
     pub fn verify_bank_hash(
         &self,
         slot: Slot,
@@ -1041,55 +1172,65 @@ impl AccountsDB {
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
-        let (hashes, mismatch_found) = self.scan_accounts(
+        let start_accumulator = if let Ok(accumulator) = self.get_end_delete_accumulator(slot) {
+            accumulator
+        } else {
+            return Err(MissingBankHash);
+        };
+
+        trace!("starting verify... {} ancestors: {:?}", slot, ancestors);
+        trace!(
+            "here starting from: {:?}",
+            start_accumulator.value.0.to_string_radix(16)
+        );
+        let (mut accumulators, mismatch_found) = self.scan_accounts(
             ancestors,
-            |(collector, mismatch_found): &mut (Vec<BankHash>, bool),
+            |(collector, mismatch_found): &mut (Vec<AccountAccumulator>, bool),
              option: Option<(&Pubkey, Account, Slot)>| {
                 if let Some((pubkey, account, slot)) = option {
                     let hash = Self::hash_account(slot, &account, pubkey);
                     if hash != account.hash {
                         *mismatch_found = true;
+                        return;
+                    }
+                    if account.lamports != 0 {
+                        let accumulator = if let Some(c) = collector.pop() {
+                            c
+                        } else {
+                            start_accumulator.clone()
+                        };
+                        trace!(
+                            "verify: adding: {} slot: {} key: {} account: {:?}",
+                            hash, slot, pubkey, account
+                        );
+                        let new = accumulator.add(&[hash]);
+                        collector.push(new);
                     }
                     if *mismatch_found {
                         return;
                     }
-                    let hash = BankHash::from_hash(&hash);
-                    debug!("xoring..{} key: {}", hash, pubkey);
-                    collector.push(hash);
                 }
             },
         );
         if mismatch_found {
             return Err(MismatchedAccountHash);
         }
-        let mut calculated_hash = BankHash::default();
-        for hash in hashes {
-            calculated_hash.xor(hash);
-        }
-        let bank_hashes = self.bank_hashes.read().unwrap();
-        if let Some(found_hash_info) = bank_hashes.get(&slot) {
-            if calculated_hash == found_hash_info.hash {
-                Ok(())
+        if let Some(accumulator) = accumulators.pop() {
+            let bank_accumulators = self.bank_accumulators.read().unwrap();
+            if let Some(found_hash_info) = bank_accumulators.get(&slot) {
+                trace!("found_accumulator: {:?}", found_hash_info.end.add);
+                trace!("accumulator: {:?}", accumulator.value.0.to_string_radix(16));
+                if accumulator.value.0.to_string_radix(16) == found_hash_info.end.add {
+                    Ok(())
+                } else {
+                    Err(MismatchedBankHash)
+                }
             } else {
-                warn!(
-                    "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
-                    slot, calculated_hash, found_hash_info.hash
-                );
-                Err(MismatchedBankHash)
+                Err(MissingBankHash)
             }
         } else {
-            Err(MissingBankHash)
+            Ok(())
         }
-    }
-
-    pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash, stats: &BankHashStats) {
-        let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let bank_hash = bank_hashes
-            .entry(slot_id)
-            .or_insert_with(BankHashInfo::default);
-        bank_hash.hash.xor(hash);
-
-        bank_hash.stats.merge(stats);
     }
 
     fn update_index(
@@ -1167,43 +1308,29 @@ impl AccountsDB {
                 }
             }
             {
-                let mut bank_hashes = self.bank_hashes.write().unwrap();
+                let mut bank_accumulators = self.bank_accumulators.write().unwrap();
                 for slot in dead_slots.iter() {
-                    bank_hashes.remove(slot);
+                    bank_accumulators.remove(slot);
                 }
             }
         }
     }
 
     fn hash_accounts(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) -> Vec<Hash> {
-        let mut hash_state = BankHash::default();
-        let mut had_account = false;
+        let mut bank_accumulators = self.bank_accumulators.write().unwrap();
+        let slot_accumulators = bank_accumulators
+            .entry(slot_id)
+            .or_insert_with(BankHashInfo::default);
         let mut stats = BankHashStats::default();
         let hashes: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
-                let hash = BankHash::from_hash(&account.hash);
                 stats.update(account);
-                let new_hash = Self::hash_account(slot_id, account, pubkey);
-                let new_bank_hash = BankHash::from_hash(&new_hash);
-                debug!(
-                    "hash_accounts: key: {} xor {} current: {}",
-                    pubkey, hash, hash_state
-                );
-                if !had_account {
-                    hash_state = hash;
-                    had_account = true;
-                } else {
-                    hash_state.xor(hash);
-                }
-                hash_state.xor(new_bank_hash);
-                new_hash
+                Self::hash_account(slot_id, account, pubkey)
             })
             .collect();
+        slot_accumulators.stats.merge(&stats);
 
-        if had_account {
-            self.xor_in_hash_state(slot_id, hash_state, &stats);
-        }
         hashes
     }
 
@@ -1901,10 +2028,14 @@ pub mod tests {
 
         // Get the hash for the latest slot, which should be the only hash in the
         // bank_hashes map on the deserialized AccountsDb
-        assert_eq!(daccounts.bank_hashes.read().unwrap().len(), 1);
+        assert_eq!(daccounts.bank_accumulators.read().unwrap().len(), 1);
         assert_eq!(
-            daccounts.bank_hashes.read().unwrap().get(&latest_slot),
-            accounts.bank_hashes.read().unwrap().get(&latest_slot)
+            daccounts
+                .bank_accumulators
+                .read()
+                .unwrap()
+                .get(&latest_slot),
+            accounts.bank_accumulators.read().unwrap().get(&latest_slot)
         );
 
         print_count_and_status("daccounts", &daccounts);
@@ -2307,8 +2438,8 @@ pub mod tests {
         db.store(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
 
-        let bank_hashes = db.bank_hashes.read().unwrap();
-        let bank_hash = bank_hashes.get(&some_slot).unwrap();
+        let bank_accumulators = db.bank_accumulators.read().unwrap();
+        let bank_hash = bank_accumulators.get(&some_slot).unwrap();
         assert_eq!(bank_hash.stats.num_removed_accounts, 1);
         assert_eq!(bank_hash.stats.num_added_accounts, 1);
         assert_eq!(bank_hash.stats.num_lamports_stored, 3);
@@ -2317,7 +2448,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_verify_bank_hash() {
+    fn test_verify_bank_hash1() {
         use BankHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDB::new(Vec::new());
@@ -2330,20 +2461,37 @@ pub mod tests {
 
         db.store(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
+        db.update_accumulators_from_values(
+            some_slot,
+            &ancestors,
+            Accumulator::<Rsa2048, Hash>::empty(),
+            Accumulator::<Rsa2048, Hash>::empty(),
+        );
         assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
 
-        db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
+        db.bank_accumulators
+            .write()
+            .unwrap()
+            .remove(&some_slot)
+            .unwrap();
         assert_matches!(
             db.verify_bank_hash(some_slot, &ancestors),
             Err(MissingBankHash)
         );
 
-        let some_bank_hash = BankHash::from_hash(&Hash::new(&[0xca; HASH_BYTES]));
         let bank_hash_info = BankHashInfo {
-            hash: some_bank_hash,
+            start: Accumulators {
+                add: "123".to_string(),
+                delete: "123".to_string(),
+            },
+            end: Accumulators {
+                add: "123".to_string(),
+                delete: "123".to_string(),
+            },
             stats: BankHashStats::default(),
+            hash: Hash::default(),
         };
-        db.bank_hashes
+        db.bank_accumulators
             .write()
             .unwrap()
             .insert(some_slot, bank_hash_info);
@@ -2361,7 +2509,7 @@ pub mod tests {
         let some_slot: Slot = 0;
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
-        db.bank_hashes
+        db.bank_accumulators
             .write()
             .unwrap()
             .insert(some_slot, BankHashInfo::default());
