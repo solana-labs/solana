@@ -229,6 +229,19 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank(commitment).collector_id().to_string())
     }
 
+    fn minimum_ledger_slot(&self) -> Result<Slot> {
+        match self.blockstore.slot_meta_iterator(0) {
+            Ok(mut metas) => match metas.next() {
+                Some((slot, _meta)) => Ok(slot),
+                None => Err(Error::invalid_request()),
+            },
+            Err(err) => {
+                warn!("slot_meta_iterator failed: {:?}", err);
+                Err(Error::invalid_request())
+            }
+        }
+    }
+
     fn get_transaction_count(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
         Ok(self.bank(commitment).transaction_count() as u64)
     }
@@ -529,6 +542,9 @@ pub trait RpcSol {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<String>;
+
+    #[rpc(meta, name = "minimumLedgerSlot")]
+    fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot>;
 
     #[rpc(meta, name = "getVoteAccounts")]
     fn get_vote_accounts(
@@ -990,6 +1006,10 @@ impl RpcSol for RpcSolImpl {
             .get_slot_leader(commitment)
     }
 
+    fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot> {
+        meta.request_processor.read().unwrap().minimum_ledger_slot()
+    }
+
     fn get_vote_accounts(
         &self,
         meta: Self::Metadata,
@@ -1372,6 +1392,21 @@ pub mod tests {
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":3,"id":1}}"#);
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_minimum_ledger_slot() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"minimumLedgerSlot"}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let expected = r#"{"jsonrpc":"2.0","result":0,"id":1}"#;
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
