@@ -35,6 +35,7 @@ pub enum RpcRequest {
     SendTransaction,
     SignVote,
     GetMinimumBalanceForRentExemption,
+    MinimumLedgerSlot,
 }
 
 impl RpcRequest {
@@ -75,6 +76,7 @@ impl RpcRequest {
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SignVote => "signVote",
             RpcRequest::GetMinimumBalanceForRentExemption => "getMinimumBalanceForRentExemption",
+            RpcRequest::MinimumLedgerSlot => "minimumLedgerSlot",
         };
         json!({
            "jsonrpc": jsonrpc,

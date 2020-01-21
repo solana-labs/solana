@@ -40,6 +40,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getTotalSupply](jsonrpc-api.md#gettotalsupply)
 * [getVersion](jsonrpc-api.md#getversion)
 * [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
+* [minimumLedgerSlot](jsonrpc-api.md#minimumledgerslot)
 * [requestAirdrop](jsonrpc-api.md#requestairdrop)
 * [sendTransaction](jsonrpc-api.md#sendtransaction)
 * [startSubscriptionChannel](jsonrpc-api.md#startsubscriptionchannel)
@@ -585,7 +586,7 @@ Returns the current slot the node is processing
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlot"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":"1234","id":1}
+{"jsonrpc":"2.0","result":1234,"id":1}
 ```
 
 ### getSlotLeader
@@ -628,7 +629,7 @@ Returns the current storage segment size in terms of slots
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlotsPerSegment"}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":"1024","id":1}
+{"jsonrpc":"2.0","result":1024,"id":1}
 ```
 
 ### getStorageTurn
@@ -770,6 +771,29 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"current":[{"commission":0,"epochVoteAccount":true,"nodePubkey":"B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD","lastVote":147,"activatedStake":42,"votePubkey":"3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"}],"delinquent":[{"commission":127,"epochVoteAccount":false,"nodePubkey":"6ZPxeQaDo4bkZLRsdNrCzchNQr5LN9QMc9sipXv9Kw8f","lastVote":0,"activatedStake":0,"votePubkey":"CmgCk4aMS7KW1SHX3s9K5tBJ6Yng2LBaC8MFov4wx9sm"}]},"id":1}
+```
+
+### minimumLedgerSlot
+
+Returns the lowest slot that the node has information about in its ledger.  This
+value may increase over time if the node is configured to purge older ledger data
+
+#### Parameters:
+
+None
+
+#### Results:
+
+* `u64` - Minimum ledger slot
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"minimumLedgerSlot"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":1234,"id":1}
 ```
 
 ### requestAirdrop
