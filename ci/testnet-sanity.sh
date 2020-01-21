@@ -60,7 +60,7 @@ trap shutdown EXIT INT
 set -x
 for zone in "$@"; do
   echo "--- $cloudProvider config [$zone]"
-  timeout 5m net/"$cloudProvider".sh config $maybePublicNetwork -p "$netName" -z "$zone"
+  timeout 5m net/"$cloudProvider".sh config $maybePublicNetwork -n 1 -p "$netName" -z "$zone"
   net/init-metrics.sh -e
   echo "+++ $cloudProvider.sh info"
   net/"$cloudProvider".sh info
