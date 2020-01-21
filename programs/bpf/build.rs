@@ -70,6 +70,7 @@ fn main() {
             "128bit",
             "alloc",
             "dep_crate",
+            "dup_accounts",
             "iter",
             "many_args",
             "external_spend",
