@@ -54,15 +54,16 @@ pub fn serialize_parameters(
     let mut v: Vec<u8> = Vec::new();
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .unwrap();
-    for info in keyed_accounts.iter_mut() {
-        v.write_u64::<LittleEndian>(info.signer_key().is_some() as u64)
+    for keyed_account in keyed_accounts.iter_mut() {
+        v.write_u64::<LittleEndian>(keyed_account.signer_key().is_some() as u64)
             .unwrap();
-        v.write_all(info.unsigned_key().as_ref()).unwrap();
-        v.write_u64::<LittleEndian>(info.account.lamports).unwrap();
-        v.write_u64::<LittleEndian>(info.account.data.len() as u64)
+        v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
+        v.write_u64::<LittleEndian>(keyed_account.account.lamports)
             .unwrap();
-        v.write_all(&info.account.data).unwrap();
-        v.write_all(info.account.owner.as_ref()).unwrap();
+        v.write_u64::<LittleEndian>(keyed_account.account.data.len() as u64)
+            .unwrap();
+        v.write_all(&keyed_account.account.data).unwrap();
+        v.write_all(keyed_account.account.owner.as_ref()).unwrap();
     }
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
     v.write_all(data).unwrap();
@@ -74,17 +75,20 @@ pub fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]
     assert_eq!(32, mem::size_of::<Pubkey>());
 
     let mut start = mem::size_of::<u64>();
-    for info in keyed_accounts.iter_mut() {
+    for keyed_account in keyed_accounts.iter_mut() {
         start += mem::size_of::<u64>(); // skip signer_key boolean
         start += mem::size_of::<Pubkey>(); // skip pubkey
-        info.account.lamports = LittleEndian::read_u64(&buffer[start..]);
+        keyed_account.account.lamports = LittleEndian::read_u64(&buffer[start..]);
 
         start += mem::size_of::<u64>() // skip lamports
                   + mem::size_of::<u64>(); // skip length tag
-        let end = start + info.account.data.len();
-        info.account.data.clone_from_slice(&buffer[start..end]);
+        let end = start + keyed_account.account.data.len();
+        keyed_account
+            .account
+            .data
+            .clone_from_slice(&buffer[start..end]);
 
-        start += info.account.data.len() // skip data
+        start += keyed_account.account.data.len() // skip data
                   + mem::size_of::<Pubkey>(); // skip owner
     }
 }
