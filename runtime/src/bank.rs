@@ -2615,7 +2615,8 @@ mod tests {
         let rent_to_be_distributed = total_rent_deducted - burned_portion;
 
         let bootstrap_validator_portion =
-            ((bootstrap_validator_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64 + 1; // Leftover lamport
+            ((bootstrap_validator_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64
+                + 1; // Leftover lamport
         assert_eq!(
             bank.get_balance(&bootstrap_validator_pubkey),
             bootstrap_validator_portion + bootstrap_validator_initial_balance

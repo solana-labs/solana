@@ -62,7 +62,8 @@ mod tests {
     fn test_leader_schedule_via_bank() {
         let pubkey = Pubkey::new_rand();
         let genesis_config =
-            create_genesis_config_with_leader(0, &pubkey, BOOTSTRAP_VALIDATOR_LAMPORTS).genesis_config;
+            create_genesis_config_with_leader(0, &pubkey, BOOTSTRAP_VALIDATOR_LAMPORTS)
+                .genesis_config;
         let bank = Bank::new(&genesis_config);
 
         let pubkeys_and_stakes: Vec<_> = staking_utils::staked_nodes(&bank).into_iter().collect();
