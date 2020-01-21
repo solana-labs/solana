@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .version(solana_clap_utils::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(
-            SubCommand::with_name("get-rpc-url")
+            SubCommand::with_name("rpc-url")
                 .about("Get an RPC URL for the cluster")
                 .arg(
                     Arg::with_name("entrypoint")
@@ -243,7 +243,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 }
             }
         }
-        ("get-rpc-url", Some(matches)) => {
+        ("rpc-url", Some(matches)) => {
             let any = matches.is_present("any");
             let all = matches.is_present("all");
             let entrypoint_addr = parse_entrypoint(&matches);

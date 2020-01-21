@@ -64,7 +64,7 @@ presently stored nonce value with
 - Command
 
 ```bash
-solana get-nonce nonce-keypair.json 
+solana nonce nonce-keypair.json 
 ```
 
 - Output
@@ -105,7 +105,7 @@ Inspect a nonce account in a more human friendly format with
 - Command
 
 ```bash
-solana show-nonce-account nonce-keypair.json 
+solana nonce-account nonce-keypair.json 
 ```
 
 - Output
@@ -117,7 +117,7 @@ nonce: DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS
 ```
 
 {% hint style="info" %}
-[Full usage documentation](../api-reference/cli.md#solana-show-nonce-account)
+[Full usage documentation](../api-reference/cli.md#solana-nonce-account)
 {% endhint %}
 
 ### Withdraw Funds from a Nonce Account
@@ -236,7 +236,7 @@ Remember, `alice.json` is the [nonce authority](#nonce-authority) in this exampl
 {% endhint %}
 
 ```bash
-$ solana show-nonce-account nonce.json 
+$ solana nonce-account nonce.json 
 balance: 1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7
@@ -256,7 +256,7 @@ $ solana balance -k bob.json
 1 SOL
 ```
 ```bash
-$ solana show-nonce-account nonce.json 
+$ solana nonce-account nonce.json 
 balance: 1 SOL
 minimum balance required: 0.00136416 SOL
 nonce: 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN

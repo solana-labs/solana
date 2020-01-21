@@ -21,11 +21,11 @@ solana balance --lamports
 
 ## Check Vote Activity
 
-The `solana show-vote-account` command displays the recent voting activity from
+The `solana vote-account` command displays the recent voting activity from
 your validator:
 
 ```bash
-solana show-vote-account ~/validator-vote-keypair.json
+solana vote-account ~/validator-vote-keypair.json
 ```
 
 ## Get Cluster Info

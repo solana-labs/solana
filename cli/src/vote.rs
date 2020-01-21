@@ -157,8 +157,9 @@ impl VoteSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("show-vote-account")
+            SubCommand::with_name("vote-account")
                 .about("Show the contents of a vote account")
+                .alias("show-vote-account")
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)

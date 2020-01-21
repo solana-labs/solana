@@ -129,8 +129,9 @@ impl NonceSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("get-nonce")
+            SubCommand::with_name("nonce")
                 .about("Get the current nonce value")
+                .alias("get-nonce")
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
@@ -156,8 +157,9 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(nonce_authority_arg()),
         )
         .subcommand(
-            SubCommand::with_name("show-nonce-account")
+            SubCommand::with_name("nonce-account")
                 .about("Show the contents of a nonce account")
+                .alias("show-nonce-account")
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
@@ -756,7 +758,7 @@ mod tests {
         // Test ShowNonceAccount Subcommand
         let test_show_nonce_account = test_commands.clone().get_matches_from(vec![
             "test",
-            "show-nonce-account",
+            "nonce-account",
             &nonce_account_string,
         ]);
         assert_eq!(

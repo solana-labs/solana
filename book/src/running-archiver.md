@@ -149,8 +149,8 @@ From another console, confirm the IP address and **identity pubkey** of your arc
 solana-gossip spy --entrypoint testnet.solana.com:8001
 ```
 
-Provide the **storage account pubkey** to the `solana show-storage-account` command to view the recent mining activity from your archiver:
+Provide the **storage account pubkey** to the `solana storage-account` command to view the recent mining activity from your archiver:
 
 ```bash
-solana --keypair storage-keypair.json show-storage-account $STORAGE_IDENTITY
+solana --keypair storage-keypair.json storage-account $STORAGE_IDENTITY
 ```

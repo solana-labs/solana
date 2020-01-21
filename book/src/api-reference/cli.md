@@ -199,14 +199,18 @@ OPTIONS:
     -k, --keypair <PATH>                    /path/to/id.json
 
 SUBCOMMANDS:
+    account                             Show the contents of an account
     address                             Get your public key
     airdrop                             Request lamports
     authorize-nonce-account             Assign account authority to a new entity
     balance                             Get your balance
+    block-production                    Show information about block production
+    block-time                          Get estimated production time of a block
     cancel                              Cancel a transfer
     catchup                             Wait for a validator to catch up to the cluster
     claim-storage-reward                Redeem storage reward credits
     cluster-version                     Get the version of the cluster entrypoint
+    config                              Solana command-line tool configuration settings
     confirm                             Confirm transaction by signature
     create-address-with-seed            Generate a dervied account address with a seed
     create-archiver-storage-account     Create an archiver storage account
@@ -217,35 +221,30 @@ SUBCOMMANDS:
     deactivate-stake                    Deactivate the delegated stake from the stake account
     delegate-stake                      Delegate stake to a vote account
     deploy                              Deploy a program
+    epoch-info                          Get information about the current epoch
     fees                                Display current cluster fees
-    get                                 Get cli config settings
-    get-block-time                      Get estimated production time of a block
-    get-epoch-info                      Get information about the current epoch
-    get-genesis-hash                    Get the genesis hash
-    get-nonce                           Get the current nonce value
-    get-slot                            Get current slot
-    get-transaction-count               Get current transaction count
+    genesis-hash                        Get the genesis hash
+    gossip                              Show the current gossip network nodes
     help                                Prints this message or the help of the given subcommand(s)
     new-nonce                           Generate a new nonce, rendering the existing nonce useless
+    nonce                               Get the current nonce value
+    nonce-account                       Show the contents of a nonce account
     pay                                 Send a payment
     ping                                Submit transactions sequentially
     redeem-vote-credits                 Redeem credits in the stake account
     send-signature                      Send a signature to authorize a transfer
     send-timestamp                      Send a timestamp to unlock a transfer
-    set                                 Set a cli config setting
-    show-account                        Show the contents of an account
-    show-block-production               Show information about block production
-    show-gossip                         Show the current gossip network nodes
-    show-nonce-account                  Show the contents of a nonce account
-    show-stake-account                  Show the contents of a stake account
-    show-stake-history                  Show the stake history
-    show-storage-account                Show the contents of a storage account
-    show-validators                     Show information about the current validators
-    show-vote-account                   Show the contents of a vote account
+    slot                                Get current slot
+    stake-account                       Show the contents of a stake account
     stake-authorize-staker              Authorize a new stake signing keypair for the given stake account
     stake-authorize-withdrawer          Authorize a new withdraw signing keypair for the given stake account
+    stake-history                       Show the stake history
+    storage-account                     Show the contents of a storage account
+    transaction-count                   Get current transaction count
     uptime                              Show the uptime of a validator, based on epoch voting history
     validator-info                      Publish/get Validator info on Solana
+    validators                          Show information about the current validators
+    vote-account                        Show the contents of a vote account
     vote-authorize-voter                Authorize a new vote signing keypair for the given vote account
     vote-authorize-withdrawer           Authorize a new withdraw signing keypair for the given vote account
     vote-update-validator               Update the vote account's validator identity
@@ -255,7 +254,7 @@ SUBCOMMANDS:
 
 #### solana-address
 ```text
-solana-address 
+solana-address
 Get your public key
 
 USAGE:
@@ -279,7 +278,7 @@ OPTIONS:
 
 #### solana-airdrop
 ```text
-solana-airdrop 
+solana-airdrop
 Request lamports
 
 USAGE:
@@ -309,7 +308,7 @@ ARGS:
 
 #### solana-authorize-nonce-account
 ```text
-solana-authorize-nonce-account 
+solana-authorize-nonce-account
 Assign account authority to a new entity
 
 USAGE:
@@ -338,7 +337,7 @@ ARGS:
 
 #### solana-balance
 ```text
-solana-balance 
+solana-balance
 Get your balance
 
 USAGE:
@@ -366,7 +365,7 @@ ARGS:
 
 #### solana-cancel
 ```text
-solana-cancel 
+solana-cancel
 Cancel a transfer
 
 USAGE:
@@ -393,7 +392,7 @@ ARGS:
 
 #### solana-catchup
 ```text
-solana-catchup 
+solana-catchup
 Wait for a validator to catch up to the cluster
 
 USAGE:
@@ -420,7 +419,7 @@ ARGS:
 
 #### solana-claim-storage-reward
 ```text
-solana-claim-storage-reward 
+solana-claim-storage-reward
 Redeem storage reward credits
 
 USAGE:
@@ -448,7 +447,7 @@ ARGS:
 
 #### solana-cluster-version
 ```text
-solana-cluster-version 
+solana-cluster-version
 Get the version of the cluster entrypoint
 
 USAGE:
@@ -472,7 +471,7 @@ OPTIONS:
 
 #### solana-confirm
 ```text
-solana-confirm 
+solana-confirm
 Confirm transaction by signature
 
 USAGE:
@@ -499,7 +498,7 @@ ARGS:
 
 #### solana-create-address-with-seed
 ```text
-solana-create-address-with-seed 
+solana-create-address-with-seed
 Generate a dervied account address with a seed
 
 USAGE:
@@ -523,13 +522,13 @@ OPTIONS:
 
 ARGS:
     <SEED_STRING>    The seed.  Must not take more than 32 bytes to encode as utf-8
-    <PROGRAM_ID>     The program_id that the address will ultimately be used for, 
+    <PROGRAM_ID>     The program_id that the address will ultimately be used for,
                      or one of STAKE, VOTE, NONCE, and STORAGE keywords
 ```
 
 #### solana-create-archiver-storage-account
 ```text
-solana-create-archiver-storage-account 
+solana-create-archiver-storage-account
 Create an archiver storage account
 
 USAGE:
@@ -551,13 +550,13 @@ OPTIONS:
     -k, --keypair <PATH>                    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>    
-    <STORAGE ACCOUNT>                 
+    <STORAGE ACCOUNT OWNER PUBKEY>
+    <STORAGE ACCOUNT>
 ```
 
 #### solana-create-nonce-account
 ```text
-solana-create-nonce-account 
+solana-create-nonce-account
 Create a nonce account
 
 USAGE:
@@ -587,7 +586,7 @@ ARGS:
 
 #### solana-create-stake-account
 ```text
-solana-create-stake-account 
+solana-create-stake-account
 Create a stake account
 
 USAGE:
@@ -621,7 +620,7 @@ ARGS:
 
 #### solana-create-validator-storage-account
 ```text
-solana-create-validator-storage-account 
+solana-create-validator-storage-account
 Create a validator storage account
 
 USAGE:
@@ -643,13 +642,13 @@ OPTIONS:
     -k, --keypair <PATH>                    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>    
-    <STORAGE ACCOUNT>                 
+    <STORAGE ACCOUNT OWNER PUBKEY>
+    <STORAGE ACCOUNT>
 ```
 
 #### solana-create-vote-account
 ```text
-solana-create-vote-account 
+solana-create-vote-account
 Create a vote account
 
 USAGE:
@@ -680,7 +679,7 @@ ARGS:
 
 #### solana-deactivate-stake
 ```text
-solana-deactivate-stake 
+solana-deactivate-stake
 Deactivate the delegated stake from the stake account
 
 USAGE:
@@ -702,9 +701,9 @@ OPTIONS:
                                                ~/.config/solana/cli/config.yml]
     -u, --url <URL>                            JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                       /path/to/id.json
-        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced 
-                                               transaction. Nonced transactions are useful when a transaction 
-                                               requires a lengthy signing process. Learn more about nonced 
+        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced
+                                               transaction. Nonced transactions are useful when a transaction
+                                               requires a lengthy signing process. Learn more about nonced
                                                transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <nonce_authority>    Provide the nonce authority keypair to use when signing a nonced
                                                transaction
@@ -716,7 +715,7 @@ ARGS:
 
 #### solana-delegate-stake
 ```text
-solana-delegate-stake 
+solana-delegate-stake
 Delegate stake to a vote account
 
 USAGE:
@@ -738,9 +737,9 @@ OPTIONS:
                                                ~/.config/solana/cli/config.yml]
     -u, --url <URL>                            JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                       /path/to/id.json
-        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced 
-                                               transaction. Nonced transactions are useful when a transaction 
-                                               requires a lengthy signing process. Learn more about nonced 
+        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced
+                                               transaction. Nonced transactions are useful when a transaction
+                                               requires a lengthy signing process. Learn more about nonced
                                                transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <nonce_authority>    Provide the nonce authority keypair to use when signing a nonced
                                                transaction
@@ -753,7 +752,7 @@ ARGS:
 
 #### solana-deploy
 ```text
-solana-deploy 
+solana-deploy
 Deploy a program
 
 USAGE:
@@ -780,7 +779,7 @@ ARGS:
 
 #### solana-fees
 ```text
-solana-fees 
+solana-fees
 Display current cluster fees
 
 USAGE:
@@ -804,7 +803,7 @@ OPTIONS:
 
 #### solana-get
 ```text
-solana-get 
+solana-get
 Get cli config settings
 
 USAGE:
@@ -831,11 +830,11 @@ ARGS:
 
 #### solana-get-block-time
 ```text
-solana-get-block-time 
+solana-get-block-time
 Get estimated production time of a block
 
 USAGE:
-    solana get-block-time [FLAGS] [OPTIONS] <SLOT>
+    solana block-time [FLAGS] [OPTIONS] <SLOT>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -858,11 +857,11 @@ ARGS:
 
 #### solana-get-epoch-info
 ```text
-solana-get-epoch-info 
+solana-get-epoch-info
 Get information about the current epoch
 
 USAGE:
-    solana get-epoch-info [FLAGS] [OPTIONS]
+    solana epoch-info [FLAGS] [OPTIONS]
 
 FLAGS:
         --confirmed                      Return information at maximum-lockout commitment level
@@ -883,11 +882,11 @@ OPTIONS:
 
 #### solana-get-genesis-hash
 ```text
-solana-get-genesis-hash 
+solana-get-genesis-hash
 Get the genesis hash
 
 USAGE:
-    solana get-genesis-hash [FLAGS] [OPTIONS]
+    solana genesis-hash [FLAGS] [OPTIONS]
 
 FLAGS:
     -h, --help                           Prints help information
@@ -907,11 +906,11 @@ OPTIONS:
 
 #### solana-get-nonce
 ```text
-solana-get-nonce 
+solana-get-nonce
 Get the current nonce value
 
 USAGE:
-    solana get-nonce [FLAGS] [OPTIONS] <NONCE ACCOUNT>
+    solana nonce [FLAGS] [OPTIONS] <NONCE ACCOUNT>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -934,11 +933,11 @@ ARGS:
 
 #### solana-get-slot
 ```text
-solana-get-slot 
+solana-get-slot
 Get current slot
 
 USAGE:
-    solana get-slot [FLAGS] [OPTIONS]
+    solana slot [FLAGS] [OPTIONS]
 
 FLAGS:
         --confirmed                      Return slot at maximum-lockout commitment level
@@ -959,11 +958,11 @@ OPTIONS:
 
 #### solana-get-transaction-count
 ```text
-solana-get-transaction-count 
+solana-get-transaction-count
 Get current transaction count
 
 USAGE:
-    solana get-transaction-count [FLAGS] [OPTIONS]
+    solana transaction-count [FLAGS] [OPTIONS]
 
 FLAGS:
         --confirmed                      Return count at maximum-lockout commitment level
@@ -984,7 +983,7 @@ OPTIONS:
 
 #### solana-help
 ```text
-solana-help 
+solana-help
 Prints this message or the help of the given subcommand(s)
 
 USAGE:
@@ -996,7 +995,7 @@ ARGS:
 
 #### solana-new-nonce
 ```text
-solana-new-nonce 
+solana-new-nonce
 Generate a new nonce, rendering the existing nonce useless
 
 USAGE:
@@ -1024,14 +1023,14 @@ ARGS:
 
 #### solana-pay
 ```text
-solana-pay 
+solana-pay
 Send a payment
 
 USAGE:
     solana pay [FLAGS] [OPTIONS] <TO PUBKEY> <AMOUNT> [--] [UNIT]
 
 FLAGS:
-        --cancelable                     
+        --cancelable
     -h, --help                           Prints help information
         --sign-only                      Sign the transaction offline
         --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
@@ -1047,9 +1046,9 @@ OPTIONS:
                                                 ~/.config/solana/cli/config.yml]
     -u, --url <URL>                             JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                        /path/to/id.json
-        --nonce <PUBKEY>                        Provide the nonce account to use when creating a nonced 
-                                                transaction. Nonced transactions are useful when a transaction 
-                                                requires a lengthy signing process. Learn more about nonced 
+        --nonce <PUBKEY>                        Provide the nonce account to use when creating a nonced
+                                                transaction. Nonced transactions are useful when a transaction
+                                                requires a lengthy signing process. Learn more about nonced
                                                 transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <nonce_authority>     Provide the nonce authority keypair to use when signing a nonced
                                                 transaction
@@ -1066,7 +1065,7 @@ ARGS:
 
 #### solana-ping
 ```text
-solana-ping 
+solana-ping
 Submit transactions sequentially
 
 USAGE:
@@ -1095,7 +1094,7 @@ OPTIONS:
 
 #### solana-redeem-vote-credits
 ```text
-solana-redeem-vote-credits 
+solana-redeem-vote-credits
 Redeem credits in the stake account
 
 USAGE:
@@ -1123,7 +1122,7 @@ ARGS:
 
 #### solana-send-signature
 ```text
-solana-send-signature 
+solana-send-signature
 Send a signature to authorize a transfer
 
 USAGE:
@@ -1151,7 +1150,7 @@ ARGS:
 
 #### solana-send-timestamp
 ```text
-solana-send-timestamp 
+solana-send-timestamp
 Send a timestamp to unlock a transfer
 
 USAGE:
@@ -1180,7 +1179,7 @@ ARGS:
 
 #### solana-set
 ```text
-solana-set 
+solana-set
 Set a cli config setting
 
 USAGE:
@@ -1202,13 +1201,13 @@ OPTIONS:
     -k, --keypair <PATH>                    /path/to/id.json
 ```
 
-#### solana-show-account
+#### solana-account
 ```text
-solana-show-account 
+solana-account
 Show the contents of an account
 
 USAGE:
-    solana show-account [FLAGS] [OPTIONS] <ACCOUNT PUBKEY>
+    solana account [FLAGS] [OPTIONS] <ACCOUNT PUBKEY>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1231,13 +1230,13 @@ ARGS:
     <ACCOUNT PUBKEY>    Account pubkey
 ```
 
-#### solana-show-block-production
+#### solana-block-production
 ```text
-solana-show-block-production 
+solana-block-production
 Show information about block production
 
 USAGE:
-    solana show-block-production [FLAGS] [OPTIONS]
+    solana block-production [FLAGS] [OPTIONS]
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1258,13 +1257,13 @@ OPTIONS:
                                             epoch]
 ```
 
-#### solana-show-gossip
+#### solana-gossip
 ```text
-solana-show-gossip 
+solana-gossip
 Show the current gossip network nodes
 
 USAGE:
-    solana show-gossip [FLAGS] [OPTIONS]
+    solana gossip [FLAGS] [OPTIONS]
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1282,13 +1281,13 @@ OPTIONS:
     -k, --keypair <PATH>                    /path/to/id.json
 ```
 
-#### solana-show-nonce-account
+#### solana-nonce-account
 ```text
-solana-show-nonce-account 
+solana-nonce-account
 Show the contents of a nonce account
 
 USAGE:
-    solana show-nonce-account [FLAGS] [OPTIONS] <NONCE ACCOUNT>
+    solana nonce-account [FLAGS] [OPTIONS] <NONCE ACCOUNT>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1310,13 +1309,13 @@ ARGS:
     <NONCE ACCOUNT>    Address of the nonce account to display
 ```
 
-#### solana-show-stake-account
+#### solana-stake-account
 ```text
-solana-show-stake-account 
+solana-stake-account
 Show the contents of a stake account
 
 USAGE:
-    solana show-stake-account [FLAGS] [OPTIONS] <STAKE ACCOUNT>
+    solana stake-account [FLAGS] [OPTIONS] <STAKE ACCOUNT>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1338,13 +1337,13 @@ ARGS:
     <STAKE ACCOUNT>    Address of the stake account to display
 ```
 
-#### solana-show-stake-history
+#### solana-stake-history
 ```text
-solana-show-stake-history 
+solana-stake-history
 Show the stake history
 
 USAGE:
-    solana show-stake-history [FLAGS] [OPTIONS]
+    solana stake-history [FLAGS] [OPTIONS]
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1363,13 +1362,13 @@ OPTIONS:
     -k, --keypair <PATH>                    /path/to/id.json
 ```
 
-#### solana-show-storage-account
+#### solana-storage-account
 ```text
-solana-show-storage-account 
+solana-storage-account
 Show the contents of a storage account
 
 USAGE:
-    solana show-storage-account [FLAGS] [OPTIONS] <STORAGE ACCOUNT PUBKEY>
+    solana storage-account [FLAGS] [OPTIONS] <STORAGE ACCOUNT PUBKEY>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1390,13 +1389,13 @@ ARGS:
     <STORAGE ACCOUNT PUBKEY>    Storage account pubkey
 ```
 
-#### solana-show-validators
+#### solana-validators
 ```text
-solana-show-validators 
+solana-validators
 Show information about the current validators
 
 USAGE:
-    solana show-validators [FLAGS] [OPTIONS]
+    solana validators [FLAGS] [OPTIONS]
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1415,13 +1414,13 @@ OPTIONS:
     -k, --keypair <PATH>                    /path/to/id.json
 ```
 
-#### solana-show-vote-account
+#### solana-vote-account
 ```text
-solana-show-vote-account 
+solana-vote-account
 Show the contents of a vote account
 
 USAGE:
-    solana show-vote-account [FLAGS] [OPTIONS] <VOTE ACCOUNT PUBKEY>
+    solana vote-account [FLAGS] [OPTIONS] <VOTE ACCOUNT PUBKEY>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1445,7 +1444,7 @@ ARGS:
 
 #### solana-stake-authorize-staker
 ```text
-solana-stake-authorize-staker 
+solana-stake-authorize-staker
 Authorize a new stake signing keypair for the given stake account
 
 USAGE:
@@ -1473,7 +1472,7 @@ ARGS:
 
 #### solana-stake-authorize-withdrawer
 ```text
-solana-stake-authorize-withdrawer 
+solana-stake-authorize-withdrawer
 Authorize a new withdraw signing keypair for the given stake account
 
 USAGE:
@@ -1501,7 +1500,7 @@ ARGS:
 
 #### solana-uptime
 ```text
-solana-uptime 
+solana-uptime
 Show the uptime of a validator, based on epoch voting history
 
 USAGE:
@@ -1530,7 +1529,7 @@ ARGS:
 
 #### solana-validator-info
 ```text
-solana-validator-info 
+solana-validator-info
 Publish/get Validator info on Solana
 
 USAGE:
@@ -1559,7 +1558,7 @@ SUBCOMMANDS:
 
 #### solana-vote-authorize-voter
 ```text
-solana-vote-authorize-voter 
+solana-vote-authorize-voter
 Authorize a new vote signing keypair for the given vote account
 
 USAGE:
@@ -1587,7 +1586,7 @@ ARGS:
 
 #### solana-vote-authorize-withdrawer
 ```text
-solana-vote-authorize-withdrawer 
+solana-vote-authorize-withdrawer
 Authorize a new withdraw signing keypair for the given vote account
 
 USAGE:
@@ -1615,7 +1614,7 @@ ARGS:
 
 #### solana-vote-update-validator
 ```text
-solana-vote-update-validator 
+solana-vote-update-validator
 Update the vote account's validator identity
 
 USAGE:
@@ -1644,7 +1643,7 @@ ARGS:
 
 #### solana-withdraw-from-nonce-account
 ```text
-solana-withdraw-from-nonce-account 
+solana-withdraw-from-nonce-account
 Withdraw lamports from the nonce account
 
 USAGE:
@@ -1675,7 +1674,7 @@ ARGS:
 
 #### solana-withdraw-stake
 ```text
-solana-withdraw-stake 
+solana-withdraw-stake
 Withdraw the unstaked lamports from the stake account
 
 USAGE:

@@ -85,7 +85,7 @@ fi
 echo "+++ $sanityTargetIp: validators"
 (
   set -x
-  $solana_cli --url http://"$sanityTargetIp":8899 show-validators
+  $solana_cli --url http://"$sanityTargetIp":8899 validators
 )
 
 echo "+++ $sanityTargetIp: node count ($numSanityNodes expected)"

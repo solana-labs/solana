@@ -56,7 +56,7 @@ done
 : "${storage_keypair:="$SOLANA_ROOT"/farf/archiver-storage-keypair"$label".json}"
 ledger="$SOLANA_ROOT"/farf/archiver-ledger"$label"
 
-rpc_url=$($solana_gossip get-rpc-url --entrypoint "$entrypoint")
+rpc_url=$($solana_gossip rpc-url --entrypoint "$entrypoint")
 
 if [[ ! -r $identity_keypair ]]; then
   $solana_keygen new --no-passphrase -so "$identity_keypair"

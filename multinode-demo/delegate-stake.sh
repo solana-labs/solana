@@ -100,9 +100,9 @@ $solana_keygen new --no-passphrase -so "$stake_keypair_path"
 
 set -x
 $solana_cli "${common_args[@]}" \
-  show-vote-account "$vote_keypair_path"
+  vote-account "$vote_keypair_path"
 $solana_cli "${common_args[@]}" \
   create-stake-account "$stake_keypair_path" "$stake_lamports" lamports
 $solana_cli "${common_args[@]}" \
   delegate-stake $maybe_force "$stake_keypair_path" "$vote_keypair_path"
-$solana_cli "${common_args[@]}" show-stake-account "$stake_keypair_path"
+$solana_cli "${common_args[@]}" stake-account "$stake_keypair_path"

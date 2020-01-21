@@ -59,7 +59,7 @@ function wait_for_bootstrap_leader_stake_drop {
   loadConfigFile
 
   while true; do
-    bootstrap_leader_validator_info="$(ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana show-validators | grep "$($HOME/.cargo/bin/solana-keygen pubkey ~/solana/config/bootstrap-leader/identity-keypair.json)"')"
+    bootstrap_leader_validator_info="$(ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana validators | grep "$($HOME/.cargo/bin/solana-keygen pubkey ~/solana/config/bootstrap-leader/identity-keypair.json)"')"
     bootstrap_leader_stake_percentage="$(echo "$bootstrap_leader_validator_info" | awk '{gsub(/[\(,\),\%]/,""); print $9}')"
 
     if [[ $(echo "$bootstrap_leader_stake_percentage < $max_stake" | bc) -ne 0 ]]; then
