@@ -472,7 +472,7 @@ startBootstrapLeader() {
   declare ipAddress=$1
   declare nodeIndex="$2"
   declare logFile="$3"
-  echo "--- Starting bootstrap leader: $ipAddress"
+  echo "--- Starting bootstrap validator: $ipAddress"
   echo "start log: $logFile"
 
   # Deploy local binaries to bootstrap validator.  Other validators and clients later fetch the
@@ -501,7 +501,7 @@ startBootstrapLeader() {
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
-         bootstrap-leader \
+         bootstrap-validator \
          $entrypointIp \
          $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
          \"$RUST_LOG\" \
@@ -781,7 +781,7 @@ deploy() {
     if $bootstrapLeader; then
       SECONDS=0
       declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-leader-$ipAddress.log"
+      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log"
       bootstrapNodeDeployTime=$SECONDS
       $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
 
@@ -819,7 +819,7 @@ deploy() {
   annotateBlockexplorerUrl
 
   sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
-                                 # have caught up to the bootstrap leader yet
+                                 # have caught up to the bootstrap validator yet
 
   echo "--- Sleeping $clientDelayStart seconds after validators are started before starting clients"
   sleep "$clientDelayStart"
@@ -861,7 +861,7 @@ deploy() {
 
   echo
   echo "+++ Deployment Successful"
-  echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
+  echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
   echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir"

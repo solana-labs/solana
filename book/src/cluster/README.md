@@ -4,7 +4,7 @@ A Solana cluster is a set of validators working together to serve client transac
 
 ## Creating a Cluster
 
-Before starting any validators, one first needs to create a _genesis config_. The config references two public keys, a _mint_ and a _bootstrap leader_. The validator holding the bootstrap leader's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis config. The second validator then contacts the bootstrap leader to register as a _validator_ or _archiver_. Additional validators then register with any registered member of the cluster.
+Before starting any validators, one first needs to create a _genesis config_. The config references two public keys, a _mint_ and a _bootstrap validator_. The validator holding the bootstrap validator's private key is responsible for appending the first entries to the ledger. It initializes its internal state with the mint's account. That account will hold the number of native tokens defined by the genesis config. The second validator then contacts the bootstrap validator to register as a _validator_ or _archiver_. Additional validators then register with any registered member of the cluster.
 
 A validator receives all entries from the leader and submits votes confirming those entries are valid. After voting, the validator is expected to store those entries until archiver nodes submit proofs that they have stored copies of it. Once the validator observes a sufficient number of copies exist, it deletes its copy.
 

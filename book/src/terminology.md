@@ -26,7 +26,7 @@ A preimage resistant [hash](terminology.md#hash) of the [ledger](terminology.md#
 
 The number of [blocks](terminology.md#block) beneath the current block. The first block after the [genesis block](terminology.md#genesis-block) has height one.
 
-## bootstrap leader
+## bootstrap validator
 
 The first [validator](terminology.md#validator) to produce a [block](terminology.md#block).
 

@@ -258,7 +258,7 @@ mod tests {
         blockstore::make_slot_entries,
         genesis_utils::{
             create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
-            BOOTSTRAP_LEADER_LAMPORTS,
+            BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         get_tmp_ledger_path,
         staking_utils::tests::setup_vote_and_stake_accounts,
@@ -376,9 +376,9 @@ mod tests {
     fn test_next_leader_slot() {
         let pubkey = Pubkey::new_rand();
         let mut genesis_config = create_genesis_config_with_leader(
-            BOOTSTRAP_LEADER_LAMPORTS,
+            BOOTSTRAP_VALIDATOR_LAMPORTS,
             &pubkey,
-            BOOTSTRAP_LEADER_LAMPORTS,
+            BOOTSTRAP_VALIDATOR_LAMPORTS,
         )
         .genesis_config;
         genesis_config.epoch_schedule = EpochSchedule::custom(
@@ -427,9 +427,9 @@ mod tests {
     fn test_next_leader_slot_blockstore() {
         let pubkey = Pubkey::new_rand();
         let mut genesis_config = create_genesis_config_with_leader(
-            BOOTSTRAP_LEADER_LAMPORTS,
+            BOOTSTRAP_VALIDATOR_LAMPORTS,
             &pubkey,
-            BOOTSTRAP_LEADER_LAMPORTS,
+            BOOTSTRAP_VALIDATOR_LAMPORTS,
         )
         .genesis_config;
         genesis_config.epoch_schedule.warmup = false;
@@ -525,7 +525,7 @@ mod tests {
             &mint_keypair,
             &vote_account,
             &node_pubkey,
-            BOOTSTRAP_LEADER_LAMPORTS,
+            BOOTSTRAP_VALIDATOR_LAMPORTS,
         );
 
         // Have to wait until the epoch at after the epoch stakes generated at genesis

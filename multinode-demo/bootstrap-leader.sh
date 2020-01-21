@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Start the bootstrap leader node
+# Start the bootstrap validator node
 #
 set -e
 
@@ -61,11 +61,11 @@ while [[ -n $1 ]]; do
 done
 
 # These keypairs are created by ./setup.sh and included in the genesis config
-identity_keypair=$SOLANA_CONFIG_DIR/bootstrap-leader/identity-keypair.json
-vote_keypair="$SOLANA_CONFIG_DIR"/bootstrap-leader/vote-keypair.json
-storage_keypair=$SOLANA_CONFIG_DIR/bootstrap-leader/storage-keypair.json
+identity_keypair=$SOLANA_CONFIG_DIR/bootstrap-validator/identity-keypair.json
+vote_keypair="$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-keypair.json
+storage_keypair=$SOLANA_CONFIG_DIR/bootstrap-validator/storage-keypair.json
 
-ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader
+ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
 [[ -d "$ledger_dir" ]] || {
   echo "$ledger_dir does not exist"
   echo
@@ -74,7 +74,7 @@ ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader
 }
 
 args+=(
-  --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader/accounts
+  --accounts "$SOLANA_CONFIG_DIR"/bootstrap-validator/accounts
   --enable-rpc-exit
   --ledger "$ledger_dir"
   --rpc-port 8899

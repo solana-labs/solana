@@ -10,8 +10,8 @@ use solana_sdk::{
 use solana_stake_program::stake_state;
 use solana_vote_program::vote_state;
 
-// The default stake placed with the bootstrap leader
-pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
+// The default stake placed with the bootstrap validator
+pub const BOOTSTRAP_VALIDATOR_LAMPORTS: u64 = 42;
 
 pub struct GenesisConfigInfo {
     pub genesis_config: GenesisConfig,
@@ -25,28 +25,28 @@ pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
 
 pub fn create_genesis_config_with_leader(
     mint_lamports: u64,
-    bootstrap_leader_pubkey: &Pubkey,
-    bootstrap_leader_stake_lamports: u64,
+    bootstrap_validator_pubkey: &Pubkey,
+    bootstrap_validator_stake_lamports: u64,
 ) -> GenesisConfigInfo {
     let mint_keypair = Keypair::new();
-    let bootstrap_leader_voting_keypair = Keypair::new();
-    let bootstrap_leader_staking_keypair = Keypair::new();
+    let bootstrap_validator_voting_keypair = Keypair::new();
+    let bootstrap_validator_staking_keypair = Keypair::new();
 
-    let bootstrap_leader_vote_account = vote_state::create_account(
-        &bootstrap_leader_voting_keypair.pubkey(),
-        &bootstrap_leader_pubkey,
+    let bootstrap_validator_vote_account = vote_state::create_account(
+        &bootstrap_validator_voting_keypair.pubkey(),
+        &bootstrap_validator_pubkey,
         0,
-        bootstrap_leader_stake_lamports,
+        bootstrap_validator_stake_lamports,
     );
 
     let rent = Rent::free();
 
-    let bootstrap_leader_stake_account = stake_state::create_account(
-        &bootstrap_leader_staking_keypair.pubkey(),
-        &bootstrap_leader_voting_keypair.pubkey(),
-        &bootstrap_leader_vote_account,
+    let bootstrap_validator_stake_account = stake_state::create_account(
+        &bootstrap_validator_staking_keypair.pubkey(),
+        &bootstrap_validator_voting_keypair.pubkey(),
+        &bootstrap_validator_vote_account,
         &rent,
-        bootstrap_leader_stake_lamports,
+        bootstrap_validator_stake_lamports,
     );
 
     let accounts = [
@@ -55,16 +55,16 @@ pub fn create_genesis_config_with_leader(
             Account::new(mint_lamports, 0, &system_program::id()),
         ),
         (
-            *bootstrap_leader_pubkey,
-            Account::new(BOOTSTRAP_LEADER_LAMPORTS, 0, &system_program::id()),
+            *bootstrap_validator_pubkey,
+            Account::new(BOOTSTRAP_VALIDATOR_LAMPORTS, 0, &system_program::id()),
         ),
         (
-            bootstrap_leader_voting_keypair.pubkey(),
-            bootstrap_leader_vote_account,
+            bootstrap_validator_voting_keypair.pubkey(),
+            bootstrap_validator_vote_account,
         ),
         (
-            bootstrap_leader_staking_keypair.pubkey(),
-            bootstrap_leader_stake_account,
+            bootstrap_validator_staking_keypair.pubkey(),
+            bootstrap_validator_stake_account,
         ),
     ]
     .iter()
@@ -94,6 +94,6 @@ pub fn create_genesis_config_with_leader(
     GenesisConfigInfo {
         genesis_config,
         mint_keypair,
-        voting_keypair: bootstrap_leader_voting_keypair,
+        voting_keypair: bootstrap_validator_voting_keypair,
     }
 }

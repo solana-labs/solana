@@ -52,12 +52,12 @@ $ NDEBUG=1 ./multinode-demo/faucet.sh
 
 ### Singlenode Testnet
 
-Before you start a validator, make sure you know the IP address of the machine you want to be the bootstrap leader for the demo, and make sure that udp ports 8000-10000 are open on all the machines you want to test with.
+Before you start a validator, make sure you know the IP address of the machine you want to be the bootstrap validator for the demo, and make sure that udp ports 8000-10000 are open on all the machines you want to test with.
 
-Now start the bootstrap leader in a separate shell:
+Now start the bootstrap validator in a separate shell:
 
 ```bash
-$ NDEBUG=1 ./multinode-demo/bootstrap-leader.sh
+$ NDEBUG=1 ./multinode-demo/bootstrap-validator.sh
 ```
 
 Wait a few seconds for the server to initialize. It will print "leader ready..." when it's ready to receive transactions. The leader will request some tokens from the faucet if it doesn't have any. The faucet does not need to be running for subsequent leader starts.
@@ -74,7 +74,7 @@ To run a performance-enhanced validator on Linux, [CUDA 10.0](https://developer.
 
 ```bash
 $ ./fetch-perf-libs.sh
-$ NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/bootstrap-leader.sh
+$ NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/bootstrap-validator.sh
 $ NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/validator.sh
 ```
 
