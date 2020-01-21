@@ -285,8 +285,7 @@ cd "$(dirname "$0")/.."
 
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
-[[ -n $SOLANA_METRICS_PARTIAL_CONFIG ]] || SOLANA_METRICS_PARTIAL_CONFIG="u=scratch_writer,p=topsecret"
-[[ -n $RAMP_UP_TIME ]] || RAMP_UP_TIME=0
+[[ -n $BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD ]] || BOOTSTRAP_LEADER_MAX_STAKE_THRESHOLD=66
 
 if [[ -z $NUMBER_OF_VALIDATOR_NODES ]]; then
   echo NUMBER_OF_VALIDATOR_NODES not defined
@@ -308,6 +307,10 @@ if [[ -z $NUMBER_OF_CLIENT_NODES ]]; then
 fi
 
 if [[ -z $SOLANA_METRICS_CONFIG ]]; then
+  if [[ -z $SOLANA_METRICS_PARTIAL_CONFIG ]]; then
+    echo SOLANA_METRICS_PARTIAL_CONFIG not defined
+    exit 1
+  fi
   export SOLANA_METRICS_CONFIG="db=$TESTNET_TAG,host=$INFLUX_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
 fi
 echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
