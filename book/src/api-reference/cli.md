@@ -191,8 +191,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -239,11 +239,12 @@ SUBCOMMANDS:
     stake-authorize-staker              Authorize a new stake signing keypair for the given stake account
     stake-authorize-withdrawer          Authorize a new withdraw signing keypair for the given stake account
     stake-history                       Show the stake history
+    stakes                              Show stake account information
     storage-account                     Show the contents of a storage account
     transaction-count                   Get current transaction count
     uptime                              Show the uptime of a validator, based on epoch voting history
     validator-info                      Publish/get Validator info on Solana
-    validators                          Show information about the current validators
+    validators                          Show summary information about the current validators
     vote-account                        Show the contents of a vote account
     vote-authorize-voter                Authorize a new vote signing keypair for the given vote account
     vote-authorize-withdrawer           Authorize a new withdraw signing keypair for the given vote account
@@ -252,9 +253,38 @@ SUBCOMMANDS:
     withdraw-stake                      Withdraw the unstaked lamports from the stake account
 ```
 
+#### solana-account
+```text
+solana-account 
+Show the contents of an account
+
+USAGE:
+    solana account [FLAGS] [OPTIONS] <ACCOUNT PUBKEY>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --lamports                       Display balance in lamports instead of SOL
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+    -o, --output <FILE>                     Write the account data to this file
+
+ARGS:
+    <ACCOUNT PUBKEY>    Account pubkey
+```
+
 #### solana-address
 ```text
-solana-address
+solana-address 
 Get your public key
 
 USAGE:
@@ -268,8 +298,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -278,7 +308,7 @@ OPTIONS:
 
 #### solana-airdrop
 ```text
-solana-airdrop
+solana-airdrop 
 Request lamports
 
 USAGE:
@@ -292,8 +322,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
         --faucet-host <HOST>                Faucet host to use [default: the --url host]
@@ -308,7 +338,7 @@ ARGS:
 
 #### solana-authorize-nonce-account
 ```text
-solana-authorize-nonce-account
+solana-authorize-nonce-account 
 Assign account authority to a new entity
 
 USAGE:
@@ -322,13 +352,15 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
         --nonce-authority <KEYPAIR>         Specify nonce authority if different from account
+        --seed <SEED STRING>                Seed for address generation; if specified, the resulting account will be at
+                                            a derived address of the NONCE_ACCOUNT pubkey
 
 ARGS:
     <NONCE_ACCOUNT>           Address of the nonce account
@@ -337,7 +369,7 @@ ARGS:
 
 #### solana-balance
 ```text
-solana-balance
+solana-balance 
 Get your balance
 
 USAGE:
@@ -352,8 +384,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -363,9 +395,63 @@ ARGS:
     <PUBKEY>    The public key of the balance to check
 ```
 
+#### solana-block-production
+```text
+solana-block-production 
+Show information about block production
+
+USAGE:
+    solana block-production [FLAGS] [OPTIONS]
+
+FLAGS:
+    -h, --help                           Prints help information
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+        --epoch <epoch>                     Epoch to show block production for [default: current epoch]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+        --slot-limit <slot_limit>           Limit results to this many slots from the end of the epoch [default: full
+                                            epoch]
+```
+
+#### solana-block-time
+```text
+solana-block-time 
+Get estimated production time of a block
+
+USAGE:
+    solana block-time [FLAGS] [OPTIONS] <SLOT>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+
+ARGS:
+    <SLOT>    Slot number of the block to query
+```
+
 #### solana-cancel
 ```text
-solana-cancel
+solana-cancel 
 Cancel a transfer
 
 USAGE:
@@ -379,8 +465,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -392,7 +478,7 @@ ARGS:
 
 #### solana-catchup
 ```text
-solana-catchup
+solana-catchup 
 Wait for a validator to catch up to the cluster
 
 USAGE:
@@ -406,8 +492,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -419,7 +505,7 @@ ARGS:
 
 #### solana-claim-storage-reward
 ```text
-solana-claim-storage-reward
+solana-claim-storage-reward 
 Redeem storage reward credits
 
 USAGE:
@@ -433,8 +519,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -447,7 +533,7 @@ ARGS:
 
 #### solana-cluster-version
 ```text
-solana-cluster-version
+solana-cluster-version 
 Get the version of the cluster entrypoint
 
 USAGE:
@@ -461,17 +547,46 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
 ```
 
+#### solana-config
+```text
+solana-config 
+Solana command-line tool configuration settings
+
+USAGE:
+    solana config [FLAGS] [OPTIONS] <SUBCOMMAND>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+
+SUBCOMMANDS:
+    get     Get current config settings
+    help    Prints this message or the help of the given subcommand(s)
+    set     Set a config setting
+```
+
 #### solana-confirm
 ```text
-solana-confirm
+solana-confirm 
 Confirm transaction by signature
 
 USAGE:
@@ -485,8 +600,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -498,7 +613,7 @@ ARGS:
 
 #### solana-create-address-with-seed
 ```text
-solana-create-address-with-seed
+solana-create-address-with-seed 
 Generate a dervied account address with a seed
 
 USAGE:
@@ -512,8 +627,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
         --from <PUBKEY>                     From (base) key, defaults to client keypair.
@@ -522,13 +637,13 @@ OPTIONS:
 
 ARGS:
     <SEED_STRING>    The seed.  Must not take more than 32 bytes to encode as utf-8
-    <PROGRAM_ID>     The program_id that the address will ultimately be used for,
-                     or one of STAKE, VOTE, NONCE, and STORAGE keywords
+    <PROGRAM_ID>     The program_id that the address will ultimately be used for, 
+                     or one of STAKE, VOTE, and STORAGE keywords
 ```
 
 #### solana-create-archiver-storage-account
 ```text
-solana-create-archiver-storage-account
+solana-create-archiver-storage-account 
 Create an archiver storage account
 
 USAGE:
@@ -542,21 +657,21 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>
-    <STORAGE ACCOUNT>
+    <STORAGE ACCOUNT OWNER PUBKEY>    
+    <STORAGE ACCOUNT>                 
 ```
 
 #### solana-create-nonce-account
 ```text
-solana-create-nonce-account
+solana-create-nonce-account 
 Create a nonce account
 
 USAGE:
@@ -570,8 +685,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>     Recover a keypair using a seed phrase and optional passphrase
-                                             [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>     Recover a keypair using a seed phrase and optional passphrase [possible
+                                             values: keypair]
     -C, --config <PATH>                      Configuration file to use [default:
                                              ~/.config/solana/cli/config.yml]
     -u, --url <URL>                          JSON RPC URL for the solana cluster
@@ -586,7 +701,7 @@ ARGS:
 
 #### solana-create-stake-account
 ```text
-solana-create-stake-account
+solana-create-stake-account 
 Create a stake account
 
 USAGE:
@@ -600,10 +715,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>     Recover a keypair using a seed phrase and optional passphrase
-                                             [possible values: keypair]
-        --authorized-staker <PUBKEY>         Public key of authorized staker (defaults to cli config pubkey)
-        --authorized-withdrawer <PUBKEY>     Public key of the authorized withdrawer (defaults to cli config pubkey)
+        --ask-seed-phrase <KEYPAIR NAME>     Recover a keypair using a seed phrase and optional passphrase [possible
+                                             values: keypair]
     -C, --config <PATH>                      Configuration file to use [default:
                                              ~/.config/solana/cli/config.yml]
         --custodian <PUBKEY>                 Identity of the custodian (can withdraw before lockup expires)
@@ -611,6 +724,10 @@ OPTIONS:
     -k, --keypair <PATH>                     /path/to/id.json
         --lockup-date <RFC3339 DATE TIME>    The date and time at which this account will be available for withdrawal
         --lockup-epoch <EPOCH>               The epoch height at which this account will be available for withdrawal
+        --seed <SEED STRING>                 Seed for address generation; if specified, the resulting account will be at
+                                             a derived address of the STAKE ACCOUNT pubkey
+        --stake-authority <PUBKEY>           Public key of authorized staker (defaults to cli config pubkey)
+        --withdraw-authority <PUBKEY>        Public key of authorized withdrawer (defaults to cli config pubkey)
 
 ARGS:
     <STAKE ACCOUNT>    Keypair of the stake account to fund
@@ -620,7 +737,7 @@ ARGS:
 
 #### solana-create-validator-storage-account
 ```text
-solana-create-validator-storage-account
+solana-create-validator-storage-account 
 Create a validator storage account
 
 USAGE:
@@ -634,21 +751,21 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>
-    <STORAGE ACCOUNT>
+    <STORAGE ACCOUNT OWNER PUBKEY>    
+    <STORAGE ACCOUNT>                 
 ```
 
 #### solana-create-vote-account
 ```text
-solana-create-vote-account
+solana-create-vote-account 
 Create a vote account
 
 USAGE:
@@ -662,15 +779,17 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
         --authorized-voter <PUBKEY>         Public key of the authorized voter (defaults to vote account)
         --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to cli config pubkey)
-        --commission <NUM>                  The commission taken on reward redemption (0-100), default: 0
+        --commission <NUM>                  The commission taken on reward redemption (0-100) [default: 100]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
+        --seed <SEED STRING>                Seed for address generation; if specified, the resulting account will be at
+                                            a derived address of the VOTE ACCOUNT pubkey
 
 ARGS:
     <VOTE ACCOUNT KEYPAIR>         Vote account keypair to fund
@@ -679,7 +798,7 @@ ARGS:
 
 #### solana-deactivate-stake
 ```text
-solana-deactivate-stake
+solana-deactivate-stake 
 Deactivate the delegated stake from the stake account
 
 USAGE:
@@ -694,20 +813,21 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>       Recover a keypair using a seed phrase and optional passphrase
-                                               [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>       Recover a keypair using a seed phrase and optional passphrase [possible
+                                               values: keypair]
         --blockhash <BLOCKHASH>                Use the supplied blockhash
     -C, --config <PATH>                        Configuration file to use [default:
                                                ~/.config/solana/cli/config.yml]
     -u, --url <URL>                            JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                       /path/to/id.json
-        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced
-                                               transaction. Nonced transactions are useful when a transaction
-                                               requires a lengthy signing process. Learn more about nonced
+        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced 
+                                               transaction. Nonced transactions are useful when a transaction 
+                                               requires a lengthy signing process. Learn more about nonced 
                                                transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <nonce_authority>    Provide the nonce authority keypair to use when signing a nonced
                                                transaction
         --signer <PUBKEY=BASE58_SIG>...        Provide a public-key/signature pair for the transaction
+        --stake-authority <KEYPAIR>            Public key of authorized staker (defaults to cli config pubkey)
 
 ARGS:
     <STAKE ACCOUNT>    Stake account to be deactivated.
@@ -715,7 +835,7 @@ ARGS:
 
 #### solana-delegate-stake
 ```text
-solana-delegate-stake
+solana-delegate-stake 
 Delegate stake to a vote account
 
 USAGE:
@@ -730,20 +850,21 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>       Recover a keypair using a seed phrase and optional passphrase
-                                               [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>       Recover a keypair using a seed phrase and optional passphrase [possible
+                                               values: keypair]
         --blockhash <BLOCKHASH>                Use the supplied blockhash
     -C, --config <PATH>                        Configuration file to use [default:
                                                ~/.config/solana/cli/config.yml]
     -u, --url <URL>                            JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                       /path/to/id.json
-        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced
-                                               transaction. Nonced transactions are useful when a transaction
-                                               requires a lengthy signing process. Learn more about nonced
+        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced 
+                                               transaction. Nonced transactions are useful when a transaction 
+                                               requires a lengthy signing process. Learn more about nonced 
                                                transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <nonce_authority>    Provide the nonce authority keypair to use when signing a nonced
                                                transaction
         --signer <PUBKEY=BASE58_SIG>...        Provide a public-key/signature pair for the transaction
+        --stake-authority <KEYPAIR>            Public key of authorized staker (defaults to cli config pubkey)
 
 ARGS:
     <STAKE ACCOUNT>    Stake account to delegate
@@ -752,7 +873,7 @@ ARGS:
 
 #### solana-deploy
 ```text
-solana-deploy
+solana-deploy 
 Deploy a program
 
 USAGE:
@@ -766,8 +887,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -777,87 +898,9 @@ ARGS:
     <PATH TO BPF PROGRAM>    /path/to/program.o
 ```
 
-#### solana-fees
+#### solana-epoch-info
 ```text
-solana-fees
-Display current cluster fees
-
-USAGE:
-    solana fees [FLAGS] [OPTIONS]
-
-FLAGS:
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-```
-
-#### solana-get
-```text
-solana-get
-Get cli config settings
-
-USAGE:
-    solana get [FLAGS] [OPTIONS] [CONFIG_FIELD]
-
-FLAGS:
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-
-ARGS:
-    <CONFIG_FIELD>    Return a specific config setting [possible values: url, keypair]
-```
-
-#### solana-get-block-time
-```text
-solana-get-block-time
-Get estimated production time of a block
-
-USAGE:
-    solana block-time [FLAGS] [OPTIONS] <SLOT>
-
-FLAGS:
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-
-ARGS:
-    <SLOT>    Slot number of the block to query
-```
-
-#### solana-get-epoch-info
-```text
-solana-get-epoch-info
+solana-epoch-info 
 Get information about the current epoch
 
 USAGE:
@@ -872,17 +915,41 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
 ```
 
-#### solana-get-genesis-hash
+#### solana-fees
 ```text
-solana-get-genesis-hash
+solana-fees 
+Display current cluster fees
+
+USAGE:
+    solana fees [FLAGS] [OPTIONS]
+
+FLAGS:
+    -h, --help                           Prints help information
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+```
+
+#### solana-genesis-hash
+```text
+solana-genesis-hash 
 Get the genesis hash
 
 USAGE:
@@ -896,21 +963,21 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
 ```
 
-#### solana-get-nonce
+#### solana-gossip
 ```text
-solana-get-nonce
-Get the current nonce value
+solana-gossip 
+Show the current gossip network nodes
 
 USAGE:
-    solana nonce [FLAGS] [OPTIONS] <NONCE ACCOUNT>
+    solana gossip [FLAGS] [OPTIONS]
 
 FLAGS:
     -h, --help                           Prints help information
@@ -920,61 +987,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-
-ARGS:
-    <NONCE ACCOUNT>    Address of the nonce account to display
-```
-
-#### solana-get-slot
-```text
-solana-get-slot
-Get current slot
-
-USAGE:
-    solana slot [FLAGS] [OPTIONS]
-
-FLAGS:
-        --confirmed                      Return slot at maximum-lockout commitment level
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-```
-
-#### solana-get-transaction-count
-```text
-solana-get-transaction-count
-Get current transaction count
-
-USAGE:
-    solana transaction-count [FLAGS] [OPTIONS]
-
-FLAGS:
-        --confirmed                      Return count at maximum-lockout commitment level
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -983,7 +997,7 @@ OPTIONS:
 
 #### solana-help
 ```text
-solana-help
+solana-help 
 Prints this message or the help of the given subcommand(s)
 
 USAGE:
@@ -995,7 +1009,7 @@ ARGS:
 
 #### solana-new-nonce
 ```text
-solana-new-nonce
+solana-new-nonce 
 Generate a new nonce, rendering the existing nonce useless
 
 USAGE:
@@ -1009,8 +1023,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1021,16 +1035,71 @@ ARGS:
     <NONCE ACCOUNT>    Address of the nonce account
 ```
 
+#### solana-nonce
+```text
+solana-nonce 
+Get the current nonce value
+
+USAGE:
+    solana nonce [FLAGS] [OPTIONS] <NONCE ACCOUNT>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+
+ARGS:
+    <NONCE ACCOUNT>    Address of the nonce account to display
+```
+
+#### solana-nonce-account
+```text
+solana-nonce-account 
+Show the contents of a nonce account
+
+USAGE:
+    solana nonce-account [FLAGS] [OPTIONS] <NONCE ACCOUNT>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --lamports                       Display balance in lamports instead of SOL
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+
+ARGS:
+    <NONCE ACCOUNT>    Address of the nonce account to display
+```
+
 #### solana-pay
 ```text
-solana-pay
+solana-pay 
 Send a payment
 
 USAGE:
     solana pay [FLAGS] [OPTIONS] <TO PUBKEY> <AMOUNT> [--] [UNIT]
 
 FLAGS:
-        --cancelable
+        --cancelable                     
     -h, --help                           Prints help information
         --sign-only                      Sign the transaction offline
         --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
@@ -1039,16 +1108,16 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>        Recover a keypair using a seed phrase and optional passphrase
-                                                [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>        Recover a keypair using a seed phrase and optional passphrase [possible
+                                                values: keypair]
         --blockhash <BLOCKHASH>                 Use the supplied blockhash
     -C, --config <PATH>                         Configuration file to use [default:
                                                 ~/.config/solana/cli/config.yml]
     -u, --url <URL>                             JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                        /path/to/id.json
-        --nonce <PUBKEY>                        Provide the nonce account to use when creating a nonced
-                                                transaction. Nonced transactions are useful when a transaction
-                                                requires a lengthy signing process. Learn more about nonced
+        --nonce <PUBKEY>                        Provide the nonce account to use when creating a nonced 
+                                                transaction. Nonced transactions are useful when a transaction 
+                                                requires a lengthy signing process. Learn more about nonced 
                                                 transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <nonce_authority>     Provide the nonce authority keypair to use when signing a nonced
                                                 transaction
@@ -1065,7 +1134,7 @@ ARGS:
 
 #### solana-ping
 ```text
-solana-ping
+solana-ping 
 Submit transactions sequentially
 
 USAGE:
@@ -1080,8 +1149,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -c, --count <NUMBER>                    Stop after submitting count transactions
@@ -1094,7 +1163,7 @@ OPTIONS:
 
 #### solana-redeem-vote-credits
 ```text
-solana-redeem-vote-credits
+solana-redeem-vote-credits 
 Redeem credits in the stake account
 
 USAGE:
@@ -1108,8 +1177,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1122,7 +1191,7 @@ ARGS:
 
 #### solana-send-signature
 ```text
-solana-send-signature
+solana-send-signature 
 Send a signature to authorize a transfer
 
 USAGE:
@@ -1136,8 +1205,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1150,7 +1219,7 @@ ARGS:
 
 #### solana-send-timestamp
 ```text
-solana-send-timestamp
+solana-send-timestamp 
 Send a timestamp to unlock a transfer
 
 USAGE:
@@ -1164,8 +1233,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
         --date <DATETIME>                   Optional arbitrary timestamp to apply
@@ -1177,15 +1246,16 @@ ARGS:
     <PROCESS ID>    The process id of the transfer to unlock
 ```
 
-#### solana-set
+#### solana-slot
 ```text
-solana-set
-Set a cli config setting
+solana-slot 
+Get current slot
 
 USAGE:
-    solana config set [FLAGS] [OPTIONS] <--url <URL>|--keypair <PATH>>
+    solana slot [FLAGS] [OPTIONS]
 
 FLAGS:
+        --confirmed                      Return slot at maximum-lockout commitment level
     -h, --help                           Prints help information
         --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
                                          official English word list
@@ -1193,125 +1263,17 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
-```
-
-#### solana-account
-```text
-solana-account
-Show the contents of an account
-
-USAGE:
-    solana account [FLAGS] [OPTIONS] <ACCOUNT PUBKEY>
-
-FLAGS:
-    -h, --help                           Prints help information
-        --lamports                       Display balance in lamports instead of SOL
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-    -o, --output <FILE>                     Write the account data to this file
-
-ARGS:
-    <ACCOUNT PUBKEY>    Account pubkey
-```
-
-#### solana-block-production
-```text
-solana-block-production
-Show information about block production
-
-USAGE:
-    solana block-production [FLAGS] [OPTIONS]
-
-FLAGS:
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-        --epoch <epoch>                     Epoch to show block production for [default: current epoch]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-        --slot-limit <slot_limit>           Limit results to this many slots from the end of the epoch [default: full
-                                            epoch]
-```
-
-#### solana-gossip
-```text
-solana-gossip
-Show the current gossip network nodes
-
-USAGE:
-    solana gossip [FLAGS] [OPTIONS]
-
-FLAGS:
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-```
-
-#### solana-nonce-account
-```text
-solana-nonce-account
-Show the contents of a nonce account
-
-USAGE:
-    solana nonce-account [FLAGS] [OPTIONS] <NONCE ACCOUNT>
-
-FLAGS:
-    -h, --help                           Prints help information
-        --lamports                       Display balance in lamports instead of SOL
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-
-ARGS:
-    <NONCE ACCOUNT>    Address of the nonce account to display
 ```
 
 #### solana-stake-account
 ```text
-solana-stake-account
+solana-stake-account 
 Show the contents of a stake account
 
 USAGE:
@@ -1326,8 +1288,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1337,9 +1299,85 @@ ARGS:
     <STAKE ACCOUNT>    Address of the stake account to display
 ```
 
+#### solana-stake-authorize-staker
+```text
+solana-stake-authorize-staker 
+Authorize a new stake signing keypair for the given stake account
+
+USAGE:
+    solana stake-authorize-staker [FLAGS] [OPTIONS] <STAKE ACCOUNT> <AUTHORIZE PUBKEY>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --sign-only                      Sign the transaction offline
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>       Recover a keypair using a seed phrase and optional passphrase [possible
+                                               values: keypair]
+        --blockhash <BLOCKHASH>                Use the supplied blockhash
+    -C, --config <PATH>                        Configuration file to use [default:
+                                               ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                            JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                       /path/to/id.json
+        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced 
+                                               transaction. Nonced transactions are useful when a transaction 
+                                               requires a lengthy signing process. Learn more about nonced 
+                                               transactions at https://docs.solana.com/offline-signing/durable-nonce
+        --nonce-authority <nonce_authority>    Provide the nonce authority keypair to use when signing a nonced
+                                               transaction
+        --signer <PUBKEY=BASE58_SIG>...        Provide a public-key/signature pair for the transaction
+        --stake-authority <KEYPAIR>            Public key of authorized staker (defaults to cli config pubkey)
+
+ARGS:
+    <STAKE ACCOUNT>       Stake account in which to set the authorized staker
+    <AUTHORIZE PUBKEY>    New authorized staker
+```
+
+#### solana-stake-authorize-withdrawer
+```text
+solana-stake-authorize-withdrawer 
+Authorize a new withdraw signing keypair for the given stake account
+
+USAGE:
+    solana stake-authorize-withdrawer [FLAGS] [OPTIONS] <STAKE ACCOUNT> <AUTHORIZE PUBKEY>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --sign-only                      Sign the transaction offline
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>       Recover a keypair using a seed phrase and optional passphrase [possible
+                                               values: keypair]
+        --blockhash <BLOCKHASH>                Use the supplied blockhash
+    -C, --config <PATH>                        Configuration file to use [default:
+                                               ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                            JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                       /path/to/id.json
+        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced 
+                                               transaction. Nonced transactions are useful when a transaction 
+                                               requires a lengthy signing process. Learn more about nonced 
+                                               transactions at https://docs.solana.com/offline-signing/durable-nonce
+        --nonce-authority <nonce_authority>    Provide the nonce authority keypair to use when signing a nonced
+                                               transaction
+        --signer <PUBKEY=BASE58_SIG>...        Provide a public-key/signature pair for the transaction
+        --withdraw-authority <KEYPAIR>         Public key of authorized withdrawer (defaults to cli config pubkey)
+
+ARGS:
+    <STAKE ACCOUNT>       Stake account in which to set the authorized withdrawer
+    <AUTHORIZE PUBKEY>    New authorized withdrawer
+```
+
 #### solana-stake-history
 ```text
-solana-stake-history
+solana-stake-history 
 Show the stake history
 
 USAGE:
@@ -1354,17 +1392,45 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
 ```
 
+#### solana-stakes
+```text
+solana-stakes 
+Show stake account information
+
+USAGE:
+    solana stakes [FLAGS] [OPTIONS] [VOTE ACCOUNT PUBKEYS]...
+
+FLAGS:
+    -h, --help                           Prints help information
+        --lamports                       Display balance in lamports instead of SOL
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+
+ARGS:
+    <VOTE ACCOUNT PUBKEYS>...    Only show stake accounts delegated to the provided vote accounts
+```
+
 #### solana-storage-account
 ```text
-solana-storage-account
+solana-storage-account 
 Show the contents of a storage account
 
 USAGE:
@@ -1378,8 +1444,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1389,68 +1455,16 @@ ARGS:
     <STORAGE ACCOUNT PUBKEY>    Storage account pubkey
 ```
 
-#### solana-validators
+#### solana-transaction-count
 ```text
-solana-validators
-Show information about the current validators
+solana-transaction-count 
+Get current transaction count
 
 USAGE:
-    solana validators [FLAGS] [OPTIONS]
+    solana transaction-count [FLAGS] [OPTIONS]
 
 FLAGS:
-    -h, --help                           Prints help information
-        --lamports                       Display balance in lamports instead of SOL
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-```
-
-#### solana-vote-account
-```text
-solana-vote-account
-Show the contents of a vote account
-
-USAGE:
-    solana vote-account [FLAGS] [OPTIONS] <VOTE ACCOUNT PUBKEY>
-
-FLAGS:
-    -h, --help                           Prints help information
-        --lamports                       Display balance in lamports instead of SOL
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-
-ARGS:
-    <VOTE ACCOUNT PUBKEY>    Vote account pubkey
-```
-
-#### solana-stake-authorize-staker
-```text
-solana-stake-authorize-staker
-Authorize a new stake signing keypair for the given stake account
-
-USAGE:
-    solana stake-authorize-staker [FLAGS] [OPTIONS] <STAKE ACCOUNT> <AUTHORIZE PUBKEY>
-
-FLAGS:
+        --confirmed                      Return count at maximum-lockout commitment level
     -h, --help                           Prints help information
         --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
                                          official English word list
@@ -1458,49 +1472,17 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
-
-ARGS:
-    <STAKE ACCOUNT>       Stake account in which to set the authorized staker
-    <AUTHORIZE PUBKEY>    New authorized staker
-```
-
-#### solana-stake-authorize-withdrawer
-```text
-solana-stake-authorize-withdrawer
-Authorize a new withdraw signing keypair for the given stake account
-
-USAGE:
-    solana stake-authorize-withdrawer [FLAGS] [OPTIONS] <STAKE ACCOUNT> <AUTHORIZE PUBKEY>
-
-FLAGS:
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-
-ARGS:
-    <STAKE ACCOUNT>       Stake account in which to set the authorized withdrawer
-    <AUTHORIZE PUBKEY>    New authorized withdrawer
 ```
 
 #### solana-uptime
 ```text
-solana-uptime
+solana-uptime 
 Show the uptime of a validator, based on epoch voting history
 
 USAGE:
@@ -1515,8 +1497,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1529,11 +1511,11 @@ ARGS:
 
 #### solana-validator-info
 ```text
-solana-validator-info
+solana-validator-info 
 Publish/get Validator info on Solana
 
 USAGE:
-    solana validator-info [FLAGS] [OPTIONS] [SUBCOMMAND]
+    solana validator-info [FLAGS] [OPTIONS] <SUBCOMMAND>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1543,8 +1525,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1556,9 +1538,62 @@ SUBCOMMANDS:
     publish    Publish Validator info on Solana
 ```
 
+#### solana-validators
+```text
+solana-validators 
+Show summary information about the current validators
+
+USAGE:
+    solana validators [FLAGS] [OPTIONS]
+
+FLAGS:
+    -h, --help                           Prints help information
+        --lamports                       Display balance in lamports instead of SOL
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+```
+
+#### solana-vote-account
+```text
+solana-vote-account 
+Show the contents of a vote account
+
+USAGE:
+    solana vote-account [FLAGS] [OPTIONS] <VOTE ACCOUNT PUBKEY>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --lamports                       Display balance in lamports instead of SOL
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+
+ARGS:
+    <VOTE ACCOUNT PUBKEY>    Vote account pubkey
+```
+
 #### solana-vote-authorize-voter
 ```text
-solana-vote-authorize-voter
+solana-vote-authorize-voter 
 Authorize a new vote signing keypair for the given vote account
 
 USAGE:
@@ -1572,8 +1607,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1586,7 +1621,7 @@ ARGS:
 
 #### solana-vote-authorize-withdrawer
 ```text
-solana-vote-authorize-withdrawer
+solana-vote-authorize-withdrawer 
 Authorize a new withdraw signing keypair for the given vote account
 
 USAGE:
@@ -1600,8 +1635,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1614,7 +1649,7 @@ ARGS:
 
 #### solana-vote-update-validator
 ```text
-solana-vote-update-validator
+solana-vote-update-validator 
 Update the vote account's validator identity
 
 USAGE:
@@ -1628,8 +1663,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1643,7 +1678,7 @@ ARGS:
 
 #### solana-withdraw-from-nonce-account
 ```text
-solana-withdraw-from-nonce-account
+solana-withdraw-from-nonce-account 
 Withdraw lamports from the nonce account
 
 USAGE:
@@ -1657,8 +1692,8 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
@@ -1674,7 +1709,7 @@ ARGS:
 
 #### solana-withdraw-stake
 ```text
-solana-withdraw-stake
+solana-withdraw-stake 
 Withdraw the unstaked lamports from the stake account
 
 USAGE:
@@ -1688,12 +1723,13 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
     -C, --config <PATH>                     Configuration file to use [default:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
+        --withdraw-authority <KEYPAIR>      Public key of authorized withdrawer (defaults to cli config pubkey)
 
 ARGS:
     <STAKE ACCOUNT>          Stake account from which to withdraw
