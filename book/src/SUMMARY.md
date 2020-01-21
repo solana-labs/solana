@@ -1,8 +1,7 @@
 # Table of contents
 
-* [Introduction](introduction.md)
-* [Terminology](terminology.md)
-* [Getting Started](getting-started/README.md)
+* [The Solana Codebase](introduction.md)
+* [Building from Source](getting-started/README.md)
   * [Example Client: Web Wallet](getting-started/webwallet.md)
 * [Programming Model](programs/README.md)
   * [Example: Tic-Tac-Toe](programs/tictactoe.md)
@@ -46,6 +45,7 @@
   * [JSON RPC API](api-reference/jsonrpc-api.md)
   * [JavaScript API](api-reference/javascript-api.md)
   * [solana CLI](api-reference/cli.md)
+* [Terminology](terminology.md)
 * [Accepted Design Proposals](proposals/README.md)
   * [Ledger Replication](proposals/ledger-replication-to-implement.md)
   * [Secure Vote Signing](proposals/vote-signing-to-implement.md)
