@@ -25,15 +25,18 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
 * [getGenesisHash](jsonrpc-api.md#getgenesishash)
+* [getInflation](jsonrpc-api.md#getinflation)
 * [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
 * [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 * [getNumBlocksSinceSignatureConfirmation](jsonrpc-api.md#getnumblockssincesignatureconfirmation)
 * [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 * [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
+* [getSignatureConfirmation](jsonrpc-api.md#getsignatureconfirmation)
 * [getSignatureStatus](jsonrpc-api.md#getsignaturestatus)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
 * [getSlotsPerSegment](jsonrpc-api.md#getslotspersegment)
+* [getStoragePubkeysForSlot](jsonrpc-api.md#getstoragepubkeysforslot)
 * [getStorageTurn](jsonrpc-api.md#getstorageturn)
 * [getStorageTurnRate](jsonrpc-api.md#getstorageturnrate)
 * [getTransactionCount](jsonrpc-api.md#gettransactioncount)
@@ -43,7 +46,8 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [minimumLedgerSlot](jsonrpc-api.md#minimumledgerslot)
 * [requestAirdrop](jsonrpc-api.md#requestairdrop)
 * [sendTransaction](jsonrpc-api.md#sendtransaction)
-* [startSubscriptionChannel](jsonrpc-api.md#startsubscriptionchannel)
+* [setLogFilter](jsonrpc-api.md#setlogfilter)
+* [validatorExit](jsonrpc-api.md#validatorexit)
 * [Subscription Websocket](jsonrpc-api.md#subscription-websocket)
   * [accountSubscribe](jsonrpc-api.md#accountsubscribe)
   * [accountUnsubscribe](jsonrpc-api.md#accountunsubscribe)
@@ -51,15 +55,17 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
   * [programUnsubscribe](jsonrpc-api.md#programunsubscribe)
   * [signatureSubscribe](jsonrpc-api.md#signaturesubscribe)
   * [signatureUnsubscribe](jsonrpc-api.md#signatureunsubscribe)
+  * [slotSubscribe](jsonrpc-api.md#slotsubscribe)
+  * [slotUnsubscribe](jsonrpc-api.md#slotunsubscribe)
 
 ## Request Formatting
 
 To make a JSON-RPC request, send an HTTP POST request with a `Content-Type: application/json` header. The JSON request data should contain 4 fields:
 
-* `jsonrpc`, set to `"2.0"`
-* `id`, a unique client-generated identifying integer
-* `method`, a string containing the method to be invoked
-* `params`, a JSON array of ordered parameter values
+* `jsonrpc: <string>`, set to `"2.0"`
+* `id: <number>`, a unique client-generated identifying integer
+* `method: <string>`, a string containing the method to be invoked
+* `params: <array>`, a JSON array of ordered parameter values
 
 Example using curl:
 
@@ -69,9 +75,9 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 The response output will be a JSON object with the following fields:
 
-* `jsonrpc`, matching the request specification
-* `id`, matching the request identifier
-* `result`, requested data or success confirmation
+* `jsonrpc: <string>`, matching the request specification
+* `id: <number>`, matching the request identifier
+* `result: <array|number|object|string>`, requested data or success confirmation
 
 Requests can be sent in batches by sending an array of JSON-RPC request objects as the data for a single POST.
 
@@ -115,12 +121,12 @@ Returns a transaction receipt
 
 #### Parameters:
 
-* `string` - Signature of Transaction to confirm, as base-58 encoded string
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `RpcResponse<boolean>` - RpcResponse JSON object with `value` field set to Transaction status, boolean true if Transaction is confirmed
+* `RpcResponse<bool>` - RpcResponse JSON object with `value` field set to Transaction status, boolean true if Transaction is confirmed
 
 #### Example:
 
@@ -138,18 +144,19 @@ Returns all information associated with the account of provided Pubkey
 
 #### Parameters:
 
-* `string` - Pubkey of account to query, as base-58 encoded string
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<string>` - Pubkey of account to query, as base-58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
 The result value will be an RpcResponse JSON object containing an AccountInfo JSON object.
 
 * `RpcResponse<AccountInfo>`, RpcResponse JSON object with `value` field set to AccountInfo, a JSON object containing:
-* `lamports`, number of lamports assigned to this account, as a u64
-* `owner`, base-58 encoded pubkey of the program this account has been assigned to
-* `data`, base-58 encoded data associated with the account
-* `executable`, boolean indicating if the account contains a program \(and is strictly read-only\)
+* `lamports: <u64>`, number of lamports assigned to this account, as a u64
+* `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+* `data: <string>`, base-58 encoded data associated with the account
+* `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+* `rentEpoch`: <u64>, the epoch at which this account will next owe rent, as u64
 
 #### Example:
 
@@ -158,7 +165,7 @@ The result value will be an RpcResponse JSON object containing an AccountInfo JS
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["2gVkYWexTHR5Hb2aLeQN3tnngvWzisFKXDUPrgMHpdST"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"executable":false,"owner":"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM","lamports":1,"data":"Joig2k8Ax4JPMpWhXRyc2jMa7Wejz4X1xqVi3i7QRkmVj1ChUgNc4VNpGUQePJGBAui3c6886peU9GEbjsyeANN8JGStprwLbLwcw5wpPjuQQb9mwrjVmoDQBjj3MzZKgeHn6wmnQ5k8DBFuoCYKWWsJfH2gv9FvCzrN6K1CRcQZzF"}},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"executable":false,"owner":"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM","lamports":1,"data":"Joig2k8Ax4JPMpWhXRyc2jMa7Wejz4X1xqVi3i7QRkmVj1ChUgNc4VNpGUQePJGBAui3c6886peU9GEbjsyeANN8JGStprwLbLwcw5wpPjuQQb9mwrjVmoDQBjj3MzZKgeHn6wmnQ5k8DBFuoCYKWWsJfH2gv9FvCzrN6K1CRcQZzF","rentEpoch":2}},"id":1}
 ```
 
 ### getBalance
@@ -167,12 +174,12 @@ Returns the balance of the account of provided Pubkey
 
 #### Parameters:
 
-* `string` - Pubkey of account to query, as base-58 encoded string
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<string>` - Pubkey of account to query, as base-58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `RpcResponse<u64>` - RpcResponse JSON object with `value` field set to quantity
+* `RpcResponse<u64>` - RpcResponse JSON object with `value` field set to the balance
 
 #### Example:
 
@@ -190,16 +197,15 @@ Returns commitment for particular block
 
 #### Parameters:
 
-* `u64` - block, identified by Slot
+* `<u64>` - block, identified by Slot
 
 #### Results:
 
 The result field will be a JSON object containing:
 
 * `commitment` - commitment, comprising either:
-  * `null` - Unknown block
-  * `object` - BlockCommitment
-    * `array` - commitment, array of u64 integers logging the amount of cluster stake in lamports that has voted on the block at each depth from 0 to `MAX_LOCKOUT_HISTORY`
+  * `<null>` - Unknown block
+  * `<array>` - commitment, array of u64 integers logging the amount of cluster stake in lamports that has voted on the block at each depth from 0 to `MAX_LOCKOUT_HISTORY`
 * `totalStake` - total active stake, in lamports, of the current epoch
 
 #### Example:
@@ -209,7 +215,7 @@ The result field will be a JSON object containing:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":[{"commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32]},42],"id":1}
+{"jsonrpc":"2.0","result":{"commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],"totalStake": 42},"id":1}
 ```
 
 ### getBlockTime
@@ -228,12 +234,12 @@ query a node that is built from genesis and retains the entire ledger.
 
 #### Parameters:
 
-* `u64` - block, identified by Slot
+* `<u64>` - block, identified by Slot
 
 #### Results:
 
-* `null` - block has not yet been produced
-* `i64` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
+* `<null>` - block has not yet been produced
+* `<i64>` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
 
 #### Example:
 
@@ -257,10 +263,10 @@ None
 
 The result field will be an array of JSON objects, each with the following sub fields:
 
-* `pubkey` - Node public key, as base-58 encoded string
-* `gossip` - Gossip network address for the node
-* `tpu` - TPU network address for the node
-* `rpc` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
+* `pubkey: <string>` - Node public key, as base-58 encoded string
+* `gossip: <string>` - Gossip network address for the node
+* `tpu: <string>` - TPU network address for the node
+* `rpc: <string>` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
 
 #### Example:
 
@@ -278,25 +284,25 @@ Returns identity and transaction information about a confirmed block in the ledg
 
 #### Parameters:
 
-* `integer` - slot, as u64 integer
-* `string` - (optional) encoding for each returned Transaction, either "json" or "binary". If not provided, the default encoding is JSON.
+* `<u64>` - slot, as u64 integer
+* `<string>` - (optional) encoding for each returned Transaction, either "json" or "binary". If not provided, the default encoding is JSON.
 
 #### Results:
 
 The result field will be an object with the following fields:
 
-* `blockhash` - the blockhash of this block, as base-58 encoded string
-* `previousBlockhash` - the blockhash of this block's parent, as base-58 encoded string
-* `parentSlot` - the slot index of this block's parent
-* `transactions` - an array of JSON objects containing:
-  * `transaction` - [Transaction](transaction-api.md) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
-  * `meta` - transaction status metadata object, containing `null` or:
-     * `status` - Transaction status:
+* `blockhash: <string>` - the blockhash of this block, as base-58 encoded string
+* `previousBlockhash: <string>` - the blockhash of this block's parent, as base-58 encoded string
+* `parentSlot: <u64>` - the slot index of this block's parent
+* `transactions: <array>` - an array of JSON objects containing:
+  * `transaction: <object|string>` - [Transaction](transaction-api.md) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
+  * `meta: <object>` - transaction status metadata object, containing `null` or:
+     * `status: <object>` - Transaction status:
        * `"Ok": null` - Transaction was successful
        * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
-     * `fee` - fee this transaction was charged, as u64 integer
-     * `preBalances` - array of u64 account balances from before the transaction was processed
-     * `postBalances` - array of u64 account balances after the transaction was processed
+     * `fee: <u64>` - fee this transaction was charged, as u64 integer
+     * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
+     * `postBalances: <array>` - array of u64 account balances after the transaction was processed
 
 #### Example:
 
@@ -305,13 +311,13 @@ The result field will be an object with the following fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}' localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"blockhash":"Gp3t5bfDsJv1ovP8cB1SuRhXVuoTqDv7p3tymyubYg5","parentSlot":429,"previousBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA","transactions":[[{"message":{"accountKeys":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC","39UAy8hsoYPywGPGdmun747omSr79zLSjqvPJN3zetoH","SysvarS1otHashes111111111111111111111111111","SysvarC1ock11111111111111111111111111111111","Vote111111111111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":2},"instructions":[{"accounts":[1,2,3],"data":"29z5mr1JoRmJYQ6ynmk3pf31cGFRziAF1M3mT3L6sFXf5cKLdkEaMXMT8AqLpD4CpcupHmuMEmtZHpomrwfdZetSomNy3d","programIdIndex":4}],"recentBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA"},"signatures":["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4vANMjSKiwEchGSXwVrQkwHnmsbKQmy9vdrsYxWdCup1bLsFzX8gKrFTSVDCZCae2dbxJB9mPNhqB2sD1vvr4sAD"]},{"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}]]},"id":1}
+{"jsonrpc":"2.0","result":{"blockhash":"Gp3t5bfDsJv1ovP8cB1SuRhXVuoTqDv7p3tymyubYg5","parentSlot":429,"previousBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA","transactions":[{"transaction":{"message":{"accountKeys":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC","39UAy8hsoYPywGPGdmun747omSr79zLSjqvPJN3zetoH","SysvarS1otHashes111111111111111111111111111","SysvarC1ock11111111111111111111111111111111","Vote111111111111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":2},"instructions":[{"accounts":[1,2,3],"data":"29z5mr1JoRmJYQ6ynmk3pf31cGFRziAF1M3mT3L6sFXf5cKLdkEaMXMT8AqLpD4CpcupHmuMEmtZHpomrwfdZetSomNy3d","programIdIndex":4}],"recentBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA"},"signatures":["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4vANMjSKiwEchGSXwVrQkwHnmsbKQmy9vdrsYxWdCup1bLsFzX8gKrFTSVDCZCae2dbxJB9mPNhqB2sD1vvr4sAD"]},"meta":{"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}}]},"id":1}
 
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "binary"]}' localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"blockhash":"Gp3t5bfDsJv1ovP8cB1SuRhXVuoTqDv7p3tymyubYg5","parentSlot":429,"previousBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA","transactions":[["81UZJt4dh4Do66jDhrgkQudS8J2N6iG3jaVav7gJrqJSFY4Ug53iA9JFJZh2gxKWcaFdLJwhHx9mRdg9JwDAWB4ywiu5154CRwXV4FMdnPLg7bhxRLwhhYaLsVgMF5AyNRcTzjCVoBvqFgDU7P8VEKDEiMvD3qxzm1pLZVxDG1LTQpT3Dz4Uviv4KQbFQNuC22KupBoyHFB7Zh6KFdMqux4M9PvhoqcoJsJKwXjWpKu7xmEKnnrSbfLadkgjBmmjhW3fdTrFvnhQdTkhtdJxUL1xS9GMuJQer8YgSKNtUXB1eXZQwXU8bU2BjYkZE6Q5Xww8hu9Z4E4Mo4QsooVtHoP6BM3NKw8zjVbWfoCQqxTrwuSzrNCWCWt58C24LHecH67CTt2uXbYSviixvrYkK7A3t68BxTJcF1dXJitEPTFe2ceTkauLJqrJgnER4iUrsjr26T8YgWvpY9wkkWFSviQW6wV5RASTCUasVEcrDiaKj8EQMkgyDoe9HyKitSVg67vMWJFpUXpQobseWJUs5FTWWzmfHmFp8FZ",{"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}]]},"id":1}
+{"jsonrpc":"2.0","result":{"blockhash":"Gp3t5bfDsJv1ovP8cB1SuRhXVuoTqDv7p3tymyubYg5","parentSlot":429,"previousBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA","transactions":[{"transaction":"81UZJt4dh4Do66jDhrgkQudS8J2N6iG3jaVav7gJrqJSFY4Ug53iA9JFJZh2gxKWcaFdLJwhHx9mRdg9JwDAWB4ywiu5154CRwXV4FMdnPLg7bhxRLwhhYaLsVgMF5AyNRcTzjCVoBvqFgDU7P8VEKDEiMvD3qxzm1pLZVxDG1LTQpT3Dz4Uviv4KQbFQNuC22KupBoyHFB7Zh6KFdMqux4M9PvhoqcoJsJKwXjWpKu7xmEKnnrSbfLadkgjBmmjhW3fdTrFvnhQdTkhtdJxUL1xS9GMuJQer8YgSKNtUXB1eXZQwXU8bU2BjYkZE6Q5Xww8hu9Z4E4Mo4QsooVtHoP6BM3NKw8zjVbWfoCQqxTrwuSzrNCWCWt58C24LHecH67CTt2uXbYSviixvrYkK7A3t68BxTJcF1dXJitEPTFe2ceTkauLJqrJgnER4iUrsjr26T8YgWvpY9wkkWFSviQW6wV5RASTCUasVEcrDiaKj8EQMkgyDoe9HyKitSVg67vMWJFpUXpQobseWJUs5FTWWzmfHmFp8FZ","meta":{"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}}]},"id":1}
 ```
 
 ### getConfirmedBlocks
@@ -320,8 +326,8 @@ Returns a list of confirmed blocks
 
 #### Parameters:
 
-* `integer` - start_slot, as u64 integer
-* `integer` - (optional) end_slot, as u64 integer
+* `<u64>` - start_slot, as u64 integer
+* `<u64>` - (optional) end_slot, as u64 integer
 
 #### Results:
 
@@ -345,15 +351,16 @@ Returns information about the current epoch
 
 #### Parameters:
 
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
 The result field will be an object with the following fields:
 
-* `epoch`, the current epoch
-* `slotIndex`, the current slot relative to the start of the current epoch
-* `slotsInEpoch`, the number of slots in this epoch
+* `absoluteSlot: <u64>`, the current slot
+* `epoch: <u64>`, the current epoch
+* `slotIndex: <u64>`, the current slot relative to the start of the current epoch
+* `slotsInEpoch: <u64>`, the number of slots in this epoch
 
 #### Example:
 
@@ -362,7 +369,7 @@ The result field will be an object with the following fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"epoch":3,"slotIndex":126,"slotsInEpoch":256},"id":1}
+{"jsonrpc":"2.0","result":{"absoluteSlot":166598,"epoch":27,"slotIndex":2790,"slotsInEpoch":8192},"id":1}
 ```
 
 ### getEpochSchedule
@@ -377,11 +384,11 @@ None
 
 The result field will be an object with the following fields:
 
-* `slotsPerEpoch`, the maximum number of slots in each epoch
-* `leaderScheduleSlotOffset`, the number of slots before beginning of an epoch to calculate a leader schedule for that epoch
-* `warmup`, whether epochs start short and grow
-* `firstNormalEpoch`, first normal-length epoch, log2(slotsPerEpoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
-* `firstNormalSlot`, MINIMUM_SLOTS_PER_EPOCH * (2.pow(firstNormalEpoch) - 1)
+* `slotsPerEpoch: <u64>`, the maximum number of slots in each epoch
+* `leaderScheduleSlotOffset: <u64>`, the number of slots before beginning of an epoch to calculate a leader schedule for that epoch
+* `warmup: <bool>`, whether epochs start short and grow
+* `firstNormalEpoch: <u64>`, first normal-length epoch, log2(slotsPerEpoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
+* `firstNormalSlot: <u64>`, MINIMUM_SLOTS_PER_EPOCH * (2.pow(firstNormalEpoch) - 1)
 
 #### Example:
 
@@ -403,7 +410,7 @@ None
 
 #### Results:
 
-* `string` - a Hash as base-58 encoded string
+* `<string>` - a Hash as base-58 encoded string
 
 #### Example:
 
@@ -415,14 +422,43 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
 ```
 
+### getInflation
+
+Returns the inflation configuration of the cluster
+
+#### Parameters:
+
+None
+
+#### Results:
+
+The result field will be an Inflation object with the following fields:
+
+* `initial: <f64>`, the initial inflation percentage from time 0
+* `terminal: <f64>`, terminal inflation percentage
+* `taper: <f64>`, rate per year at which inflation is lowered
+* `foundation: <f64>`, percentage of total inflation allocated to the foundation
+* `foundationTerm: <f64>`, duration of foundation pool inflation in years
+* `storage: <f64>`, percentage of total inflation allocated to storage rewards
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getInflation"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"foundation":0.05,"foundationTerm":7.0,"initial":0.15,"storage":0.1,"taper":0.15,"terminal":0.015},"id":1}
+```
+
 ### getLeaderSchedule
 
 Returns the leader schedule for an epoch
 
 #### Parameters:
 
-* `slot` - (optional) Fetch the leader schedule for the epoch that corresponds to the provided slot.  If unspecified, the leader schedule for the current epoch is fetched
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<u64>` - (optional) Fetch the leader schedule for the epoch that corresponds to the provided slot.  If unspecified, the leader schedule for the current epoch is fetched
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -446,12 +482,12 @@ Returns minimum balance required to make account rent exempt.
 
 #### Parameters:
 
-* `u64` - account data length
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<usize>` - account data length
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `u64` - minimum lamports required in account
+* `<u64>` - minimum lamports required in account
 
 #### Example:
 
@@ -469,12 +505,12 @@ Returns the current number of blocks since signature has been confirmed.
 
 #### Parameters:
 
-* `string` - Signature of Transaction to confirm, as base-58 encoded string
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `u64` - count
+* `<u64>` - count, or null if signature not found
 
 #### Example:
 
@@ -492,18 +528,20 @@ Returns all accounts owned by the provided program Pubkey
 
 #### Parameters:
 
-* `string` - Pubkey of program, as base-58 encoded string
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<string>` - Pubkey of program, as base-58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-The result field will be an array of arrays. Each sub array will contain:
+The result field will be an array of JSON objects, which will contain:
 
-* `string` - the account Pubkey as base-58 encoded string and a JSON object, with the following sub fields:
-* `lamports`, number of lamports assigned to this account, as a u64
-* `owner`, base-58 encoded pubkey of the program this account has been assigned to
-* `data`, base-58 encoded data associated with the account
-* `executable`, boolean indicating if the account contains a program \(and is strictly read-only\)
+* `pubkey: <string>` - the account Pubkey as base-58 encoded string
+* `account: <object>` - a JSON object, with the following sub fields:
+   * `lamports: <u64>`, number of lamports assigned to this account, as a u64
+   * `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+   * `data: <string>`, base-58 encoded data associated with the account
+   * `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+   * `rentEpoch`: <u64>, the epoch at which this account will next owe rent, as u64
 
 #### Example:
 
@@ -512,7 +550,7 @@ The result field will be an array of arrays. Each sub array will contain:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":[["BqGKYtAKu69ZdWEBtZHh4xgJY1BYa2YBiBReQE3pe383", {"executable":false,"owner":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","lamports":1,"data":"", ["8nQwAgzN2yyUzrukXsCa3JELBYqDQrqJ3UyHiWazWxHR", {"executable":false,"owner":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","lamports":10,"data":[]]]},"id":1}
+{"jsonrpc":"2.0","result":[{"account":{"data":"2R9jLfiAQ9bgdcw6h8s44439","executable":false,"lamports":15298080,"owner":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","rentEpoch":28},"pubkey":"CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"}],"id":1}
 ```
 
 ### getRecentBlockhash
@@ -521,15 +559,15 @@ Returns a recent block hash from the ledger, and a fee schedule that can be used
 
 #### Parameters:
 
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
 An RpcResponse containing a JSON object consisting of a string blockhash and FeeCalculator JSON object.
 
-* `RpcResponse<array>` - RpcResponse JSON object with `value` field set to a JSON object including:
-* `blockhash` - a Hash as base-58 encoded string
-* `feeCalculator` - FeeCalculator object, the fee schedule for this block hash
+* `RpcResponse<object>` - RpcResponse JSON object with `value` field set to a JSON object including:
+* `blockhash: <string>` - a Hash as base-58 encoded string
+* `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
 
 #### Example:
 
@@ -538,7 +576,34 @@ An RpcResponse containing a JSON object consisting of a string blockhash and Fee
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","feeCalculator":{"lamportsPerSignature": 0}}},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"burnPercent":50,"lamportsPerSignature":5000,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
+```
+
+### getSignatureConfirmation
+
+Returns the status and number of confirmations of a given signature.
+#### Parameters:
+
+* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+* `<null>` - Unknown transaction
+* `<object>` - Transaction confirmations and status:
+  * `confirmations: <u64>` - count of confirmations since transaction was processed
+  * `status: <object>` -
+    * `"Ok": <null>` - Transaction was successful
+    * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureConfirmation", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"confirmations":12,"status":{"Ok": null}},"id":1}
 ```
 
 ### getSignatureStatus
@@ -547,14 +612,14 @@ Returns the status of a given signature. This method is similar to [confirmTrans
 
 #### Parameters:
 
-* `string` - Signature of Transaction to confirm, as base-58 encoded string
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `null` - Unknown transaction
-* `object` - Transaction status:
-  * `"Ok": null` - Transaction was successful
+* `<null>` - Unknown transaction
+* `<object>` - Transaction status:
+  * `"Ok": <null>` - Transaction was successful
   * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
 
 #### Example:
@@ -564,7 +629,7 @@ Returns the status of a given signature. This method is similar to [confirmTrans
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatus", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":"SignatureNotFound","id":1}
+{"jsonrpc":"2.0","result":{"Ok": null},"id":1}
 ```
 
 ### getSlot
@@ -573,11 +638,11 @@ Returns the current slot the node is processing
 
 #### Parameters:
 
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `u64` - Current slot
+* `<u64>` - Current slot
 
 #### Example:
 
@@ -595,11 +660,11 @@ Returns the current slot leader
 
 #### Parameters:
 
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `string` - Node Id as base-58 encoded string
+* `<string>` - Node identity Pubkey as base-58 encoded string
 
 #### Example:
 
@@ -617,11 +682,11 @@ Returns the current storage segment size in terms of slots
 
 #### Parameters:
 
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `u64` - Number of slots in a storage segment
+* `<u64>` - Number of slots in a storage segment
 
 #### Example:
 
@@ -630,6 +695,27 @@ Returns the current storage segment size in terms of slots
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlotsPerSegment"}' http://localhost:8899
 // Result
 {"jsonrpc":"2.0","result":1024,"id":1}
+```
+
+### getStoragePubkeysForSlot
+
+Returns the storage Pubkeys for a particular slot
+
+#### Parameters:
+
+None
+
+#### Results:
+
+An array of Pubkeys, as base-58 encoded strings
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStoragePubkeysForSlot","params":[1]}' http://localhost:8899
+ // Result
+{"jsonrpc":"2.0","result":["GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC"],"id":1}
 ```
 
 ### getStorageTurn
@@ -644,8 +730,8 @@ None
 
 A JSON object consisting of
 
-* `blockhash` - a Hash as base-58 encoded string indicating the blockhash of the turn slot
-* `slot` - the current storage turn slot
+* `blockhash: <string>` - a Hash as base-58 encoded string indicating the blockhash of the turn slot
+* `slot: <u64>` - the current storage turn slot
 
 #### Example:
 
@@ -653,7 +739,7 @@ A JSON object consisting of
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStorageTurn"}' http://localhost:8899
  // Result
-{"jsonrpc":"2.0","result":{"blockhash": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC", "slot": "2048"},"id":1}
+{"jsonrpc":"2.0","result":{"blockhash": "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC", "slot": 2048},"id":1}
 ```
 
 ### getStorageTurnRate
@@ -666,7 +752,7 @@ None
 
 #### Results:
 
-* `u64` - Number of slots in storage turn
+* `<u64>` - Number of slots in storage turn
 
 #### Example:
 
@@ -683,11 +769,11 @@ Returns the current Transaction count from the ledger
 
 #### Parameters:
 
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `u64` - count
+* `<u64>` - count
 
 #### Example:
 
@@ -701,15 +787,15 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### getTotalSupply
 
-Returns the current total supply in Lamports
+Returns the current total supply in lamports
 
 #### Parameters:
 
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
-* `u64` - Total supply
+* `<u64>` - Total supply
 
 #### Example:
 
@@ -731,7 +817,7 @@ None
 
 #### Results:
 
-The result field will be a JSON object with the following sub fields:
+The result field will be a JSON object with the following fields:
 
 * `solana-core`, software version of solana-core
 
@@ -741,7 +827,7 @@ The result field will be a JSON object with the following sub fields:
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' http://localhost:8899
 // Result
-{"jsonrpc":"2.0","result":{"solana-core": "0.17.2"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "0.23.0"},"id":1}
 ```
 
 ### getVoteAccounts
@@ -750,18 +836,19 @@ Returns the account info and associated stake for all the voting accounts in the
 
 #### Parameters:
 
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
 The result field will be a JSON object of `current` and `delinquent` accounts, each containing an array of JSON objects with the following sub fields:
 
-* `votePubkey` - Vote account public key, as base-58 encoded string
-* `nodePubkey` - Node public key, as base-58 encoded string
-* `activatedStake` - the stake, in lamports, delegated to this vote account and active in this epoch
-* `epochVoteAccount` - bool, whether the vote account is staked for this epoch
-* `commission`, percentage (0-100) of rewards payout owed to the vote account
-* `lastVote` - Most recent slot voted on by this vote account
+* `votePubkey: <string>` - Vote account public key, as base-58 encoded string
+* `nodePubkey: <string>` - Node public key, as base-58 encoded string
+* `activatedStake: <u64>` - the stake, in lamports, delegated to this vote account and active in this epoch
+* `epochVoteAccount: <bool>` - bool, whether the vote account is staked for this epoch
+* `commission: <number>`, percentage (0-100) of rewards payout owed to the vote account
+* `lastVote: <u64>` - Most recent slot voted on by this vote account
+* `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: [epoch, credits, previousCredits]
 
 #### Example:
 
@@ -770,7 +857,7 @@ The result field will be a JSON object of `current` and `delinquent` accounts, e
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"current":[{"commission":0,"epochVoteAccount":true,"nodePubkey":"B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD","lastVote":147,"activatedStake":42,"votePubkey":"3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"}],"delinquent":[{"commission":127,"epochVoteAccount":false,"nodePubkey":"6ZPxeQaDo4bkZLRsdNrCzchNQr5LN9QMc9sipXv9Kw8f","lastVote":0,"activatedStake":0,"votePubkey":"CmgCk4aMS7KW1SHX3s9K5tBJ6Yng2LBaC8MFov4wx9sm"}]},"id":1}
+{"jsonrpc":"2.0","result":{"current":[{"commission":0,"epochVoteAccount":true,"epochCredits":[[1,64,0],[2,192,64]],"nodePubkey":"B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD","lastVote":147,"activatedStake":42,"votePubkey":"3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"}],"delinquent":[{"commission":127,"epochVoteAccount":false,"epochCredits":[],"nodePubkey":"6ZPxeQaDo4bkZLRsdNrCzchNQr5LN9QMc9sipXv9Kw8f","lastVote":0,"activatedStake":0,"votePubkey":"CmgCk4aMS7KW1SHX3s9K5tBJ6Yng2LBaC8MFov4wx9sm"}]},"id":1}
 ```
 
 ### minimumLedgerSlot
@@ -802,13 +889,13 @@ Requests an airdrop of lamports to a Pubkey
 
 #### Parameters:
 
-* `string` - Pubkey of account to receive lamports, as base-58 encoded string
-* `integer` - lamports, as a u64
-* `object` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash and verifying airdrop success)
+* `<string>` - Pubkey of account to receive lamports, as base-58 encoded string
+* `<integer>` - lamports, as a u64
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash and verifying airdrop success)
 
 #### Results:
 
-* `string` - Transaction Signature of airdrop, as base-58 encoded string
+* `<string>` - Transaction Signature of airdrop, as base-58 encoded string
 
 #### Example:
 
@@ -826,11 +913,11 @@ Creates new transaction
 
 #### Parameters:
 
-* `array` - array of octets containing a fully-signed Transaction
+* `<array>` - array of octets containing a fully-signed Transaction
 
 #### Results:
 
-* `string` - Transaction Signature, as base-58 encoded string
+* `<string>` - Transaction Signature, as base-58 encoded string
 
 #### Example:
 
@@ -840,6 +927,50 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":"2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b","id":1}
+```
+
+### setLogFilter
+
+Sets the log filter on the validator
+
+#### Parameters:
+
+* `<string>` - the new log filter to use
+
+#### Results:
+
+* `<null>`
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"setLogFilter", "params":["solana_core=debug"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":null,"id":1}
+```
+
+### validatorExit
+
+If a validator boots with RPC exit enabled (`--enable-rpc-exit` parameter), this request causes the validator to exit.
+
+#### Parameters:
+
+None
+
+#### Results:
+
+* `<bool>` - Whether the validator exit operation was successful
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":true,"id":1}
 ```
 
 ### Subscription Websocket
@@ -870,14 +1001,14 @@ Subscribe to an account to receive notifications when the lamports or data for a
 
 #### Parameters:
 
-* `string` - account Pubkey, as base-58 encoded string
-* `integer` - optional, number of confirmed blocks to wait before notification.
+* `<string>` - account Pubkey, as base-58 encoded string
+* `<u64>` - optional, number of confirmed blocks to wait before notification.
 
   Default: 0, Max: `MAX_LOCKOUT_HISTORY` \(greater integers rounded down\)
 
 #### Results:
 
-* `integer` - Subscription id \(needed to unsubscribe\)
+* `<number>` - Subscription id \(needed to unsubscribe\)
 
 #### Example:
 
@@ -894,7 +1025,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
 #### Notification Format:
 
 ```bash
-{"jsonrpc": "2.0","method": "accountNotification", "params": {"result": {"executable":false,"owner":"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM","lamports":1,"data":"Joig2k8Ax4JPMpWhXRyc2jMa7Wejz4X1xqVi3i7QRkmVj1ChUgNc4VNpGUQePJGBAui3c6886peU9GEbjsyeANN8JGStprwLbLwcw5wpPjuQQb9mwrjVmoDQBjj3MzZKgeHn6wmnQ5k8DBFuoCYKWWsJfH2gv9FvCzrN6K1CRcQZzF"},"subscription":0}}
+{"jsonrpc": "2.0","method": "accountNotification", "params": {"result": {"executable":false,"owner":"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM","lamports":1,"data":"Joig2k8Ax4JPMpWhXRyc2jMa7Wejz4X1xqVi3i7QRkmVj1ChUgNc4VNpGUQePJGBAui3c6886peU9GEbjsyeANN8JGStprwLbLwcw5wpPjuQQb9mwrjVmoDQBjj3MzZKgeHn6wmnQ5k8DBFuoCYKWWsJfH2gv9FvCzrN6K1CRcQZzF","rentEpoch":28},"subscription":0}}
 ```
 
 ### accountUnsubscribe
@@ -903,11 +1034,11 @@ Unsubscribe from account change notifications
 
 #### Parameters:
 
-* `integer` - id of account Subscription to cancel
+* `<number>` - id of account Subscription to cancel
 
 #### Results:
 
-* `bool` - unsubscribe success message
+* `<bool>` - unsubscribe success message
 
 #### Example:
 
@@ -925,14 +1056,14 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 
 #### Parameters:
 
-* `string` - program\_id Pubkey, as base-58 encoded string
-* `integer` - optional, number of confirmed blocks to wait before notification.
+* `<string>` - program\_id Pubkey, as base-58 encoded string
+* `<u64>` - optional, number of confirmed blocks to wait before notification.
 
   Default: 0, Max: `MAX_LOCKOUT_HISTORY` \(greater integers rounded down\)
 
 #### Results:
 
-* `integer` - Subscription id \(needed to unsubscribe\)
+* `<integer>` - Subscription id \(needed to unsubscribe\)
 
 #### Example:
 
@@ -948,11 +1079,11 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 
 #### Notification Format:
 
-* `string` - account Pubkey, as base-58 encoded string
-* `object` - account info JSON object \(see [getAccountInfo](jsonrpc-api.md#getaccountinfo) for field details\)
+* `<string>` - account Pubkey, as base-58 encoded string
+* `<object>` - account info JSON object \(see [getAccountInfo](jsonrpc-api.md#getaccountinfo) for field details\)
 
   ```bash
-  {"jsonrpc":"2.0","method":"programNotification","params":{{"result":["8Rshv2oMkPu5E4opXTRyuyBeZBqQ4S477VG26wUTFxUM",{"executable":false,"lamports":1,"owner":"9gZbPtbtHrs6hEWgd6MbVY9VPFtS5Z8xKtnYwA2NynHV","data":"4SZWhnbSt3njU4QHVgPrWeekz1BudU4ttmdr9ezmrL4X6XeLeL83xVAo6ZdxwU3oXgHNeF2q6tWZbnVnBXmvNyeLVEGt8ZQ4ZmgjHfVNCEwBtzh2aDrHgQSjBFLYAdmM3uwBhcm1EyHJLeUiFqpsoAUhn6Vphwrpf44dWRAGsAJZbzvVrUW9bfucpR7xudHHg2MxQ2CdqsfS3TfWUJY3vaf2A4AUNzfAmNPHBGi99nU2hYubGSVSPcpVPpdRWQkydgqasBmTosd"}],"subscription":0}}
+  {"jsonrpc":"2.0","method":"programNotification","params":{{"result":["8Rshv2oMkPu5E4opXTRyuyBeZBqQ4S477VG26wUTFxUM",{"executable":false,"lamports":1,"owner":"9gZbPtbtHrs6hEWgd6MbVY9VPFtS5Z8xKtnYwA2NynHV","data":"4SZWhnbSt3njU4QHVgPrWeekz1BudU4ttmdr9ezmrL4X6XeLeL83xVAo6ZdxwU3oXgHNeF2q6tWZbnVnBXmvNyeLVEGt8ZQ4ZmgjHfVNCEwBtzh2aDrHgQSjBFLYAdmM3uwBhcm1EyHJLeUiFqpsoAUhn6Vphwrpf44dWRAGsAJZbzvVrUW9bfucpR7xudHHg2MxQ2CdqsfS3TfWUJY3vaf2A4AUNzfAmNPHBGi99nU2hYubGSVSPcpVPpdRWQkydgqasBmTosd","rentEpoch":28}],"subscription":0}}
   ```
 
 ### programUnsubscribe
@@ -961,11 +1092,11 @@ Unsubscribe from program-owned account change notifications
 
 #### Parameters:
 
-* `integer` - id of account Subscription to cancel
+* `<integer>` - id of account Subscription to cancel
 
 #### Results:
 
-* `bool` - unsubscribe success message
+* `<bool>` - unsubscribe success message
 
 #### Example:
 
@@ -983,8 +1114,8 @@ Subscribe to a transaction signature to receive notification when the transactio
 
 #### Parameters:
 
-* `string` - Transaction Signature, as base-58 encoded string
-* `integer` - optional, number of confirmed blocks to wait before notification.
+* `<string>` - Transaction Signature, as base-58 encoded string
+* `<integer>` - optional, number of confirmed blocks to wait before notification.
 
   Default: 0, Max: `MAX_LOCKOUT_HISTORY` \(greater integers rounded down\)
 
@@ -1016,17 +1147,67 @@ Unsubscribe from signature confirmation notification
 
 #### Parameters:
 
-* `integer` - subscription id to cancel
+* `<integer>` - subscription id to cancel
 
 #### Results:
 
-* `bool` - unsubscribe success message
+* `<bool>` - unsubscribe success message
 
 #### Example:
 
 ```bash
 // Request
 {"jsonrpc":"2.0", "id":1, "method":"signatureUnsubscribe", "params":[0]}
+
+// Result
+{"jsonrpc": "2.0","result": true,"id": 1}
+```
+
+### slotSubscribe
+
+Subscribe to receive notification anytime a slot is processed by the validator
+
+#### Parameters:
+
+None
+
+#### Results:
+
+* `integer` - subscription id \(needed to unsubscribe\)
+
+#### Example:
+
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"slotSubscribe"}
+
+// Result
+{"jsonrpc": "2.0","result": 0,"id": 1}
+```
+
+#### Notification Format:
+
+```bash
+{"jsonrpc": "2.0","method": "slotNotification", "params": {"result":{"parent":75,"root":44,"slot":76},"subscription":0}}
+```
+
+### slotUnsubscribe
+
+Unsubscribe from signature confirmation notification
+
+#### Parameters:
+
+* `<integer>` - subscription id to cancel
+
+#### Results:
+
+* `<bool>` - unsubscribe success message
+
+#### Example:
+
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"slotUnsubscribe", "params":[0]}
 
 // Result
 {"jsonrpc": "2.0","result": true,"id": 1}
