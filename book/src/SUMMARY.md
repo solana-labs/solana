@@ -3,7 +3,6 @@
 * [Introduction](introduction.md)
 * [Terminology](terminology.md)
 * [Getting Started](getting-started/README.md)
-  * [Testnet Participation](getting-started/testnet-participation.md)
   * [Example Client: Web Wallet](getting-started/webwallet.md)
 * [Programming Model](programs/README.md)
   * [Example: Tic-Tac-Toe](programs/tictactoe.md)
