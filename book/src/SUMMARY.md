@@ -62,7 +62,6 @@
   * [Block Confirmation](proposals/block-confirmation.md)
   * [ABI Management](proposals/abi-management.md)
 * [Implemented Design Proposals](implemented-proposals/README.md)
-  * [Blockstore](implemented-proposals/blockstore.md)
   * [Cluster Software Installation and Updates](implemented-proposals/installer.md)
   * [Cluster Economics](implemented-proposals/ed_overview/README.md)
     * [Validation-client Economics](implemented-proposals/ed_overview/ed_validation_client_economics/README.md)
