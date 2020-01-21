@@ -58,7 +58,8 @@ pub fn serialize_parameters(
         v.write_u64::<LittleEndian>(keyed_account.signer_key().is_some() as u64)
             .unwrap();
         v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
-        v.write_u64::<LittleEndian>(keyed_account.account.lamports).unwrap();
+        v.write_u64::<LittleEndian>(keyed_account.account.lamports)
+            .unwrap();
         v.write_u64::<LittleEndian>(keyed_account.account.data.len() as u64)
             .unwrap();
         v.write_all(&keyed_account.account.data).unwrap();
@@ -82,7 +83,10 @@ pub fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]
         start += mem::size_of::<u64>() // skip lamports
                   + mem::size_of::<u64>(); // skip length tag
         let end = start + keyed_account.account.data.len();
-        keyed_account.account.data.clone_from_slice(&buffer[start..end]);
+        keyed_account
+            .account
+            .data
+            .clone_from_slice(&buffer[start..end]);
 
         start += keyed_account.account.data.len() // skip data
                   + mem::size_of::<Pubkey>(); // skip owner
