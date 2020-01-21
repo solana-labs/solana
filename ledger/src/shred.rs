@@ -40,6 +40,7 @@ pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
+                    .thread_name(|ix| format!("shredder_{}", ix))
                     .build()
                     .unwrap()));
 
