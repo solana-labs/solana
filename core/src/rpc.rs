@@ -1223,7 +1223,7 @@ pub mod tests {
         let tx = system_transaction::transfer(&alice, pubkey, 20, blockhash);
         bank.process_transaction(&tx).expect("process transaction");
 
-        let tx = system_transaction::transfer(&alice, &alice.pubkey(), 20, blockhash);
+        let tx = system_transaction::transfer(&alice, pubkey, std::u64::MAX, blockhash);
         let _ = bank.process_transaction(&tx);
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
@@ -1654,8 +1654,8 @@ pub mod tests {
             alice,
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
 
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
             tx.signatures[0]
@@ -1693,14 +1693,14 @@ pub mod tests {
         assert_eq!(expected, result);
 
         // Test getSignatureStatus request on a TransactionError
-        let tx = system_transaction::transfer(&alice, &alice.pubkey(), 20, blockhash);
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, std::u64::MAX, blockhash);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
             tx.signatures[0]
         );
         let res = io.handle_request_sync(&req, meta);
         let expected_res: Option<transaction::Result<()>> = Some(Err(
-            TransactionError::InstructionError(0, InstructionError::DuplicateAccountIndex),
+            TransactionError::InstructionError(0, InstructionError::CustomError(1)),
         ));
         let expected = json!({
             "jsonrpc": "2.0",
