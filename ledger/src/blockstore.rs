@@ -5097,7 +5097,7 @@ pub mod tests {
                 .iter()
                 .cloned()
                 .chain(
-                    coding_shreds[coding_shreds.len() / 2 - 1..coding_shreds.len() / 2]
+                    coding_shreds[coding_shreds.len() / 2 - 1..data_shreds.len() / 2]
                         .iter()
                         .cloned(),
                 )
