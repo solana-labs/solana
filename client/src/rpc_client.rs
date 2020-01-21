@@ -386,6 +386,25 @@ impl RpcClient {
         })
     }
 
+    pub fn minimum_ledger_slot(&self) -> io::Result<Slot> {
+        let response = self
+            .client
+            .send(&RpcRequest::MinimumLedgerSlot, Value::Null, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("MinimumLedgerSlot request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("MinimumLedgerSlot parse failure: {}", err),
+            )
+        })
+    }
+
     pub fn send_and_confirm_transaction<T: KeypairUtil>(
         &self,
         transaction: &mut Transaction,
