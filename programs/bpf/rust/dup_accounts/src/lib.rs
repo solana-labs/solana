@@ -2,7 +2,7 @@
 
 extern crate solana_sdk;
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, info, log::*, pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, info, pubkey::Pubkey,
 };
 
 entrypoint!(process_instruction);
