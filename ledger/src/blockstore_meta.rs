@@ -194,17 +194,19 @@ impl ErasureMeta {
             .data()
             .present_in_bounds(self.set_index..self.set_index + self.config.num_data() as u64);
 
-        let (data_missing, num_needed) = (
-            self.config.num_data().saturating_sub(num_data),
-            self.config.num_data().saturating_sub(num_data + num_coding),
+        let (data_missing, coding_missing) = (
+            self.config.num_data() - num_data,
+            self.config.num_coding() - num_coding,
         );
 
-        if data_missing == 0 {
-            DataFull
-        } else if num_needed == 0 {
+        let total_missing = data_missing + coding_missing;
+
+        if data_missing > 0 && total_missing <= self.config.num_coding() {
             CanRecover
+        } else if data_missing == 0 {
+            DataFull
         } else {
-            StillNeed(num_needed)
+            StillNeed(total_missing - self.config.num_coding())
         }
     }
 
