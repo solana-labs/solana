@@ -1294,22 +1294,7 @@ impl Blockstore {
             .flat_map(|query_slot| self.get_block_timestamps(query_slot).unwrap_or_default())
             .collect();
 
-        let (stake_weighted_timestamps_sum, total_stake) = unique_timestamps
-            .into_iter()
-            .filter_map(|(vote_pubkey, (timestamp_slot, timestamp))| {
-                let offset = (slot - timestamp_slot) as u32 * slot_duration;
-                stakes
-                    .get(&vote_pubkey)
-                    .map(|(stake, _account)| ((timestamp as u64 + offset.as_secs()) * stake, stake))
-            })
-            .fold((0, 0), |(timestamps, stakes), (timestamp, stake)| {
-                (timestamps + timestamp, stakes + stake)
-            });
-        if total_stake > 0 {
-            Some((stake_weighted_timestamps_sum / total_stake) as i64)
-        } else {
-            None
-        }
+        calculate_stake_weighted_timestamp(unique_timestamps, stakes, slot, slot_duration)
     }
 
     fn get_timestamp_slots(
@@ -2181,6 +2166,33 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
         (slot_meta_backup.is_some() && slot_meta_backup.as_ref().unwrap().consumed != slot_meta.consumed))
 }
 
+fn calculate_stake_weighted_timestamp(
+    unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)>,
+    stakes: &HashMap<Pubkey, (u64, Account)>,
+    slot: Slot,
+    slot_duration: Duration,
+) -> Option<UnixTimestamp> {
+    let (stake_weighted_timestamps_sum, total_stake) = unique_timestamps
+        .into_iter()
+        .filter_map(|(vote_pubkey, (timestamp_slot, timestamp))| {
+            let offset = (slot - timestamp_slot) as u32 * slot_duration;
+            stakes.get(&vote_pubkey).map(|(stake, _account)| {
+                (
+                    (timestamp as u128 + offset.as_secs() as u128) * *stake as u128,
+                    stake,
+                )
+            })
+        })
+        .fold((0, 0), |(timestamps, stakes), (timestamp, stake)| {
+            (timestamps + timestamp, stakes + *stake as u128)
+        });
+    if total_stake > 0 {
+        Some((stake_weighted_timestamps_sum / total_stake) as i64)
+    } else {
+        None
+    }
+}
+
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
 //
 // Returns the blockhash that can be used to append entries with.
@@ -2428,6 +2440,7 @@ pub mod tests {
     use solana_sdk::{
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
+        native_token::sol_to_lamports,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::Signature,
@@ -4878,6 +4891,113 @@ pub mod tests {
                 .get_block_time(8, slot_duration.clone(), &stakes)
                 .unwrap() as u64,
             expected_time + 2 // At 400ms block duration, 5 slots == 2sec
+        );
+    }
+
+    #[test]
+    fn test_calculate_stake_weighted_timestamp() {
+        let recent_timestamp: UnixTimestamp = 1578909061;
+        let slot = 5;
+        let slot_duration = Duration::from_millis(400);
+        let expected_offset = (slot * slot_duration).as_secs();
+        let pubkey0 = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
+        let pubkey3 = Pubkey::new_rand();
+        let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
+            (pubkey0, (0, recent_timestamp)),
+            (pubkey1, (0, recent_timestamp)),
+            (pubkey2, (0, recent_timestamp)),
+            (pubkey3, (0, recent_timestamp)),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        let stakes: HashMap<Pubkey, (u64, Account)> = [
+            (
+                pubkey0,
+                (
+                    sol_to_lamports(4_500_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey1,
+                (
+                    sol_to_lamports(4_500_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey2,
+                (
+                    sol_to_lamports(4_500_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey3,
+                (
+                    sol_to_lamports(4_500_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        assert_eq!(
+            calculate_stake_weighted_timestamp(
+                unique_timestamps.clone(),
+                &stakes,
+                slot as Slot,
+                slot_duration
+            ),
+            Some(recent_timestamp + expected_offset as i64)
+        );
+
+        let stakes: HashMap<Pubkey, (u64, Account)> = [
+            (
+                pubkey0,
+                (
+                    sol_to_lamports(15_000_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey1,
+                (
+                    sol_to_lamports(1_000_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey2,
+                (
+                    sol_to_lamports(1_000_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey3,
+                (
+                    sol_to_lamports(1_000_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        assert_eq!(
+            calculate_stake_weighted_timestamp(
+                unique_timestamps,
+                &stakes,
+                slot as Slot,
+                slot_duration
+            ),
+            Some(recent_timestamp + expected_offset as i64)
         );
     }
 
