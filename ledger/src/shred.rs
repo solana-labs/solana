@@ -46,6 +46,7 @@ pub const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SL
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
+                    .thread_name(|ix| format!("shredder_{}", ix))
                     .build()
                     .unwrap()));
 

@@ -20,15 +20,17 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::sync::Arc;
-use std::{cell::RefCell, collections::HashMap, mem::size_of};
+use std::{collections::HashMap, mem::size_of};
 
 pub const SIGN_SHRED_GPU_MIN: usize = 256;
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("sigverify_shreds_{}", ix))
-                    .build()
-                    .unwrap()));
+lazy_static! {
+    pub static ref SIGVERIFY_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_thread_count())
+        .thread_name(|ix| format!("sigverify_shreds_{}", ix))
+        .build()
+        .unwrap();
+}
 
 /// Assuming layout is
 /// signature: Signature
@@ -70,18 +72,16 @@ fn verify_shreds_cpu(batches: &[Packets], slot_leaders: &HashMap<u64, [u8; 32]>)
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("CPU SHRED ECDSA for {}", count);
-    let rv = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map(|p| {
-                    p.packets
-                        .par_iter()
-                        .map(|p| verify_shred_cpu(p, slot_leaders).unwrap_or(0))
-                        .collect()
-                })
-                .collect()
-        })
+    let rv = SIGVERIFY_THREAD_POOL.install(|| {
+        batches
+            .into_par_iter()
+            .map(|p| {
+                p.packets
+                    .par_iter()
+                    .map(|p| verify_shred_cpu(p, slot_leaders).unwrap_or(0))
+                    .collect()
+            })
+            .collect()
     });
     inc_new_counter_debug!("ed25519_shred_verify_cpu", count);
     rv
@@ -97,30 +97,28 @@ fn slot_key_data_for_gpu<
 ) -> (PinnedVec<u8>, TxOffset, usize) {
     //TODO: mark Pubkey::default shreds as failed after the GPU returns
     assert_eq!(slot_keys.get(&std::u64::MAX), Some(&T::default()));
-    let slots: Vec<Vec<u64>> = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map(|p| {
-                    p.packets
-                        .iter()
-                        .map(|packet| {
-                            let slot_start = size_of::<Signature>() + size_of::<ShredType>();
-                            let slot_end = slot_start + size_of::<u64>();
-                            if packet.meta.size < slot_end || packet.meta.discard {
-                                return std::u64::MAX;
-                            }
-                            let slot: Option<u64> =
-                                limited_deserialize(&packet.data[slot_start..slot_end]).ok();
-                            match slot {
-                                Some(slot) if slot_keys.get(&slot).is_some() => slot,
-                                _ => std::u64::MAX,
-                            }
-                        })
-                        .collect()
-                })
-                .collect()
-        })
+    let slots: Vec<Vec<u64>> = SIGVERIFY_THREAD_POOL.install(|| {
+        batches
+            .into_par_iter()
+            .map(|p| {
+                p.packets
+                    .iter()
+                    .map(|packet| {
+                        let slot_start = size_of::<Signature>() + size_of::<ShredType>();
+                        let slot_end = slot_start + size_of::<u64>();
+                        if packet.meta.size < slot_end || packet.meta.discard {
+                            return std::u64::MAX;
+                        }
+                        let slot: Option<u64> =
+                            limited_deserialize(&packet.data[slot_start..slot_end]).ok();
+                        match slot {
+                            Some(slot) if slot_keys.get(&slot).is_some() => slot,
+                            _ => std::u64::MAX,
+                        }
+                    })
+                    .collect()
+            })
+            .collect()
     });
     let mut keys_to_slots: HashMap<T, Vec<u64>> = HashMap::new();
     for batch in slots.iter() {
@@ -312,14 +310,12 @@ pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [Packets]) {
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("CPU SHRED ECDSA for {}", count);
-    PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches.par_iter_mut().for_each(|p| {
-                p.packets[..]
-                    .par_iter_mut()
-                    .for_each(|mut p| sign_shred_cpu(keypair, &mut p));
-            });
-        })
+    SIGVERIFY_THREAD_POOL.install(|| {
+        batches.par_iter_mut().for_each(|p| {
+            p.packets[..]
+                .par_iter_mut()
+                .for_each(|mut p| sign_shred_cpu(keypair, &mut p));
+        });
     });
     inc_new_counter_debug!("ed25519_shred_verify_cpu", count);
 }
@@ -425,25 +421,23 @@ pub fn sign_shreds_gpu(
         }
         sizes[i] += sizes[i - 1];
     }
-    PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .par_iter_mut()
-                .enumerate()
-                .for_each(|(batch_ix, batch)| {
-                    let num_packets = sizes[batch_ix];
-                    batch.packets[..]
-                        .par_iter_mut()
-                        .enumerate()
-                        .for_each(|(packet_ix, packet)| {
-                            let sig_ix = packet_ix + num_packets;
-                            let sig_start = sig_ix * sig_size;
-                            let sig_end = sig_start + sig_size;
-                            packet.data[0..sig_size]
-                                .copy_from_slice(&signatures_out[sig_start..sig_end]);
-                        });
-                });
-        });
+    SIGVERIFY_THREAD_POOL.install(|| {
+        batches
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(batch_ix, batch)| {
+                let num_packets = sizes[batch_ix];
+                batch.packets[..]
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(packet_ix, packet)| {
+                        let sig_ix = packet_ix + num_packets;
+                        let sig_start = sig_ix * sig_size;
+                        let sig_end = sig_start + sig_size;
+                        packet.data[0..sig_size]
+                            .copy_from_slice(&signatures_out[sig_start..sig_end]);
+                    });
+            });
     });
     inc_new_counter_debug!("ed25519_shred_sign_gpu", count);
 }
