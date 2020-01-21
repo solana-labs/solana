@@ -94,32 +94,6 @@ fn slot_key_data_for_gpu<
 ) -> (PinnedVec<u8>, TxOffset, usize) {
     //TODO: mark Pubkey::default shreds as failed after the GPU returns
     assert_eq!(slot_keys.get(&std::u64::MAX), Some(&T::default()));
-<<<<<<< HEAD
-    let slots: Vec<Vec<u64>> = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map(|p| {
-                    p.packets
-                        .iter()
-                        .map(|packet| {
-                            let slot_start = size_of::<Signature>() + size_of::<ShredType>();
-                            let slot_end = slot_start + size_of::<u64>();
-                            if packet.meta.size < slot_end {
-                                return std::u64::MAX;
-                            }
-                            let slot: Option<u64> =
-                                limited_deserialize(&packet.data[slot_start..slot_end]).ok();
-                            match slot {
-                                Some(slot) if slot_keys.get(&slot).is_some() => slot,
-                                _ => std::u64::MAX,
-                            }
-                        })
-                        .collect()
-                })
-                .collect()
-        })
-=======
     let slots: Vec<Vec<u64>> = SIGVERIFY_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
@@ -129,7 +103,7 @@ fn slot_key_data_for_gpu<
                     .map(|packet| {
                         let slot_start = size_of::<Signature>() + size_of::<ShredType>();
                         let slot_end = slot_start + size_of::<u64>();
-                        if packet.meta.size < slot_end || packet.meta.discard {
+                        if packet.meta.size < slot_end {
                             return std::u64::MAX;
                         }
                         let slot: Option<u64> =
@@ -142,7 +116,6 @@ fn slot_key_data_for_gpu<
                     .collect()
             })
             .collect()
->>>>>>> 2dd8ab197... Remove redundant threadpools in sigverify (#7888)
     });
     let mut keys_to_slots: HashMap<T, Vec<u64>> = HashMap::new();
     for batch in slots.iter() {
