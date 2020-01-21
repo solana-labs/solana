@@ -490,19 +490,39 @@ pub fn process_show_block_production(
         return Err(format!("Epoch {} is in the future", epoch).into());
     }
 
+    let minimum_ledger_slot = rpc_client.minimum_ledger_slot()?;
+
     let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
     let end_slot = std::cmp::min(
         epoch_info.absolute_slot,
         epoch_schedule.get_last_slot_in_epoch(epoch),
     );
 
-    let start_slot = if let Some(slot_limit) = slot_limit {
+    let mut start_slot = if let Some(slot_limit) = slot_limit {
         std::cmp::max(end_slot.saturating_sub(slot_limit), first_slot_in_epoch)
     } else {
         first_slot_in_epoch
     };
-    let start_slot_index = (start_slot - first_slot_in_epoch) as usize;
-    let end_slot_index = (end_slot - first_slot_in_epoch) as usize;
+
+    if minimum_ledger_slot > end_slot {
+        return Err(format!(
+            "Ledger data not available for slots {} to {} (minimum ledger slot is {})",
+            start_slot, end_slot, minimum_ledger_slot
+        )
+        .into());
+    }
+
+    if minimum_ledger_slot > start_slot {
+        println!(
+            "\n{}",
+            style(format!(
+                "Note: Requested start slot was {} but minimum ledger slot is {}",
+                start_slot, minimum_ledger_slot
+            ))
+            .italic(),
+        );
+        start_slot = minimum_ledger_slot;
+    }
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!(
@@ -511,6 +531,8 @@ pub fn process_show_block_production(
     ));
     let confirmed_blocks = rpc_client.get_confirmed_blocks(start_slot, Some(end_slot))?;
 
+    let start_slot_index = (start_slot - first_slot_in_epoch) as usize;
+    let end_slot_index = (end_slot - first_slot_in_epoch) as usize;
     let total_slots = end_slot_index - start_slot_index + 1;
     let total_blocks = confirmed_blocks.len();
     assert!(total_blocks <= total_slots);
