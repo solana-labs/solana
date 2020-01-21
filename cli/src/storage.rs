@@ -81,8 +81,9 @@ impl StorageSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("show-storage-account")
+            SubCommand::with_name("storage-account")
                 .about("Show the contents of a storage account")
+                .alias("show-storage-account")
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(1)

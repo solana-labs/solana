@@ -455,8 +455,9 @@ impl StakeSubCommands for App<'_, '_> {
                 )
         )
         .subcommand(
-            SubCommand::with_name("show-stake-account")
+            SubCommand::with_name("stake-account")
                 .about("Show the contents of a stake account")
+                .alias("show-stake-account")
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
@@ -474,8 +475,9 @@ impl StakeSubCommands for App<'_, '_> {
                 )
         )
         .subcommand(
-            SubCommand::with_name("show-stake-history")
+            SubCommand::with_name("stake-history")
                 .about("Show the stake history")
+                .alias("show-stake-history")
                 .arg(
                     Arg::with_name("lamports")
                         .long("lamports")

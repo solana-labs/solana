@@ -250,7 +250,7 @@ wallet() {
 setup_validator_accounts() {
   declare node_lamports=$1
 
-  if ! wallet show-vote-account "$voting_keypair_path"; then
+  if ! wallet vote-account "$voting_keypair_path"; then
     if ((airdrops_enabled)); then
       echo "Adding $node_lamports to validator identity account:"
       wallet airdrop "$node_lamports" lamports || return $?
@@ -261,7 +261,7 @@ setup_validator_accounts() {
   fi
   echo "Validator vote account configured"
 
-  if ! wallet show-storage-account "$storage_keypair_path"; then
+  if ! wallet storage-account "$storage_keypair_path"; then
     echo "Creating validator storage account"
     wallet create-validator-storage-account "$identity_keypair_path" "$storage_keypair_path" || return $?
   fi
@@ -273,7 +273,7 @@ setup_validator_accounts() {
   return 0
 }
 
-rpc_url=$($solana_gossip get-rpc-url --entrypoint "$gossip_entrypoint" --any)
+rpc_url=$($solana_gossip rpc-url --entrypoint "$gossip_entrypoint" --any)
 
 [[ -r "$identity_keypair_path" ]] || $solana_keygen new --no-passphrase -so "$identity_keypair_path"
 [[ -r "$voting_keypair_path" ]] || $solana_keygen new --no-passphrase -so "$voting_keypair_path"

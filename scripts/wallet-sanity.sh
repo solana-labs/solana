@@ -20,7 +20,7 @@ $solana_keygen new --no-passphrase -sf
 node_readiness=false
 timeout=60
 while [[ $timeout -gt 0 ]]; do
-  output=$($solana_cli "${args[@]}" get-transaction-count)
+  output=$($solana_cli "${args[@]}" transaction-count)
   if [[ -n $output ]]; then
     node_readiness=true
     break

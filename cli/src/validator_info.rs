@@ -3,7 +3,7 @@ use crate::{
     display::println_name_value,
 };
 use bincode::deserialize;
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use reqwest::blocking::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -151,6 +151,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
         self.subcommand(
             SubCommand::with_name("validator-info")
                 .about("Publish/get Validator info on Solana")
+                .setting(AppSettings::SubcommandRequiredElseHelp)
                 .subcommand(
                     SubCommand::with_name("publish")
                         .about("Publish Validator info on Solana")

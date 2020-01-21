@@ -179,7 +179,7 @@ startNodes() {
       (
         set -x
         $solana_cli --keypair config/bootstrap-leader/identity-keypair.json \
-          --url http://127.0.0.1:8899 get-genesis-hash
+          --url http://127.0.0.1:8899 genesis-hash
       ) | tee genesis-hash.log
       maybeExpectedGenesisHash="--expected-genesis-hash $(tail -n1 genesis-hash.log)"
     fi

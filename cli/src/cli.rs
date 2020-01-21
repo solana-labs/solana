@@ -370,28 +370,28 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             command: CliCommand::Fees,
             require_keypair: false,
         }),
-        ("get-block-time", Some(matches)) => parse_get_block_time(matches),
-        ("get-epoch-info", Some(matches)) => parse_get_epoch_info(matches),
-        ("get-genesis-hash", Some(_matches)) => Ok(CliCommandInfo {
+        ("block-time", Some(matches)) => parse_get_block_time(matches),
+        ("epoch-info", Some(matches)) => parse_get_epoch_info(matches),
+        ("genesis-hash", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::GetGenesisHash,
             require_keypair: false,
         }),
-        ("get-slot", Some(matches)) => parse_get_slot(matches),
-        ("get-transaction-count", Some(matches)) => parse_get_transaction_count(matches),
+        ("slot", Some(matches)) => parse_get_slot(matches),
+        ("transaction-count", Some(matches)) => parse_get_transaction_count(matches),
         ("ping", Some(matches)) => parse_cluster_ping(matches),
-        ("show-block-production", Some(matches)) => parse_show_block_production(matches),
-        ("show-gossip", Some(_matches)) => Ok(CliCommandInfo {
+        ("block-production", Some(matches)) => parse_show_block_production(matches),
+        ("gossip", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ShowGossip,
             require_keypair: false,
         }),
-        ("show-stakes", Some(matches)) => parse_show_stakes(matches),
-        ("show-validators", Some(matches)) => parse_show_validators(matches),
+        ("stakes", Some(matches)) => parse_show_stakes(matches),
+        ("validators", Some(matches)) => parse_show_validators(matches),
         // Nonce Commands
         ("authorize-nonce-account", Some(matches)) => parse_authorize_nonce_account(matches),
         ("create-nonce-account", Some(matches)) => parse_nonce_create_account(matches),
-        ("get-nonce", Some(matches)) => parse_get_nonce(matches),
+        ("nonce", Some(matches)) => parse_get_nonce(matches),
         ("new-nonce", Some(matches)) => parse_new_nonce(matches),
-        ("show-nonce-account", Some(matches)) => parse_show_nonce_account(matches),
+        ("nonce-account", Some(matches)) => parse_show_nonce_account(matches),
         ("withdraw-from-nonce-account", Some(matches)) => {
             parse_withdraw_from_nonce_account(matches)
         }
@@ -412,8 +412,8 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             parse_stake_authorize(matches, StakeAuthorize::Withdrawer)
         }
         ("redeem-vote-credits", Some(matches)) => parse_redeem_vote_credits(matches),
-        ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
-        ("show-stake-history", Some(matches)) => parse_show_stake_history(matches),
+        ("stake-account", Some(matches)) => parse_show_stake_account(matches),
+        ("stake-history", Some(matches)) => parse_show_stake_history(matches),
         // Storage Commands
         ("create-archiver-storage-account", Some(matches)) => {
             parse_storage_create_archiver_account(matches)
@@ -422,17 +422,11 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             parse_storage_create_validator_account(matches)
         }
         ("claim-storage-reward", Some(matches)) => parse_storage_claim_reward(matches),
-        ("show-storage-account", Some(matches)) => parse_storage_get_account_command(matches),
+        ("storage-account", Some(matches)) => parse_storage_get_account_command(matches),
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
             ("publish", Some(matches)) => parse_validator_info_command(matches),
             ("get", Some(matches)) => parse_get_validator_info_command(matches),
-            ("", None) => {
-                eprintln!("{}", matches.usage());
-                Err(CliError::CommandNotRecognized(
-                    "no validator-info subcommand given".to_string(),
-                ))
-            }
             _ => unreachable!(),
         },
         // Vote Commands
@@ -444,7 +438,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         ("vote-authorize-withdrawer", Some(matches)) => {
             parse_vote_authorize(matches, VoteAuthorize::Withdrawer)
         }
-        ("show-vote-account", Some(matches)) => parse_vote_get_account_command(matches),
+        ("vote-account", Some(matches)) => parse_vote_get_account_command(matches),
         ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         // Wallet Commands
         ("address", Some(_matches)) => Ok(CliCommandInfo {
@@ -560,7 +554,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
                 require_keypair: true,
             })
         }
-        ("show-account", Some(matches)) => {
+        ("account", Some(matches)) => {
             let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
             let output_file = matches.value_of("output_file");
             let use_lamports_unit = matches.is_present("lamports");
@@ -2003,8 +1997,9 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("show-account")
+            SubCommand::with_name("account")
                 .about("Show the contents of an account")
+                .alias("account")
                 .arg(
                     Arg::with_name("account_pubkey")
                         .index(1)

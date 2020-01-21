@@ -18,7 +18,7 @@ Before attaching a validator node, sanity check that the cluster is accessible
 to your machine by fetching the transaction count:
 
 ```bash
-solana get-transaction-count
+solana transaction-count
 ```
 
 Inspect the network explorer at

@@ -55,8 +55,9 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Get the version of the cluster entrypoint"),
         )
         .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
-        .subcommand(SubCommand::with_name("get-block-time")
+        .subcommand(SubCommand::with_name("block-time")
             .about("Get estimated production time of a block")
+            .alias("get-block-time")
             .arg(
                 Arg::with_name("slot")
                     .index(1)
@@ -67,8 +68,9 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             )
         )
         .subcommand(
-            SubCommand::with_name("get-epoch-info")
+            SubCommand::with_name("epoch-info")
             .about("Get information about the current epoch")
+            .alias("get-epoch-info")
             .arg(
                 Arg::with_name("confirmed")
                     .long("confirmed")
@@ -79,10 +81,13 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             ),
         )
         .subcommand(
-            SubCommand::with_name("get-genesis-hash").about("Get the genesis hash"),
+            SubCommand::with_name("genesis-hash")
+            .about("Get the genesis hash")
+            .alias("get-genesis-hash")
         )
         .subcommand(
-            SubCommand::with_name("get-slot").about("Get current slot")
+            SubCommand::with_name("slot").about("Get current slot")
+            .alias("get-slot")
             .arg(
                 Arg::with_name("confirmed")
                     .long("confirmed")
@@ -93,7 +98,8 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             ),
         )
         .subcommand(
-            SubCommand::with_name("get-transaction-count").about("Get current transaction count")
+            SubCommand::with_name("transaction-count").about("Get current transaction count")
+            .alias("get-transaction-count")
             .arg(
                 Arg::with_name("confirmed")
                     .long("confirmed")
@@ -151,8 +157,9 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("show-block-production")
+            SubCommand::with_name("block-production")
                 .about("Show information about block production")
+                .alias("show-block-production")
                 .arg(
                     Arg::with_name("epoch")
                         .long("epoch")
@@ -167,11 +174,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("show-gossip")
-                .about("Show the current gossip network nodes"),
+            SubCommand::with_name("gossip")
+                .about("Show the current gossip network nodes")
+                .alias("show-gossip")
         )
         .subcommand(
-            SubCommand::with_name("show-stakes")
+            SubCommand::with_name("stakes")
                 .about("Show stake account information")
                 .arg(
                     Arg::with_name("vote_account_pubkeys")
@@ -190,8 +198,9 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("show-validators")
+            SubCommand::with_name("validators")
                 .about("Show summary information about the current validators")
+                .alias("show-validators")
                 .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
@@ -985,11 +994,10 @@ mod tests {
         );
 
         let slot = 100;
-        let test_get_block_time = test_commands.clone().get_matches_from(vec![
-            "test",
-            "get-block-time",
-            &slot.to_string(),
-        ]);
+        let test_get_block_time =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "block-time", &slot.to_string()]);
         assert_eq!(
             parse_command(&test_get_block_time).unwrap(),
             CliCommandInfo {
@@ -1000,7 +1008,7 @@ mod tests {
 
         let test_get_epoch_info = test_commands
             .clone()
-            .get_matches_from(vec!["test", "get-epoch-info"]);
+            .get_matches_from(vec!["test", "epoch-info"]);
         assert_eq!(
             parse_command(&test_get_epoch_info).unwrap(),
             CliCommandInfo {
@@ -1013,7 +1021,7 @@ mod tests {
 
         let test_get_genesis_hash = test_commands
             .clone()
-            .get_matches_from(vec!["test", "get-genesis-hash"]);
+            .get_matches_from(vec!["test", "genesis-hash"]);
         assert_eq!(
             parse_command(&test_get_genesis_hash).unwrap(),
             CliCommandInfo {
@@ -1022,9 +1030,7 @@ mod tests {
             }
         );
 
-        let test_get_slot = test_commands
-            .clone()
-            .get_matches_from(vec!["test", "get-slot"]);
+        let test_get_slot = test_commands.clone().get_matches_from(vec!["test", "slot"]);
         assert_eq!(
             parse_command(&test_get_slot).unwrap(),
             CliCommandInfo {
@@ -1037,7 +1043,7 @@ mod tests {
 
         let test_transaction_count = test_commands
             .clone()
-            .get_matches_from(vec!["test", "get-transaction-count"]);
+            .get_matches_from(vec!["test", "transaction-count"]);
         assert_eq!(
             parse_command(&test_transaction_count).unwrap(),
             CliCommandInfo {
