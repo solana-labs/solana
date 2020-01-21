@@ -3,7 +3,7 @@ use crate::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys,
         get_blockhash_fee_calculator, log_instruction_custom_error, replace_signatures,
         required_lamports_from, return_signers, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult,
+        ProcessResult, SigningAuthority,
     },
     nonce::{check_nonce_account, NONCE_ARG, NONCE_AUTHORITY_ARG},
 };
@@ -48,7 +48,7 @@ fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .long(STAKE_AUTHORITY_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(is_keypair_or_ask_keyword)
+        .validator(is_pubkey_or_keypair_or_ask_keyword)
         .help(STAKE_AUTHORITY_ARG.help)
 }
 
@@ -57,7 +57,7 @@ fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .long(WITHDRAW_AUTHORITY_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(is_keypair_or_ask_keyword)
+        .validator(is_pubkey_or_keypair_or_ask_keyword)
         .help(WITHDRAW_AUTHORITY_ARG.help)
 }
 
@@ -518,23 +518,27 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
 pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
-        let authority = keypair_of(&matches, STAKE_AUTHORITY_ARG.name)
-            .ok_or_else(|| CliError::BadParameter("Invalid keypair for stake-authority".into()))?;
-        Some(authority.into())
-    } else {
-        None
-    };
     let force = matches.is_present("force");
     let sign_only = matches.is_present("sign_only");
     let signers = pubkeys_sigs_of(&matches, "signer");
     let blockhash = value_of(matches, "blockhash");
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            STAKE_AUTHORITY_ARG.name,
+            signers.as_deref(),
+        )?)
+    } else {
+        None
+    };
     let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-        let authority = keypair_of(&matches, NONCE_AUTHORITY_ARG.name)
-            .ok_or_else(|| CliError::BadParameter("Invalid keypair for nonce-authority".into()))?;
-        Some(authority.into())
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            NONCE_AUTHORITY_ARG.name,
+            signers.as_deref(),
+        )?)
     } else {
         None
     };
@@ -565,22 +569,25 @@ pub fn parse_stake_authorize(
         StakeAuthorize::Staker => STAKE_AUTHORITY_ARG.name,
         StakeAuthorize::Withdrawer => WITHDRAW_AUTHORITY_ARG.name,
     };
+    let sign_only = matches.is_present("sign_only");
+    let signers = pubkeys_sigs_of(&matches, "signer");
     let authority = if matches.is_present(authority_flag) {
-        let authority = keypair_of(&matches, authority_flag).ok_or_else(|| {
-            CliError::BadParameter(format!("Invalid keypair for {}", authority_flag))
-        })?;
-        Some(authority.into())
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            authority_flag,
+            signers.as_deref(),
+        )?)
     } else {
         None
     };
-    let sign_only = matches.is_present("sign_only");
-    let signers = pubkeys_sigs_of(&matches, "signer");
     let blockhash = value_of(matches, "blockhash");
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-        let authority = keypair_of(&matches, NONCE_AUTHORITY_ARG.name)
-            .ok_or_else(|| CliError::BadParameter("Invalid keypair for nonce-authority".into()))?;
-        Some(authority.into())
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            NONCE_AUTHORITY_ARG.name,
+            signers.as_deref(),
+        )?)
     } else {
         None
     };
@@ -613,22 +620,26 @@ pub fn parse_redeem_vote_credits(matches: &ArgMatches<'_>) -> Result<CliCommandI
 
 pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
-        let authority = keypair_of(&matches, STAKE_AUTHORITY_ARG.name)
-            .ok_or_else(|| CliError::BadParameter("Invalid keypair for stake-authority".into()))?;
-        Some(authority.into())
-    } else {
-        None
-    };
     let sign_only = matches.is_present("sign_only");
     let signers = pubkeys_sigs_of(&matches, "signer");
     let blockhash = value_of(matches, "blockhash");
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            STAKE_AUTHORITY_ARG.name,
+            signers.as_deref(),
+        )?)
+    } else {
+        None
+    };
     let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-        let authority = keypair_of(&matches, NONCE_AUTHORITY_ARG.name)
-            .ok_or_else(|| CliError::BadParameter("Invalid keypair for nonce-authority".into()))?;
-        Some(authority.into())
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            NONCE_AUTHORITY_ARG.name,
+            signers.as_deref(),
+        )?)
     } else {
         None
     };
@@ -652,10 +663,11 @@ pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
     let lamports = required_lamports_from(matches, "amount", "unit")?;
     let withdraw_authority = if matches.is_present(WITHDRAW_AUTHORITY_ARG.name) {
-        let authority = keypair_of(&matches, WITHDRAW_AUTHORITY_ARG.name).ok_or_else(|| {
-            CliError::BadParameter("Invalid keypair for withdraw-authority".into())
-        })?;
-        Some(authority.into())
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            WITHDRAW_AUTHORITY_ARG.name,
+            None,
+        )?)
     } else {
         None
     };
@@ -790,18 +802,18 @@ pub fn process_stake_authorize(
     stake_account_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
-    authority: Option<&Keypair>,
+    authority: Option<&SigningAuthority>,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash: Option<Hash>,
     nonce_account: Option<Pubkey>,
-    nonce_authority: Option<&Keypair>,
+    nonce_authority: Option<&SigningAuthority>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
         (authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
-    let authority = authority.unwrap_or(&config.keypair);
+    let authority = authority.map(|a| a.keypair()).unwrap_or(&config.keypair);
     let (recent_blockhash, fee_calculator) =
         get_blockhash_fee_calculator(rpc_client, sign_only, blockhash)?;
     let ixs = vec![stake_instruction::authorize(
@@ -811,12 +823,14 @@ pub fn process_stake_authorize(
         stake_authorize,      // stake or withdraw
     )];
 
+    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
+        .map(|a| (a.keypair(), a.pubkey()))
+        .unwrap_or((&config.keypair, config.keypair.pubkey()));
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        let nonce_authority: &Keypair = nonce_authority.unwrap_or(&config.keypair);
         Transaction::new_signed_with_nonce(
             ixs,
             Some(&config.keypair.pubkey()),
-            &[&config.keypair, authority, nonce_authority],
+            &[&config.keypair, nonce_authority, authority],
             nonce_account,
             &nonce_authority.pubkey(),
             recent_blockhash,
@@ -836,9 +850,8 @@ pub fn process_stake_authorize(
         return_signers(&tx)
     } else {
         if let Some(nonce_account) = &nonce_account {
-            let nonce_authority: &Keypair = nonce_authority.unwrap_or(&config.keypair);
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
@@ -855,22 +868,26 @@ pub fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
-    stake_authority: Option<&Keypair>,
+    stake_authority: Option<&SigningAuthority>,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash: Option<Hash>,
     nonce_account: Option<Pubkey>,
-    nonce_authority: Option<&Keypair>,
+    nonce_authority: Option<&SigningAuthority>,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
         get_blockhash_fee_calculator(rpc_client, sign_only, blockhash)?;
-    let stake_authority = stake_authority.unwrap_or(&config.keypair);
+    let stake_authority = stake_authority
+        .map(|a| a.keypair())
+        .unwrap_or(&config.keypair);
     let ixs = vec![stake_instruction::deactivate_stake(
         stake_account_pubkey,
         &stake_authority.pubkey(),
     )];
+    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
+        .map(|a| (a.keypair(), a.pubkey()))
+        .unwrap_or((&config.keypair, config.keypair.pubkey()));
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        let nonce_authority: &Keypair = nonce_authority.unwrap_or(&config.keypair);
         Transaction::new_signed_with_nonce(
             ixs,
             Some(&config.keypair.pubkey()),
@@ -894,9 +911,8 @@ pub fn process_deactivate_stake_account(
         return_signers(&tx)
     } else {
         if let Some(nonce_account) = &nonce_account {
-            let nonce_authority: &Keypair = nonce_authority.unwrap_or(&config.keypair);
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
@@ -915,10 +931,12 @@ pub fn process_withdraw_stake(
     stake_account_pubkey: &Pubkey,
     destination_account_pubkey: &Pubkey,
     lamports: u64,
-    withdraw_authority: Option<&Keypair>,
+    withdraw_authority: Option<&SigningAuthority>,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let withdraw_authority = withdraw_authority.unwrap_or(&config.keypair);
+    let withdraw_authority = withdraw_authority
+        .map(|a| a.keypair())
+        .unwrap_or(&config.keypair);
 
     let ixs = vec![stake_instruction::withdraw(
         stake_account_pubkey,
@@ -1097,19 +1115,21 @@ pub fn process_delegate_stake(
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     vote_account_pubkey: &Pubkey,
-    stake_authority: Option<&Keypair>,
+    stake_authority: Option<&SigningAuthority>,
     force: bool,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash: Option<Hash>,
     nonce_account: Option<Pubkey>,
-    nonce_authority: Option<&Keypair>,
+    nonce_authority: Option<&SigningAuthority>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
-    let stake_authority = stake_authority.unwrap_or(&config.keypair);
+    let stake_authority = stake_authority
+        .map(|a| a.keypair())
+        .unwrap_or(&config.keypair);
 
     // Sanity check the vote account to ensure it is attached to a validator that has recently
     // voted at the tip of the ledger
@@ -1159,8 +1179,10 @@ pub fn process_delegate_stake(
         &stake_authority.pubkey(),
         vote_account_pubkey,
     )];
+    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
+        .map(|a| (a.keypair(), a.pubkey()))
+        .unwrap_or((&config.keypair, config.keypair.pubkey()));
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        let nonce_authority: &Keypair = nonce_authority.unwrap_or(&config.keypair);
         Transaction::new_signed_with_nonce(
             ixs,
             Some(&config.keypair.pubkey()),
@@ -1184,9 +1206,8 @@ pub fn process_delegate_stake(
         return_signers(&tx)
     } else {
         if let Some(nonce_account) = &nonce_account {
-            let nonce_authority: &Keypair = nonce_authority.unwrap_or(&config.keypair);
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
