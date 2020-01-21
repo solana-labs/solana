@@ -6,7 +6,7 @@ The solana cli includes `get` and `set` configuration commands to automatically
 set the `--url` argument for cli commands. For example:
 
 ```bash
-solana set --url http://testnet.solana.com:8899
+solana config set --url http://testnet.solana.com:8899
 ```
 
 \(You can always override the set configuration by explicitly passing the
@@ -100,7 +100,7 @@ Now that you have a keypair, set the solana configuration to use your validator
 keypair for all following commands:
 
 ```bash
-solana set --keypair ~/validator-keypair.json
+solana config set --keypair ~/validator-keypair.json
 ```
 
 You should see the following output:

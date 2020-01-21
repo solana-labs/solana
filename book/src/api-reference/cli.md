@@ -1183,7 +1183,7 @@ solana-set
 Set a cli config setting
 
 USAGE:
-    solana set [FLAGS] [OPTIONS] <--url <URL>|--keypair <PATH>>
+    solana config set [FLAGS] [OPTIONS] <--url <URL>|--keypair <PATH>>
 
 FLAGS:
     -h, --help                           Prints help information
