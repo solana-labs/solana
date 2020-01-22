@@ -653,19 +653,14 @@ impl Bank {
                     (Some(mut stake_account), Some(mut vote_account)) => {
                         match (stake_account.state(), vote_account.state()) {
                             (Ok(StakeState::Stake(meta, mut stake)), Ok(vote_state)) => {
-                                // we've recovered everything we need to do redemption at this point
-                                if let Some((voters_reward, stakers_reward, credits_observed)) =
-                                    stake.calculate_rewards(
-                                        validator_point_value,
-                                        &vote_state,
-                                        Some(&stake_history),
-                                    )
-                                {
+                                // we've recovered everything we need to do redemption
+                                if let Some((voters_reward, stakers_reward)) = stake.redeem_rewards(
+                                    validator_point_value,
+                                    &vote_state,
+                                    Some(&stake_history),
+                                ) {
                                     stake_account.lamports += stakers_reward;
                                     vote_account.lamports += voters_reward;
-
-                                    stake.credits_observed = credits_observed;
-                                    stake.delegation.stake += stakers_reward;
 
                                     if stake_account
                                         .set_state(&StakeState::Stake(meta, stake))

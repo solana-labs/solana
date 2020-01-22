@@ -365,6 +365,21 @@ impl Stake {
     pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
         self.delegation.stake(epoch, history)
     }
+
+    pub fn redeem_rewards(
+        &mut self,
+        point_value: f64,
+        vote_state: &VoteState,
+        stake_history: Option<&StakeHistory>,
+    ) -> Option<(u64, u64)> {
+        self.calculate_rewards(point_value, vote_state, stake_history)
+            .map(|(voters_reward, stakers_reward, credits_observed)| {
+                self.credits_observed = credits_observed;
+                self.delegation.stake += stakers_reward;
+                (voters_reward, stakers_reward)
+            })
+    }
+
     /// for a given stake and vote_state, calculate what distributions and what updates should be made
     /// returns a tuple in the case of a payout of:
     ///   * voter_rewards to be distributed
@@ -1922,6 +1937,43 @@ mod tests {
             ),
             Ok(())
         );
+    }
+
+    #[test]
+    fn test_stake_state_redeem_rewards() {
+        let mut vote_state = VoteState::default();
+        // assume stake.stake() is right
+        // bootstrap means fully-vested stake at epoch 0
+        let stake_lamports = 1;
+        let mut stake = Stake::new(
+            stake_lamports,
+            &Pubkey::default(),
+            &vote_state,
+            std::u64::MAX,
+            &Config::default(),
+        );
+
+        // this one can't collect now, credits_observed == vote_state.credits()
+        assert_eq!(
+            None,
+            stake.redeem_rewards(1_000_000_000.0, &vote_state, None)
+        );
+
+        // put 2 credits in at epoch 0
+        vote_state.increment_credits(0);
+        vote_state.increment_credits(0);
+
+        // this one should be able to collect exactly 2
+        assert_eq!(
+            Some((0, stake_lamports * 2)),
+            stake.redeem_rewards(1.0, &vote_state, None)
+        );
+
+        assert_eq!(
+            stake.delegation.stake,
+            stake_lamports + (stake_lamports * 2)
+        );
+        assert_eq!(stake.credits_observed, 2);
     }
 
     #[test]
