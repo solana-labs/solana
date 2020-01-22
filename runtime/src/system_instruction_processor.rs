@@ -339,7 +339,7 @@ mod tests {
         system_instruction, system_program, sysvar,
         transaction::TransactionError,
     };
-    use std::{cell::RefCell, rc::Rc};
+    use std::cell::RefCell;
 
     impl From<Pubkey> for Address {
         fn from(address: Pubkey) -> Self {
@@ -350,23 +350,19 @@ mod tests {
         }
     }
 
-    fn create_default_account() -> Rc<RefCell<Account>> {
-        Rc::new(RefCell::new(Account::default()))
+    fn create_default_account() -> RefCell<Account> {
+        RefCell::new(Account::default())
     }
-    fn create_default_recent_blockhashes_account() -> Rc<RefCell<Account>> {
-        Rc::new(RefCell::new(
-            sysvar::recent_blockhashes::create_account_with_data(
-                1,
-                vec![(0u64, &Hash::default()); 32].into_iter(),
-            ),
+    fn create_default_recent_blockhashes_account() -> RefCell<Account> {
+        RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
+            1,
+            vec![(0u64, &Hash::default()); 32].into_iter(),
         ))
     }
-    fn create_default_rent_account() -> Rc<RefCell<Account>> {
-        Rc::new(RefCell::new(
-            sysvar::recent_blockhashes::create_account_with_data(
-                1,
-                vec![(0u64, &Hash::default()); 32].into_iter(),
-            ),
+    fn create_default_rent_account() -> RefCell<Account> {
+        RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
+            1,
+            vec![(0u64, &Hash::default()); 32].into_iter(),
         ))
     }
 
@@ -1121,12 +1117,11 @@ mod tests {
             &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
         )
         .unwrap();
-        let new_recent_blockhashes_account = Rc::new(RefCell::new(
-            sysvar::recent_blockhashes::create_account_with_data(
+        let new_recent_blockhashes_account =
+            RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
                 1,
                 vec![(0u64, &hash(&serialize(&0).unwrap())); 32].into_iter(),
-            ),
-        ));
+            ));
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
