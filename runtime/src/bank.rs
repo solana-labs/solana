@@ -1307,13 +1307,13 @@ impl Bank {
                 (Ok((accounts, loaders, _rents)), hash_age_kind) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
-                    let (mut account_refcells, mut loader_refcells) =
+                    let (account_refcells, loader_refcells) =
                         Self::into_refcells(accounts, loaders);
 
                     let process_result = self.message_processor.process_message(
                         tx.message(),
-                        &mut loader_refcells,
-                        &mut account_refcells,
+                        &loader_refcells,
+                        &account_refcells,
                     );
 
                     Self::from_refcells(accounts, loaders, account_refcells, loader_refcells);

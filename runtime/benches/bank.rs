@@ -32,7 +32,7 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
 
 fn process_instruction(
     _program_id: &Pubkey,
-    _keyed_accounts: &mut [KeyedAccount],
+    _keyed_accounts: &[KeyedAccount],
     _data: &[u8],
 ) -> Result<(), InstructionError> {
     Ok(())
