@@ -101,7 +101,7 @@ where
 pub(crate) mod tests {
     use super::*;
     use crate::genesis_utils::{
-        create_genesis_config, GenesisConfigInfo, BOOTSTRAP_LEADER_LAMPORTS,
+        create_genesis_config, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
     };
     use solana_sdk::{
         clock::Clock,
@@ -183,10 +183,10 @@ pub(crate) mod tests {
     #[test]
     fn test_epoch_stakes_and_lockouts() {
         solana_logger::setup();
-        let stake = BOOTSTRAP_LEADER_LAMPORTS * 100;
+        let stake = BOOTSTRAP_VALIDATOR_LAMPORTS * 100;
         let leader_stake = Stake {
             delegation: Delegation {
-                stake: BOOTSTRAP_LEADER_LAMPORTS,
+                stake: BOOTSTRAP_VALIDATOR_LAMPORTS,
                 activation_epoch: std::u64::MAX, // mark as bootstrap
                 ..Delegation::default()
             },
@@ -205,7 +205,7 @@ pub(crate) mod tests {
         let vote_account = Keypair::new();
 
         // Give the validator some stake but don't setup a staking account
-        // Validator has no lamports staked, so they get filtered out. Only the bootstrap leader
+        // Validator has no lamports staked, so they get filtered out. Only the bootstrap validator
         // created by the genesis config will get included
         bank.transfer(1, &mint_keypair, &validator.pubkey())
             .unwrap();

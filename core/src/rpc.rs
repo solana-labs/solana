@@ -2293,7 +2293,7 @@ pub mod tests {
             .expect("process transaction");
         assert_eq!(bank.vote_accounts().len(), 2);
 
-        // Check getVoteAccounts: the bootstrap leader vote account will be delinquent as it has
+        // Check getVoteAccounts: the bootstrap validator vote account will be delinquent as it has
         // stake but has never voted, and the vote account with no stake should not be present.
         {
             let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts"}}"#);

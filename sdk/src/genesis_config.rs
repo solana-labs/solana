@@ -31,7 +31,7 @@ pub enum OperatingMode {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GenesisConfig {
-    /// when the network (bootstrap leader) was started relative to the UNIX Epoch
+    /// when the network (bootstrap validator) was started relative to the UNIX Epoch
     pub creation_time: UnixTimestamp,
     /// initial accounts
     pub accounts: BTreeMap<Pubkey, Account>,

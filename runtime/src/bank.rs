@@ -741,7 +741,7 @@ impl Bank {
     }
 
     fn process_genesis_config(&mut self, genesis_config: &GenesisConfig) {
-        // Bootstrap leader collects fees until `new_from_parent` is called.
+        // Bootstrap validator collects fees until `new_from_parent` is called.
         self.fee_calculator = genesis_config.fee_calculator.clone();
         self.update_fees();
 
@@ -1957,7 +1957,7 @@ mod tests {
         accounts_db::get_temp_accounts_paths,
         accounts_db::tests::copy_append_vecs,
         genesis_utils::{
-            create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_LEADER_LAMPORTS,
+            create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         status_cache::MAX_CACHE_ENTRIES,
     };
@@ -2019,7 +2019,7 @@ mod tests {
     #[test]
     fn test_bank_new() {
         let dummy_leader_pubkey = Pubkey::new_rand();
-        let dummy_leader_lamports = BOOTSTRAP_LEADER_LAMPORTS;
+        let dummy_leader_lamports = BOOTSTRAP_VALIDATOR_LAMPORTS;
         let mint_lamports = 10_000;
         let GenesisConfigInfo {
             mut genesis_config,
@@ -2443,12 +2443,12 @@ mod tests {
 
     #[test]
     fn test_rent_distribution() {
-        let bootstrap_leader_pubkey = Pubkey::new_rand();
-        let bootstrap_leader_stake_lamports = 30;
+        let bootstrap_validator_pubkey = Pubkey::new_rand();
+        let bootstrap_validator_stake_lamports = 30;
         let mut genesis_config = create_genesis_config_with_leader(
             10,
-            &bootstrap_leader_pubkey,
-            bootstrap_leader_stake_lamports,
+            &bootstrap_validator_pubkey,
+            bootstrap_validator_stake_lamports,
         )
         .genesis_config;
 
@@ -2584,7 +2584,7 @@ mod tests {
         let payee_account = Account::new(70, 1, &system_program::id());
         bank.store_account(&payee.pubkey(), &payee_account);
 
-        let bootstrap_leader_initial_balance = bank.get_balance(&bootstrap_leader_pubkey);
+        let bootstrap_validator_initial_balance = bank.get_balance(&bootstrap_validator_pubkey);
 
         let tx = system_transaction::transfer(&payer, &payee.pubkey(), 180, genesis_config.hash());
 
@@ -2614,11 +2614,12 @@ mod tests {
             total_rent_deducted * u64::from(bank.rent_collector.rent.burn_percent) / 100;
         let rent_to_be_distributed = total_rent_deducted - burned_portion;
 
-        let bootstrap_leader_portion =
-            ((bootstrap_leader_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64 + 1; // Leftover lamport
+        let bootstrap_validator_portion =
+            ((bootstrap_validator_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64
+                + 1; // Leftover lamport
         assert_eq!(
-            bank.get_balance(&bootstrap_leader_pubkey),
-            bootstrap_leader_portion + bootstrap_leader_initial_balance
+            bank.get_balance(&bootstrap_validator_pubkey),
+            bootstrap_validator_portion + bootstrap_validator_initial_balance
         );
 
         // Since, validator 1 and validator 2 has equal smallest stake, it comes down to comparison
@@ -4233,7 +4234,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
 
         let vote_accounts = bank.vote_accounts();
-        assert_eq!(vote_accounts.len(), 1); // bootstrap leader has
+        assert_eq!(vote_accounts.len(), 1); // bootstrap validator has
                                             // to have a vote account
 
         let vote_keypair = Keypair::new();
@@ -4280,7 +4281,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
 
         let stake_delegations = bank.stake_delegations();
-        assert_eq!(stake_delegations.len(), 1); // bootstrap leader has
+        assert_eq!(stake_delegations.len(), 1); // bootstrap validator has
                                                 // to have a stake delegation
 
         let vote_keypair = Keypair::new();

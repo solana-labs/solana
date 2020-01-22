@@ -29,7 +29,7 @@ Start a local cluster and run sanity on it
    -x          - Add an extra validator (may be supplied multiple times)
    -r          - Select the RPC endpoint hosted by a node that starts as
                  a validator node.  If unspecified the RPC endpoint hosted by
-                 the bootstrap leader will be used.
+                 the bootstrap validator will be used.
    -c          - Reuse existing node/ledger configuration from a previous sanity
                  run
 
@@ -74,7 +74,7 @@ source multinode-demo/common.sh
 
 nodes=(
   "multinode-demo/faucet.sh"
-  "multinode-demo/bootstrap-leader.sh \
+  "multinode-demo/bootstrap-validator.sh \
     --no-restart \
     --init-complete-file init-complete-node1.log \
     --dynamic-port-range 8000-8050"
@@ -170,7 +170,7 @@ startNodes() {
       logs+=("$(getNodeLogFile "$i" "$cmd")")
     fi
 
-    # 1 == bootstrap leader, wait until it boots before starting
+    # 1 == bootstrap validator, wait until it boots before starting
     # other validators
     if [[ "$i" -eq 1 ]]; then
       SECONDS=
@@ -178,7 +178,7 @@ startNodes() {
 
       (
         set -x
-        $solana_cli --keypair config/bootstrap-leader/identity-keypair.json \
+        $solana_cli --keypair config/bootstrap-validator/identity-keypair.json \
           --url http://127.0.0.1:8899 genesis-hash
       ) | tee genesis-hash.log
       maybeExpectedGenesisHash="--expected-genesis-hash $(tail -n1 genesis-hash.log)"
@@ -277,7 +277,7 @@ rollingNodeRestart() {
 }
 
 verifyLedger() {
-  for ledger in bootstrap-leader validator; do
+  for ledger in bootstrap-validator validator; do
     echo "--- $ledger ledger verification"
     (
       set -x
@@ -331,7 +331,7 @@ while [[ $iteration -le $iterations ]]; do
     rm -rf $client_keypair
   ) || flag_error
 
-  echo "--- RPC API: bootstrap-leader getTransactionCount ($iteration)"
+  echo "--- RPC API: bootstrap-validator getTransactionCount ($iteration)"
   (
     set -x
     curl --retry 5 --retry-delay 2 --retry-connrefused \
@@ -351,7 +351,7 @@ while [[ $iteration -le $iterations ]]; do
       http://localhost:18899
   ) || flag_error
 
-  # Verify transaction count as reported by the bootstrap-leader node is advancing
+  # Verify transaction count as reported by the bootstrap-validator node is advancing
   transactionCount=$(sed -e 's/{"jsonrpc":"2.0","result":\([0-9]*\),"id":1}/\1/' log-transactionCount.txt)
   if [[ -n $lastTransactionCount ]]; then
     echo "--- Transaction count check: $lastTransactionCount < $transactionCount"

@@ -152,7 +152,7 @@ Manage testnet instances
                       Only supported on GCE.
    --dedicated      - Use dedicated instances for additional validators
                       (by default preemptible instances are used to reduce
-                      cost).  Note that the bootstrap leader, archiver,
+                      cost).  Note that the bootstrap validator, archiver,
                       blockstreamer and client nodes are always dedicated.
    --self-destruct-hours [number]
                     - Specify lifetime of the allocated instances in hours. 0 to
@@ -514,12 +514,12 @@ EOF
   }
 
   if $externalNodes; then
-    echo "Bootstrap leader is already configured"
+    echo "Bootstrap validator is already configured"
   else
-    echo "Looking for bootstrap leader instance..."
-    cloud_FindInstance "$prefix-bootstrap-leader"
+    echo "Looking for bootstrap validator instance..."
+    cloud_FindInstance "$prefix-bootstrap-validator"
     [[ ${#instances[@]} -eq 1 ]] || {
-      echo "Unable to find bootstrap leader"
+      echo "Unable to find bootstrap validator"
       exit 1
     }
 
@@ -649,7 +649,7 @@ create)
   printNetworkInfo() {
     cat <<EOF
 ==[ Network composition ]===============================================================
-  Bootstrap leader = $bootstrapLeaderMachineType (GPU=$enableGpu)
+  Bootstrap validator = $bootstrapLeaderMachineType (GPU=$enableGpu)
   Additional validators = $additionalValidatorCount x $validatorMachineType
   Client(s) = $clientNodeCount x $clientMachineType
   Archivers(s) = $archiverNodeCount x $archiverMachineType
@@ -812,9 +812,9 @@ EOF
   done
 
   if $externalNodes; then
-    echo "Bootstrap leader is already configured"
+    echo "Bootstrap validator is already configured"
   else
-    cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
+    cloud_CreateInstances "$prefix" "$prefix-bootstrap-validator" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$validatorBootDiskSizeInGb" \
       "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$validatorAdditionalDiskSizeInGb" \
       "never preemptible" "$sshPrivateKey"
@@ -890,7 +890,7 @@ info)
     echo "-------------------+-----------------+-----------------+--------------"
   fi
 
-  nodeType=bootstrap-leader
+  nodeType=bootstrap-validator
   if [[ ${#validatorIpList[@]} -gt 0 ]]; then
     for i in $(seq 0 $(( ${#validatorIpList[@]} - 1)) ); do
       ipAddress=${validatorIpList[$i]}

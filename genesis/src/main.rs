@@ -121,11 +121,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
     };
     // vote account
-    let default_bootstrap_leader_lamports = &sol_to_lamports(500.0)
+    let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
         .max(VoteState::get_rent_exempt_reserve(&rent))
         .to_string();
     // stake account
-    let default_bootstrap_leader_stake_lamports = &sol_to_lamports(0.5)
+    let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
         .max(StakeState::get_rent_exempt_reserve(&rent))
         .to_string();
 
@@ -143,16 +143,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("RFC3339 DATE TIME")
                 .validator(is_rfc3339_datetime)
                 .takes_value(true)
-                .help("Time when the bootstrap leader will start the cluster [default: current system time]"),
+                .help("Time when the bootstrap validator will start the cluster [default: current system time]"),
         )
         .arg(
-            Arg::with_name("bootstrap_leader_pubkey_file")
+            Arg::with_name("bootstrap_validator_pubkey_file")
                 .short("b")
-                .long("bootstrap-leader-pubkey")
-                .value_name("BOOTSTRAP LEADER PUBKEY")
+                .long("bootstrap-validator-pubkey")
+                .value_name("BOOTSTRAP VALIDATOR PUBKEY")
                 .takes_value(true)
                 .required(true)
-                .help("Path to file containing the bootstrap leader's pubkey"),
+                .help("Path to file containing the bootstrap validator's pubkey"),
         )
         .arg(
             Arg::with_name("ledger_path")
@@ -187,7 +187,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("BOOTSTRAP VOTE PUBKEY")
                 .takes_value(true)
                 .required(true)
-                .help("Path to file containing the bootstrap leader's voting pubkey"),
+                .help("Path to file containing the bootstrap validator's voting pubkey"),
         )
         .arg(
             Arg::with_name("bootstrap_stake_pubkey_file")
@@ -195,39 +195,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("BOOTSTRAP STAKE PUBKEY")
                 .takes_value(true)
                 .required(true)
-                .help("Path to file containing the bootstrap leader's staking pubkey"),
+                .help("Path to file containing the bootstrap validator's staking pubkey"),
         )
         .arg(
             Arg::with_name("bootstrap_stake_authorized_pubkey_file")
                 .long("bootstrap-stake-authorized-pubkey")
                 .value_name("BOOTSTRAP STAKE AUTHORIZED PUBKEY")
                 .takes_value(true)
-                .help("Path to file containing the pubkey authorized to manage the bootstrap leader's stake [default: --bootstrap-leader-pubkey]"),
+                .help("Path to file containing the pubkey authorized to manage the bootstrap validator's stake [default: --bootstrap-validator-pubkey]"),
         )
         .arg(
             Arg::with_name("bootstrap_storage_pubkey_file")
                 .long("bootstrap-storage-pubkey")
                 .value_name("BOOTSTRAP STORAGE PUBKEY")
                 .takes_value(true)
-                .help("Path to file containing the bootstrap leader's storage pubkey"),
+                .help("Path to file containing the bootstrap validator's storage pubkey"),
         )
         .arg(
-            Arg::with_name("bootstrap_leader_lamports")
-                .long("bootstrap-leader-lamports")
+            Arg::with_name("bootstrap_validator_lamports")
+                .long("bootstrap-validator-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
-                .default_value(default_bootstrap_leader_lamports)
+                .default_value(default_bootstrap_validator_lamports)
                 .required(true)
-                .help("Number of lamports to assign to the bootstrap leader"),
+                .help("Number of lamports to assign to the bootstrap validator"),
         )
         .arg(
-            Arg::with_name("bootstrap_leader_stake_lamports")
-                .long("bootstrap-leader-stake-lamports")
+            Arg::with_name("bootstrap_validator_stake_lamports")
+                .long("bootstrap-validator-stake-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
-                .default_value(default_bootstrap_leader_stake_lamports)
+                .default_value(default_bootstrap_validator_stake_lamports)
                 .required(true)
-                .help("Number of lamports to assign to the bootstrap leader's stake account"),
+                .help("Number of lamports to assign to the bootstrap validator's stake account"),
         )
         .arg(
             Arg::with_name("target_lamports_per_signature")
@@ -366,15 +366,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
-    let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
+    let bootstrap_validator_lamports =
+        value_t_or_exit!(matches, "bootstrap_validator_lamports", u64);
 
-    let bootstrap_leader_stake_lamports = rent_exempt_check(
+    let bootstrap_validator_stake_lamports = rent_exempt_check(
         &matches,
-        "bootstrap_leader_stake_lamports",
+        "bootstrap_validator_stake_lamports",
         StakeState::get_rent_exempt_reserve(&rent),
     )?;
 
-    let bootstrap_leader_pubkey = required_pubkey(&matches, "bootstrap_leader_pubkey_file")?;
+    let bootstrap_validator_pubkey = required_pubkey(&matches, "bootstrap_validator_pubkey_file")?;
     let bootstrap_vote_pubkey = required_pubkey(&matches, "bootstrap_vote_pubkey_file")?;
     let bootstrap_stake_pubkey = required_pubkey(&matches, "bootstrap_stake_pubkey_file")?;
     let bootstrap_stake_authorized_pubkey =
@@ -382,33 +383,33 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
     let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
-    let bootstrap_leader_vote_account = vote_state::create_account(
+    let bootstrap_validator_vote_account = vote_state::create_account(
         &bootstrap_vote_pubkey,
-        &bootstrap_leader_pubkey,
+        &bootstrap_validator_pubkey,
         100,
         VoteState::get_rent_exempt_reserve(&rent).max(1),
     );
 
-    let bootstrap_leader_stake_account = stake_state::create_account(
+    let bootstrap_validator_stake_account = stake_state::create_account(
         bootstrap_stake_authorized_pubkey
             .as_ref()
-            .unwrap_or(&bootstrap_leader_pubkey),
+            .unwrap_or(&bootstrap_validator_pubkey),
         &bootstrap_vote_pubkey,
-        &bootstrap_leader_vote_account,
+        &bootstrap_validator_vote_account,
         &rent,
-        bootstrap_leader_stake_lamports,
+        bootstrap_validator_stake_lamports,
     );
 
     let mut accounts: BTreeMap<Pubkey, Account> = [
         // node needs an account to issue votes from
         (
-            bootstrap_leader_pubkey,
-            Account::new(bootstrap_leader_lamports, 0, &system_program::id()),
+            bootstrap_validator_pubkey,
+            Account::new(bootstrap_validator_lamports, 0, &system_program::id()),
         ),
         // where votes go to
-        (bootstrap_vote_pubkey, bootstrap_leader_vote_account),
-        // bootstrap leader stake
-        (bootstrap_stake_pubkey, bootstrap_leader_stake_account),
+        (bootstrap_vote_pubkey, bootstrap_validator_vote_account),
+        // bootstrap validator stake
+        (bootstrap_stake_pubkey, bootstrap_validator_stake_account),
     ]
     .iter()
     .cloned()
@@ -417,7 +418,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     if let Some(bootstrap_storage_pubkey) = bootstrap_storage_pubkey {
         accounts.insert(
             bootstrap_storage_pubkey,
-            storage_contract::create_validator_storage_account(bootstrap_leader_pubkey, 1),
+            storage_contract::create_validator_storage_account(bootstrap_validator_pubkey, 1),
         );
     }
 

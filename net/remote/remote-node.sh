@@ -144,7 +144,7 @@ cat >> ~/solana/on-reboot <<EOF
 EOF
 
   case $nodeType in
-  bootstrap-leader)
+  bootstrap-validator)
     set -x
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
@@ -213,10 +213,10 @@ EOF
       fi
 
       if [[ -n $internalNodesStakeLamports ]]; then
-        args+=(--bootstrap-leader-stake-lamports "$internalNodesStakeLamports")
+        args+=(--bootstrap-validator-stake-lamports "$internalNodesStakeLamports")
       fi
       if [[ -n $internalNodesLamports ]]; then
-        args+=(--bootstrap-leader-lamports "$internalNodesLamports")
+        args+=(--bootstrap-validator-lamports "$internalNodesLamports")
       fi
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
@@ -224,8 +224,8 @@ EOF
       if [[ -f net/keypairs/mint.json ]]; then
         export FAUCET_KEYPAIR=net/keypairs/mint.json
       fi
-      if [[ -f net/keypairs/bootstrap-leader-identity.json ]]; then
-        export BOOTSTRAP_LEADER_IDENTITY_KEYPAIR=net/keypairs/bootstrap-leader-identity.json
+      if [[ -f net/keypairs/bootstrap-validator-identity.json ]]; then
+        export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
       fi
       multinode-demo/setup.sh "${args[@]}"
     fi
@@ -244,7 +244,7 @@ EOF
     args+=($extraNodeArgs)
 
 cat >> ~/solana/on-reboot <<EOF
-    nohup ./multinode-demo/bootstrap-leader.sh ${args[@]} > validator.log.\$now 2>&1 &
+    nohup ./multinode-demo/bootstrap-validator.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
@@ -254,7 +254,7 @@ EOF
 
     if [[ $skipSetup != true ]]; then
       solana --url http://"$entrypointIp":8899 \
-        --keypair ~/solana/config/bootstrap-leader/identity-keypair.json \
+        --keypair ~/solana/config/bootstrap-validator/identity-keypair.json \
         validator-info publish "$(hostname)" -n team/solana --force || true
     fi
     ;;
@@ -373,7 +373,7 @@ EOF
     waitForNodeToInit
 
     if [[ $skipSetup != true && $nodeType != blockstreamer ]]; then
-      # Wait for the validator to catch up to the bootstrap leader before
+      # Wait for the validator to catch up to the bootstrap validator before
       # delegating stake to it
       solana --url http://"$entrypointIp":8899 catchup config/validator-identity.json
 

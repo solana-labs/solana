@@ -84,7 +84,7 @@ else
     --hashes-per-tick sleep \
     --faucet-pubkey "$dataDir"/faucet-keypair.json \
     --faucet-lamports 500000000000000000 \
-    --bootstrap-leader-pubkey "$dataDir"/leader-keypair.json \
+    --bootstrap-validator-pubkey "$dataDir"/leader-keypair.json \
     --bootstrap-vote-pubkey "$dataDir"/leader-vote-account-keypair.json \
     --bootstrap-stake-pubkey "$dataDir"/leader-stake-account-keypair.json \
     --bootstrap-storage-pubkey "$dataDir"/leader-storage-account-keypair.json \
