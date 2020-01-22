@@ -31,6 +31,7 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
+    account_utils::State,
     clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
@@ -48,7 +49,7 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
-use solana_stake_program::stake_state::Delegation;
+use solana_stake_program::stake_state::{Delegation, StakeState};
 use solana_vote_program::vote_state::VoteState;
 use std::{
     cell::RefCell,
@@ -630,10 +631,71 @@ impl Bank {
             &sysvar::rewards::create_account(1, validator_point_value, storage_point_value),
         );
 
+        let validator_rewards = self.pay_validator_rewards(validator_point_value);
+
         self.capitalization.fetch_add(
-            (validator_rewards + storage_rewards) as u64,
+            validator_rewards + storage_rewards as u64,
             Ordering::Relaxed,
         );
+    }
+
+    /// iterate over all stakes, redeem vote credits for each stake we can
+    ///   successfully load and parse, return total payout
+    fn pay_validator_rewards(&self, validator_point_value: f64) -> u64 {
+        let stake_history = self.stakes.read().unwrap().history().clone();
+        self.stake_delegations()
+            .iter()
+            .map(
+                |(
+                    stake_pubkey,
+                    Delegation {
+                        voter_pubkey: vote_pubkey,
+                        ..
+                    },
+                )| {
+                    match (
+                        self.get_account(&stake_pubkey),
+                        self.get_account(&vote_pubkey),
+                    ) {
+                        (Some(mut stake_account), Some(mut vote_account)) => {
+                            match (stake_account.state(), vote_account.state()) {
+                                (Ok(StakeState::Stake(meta, mut stake)), Ok(vote_state)) => {
+                                    // we've recovered everything we need to do redemption at this point
+                                    if let Some((voters_reward, stakers_reward, credits_observed)) =
+                                        stake.calculate_rewards(
+                                            validator_point_value,
+                                            &vote_state,
+                                            Some(&stake_history),
+                                        )
+                                    {
+                                        stake_account.lamports += stakers_reward;
+                                        vote_account.lamports += voters_reward;
+
+                                        stake.credits_observed = credits_observed;
+                                        stake.delegation.stake += stakers_reward;
+
+                                        if stake_account
+                                            .set_state(&StakeState::Stake(meta, stake))
+                                            .is_ok()
+                                        {
+                                            self.store_account(&stake_pubkey, &stake_account);
+                                            self.store_account(&vote_pubkey, &vote_account);
+                                            stakers_reward + voters_reward
+                                        } else {
+                                            0
+                                        }
+                                    } else {
+                                        0
+                                    }
+                                }
+                                (_, _) => 0,
+                            }
+                        }
+                        (_, _) => 0,
+                    }
+                },
+            )
+            .sum()
     }
 
     pub fn update_recent_blockhashes(&self) {
