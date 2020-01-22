@@ -1104,7 +1104,7 @@ impl Bank {
                     .map(|acc| (*nonce_pubkey, acc))
             })
             .filter(|(_pubkey, nonce_account)| {
-                nonce_utils::verify_nonce(nonce_account, &tx.message().recent_blockhash)
+                nonce_utils::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
             })
     }
 
@@ -4830,7 +4830,7 @@ mod tests {
         }
     }
 
-    fn get_nonce(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
+    fn get_nonce_account(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
         bank.get_account(&nonce_pubkey)
             .and_then(|acc| match acc.state() {
                 Ok(nonce_state::NonceState::Initialized(_meta, hash)) => Some(hash),
@@ -4901,10 +4901,10 @@ mod tests {
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
-        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
             vec![
-                system_instruction::advance_nonce(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4925,11 +4925,11 @@ mod tests {
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
-        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
             vec![
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
-                system_instruction::advance_nonce(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
             ],
             Some(&custodian_pubkey),
             &[&custodian_keypair, &nonce_keypair],
@@ -4945,10 +4945,10 @@ mod tests {
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
-        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
         let mut tx = Transaction::new_signed_with_payer(
             vec![
-                system_instruction::advance_nonce(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4968,10 +4968,10 @@ mod tests {
         let missing_keypair = Keypair::new();
         let missing_pubkey = missing_keypair.pubkey();
 
-        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
             vec![
-                system_instruction::advance_nonce(&missing_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&missing_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -4990,7 +4990,7 @@ mod tests {
 
         let tx = Transaction::new_signed_with_payer(
             vec![
-                system_instruction::advance_nonce(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -5054,7 +5054,7 @@ mod tests {
         assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
 
         /* Grab the hash stored in the nonce account */
-        let nonce_hash = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
 
         /* Kick nonce hash off the blockhash_queue */
         for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
@@ -5078,7 +5078,7 @@ mod tests {
         /* Durable Nonce transfer */
         let durable_tx = Transaction::new_signed_with_payer(
             vec![
-                system_instruction::advance_nonce(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -5093,13 +5093,13 @@ mod tests {
         assert_eq!(bank.get_balance(&alice_pubkey), 100_000);
 
         /* Confirm stored nonce has advanced */
-        let new_nonce = get_nonce(&bank, &nonce_pubkey).unwrap();
+        let new_nonce = get_nonce_account(&bank, &nonce_pubkey).unwrap();
         assert_ne!(nonce_hash, new_nonce);
 
         /* Durable Nonce re-use fails */
         let durable_tx = Transaction::new_signed_with_payer(
             vec![
-                system_instruction::advance_nonce(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
             ],
             Some(&custodian_pubkey),
@@ -5112,7 +5112,7 @@ mod tests {
         );
         /* Check fee not charged and nonce not advanced */
         assert_eq!(bank.get_balance(&custodian_pubkey), 4_640_000);
-        assert_eq!(new_nonce, get_nonce(&bank, &nonce_pubkey).unwrap());
+        assert_eq!(new_nonce, get_nonce_account(&bank, &nonce_pubkey).unwrap());
 
         let nonce_hash = new_nonce;
 
@@ -5124,7 +5124,7 @@ mod tests {
 
         let durable_tx = Transaction::new_signed_with_payer(
             vec![
-                system_instruction::advance_nonce(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000_000),
             ],
             Some(&custodian_pubkey),
@@ -5140,7 +5140,7 @@ mod tests {
         );
         /* Check fee charged and nonce has advanced */
         assert_eq!(bank.get_balance(&custodian_pubkey), 4_630_000);
-        assert_ne!(nonce_hash, get_nonce(&bank, &nonce_pubkey).unwrap());
+        assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
         /* Confirm replaying a TX that failed with InstructionError::* now
          * fails with TransactionError::BlockhashNotFound
          */
