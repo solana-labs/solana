@@ -10,7 +10,7 @@ use std::{
     cmp::Ordering,
     fs,
     fs::File,
-    io::{BufReader, BufWriter, Error as IOError, ErrorKind},
+    io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read},
     path::{Path, PathBuf},
 };
 use tar::Archive;
@@ -19,6 +19,7 @@ use thiserror::Error;
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
+pub const TAR_VERSION_FILE: &str = "version";
 
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
@@ -206,7 +207,20 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     let mut measure = Measure::start("bank rebuild from snapshot");
     let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
     let unpacked_snapshots_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
+    let unpacked_version_file = unpack_dir.as_ref().join(TAR_VERSION_FILE);
+
+    let snapshot_version = if let Ok(mut f) = File::open(unpacked_version_file) {
+        let mut snapshot_version = String::new();
+        f.read_to_string(&mut snapshot_version)?;
+        snapshot_version
+    } else {
+        // Once v0.23.x is deployed, this default can be removed and snapshots without a version
+        // file can be rejected
+        String::from("v0.22.3")
+    };
+
     let bank = rebuild_bank_from_snapshots(
+        snapshot_version.trim(),
         account_paths,
         &unpacked_snapshots_dir,
         unpacked_accounts_dir,
@@ -254,6 +268,7 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
 }
 
 fn rebuild_bank_from_snapshots<P>(
+    snapshot_version: &str,
     local_account_paths: &[PathBuf],
     unpacked_snapshots_dir: &PathBuf,
     append_vecs_path: P,
@@ -261,6 +276,8 @@ fn rebuild_bank_from_snapshots<P>(
 where
     P: AsRef<Path>,
 {
+    info!("snapshot version: {}", snapshot_version);
+
     let mut snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
     if snapshot_paths.len() > 1 {
         return Err(get_io_error("invalid snapshot format"));
@@ -270,10 +287,22 @@ where
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
 
     // Rebuild the root bank
-    info!("Loading from {:?}", &root_paths.snapshot_file_path);
+    info!("Loading bank from {:?}", &root_paths.snapshot_file_path);
     let file = File::open(&root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
-    let bank: Bank = deserialize_from(&mut stream)?;
+    let bank: Bank = match snapshot_version {
+        env!("CARGO_PKG_VERSION") => deserialize_from(&mut stream)?,
+        "v0.22.3" => {
+            let bank0223: solana_runtime::bank::LegacyBank0223 = deserialize_from(&mut stream)?;
+            bank0223.into()
+        }
+        _ => {
+            return Err(get_io_error(&format!(
+                "unsupported snapshot version: {}",
+                snapshot_version
+            )));
+        }
+    };
 
     // Rebuild accounts
     bank.rc

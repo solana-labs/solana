@@ -1,7 +1,7 @@
 use crate::result::{Error, Result};
 use bincode::serialize_into;
 use solana_ledger::snapshot_package::{SnapshotPackage, SnapshotPackageReceiver};
-use solana_ledger::snapshot_utils::{self, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR};
+use solana_ledger::snapshot_utils::{self, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR, TAR_VERSION_FILE};
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::status_cache::SlotDelta;
@@ -67,6 +67,7 @@ impl SnapshotPackagerService {
         let staging_dir = TempDir::new()?;
         let staging_accounts_dir = staging_dir.path().join(TAR_ACCOUNTS_DIR);
         let staging_snapshots_dir = staging_dir.path().join(TAR_SNAPSHOTS_DIR);
+        let staging_version_file = staging_dir.path().join(TAR_VERSION_FILE);
         fs::create_dir_all(&staging_accounts_dir)?;
 
         // Add the snapshots to the staging directory
@@ -97,6 +98,15 @@ impl SnapshotPackagerService {
             }
         }
 
+        // Write version file
+        {
+            use std::io::Write;
+            let snapshot_version = format!("{}\n", env!("CARGO_PKG_VERSION"));
+            let mut f = std::fs::File::create(staging_version_file)?;
+            //f.write_all(&snapshot_version.to_string().into_bytes())?;
+            f.write_all(&snapshot_version.into_bytes())?;
+        }
+
         // Tar the staging directory into the archive at `archive_path`
         let archive_path = tar_dir.join("new_state.tar.bz2");
         let args = vec![
@@ -106,6 +116,7 @@ impl SnapshotPackagerService {
             staging_dir.path().to_str().unwrap(),
             TAR_ACCOUNTS_DIR,
             TAR_SNAPSHOTS_DIR,
+            TAR_VERSION_FILE,
         ];
 
         let output = std::process::Command::new("tar").args(&args).output()?;
