@@ -1,4 +1,4 @@
-# solana CLI
+# Command-line Client
 
 The [solana-cli crate](https://crates.io/crates/solana-cli) provides a command-line interface tool for Solana
 
