@@ -4,12 +4,13 @@ This chapter documents the binary format of a transaction.
 
 ## Transaction Format
 
-A transaction contains a compact-array of signatures, followed by a message.
-The signatures are all signatures of the given message. The Solana runtime
-verifies that the number of signatures matches the number in the first 8 bits
-of the message header. It also verifies the signature was signed by the
-private key corresponding to the public key at the same index in the message's
-account addresses vector.
+A transaction contains a [compact-array](#Compact-Array-Format) of signatures,
+followed by a [message](#Message-Format).  Each item in the signatures array is
+a [digital signature](#Signature-Format) of the given message. The Solana
+runtime verifies that the number of signatures matches the number in the first
+8 bits of the [message header](#Message-Header-Format). It also verifies the
+signature was signed by the private key corresponding to the public key at the
+same index in the message's account addresses vector.
 
 ### Signature Format
 
@@ -18,8 +19,10 @@ Each digital signature is in the ed25519 binary format and consumes 64 bytes.
 
 ## Message Format
 
-A message contains a header, followed by a compact-array of account addresses,
-followed by a recent blockhash, followed by a compact-array of instructions.
+A message contains a [header](#Message-Header-Format), followed by a
+compact-array of [account addresses](#Account-Address-Format), followed by a
+recent [blockhash](#Blockhash-Format), followed by a compact-array of
+[instructions](#Instruction-Format).
 
 ### Message Header Format
 
@@ -32,7 +35,7 @@ signatures. These addresses immediately follow the addresses that require
 signatures. The remaining addresses are used to request write access to the
 cooresponding accounts.
 
-### Recent Blockhash Format
+### Blockhash Format
 
 A blockhash contains a 32-byte SHA-256 hash. It is used to indicate when a
 client last observed the ledger. Validators will reject transactions when the
