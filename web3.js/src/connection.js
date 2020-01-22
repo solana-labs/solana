@@ -1220,8 +1220,20 @@ export class Connection {
   async sendRawTransaction(
     rawTransaction: Buffer,
   ): Promise<TransactionSignature> {
+    const encodedTransaction = bs58.encode(rawTransaction);
+    const result = await this.sendEncodedTransaction(encodedTransaction);
+    return result;
+  }
+
+  /**
+   * Send a transaction that has already been signed, serialized into the
+   * wire format, and encoded as a base58 string
+   */
+  async sendEncodedTransaction(
+    encodedTransaction: string,
+  ): Promise<TransactionSignature> {
     const unsafeRes = await this._rpcRequest('sendTransaction', [
-      [...rawTransaction],
+      encodedTransaction,
     ]);
     const res = SendTransactionRpcResult(unsafeRes);
     if (res.error) {
