@@ -149,20 +149,20 @@ pub(crate) mod tests {
         let ((validator_pubkey, validator_account), (archiver_pubkey, archiver_account)) =
             create_storage_accounts_with_credits(credits);
 
-        storage_accounts.store(&validator_pubkey, &validator_account.borrow());
-        storage_accounts.store(&archiver_pubkey, &archiver_account.borrow());
+        storage_accounts.store(&validator_pubkey, &validator_account);
+        storage_accounts.store(&archiver_pubkey, &archiver_account);
         // check that 2x credits worth of points are available
         assert_eq!(storage_accounts.points(), credits * 2);
         let ((validator_pubkey, validator_account), (archiver_pubkey, archiver_account)) =
             create_storage_accounts_with_credits(credits);
 
-        storage_accounts.store(&validator_pubkey, &validator_account.borrow());
-        storage_accounts.store(&archiver_pubkey, &archiver_account.borrow());
+        storage_accounts.store(&validator_pubkey, &validator_account);
+        storage_accounts.store(&archiver_pubkey, &archiver_account);
         // check that 4x credits worth of points are available
         assert_eq!(storage_accounts.points(), credits * 2 * 2);
 
-        storage_accounts.store(&validator_pubkey, &validator_account.borrow());
-        storage_accounts.store(&archiver_pubkey, &archiver_account.borrow());
+        storage_accounts.store(&validator_pubkey, &validator_account);
+        storage_accounts.store(&archiver_pubkey, &archiver_account);
         // check that storing again has no effect
         assert_eq!(storage_accounts.points(), credits * 2 * 2);
 
@@ -191,8 +191,8 @@ pub(crate) mod tests {
     pub fn create_storage_accounts_with_credits(
         credits: u64,
     ) -> (
-        (Pubkey, Rc<RefCell<Account>>),
-        (Pubkey, Rc<RefCell<Account>>),
+        (Pubkey, Account),
+        (Pubkey, Account),
     ) {
         let validator_pubkey = Pubkey::new_rand();
         let archiver_pubkey = Pubkey::new_rand();
@@ -240,8 +240,8 @@ pub(crate) mod tests {
                 .unwrap();
         }
         (
-            (validator_pubkey, validator_account),
-            (archiver_pubkey, archiver_account),
+            (validator_pubkey, validator_account.into_inner()),
+            (archiver_pubkey, archiver_account.into_inner()),
         )
     }
 }
