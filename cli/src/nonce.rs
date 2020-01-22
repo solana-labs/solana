@@ -1,7 +1,7 @@
 use crate::cli::{
     build_balance_message, check_account_for_fee, check_unique_pubkeys,
     log_instruction_custom_error, required_lamports_from, CliCommand, CliCommandInfo, CliConfig,
-    CliError, ProcessResult,
+    CliError, ProcessResult, SigningAuthority,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
@@ -54,7 +54,7 @@ fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .long("nonce-authority")
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(is_keypair_or_ask_keyword)
+        .validator(is_pubkey_or_keypair_or_ask_keyword)
         .help("Specify nonce authority if different from account")
 }
 
@@ -222,7 +222,15 @@ impl NonceSubCommands for App<'_, '_> {
 pub fn parse_authorize_nonce_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let new_authority = pubkey_of(matches, "new_authority").unwrap();
-    let nonce_authority = keypair_of(matches, "nonce_authority").map(|kp| kp.into());
+    let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            NONCE_AUTHORITY_ARG.name,
+            None,
+        )?)
+    } else {
+        None
+    };
 
     Ok(CliCommandInfo {
         command: CliCommand::AuthorizeNonceAccount {
@@ -262,7 +270,15 @@ pub fn parse_get_nonce(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
 
 pub fn parse_new_nonce(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
-    let nonce_authority = keypair_of(matches, "nonce_authority").map(|kp| kp.into());
+    let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            NONCE_AUTHORITY_ARG.name,
+            None,
+        )?)
+    } else {
+        None
+    };
 
     Ok(CliCommandInfo {
         command: CliCommand::NewNonce {
@@ -292,7 +308,15 @@ pub fn parse_withdraw_from_nonce_account(
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
     let lamports = required_lamports_from(matches, "amount", "unit")?;
-    let nonce_authority = keypair_of(matches, "nonce_authority").map(|kp| kp.into());
+    let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
+        Some(SigningAuthority::new_from_matches(
+            &matches,
+            NONCE_AUTHORITY_ARG.name,
+            None,
+        )?)
+    } else {
+        None
+    };
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawFromNonceAccount {
@@ -337,12 +361,14 @@ pub fn process_authorize_nonce_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     nonce_account: &Pubkey,
-    nonce_authority: Option<&Keypair>,
+    nonce_authority: Option<&SigningAuthority>,
     new_authority: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let nonce_authority = nonce_authority.unwrap_or(&config.keypair);
+    let nonce_authority = nonce_authority
+        .map(|a| a.keypair())
+        .unwrap_or(&config.keypair);
     let ix = nonce_authorize(nonce_account, &nonce_authority.pubkey(), new_authority);
     let mut tx = Transaction::new_signed_with_payer(
         vec![ix],
@@ -472,7 +498,7 @@ pub fn process_new_nonce(
     rpc_client: &RpcClient,
     config: &CliConfig,
     nonce_account: &Pubkey,
-    nonce_authority: Option<&Keypair>,
+    nonce_authority: Option<&SigningAuthority>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
@@ -486,7 +512,9 @@ pub fn process_new_nonce(
         .into());
     }
 
-    let nonce_authority = nonce_authority.unwrap_or(&config.keypair);
+    let nonce_authority = nonce_authority
+        .map(|a| a.keypair())
+        .unwrap_or(&config.keypair);
     let ix = nonce_advance(&nonce_account, &nonce_authority.pubkey());
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_with_payer(
@@ -553,13 +581,15 @@ pub fn process_withdraw_from_nonce_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     nonce_account: &Pubkey,
-    nonce_authority: Option<&Keypair>,
+    nonce_authority: Option<&SigningAuthority>,
     destination_account_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let nonce_authority = nonce_authority.unwrap_or(&config.keypair);
+    let nonce_authority = nonce_authority
+        .map(|a| a.keypair())
+        .unwrap_or(&config.keypair);
     let ix = nonce_withdraw(
         nonce_account,
         &nonce_authority.pubkey(),

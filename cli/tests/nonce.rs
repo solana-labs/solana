@@ -1,5 +1,5 @@
 use solana_cli::cli::{
-    process_command, request_and_confirm_airdrop, CliCommand, CliConfig, KeypairEq,
+    process_command, request_and_confirm_airdrop, CliCommand, CliConfig, SigningAuthority,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
@@ -141,7 +141,7 @@ fn test_nonce_with_authority() {
     remove_dir_all(ledger_path).unwrap();
 }
 
-fn read_keypair_from_option(keypair_file: &Option<&str>) -> Option<KeypairEq> {
+fn read_keypair_from_option(keypair_file: &Option<&str>) -> Option<SigningAuthority> {
     keypair_file.map(|akf| read_keypair_file(&akf).unwrap().into())
 }
 
@@ -175,7 +175,7 @@ fn full_battery_tests(
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
         seed,
         nonce_authority: read_keypair_from_option(&authority_keypair_file)
-            .map(|na: KeypairEq| na.pubkey()),
+            .map(|na: SigningAuthority| na.pubkey()),
         lamports: 1000,
     };
 

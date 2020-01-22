@@ -574,8 +574,7 @@ fn test_stake_authorize() {
         stake_account_pubkey,
         new_authorized_pubkey: nonced_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
-        // We need to be able to specify the authority by pubkey/sig pair here
-        authority: Some(read_keypair_file(&offline_authority_file).unwrap().into()),
+        authority: Some(offline_authority_pubkey.into()),
         sign_only: false,
         signers: Some(signers),
         blockhash: Some(blockhash),
@@ -614,7 +613,7 @@ fn test_stake_authorize() {
         _ => panic!("Nonce is not initialized"),
     };
 
-    // Nonced assignment of new nonced stake authority
+    // Nonced assignment of new online stake authority
     let online_authority = Keypair::new();
     let online_authority_pubkey = online_authority.pubkey();
     let (_online_authority_file, mut tmp_file) = make_tmp_file();
@@ -629,7 +628,6 @@ fn test_stake_authorize() {
         blockhash: Some(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
-        //nonce_authority: Some(read_keypair_file(&nonce_keypair_file).unwrap().into()),
     };
     let sign_reply = process_command(&config).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
@@ -638,8 +636,7 @@ fn test_stake_authorize() {
         stake_account_pubkey,
         new_authorized_pubkey: online_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
-        // We need to be able to specify the authority by pubkey/sig pair here
-        authority: Some(read_keypair_file(&nonced_authority_file).unwrap().into()),
+        authority: Some(nonced_authority_pubkey.into()),
         sign_only: false,
         signers: Some(signers),
         blockhash: Some(blockhash),

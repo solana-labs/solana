@@ -43,6 +43,11 @@ pub fn is_pubkey_or_keypair(string: String) -> Result<(), String> {
     is_pubkey(string.clone()).or_else(|_| is_keypair(string))
 }
 
+// Return an error if string cannot be parsed as pubkey or keypair file or keypair ask keyword
+pub fn is_pubkey_or_keypair_or_ask_keyword(string: String) -> Result<(), String> {
+    is_pubkey(string.clone()).or_else(|_| is_keypair_or_ask_keyword(string))
+}
+
 // Return an error if string cannot be parsed as pubkey=signature string
 pub fn is_pubkey_sig(string: String) -> Result<(), String> {
     let mut signer = string.split('=');
