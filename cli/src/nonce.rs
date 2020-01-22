@@ -49,13 +49,23 @@ pub trait NonceSubCommands {
     fn nonce_subcommands(self) -> Self;
 }
 
-fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("nonce_authority")
-        .long("nonce-authority")
+pub fn nonce_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(NONCE_ARG.name)
+        .long(NONCE_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR")
+        .value_name("PUBKEY")
+        .requires("blockhash")
+        .validator(is_pubkey)
+        .help(NONCE_ARG.help)
+}
+
+pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(NONCE_AUTHORITY_ARG.name)
+        .long(NONCE_AUTHORITY_ARG.long)
+        .takes_value(true)
+        .value_name("KEYPAIR or PUBKEY")
         .validator(is_pubkey_or_keypair_or_ask_keyword)
-        .help("Specify nonce authority if different from account")
+        .help(NONCE_AUTHORITY_ARG.help)
 }
 
 impl NonceSubCommands for App<'_, '_> {
@@ -120,8 +130,8 @@ impl NonceSubCommands for App<'_, '_> {
                         .help("Specify unit to use for request"),
                 )
                 .arg(
-                    Arg::with_name("nonce_authority")
-                        .long("nonce-authority")
+                    Arg::with_name(NONCE_AUTHORITY_ARG.name)
+                        .long(NONCE_AUTHORITY_ARG.long)
                         .takes_value(true)
                         .value_name("BASE58_PUBKEY")
                         .validator(is_pubkey_or_keypair)
@@ -246,7 +256,7 @@ pub fn parse_nonce_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
     let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let lamports = required_lamports_from(matches, "amount", "unit")?;
-    let nonce_authority = pubkey_of(matches, "nonce_authority");
+    let nonce_authority = pubkey_of(matches, NONCE_AUTHORITY_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateNonceAccount {
