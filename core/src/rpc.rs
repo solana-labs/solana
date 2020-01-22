@@ -1,12 +1,8 @@
 //! The `rpc` module implements the Solana RPC interface.
 
 use crate::{
-    cluster_info::ClusterInfo,
-    commitment::{BlockCommitment, BlockCommitmentCache},
-    contact_info::ContactInfo,
-    packet::PACKET_DATA_SIZE,
-    storage_stage::StorageState,
-    validator::ValidatorExit,
+    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, contact_info::ContactInfo,
+    packet::PACKET_DATA_SIZE, storage_stage::StorageState, validator::ValidatorExit,
 };
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
@@ -200,10 +196,12 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    fn get_block_commitment(&self, block: Slot) -> RpcBlockCommitment<BlockCommitment> {
+    fn get_block_commitment(&self, block: Slot) -> RpcBlockCommitment<[u64; MAX_LOCKOUT_HISTORY]> {
         let r_block_commitment = self.block_commitment_cache.read().unwrap();
         RpcBlockCommitment {
-            commitment: r_block_commitment.get_block_commitment(block).cloned(),
+            commitment: r_block_commitment
+                .get_block_commitment(block)
+                .map(|block_commitment| block_commitment.commitment),
             total_stake: r_block_commitment.total_stake(),
         }
     }
@@ -479,7 +477,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         block: Slot,
-    ) -> Result<RpcBlockCommitment<BlockCommitment>>;
+    ) -> Result<RpcBlockCommitment<[u64; MAX_LOCKOUT_HISTORY]>>;
 
     #[rpc(meta, name = "getGenesisHash")]
     fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
@@ -766,7 +764,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         block: Slot,
-    ) -> Result<RpcBlockCommitment<BlockCommitment>> {
+    ) -> Result<RpcBlockCommitment<[u64; MAX_LOCKOUT_HISTORY]>> {
         Ok(meta
             .request_processor
             .read()
@@ -1102,6 +1100,7 @@ impl RpcSol for RpcSolImpl {
 pub mod tests {
     use super::*;
     use crate::{
+        commitment::BlockCommitment,
         contact_info::ContactInfo,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
@@ -2001,14 +2000,14 @@ pub mod tests {
         assert_eq!(
             request_processor.get_block_commitment(0),
             RpcBlockCommitment {
-                commitment: Some(commitment_slot0),
+                commitment: Some(commitment_slot0.commitment),
                 total_stake: 42,
             }
         );
         assert_eq!(
             request_processor.get_block_commitment(1),
             RpcBlockCommitment {
-                commitment: Some(commitment_slot1),
+                commitment: Some(commitment_slot1.commitment),
                 total_stake: 42,
             }
         );
@@ -2054,7 +2053,7 @@ pub mod tests {
                 .read()
                 .unwrap()
                 .get_block_commitment(0)
-                .cloned()
+                .map(|block_commitment| block_commitment.commitment)
         );
         assert_eq!(total_stake, 42);
 
@@ -2063,7 +2062,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let commitment_response: RpcBlockCommitment<BlockCommitment> =
+        let commitment_response: RpcBlockCommitment<[u64; MAX_LOCKOUT_HISTORY]> =
             if let Response::Single(res) = result {
                 if let Output::Success(res) = res {
                     serde_json::from_value(res.result).unwrap()

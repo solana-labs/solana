@@ -12,7 +12,7 @@ use std::{
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BlockCommitment {
-    commitment: [u64; MAX_LOCKOUT_HISTORY],
+    pub commitment: [u64; MAX_LOCKOUT_HISTORY],
 }
 
 impl BlockCommitment {
