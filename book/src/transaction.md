@@ -8,9 +8,9 @@ A transaction contains a [compact-array](#Compact-Array-Format) of signatures,
 followed by a [message](#Message-Format).  Each item in the signatures array is
 a [digital signature](#Signature-Format) of the given message. The Solana
 runtime verifies that the number of signatures matches the number in the first
-8 bits of the [message header](#Message-Header-Format). It also verifies the
-signature was signed by the private key corresponding to the public key at the
-same index in the message's account addresses vector.
+8 bits of the [message header](#Message-Header-Format). It also verifies that
+each signature was signed by the private key corresponding to the public key at
+the same index in the message's account addresses array.
 
 ### Signature Format
 
@@ -26,14 +26,20 @@ recent [blockhash](#Blockhash-Format), followed by a compact-array of
 
 ### Message Header Format
 
-The message header contains three unsigned 8-bit values. The first value is a
+The message header contains three unsigned 8-bit values. The first value is the
 number of required signatures in the containing transaction. The second value
-is the number of read-only account addresses requiring signatures. These will
-be the first addresses in the message's vector of account addresses.  The third
-value in the header is the number of read-only account addresses not requiring
-signatures. These addresses immediately follow the addresses that require
-signatures. The remaining addresses are used to request write access to the
-cooresponding accounts.
+is the number of those corresponding account addresses that are read-only.  The
+third value in the message header is the number of read-only account addresses
+not requiring signatures.
+
+### Account Addresses Format
+
+The addresses that require signatures appear at the beginning of the account
+address array, with addresses requesting write access first and read-only
+accounts following. The addresses that do not require signatures follow the
+addresses that do, again with read-write accounts first and read-only accounts
+following.
+
 
 ### Blockhash Format
 
@@ -48,8 +54,8 @@ An instruction contains a program ID index, followed by a compact-array of
 account address indexes, followed by a compact-array of opaque 8-bit data. The
 program ID index is used to identify an on-chain program that can interpret the
 opaque data.  The program ID index is an unsigned 8-bit index to an account
-address in the message's vector of account addresses. The account address
-indexes are each an unsigned 8-bit index into that same vector.
+address in the message's array of account addresses. The account address
+indexes are each an unsigned 8-bit index into that same array.
 
 
 ## Compact-Array Format
