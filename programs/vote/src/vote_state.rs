@@ -151,14 +151,6 @@ pub struct VoteState {
     pub votes: VecDeque<Lockout>,
     pub root_slot: Option<u64>,
 
-    /// clock epoch
-    epoch: Epoch,
-    /// clock credits earned, monotonically increasing
-    credits: u64,
-
-    /// credits as of previous epoch
-    last_epoch_credits: u64,
-
     /// history of how many credits earned by the end of each epoch
     ///  each tuple is (Epoch, credits, prev_credits)
     epoch_credits: Vec<(Epoch, u64, u64)>,
@@ -322,31 +314,37 @@ impl VoteState {
 
     /// increment credits, record credits for last epoch if new epoch
     pub fn increment_credits(&mut self, epoch: Epoch) {
-        // record credits by epoch
+        // increment credits, record by epoch
 
-        if epoch != self.epoch {
-            // encode the delta, but be able to return partial for stakers who
-            //   attach halfway through an epoch
-            if self.credits > 0 {
-                self.epoch_credits
-                    .push((self.epoch, self.credits, self.last_epoch_credits));
+        // never seen a credit
+        if self.epoch_credits.is_empty() {
+            self.epoch_credits.push((epoch, 0, 0));
+        } else if epoch != self.epoch_credits.last().unwrap().0 {
+            let (_, credits, prev_credits) = *self.epoch_credits.last().unwrap();
+
+            if credits != prev_credits {
+                // if credits were earned previous epoch
+                // append entry at end of list for the new epoch
+                self.epoch_credits.push((epoch, credits, credits));
+            } else {
+                // else just move the current epoch
+                self.epoch_credits.last_mut().unwrap().0 = epoch;
             }
+
             // if stakers do not claim before the epoch goes away they lose the
             //  credits...
             if self.epoch_credits.len() > MAX_EPOCH_CREDITS_HISTORY {
                 self.epoch_credits.remove(0);
             }
-            self.epoch = epoch;
-            self.last_epoch_credits = self.credits;
         }
 
-        self.credits += 1;
+        self.epoch_credits.last_mut().unwrap().1 += 1;
     }
 
     /// "unchecked" functions used by tests and Tower
     pub fn process_vote_unchecked(&mut self, vote: &Vote) {
         let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
-        let _ignored = self.process_vote(vote, &slot_hashes, self.epoch);
+        let _ignored = self.process_vote(vote, &slot_hashes, self.current_epoch());
     }
     pub fn process_slot_vote_unchecked(&mut self, slot: Slot) {
         self.process_vote_unchecked(&Vote::new(vec![slot], Hash::default()));
@@ -361,10 +359,22 @@ impl VoteState {
         }
     }
 
+    fn current_epoch(&self) -> Epoch {
+        if self.epoch_credits.is_empty() {
+            0
+        } else {
+            self.epoch_credits.last().unwrap().0
+        }
+    }
+
     /// Number of "credits" owed to this account from the mining pool. Submit this
     /// VoteState to the Rewards program to trade credits for lamports.
     pub fn credits(&self) -> u64 {
-        self.credits
+        if self.epoch_credits.is_empty() {
+            0
+        } else {
+            self.epoch_credits.last().unwrap().1
+        }
     }
 
     /// Number of "credits" owed to this account from the mining pool on a per-epoch basis,
@@ -1022,10 +1032,10 @@ mod tests {
             vote_state.process_slot_vote_unchecked(i as u64);
         }
 
-        assert_eq!(vote_state.credits, 0);
+        assert_eq!(vote_state.credits(), 0);
 
         vote_state.process_slot_vote_unchecked(MAX_LOCKOUT_HISTORY as u64 + 1);
-        assert_eq!(vote_state.credits, 1);
+        assert_eq!(vote_state.credits(), 1);
         vote_state.process_slot_vote_unchecked(MAX_LOCKOUT_HISTORY as u64 + 2);
         assert_eq!(vote_state.credits(), 2);
         vote_state.process_slot_vote_unchecked(MAX_LOCKOUT_HISTORY as u64 + 3);
@@ -1329,7 +1339,7 @@ mod tests {
             }
             expected.push((epoch, credits, credits - epoch));
         }
-        expected.pop(); // last one doesn't count, doesn't get saved off
+
         while expected.len() > MAX_EPOCH_CREDITS_HISTORY {
             expected.remove(0);
         }
@@ -1344,10 +1354,10 @@ mod tests {
 
         assert_eq!(vote_state.epoch_credits().len(), 0);
         vote_state.increment_credits(1);
-        assert_eq!(vote_state.epoch_credits().len(), 0);
+        assert_eq!(vote_state.epoch_credits().len(), 1);
 
         vote_state.increment_credits(2);
-        assert_eq!(vote_state.epoch_credits().len(), 1);
+        assert_eq!(vote_state.epoch_credits().len(), 2);
     }
 
     #[test]

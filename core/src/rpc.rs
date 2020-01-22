@@ -2381,7 +2381,13 @@ pub mod tests {
         assert_ne!(leader_info.activated_stake, 0);
         // Subtract one because the last vote always carries over to the next epoch
         let expected_credits = TEST_SLOTS_PER_EPOCH - MAX_LOCKOUT_HISTORY as u64 - 1;
-        assert_eq!(leader_info.epoch_credits, vec![(0, expected_credits, 0)]);
+        assert_eq!(
+            leader_info.epoch_credits,
+            vec![
+                (0, expected_credits, 0),
+                (1, expected_credits + 1, expected_credits) // one vote in current epoch
+            ]
+        );
 
         // Advance bank with no voting
         bank.freeze();
