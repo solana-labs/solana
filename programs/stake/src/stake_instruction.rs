@@ -18,6 +18,9 @@ use thiserror::Error;
 /// Reasons the stake might have had an error
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum StakeError {
+    #[error("not enough credits to redeem")]
+    NoCreditsToRedeem,
+
     #[error("lockup has not yet expired")]
     LockupInForce,
 
@@ -728,8 +731,8 @@ mod tests {
             }
         }
         assert_eq!(
-            "CustomError(0): StakeError::LockupInForce - lockup has not yet expired",
-            pretty_err::<StakeError>(StakeError::LockupInForce.into())
+            "CustomError(0): StakeError::NoCreditsToRedeem - not enough credits to redeem",
+            pretty_err::<StakeError>(StakeError::NoCreditsToRedeem.into())
         )
     }
 }
