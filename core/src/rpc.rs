@@ -532,7 +532,7 @@ pub trait RpcSol {
     ) -> Result<String>;
 
     #[rpc(meta, name = "sendTransaction")]
-    fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String>;
+    fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String>;
 
     #[rpc(meta, name = "getSlotLeader")]
     fn get_slot_leader(
@@ -958,7 +958,8 @@ impl RpcSol for RpcSolImpl {
         }
     }
 
-    fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
+    fn send_transaction(&self, meta: Self::Metadata, data: String) -> Result<String> {
+        let data = bs58::decode(data).into_vec().unwrap();
         if data.len() >= PACKET_DATA_SIZE {
             info!(
                 "send_transaction: transaction too large: {} bytes (max: {} bytes)",
@@ -1833,8 +1834,7 @@ pub mod tests {
             genesis_hash: Hash::default(),
         };
 
-        let req =
-            r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":[[0,0,0,0,0,0,0,0]]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
         let res = io.handle_request_sync(req, meta.clone());
         let expected =
             r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":1}"#;

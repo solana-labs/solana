@@ -42,14 +42,14 @@ fn test_rpc_send_tx() {
 
     info!("blockhash: {:?}", blockhash);
     let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
-    let serial_tx = serialize(&tx).unwrap();
+    let serialized_encoded_tx = bs58::encode(serialize(&tx).unwrap()).into_string();
 
     let client = reqwest::blocking::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
        "method": "sendTransaction",
-       "params": json!([serial_tx])
+       "params": json!([serialized_encoded_tx])
     });
     let rpc_addr = leader_data.rpc;
     let rpc_string = get_rpc_request_str(rpc_addr, false);
