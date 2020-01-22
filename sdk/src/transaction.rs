@@ -601,4 +601,29 @@ mod tests {
         );
         assert!(tx.is_signed());
     }
+
+    #[test]
+    fn test_transaction_instruction_with_duplicate_keys() {
+        let program_id = Pubkey::default();
+        let keypair0 = Keypair::new();
+        let id0 = keypair0.pubkey();
+        let id1 = Pubkey::new_rand();
+        let ix = Instruction::new(
+            program_id,
+            &0,
+            vec![
+                AccountMeta::new(id0, true),
+                AccountMeta::new(id1, false),
+                AccountMeta::new(id0, false),
+                AccountMeta::new(id1, false),
+            ],
+        );
+        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
+        tx.sign(&[&keypair0], Hash::default());
+        assert_eq!(
+            tx.message.instructions[0],
+            CompiledInstruction::new(2, &0, vec![0, 1, 0, 1])
+        );
+        assert!(tx.is_signed());
+    }
 }

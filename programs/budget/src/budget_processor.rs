@@ -33,8 +33,8 @@ fn apply_signature(
         if let Some(key) = witness_keyed_account.signer_key() {
             if &payment.to == key {
                 budget_state.pending_budget = None;
-                contract_keyed_account.account.lamports -= payment.lamports;
-                witness_keyed_account.account.lamports += payment.lamports;
+                contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
+                witness_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
                 return Ok(());
             }
         }
@@ -44,8 +44,8 @@ fn apply_signature(
             return Err(BudgetError::DestinationMissing.into());
         }
         budget_state.pending_budget = None;
-        contract_keyed_account.account.lamports -= payment.lamports;
-        to_keyed_account.account.lamports += payment.lamports;
+        contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
+        to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
     }
     Ok(())
 }
@@ -75,8 +75,8 @@ fn apply_timestamp(
             return Err(BudgetError::DestinationMissing.into());
         }
         budget_state.pending_budget = None;
-        contract_keyed_account.account.lamports -= payment.lamports;
-        to_keyed_account.account.lamports += payment.lamports;
+        contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
+        to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
     }
     Ok(())
 }
@@ -93,8 +93,8 @@ fn apply_account_data(
 
     if let Some(ref mut expr) = budget_state.pending_budget {
         let key = witness_keyed_account.unsigned_key();
-        let program_id = witness_keyed_account.account.owner;
-        let actual_hash = hash(&witness_keyed_account.account.data);
+        let program_id = witness_keyed_account.owner()?;
+        let actual_hash = hash(&witness_keyed_account.try_account_ref()?.data);
         expr.apply_witness(&Witness::AccountData(actual_hash, program_id), key);
         final_payment = expr.final_payment();
     }
@@ -106,8 +106,8 @@ fn apply_account_data(
             return Err(BudgetError::DestinationMissing.into());
         }
         budget_state.pending_budget = None;
-        contract_keyed_account.account.lamports -= payment.lamports;
-        to_keyed_account.account.lamports += payment.lamports;
+        contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
+        to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
     }
     Ok(())
 }
@@ -129,11 +129,12 @@ pub fn process_instruction(
             if let Some(payment) = expr.final_payment() {
                 let to_keyed_account = contract_keyed_account;
                 let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-                contract_keyed_account.account.lamports = 0;
-                to_keyed_account.account.lamports += payment.lamports;
+                contract_keyed_account.try_account_ref_mut()?.lamports = 0;
+                to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
                 return Ok(());
             }
-            let existing = BudgetState::deserialize(&contract_keyed_account.account.data).ok();
+            let existing =
+                BudgetState::deserialize(&contract_keyed_account.try_account_ref_mut()?.data).ok();
             if Some(true) == existing.map(|x| x.initialized) {
                 trace!("contract already exists");
                 return Err(InstructionError::AccountAlreadyInitialized);
@@ -141,12 +142,13 @@ pub fn process_instruction(
             let mut budget_state = BudgetState::default();
             budget_state.pending_budget = Some(*expr);
             budget_state.initialized = true;
-            budget_state.serialize(&mut contract_keyed_account.account.data)
+            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
             let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
             let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let mut budget_state = BudgetState::deserialize(&contract_keyed_account.account.data)?;
+            let mut budget_state =
+                BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data)?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }
@@ -166,12 +168,13 @@ pub fn process_instruction(
                 dt,
             )?;
             trace!("apply timestamp committed");
-            budget_state.serialize(&mut contract_keyed_account.account.data)
+            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
         }
         BudgetInstruction::ApplySignature => {
             let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
             let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let mut budget_state = BudgetState::deserialize(&contract_keyed_account.account.data)?;
+            let mut budget_state =
+                BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data)?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }
@@ -190,12 +193,13 @@ pub fn process_instruction(
                 next_keyed_account(keyed_accounts_iter),
             )?;
             trace!("apply signature committed");
-            budget_state.serialize(&mut contract_keyed_account.account.data)
+            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
         }
         BudgetInstruction::ApplyAccountData => {
             let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
             let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let mut budget_state = BudgetState::deserialize(&contract_keyed_account.account.data)?;
+            let mut budget_state =
+                BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data)?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }
@@ -210,7 +214,7 @@ pub fn process_instruction(
                 next_keyed_account(keyed_accounts_iter),
             )?;
             trace!("apply account data committed");
-            budget_state.serialize(&mut contract_keyed_account.account.data)
+            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
         }
     }
 }

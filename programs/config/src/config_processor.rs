@@ -14,18 +14,20 @@ pub fn process_instruction(
     data: &[u8],
 ) -> Result<(), InstructionError> {
     let key_list: ConfigKeys = limited_deserialize(data)?;
-    let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
+    let keyed_accounts_iter = &mut keyed_accounts.iter();
     let config_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
-    let current_data: ConfigKeys =
-        deserialize(&config_keyed_account.account.data).map_err(|err| {
+    let current_data: ConfigKeys = {
+        let config_account = config_keyed_account.try_account_ref_mut()?;
+        deserialize(&config_account.data).map_err(|err| {
             error!(
                 "Unable to deserialize account[0]: {:?} (len={}): {:?}",
-                config_keyed_account.account.data,
-                config_keyed_account.account.data.len(),
+                config_account.data,
+                config_account.data.len(),
                 err
             );
             InstructionError::InvalidAccountData
-        })?;
+        })?
+    };
     let current_signer_keys: Vec<Pubkey> = current_data
         .keys
         .iter()
@@ -89,12 +91,12 @@ pub fn process_instruction(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    if config_keyed_account.account.data.len() < data.len() {
+    if config_keyed_account.data_len()? < data.len() {
         error!("instruction data too large");
         return Err(InstructionError::InvalidInstructionData);
     }
 
-    config_keyed_account.account.data[0..data.len()].copy_from_slice(&data);
+    config_keyed_account.try_account_ref_mut()?.data[0..data.len()].copy_from_slice(&data);
     Ok(())
 }
 
@@ -109,6 +111,7 @@ mod tests {
         signature::{Keypair, KeypairUtil},
         system_instruction::SystemInstruction,
     };
+    use std::cell::RefCell;
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct MyConfig {
@@ -134,7 +137,7 @@ mod tests {
         }
     }
 
-    fn create_config_account(keys: Vec<(Pubkey, bool)>) -> (Keypair, Account) {
+    fn create_config_account(keys: Vec<(Pubkey, bool)>) -> (Keypair, RefCell<Account>) {
         let from_pubkey = Pubkey::new_rand();
         let config_keypair = Keypair::new();
         let config_pubkey = config_keypair.pubkey();
@@ -151,10 +154,10 @@ mod tests {
             } => space,
             _ => panic!("Not a CreateAccount system instruction"),
         };
-        let mut config_account = Account {
+        let mut config_account = RefCell::new(Account {
             data: vec![0; space as usize],
             ..Account::default()
-        };
+        });
         let mut accounts = vec![(&config_pubkey, true, &mut config_account)];
         let mut keyed_accounts = create_keyed_is_signer_accounts(&mut accounts);
         assert_eq!(
@@ -172,7 +175,7 @@ mod tests {
         let (_, config_account) = create_config_account(keys.clone());
         assert_eq!(
             Some(MyConfig::default()),
-            deserialize(get_config_data(&config_account.data).unwrap()).ok()
+            deserialize(get_config_data(&config_account.borrow().data).unwrap()).ok()
         );
     }
 
@@ -193,7 +196,7 @@ mod tests {
         );
         assert_eq!(
             Some(my_config),
-            deserialize(get_config_data(&config_account.data).unwrap()).ok()
+            deserialize(get_config_data(&config_account.borrow().data).unwrap()).ok()
         );
     }
 
@@ -250,8 +253,8 @@ mod tests {
         let my_config = MyConfig::new(42);
 
         let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
-        let mut signer0_account = Account::default();
-        let mut signer1_account = Account::default();
+        let mut signer0_account = RefCell::new(Account::default());
+        let mut signer1_account = RefCell::new(Account::default());
         let mut accounts = vec![
             (&config_pubkey, true, &mut config_account),
             (&signer0_pubkey, true, &mut signer0_account),
@@ -262,11 +265,11 @@ mod tests {
             process_instruction(&id(), &mut keyed_accounts, &instruction.data),
             Ok(())
         );
-        let meta_data: ConfigKeys = deserialize(&config_account.data).unwrap();
+        let meta_data: ConfigKeys = deserialize(&config_account.borrow().data).unwrap();
         assert_eq!(meta_data.keys, keys);
         assert_eq!(
             Some(my_config),
-            deserialize(get_config_data(&config_account.data).unwrap()).ok()
+            deserialize(get_config_data(&config_account.borrow().data).unwrap()).ok()
         );
     }
 
@@ -282,7 +285,7 @@ mod tests {
 
         let instruction =
             config_instruction::store(&config_pubkey, false, keys.clone(), &my_config);
-        let mut signer0_account = Account::default();
+        let mut signer0_account = RefCell::new(Account::default());
         let mut accounts = vec![(&signer0_pubkey, true, &mut signer0_account)];
         let mut keyed_accounts = create_keyed_is_signer_accounts(&mut accounts);
         assert_eq!(
@@ -296,8 +299,8 @@ mod tests {
         solana_logger::setup();
         let signer0_pubkey = Pubkey::new_rand();
         let signer1_pubkey = Pubkey::new_rand();
-        let mut signer0_account = Account::default();
-        let mut signer1_account = Account::default();
+        let mut signer0_account = RefCell::new(Account::default());
+        let mut signer1_account = RefCell::new(Account::default());
         let keys = vec![(signer0_pubkey, true)];
         let (config_keypair, mut config_account) = create_config_account(keys.clone());
         let config_pubkey = config_keypair.pubkey();
@@ -335,9 +338,9 @@ mod tests {
         let signer0_pubkey = Pubkey::new_rand();
         let signer1_pubkey = Pubkey::new_rand();
         let signer2_pubkey = Pubkey::new_rand();
-        let mut signer0_account = Account::default();
-        let mut signer1_account = Account::default();
-        let mut signer2_account = Account::default();
+        let mut signer0_account = RefCell::new(Account::default());
+        let mut signer1_account = RefCell::new(Account::default());
+        let mut signer2_account = RefCell::new(Account::default());
         let keys = vec![
             (pubkey, false),
             (signer0_pubkey, true),
@@ -373,11 +376,11 @@ mod tests {
             process_instruction(&id(), &mut keyed_accounts, &instruction.data),
             Ok(())
         );
-        let meta_data: ConfigKeys = deserialize(&config_account.data).unwrap();
+        let meta_data: ConfigKeys = deserialize(&config_account.borrow().data).unwrap();
         assert_eq!(meta_data.keys, keys);
         assert_eq!(
             new_config,
-            MyConfig::deserialize(get_config_data(&config_account.data).unwrap()).unwrap()
+            MyConfig::deserialize(get_config_data(&config_account.borrow().data).unwrap()).unwrap()
         );
 
         // Attempt update with incomplete signatures
@@ -420,7 +423,7 @@ mod tests {
         solana_logger::setup();
         let pubkey = Pubkey::new_rand();
         let signer0_pubkey = Pubkey::new_rand();
-        let mut signer0_account = Account::default();
+        let mut signer0_account = RefCell::new(Account::default());
         let keys = vec![
             (pubkey, false),
             (signer0_pubkey, true),
@@ -460,11 +463,11 @@ mod tests {
             process_instruction(&id(), &mut keyed_accounts, &instruction.data),
             Ok(())
         );
-        let meta_data: ConfigKeys = deserialize(&config_account.data).unwrap();
+        let meta_data: ConfigKeys = deserialize(&config_account.borrow().data).unwrap();
         assert_eq!(meta_data.keys, keys);
         assert_eq!(
             new_config,
-            MyConfig::deserialize(get_config_data(&config_account.data).unwrap()).unwrap()
+            MyConfig::deserialize(get_config_data(&config_account.borrow().data).unwrap()).unwrap()
         );
 
         // Attempt update with incomplete signatures

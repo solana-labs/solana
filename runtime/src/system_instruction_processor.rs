@@ -151,20 +151,20 @@ fn transfer(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    if !from.account.data.is_empty() {
+    if !from.data_is_empty()? {
         debug!("Transfer: `from` must not carry data");
         return Err(InstructionError::InvalidArgument);
     }
-
-    if lamports > from.account.lamports {
+    if lamports > from.lamports()? {
         debug!(
             "Transfer: insufficient lamports ({}, need {})",
-            from.account.lamports, lamports
+            from.lamports()?,
+            lamports
         );
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
 
-    from.account.lamports -= lamports;
+    from.try_account_ref_mut()?.lamports -= lamports;
     to.lamports += lamports;
     Ok(())
 }
@@ -190,10 +190,11 @@ pub fn process_instruction(
         } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
+            let mut to_account = to.try_account_ref_mut()?;
             let to_address = Address::create(to.unsigned_key(), None)?;
             create_account(
                 from,
-                to.account,
+                &mut to_account,
                 &to_address,
                 lamports,
                 space,
@@ -210,12 +211,12 @@ pub fn process_instruction(
         } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
+            let mut to_account = to.try_account_ref_mut()?;
             let to_address =
                 Address::create(&to.unsigned_key(), Some((&base, &seed, &program_id)))?;
-
             create_account(
                 from,
-                to.account,
+                &mut to_account,
                 &to_address,
                 lamports,
                 space,
@@ -225,13 +226,14 @@ pub fn process_instruction(
         }
         SystemInstruction::Assign { program_id } => {
             let keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None)?;
-            assign(keyed_account.account, &address, &program_id, &signers)
+            assign(&mut account, &address, &program_id, &signers)
         }
         SystemInstruction::Transfer { lamports } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
-            let to = next_keyed_account(keyed_accounts_iter)?;
-            transfer(from, to.account, lamports)
+            let mut to_account = next_keyed_account(keyed_accounts_iter)?.try_account_ref_mut()?;
+            transfer(from, &mut to_account, lamports)
         }
         SystemInstruction::AdvanceNonceAccount => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
@@ -265,9 +267,9 @@ pub fn process_instruction(
         }
         SystemInstruction::Allocate { space } => {
             let keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None)?;
-
-            allocate(keyed_account.account, &address, space, &signers)
+            allocate(&mut account, &address, space, &signers)
         }
         SystemInstruction::AllocateWithSeed {
             base,
@@ -276,17 +278,12 @@ pub fn process_instruction(
             program_id,
         } => {
             let keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(
                 keyed_account.unsigned_key(),
                 Some((&base, &seed, &program_id)),
             )?;
-            allocate_and_assign(
-                keyed_account.account,
-                &address,
-                space,
-                &program_id,
-                &signers,
-            )
+            allocate_and_assign(&mut account, &address, space, &program_id, &signers)
         }
         SystemInstruction::AssignWithSeed {
             base,
@@ -294,12 +291,13 @@ pub fn process_instruction(
             program_id,
         } => {
             let keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(
                 keyed_account.unsigned_key(),
                 Some((&base, &seed, &program_id)),
             )?;
 
-            assign(keyed_account.account, &address, &program_id, &signers)
+            assign(&mut account, &address, &program_id, &signers)
         }
     }
 }
@@ -341,6 +339,7 @@ mod tests {
         system_instruction, system_program, sysvar,
         transaction::TransactionError,
     };
+    use std::cell::RefCell;
 
     impl From<Pubkey> for Address {
         fn from(address: Pubkey) -> Self {
@@ -351,13 +350,29 @@ mod tests {
         }
     }
 
+    fn create_default_account() -> RefCell<Account> {
+        RefCell::new(Account::default())
+    }
+    fn create_default_recent_blockhashes_account() -> RefCell<Account> {
+        RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
+            1,
+            vec![(0u64, &Hash::default()); 32].into_iter(),
+        ))
+    }
+    fn create_default_rent_account() -> RefCell<Account> {
+        RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
+            1,
+            vec![(0u64, &Hash::default()); 32].into_iter(),
+        ))
+    }
+
     #[test]
     fn test_create_account() {
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
         let to = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &system_program::id());
-        let mut to_account = Account::new(0, 0, &Pubkey::default());
+        let mut from_account = Account::new_ref(100, 0, &system_program::id());
+        let mut to_account = Account::new_ref(0, 0, &Pubkey::default());
 
         assert_eq!(
             process_instruction(
@@ -375,10 +390,10 @@ mod tests {
             ),
             Ok(())
         );
-        assert_eq!(from_account.lamports, 50);
-        assert_eq!(to_account.lamports, 50);
-        assert_eq!(to_account.owner, new_program_owner);
-        assert_eq!(to_account.data, [0, 0]);
+        assert_eq!(from_account.borrow().lamports, 50);
+        assert_eq!(to_account.borrow().lamports, 50);
+        assert_eq!(to_account.borrow().owner, new_program_owner);
+        assert_eq!(to_account.borrow().data, [0, 0]);
     }
 
     #[test]
@@ -388,8 +403,8 @@ mod tests {
         let seed = "shiny pepper";
         let to = create_address_with_seed(&from, seed, &new_program_owner).unwrap();
 
-        let mut from_account = Account::new(100, 0, &system_program::id());
-        let mut to_account = Account::new(0, 0, &Pubkey::default());
+        let mut from_account = Account::new_ref(100, 0, &system_program::id());
+        let mut to_account = Account::new_ref(0, 0, &Pubkey::default());
 
         assert_eq!(
             process_instruction(
@@ -409,10 +424,10 @@ mod tests {
             ),
             Ok(())
         );
-        assert_eq!(from_account.lamports, 50);
-        assert_eq!(to_account.lamports, 50);
-        assert_eq!(to_account.owner, new_program_owner);
-        assert_eq!(to_account.data, [0, 0]);
+        assert_eq!(from_account.borrow().lamports, 50);
+        assert_eq!(to_account.borrow().lamports, 50);
+        assert_eq!(to_account.borrow().owner, new_program_owner);
+        assert_eq!(to_account.borrow().data, [0, 0]);
     }
 
     #[test]
@@ -435,13 +450,13 @@ mod tests {
         let seed = "dull boy";
         let to = create_address_with_seed(&from, seed, &new_program_owner).unwrap();
 
-        let mut from_account = Account::new(100, 0, &system_program::id());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
         let mut to_account = Account::new(0, 0, &Pubkey::default());
         let to_address = Address::create(&to, Some((&from, seed, &new_program_owner))).unwrap();
 
         assert_eq!(
             create_account(
-                &mut KeyedAccount::new(&from, false, &mut from_account),
+                &mut KeyedAccount::new(&from, false, &from_account),
                 &mut to_account,
                 &to_address,
                 50,
@@ -451,7 +466,7 @@ mod tests {
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
-        assert_eq!(from_account.lamports, 100);
+        assert_eq!(from_account.borrow().lamports, 100);
         assert_eq!(to_account, Account::default());
     }
 
@@ -460,14 +475,14 @@ mod tests {
         // create account with zero lamports tranferred
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 1, &Pubkey::new_rand()); // not from system account
+        let from_account = Account::new_ref(100, 1, &Pubkey::new_rand()); // not from system account
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
 
         assert_eq!(
             create_account(
-                &mut KeyedAccount::new(&from, false, &mut from_account), // no signer
+                &mut KeyedAccount::new(&from, false, &from_account), // no signer
                 &mut to_account,
                 &to.into(),
                 0,
@@ -478,7 +493,7 @@ mod tests {
             Ok(())
         );
 
-        let from_lamports = from_account.lamports;
+        let from_lamports = from_account.borrow().lamports;
         let to_lamports = to_account.lamports;
         let to_owner = to_account.owner;
         let to_data = to_account.data.clone();
@@ -493,7 +508,7 @@ mod tests {
         // Attempt to create account with more lamports than remaining in from_account
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut from_account = Account::new_ref(100, 0, &system_program::id());
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
@@ -512,7 +527,7 @@ mod tests {
 
     #[test]
     fn test_request_more_than_allowed_data_length() {
-        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut from_account = Account::new_ref(100, 0, &system_program::id());
         let from = Pubkey::new_rand();
         let mut to_account = Account::default();
         let to = Pubkey::new_rand();
@@ -556,7 +571,7 @@ mod tests {
         // Attempt to create system account in account already owned by another program
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &system_program::id());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let original_program_owner = Pubkey::new(&[5; 32]);
         let owned_key = Pubkey::new_rand();
@@ -567,7 +582,7 @@ mod tests {
         let owned_address = owned_key.into();
 
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&from, true, &from_account),
             &mut owned_account,
             &owned_address,
             50,
@@ -577,7 +592,7 @@ mod tests {
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
 
-        let from_lamports = from_account.lamports;
+        let from_lamports = from_account.borrow().lamports;
         assert_eq!(from_lamports, 100);
         assert_eq!(owned_account, unchanged_account);
 
@@ -585,7 +600,7 @@ mod tests {
         let mut owned_account = Account::new(0, 1, &Pubkey::default());
         let unchanged_account = owned_account.clone();
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&from, true, &from_account),
             &mut owned_account,
             &owned_address,
             50,
@@ -594,14 +609,14 @@ mod tests {
             &signers,
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
-        let from_lamports = from_account.lamports;
+        let from_lamports = from_account.borrow().lamports;
         assert_eq!(from_lamports, 100);
         assert_eq!(owned_account, unchanged_account);
 
         // Verify that create_account works even if `to` has a non-zero balance
         let mut owned_account = Account::new(1, 0, &Pubkey::default());
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &mut KeyedAccount::new(&from, true, &from_account),
             &mut owned_account,
             &owned_address,
             50,
@@ -610,7 +625,7 @@ mod tests {
             &signers,
         );
         assert_eq!(result, Ok(()));
-        assert_eq!(from_account.lamports, from_lamports - 50);
+        assert_eq!(from_account.borrow().lamports, from_lamports - 50);
         assert_eq!(owned_account.lamports, 1 + 50);
     }
 
@@ -619,7 +634,7 @@ mod tests {
         // Attempt to create an account without signing the transfer
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut from_account = Account::new_ref(100, 0, &system_program::id());
 
         let owned_key = Pubkey::new_rand();
         let mut owned_account = Account::new(0, 0, &Pubkey::default());
@@ -669,7 +684,7 @@ mod tests {
     fn test_create_sysvar_invalid_id() {
         // Attempt to create system account in account already owned by another program
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut from_account = Account::new_ref(100, 0, &system_program::id());
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::default();
@@ -696,7 +711,7 @@ mod tests {
         // Attempt to create system account in account with populated data
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut from_account = Account::new_ref(100, 0, &system_program::id());
 
         let populated_key = Pubkey::new_rand();
         let mut populated_account = Account {
@@ -725,7 +740,7 @@ mod tests {
     #[test]
     fn test_create_from_account_is_nonce_fail() {
         let nonce = Pubkey::new_rand();
-        let mut nonce_account = Account::new_data(
+        let mut nonce_account = Account::new_ref_data(
             42,
             &nonce_state::NonceState::Initialized(
                 nonce_state::Meta::new(&Pubkey::default()),
@@ -783,6 +798,7 @@ mod tests {
             Ok(())
         );
 
+        let mut account = RefCell::new(account);
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
@@ -825,7 +841,7 @@ mod tests {
         assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
 
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut from_account = Account::new_ref(100, 0, &system_program::id());
         // Attempt to transfer with no destination
         let instruction = SystemInstruction::Transfer { lamports: 0 };
         let data = serialize(&instruction).unwrap();
@@ -840,51 +856,40 @@ mod tests {
     #[test]
     fn test_transfer_lamports() {
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
+        let from_account = Account::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
-        transfer(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut to_account,
-            50,
-        )
-        .unwrap();
-        let from_lamports = from_account.lamports;
+        let mut from_keyed_account = KeyedAccount::new(&from, true, &from_account);
+        transfer(&mut from_keyed_account, &mut to_account, 50).unwrap();
+        let from_lamports = from_keyed_account.account.borrow().lamports;
         let to_lamports = to_account.lamports;
         assert_eq!(from_lamports, 50);
         assert_eq!(to_lamports, 51);
 
         // Attempt to move more lamports than remaining in from_account
-        let result = transfer(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
-            &mut to_account,
-            100,
-        );
+        let mut from_keyed_account = KeyedAccount::new(&from, true, &from_account);
+        let result = transfer(&mut from_keyed_account, &mut to_account, 100);
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
-        assert_eq!(from_account.lamports, 50);
+        assert_eq!(from_keyed_account.account.borrow().lamports, 50);
         assert_eq!(to_account.lamports, 51);
 
         // test unsigned transfer of zero
-        assert!(transfer(
-            &mut KeyedAccount::new(&from, false, &mut from_account),
-            &mut to_account,
-            0,
-        )
-        .is_ok(),);
-        assert_eq!(from_account.lamports, 50);
+        let mut from_keyed_account = KeyedAccount::new(&from, false, &from_account);
+        assert!(transfer(&mut from_keyed_account, &mut to_account, 0,).is_ok(),);
+        assert_eq!(from_keyed_account.account.borrow().lamports, 50);
         assert_eq!(to_account.lamports, 51);
     }
 
     #[test]
     fn test_transfer_lamports_from_nonce_account_fail() {
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new_data(
+        let mut from_account = Account::new_ref_data(
             100,
             &nonce_state::NonceState::Initialized(nonce_state::Meta::new(&from), Hash::default()),
             &system_program::id(),
         )
         .unwrap();
         assert_eq!(
-            get_system_account_kind(&from_account),
+            get_system_account_kind(&from_account.borrow()),
             Some(SystemAccountKind::Nonce)
         );
 
@@ -1009,7 +1014,7 @@ mod tests {
             .accounts
             .iter()
             .map(|meta| {
-                if sysvar::recent_blockhashes::check_id(&meta.pubkey) {
+                RefCell::new(if sysvar::recent_blockhashes::check_id(&meta.pubkey) {
                     sysvar::recent_blockhashes::create_account_with_data(
                         1,
                         vec![(0u64, &Hash::default()); 32].into_iter(),
@@ -1018,7 +1023,7 @@ mod tests {
                     sysvar::rent::create_account(1, &Rent::free())
                 } else {
                     Account::default()
-                }
+                })
             })
             .collect();
 
@@ -1068,7 +1073,7 @@ mod tests {
                 &mut [KeyedAccount::new(
                     &Pubkey::default(),
                     true,
-                    &mut Account::default(),
+                    &create_default_account(),
                 ),],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             ),
@@ -1082,11 +1087,11 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default(),),
+                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
-                        &mut Account::default(),
+                        &create_default_account(),
                     ),
                 ],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
@@ -1105,20 +1110,18 @@ mod tests {
                 KeyedAccount::new(
                     &sysvar::recent_blockhashes::id(),
                     false,
-                    &mut sysvar::recent_blockhashes::create_account_with_data(
-                        1,
-                        vec![(0u64, &Hash::default()); 32].into_iter(),
-                    ),
+                    &create_default_recent_blockhashes_account(),
                 ),
-                KeyedAccount::new(
-                    &sysvar::rent::id(),
-                    false,
-                    &mut sysvar::rent::create_account(1, &Rent::free()),
-                ),
+                KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
             ],
             &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
         )
         .unwrap();
+        let new_recent_blockhashes_account =
+            RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
+                1,
+                vec![(0u64, &hash(&serialize(&0).unwrap())); 32].into_iter(),
+            ));
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
@@ -1127,10 +1130,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
-                        &mut sysvar::recent_blockhashes::create_account_with_data(
-                            1,
-                            vec![(0u64, &hash(&serialize(&0).unwrap())); 32].into_iter(),
-                        ),
+                        &new_recent_blockhashes_account,
                     ),
                 ],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
@@ -1172,7 +1172,7 @@ mod tests {
                 &mut [KeyedAccount::new(
                     &Pubkey::default(),
                     true,
-                    &mut Account::default(),
+                    &create_default_account()
                 ),],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
@@ -1186,12 +1186,12 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default(),),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default(),),
+                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
-                        &mut Account::default(),
+                        &create_default_account()
                     ),
                 ],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
@@ -1211,16 +1211,13 @@ mod tests {
                         true,
                         &mut nonce_state::create_account(1_000_000),
                     ),
-                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default(),),
+                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
-                        &mut sysvar::recent_blockhashes::create_account_with_data(
-                            1,
-                            vec![(0u64, &Hash::default()); 32].into_iter(),
-                        ),
+                        &create_default_recent_blockhashes_account(),
                     ),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_account()),
                 ],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
@@ -1239,20 +1236,13 @@ mod tests {
                         true,
                         &mut nonce_state::create_account(1_000_000),
                     ),
-                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default(),),
+                    KeyedAccount::new(&Pubkey::default(), true, &mut create_default_account()),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
-                        &mut sysvar::recent_blockhashes::create_account_with_data(
-                            1,
-                            vec![(0u64, &Hash::default()); 32].into_iter(),
-                        ),
+                        &create_default_recent_blockhashes_account(),
                     ),
-                    KeyedAccount::new(
-                        &sysvar::rent::id(),
-                        false,
-                        &mut sysvar::rent::create_account(1, &Rent::free())
-                    ),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
                 ],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
@@ -1302,7 +1292,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
-                        &mut Account::default(),
+                        &create_default_account()
                     ),
                 ],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
@@ -1325,12 +1315,9 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
-                        &mut sysvar::recent_blockhashes::create_account_with_data(
-                            1,
-                            vec![(0u64, &Hash::default()); 32].into_iter(),
-                        ),
+                        &create_default_recent_blockhashes_account(),
                     ),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &mut Account::default(),),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_account()),
                 ],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
@@ -1352,16 +1339,9 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
-                        &mut sysvar::recent_blockhashes::create_account_with_data(
-                            1,
-                            vec![(0u64, &Hash::default()); 32].into_iter(),
-                        ),
+                        &create_default_recent_blockhashes_account(),
                     ),
-                    KeyedAccount::new(
-                        &sysvar::rent::id(),
-                        false,
-                        &mut sysvar::rent::create_account(1, &Rent::free())
-                    ),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
                 ],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
@@ -1379,16 +1359,9 @@ mod tests {
                 KeyedAccount::new(
                     &sysvar::recent_blockhashes::id(),
                     false,
-                    &mut sysvar::recent_blockhashes::create_account_with_data(
-                        1,
-                        vec![(0u64, &Hash::default()); 32].into_iter(),
-                    ),
+                    &create_default_recent_blockhashes_account(),
                 ),
-                KeyedAccount::new(
-                    &sysvar::rent::id(),
-                    false,
-                    &mut sysvar::rent::create_account(1, &Rent::free()),
-                ),
+                KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
             ],
             &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
         )
@@ -1444,7 +1417,7 @@ mod tests {
     #[test]
     fn test_get_system_account_kind_uninitialized_nonce_account_fail() {
         assert_eq!(
-            get_system_account_kind(&nonce_state::create_account(42)),
+            get_system_account_kind(&nonce_state::create_account(42).borrow()),
             None
         );
     }

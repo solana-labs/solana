@@ -30,10 +30,10 @@ where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn state(&self) -> Result<T, InstructionError> {
-        self.account.state()
+        self.try_account_ref()?.state()
     }
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
-        self.account.set_state(state)
+        self.try_account_ref_mut()?.set_state(state)
     }
 }
 

@@ -11,6 +11,7 @@ use solana_sdk::{
     move_loader::id,
     pubkey::Pubkey,
     sysvar::rent,
+    account_utils::State,
 };
 use types::{
     account_address::AccountAddress,
@@ -177,7 +178,7 @@ impl MoveProcessor {
         let mut keyed_accounts_iter = keyed_accounts.iter();
         let genesis = next_keyed_account(&mut keyed_accounts_iter)?;
 
-        match limited_deserialize(&genesis.account.data)? {
+        match limited_deserialize(&genesis.try_account_ref()?.data)? {
             LibraAccountState::Genesis(write_set) => data_store.apply_write_set(&write_set),
             _ => {
                 debug!("Must include a genesis account");
@@ -186,7 +187,7 @@ impl MoveProcessor {
         }
 
         for keyed_account in keyed_accounts_iter {
-            match limited_deserialize(&keyed_account.account.data)? {
+            match limited_deserialize(&keyed_account.try_account_ref()?.data)? {
                 LibraAccountState::User(owner, write_set) => {
                     if owner != *genesis.unsigned_key() {
                         debug!("User account must be owned by this genesis");
@@ -230,7 +231,7 @@ impl MoveProcessor {
         let write_set = write_set.freeze().unwrap();
         Self::serialize_and_enforce_length(
             &LibraAccountState::Genesis(write_set),
-            &mut genesis.account.data,
+            &mut genesis.try_account_ref_mut()?.data,
         )?;
 
         // Now do the rest of the accounts
@@ -238,11 +239,11 @@ impl MoveProcessor {
             let write_set = write_sets
                 .remove(&pubkey_to_address(keyed_account.unsigned_key()))
                 .ok_or_else(Self::missing_account)?;
-            if !keyed_account.account.executable {
+            if !keyed_account.executable()? {
                 // Only write back non-executable accounts
                 Self::serialize_and_enforce_length(
                     &LibraAccountState::User(genesis_key, write_set),
-                    &mut keyed_account.account.data,
+                    &mut keyed_account.try_account_ref_mut()?.data,
                 )?;
             }
         }
@@ -268,15 +269,15 @@ impl MoveProcessor {
         let offset = offset as usize;
         let len = bytes.len();
         trace!("Write: offset={} length={}", offset, len);
-        if keyed_account.account.data.len() < offset + len {
+        if keyed_account.data_len()? < offset + len {
             debug!(
                 "Error: Write overflow: {} < {}",
-                keyed_account.account.data.len(),
+                keyed_account.data_len()?,
                 offset + len
             );
             return Err(InstructionError::AccountDataTooSmall);
         }
-        keyed_account.account.data[offset..offset + len].copy_from_slice(&bytes);
+        keyed_account.try_account_ref_mut()?.data[offset..offset + len].copy_from_slice(&bytes);
         Ok(())
     }
 
@@ -292,7 +293,7 @@ impl MoveProcessor {
 
         rent::verify_rent_exemption(&finalized, &rent)?;
 
-        match limited_deserialize(&finalized.account.data)? {
+        match finalized.state()? {
             LibraAccountState::CompiledScript(string) => {
                 let script: Script = serde_json::from_str(&string).map_err(map_json_error)?;
                 let compiled_script =
@@ -314,7 +315,7 @@ impl MoveProcessor {
                     .map_err(map_failure_error)?;
                 Self::serialize_and_enforce_length(
                     &LibraAccountState::VerifiedScript { script_bytes },
-                    &mut finalized.account.data,
+                    &mut finalized.try_account_ref_mut()?.data,
                 )?;
                 info!("Finalize script: {:?}", finalized.unsigned_key());
             }
@@ -339,7 +340,7 @@ impl MoveProcessor {
                     .ok_or_else(Self::missing_account)?;
                 Self::serialize_and_enforce_length(
                     &LibraAccountState::PublishedModule(write_set),
-                    &mut finalized.account.data,
+                    &mut finalized.try_account_ref_mut()?.data,
                 )?;
 
                 if !write_sets.is_empty() {
@@ -355,7 +356,7 @@ impl MoveProcessor {
             }
         };
 
-        finalized.account.executable = true;
+        finalized.try_account_ref_mut()?.executable = true;
 
         Ok(())
     }
@@ -365,17 +366,17 @@ impl MoveProcessor {
         amount: u64,
     ) -> Result<(), InstructionError> {
         let mut keyed_accounts_iter = keyed_accounts.iter_mut();
-        let script = next_keyed_account(&mut keyed_accounts_iter)?;
+        let genesis = next_keyed_account(&mut keyed_accounts_iter)?;
 
-        if script.account.owner != id() {
-            debug!("Error: Move script account not owned by Move loader");
+        if genesis.owner()? != id() {
+            debug!("Error: Move genesis account not owned by Move loader");
             return Err(InstructionError::InvalidArgument);
         }
 
-        match limited_deserialize(&script.account.data)? {
+        match genesis.state()? {
             LibraAccountState::Unallocated => Self::serialize_and_enforce_length(
                 &LibraAccountState::create_genesis(amount)?,
-                &mut script.account.data,
+                &mut genesis.try_account_ref_mut()?.data,
             ),
             _ => {
                 debug!("Error: Must provide an unallocated account");
@@ -399,11 +400,11 @@ impl MoveProcessor {
             function_name
         );
 
-        if script.account.owner != id() {
+        if script.owner()? != id() {
             debug!("Error: Move script account not owned by Move loader");
             return Err(InstructionError::InvalidArgument);
         }
-        if !script.account.executable {
+        if !script.executable()? {
             debug!("Error: Move script account not executable");
             return Err(InstructionError::AccountNotExecutable);
         }
@@ -411,7 +412,7 @@ impl MoveProcessor {
         let data_accounts = keyed_accounts_iter.into_slice();
 
         let mut data_store = Self::keyed_accounts_to_data_store(&data_accounts)?;
-        let verified_script = Self::deserialize_verified_script(&script.account.data)?;
+        let verified_script = Self::deserialize_verified_script(&script.try_account_ref()?.data)?;
 
         let output = Self::execute(
             sender_address,
@@ -435,7 +436,7 @@ impl MoveProcessor {
     ) -> Result<(), InstructionError> {
         solana_logger::setup();
 
-        if is_executable(keyed_accounts) {
+        if is_executable(keyed_accounts)? {
             match limited_deserialize(&instruction_data)? {
                 Executable::RunScript {
                     sender_address,
@@ -463,6 +464,7 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::rent::Rent;
     use solana_sdk::sysvar::rent;
+    use std::cell::RefCell;
 
     const BIG_ENOUGH: usize = 10_000;
 
@@ -500,13 +502,13 @@ mod tests {
         let sender_address = AccountAddress::default();
         let mut script = LibraAccount::create_script(&sender_address, code, vec![]);
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::free());
+        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
-        let _ = MoveProcessor::deserialize_verified_script(&script.account.data).unwrap();
+        let _ = MoveProcessor::deserialize_verified_script(&script.account.borrow().data).unwrap();
     }
 
     #[test]
@@ -525,10 +527,11 @@ mod tests {
 
         assert_eq!(
             bincode::deserialize::<LibraAccountState>(
-                &LibraAccount::create_genesis(amount).account.data
+                &LibraAccount::create_genesis(amount).account.borrow().data
             )
             .unwrap(),
-            bincode::deserialize::<LibraAccountState>(&keyed_accounts[0].account.data).unwrap()
+            bincode::deserialize::<LibraAccountState>(&keyed_accounts[0].account.borrow().data)
+                .unwrap()
         );
     }
 
@@ -542,7 +545,7 @@ mod tests {
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::free());
+        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -577,12 +580,16 @@ mod tests {
         ";
         let mut module = LibraAccount::create_module(code, vec![]);
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::free());
+        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let mut keyed_accounts = vec![
             KeyedAccount::new(&module.key, true, &mut module.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
-        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
+        keyed_accounts[0]
+            .account
+            .borrow_mut()
+            .data
+            .resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
     }
@@ -602,7 +609,7 @@ mod tests {
         let mut genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::free());
+        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -639,7 +646,7 @@ mod tests {
         let _script = next_libra_account(&mut accounts_iter).unwrap();
         let genesis = next_libra_account(&mut accounts_iter).unwrap();
         let payee = next_libra_account(&mut accounts_iter).unwrap();
-        match bincode::deserialize(&payee.account.data).unwrap() {
+        match bincode::deserialize(&payee.account.borrow().data).unwrap() {
             LibraAccountState::User(owner, write_set) => {
                 if owner != genesis.key {
                     panic!();
@@ -677,7 +684,7 @@ mod tests {
         let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::free());
+        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -735,12 +742,16 @@ mod tests {
         let mut module = LibraAccount::create_module(&code, vec![]);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::free());
+        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let mut keyed_accounts = vec![
             KeyedAccount::new(&module.key, true, &mut module.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
         ];
-        keyed_accounts[0].account.data.resize(BIG_ENOUGH, 0);
+        keyed_accounts[0]
+            .account
+            .borrow_mut()
+            .data
+            .resize(BIG_ENOUGH, 0);
 
         MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
 
@@ -769,12 +780,15 @@ mod tests {
             ",
             module.address
         );
-        let mut script =
-            LibraAccount::create_script(&genesis.address, &code, vec![&module.account.data]);
+        let mut script = LibraAccount::create_script(
+            &genesis.address,
+            &code,
+            vec![&module.account.borrow().data],
+        );
         let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::free());
+        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -824,7 +838,7 @@ mod tests {
         let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
-        let mut rent_account = rent::create_account(1, &Rent::free());
+        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let mut keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &mut script.account),
             KeyedAccount::new(&rent_id, false, &mut rent_account),
@@ -850,9 +864,9 @@ mod tests {
         .unwrap();
 
         Ok(vec![
-            LibraAccount::new(script.key, script.account),
-            LibraAccount::new(genesis.key, genesis.account),
-            LibraAccount::new(payee.key, payee.account),
+            LibraAccount::new(script.key, script.account.into_inner()),
+            LibraAccount::new(genesis.key, genesis.account.into_inner()),
+            LibraAccount::new(payee.key, payee.account.into_inner()),
         ])
     }
 
@@ -860,7 +874,7 @@ mod tests {
     struct LibraAccount {
         pub key: Pubkey,
         pub address: AccountAddress,
-        pub account: Account,
+        pub account: RefCell<Account>,
     }
 
     pub fn next_libra_account<I: Iterator>(iter: &mut I) -> Result<I::Item, InstructionError> {
@@ -873,7 +887,7 @@ mod tests {
             Self {
                 key,
                 address,
-                account,
+                account: RefCell::new(account),
             }
         }
 
@@ -898,10 +912,10 @@ mod tests {
                 owner: id(),
                 ..Account::default()
             };
-            let mut genesis = Self::new(Pubkey::new_rand(), account);
+            let genesis = Self::new(Pubkey::new_rand(), account);
             let pre_data = LibraAccountState::create_genesis(amount).unwrap();
             let _hi = "hello";
-            genesis.account.data = bincode::serialize(&pre_data).unwrap();
+            genesis.account.borrow_mut().data = bincode::serialize(&pre_data).unwrap();
             genesis
         }
 
@@ -910,24 +924,20 @@ mod tests {
             code: &str,
             deps: Vec<&Vec<u8>>,
         ) -> Self {
-            let mut script = Self::create_unallocated(0);
-            script.account.data = bincode::serialize(&LibraAccountState::create_script(
-                sender_address,
-                code,
-                deps,
-            ))
+            let script = Self::create_unallocated(0);
+            script.account.borrow_mut().data = bincode::serialize(
+                &LibraAccountState::create_script(sender_address, code, deps),
+            )
             .unwrap();
 
             script
         }
 
         pub fn create_module(code: &str, deps: Vec<&Vec<u8>>) -> Self {
-            let mut module = Self::create_unallocated(0);
-            module.account.data = bincode::serialize(&LibraAccountState::create_module(
-                &module.address,
-                code,
-                deps,
-            ))
+            let module = Self::create_unallocated(0);
+            module.account.borrow_mut().data = bincode::serialize(
+                &LibraAccountState::create_module(&module.address, code, deps),
+            )
             .unwrap();
 
             module

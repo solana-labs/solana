@@ -19,7 +19,8 @@ pub fn process_instruction(
 
     let (me, rest) = keyed_accounts.split_at_mut(1);
     let me_unsigned = me[0].signer_key().is_none();
-    let mut storage_account = StorageAccount::new(*me[0].unsigned_key(), &mut me[0].account);
+    let mut me_account = me[0].try_account_ref_mut()?;
+    let mut storage_account = StorageAccount::new(*me[0].unsigned_key(), &mut me_account);
 
     match limited_deserialize(data)? {
         StorageInstruction::InitializeStorage {
@@ -68,7 +69,8 @@ pub fn process_instruction(
 
             let rewards = Rewards::from_keyed_account(&rewards[0])?;
             let clock = Clock::from_keyed_account(&clock[0])?;
-            let mut owner = StorageAccount::new(*owner[0].unsigned_key(), &mut owner[0].account);
+            let mut owner_account = owner[0].try_account_ref_mut()?;
+            let mut owner = StorageAccount::new(*owner[0].unsigned_key(), &mut owner_account);
 
             storage_account.claim_storage_reward(&mut rewards_pools[0], clock, rewards, &mut owner)
         }
@@ -84,12 +86,16 @@ pub fn process_instruction(
             }
             let me_id = storage_account.id;
             let clock = Clock::from_keyed_account(&clock[0])?;
-            let mut rest: Vec<_> = rest
+            let mut rest = rest
+                .iter()
+                .map(|keyed_account| Ok((keyed_account, keyed_account.try_account_ref_mut()?)))
+                .collect::<Result<Vec<_>, InstructionError>>()?;
+            let mut rest = rest
                 .iter_mut()
-                .map(|keyed_account| {
-                    StorageAccount::new(*keyed_account.unsigned_key(), &mut keyed_account.account)
+                .map(|(keyed_account, account_ref)| {
+                    StorageAccount::new(*keyed_account.unsigned_key(), account_ref)
                 })
-                .collect();
+                .collect::<Vec<_>>();
             storage_account.proof_validation(&me_id, clock, segment, proofs, &mut rest)
         }
     }
@@ -117,15 +123,20 @@ mod tests {
             Sysvar,
         },
     };
+    use std::cell::RefCell;
 
     fn test_instruction(
         ix: &Instruction,
         program_accounts: &mut [Account],
     ) -> Result<(), InstructionError> {
+        let program_accounts: Vec<_> = program_accounts
+            .iter()
+            .map(|account| RefCell::new(account.clone()))
+            .collect();
         let mut keyed_accounts: Vec<_> = ix
             .accounts
             .iter()
-            .zip(program_accounts.iter_mut())
+            .zip(program_accounts.iter())
             .map(|(account_meta, account)| {
                 KeyedAccount::new(&account_meta.pubkey, account_meta.is_signer, account)
             })
@@ -175,7 +186,7 @@ mod tests {
     #[test]
     fn test_storage_tx() {
         let pubkey = Pubkey::new_rand();
-        let mut accounts = [(pubkey, Account::default())];
+        let mut accounts = [(&pubkey, &RefCell::new(Account::default()))];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
         assert!(process_instruction(&id(), &mut keyed_accounts, &[]).is_err());
     }
@@ -185,8 +196,8 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let clock_id = clock::id();
         let mut keyed_accounts = Vec::new();
-        let mut user_account = Account::default();
-        let mut clock_account = Clock::default().create_account(1);
+        let mut user_account = RefCell::new(Account::default());
+        let mut clock_account = RefCell::new(Clock::default().create_account(1));
         keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
         keyed_accounts.push(KeyedAccount::new(&clock_id, false, &mut clock_account));
 

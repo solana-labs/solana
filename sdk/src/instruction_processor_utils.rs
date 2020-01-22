@@ -115,8 +115,8 @@ pub fn next_keyed_account<I: Iterator>(iter: &mut I) -> Result<I::Item, Instruct
 
 /// Return true if the first keyed_account is executable, used to determine if
 /// the loader should call a program's 'main'
-pub fn is_executable(keyed_accounts: &[KeyedAccount]) -> bool {
-    !keyed_accounts.is_empty() && keyed_accounts[0].account.executable
+pub fn is_executable(keyed_accounts: &[KeyedAccount]) -> Result<bool, InstructionError> {
+    Ok(!keyed_accounts.is_empty() && keyed_accounts[0].executable()?)
 }
 
 pub fn limited_deserialize<T>(instruction_data: &[u8]) -> Result<T, InstructionError>

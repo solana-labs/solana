@@ -1,6 +1,12 @@
 use crate::hash::Hash;
+use crate::instruction::InstructionError;
 use crate::{clock::Epoch, pubkey::Pubkey};
-use std::{cmp, fmt, iter::FromIterator};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    cmp, fmt,
+    iter::FromIterator,
+    rc::Rc,
+};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
@@ -69,6 +75,9 @@ impl Account {
             ..Self::default()
         }
     }
+    pub fn new_ref(lamports: u64, space: usize, owner: &Pubkey) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self::new(lamports, space, owner)))
+    }
 
     pub fn new_data<T: serde::Serialize>(
         lamports: u64,
@@ -83,6 +92,13 @@ impl Account {
             ..Self::default()
         })
     }
+    pub fn new_ref_data<T: serde::Serialize>(
+        lamports: u64,
+        state: &T,
+        owner: &Pubkey,
+    ) -> Result<RefCell<Self>, bincode::Error> {
+        Ok(RefCell::new(Self::new_data(lamports, state, owner)?))
+    }
 
     pub fn new_data_with_space<T: serde::Serialize>(
         lamports: u64,
@@ -95,6 +111,16 @@ impl Account {
         account.serialize_data(state)?;
 
         Ok(account)
+    }
+    pub fn new_ref_data_with_space<T: serde::Serialize>(
+        lamports: u64,
+        state: &T,
+        space: usize,
+        owner: &Pubkey,
+    ) -> Result<RefCell<Self>, bincode::Error> {
+        Ok(RefCell::new(Self::new_data_with_space(
+            lamports, state, space, owner,
+        )?))
     }
 
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
@@ -115,7 +141,7 @@ pub struct KeyedAccount<'a> {
     is_signer: bool, // Transaction was signed by this account's key
     is_writable: bool,
     key: &'a Pubkey,
-    pub account: &'a mut Account,
+    pub account: &'a RefCell<Account>,
 }
 
 impl<'a> KeyedAccount<'a> {
@@ -135,7 +161,46 @@ impl<'a> KeyedAccount<'a> {
         self.is_writable
     }
 
-    pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a mut Account) -> Self {
+    pub fn lamports(&self) -> Result<u64, InstructionError> {
+        Ok(self.try_borrow()?.lamports)
+    }
+
+    pub fn data_len(&self) -> Result<usize, InstructionError> {
+        Ok(self.try_borrow()?.data.len())
+    }
+
+    pub fn data_is_empty(&self) -> Result<bool, InstructionError> {
+        Ok(self.try_borrow()?.data.is_empty())
+    }
+
+    pub fn owner(&self) -> Result<Pubkey, InstructionError> {
+        Ok(self.try_borrow()?.owner)
+    }
+
+    pub fn executable(&self) -> Result<bool, InstructionError> {
+        Ok(self.try_borrow()?.executable)
+    }
+
+    pub fn try_account_ref(&'a self) -> Result<Ref<Account>, InstructionError> {
+        self.try_borrow()
+    }
+
+    pub fn try_account_ref_mut(&'a self) -> Result<RefMut<Account>, InstructionError> {
+        self.try_borrow_mut()
+    }
+
+    fn try_borrow(&self) -> Result<Ref<Account>, InstructionError> {
+        self.account
+            .try_borrow()
+            .map_err(|_| InstructionError::AccountBorrowFailed)
+    }
+    fn try_borrow_mut(&self) -> Result<RefMut<Account>, InstructionError> {
+        self.account
+            .try_borrow_mut()
+            .map_err(|_| InstructionError::AccountBorrowFailed)
+    }
+
+    pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a RefCell<Account>) -> Self {
         Self {
             is_signer,
             is_writable: true,
@@ -144,7 +209,7 @@ impl<'a> KeyedAccount<'a> {
         }
     }
 
-    pub fn new_readonly(key: &'a Pubkey, is_signer: bool, account: &'a mut Account) -> Self {
+    pub fn new_readonly(key: &'a Pubkey, is_signer: bool, account: &'a RefCell<Account>) -> Self {
         Self {
             is_signer,
             is_writable: false,
@@ -154,8 +219,14 @@ impl<'a> KeyedAccount<'a> {
     }
 }
 
-impl<'a> From<(&'a Pubkey, &'a mut Account)> for KeyedAccount<'a> {
-    fn from((key, account): (&'a Pubkey, &'a mut Account)) -> Self {
+impl<'a> PartialEq for KeyedAccount<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+    }
+}
+
+impl<'a> From<(&'a Pubkey, &'a RefCell<Account>)> for KeyedAccount<'a> {
+    fn from((key, account): (&'a Pubkey, &'a RefCell<Account>)) -> Self {
         Self {
             is_signer: false,
             is_writable: true,
@@ -165,8 +236,8 @@ impl<'a> From<(&'a Pubkey, &'a mut Account)> for KeyedAccount<'a> {
     }
 }
 
-impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for KeyedAccount<'a> {
-    fn from((key, is_signer, account): (&'a Pubkey, bool, &'a mut Account)) -> Self {
+impl<'a> From<(&'a Pubkey, bool, &'a RefCell<Account>)> for KeyedAccount<'a> {
+    fn from((key, is_signer, account): (&'a Pubkey, bool, &'a RefCell<Account>)) -> Self {
         Self {
             is_signer,
             is_writable: true,
@@ -176,8 +247,8 @@ impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for KeyedAccount<'a> {
     }
 }
 
-impl<'a> From<&'a mut (Pubkey, Account)> for KeyedAccount<'a> {
-    fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
+impl<'a> From<&'a mut (&'a Pubkey, &'a RefCell<Account>)> for KeyedAccount<'a> {
+    fn from((key, account): &'a mut (&'a Pubkey, &'a RefCell<Account>)) -> Self {
         Self {
             is_signer: false,
             is_writable: true,
@@ -187,12 +258,14 @@ impl<'a> From<&'a mut (Pubkey, Account)> for KeyedAccount<'a> {
     }
 }
 
-pub fn create_keyed_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
+pub fn create_keyed_accounts<'a>(
+    accounts: &'a mut [(&'a Pubkey, &'a RefCell<Account>)],
+) -> Vec<KeyedAccount<'a>> {
     accounts.iter_mut().map(Into::into).collect()
 }
 
 pub fn create_keyed_is_signer_accounts<'a>(
-    accounts: &'a mut [(&'a Pubkey, bool, &'a mut Account)],
+    accounts: &'a mut [(&'a Pubkey, bool, &'a mut RefCell<Account>)],
 ) -> Vec<KeyedAccount<'a>> {
     accounts
         .iter_mut()
@@ -205,7 +278,9 @@ pub fn create_keyed_is_signer_accounts<'a>(
         .collect()
 }
 
-pub fn create_keyed_readonly_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
+pub fn create_keyed_readonly_accounts(
+    accounts: &mut [(Pubkey, RefCell<Account>)],
+) -> Vec<KeyedAccount> {
     accounts
         .iter_mut()
         .map(|(key, account)| KeyedAccount {

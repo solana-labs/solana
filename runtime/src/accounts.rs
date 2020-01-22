@@ -5,7 +5,6 @@ use crate::accounts_index::AccountsIndex;
 use crate::append_vec::StoredAccount;
 use crate::bank::{HashAgeKind, TransactionProcessResult};
 use crate::blockhash_queue::BlockhashQueue;
-use crate::message_processor::has_duplicates;
 use crate::nonce_utils::prepare_if_nonce_account;
 use crate::rent_collector::RentCollector;
 use crate::system_instruction_processor::{get_system_account_kind, SystemAccountKind};
@@ -87,6 +86,19 @@ impl Accounts {
             .accounts_from_stream(stream, local_paths, append_vecs_path)
     }
 
+    /// Return true if the slice has any duplicate elements
+    pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
+        // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
+        // `bench_has_duplicates` in benches/message_processor.rs shows that this implementation is
+        // ~50 times faster than using HashSet for very short slices.
+        for i in 1..xs.len() {
+            if xs[i..].contains(&xs[i - 1]) {
+                return true;
+            }
+        }
+        false
+    }
+
     fn load_tx_accounts(
         &self,
         storage: &AccountStorage,
@@ -103,7 +115,7 @@ impl Accounts {
             Err(TransactionError::MissingSignatureForFee)
         } else {
             // Check for unique account keys
-            if has_duplicates(&message.account_keys) {
+            if Self::has_duplicates(&message.account_keys) {
                 error_counters.account_loaded_twice += 1;
                 return Err(TransactionError::AccountLoadedTwice);
             }
@@ -1633,5 +1645,11 @@ mod tests {
                 .unwrap(),
             1
         );
+    }
+
+    #[test]
+    fn test_has_duplicates() {
+        assert!(!Accounts::has_duplicates(&[1, 2]));
+        assert!(Accounts::has_duplicates(&[1, 2, 1]));
     }
 }

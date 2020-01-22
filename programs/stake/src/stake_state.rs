@@ -553,9 +553,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         rent: &Rent,
     ) -> Result<(), InstructionError> {
         if let StakeState::Uninitialized = self.state()? {
-            let rent_exempt_reserve = rent.minimum_balance(self.account.data.len());
+            let rent_exempt_reserve = rent.minimum_balance(self.data_len()?);
 
-            if rent_exempt_reserve < self.account.lamports {
+            if rent_exempt_reserve < self.lamports()? {
                 self.set_state(&StakeState::Initialized(Meta {
                     rent_exempt_reserve,
                     authorized: *authorized,
@@ -602,9 +602,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Initialized(meta) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 let stake = Stake::new(
-                    self.account
-                        .lamports
-                        .saturating_sub(meta.rent_exempt_reserve), // can't stake the rent ;)
+                    self.lamports()?.saturating_sub(meta.rent_exempt_reserve), // can't stake the rent ;)
                     vote_account.unsigned_key(),
                     &vote_account.state()?,
                     clock.epoch,
@@ -659,13 +657,13 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     Some(stake_history),
                 )
             {
-                if rewards_account.account.lamports < (stakers_reward + voters_reward) {
+                if rewards_account.lamports()? < (stakers_reward + voters_reward) {
                     return Err(InstructionError::UnbalancedInstruction);
                 }
-                rewards_account.account.lamports -= stakers_reward + voters_reward;
+                rewards_account.try_account_ref_mut()?.lamports -= stakers_reward + voters_reward;
 
-                self.account.lamports += stakers_reward;
-                vote_account.account.lamports += voters_reward;
+                self.try_account_ref_mut()?.lamports += stakers_reward;
+                vote_account.try_account_ref_mut()?.lamports += voters_reward;
 
                 stake.credits_observed = credits_observed;
                 stake.delegation.stake += stakers_reward;
@@ -688,7 +686,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         if let StakeState::Uninitialized = split.state()? {
             // verify enough account lamports
-            if lamports > self.account.lamports {
+            if lamports > self.lamports()? {
                 return Err(InstructionError::InsufficientFunds);
             }
 
@@ -697,9 +695,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     meta.authorized.check(signers, StakeAuthorize::Staker)?;
 
                     // verify enough lamports for rent in new stake with the split
-                    if split.account.lamports + lamports < meta.rent_exempt_reserve
+                    if split.lamports()? + lamports < meta.rent_exempt_reserve
                      // verify enough lamports left in previous stake and not full withdrawal
-                        || (lamports + meta.rent_exempt_reserve > self.account.lamports && lamports != self.account.lamports)
+                        || (lamports + meta.rent_exempt_reserve > self.lamports()? && lamports != self.lamports()?)
                     {
                         return Err(InstructionError::InsufficientFunds);
                     }
@@ -709,10 +707,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     // this could represent a small loss of staked lamports
                     //  if the split account starts out with a zero balance
                     let split_stake = stake.split(
-                        lamports
-                            - meta
-                                .rent_exempt_reserve
-                                .saturating_sub(split.account.lamports),
+                        lamports - meta.rent_exempt_reserve.saturating_sub(split.lamports()?),
                     )?;
 
                     self.set_state(&StakeState::Stake(meta, stake))?;
@@ -724,7 +719,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     // enough lamports for rent in new stake
                     if lamports < meta.rent_exempt_reserve
                     // verify enough lamports left in previous stake
-                        || (lamports + meta.rent_exempt_reserve > self.account.lamports && lamports != self.account.lamports)
+                        || (lamports + meta.rent_exempt_reserve > self.lamports()? && lamports != self.lamports()?)
                     {
                         return Err(InstructionError::InsufficientFunds);
                     }
@@ -739,8 +734,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 _ => return Err(InstructionError::InvalidAccountData),
             }
 
-            split.account.lamports += lamports;
-            self.account.lamports -= lamports;
+            split.try_account_ref_mut()?.lamports += lamports;
+            self.try_account_ref_mut()?.lamports -= lamports;
             Ok(())
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -792,20 +787,20 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
         // if the stake is active, we mustn't allow the account to go away
         if is_staked // line coverage for branch coverage
-            && lamports + reserve > self.account.lamports
+            && lamports + reserve > self.lamports()?
         {
             return Err(InstructionError::InsufficientFunds);
         }
 
-        if lamports != self.account.lamports // not a full withdrawal
-            && lamports + reserve > self.account.lamports
+        if lamports != self.lamports()? // not a full withdrawal
+            && lamports + reserve > self.lamports()?
         {
             assert!(!is_staked);
             return Err(InstructionError::InsufficientFunds);
         }
 
-        self.account.lamports -= lamports;
-        to.account.lamports += lamports;
+        self.try_account_ref_mut()?.lamports -= lamports;
+        to.try_account_ref_mut()?.lamports += lamports;
         Ok(())
     }
 }
@@ -903,6 +898,7 @@ mod tests {
     use crate::id;
     use solana_sdk::{account::Account, pubkey::Pubkey, system_program};
     use solana_vote_program::vote_state;
+    use std::cell::RefCell;
 
     impl Meta {
         pub fn auto(authorized: &Pubkey) -> Self {
@@ -1004,14 +1000,18 @@ mod tests {
             vote_state.process_slot_vote_unchecked(i);
         }
 
-        let mut vote_account =
-            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_account = RefCell::new(vote_state::create_account(
+            &vote_pubkey,
+            &Pubkey::new_rand(),
+            0,
+            100,
+        ));
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&vote_state).unwrap();
 
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta {
                 authorized: Authorized {
@@ -1061,7 +1061,7 @@ mod tests {
             .is_ok());
 
         // verify that delegate_stake() looks right, compare against hand-rolled
-        let stake = StakeState::stake_from(&stake_keyed_account.account).unwrap();
+        let stake = StakeState::stake_from(&stake_keyed_account.account.borrow()).unwrap();
         assert_eq!(
             stake,
             Stake {
@@ -1462,7 +1462,7 @@ mod tests {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
         let mut stake_account =
-            Account::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
+            Account::new_ref(stake_lamports, std::mem::size_of::<StakeState>(), &id());
 
         // unsigned keyed account
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
@@ -1496,7 +1496,7 @@ mod tests {
         );
         // check that we see what we expect
         assert_eq!(
-            StakeState::from(&stake_keyed_account.account).unwrap(),
+            StakeState::from(&stake_keyed_account.account.borrow()).unwrap(),
             StakeState::Initialized(Meta {
                 lockup: Lockup {
                     unix_timestamp: 0,
@@ -1525,7 +1525,7 @@ mod tests {
     fn test_deactivate_stake() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
@@ -1548,8 +1548,12 @@ mod tests {
 
         // Staking
         let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account =
-            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_account = RefCell::new(vote_state::create_account(
+            &vote_pubkey,
+            &Pubkey::new_rand(),
+            0,
+            100,
+        ));
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
@@ -1587,7 +1591,7 @@ mod tests {
     fn test_withdraw_stake() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
@@ -1598,7 +1602,7 @@ mod tests {
         let mut clock = sysvar::clock::Clock::default();
 
         let to = Pubkey::new_rand();
-        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_account = Account::new_ref(1, 0, &system_program::id());
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         // no signers, should fail
@@ -1628,10 +1632,10 @@ mod tests {
             ),
             Ok(())
         );
-        assert_eq!(stake_account.lamports, 0);
+        assert_eq!(stake_account.borrow().lamports, 0);
 
         // reset balance
-        stake_account.lamports = stake_lamports;
+        stake_account.borrow_mut().lamports = stake_lamports;
 
         // lockup
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
@@ -1664,8 +1668,12 @@ mod tests {
 
         // Stake some lamports (available lamports for withdrawals will reduce to zero)
         let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account =
-            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_account = RefCell::new(vote_state::create_account(
+            &vote_pubkey,
+            &Pubkey::new_rand(),
+            0,
+            100,
+        ));
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         assert_eq!(
@@ -1679,7 +1687,7 @@ mod tests {
         );
 
         // simulate rewards
-        stake_account.lamports += 10;
+        stake_account.borrow_mut().lamports += 10;
         // withdrawal before deactivate works for rewards amount
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
@@ -1695,7 +1703,7 @@ mod tests {
         );
 
         // simulate rewards
-        stake_account.lamports += 10;
+        stake_account.borrow_mut().lamports += 10;
         // withdrawal of rewards fails if not in excess of stake
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
@@ -1743,7 +1751,7 @@ mod tests {
             ),
             Ok(())
         );
-        assert_eq!(stake_account.lamports, 0);
+        assert_eq!(stake_account.borrow().lamports, 0);
     }
 
     #[test]
@@ -1751,7 +1759,7 @@ mod tests {
         let stake_pubkey = Pubkey::new_rand();
         let total_lamports = 100;
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             total_lamports,
             &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
@@ -1764,15 +1772,19 @@ mod tests {
         future.epoch += 16;
 
         let to = Pubkey::new_rand();
-        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_account = Account::new_ref(1, 0, &system_program::id());
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
 
         // Stake some lamports (available lamports for withdrawals will reduce)
         let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account =
-            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_account = RefCell::new(vote_state::create_account(
+            &vote_pubkey,
+            &Pubkey::new_rand(),
+            0,
+            100,
+        ));
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -1789,9 +1801,11 @@ mod tests {
         let stake_history = create_stake_history_from_delegations(
             None,
             0..future.epoch,
-            &[StakeState::stake_from(&stake_keyed_account.account)
-                .unwrap()
-                .delegation],
+            &[
+                StakeState::stake_from(&stake_keyed_account.account.borrow())
+                    .unwrap()
+                    .delegation,
+            ],
         );
 
         // Try to withdraw stake
@@ -1811,7 +1825,7 @@ mod tests {
     fn test_withdraw_stake_invalid_state() {
         let stake_pubkey = Pubkey::new_rand();
         let total_lamports = 100;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             total_lamports,
             &StakeState::RewardsPool,
             std::mem::size_of::<StakeState>(),
@@ -1820,7 +1834,7 @@ mod tests {
         .expect("stake_account");
 
         let to = Pubkey::new_rand();
-        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_account = Account::new_ref(1, 0, &system_program::id());
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -1841,7 +1855,7 @@ mod tests {
         let stake_pubkey = Pubkey::new_rand();
         let custodian = Pubkey::new_rand();
         let total_lamports = 100;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             total_lamports,
             &StakeState::Initialized(Meta {
                 lockup: Lockup {
@@ -1857,7 +1871,7 @@ mod tests {
         .expect("stake_account");
 
         let to = Pubkey::new_rand();
-        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_account = Account::new_ref(1, 0, &system_program::id());
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
@@ -1893,7 +1907,7 @@ mod tests {
             );
         }
         // reset balance
-        stake_keyed_account.account.lamports = total_lamports;
+        stake_keyed_account.account.borrow_mut().lamports = total_lamports;
 
         // lockup has expired
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
@@ -1999,7 +2013,7 @@ mod tests {
         rewards.validator_point_value = 100.0;
 
         let rewards_pool_pubkey = Pubkey::new_rand();
-        let mut rewards_pool_account = Account::new_data(
+        let mut rewards_pool_account = Account::new_ref_data(
             std::u64::MAX,
             &StakeState::RewardsPool,
             &crate::rewards_pools::id(),
@@ -2010,7 +2024,7 @@ mod tests {
 
         let stake_pubkey = Pubkey::default();
         let stake_lamports = 100;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
@@ -2021,8 +2035,12 @@ mod tests {
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
 
         let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account =
-            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_account = RefCell::new(vote_state::create_account(
+            &vote_pubkey,
+            &Pubkey::new_rand(),
+            0,
+            100,
+        ));
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
 
         // not delegated yet, deserialization fails
@@ -2044,9 +2062,11 @@ mod tests {
         let stake_history = create_stake_history_from_delegations(
             Some(100),
             0..10,
-            &[StakeState::stake_from(&stake_keyed_account.account)
-                .unwrap()
-                .delegation],
+            &[
+                StakeState::stake_from(&stake_keyed_account.account.borrow())
+                    .unwrap()
+                    .delegation,
+            ],
         );
 
         // no credits to claim
@@ -2071,10 +2091,14 @@ mod tests {
             Err(InstructionError::InvalidAccountData)
         );
 
-        let mut vote_account =
-            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_account = RefCell::new(vote_state::create_account(
+            &vote_pubkey,
+            &Pubkey::new_rand(),
+            0,
+            100,
+        ));
 
-        let mut vote_state = VoteState::from(&vote_account).unwrap();
+        let mut vote_state = VoteState::from(&vote_account.borrow()).unwrap();
         // split credits 3:1 between staker and voter
         vote_state.commission = 25;
         // put in some credits in epoch 0 for which we should have a non-zero stake
@@ -2083,11 +2107,11 @@ mod tests {
         }
         vote_state.increment_credits(2);
 
-        vote_state.to(&mut vote_account).unwrap();
+        vote_state.to(&mut vote_account.borrow_mut()).unwrap();
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
 
         // some credits to claim, but rewards pool empty (shouldn't ever happen)
-        rewards_pool_keyed_account.account.lamports = 1;
+        rewards_pool_keyed_account.account.borrow_mut().lamports = 1;
         assert_eq!(
             stake_keyed_account.redeem_vote_credits(
                 &mut vote_keyed_account,
@@ -2097,11 +2121,11 @@ mod tests {
             ),
             Err(InstructionError::UnbalancedInstruction)
         );
-        rewards_pool_keyed_account.account.lamports = std::u64::MAX;
+        rewards_pool_keyed_account.account.borrow_mut().lamports = std::u64::MAX;
 
         // finally! some credits to claim
-        let stake_account_balance = stake_keyed_account.account.lamports;
-        let vote_account_balance = vote_keyed_account.account.lamports;
+        let stake_account_balance = stake_keyed_account.account.borrow().lamports;
+        let vote_account_balance = vote_keyed_account.account.borrow().lamports;
         assert_eq!(
             stake_keyed_account.redeem_vote_credits(
                 &mut vote_keyed_account,
@@ -2111,8 +2135,8 @@ mod tests {
             ),
             Ok(())
         );
-        let staker_rewards = stake_keyed_account.account.lamports - stake_account_balance;
-        let voter_commission = vote_keyed_account.account.lamports - vote_account_balance;
+        let staker_rewards = stake_keyed_account.account.borrow().lamports - stake_account_balance;
+        let voter_commission = vote_keyed_account.account.borrow().lamports - vote_account_balance;
         assert!(voter_commission > 0);
         assert!(staker_rewards > 0);
         assert!(
@@ -2120,8 +2144,11 @@ mod tests {
             "rewards should be split ~3:1"
         );
         // verify rewards are added to stake
-        let stake = StakeState::stake_from(&stake_keyed_account.account).unwrap();
-        assert_eq!(stake.delegation.stake, stake_keyed_account.account.lamports);
+        let stake = StakeState::stake_from(&stake_keyed_account.account.borrow()).unwrap();
+        assert_eq!(
+            stake.delegation.stake,
+            stake_keyed_account.account.borrow().lamports
+        );
 
         let wrong_vote_pubkey = Pubkey::new_rand();
         let mut wrong_vote_keyed_account =
@@ -2143,7 +2170,7 @@ mod tests {
     fn test_authorize_uninit() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::default(),
             std::mem::size_of::<StakeState>(),
@@ -2168,7 +2195,7 @@ mod tests {
     fn test_authorize_lockup() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
@@ -2177,7 +2204,7 @@ mod tests {
         .expect("stake_account");
 
         let to = Pubkey::new_rand();
-        let mut to_account = Account::new(1, 0, &system_program::id());
+        let mut to_account = Account::new_ref(1, 0, &system_program::id());
         let mut to_keyed_account = KeyedAccount::new(&to, false, &mut to_account);
 
         let clock = sysvar::clock::Clock::default();
@@ -2204,7 +2231,7 @@ mod tests {
             Ok(())
         );
         if let StakeState::Initialized(Meta { authorized, .. }) =
-            StakeState::from(&stake_keyed_account.account).unwrap()
+            StakeState::from(&stake_keyed_account.account.borrow()).unwrap()
         {
             assert_eq!(authorized.staker, stake_pubkey0);
             assert_eq!(authorized.withdrawer, stake_pubkey0);
@@ -2238,7 +2265,7 @@ mod tests {
             Ok(())
         );
         if let StakeState::Initialized(Meta { authorized, .. }) =
-            StakeState::from(&stake_keyed_account.account).unwrap()
+            StakeState::from(&stake_keyed_account.account.borrow()).unwrap()
         {
             assert_eq!(authorized.staker, stake_pubkey2);
         }
@@ -2253,7 +2280,7 @@ mod tests {
             Ok(())
         );
         if let StakeState::Initialized(Meta { authorized, .. }) =
-            StakeState::from(&stake_keyed_account.account).unwrap()
+            StakeState::from(&stake_keyed_account.account.borrow()).unwrap()
         {
             assert_eq!(authorized.staker, stake_pubkey2);
         }
@@ -2290,7 +2317,7 @@ mod tests {
     fn test_split_source_uninitialized() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
@@ -2299,7 +2326,7 @@ mod tests {
         .expect("stake_account");
 
         let split_stake_pubkey = Pubkey::new_rand();
-        let mut split_stake_account = Account::new_data_with_space(
+        let mut split_stake_account = Account::new_ref_data_with_space(
             0,
             &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
@@ -2328,8 +2355,8 @@ mod tests {
             Ok(())
         );
         assert_eq!(
-            stake_keyed_account.account.lamports,
-            split_stake_keyed_account.account.lamports
+            stake_keyed_account.account.borrow().lamports,
+            split_stake_keyed_account.account.borrow().lamports
         );
     }
 
@@ -2337,7 +2364,7 @@ mod tests {
     fn test_split_split_not_uninitialized() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Stake(Meta::auto(&stake_pubkey), Stake::just_stake(stake_lamports)),
             std::mem::size_of::<StakeState>(),
@@ -2346,7 +2373,7 @@ mod tests {
         .expect("stake_account");
 
         let split_stake_pubkey = Pubkey::new_rand();
-        let mut split_stake_account = Account::new_data_with_space(
+        let mut split_stake_account = Account::new_ref_data_with_space(
             0,
             &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
@@ -2379,7 +2406,7 @@ mod tests {
     fn test_split_more_than_staked() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Stake(
                 Meta::auto(&stake_pubkey),
@@ -2391,7 +2418,7 @@ mod tests {
         .expect("stake_account");
 
         let split_stake_pubkey = Pubkey::new_rand();
-        let mut split_stake_account = Account::new_data_with_space(
+        let mut split_stake_account = Account::new_ref_data_with_space(
             0,
             &StakeState::Uninitialized,
             std::mem::size_of::<StakeState>(),
@@ -2431,7 +2458,7 @@ mod tests {
                 Stake::just_stake(stake_lamports - rent_exempt_reserve),
             ),
         ] {
-            let mut stake_account = Account::new_data_with_space(
+            let mut stake_account = Account::new_ref_data_with_space(
                 stake_lamports,
                 state,
                 std::mem::size_of::<StakeState>(),
@@ -2442,7 +2469,7 @@ mod tests {
             let mut stake_keyed_account =
                 KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
 
-            let mut split_stake_account = Account::new_data_with_space(
+            let mut split_stake_account = Account::new_ref_data_with_space(
                 0,
                 &StakeState::Uninitialized,
                 std::mem::size_of::<StakeState>(),
@@ -2474,7 +2501,7 @@ mod tests {
             );
 
             // split account already has way enough lamports
-            split_stake_keyed_account.account.lamports = 1_000;
+            split_stake_keyed_account.account.borrow_mut().lamports = 1_000;
             assert_eq!(
                 stake_keyed_account.split(
                     stake_lamports - rent_exempt_reserve,
@@ -2499,9 +2526,12 @@ mod tests {
                         }
                     ))
                 );
-                assert_eq!(stake_keyed_account.account.lamports, rent_exempt_reserve);
                 assert_eq!(
-                    split_stake_keyed_account.account.lamports,
+                    stake_keyed_account.account.borrow().lamports,
+                    rent_exempt_reserve
+                );
+                assert_eq!(
+                    split_stake_keyed_account.account.borrow().lamports,
                     1_000 + stake_lamports - rent_exempt_reserve
                 );
             }
@@ -2521,7 +2551,7 @@ mod tests {
             StakeState::Initialized(Meta::auto(&stake_pubkey)),
             StakeState::Stake(Meta::auto(&stake_pubkey), Stake::just_stake(stake_lamports)),
         ] {
-            let mut split_stake_account = Account::new_data_with_space(
+            let mut split_stake_account = Account::new_ref_data_with_space(
                 0,
                 &StakeState::Uninitialized,
                 std::mem::size_of::<StakeState>(),
@@ -2532,7 +2562,7 @@ mod tests {
             let mut split_stake_keyed_account =
                 KeyedAccount::new(&split_stake_pubkey, true, &mut split_stake_account);
 
-            let mut stake_account = Account::new_data_with_space(
+            let mut stake_account = Account::new_ref_data_with_space(
                 stake_lamports,
                 state,
                 std::mem::size_of::<StakeState>(),
@@ -2563,7 +2593,8 @@ mod tests {
             );
             // no lamport leakage
             assert_eq!(
-                stake_keyed_account.account.lamports + split_stake_keyed_account.account.lamports,
+                stake_keyed_account.account.borrow().lamports
+                    + split_stake_keyed_account.account.borrow().lamports,
                 stake_lamports
             );
 
@@ -2604,7 +2635,7 @@ mod tests {
             }
 
             // reset
-            stake_keyed_account.account.lamports = stake_lamports;
+            stake_keyed_account.account.borrow_mut().lamports = stake_lamports;
         }
     }
 
@@ -2631,7 +2662,7 @@ mod tests {
                 Stake::just_stake(stake_lamports - rent_exempt_reserve),
             ),
         ] {
-            let mut split_stake_account = Account::new_data_with_space(
+            let mut split_stake_account = Account::new_ref_data_with_space(
                 0,
                 &StakeState::Uninitialized,
                 std::mem::size_of::<StakeState>(),
@@ -2642,7 +2673,7 @@ mod tests {
             let mut split_stake_keyed_account =
                 KeyedAccount::new(&split_stake_pubkey, true, &mut split_stake_account);
 
-            let mut stake_account = Account::new_data_with_space(
+            let mut stake_account = Account::new_ref_data_with_space(
                 stake_lamports,
                 state,
                 std::mem::size_of::<StakeState>(),
@@ -2660,7 +2691,8 @@ mod tests {
 
             // no lamport leakage
             assert_eq!(
-                stake_keyed_account.account.lamports + split_stake_keyed_account.account.lamports,
+                stake_keyed_account.account.borrow().lamports
+                    + split_stake_keyed_account.account.borrow().lamports,
                 stake_lamports
             );
 
@@ -2701,7 +2733,7 @@ mod tests {
             }
 
             // reset
-            stake_keyed_account.account.lamports = stake_lamports;
+            stake_keyed_account.account.borrow_mut().lamports = stake_lamports;
         }
     }
 
@@ -2792,7 +2824,7 @@ mod tests {
     fn test_authorize_delegated_stake() {
         let stake_pubkey = Pubkey::new_rand();
         let stake_lamports = 42;
-        let mut stake_account = Account::new_data_with_space(
+        let mut stake_account = Account::new_ref_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_pubkey)),
             std::mem::size_of::<StakeState>(),
@@ -2803,8 +2835,12 @@ mod tests {
         let mut clock = Clock::default();
 
         let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account =
-            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut vote_account = RefCell::new(vote_state::create_account(
+            &vote_pubkey,
+            &Pubkey::new_rand(),
+            0,
+            100,
+        ));
         let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
@@ -2823,7 +2859,8 @@ mod tests {
             ),
             Ok(())
         );
-        let authorized = StakeState::authorized_from(&stake_keyed_account.account).unwrap();
+        let authorized =
+            StakeState::authorized_from(&stake_keyed_account.try_account_ref().unwrap()).unwrap();
         assert_eq!(authorized.staker, new_staker_pubkey);
 
         let other_pubkey = Pubkey::new_rand();
@@ -2834,8 +2871,12 @@ mod tests {
 
         let new_voter_pubkey = Pubkey::new_rand();
         let vote_state = VoteState::default();
-        let mut new_vote_account =
-            vote_state::create_account(&new_voter_pubkey, &Pubkey::new_rand(), 0, 100);
+        let mut new_vote_account = RefCell::new(vote_state::create_account(
+            &new_voter_pubkey,
+            &Pubkey::new_rand(),
+            0,
+            100,
+        ));
         let mut new_vote_keyed_account =
             KeyedAccount::new(&new_voter_pubkey, false, &mut new_vote_account);
         new_vote_keyed_account.set_state(&vote_state).unwrap();
@@ -2864,7 +2905,8 @@ mod tests {
             ),
             Ok(())
         );
-        let stake = StakeState::stake_from(&stake_keyed_account.account).unwrap();
+        let stake =
+            StakeState::stake_from(&stake_keyed_account.try_account_ref().unwrap()).unwrap();
         assert_eq!(stake.delegation.voter_pubkey, new_voter_pubkey);
 
         // Test another staking action

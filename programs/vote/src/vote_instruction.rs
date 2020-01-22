@@ -228,8 +228,8 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::account::Account;
-    use solana_sdk::rent::Rent;
+    use solana_sdk::{account::Account, rent::Rent};
+    use std::cell::RefCell;
 
     // these are for 100% coverage in this file
     #[test]
@@ -245,7 +245,7 @@ mod tests {
             .accounts
             .iter()
             .map(|meta| {
-                if sysvar::clock::check_id(&meta.pubkey) {
+                RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
                     Clock::default().create_account(1)
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
                     SlotHashes::default().create_account(1)
@@ -253,12 +253,12 @@ mod tests {
                     Rent::free().create_account(1)
                 } else {
                     Account::default()
-                }
+                })
             })
             .collect();
 
         for _ in 0..instruction.accounts.len() {
-            accounts.push(Account::default());
+            accounts.push(RefCell::new(Account::default()));
         }
         {
             let mut keyed_accounts: Vec<_> = instruction

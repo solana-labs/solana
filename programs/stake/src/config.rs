@@ -67,18 +67,19 @@ pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, InstructionE
     if !check_id(account.unsigned_key()) {
         return Err(InstructionError::InvalidArgument);
     }
-    Config::from(account.account).ok_or(InstructionError::InvalidArgument)
+    Config::from(&*account.try_account_ref()?).ok_or(InstructionError::InvalidArgument)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use solana_sdk::pubkey::Pubkey;
+    use std::cell::RefCell;
 
     #[test]
     fn test() {
-        let mut account = create_account(0, &Config::default());
-        assert_eq!(Config::from(&account), Some(Config::default()));
+        let mut account = RefCell::new(create_account(0, &Config::default()));
+        assert_eq!(Config::from(&account.borrow()), Some(Config::default()));
         assert_eq!(
             from_keyed_account(&KeyedAccount::new(&Pubkey::default(), false, &mut account)),
             Err(InstructionError::InvalidArgument)

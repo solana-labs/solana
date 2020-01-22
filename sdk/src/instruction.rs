@@ -59,6 +59,7 @@ pub enum InstructionError {
     ReadonlyDataModified,
 
     /// An account was referenced more than once in a single instruction
+    // Deprecated, instructions can now contain duplicate accounts
     DuplicateAccountIndex,
 
     /// Executable bit on account changed, but shouldn't have
@@ -75,6 +76,17 @@ pub enum InstructionError {
 
     /// The instruction expected an executable account
     AccountNotExecutable,
+
+    /// Failed to borrow a reference to an account, already borrowed
+    AccountBorrowFailed,
+
+    /// Account has an outstanding reference after a program's execution
+    AccountBorrowOutstanding,
+
+    /// The same account was multiply passed to an on-chain program's entrypoint, but the program
+    /// modified them differently.  A program can only modify one instance of the account because
+    /// the runtime cannot determine which changes to pick or how to merge them if both are modified
+    DuplicateAccountOutOfSync,
 
     /// CustomError allows on-chain programs to implement program-specific error types and see
     /// them returned by the Solana runtime. A CustomError may be any type that is represented

@@ -21,10 +21,7 @@ pub fn verify_rent_exemption(
     rent_sysvar_account: &KeyedAccount,
 ) -> Result<(), InstructionError> {
     let rent = Rent::from_keyed_account(rent_sysvar_account)?;
-    if !rent.is_exempt(
-        keyed_account.account.lamports,
-        keyed_account.account.data.len(),
-    ) {
+    if !rent.is_exempt(keyed_account.lamports()?, keyed_account.data_len()?) {
         Err(InstructionError::InsufficientFunds)
     } else {
         Ok(())

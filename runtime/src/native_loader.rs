@@ -72,7 +72,7 @@ pub fn invoke_entrypoint(
 ) -> Result<(), InstructionError> {
     // dispatch it
     let (names, params) = keyed_accounts.split_at_mut(1);
-    let name_vec = &names[0].account.data;
+    let name_vec = &names[0].try_account_ref()?.data;
     if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
         unsafe {
             return entrypoint(program_id, params, instruction_data);

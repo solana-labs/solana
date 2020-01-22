@@ -12,12 +12,13 @@ use solana_sdk::{
     instruction_processor_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
 };
+use std::cell::RefMut;
 
 fn verify_date_account(
     keyed_account: &mut KeyedAccount,
     expected_pubkey: &Pubkey,
 ) -> Result<Date<Utc>, InstructionError> {
-    if keyed_account.account.owner != solana_config_program::id() {
+    if keyed_account.owner()? != solana_config_program::id() {
         return Err(InstructionError::IncorrectProgramId);
     }
 
@@ -34,18 +35,18 @@ fn verify_date_account(
 fn verify_account<'a>(
     keyed_account: &'a mut KeyedAccount,
     expected_pubkey: &Pubkey,
-) -> Result<&'a mut Account, InstructionError> {
+) -> Result<RefMut<'a, Account>, InstructionError> {
     if keyed_account.unsigned_key() != expected_pubkey {
         return Err(VestError::Unauthorized.into());
     }
 
-    Ok(keyed_account.account)
+    keyed_account.try_account_ref_mut()
 }
 
 fn verify_signed_account<'a>(
     keyed_account: &'a mut KeyedAccount,
     expected_pubkey: &Pubkey,
-) -> Result<&'a mut Account, InstructionError> {
+) -> Result<RefMut<'a, Account>, InstructionError> {
     if keyed_account.signer_key().is_none() {
         return Err(InstructionError::MissingRequiredSignature);
     }
@@ -59,7 +60,7 @@ pub fn process_instruction(
     data: &[u8],
 ) -> Result<(), InstructionError> {
     let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
-    let contract_account = &mut next_keyed_account(keyed_accounts_iter)?.account;
+    let contract_account = &mut next_keyed_account(keyed_accounts_iter)?.try_account_ref_mut()?;
 
     let instruction = limited_deserialize(data)?;
 
@@ -104,11 +105,11 @@ pub fn process_instruction(
                 next_keyed_account(keyed_accounts_iter)?,
                 &vest_state.date_pubkey,
             )?;
-            let payee_account = verify_account(
+            let mut payee_account = verify_account(
                 next_keyed_account(keyed_accounts_iter)?,
                 &vest_state.payee_pubkey,
             )?;
-            vest_state.redeem_tokens(contract_account, current_date, payee_account);
+            vest_state.redeem_tokens(contract_account, current_date, &mut payee_account);
         }
         VestInstruction::Terminate | VestInstruction::Renege(_) => {
             let lamports = if let VestInstruction::Renege(lamports) = instruction {
@@ -121,12 +122,12 @@ pub fn process_instruction(
                 &vest_state.terminator_pubkey,
             )?;
             let payee_keyed_account = keyed_accounts_iter.next();
-            let payee_account = if let Some(payee_keyed_account) = payee_keyed_account {
-                &mut payee_keyed_account.account
+            let mut payee_account = if let Some(payee_keyed_account) = payee_keyed_account {
+                payee_keyed_account.try_account_ref_mut()?
             } else {
                 terminator_account
             };
-            vest_state.renege(contract_account, payee_account, lamports);
+            vest_state.renege(contract_account, &mut payee_account, lamports);
         }
         VestInstruction::VestAll => {
             verify_signed_account(
@@ -264,7 +265,7 @@ mod tests {
     fn test_verify_account_unauthorized() {
         // Ensure client can't sneak in with an untrusted date account.
         let date_pubkey = Pubkey::new_rand();
-        let mut account = Account::new(1, 0, &solana_config_program::id());
+        let mut account = Account::new_ref(1, 0, &solana_config_program::id());
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
 
         let mallory_pubkey = Pubkey::new_rand(); // <-- Attack! Not the expected account.
@@ -278,7 +279,7 @@ mod tests {
     fn test_verify_signed_account_missing_signature() {
         // Ensure client can't sneak in with an unsigned account.
         let date_pubkey = Pubkey::new_rand();
-        let mut account = Account::new(1, 0, &solana_config_program::id());
+        let mut account = Account::new_ref(1, 0, &solana_config_program::id());
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account); // <-- Attack! Unsigned transaction.
 
         assert_eq!(
@@ -291,7 +292,7 @@ mod tests {
     fn test_verify_date_account_incorrect_program_id() {
         // Ensure client can't sneak in with a non-Config account.
         let date_pubkey = Pubkey::new_rand();
-        let mut account = Account::new(1, 0, &id()); // <-- Attack! Pass Vest account where Config account is expected.
+        let mut account = Account::new_ref(1, 0, &id()); // <-- Attack! Pass Vest account where Config account is expected.
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
         assert_eq!(
             verify_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
@@ -303,7 +304,7 @@ mod tests {
     fn test_verify_date_account_uninitialized_config() {
         // Ensure no panic when `get_config_data()` returns an error.
         let date_pubkey = Pubkey::new_rand();
-        let mut account = Account::new(1, 0, &solana_config_program::id()); // <-- Attack! Zero space.
+        let mut account = Account::new_ref(1, 0, &solana_config_program::id()); // <-- Attack! Zero space.
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
         assert_eq!(
             verify_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
@@ -315,7 +316,7 @@ mod tests {
     fn test_verify_date_account_invalid_date_config() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
         let date_pubkey = Pubkey::new_rand();
-        let mut account = Account::new(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let mut account = Account::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
         assert_eq!(
             verify_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
@@ -327,7 +328,7 @@ mod tests {
     fn test_verify_date_account_deserialize() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
         let date_pubkey = Pubkey::new_rand();
-        let mut account = Account::new(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let mut account = Account::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let mut keyed_account = KeyedAccount::new(&date_pubkey, false, &mut account);
         assert_eq!(
             verify_date_account(&mut keyed_account, &date_pubkey).unwrap_err(),
