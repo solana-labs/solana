@@ -645,56 +645,48 @@ impl Bank {
         let stake_history = self.stakes.read().unwrap().history().clone();
         self.stake_delegations()
             .iter()
-            .map(
-                |(
-                    stake_pubkey,
-                    Delegation {
-                        voter_pubkey: vote_pubkey,
-                        ..
-                    },
-                )| {
-                    match (
-                        self.get_account(&stake_pubkey),
-                        self.get_account(&vote_pubkey),
-                    ) {
-                        (Some(mut stake_account), Some(mut vote_account)) => {
-                            match (stake_account.state(), vote_account.state()) {
-                                (Ok(StakeState::Stake(meta, mut stake)), Ok(vote_state)) => {
-                                    // we've recovered everything we need to do redemption at this point
-                                    if let Some((voters_reward, stakers_reward, credits_observed)) =
-                                        stake.calculate_rewards(
-                                            validator_point_value,
-                                            &vote_state,
-                                            Some(&stake_history),
-                                        )
+            .map(|(stake_pubkey, delegation)| {
+                match (
+                    self.get_account(&stake_pubkey),
+                    self.get_account(&delegation.voter_pubkey),
+                ) {
+                    (Some(mut stake_account), Some(mut vote_account)) => {
+                        match (stake_account.state(), vote_account.state()) {
+                            (Ok(StakeState::Stake(meta, mut stake)), Ok(vote_state)) => {
+                                // we've recovered everything we need to do redemption at this point
+                                if let Some((voters_reward, stakers_reward, credits_observed)) =
+                                    stake.calculate_rewards(
+                                        validator_point_value,
+                                        &vote_state,
+                                        Some(&stake_history),
+                                    )
+                                {
+                                    stake_account.lamports += stakers_reward;
+                                    vote_account.lamports += voters_reward;
+
+                                    stake.credits_observed = credits_observed;
+                                    stake.delegation.stake += stakers_reward;
+
+                                    if stake_account
+                                        .set_state(&StakeState::Stake(meta, stake))
+                                        .is_ok()
                                     {
-                                        stake_account.lamports += stakers_reward;
-                                        vote_account.lamports += voters_reward;
-
-                                        stake.credits_observed = credits_observed;
-                                        stake.delegation.stake += stakers_reward;
-
-                                        if stake_account
-                                            .set_state(&StakeState::Stake(meta, stake))
-                                            .is_ok()
-                                        {
-                                            self.store_account(&stake_pubkey, &stake_account);
-                                            self.store_account(&vote_pubkey, &vote_account);
-                                            stakers_reward + voters_reward
-                                        } else {
-                                            0
-                                        }
+                                        self.store_account(&stake_pubkey, &stake_account);
+                                        self.store_account(&delegation.voter_pubkey, &vote_account);
+                                        stakers_reward + voters_reward
                                     } else {
                                         0
                                     }
+                                } else {
+                                    0
                                 }
-                                (_, _) => 0,
                             }
+                            (_, _) => 0,
                         }
-                        (_, _) => 0,
                     }
-                },
-            )
+                    (_, _) => 0,
+                }
+            })
             .sum()
     }
 
@@ -2982,14 +2974,14 @@ mod tests {
         }));
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
 
-        let ((vote_id, mut vote_account), stake) =
+        let ((vote_id, mut vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
         let ((validator_id, validator_account), (archiver_id, archiver_account)) =
             crate::storage_utils::tests::create_storage_accounts_with_credits(100);
 
         // set up stakes, vote, and storage accounts
-        bank.store_account(&stake.0, &stake.1);
+        bank.store_account(&stake_id, &stake_account.borrow());
         bank.store_account(&validator_id, &validator_account.borrow());
         bank.store_account(&archiver_id, &archiver_account.borrow());
 
@@ -3022,6 +3014,16 @@ mod tests {
             .map(|account| Rewards::from_account(&account).unwrap())
             .unwrap();
 
+        // verify the stake and vote accounts are the right size
+        assert!(
+            ((bank1.get_balance(&stake_id) - stake_account.lamports + bank1.get_balance(&vote_id)
+                - vote_account.lamports) as f64
+                - rewards.validator_point_value * validator_points as f64)
+                .abs()
+                < 1.0
+        );
+
+        // verify the rewards are the right size
         assert!(
             ((rewards.validator_point_value * validator_points as f64
                 + rewards.storage_point_value * storage_points as f64)
