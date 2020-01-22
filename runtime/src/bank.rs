@@ -31,6 +31,7 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
+    account_utils::State,
     clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
@@ -48,7 +49,7 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
-use solana_stake_program::stake_state::{self, Delegation};
+use solana_stake_program::stake_state::{Delegation, StakeState};
 use solana_vote_program::vote_state::VoteState;
 use std::{
     cell::RefCell,
