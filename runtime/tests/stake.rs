@@ -258,7 +258,8 @@ fn test_stake_account_lifetime() {
 
     // 1 less vote, as the first vote should have cleared the lockout
     assert_eq!(vote_state.votes.len(), 31);
-    assert_eq!(vote_state.credits(), 1);
+    // one vote per slot, might be more slots than 32 in the epoch
+    assert!(vote_state.credits() >= 1);
     bank = fill_epoch_with_votes(&bank, &vote_keypair, &mint_keypair);
 
     let pre_staked = get_staked(&bank, &stake_pubkey);
@@ -275,6 +276,8 @@ fn test_stake_account_lifetime() {
     // split the stake
     let split_stake_keypair = Keypair::new();
     let split_stake_pubkey = split_stake_keypair.pubkey();
+
+    let bank_client = BankClient::new_shared(&bank);
     // Test split
     let message = Message::new_with_payer(
         stake_instruction::split(
