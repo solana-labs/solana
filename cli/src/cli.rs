@@ -1,7 +1,7 @@
 use crate::{
     cluster_query::*,
     display::{println_name_value, println_signers},
-    nonce::*,
+    nonce::{self, *},
     stake::*,
     storage::*,
     validator_info::*,
@@ -144,6 +144,10 @@ impl PartialEq for SigningAuthority {
             }
         }
     }
+}
+
+pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+    nonce::nonce_authority_arg().requires(NONCE_ARG.name)
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -1985,23 +1989,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(false)
                         .help("Sign the transaction offline"),
                 )
-                .arg(
-                    Arg::with_name(NONCE_ARG.name)
-                        .long(NONCE_ARG.long)
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .requires("blockhash")
-                        .validator(is_pubkey_or_keypair)
-                        .help(NONCE_ARG.help),
-                )
-                .arg(
-                    Arg::with_name(NONCE_AUTHORITY_ARG.name)
-                        .long(NONCE_AUTHORITY_ARG.long)
-                        .takes_value(true)
-                        .requires(NONCE_ARG.name)
-                        .validator(is_pubkey_or_keypair_or_ask_keyword)
-                        .help(NONCE_AUTHORITY_ARG.help),
-                )
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
                 .arg(
                     Arg::with_name("signer")
                         .long("signer")
