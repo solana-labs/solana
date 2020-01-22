@@ -31,7 +31,6 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
-    account_utils::State,
     clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
@@ -49,7 +48,7 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
-use solana_stake_program::stake_state::{Delegation, StakeState};
+use solana_stake_program::stake_state::{self, Delegation};
 use solana_vote_program::vote_state::VoteState;
 use std::{
     cell::RefCell,
@@ -641,7 +640,7 @@ impl Bank {
 
     /// iterate over all stakes, redeem vote credits for each stake we can
     ///   successfully load and parse, return total payout
-    fn pay_validator_rewards(&self, validator_point_value: f64) -> u64 {
+    fn pay_validator_rewards(&self, point_value: f64) -> u64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
         self.stake_delegations()
             .iter()
@@ -651,32 +650,22 @@ impl Bank {
                     self.get_account(&delegation.voter_pubkey),
                 ) {
                     (Some(mut stake_account), Some(mut vote_account)) => {
-                        match (stake_account.state(), vote_account.state()) {
-                            (Ok(StakeState::Stake(meta, mut stake)), Ok(vote_state)) => {
-                                // we've recovered everything we need to do redemption
-                                if let Some((voters_reward, stakers_reward)) = stake.redeem_rewards(
-                                    validator_point_value,
-                                    &vote_state,
-                                    Some(&stake_history),
-                                ) {
-                                    stake_account.lamports += stakers_reward;
-                                    vote_account.lamports += voters_reward;
-
-                                    if stake_account
-                                        .set_state(&StakeState::Stake(meta, stake))
-                                        .is_ok()
-                                    {
-                                        self.store_account(&stake_pubkey, &stake_account);
-                                        self.store_account(&delegation.voter_pubkey, &vote_account);
-                                        stakers_reward + voters_reward
-                                    } else {
-                                        0
-                                    }
-                                } else {
-                                    0
-                                }
-                            }
-                            (_, _) => 0,
+                        let rewards = stake_state::redeem_rewards(
+                            &mut stake_account,
+                            &mut vote_account,
+                            point_value,
+                            Some(&stake_history),
+                        );
+                        if let Ok(rewards) = rewards {
+                            self.store_account(&stake_pubkey, &stake_account);
+                            self.store_account(&delegation.voter_pubkey, &vote_account);
+                            rewards
+                        } else {
+                            debug!(
+                                "stake_state::redeem_rewards() failed for {}: {:?}",
+                                stake_pubkey, rewards
+                            );
+                            0
                         }
                     }
                     (_, _) => 0,
@@ -2976,7 +2965,7 @@ mod tests {
             crate::storage_utils::tests::create_storage_accounts_with_credits(100);
 
         // set up stakes, vote, and storage accounts
-        bank.store_account(&stake_id, &stake_account.borrow());
+        bank.store_account(&stake_id, &stake_account);
         bank.store_account(&validator_id, &validator_account.borrow());
         bank.store_account(&archiver_id, &archiver_account.borrow());
 

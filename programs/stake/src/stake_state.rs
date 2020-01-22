@@ -820,6 +820,33 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
 }
 
+// utility function, used by runtime
+pub fn redeem_rewards(
+    stake_account: &mut Account,
+    vote_account: &mut Account,
+    point_value: f64,
+    stake_history: Option<&StakeHistory>,
+) -> Result<u64, InstructionError> {
+    if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
+        let vote_state = vote_account.state()?;
+
+        if let Some((voters_reward, stakers_reward)) =
+            stake.redeem_rewards(point_value, &vote_state, stake_history)
+        {
+            stake_account.lamports += stakers_reward;
+            vote_account.lamports += voters_reward;
+
+            stake_account.set_state(&StakeState::Stake(meta, stake))?;
+
+            Ok(stakers_reward + voters_reward)
+        } else {
+            Err(StakeError::NoCreditsToRedeem.into())
+        }
+    } else {
+        Err(InstructionError::InvalidAccountData)
+    }
+}
+
 // utility function, used by runtime::Stakes, tests
 pub fn new_stake_history_entry<'a, I>(
     epoch: Epoch,
