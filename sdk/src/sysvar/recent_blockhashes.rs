@@ -38,6 +38,34 @@ impl<'a> FromIterator<&'a Hash> for RecentBlockhashes {
     }
 }
 
+// This is cherry-picked from HEAD of rust-lang's master (ref1) because it's
+// a nightly-only experimental API.
+// (binary_heap_into_iter_sorted [rustc issue #59278])
+// Remove this and use the standard API once BinaryHeap::into_iter_sorted (ref2)
+// is stabilized.
+// ref1: https://github.com/rust-lang/rust/blob/2f688ac602d50129388bb2a5519942049096cbff/src/liballoc/collections/binary_heap.rs#L1149
+// ref2: https://doc.rust-lang.org/std/collections/struct.BinaryHeap.html#into_iter_sorted.v
+
+#[derive(Clone, Debug)]
+pub struct IntoIterSorted<T> {
+    inner: BinaryHeap<T>,
+}
+
+impl<T: Ord> Iterator for IntoIterSorted<T> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<T> {
+        self.inner.pop()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.inner.len();
+        (exact, Some(exact))
+    }
+}
+
 impl Sysvar for RecentBlockhashes {
     fn size_of() -> usize {
         // hard-coded so that we don't have to construct an empty
@@ -61,7 +89,8 @@ where
     I: IntoIterator<Item = (u64, &'a Hash)>,
 {
     let sorted = BinaryHeap::from_iter(recent_blockhash_iter);
-    let recent_blockhash_iter = sorted.into_iter().take(MAX_ENTRIES).map(|(_, hash)| hash);
+    let sorted_iter = IntoIterSorted { inner: sorted };
+    let recent_blockhash_iter = sorted_iter.take(MAX_ENTRIES).map(|(_, hash)| hash);
     let recent_blockhashes = RecentBlockhashes::from_iter(recent_blockhash_iter);
     recent_blockhashes.to_account(account)
 }
