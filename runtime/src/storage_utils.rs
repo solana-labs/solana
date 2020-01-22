@@ -190,10 +190,7 @@ pub(crate) mod tests {
 
     pub fn create_storage_accounts_with_credits(
         credits: u64,
-    ) -> (
-        (Pubkey, Account),
-        (Pubkey, Account),
-    ) {
+    ) -> ((Pubkey, Account), (Pubkey, Account)) {
         let validator_pubkey = Pubkey::new_rand();
         let archiver_pubkey = Pubkey::new_rand();
         let validator_account = Account::new_ref(
