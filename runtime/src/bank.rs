@@ -3,7 +3,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::{
-    accounts::{Accounts, TransactionLoadResult},
+    accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
     accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
     blockhash_queue::BlockhashQueue,
     message_processor::{MessageProcessor, ProcessInstruction},
@@ -66,6 +66,8 @@ pub const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
+type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
+type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 
 #[derive(Default)]
 pub struct BankRc {
@@ -1169,6 +1171,48 @@ impl Bank {
         }
     }
 
+    /// Converts Accounts into RefCell<Account>, this involves moving
+    /// ownership by draining the source
+    #[allow(clippy::wrong_self_convention)]
+    fn into_refcells(
+        accounts: &mut TransactionAccounts,
+        loaders: &mut TransactionLoaders,
+    ) -> (TransactionAccountRefCells, TransactionLoaderRefCells) {
+        let account_refcells: Vec<_> = accounts
+            .drain(..)
+            .map(|account| Rc::new(RefCell::new(account)))
+            .collect();
+        let loader_refcells: Vec<Vec<_>> = loaders
+            .iter_mut()
+            .map(|v| {
+                v.drain(..)
+                    .map(|(pubkey, account)| (pubkey, RefCell::new(account)))
+                    .collect()
+            })
+            .collect();
+        (account_refcells, loader_refcells)
+    }
+
+    /// Converts back from RefCell<Account> to Account, this involves moving
+    /// ownership by draining the sources
+    fn from_refcells(
+        accounts: &mut TransactionAccounts,
+        loaders: &mut TransactionLoaders,
+        mut account_refcells: TransactionAccountRefCells,
+        loader_refcells: TransactionLoaderRefCells,
+    ) {
+        account_refcells.drain(..).for_each(|account_refcell| {
+            accounts.push(Rc::try_unwrap(account_refcell).unwrap().into_inner())
+        });
+        loaders
+            .iter_mut()
+            .zip(loader_refcells)
+            .for_each(|(ls, mut lrcs)| {
+                lrcs.drain(..)
+                    .for_each(|(pubkey, lrc)| ls.push((pubkey, lrc.into_inner())))
+            });
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -1223,47 +1267,23 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 (Err(e), hash_age_kind) => (Err(e.clone()), hash_age_kind.clone()),
                 (Ok((accounts, loaders, _rents)), hash_age_kind) => {
-                    // Into RefCells
-                    let mut account_ref_cells: Vec<_> = accounts
-                        .drain(..)
-                        .map(|account| Rc::new(RefCell::new(account)))
-                        .collect();
-                    let mut loader_ref_cells: Vec<Vec<_>> = loaders
-                        .iter_mut()
-                        .map(|v| {
-                            v.drain(..)
-                                .map(|(pubkey, account)| (pubkey, RefCell::new(account)))
-                                .collect()
-                        })
-                        .collect();
-
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
-                    let result = {
-                        let process_result = self.message_processor.process_message(
-                            tx.message(),
-                            &mut loader_ref_cells,
-                            &mut account_ref_cells,
-                        );
-                        if let Err(TransactionError::InstructionError(_, _)) = &process_result {
-                            error_counters.instruction_error += 1;
-                        }
-                        (process_result, hash_age_kind.clone())
-                    };
+                    let (mut account_refcells, mut loader_refcells) =
+                        Self::into_refcells(accounts, loaders);
 
-                    // Back from RefCells
-                    account_ref_cells.drain(..).for_each(|account_ref_cell| {
-                        accounts.push(Rc::try_unwrap(account_ref_cell).unwrap().into_inner())
-                    });
-                    loaders
-                        .iter_mut()
-                        .zip(loader_ref_cells)
-                        .for_each(|(ls, mut lrcs)| {
-                            lrcs.drain(..)
-                                .for_each(|(pubkey, lrc)| ls.push((pubkey, lrc.into_inner())))
-                        });
+                    let process_result = self.message_processor.process_message(
+                        tx.message(),
+                        &mut loader_refcells,
+                        &mut account_refcells,
+                    );
 
-                    result
+                    Self::from_refcells(accounts, loaders, account_refcells, loader_refcells);
+
+                    if let Err(TransactionError::InstructionError(_, _)) = &process_result {
+                        error_counters.instruction_error += 1;
+                    }
+                    (process_result, hash_age_kind.clone())
                 }
             })
             .collect();
