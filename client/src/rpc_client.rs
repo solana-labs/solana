@@ -100,10 +100,10 @@ impl RpcClient {
     }
 
     pub fn send_transaction(&self, transaction: &Transaction) -> Result<String, ClientError> {
-        let serialized = serialize(transaction).unwrap();
-        let signature = self
-            .client
-            .send(&RpcRequest::SendTransaction, json!([serialized]), 5)?;
+        let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
+        let signature =
+            self.client
+                .send(&RpcRequest::SendTransaction, json!([serialized_encoded]), 5)?;
         if signature.as_str().is_none() {
             Err(io::Error::new(
                 io::ErrorKind::Other,
