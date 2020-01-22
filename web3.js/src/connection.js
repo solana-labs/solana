@@ -448,46 +448,49 @@ const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult('number');
  * Expected JSON RPC response for the "getConfirmedBlock" message
  */
 export const GetConfirmedBlockRpcResult = jsonRpcResult(
-  struct({
-    blockhash: 'string',
-    previousBlockhash: 'string',
-    parentSlot: 'number',
-    transactions: struct.array([
-      struct({
-        transaction: struct({
-          signatures: struct.array(['string']),
-          message: struct({
-            accountKeys: struct.array(['string']),
-            header: struct({
-              numRequiredSignatures: 'number',
-              numReadonlySignedAccounts: 'number',
-              numReadonlyUnsignedAccounts: 'number',
-            }),
-            instructions: struct.array([
-              struct.union([
-                struct.array(['number']),
-                struct({
-                  accounts: struct.array(['number']),
-                  data: 'string',
-                  programIdIndex: 'number',
-                }),
+  struct.union([
+    'null',
+    struct({
+      blockhash: 'string',
+      previousBlockhash: 'string',
+      parentSlot: 'number',
+      transactions: struct.array([
+        struct({
+          transaction: struct({
+            signatures: struct.array(['string']),
+            message: struct({
+              accountKeys: struct.array(['string']),
+              header: struct({
+                numRequiredSignatures: 'number',
+                numReadonlySignedAccounts: 'number',
+                numReadonlyUnsignedAccounts: 'number',
+              }),
+              instructions: struct.array([
+                struct.union([
+                  struct.array(['number']),
+                  struct({
+                    accounts: struct.array(['number']),
+                    data: 'string',
+                    programIdIndex: 'number',
+                  }),
+                ]),
               ]),
-            ]),
-            recentBlockhash: 'string',
+              recentBlockhash: 'string',
+            }),
           }),
+          meta: struct.union([
+            'null',
+            struct({
+              status: SignatureStatusResult,
+              fee: 'number',
+              preBalances: struct.array(['number']),
+              postBalances: struct.array(['number']),
+            }),
+          ]),
         }),
-        meta: struct.union([
-          'null',
-          struct({
-            status: SignatureStatusResult,
-            fee: 'number',
-            preBalances: struct.array(['number']),
-            postBalances: struct.array(['number']),
-          }),
-        ]),
-      }),
-    ]),
-  }),
+      ]),
+    }),
+  ]),
 );
 
 /**
@@ -1052,6 +1055,9 @@ export class Connection {
       throw new Error(result.error.message);
     }
     assert(typeof result.result !== 'undefined');
+    if (!result.result) {
+      throw new Error('Confirmed block '+slot+' not found');
+    }
     return {
       blockhash: new PublicKey(result.result.blockhash).toString(),
       previousBlockhash: new PublicKey(

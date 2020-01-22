@@ -646,6 +646,21 @@ test('get confirmed block', async () => {
     }
     x++;
   }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedBlock',
+      params: [10000],
+    },
+    {
+      error: null,
+      result: null,
+    },
+  ]);
+  await expect(
+    connection.getConfirmedBlock(10000),
+  ).rejects.toThrow();
 });
 
 test('get recent blockhash', async () => {
