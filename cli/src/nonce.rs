@@ -14,8 +14,9 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_instruction::{
-        create_address_with_seed, create_nonce_account, create_nonce_account_with_seed,
-        nonce_advance, nonce_authorize, nonce_withdraw, NonceError, SystemError,
+        advance_nonce_account, authorize_nonce_account, create_address_with_seed,
+        create_nonce_account, create_nonce_account_with_seed, withdraw_nonce_account, NonceError,
+        SystemError,
     },
     system_program,
     transaction::Transaction,
@@ -379,7 +380,7 @@ pub fn process_authorize_nonce_account(
     let nonce_authority = nonce_authority
         .map(|a| a.keypair())
         .unwrap_or(&config.keypair);
-    let ix = nonce_authorize(nonce_account, &nonce_authority.pubkey(), new_authority);
+    let ix = authorize_nonce_account(nonce_account, &nonce_authority.pubkey(), new_authority);
     let mut tx = Transaction::new_signed_with_payer(
         vec![ix],
         Some(&config.keypair.pubkey()),
@@ -525,7 +526,7 @@ pub fn process_new_nonce(
     let nonce_authority = nonce_authority
         .map(|a| a.keypair())
         .unwrap_or(&config.keypair);
-    let ix = nonce_advance(&nonce_account, &nonce_authority.pubkey());
+    let ix = advance_nonce_account(&nonce_account, &nonce_authority.pubkey());
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_with_payer(
         vec![ix],
@@ -600,7 +601,7 @@ pub fn process_withdraw_from_nonce_account(
     let nonce_authority = nonce_authority
         .map(|a| a.keypair())
         .unwrap_or(&config.keypair);
-    let ix = nonce_withdraw(
+    let ix = withdraw_nonce_account(
         nonce_account,
         &nonce_authority.pubkey(),
         destination_account_pubkey,

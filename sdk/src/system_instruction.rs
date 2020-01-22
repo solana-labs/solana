@@ -363,7 +363,7 @@ pub fn create_nonce_account(
     ]
 }
 
-pub fn nonce_advance(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
+pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*nonce_pubkey, false),
         AccountMeta::new_readonly(recent_blockhashes::id(), false),
@@ -376,7 +376,7 @@ pub fn nonce_advance(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instr
     )
 }
 
-pub fn nonce_withdraw(
+pub fn withdraw_nonce_account(
     nonce_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     to_pubkey: &Pubkey,
@@ -396,7 +396,7 @@ pub fn nonce_withdraw(
     )
 }
 
-pub fn nonce_authorize(
+pub fn authorize_nonce_account(
     nonce_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     new_authority: &Pubkey,
