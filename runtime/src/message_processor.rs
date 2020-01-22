@@ -221,7 +221,7 @@ impl MessageProcessor {
         )
     }
 
-    fn verify_account_references(
+    pub fn verify_account_references(
         executable_accounts: &mut [(Pubkey, RefCell<Account>)],
         program_accounts: &mut [Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
@@ -375,6 +375,30 @@ mod tests {
 
         let buf = vec![];
         assert_eq!(is_zeroed(&buf), true);
+    }
+
+    #[test]
+    fn test_verify_account_references() {
+        let mut executable_accounts = vec![(Pubkey::new_rand(), RefCell::new(Account::default()))];
+        let mut program_accounts = vec![Rc::new(RefCell::new(Account::default()))];
+
+        assert!(MessageProcessor::verify_account_references(
+            &mut executable_accounts,
+            &mut program_accounts,
+        )
+        .is_ok());
+
+        let cloned = program_accounts[0].clone();
+        let _borrowed = cloned.borrow();
+        assert_eq!(
+            MessageProcessor::verify_account_references(
+                &mut executable_accounts,
+                &mut program_accounts,
+            ),
+            Err(InstructionError::AccountBorrowOutstanding)
+        );
+
+        // TODO when the `&mut`s go away test outstanding executable_account refs
     }
 
     #[test]
