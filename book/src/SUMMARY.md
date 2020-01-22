@@ -41,7 +41,6 @@
 * [API Reference](api-reference/README.md)
   * [Transaction](api-reference/transaction-api.md)
   * [Instruction](api-reference/instruction-api.md)
-  * [Blockstreamer](api-reference/blockstreamer.md)
   * [JSON RPC API](api-reference/jsonrpc-api.md)
   * [JavaScript API](api-reference/javascript-api.md)
   * [solana CLI](api-reference/cli.md)
