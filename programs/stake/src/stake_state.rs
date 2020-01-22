@@ -408,8 +408,8 @@ impl Stake {
                 // the staker registered sometime during the epoch, partial credit
                 credits - credits_observed
             } else {
-                // the staker has already observed/redeemed this epoch, or activated
-                //  after this epoch
+                // the staker has already observed or been redeemed this epoch
+                //  or was activated after this epoch
                 0
             };
 
@@ -537,13 +537,6 @@ pub trait StakeAccount {
         clock: &sysvar::clock::Clock,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError>;
-    fn redeem_vote_credits(
-        &mut self,
-        vote_account: &mut KeyedAccount,
-        rewards_account: &mut KeyedAccount,
-        rewards: &sysvar::rewards::Rewards,
-        stake_history: &sysvar::stake_history::StakeHistory,
-    ) -> Result<(), InstructionError>;
     fn split(
         &mut self,
         lamports: u64,
@@ -643,51 +636,6 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             stake.deactivate(clock.epoch)?;
 
             self.set_state(&StakeState::Stake(meta, stake))
-        } else {
-            Err(InstructionError::InvalidAccountData)
-        }
-    }
-    fn redeem_vote_credits(
-        &mut self,
-        vote_account: &mut KeyedAccount,
-        rewards_account: &mut KeyedAccount,
-        rewards: &sysvar::rewards::Rewards,
-        stake_history: &sysvar::stake_history::StakeHistory,
-    ) -> Result<(), InstructionError> {
-        if let (StakeState::Stake(meta, mut stake), StakeState::RewardsPool) =
-            (self.state()?, rewards_account.state()?)
-        {
-            let vote_state: VoteState = vote_account.state()?;
-
-            // the only valid use of current voter_pubkey, redelegation breaks
-            //  rewards redemption for previous voter_pubkey
-            if stake.delegation.voter_pubkey != *vote_account.unsigned_key() {
-                return Err(InstructionError::InvalidArgument);
-            }
-
-            if let Some((voters_reward, stakers_reward, credits_observed)) = stake
-                .calculate_rewards(
-                    rewards.validator_point_value,
-                    &vote_state,
-                    Some(stake_history),
-                )
-            {
-                if rewards_account.lamports()? < (stakers_reward + voters_reward) {
-                    return Err(InstructionError::UnbalancedInstruction);
-                }
-                rewards_account.try_account_ref_mut()?.lamports -= stakers_reward + voters_reward;
-
-                self.try_account_ref_mut()?.lamports += stakers_reward;
-                vote_account.try_account_ref_mut()?.lamports += voters_reward;
-
-                stake.credits_observed = credits_observed;
-                stake.delegation.stake += stakers_reward;
-
-                self.set_state(&StakeState::Stake(meta, stake))
-            } else {
-                // not worth collecting
-                Err(StakeError::NoCreditsToRedeem.into())
-            }
         } else {
             Err(InstructionError::InvalidAccountData)
         }
@@ -2082,166 +2030,6 @@ mod tests {
         assert_eq!(
             None, // would be Some((0, 2 * 1 + 1 * 2, 4)),
             stake.calculate_rewards(1.0, &vote_state, None)
-        );
-    }
-
-    #[test]
-    fn test_stake_redeem_vote_credits() {
-        let clock = sysvar::clock::Clock::default();
-        let mut rewards = sysvar::rewards::Rewards::default();
-        rewards.validator_point_value = 100.0;
-
-        let rewards_pool_pubkey = Pubkey::new_rand();
-        let mut rewards_pool_account = Account::new_ref_data(
-            std::u64::MAX,
-            &StakeState::RewardsPool,
-            &crate::rewards_pools::id(),
-        )
-        .unwrap();
-        let mut rewards_pool_keyed_account =
-            KeyedAccount::new(&rewards_pool_pubkey, false, &mut rewards_pool_account);
-
-        let stake_pubkey = Pubkey::default();
-        let stake_lamports = 100;
-        let mut stake_account = Account::new_ref_data_with_space(
-            stake_lamports,
-            &StakeState::Initialized(Meta::auto(&stake_pubkey)),
-            std::mem::size_of::<StakeState>(),
-            &id(),
-        )
-        .expect("stake_account");
-
-        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
-
-        let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account = RefCell::new(vote_state::create_account(
-            &vote_pubkey,
-            &Pubkey::new_rand(),
-            0,
-            100,
-        ));
-        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
-
-        // not delegated yet, deserialization fails
-        assert_eq!(
-            stake_keyed_account.redeem_vote_credits(
-                &mut vote_keyed_account,
-                &mut rewards_pool_keyed_account,
-                &rewards,
-                &StakeHistory::default(),
-            ),
-            Err(InstructionError::InvalidAccountData)
-        );
-        let signers = vec![stake_pubkey].into_iter().collect();
-        // delegate the stake
-        assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account, &clock, &Config::default(), &signers)
-            .is_ok());
-
-        let stake_history = create_stake_history_from_delegations(
-            Some(100),
-            0..10,
-            &[
-                StakeState::stake_from(&stake_keyed_account.account.borrow())
-                    .unwrap()
-                    .delegation,
-            ],
-        );
-
-        // no credits to claim
-        assert_eq!(
-            stake_keyed_account.redeem_vote_credits(
-                &mut vote_keyed_account,
-                &mut rewards_pool_keyed_account,
-                &rewards,
-                &stake_history,
-            ),
-            Err(StakeError::NoCreditsToRedeem.into())
-        );
-
-        // in this call, we've swapped rewards and vote, deserialization of rewards_pool fails
-        assert_eq!(
-            stake_keyed_account.redeem_vote_credits(
-                &mut rewards_pool_keyed_account,
-                &mut vote_keyed_account,
-                &rewards,
-                &StakeHistory::default(),
-            ),
-            Err(InstructionError::InvalidAccountData)
-        );
-
-        let mut vote_account = RefCell::new(vote_state::create_account(
-            &vote_pubkey,
-            &Pubkey::new_rand(),
-            0,
-            100,
-        ));
-
-        let mut vote_state = VoteState::from(&vote_account.borrow()).unwrap();
-        // split credits 3:1 between staker and voter
-        vote_state.commission = 25;
-        // put in some credits in epoch 0 for which we should have a non-zero stake
-        for _i in 0..100 {
-            vote_state.increment_credits(1);
-        }
-        vote_state.increment_credits(2);
-
-        vote_state.to(&mut vote_account.borrow_mut()).unwrap();
-        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
-
-        // some credits to claim, but rewards pool empty (shouldn't ever happen)
-        rewards_pool_keyed_account.account.borrow_mut().lamports = 1;
-        assert_eq!(
-            stake_keyed_account.redeem_vote_credits(
-                &mut vote_keyed_account,
-                &mut rewards_pool_keyed_account,
-                &rewards,
-                &StakeHistory::default(),
-            ),
-            Err(InstructionError::UnbalancedInstruction)
-        );
-        rewards_pool_keyed_account.account.borrow_mut().lamports = std::u64::MAX;
-
-        // finally! some credits to claim
-        let stake_account_balance = stake_keyed_account.account.borrow().lamports;
-        let vote_account_balance = vote_keyed_account.account.borrow().lamports;
-        assert_eq!(
-            stake_keyed_account.redeem_vote_credits(
-                &mut vote_keyed_account,
-                &mut rewards_pool_keyed_account,
-                &rewards,
-                &stake_history,
-            ),
-            Ok(())
-        );
-        let staker_rewards = stake_keyed_account.account.borrow().lamports - stake_account_balance;
-        let voter_commission = vote_keyed_account.account.borrow().lamports - vote_account_balance;
-        assert!(voter_commission > 0);
-        assert!(staker_rewards > 0);
-        assert!(
-            staker_rewards / 3 >= voter_commission,
-            "rewards should be split ~3:1"
-        );
-        // verify rewards are added to stake
-        let stake = StakeState::stake_from(&stake_keyed_account.account.borrow()).unwrap();
-        assert_eq!(
-            stake.delegation.stake,
-            stake_keyed_account.account.borrow().lamports
-        );
-
-        let wrong_vote_pubkey = Pubkey::new_rand();
-        let mut wrong_vote_keyed_account =
-            KeyedAccount::new(&wrong_vote_pubkey, false, &mut vote_account);
-
-        // wrong voter_pubkey...
-        assert_eq!(
-            stake_keyed_account.redeem_vote_credits(
-                &mut wrong_vote_keyed_account,
-                &mut rewards_pool_keyed_account,
-                &rewards,
-                &stake_history,
-            ),
-            Err(InstructionError::InvalidArgument)
         );
     }
 

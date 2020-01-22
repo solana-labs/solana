@@ -24,7 +24,7 @@ msc {
   ... ;
   Validator abox Validator [label="\nmax\nlockout\n"];
        |||;
-  StakerX => Cluster [label="StakeState::RedeemCredits()"];
-  StakerY => Cluster [label="StakeState::RedeemCredits()"] ;
+  Cluster box Cluster [label="credits redeemed (at epoch)"];
+
 
 }
