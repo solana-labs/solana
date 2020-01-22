@@ -22,7 +22,6 @@
   * [Blockstore](validator/blockstore.md)
   * [Gossip Service](validator/gossip.md)
   * [The Runtime](validator/runtime.md)
-* [Anatomy of a Transaction](transaction.md)
 * [Running a Validator](running-validator/README.md)
   * [Validator Requirements](running-validator/validator-reqs.md)
   * [Choosing a Testnet](running-validator/validator-testnet.md)

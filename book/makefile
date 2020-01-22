@@ -1,6 +1,6 @@
 BOB_SRCS=$(wildcard art/*.bob)
 MSC_SRCS=$(wildcard art/*.msc)
-MD_SRCS=$(wildcard src/*.md)
+MD_SRCS=$(wildcard src/*.md src/*/*.md)
 
 SVG_IMGS=$(BOB_SRCS:art/%.bob=src/.gitbook/assets/%.svg) $(MSC_SRCS:art/%.msc=src/.gitbook/assets/%.svg)
 

@@ -1,6 +1,20 @@
 # Programming Model
 
-A client _app_ interacts with a Solana cluster by sending it _transactions_ with one or more _instructions_. The Solana _runtime_ passes those instructions to user-contributed _programs_. An instruction might, for example, tell a program to transfer _lamports_ from one _account_ to another or create an interactive contract that governs how lamports are transfered. Instructions are executed atomically. If any instruction is invalid, any changes made within the transaction are discarded.
+A client _app_ interacts with a Solana cluster by sending it _transactions_ with one or more _instructions_. The Solana _runtime_ passes those instructions to user-contributed _programs_. An instruction might, for example, tell a program to transfer _lamports_ from one _account_ to another or create an interactive contract that governs how lamports are transfered. Instructions are executed sequentially and atomically. If any instruction is invalid, any changes made within the transaction are discarded.
+
+### Accounts and Signatures
+
+Each transaction explicitly lists all account public keys referenced by the transaction's instructions. A subset of those public keys are each accompanied by a transaction signature. Those signatures signal on-chain programs that the account holder has authorized the transaction. Typically, the program uses the authorization to permit debiting the account or modifying its data.
+
+The transaction also marks some accounts as _read-only accounts_. The runtime permits read-only accounts to be read concurrently. If a program attempts to modify a read-only account, the transaction is rejected by the runtime.
+
+### Recent Blockhash
+
+A Transaction includes a recent blockhash to prevent duplication and to give transactions lifetimes. Any transaction that is completely identical to a previous one is rejected, so adding a newer blockhash allows multiple transactions to repeat the exact same action. Transactions also have lifetimes that are defined by the blockhash, as any transaction whose blockhash is too old will be rejected.
+
+### Instructions
+
+Each instruction specifies a single program account \(which must be marked executable\), a subset of the transaction's accounts that should be passed to the program, and a data byte array instruction that is passed to the program. The program interprets the data array and operates on the accounts specified by the instructions. The program can return successfully, or with an error code. An error return causes the entire transaction to fail immediately.
 
 ## Deploying Programs to a Cluster
 
