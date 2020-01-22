@@ -223,7 +223,7 @@ pub fn process_instruction(
         }
         SystemInstruction::AdvanceNonceAccount => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
-            me.nonce_advance(
+            me.advance_nonce_account(
                 &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
                 &signers,
             )
@@ -231,7 +231,7 @@ pub fn process_instruction(
         SystemInstruction::WithdrawNonceAccount(lamports) => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
             let to = &mut next_keyed_account(keyed_accounts_iter)?;
-            me.nonce_withdraw(
+            me.withdraw_nonce_account(
                 lamports,
                 to,
                 &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
@@ -241,7 +241,7 @@ pub fn process_instruction(
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
-            me.nonce_initialize(
+            me.initialize_nonce_account(
                 &authorized,
                 &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
                 &Rent::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
@@ -249,7 +249,7 @@ pub fn process_instruction(
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
-            me.nonce_authorize(&nonce_authority, &signers)
+            me.authorize_nonce_account(&nonce_authority, &signers)
         }
     }
 }
@@ -868,7 +868,7 @@ mod tests {
     #[test]
     fn test_process_nonce_ix_no_acc_data_fail() {
         assert_eq!(
-            process_nonce_instruction(&system_instruction::nonce_advance(
+            process_nonce_instruction(&system_instruction::advance_nonce_account(
                 &Pubkey::default(),
                 &Pubkey::default()
             )),
@@ -970,7 +970,7 @@ mod tests {
     #[test]
     fn test_process_withdraw_ix_no_acc_data_fail() {
         assert_eq!(
-            process_nonce_instruction(&system_instruction::nonce_withdraw(
+            process_nonce_instruction(&system_instruction::withdraw_nonce_account(
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
@@ -1234,7 +1234,7 @@ mod tests {
     #[test]
     fn test_process_authorize_bad_account_data_fail() {
         assert_eq!(
-            process_nonce_instruction(&system_instruction::nonce_authorize(
+            process_nonce_instruction(&system_instruction::authorize_nonce_account(
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),

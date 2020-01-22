@@ -39,7 +39,7 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
     })
 }
 
-pub fn verify_nonce(acc: &Account, hash: &Hash) -> bool {
+pub fn verify_nonce_account(acc: &Account, hash: &Hash) -> bool {
     match acc.state() {
         Ok(NonceState::Initialized(_meta, ref nonce)) => hash == nonce,
         _ => false,
@@ -93,7 +93,7 @@ mod tests {
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
             vec![
-                system_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
             ],
             Hash::default(),
@@ -131,7 +131,7 @@ mod tests {
             &[&from_keypair, &nonce_keypair],
             vec![
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
-                system_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
             ],
             Hash::default(),
         );
@@ -147,7 +147,12 @@ mod tests {
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
             vec![
-                system_instruction::nonce_withdraw(&nonce_pubkey, &nonce_pubkey, &from_pubkey, 42),
+                system_instruction::withdraw_nonce_account(
+                    &nonce_pubkey,
+                    &nonce_pubkey,
+                    &from_pubkey,
+                    42,
+                ),
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
             ],
             Hash::default(),
@@ -194,16 +199,30 @@ mod tests {
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authorized = nonce_account.unsigned_key().clone();
             nonce_account
-                .nonce_initialize(&authorized, &recent_blockhashes, &Rent::free())
+                .initialize_nonce_account(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
+<<<<<<< HEAD
             assert!(verify_nonce(&nonce_account.account, &recent_blockhashes[0]));
+=======
+            assert!(verify_nonce_account(
+                &nonce_account.account.borrow(),
+                &recent_blockhashes[0]
+            ));
+>>>>>>> 964ff522b... Verb-noun-ify Nonce API (#7925)
         });
     }
 
     #[test]
     fn verify_nonce_bad_acc_state_fail() {
         with_test_keyed_account(42, true, |nonce_account| {
+<<<<<<< HEAD
             assert!(!verify_nonce(&nonce_account.account, &Hash::default()));
+=======
+            assert!(!verify_nonce_account(
+                &nonce_account.account.borrow(),
+                &Hash::default()
+            ));
+>>>>>>> 964ff522b... Verb-noun-ify Nonce API (#7925)
         });
     }
 
@@ -218,10 +237,15 @@ mod tests {
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authorized = nonce_account.unsigned_key().clone();
             nonce_account
-                .nonce_initialize(&authorized, &recent_blockhashes, &Rent::free())
+                .initialize_nonce_account(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
+<<<<<<< HEAD
             assert!(!verify_nonce(
                 &nonce_account.account,
+=======
+            assert!(!verify_nonce_account(
+                &nonce_account.account.borrow(),
+>>>>>>> 964ff522b... Verb-noun-ify Nonce API (#7925)
                 &recent_blockhashes[1]
             ));
         });
