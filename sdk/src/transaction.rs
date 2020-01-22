@@ -111,7 +111,7 @@ impl Transaction {
         nonce_hash: Hash,
     ) -> Self {
         let nonce_ix =
-            system_instruction::nonce_advance(&nonce_account_pubkey, &nonce_authority_pubkey);
+            system_instruction::advance_nonce(&nonce_account_pubkey, &nonce_authority_pubkey);
         instructions.insert(0, nonce_ix);
         Self::new_signed_with_payer(instructions, payer, signing_keypairs, nonce_hash)
     }

@@ -93,7 +93,7 @@ mod tests {
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
             vec![
-                system_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
             ],
             Hash::default(),
@@ -131,7 +131,7 @@ mod tests {
             &[&from_keypair, &nonce_keypair],
             vec![
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
-                system_instruction::nonce_advance(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::advance_nonce(&nonce_pubkey, &nonce_pubkey),
             ],
             Hash::default(),
         );
@@ -147,7 +147,7 @@ mod tests {
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
             vec![
-                system_instruction::nonce_withdraw(&nonce_pubkey, &nonce_pubkey, &from_pubkey, 42),
+                system_instruction::withdraw_nonce(&nonce_pubkey, &nonce_pubkey, &from_pubkey, 42),
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
             ],
             Hash::default(),
@@ -194,7 +194,7 @@ mod tests {
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authorized = nonce_account.unsigned_key().clone();
             nonce_account
-                .nonce_initialize(&authorized, &recent_blockhashes, &Rent::free())
+                .initialize_nonce(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
             assert!(verify_nonce(
                 &nonce_account.account.borrow(),
@@ -224,7 +224,7 @@ mod tests {
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authorized = nonce_account.unsigned_key().clone();
             nonce_account
-                .nonce_initialize(&authorized, &recent_blockhashes, &Rent::free())
+                .initialize_nonce(&authorized, &recent_blockhashes, &Rent::free())
                 .unwrap();
             assert!(!verify_nonce(
                 &nonce_account.account.borrow(),
