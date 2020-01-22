@@ -1,6 +1,8 @@
 //! useful extras for Account state
-use crate::account::{Account, KeyedAccount};
-use crate::instruction::InstructionError;
+use crate::{
+    account::{Account, KeyedAccount},
+    instruction::InstructionError,
+};
 use bincode::ErrorKind;
 
 /// Convenience trait to covert bincode errors to instruction errors.

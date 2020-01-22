@@ -365,13 +365,28 @@ impl Stake {
     pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
         self.delegation.stake(epoch, history)
     }
+
+    pub fn redeem_rewards(
+        &mut self,
+        point_value: f64,
+        vote_state: &VoteState,
+        stake_history: Option<&StakeHistory>,
+    ) -> Option<(u64, u64)> {
+        self.calculate_rewards(point_value, vote_state, stake_history)
+            .map(|(voters_reward, stakers_reward, credits_observed)| {
+                self.credits_observed = credits_observed;
+                self.delegation.stake += stakers_reward;
+                (voters_reward, stakers_reward)
+            })
+    }
+
     /// for a given stake and vote_state, calculate what distributions and what updates should be made
     /// returns a tuple in the case of a payout of:
     ///   * voter_rewards to be distributed
     ///   * staker_rewards to be distributed
     ///   * new value for credits_observed in the stake
     //  returns None if there's no payout or if any deserved payout is < 1 lamport
-    fn calculate_rewards(
+    pub fn calculate_rewards(
         &self,
         point_value: f64,
         vote_state: &VoteState,
@@ -802,6 +817,33 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         self.try_account_ref_mut()?.lamports -= lamports;
         to.try_account_ref_mut()?.lamports += lamports;
         Ok(())
+    }
+}
+
+// utility function, used by runtime
+pub fn redeem_rewards(
+    stake_account: &mut Account,
+    vote_account: &mut Account,
+    point_value: f64,
+    stake_history: Option<&StakeHistory>,
+) -> Result<u64, InstructionError> {
+    if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
+        let vote_state = vote_account.state()?;
+
+        if let Some((voters_reward, stakers_reward)) =
+            stake.redeem_rewards(point_value, &vote_state, stake_history)
+        {
+            stake_account.lamports += stakers_reward;
+            vote_account.lamports += voters_reward;
+
+            stake_account.set_state(&StakeState::Stake(meta, stake))?;
+
+            Ok(stakers_reward + voters_reward)
+        } else {
+            Err(StakeError::NoCreditsToRedeem.into())
+        }
+    } else {
+        Err(InstructionError::InvalidAccountData)
     }
 }
 
@@ -1922,6 +1964,43 @@ mod tests {
             ),
             Ok(())
         );
+    }
+
+    #[test]
+    fn test_stake_state_redeem_rewards() {
+        let mut vote_state = VoteState::default();
+        // assume stake.stake() is right
+        // bootstrap means fully-vested stake at epoch 0
+        let stake_lamports = 1;
+        let mut stake = Stake::new(
+            stake_lamports,
+            &Pubkey::default(),
+            &vote_state,
+            std::u64::MAX,
+            &Config::default(),
+        );
+
+        // this one can't collect now, credits_observed == vote_state.credits()
+        assert_eq!(
+            None,
+            stake.redeem_rewards(1_000_000_000.0, &vote_state, None)
+        );
+
+        // put 2 credits in at epoch 0
+        vote_state.increment_credits(0);
+        vote_state.increment_credits(0);
+
+        // this one should be able to collect exactly 2
+        assert_eq!(
+            Some((0, stake_lamports * 2)),
+            stake.redeem_rewards(1.0, &vote_state, None)
+        );
+
+        assert_eq!(
+            stake.delegation.stake,
+            stake_lamports + (stake_lamports * 2)
+        );
+        assert_eq!(stake.credits_observed, 2);
     }
 
     #[test]

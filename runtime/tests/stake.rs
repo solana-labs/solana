@@ -1,4 +1,3 @@
-use assert_matches::assert_matches;
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -11,7 +10,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_instruction::create_address_with_seed,
-    sysvar::{self, rewards::Rewards, stake_history::StakeHistory, Sysvar},
+    sysvar::{self, stake_history::StakeHistory, Sysvar},
 };
 use solana_stake_program::{
     stake_instruction::{self},
@@ -241,6 +240,14 @@ fn test_stake_account_lifetime() {
         assert!(false, "wrong account type found")
     }
 
+    loop {
+        if warmed_up(&bank, &stake_pubkey) {
+            break;
+        }
+        // Cycle thru banks until we're fully warmed up
+        bank = next_epoch(&bank);
+    }
+
     // Reward redemption
     // Submit enough votes to generate rewards
     bank = fill_epoch_with_votes(&bank, &vote_keypair, &mint_keypair);
@@ -251,35 +258,14 @@ fn test_stake_account_lifetime() {
 
     // 1 less vote, as the first vote should have cleared the lockout
     assert_eq!(vote_state.votes.len(), 31);
-    assert_eq!(vote_state.credits(), 1);
+    // one vote per slot, might be more slots than 32 in the epoch
+    assert!(vote_state.credits() >= 1);
     bank = fill_epoch_with_votes(&bank, &vote_keypair, &mint_keypair);
-
-    loop {
-        if warmed_up(&bank, &stake_pubkey) {
-            break;
-        }
-        // Cycle thru banks until we're fully warmed up
-        bank = next_epoch(&bank);
-    }
-
-    // Test that rewards are there
-    let rewards_account = bank
-        .get_account(&sysvar::rewards::id())
-        .expect("account not found");
-    assert_matches!(Rewards::from_account(&rewards_account), Some(_));
 
     let pre_staked = get_staked(&bank, &stake_pubkey);
 
-    // Redeem the credit
-    let bank_client = BankClient::new_shared(&bank);
-    let message = Message::new_with_payer(
-        vec![stake_instruction::redeem_vote_credits(
-            &stake_pubkey,
-            &vote_pubkey,
-        )],
-        Some(&mint_pubkey),
-    );
-    assert_matches!(bank_client.send_message(&[&mint_keypair], message), Ok(_));
+    // next epoch bank should pay rewards
+    bank = next_epoch(&bank);
 
     // Test that balance increased, and that the balance got staked
     let staked = get_staked(&bank, &stake_pubkey);
@@ -290,6 +276,8 @@ fn test_stake_account_lifetime() {
     // split the stake
     let split_stake_keypair = Keypair::new();
     let split_stake_pubkey = split_stake_keypair.pubkey();
+
+    let bank_client = BankClient::new_shared(&bank);
     // Test split
     let message = Message::new_with_payer(
         stake_instruction::split(

@@ -48,7 +48,7 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{Result, Transaction, TransactionError},
 };
-use solana_stake_program::stake_state::Delegation;
+use solana_stake_program::stake_state::{self, Delegation};
 use solana_vote_program::vote_state::VoteState;
 use std::{
     cell::RefCell,
@@ -630,10 +630,48 @@ impl Bank {
             &sysvar::rewards::create_account(1, validator_point_value, storage_point_value),
         );
 
+        let validator_rewards = self.pay_validator_rewards(validator_point_value);
+
         self.capitalization.fetch_add(
-            (validator_rewards + storage_rewards) as u64,
+            validator_rewards + storage_rewards as u64,
             Ordering::Relaxed,
         );
+    }
+
+    /// iterate over all stakes, redeem vote credits for each stake we can
+    ///   successfully load and parse, return total payout
+    fn pay_validator_rewards(&self, point_value: f64) -> u64 {
+        let stake_history = self.stakes.read().unwrap().history().clone();
+        self.stake_delegations()
+            .iter()
+            .map(|(stake_pubkey, delegation)| {
+                match (
+                    self.get_account(&stake_pubkey),
+                    self.get_account(&delegation.voter_pubkey),
+                ) {
+                    (Some(mut stake_account), Some(mut vote_account)) => {
+                        let rewards = stake_state::redeem_rewards(
+                            &mut stake_account,
+                            &mut vote_account,
+                            point_value,
+                            Some(&stake_history),
+                        );
+                        if let Ok(rewards) = rewards {
+                            self.store_account(&stake_pubkey, &stake_account);
+                            self.store_account(&delegation.voter_pubkey, &vote_account);
+                            rewards
+                        } else {
+                            debug!(
+                                "stake_state::redeem_rewards() failed for {}: {:?}",
+                                stake_pubkey, rewards
+                            );
+                            0
+                        }
+                    }
+                    (_, _) => 0,
+                }
+            })
+            .sum()
     }
 
     pub fn update_recent_blockhashes(&self) {
@@ -2920,14 +2958,14 @@ mod tests {
         }));
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
 
-        let ((vote_id, mut vote_account), stake) =
+        let ((vote_id, mut vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
         let ((validator_id, validator_account), (archiver_id, archiver_account)) =
             crate::storage_utils::tests::create_storage_accounts_with_credits(100);
 
         // set up stakes, vote, and storage accounts
-        bank.store_account(&stake.0, &stake.1);
+        bank.store_account(&stake_id, &stake_account);
         bank.store_account(&validator_id, &validator_account.borrow());
         bank.store_account(&archiver_id, &archiver_account.borrow());
 
@@ -2960,6 +2998,16 @@ mod tests {
             .map(|account| Rewards::from_account(&account).unwrap())
             .unwrap();
 
+        // verify the stake and vote accounts are the right size
+        assert!(
+            ((bank1.get_balance(&stake_id) - stake_account.lamports + bank1.get_balance(&vote_id)
+                - vote_account.lamports) as f64
+                - rewards.validator_point_value * validator_points as f64)
+                .abs()
+                < 1.0
+        );
+
+        // verify the rewards are the right size
         assert!(
             ((rewards.validator_point_value * validator_points as f64
                 + rewards.storage_point_value * storage_points as f64)
