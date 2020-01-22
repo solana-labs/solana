@@ -31,7 +31,6 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
-    account_utils::State,
     clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
