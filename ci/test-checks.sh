@@ -10,6 +10,9 @@ source ci/rust-version.sh nightly
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
+# Look for failed mergify.io backports
+_ git show HEAD --check --oneline
+
 _ cargo +"$rust_stable" fmt --all -- --check
 
 # Clippy gets stuck for unknown reasons if sdk-c is included in the build, so check it separately.
