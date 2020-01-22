@@ -1933,16 +1933,6 @@ mod tests {
         vote_state.increment_credits(0);
         vote_state.increment_credits(0);
 
-        // this one can't collect now, no epoch credits have been saved off
-        //   even though point value is huuge
-        assert_eq!(
-            None,
-            stake.calculate_rewards(1_000_000_000_000.0, &vote_state, None)
-        );
-
-        // put 1 credit in epoch 1, pushes the 2 above into a redeemable state
-        vote_state.increment_credits(1);
-
         // this one should be able to collect exactly 2
         assert_eq!(
             Some((0, stake.delegation.stake * 2, 2)),
@@ -1950,22 +1940,27 @@ mod tests {
         );
 
         stake.credits_observed = 1;
-        // this one should be able to collect exactly 1 (only observed one)
+        // this one should be able to collect exactly 1 (already observed one)
         assert_eq!(
             Some((0, stake.delegation.stake * 1, 2)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
 
-        stake.credits_observed = 2;
-        // this one should be able to collect none because credits_observed >= credits in a
-        //  redeemable state (the 2 credits in epoch 0)
-        assert_eq!(None, stake.calculate_rewards(1.0, &vote_state, None));
+        // put 1 credit in epoch 1
+        vote_state.increment_credits(1);
 
-        // put 1 credit in epoch 2, pushes the 1 for epoch 1 to redeemable
-        vote_state.increment_credits(2);
-        // this one should be able to collect 1 now, one credit by a stake of 1
+        stake.credits_observed = 2;
+        // this one should be able to collect the one just added
         assert_eq!(
             Some((0, stake.delegation.stake * 1, 3)),
+            stake.calculate_rewards(1.0, &vote_state, None)
+        );
+
+        // put 1 credit in epoch 2
+        vote_state.increment_credits(2);
+        // this one should be able to collect 2 now
+        assert_eq!(
+            Some((0, stake.delegation.stake * 2, 4)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
 
@@ -1975,8 +1970,10 @@ mod tests {
         assert_eq!(
             Some((
                 0,
-                stake.delegation.stake * 1 + stake.delegation.stake * 2,
-                3
+                stake.delegation.stake * 2 // epoch 0
+                    + stake.delegation.stake * 1 // epoch 1
+                    + stake.delegation.stake * 1, // epoch 2
+                4
             )),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
@@ -1985,12 +1982,12 @@ mod tests {
         //  verify that None comes back on small redemptions where no one gets paid
         vote_state.commission = 1;
         assert_eq!(
-            None, // would be Some((0, 2 * 1 + 1 * 2, 3)),
+            None, // would be Some((0, 2 * 1 + 1 * 2, 4)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
         vote_state.commission = 99;
         assert_eq!(
-            None, // would be Some((0, 2 * 1 + 1 * 2, 3)),
+            None, // would be Some((0, 2 * 1 + 1 * 2, 4)),
             stake.calculate_rewards(1.0, &vote_state, None)
         );
     }
