@@ -8,7 +8,7 @@ use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     account::Account,
-    account_utils::State,
+    account_utils::StateMut,
     hash::Hash,
     nonce_state::NonceState,
     pubkey::Pubkey,
@@ -420,7 +420,7 @@ pub fn process_create_nonce_account(
 
     if let Ok(nonce_account) = rpc_client.get_account(&nonce_account_address) {
         let err_msg = if nonce_account.owner == system_program::id()
-            && State::<NonceState>::state(&nonce_account).is_ok()
+            && StateMut::<NonceState>::state(&nonce_account).is_ok()
         {
             format!("Nonce account {} already exists", nonce_account_address)
         } else {

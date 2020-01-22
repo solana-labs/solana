@@ -124,8 +124,7 @@ pub fn verify_account_changes(
     Ok(())
 }
 
-pub type ProcessInstruction =
-    fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), InstructionError>;
+pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<instruction_processor_utils::Entrypoint>>>;
 
@@ -215,15 +214,15 @@ impl MessageProcessor {
 
         native_loader::invoke_entrypoint(
             &program_id,
-            &mut keyed_accounts,
+            &keyed_accounts,
             &instruction.data,
             &self.symbol_cache,
         )
     }
 
     pub fn verify_account_references(
-        executable_accounts: &mut [(Pubkey, RefCell<Account>)],
-        program_accounts: &mut [Rc<RefCell<Account>>],
+        executable_accounts: &[(Pubkey, RefCell<Account>)],
+        program_accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         for account in program_accounts.iter() {
             account
@@ -805,7 +804,7 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &mut [KeyedAccount],
+            keyed_accounts: &[KeyedAccount],
             data: &[u8],
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -901,7 +900,7 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &mut [KeyedAccount],
+            keyed_accounts: &[KeyedAccount],
             data: &[u8],
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {

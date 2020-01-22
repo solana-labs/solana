@@ -6,12 +6,19 @@ use crate::{
 use bincode::ErrorKind;
 
 /// Convenience trait to covert bincode errors to instruction errors.
-pub trait State<T> {
+pub trait StateMut<T> {
     fn state(&self) -> Result<T, InstructionError>;
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
 }
 
-impl<T> State<T> for Account
+// TODO duplicate trait needed?
+/// Convenience trait to covert bincode errors to instruction errors.
+pub trait State<T> {
+    fn state(&self) -> Result<T, InstructionError>;
+    fn set_state(&self, state: &T) -> Result<(), InstructionError>;
+}
+
+impl<T> StateMut<T> for Account
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -34,7 +41,7 @@ where
     fn state(&self) -> Result<T, InstructionError> {
         self.try_account_ref()?.state()
     }
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
+    fn set_state(&self, state: &T) -> Result<(), InstructionError> {
         self.try_account_ref_mut()?.set_state(state)
     }
 }

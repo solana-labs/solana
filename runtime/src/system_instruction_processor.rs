@@ -2,7 +2,7 @@ use log::*;
 
 use solana_sdk::{
     account::{get_signers, Account, KeyedAccount},
-    account_utils::State,
+    account_utils::StateMut,
     instruction::InstructionError,
     instruction_processor_utils::{limited_deserialize, next_keyed_account},
     nonce_state::{NonceAccount, NonceState},
@@ -125,7 +125,7 @@ fn allocate_and_assign(
 }
 
 fn create_account(
-    from: &mut KeyedAccount,
+    from: &KeyedAccount,
     to: &mut Account,
     to_address: &Address,
     lamports: u64,
@@ -137,11 +137,7 @@ fn create_account(
     transfer(from, to, lamports)
 }
 
-fn transfer(
-    from: &mut KeyedAccount,
-    to: &mut Account,
-    lamports: u64,
-) -> Result<(), InstructionError> {
+fn transfer(from: &KeyedAccount, to: &mut Account, lamports: u64) -> Result<(), InstructionError> {
     if lamports == 0 {
         return Ok(());
     }
@@ -171,7 +167,7 @@ fn transfer(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
 ) -> Result<(), InstructionError> {
     let instruction = limited_deserialize(instruction_data)?;
@@ -180,7 +176,7 @@ pub fn process_instruction(
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
     let signers = get_signers(keyed_accounts);
-    let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
+    let keyed_accounts_iter = &mut keyed_accounts.iter();
 
     match instruction {
         SystemInstruction::CreateAccount {

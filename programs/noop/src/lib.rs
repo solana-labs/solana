@@ -11,7 +11,7 @@ solana_sdk::declare_program!(
 
 fn process_instruction(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();

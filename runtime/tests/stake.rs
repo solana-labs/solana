@@ -4,7 +4,7 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
 };
 use solana_sdk::{
-    account_utils::State,
+    account_utils::StateMut,
     client::SyncClient,
     message::Message,
     pubkey::Pubkey,

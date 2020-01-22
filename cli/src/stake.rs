@@ -13,7 +13,7 @@ use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::{
-    account_utils::State,
+    account_utils::StateMut,
     hash::Hash,
     pubkey::Pubkey,
     signature::KeypairUtil,

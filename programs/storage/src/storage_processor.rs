@@ -12,12 +12,12 @@ use solana_sdk::{
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
-    let (me, rest) = keyed_accounts.split_at_mut(1);
+    let (me, rest) = keyed_accounts.split_at(1);
     let me_unsigned = me[0].signer_key().is_none();
     let mut me_account = me[0].try_account_ref_mut()?;
     let mut storage_account = StorageAccount::new(*me[0].unsigned_key(), &mut me_account);
@@ -63,23 +63,23 @@ pub fn process_instruction(
             if rest.len() != 4 {
                 return Err(InstructionError::InvalidArgument);
             }
-            let (clock, rest) = rest.split_at_mut(1);
-            let (rewards, rest) = rest.split_at_mut(1);
-            let (rewards_pools, owner) = rest.split_at_mut(1);
+            let (clock, rest) = rest.split_at(1);
+            let (rewards, rest) = rest.split_at(1);
+            let (rewards_pools, owner) = rest.split_at(1);
 
             let rewards = Rewards::from_keyed_account(&rewards[0])?;
             let clock = Clock::from_keyed_account(&clock[0])?;
             let mut owner_account = owner[0].try_account_ref_mut()?;
             let mut owner = StorageAccount::new(*owner[0].unsigned_key(), &mut owner_account);
 
-            storage_account.claim_storage_reward(&mut rewards_pools[0], clock, rewards, &mut owner)
+            storage_account.claim_storage_reward(&rewards_pools[0], clock, rewards, &mut owner)
         }
         StorageInstruction::ProofValidation { segment, proofs } => {
             if rest.is_empty() {
                 return Err(InstructionError::InvalidArgument);
             }
 
-            let (clock, rest) = rest.split_at_mut(1);
+            let (clock, rest) = rest.split_at(1);
             if me_unsigned || rest.is_empty() {
                 // This instruction must be signed by `me` and `rest` cannot be empty
                 return Err(InstructionError::InvalidArgument);
@@ -127,13 +127,13 @@ mod tests {
 
     fn test_instruction(
         ix: &Instruction,
-        program_accounts: &mut [Account],
+        program_accounts: &[Account],
     ) -> Result<(), InstructionError> {
         let program_accounts: Vec<_> = program_accounts
             .iter()
             .map(|account| RefCell::new(account.clone()))
             .collect();
-        let mut keyed_accounts: Vec<_> = ix
+        let keyed_accounts: Vec<_> = ix
             .accounts
             .iter()
             .zip(program_accounts.iter())
@@ -142,7 +142,7 @@ mod tests {
             })
             .collect();
 
-        let ret = process_instruction(&id(), &mut keyed_accounts, &ix.data);
+        let ret = process_instruction(&id(), &keyed_accounts, &ix.data);
         info!("ret: {:?}", ret);
         ret
     }
@@ -180,15 +180,15 @@ mod tests {
             &mut clock_account,
         );
 
-        assert_eq!(test_instruction(&ix, &mut [account, clock_account]), Ok(()));
+        assert_eq!(test_instruction(&ix, &[account, clock_account]), Ok(()));
     }
 
     #[test]
     fn test_storage_tx() {
         let pubkey = Pubkey::new_rand();
-        let mut accounts = [(&pubkey, &RefCell::new(Account::default()))];
-        let mut keyed_accounts = create_keyed_accounts(&mut accounts);
-        assert!(process_instruction(&id(), &mut keyed_accounts, &[]).is_err());
+        let accounts = [(&pubkey, &RefCell::new(Account::default()))];
+        let keyed_accounts = create_keyed_accounts(&accounts);
+        assert!(process_instruction(&id(), &keyed_accounts, &[]).is_err());
     }
 
     #[test]
@@ -196,15 +196,15 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let clock_id = clock::id();
         let mut keyed_accounts = Vec::new();
-        let mut user_account = RefCell::new(Account::default());
-        let mut clock_account = RefCell::new(Clock::default().create_account(1));
-        keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
-        keyed_accounts.push(KeyedAccount::new(&clock_id, false, &mut clock_account));
+        let user_account = RefCell::new(Account::default());
+        let clock_account = RefCell::new(Clock::default().create_account(1));
+        keyed_accounts.push(KeyedAccount::new(&pubkey, true, &user_account));
+        keyed_accounts.push(KeyedAccount::new(&clock_id, false, &clock_account));
 
         let ix = storage_instruction::advertise_recent_blockhash(&pubkey, Hash::default(), 1);
 
         assert_eq!(
-            process_instruction(&id(), &mut keyed_accounts, &ix.data),
+            process_instruction(&id(), &keyed_accounts, &ix.data),
             Err(InstructionError::InvalidAccountData)
         );
     }
@@ -212,7 +212,7 @@ mod tests {
     #[test]
     fn test_invalid_accounts_len() {
         let pubkey = Pubkey::new_rand();
-        let mut accounts = [Account::default()];
+        let accounts = [Account::default()];
 
         let ix = storage_instruction::mining_proof(
             &pubkey,
@@ -232,11 +232,11 @@ mod tests {
             &mut clock_account,
         );
 
-        assert!(test_instruction(&ix, &mut accounts).is_err());
+        assert!(test_instruction(&ix, &accounts).is_err());
 
-        let mut accounts = [Account::default(), clock_account, Account::default()];
+        let accounts = [Account::default(), clock_account, Account::default()];
 
-        assert!(test_instruction(&ix, &mut accounts).is_err());
+        assert!(test_instruction(&ix, &accounts).is_err());
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod tests {
         );
 
         // submitting a proof for a slot in the past, so this should fail
-        assert!(test_instruction(&ix, &mut accounts).is_err());
+        assert!(test_instruction(&ix, &accounts).is_err());
     }
 
     #[test]
@@ -291,6 +291,6 @@ mod tests {
             &mut clock_account,
         );
 
-        assert_matches!(test_instruction(&ix, &mut [account, clock_account]), Ok(_));
+        assert_matches!(test_instruction(&ix, &[account, clock_account]), Ok(_));
     }
 }

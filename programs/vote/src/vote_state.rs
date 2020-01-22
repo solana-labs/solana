@@ -428,7 +428,7 @@ impl VoteState {
 /// but will implicitly withdraw authorization from the previously authorized
 /// key
 pub fn authorize(
-    vote_account: &mut KeyedAccount,
+    vote_account: &KeyedAccount,
     authorized: &Pubkey,
     vote_authorize: VoteAuthorize,
     signers: &HashSet<Pubkey>,
@@ -465,7 +465,7 @@ pub fn authorize(
 
 /// Update the node_pubkey, requires signature of the authorized voter
 pub fn update_node(
-    vote_account: &mut KeyedAccount,
+    vote_account: &KeyedAccount,
     node_pubkey: &Pubkey,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
@@ -492,9 +492,9 @@ fn verify_authorized_signer(
 
 /// Withdraw funds from the vote account
 pub fn withdraw(
-    vote_account: &mut KeyedAccount,
+    vote_account: &KeyedAccount,
     lamports: u64,
-    to_account: &mut KeyedAccount,
+    to_account: &KeyedAccount,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
@@ -513,7 +513,7 @@ pub fn withdraw(
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account(
-    vote_account: &mut KeyedAccount,
+    vote_account: &KeyedAccount,
     vote_init: &VoteInit,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
@@ -526,7 +526,7 @@ pub fn initialize_account(
 }
 
 pub fn process_vote(
-    vote_account: &mut KeyedAccount,
+    vote_account: &KeyedAccount,
     slot_hashes: &[SlotHash],
     clock: &Clock,
     vote: &Vote,
@@ -581,7 +581,7 @@ mod tests {
     use crate::vote_state;
     use solana_sdk::{
         account::{get_signers, Account},
-        account_utils::State,
+        account_utils::StateMut,
         hash::hash,
         instruction_processor_utils::next_keyed_account,
     };
@@ -606,14 +606,14 @@ mod tests {
     #[test]
     fn test_initialize_vote_account() {
         let vote_account_pubkey = Pubkey::new_rand();
-        let mut vote_account = Account::new_ref(100, VoteState::size_of(), &id());
+        let vote_account = Account::new_ref(100, VoteState::size_of(), &id());
 
         let node_pubkey = Pubkey::new_rand();
 
         //init should pass
-        let mut vote_account = KeyedAccount::new(&vote_account_pubkey, false, &mut vote_account);
+        let vote_account = KeyedAccount::new(&vote_account_pubkey, false, &vote_account);
         let res = initialize_account(
-            &mut vote_account,
+            &vote_account,
             &VoteInit {
                 node_pubkey,
                 authorized_voter: vote_account_pubkey,
@@ -626,7 +626,7 @@ mod tests {
 
         // reinit should fail
         let res = initialize_account(
-            &mut vote_account,
+            &vote_account,
             &VoteInit {
                 node_pubkey,
                 authorized_voter: vote_account_pubkey,
@@ -653,15 +653,15 @@ mod tests {
 
     fn simulate_process_vote(
         vote_pubkey: &Pubkey,
-        vote_account: &mut RefCell<Account>,
+        vote_account: &RefCell<Account>,
         vote: &Vote,
         slot_hashes: &[SlotHash],
         epoch: Epoch,
     ) -> Result<VoteState, InstructionError> {
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, vote_account)];
         let signers = get_signers(keyed_accounts);
         process_vote(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             slot_hashes,
             &Clock {
                 epoch,
@@ -676,7 +676,7 @@ mod tests {
     /// exercises all the keyed accounts stuff
     fn simulate_process_vote_unchecked(
         vote_pubkey: &Pubkey,
-        vote_account: &mut RefCell<Account>,
+        vote_account: &RefCell<Account>,
         vote: &Vote,
     ) -> Result<VoteState, InstructionError> {
         simulate_process_vote(
@@ -711,11 +711,11 @@ mod tests {
 
     #[test]
     fn test_vote() {
-        let (vote_pubkey, mut vote_account) = create_test_account();
+        let (vote_pubkey, vote_account) = create_test_account();
 
         let vote = Vote::new(vec![1], Hash::default());
         let vote_state =
-            simulate_process_vote_unchecked(&vote_pubkey, &mut vote_account, &vote).unwrap();
+            simulate_process_vote_unchecked(&vote_pubkey, &vote_account, &vote).unwrap();
         assert_eq!(
             vote_state.votes,
             vec![Lockout::new(*vote.slots.last().unwrap())]
@@ -725,7 +725,7 @@ mod tests {
 
     #[test]
     fn test_vote_slot_hashes() {
-        let (vote_pubkey, mut vote_account) = create_test_account();
+        let (vote_pubkey, vote_account) = create_test_account();
 
         let hash = hash(&[0u8]);
         let vote = Vote::new(vec![0], hash);
@@ -734,7 +734,7 @@ mod tests {
         assert_eq!(
             simulate_process_vote(
                 &vote_pubkey,
-                &mut vote_account,
+                &vote_account,
                 &vote,
                 &[(0, Hash::default())],
                 0,
@@ -744,33 +744,33 @@ mod tests {
 
         // wrong slot
         assert_eq!(
-            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[(1, hash)], 0),
+            simulate_process_vote(&vote_pubkey, &vote_account, &vote, &[(1, hash)], 0),
             Err(VoteError::SlotsMismatch.into())
         );
 
         // empty slot_hashes
         assert_eq!(
-            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[], 0),
+            simulate_process_vote(&vote_pubkey, &vote_account, &vote, &[], 0),
             Err(VoteError::VoteTooOld.into())
         );
     }
 
     #[test]
     fn test_vote_update_node_id() {
-        let (vote_pubkey, mut vote_account) = create_test_account();
+        let (vote_pubkey, vote_account) = create_test_account();
 
         let node_pubkey = Pubkey::new_rand();
 
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, false, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
         let signers = get_signers(keyed_accounts);
-        let res = update_node(&mut keyed_accounts[0], &node_pubkey, &signers);
+        let res = update_node(&keyed_accounts[0], &node_pubkey, &signers);
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
         let vote_state: VoteState = vote_account.borrow().state().unwrap();
         assert!(vote_state.node_pubkey != node_pubkey);
 
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers = get_signers(keyed_accounts);
-        let res = update_node(&mut keyed_accounts[0], &node_pubkey, &signers);
+        let res = update_node(&keyed_accounts[0], &node_pubkey, &signers);
         assert_eq!(res, Ok(()));
         let vote_state: VoteState = vote_account.borrow().state().unwrap();
         assert_eq!(vote_state.node_pubkey, node_pubkey);
@@ -778,14 +778,14 @@ mod tests {
 
     #[test]
     fn test_vote_signature() {
-        let (vote_pubkey, mut vote_account) = create_test_account();
+        let (vote_pubkey, vote_account) = create_test_account();
         let vote = Vote::new(vec![1], Hash::default());
 
         // unsigned
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, false, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let res = process_vote(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
             &vote,
@@ -794,10 +794,10 @@ mod tests {
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // signed
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let res = process_vote(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
             &vote,
@@ -806,11 +806,11 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // another voter, unsigned
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, false, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let authorized_voter_pubkey = Pubkey::new_rand();
         let res = authorize(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
             &signers,
@@ -821,10 +821,10 @@ mod tests {
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let res = authorize(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
             &signers,
@@ -833,7 +833,7 @@ mod tests {
         assert_eq!(res, Err(VoteError::TooSoonToReauthorize.into()));
 
         let res = authorize(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
             &signers,
@@ -845,18 +845,14 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // verify authorized_voter_pubkey can authorize authorized_voter_pubkey ;)
-        let mut authorized_voter_account = RefCell::new(Account::default());
-        let keyed_accounts = &mut [
-            KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            KeyedAccount::new(
-                &authorized_voter_pubkey,
-                true,
-                &mut authorized_voter_account,
-            ),
+        let authorized_voter_account = RefCell::new(Account::default());
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, false, &vote_account),
+            KeyedAccount::new(&authorized_voter_pubkey, true, &authorized_voter_account),
         ];
         let signers = get_signers(keyed_accounts);
         let res = authorize(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
             &signers,
@@ -866,11 +862,11 @@ mod tests {
 
         // authorize another withdrawer
         // another voter
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let authorized_withdrawer_pubkey = Pubkey::new_rand();
         let res = authorize(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
             &signers,
@@ -879,14 +875,14 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // verify authorized_withdrawer can authorize authorized_withdrawer ;)
-        let mut withdrawer_account = RefCell::new(Account::default());
-        let keyed_accounts = &mut [
-            KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &mut withdrawer_account),
+        let withdrawer_account = RefCell::new(Account::default());
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, false, &vote_account),
+            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
         ];
         let signers = get_signers(keyed_accounts);
         let res = authorize(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
             &signers,
@@ -895,11 +891,11 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // not signed by authorized voter
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let vote = Vote::new(vec![2], Hash::default());
         let res = process_vote(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
             &vote,
@@ -908,19 +904,15 @@ mod tests {
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // signed by authorized voter
-        let mut authorized_voter_account = RefCell::new(Account::default());
-        let keyed_accounts = &mut [
-            KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            KeyedAccount::new(
-                &authorized_voter_pubkey,
-                true,
-                &mut authorized_voter_account,
-            ),
+        let authorized_voter_account = RefCell::new(Account::default());
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, false, &vote_account),
+            KeyedAccount::new(&authorized_voter_pubkey, true, &authorized_voter_account),
         ];
         let signers = get_signers(keyed_accounts);
         let vote = Vote::new(vec![2], Hash::default());
         let res = process_vote(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock::default(),
             &vote,
@@ -932,11 +924,11 @@ mod tests {
     #[test]
     fn test_vote_without_initialization() {
         let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account = RefCell::new(Account::new(100, VoteState::size_of(), &id()));
+        let vote_account = RefCell::new(Account::new(100, VoteState::size_of(), &id()));
 
         let res = simulate_process_vote_unchecked(
             &vote_pubkey,
-            &mut vote_account,
+            &vote_account,
             &Vote::new(vec![1], Hash::default()),
         );
         assert_eq!(res, Err(InstructionError::UninitializedAccount));
@@ -1252,47 +1244,47 @@ mod tests {
 
     #[test]
     fn test_vote_state_withdraw() {
-        let (vote_pubkey, mut vote_account) = create_test_account();
+        let (vote_pubkey, vote_account) = create_test_account();
 
         // unsigned request
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, false, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let res = withdraw(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             0,
-            &mut KeyedAccount::new(
+            &KeyedAccount::new(
                 &Pubkey::new_rand(),
                 false,
-                &mut RefCell::new(Account::default()),
+                &RefCell::new(Account::default()),
             ),
             &signers,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // insufficient funds
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let res = withdraw(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             101,
-            &mut KeyedAccount::new(
+            &KeyedAccount::new(
                 &Pubkey::new_rand(),
                 false,
-                &mut RefCell::new(Account::default()),
+                &RefCell::new(Account::default()),
             ),
             &signers,
         );
         assert_eq!(res, Err(InstructionError::InsufficientFunds));
 
         // all good
-        let mut to_account = RefCell::new(Account::default());
+        let to_account = RefCell::new(Account::default());
         let lamports = vote_account.borrow().lamports;
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let res = withdraw(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             lamports,
-            &mut KeyedAccount::new(&Pubkey::new_rand(), false, &mut to_account),
+            &KeyedAccount::new(&Pubkey::new_rand(), false, &to_account),
             &signers,
         );
         assert_eq!(res, Ok(()));
@@ -1304,10 +1296,10 @@ mod tests {
 
         // authorize authorized_withdrawer
         let authorized_withdrawer_pubkey = Pubkey::new_rand();
-        let keyed_accounts = &mut [KeyedAccount::new(&vote_pubkey, true, &mut vote_account)];
+        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let res = authorize(
-            &mut keyed_accounts[0],
+            &keyed_accounts[0],
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
             &signers,
@@ -1316,13 +1308,13 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // withdraw using authorized_withdrawer to authorized_withdrawer's account
-        let mut withdrawer_account = RefCell::new(Account::default());
-        let keyed_accounts = &mut [
-            KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
-            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &mut withdrawer_account),
+        let withdrawer_account = RefCell::new(Account::default());
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, false, &vote_account),
+            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
         ];
         let signers = get_signers(keyed_accounts);
-        let keyed_accounts = &mut keyed_accounts.iter_mut();
+        let keyed_accounts = &mut keyed_accounts.iter();
         let vote_keyed_account = next_keyed_account(keyed_accounts).unwrap();
         let withdrawer_keyed_account = next_keyed_account(keyed_accounts).unwrap();
         let res = withdraw(

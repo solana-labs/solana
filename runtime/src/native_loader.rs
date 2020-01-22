@@ -66,12 +66,12 @@ fn library_open(path: &PathBuf) -> std::io::Result<Library> {
 
 pub fn invoke_entrypoint(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     symbol_cache: &SymbolCache,
 ) -> Result<(), InstructionError> {
     // dispatch it
-    let (names, params) = keyed_accounts.split_at_mut(1);
+    let (names, params) = keyed_accounts.split_at(1);
     let name_vec = &names[0].try_account_ref()?.data;
     if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
         unsafe {

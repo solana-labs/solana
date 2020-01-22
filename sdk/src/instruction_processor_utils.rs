@@ -4,7 +4,7 @@ use num_traits::{FromPrimitive, ToPrimitive};
 // Native program ENTRYPOINT prototype
 pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
 ) -> Result<(), InstructionError>;
 
@@ -28,7 +28,7 @@ pub type Entrypoint = unsafe extern "C" fn(
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
-///     keyed_accounts: &mut [KeyedAccount],
+///     keyed_accounts: &[KeyedAccount],
 ///     instruction_data: &[u8],
 /// ) -> Result<(), InstructionError> {
 ///   // Process an instruction
@@ -59,7 +59,7 @@ pub type Entrypoint = unsafe extern "C" fn(
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
-///     keyed_accounts: &mut [KeyedAccount],
+///     keyed_accounts: &[KeyedAccount],
 ///     instruction_data: &[u8],
 /// ) -> Result<(), InstructionError> {
 ///   // Process an instruction
@@ -91,7 +91,7 @@ macro_rules! declare_program(
         #[no_mangle]
         pub extern "C" fn $name(
             program_id: &$crate::pubkey::Pubkey,
-            keyed_accounts: &mut [$crate::account::KeyedAccount],
+            keyed_accounts: &[$crate::account::KeyedAccount],
             instruction_data: &[u8],
         ) -> Result<(), $crate::instruction::InstructionError> {
             $entrypoint(program_id, keyed_accounts, instruction_data)

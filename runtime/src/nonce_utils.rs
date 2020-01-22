@@ -1,6 +1,6 @@
 use solana_sdk::{
     account::Account,
-    account_utils::State,
+    account_utils::StateMut,
     hash::Hash,
     instruction::CompiledInstruction,
     instruction_processor_utils::limited_deserialize,
@@ -75,6 +75,7 @@ mod tests {
     use super::*;
     use solana_sdk::{
         account::Account,
+        account_utils::State,
         hash::Hash,
         instruction::InstructionError,
         nonce_state::{with_test_keyed_account, Meta, NonceAccount},

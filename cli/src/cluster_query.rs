@@ -11,7 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::{rpc_client::RpcClient, rpc_response::RpcVoteAccountInfo};
 use solana_sdk::{
-    account_utils::State,
+    account_utils::StateMut,
     clock::{self, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::{Epoch, EpochSchedule},

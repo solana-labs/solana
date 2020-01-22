@@ -30,7 +30,7 @@ use solana_perf::packet::Packets;
 use solana_perf::recycler::Recycler;
 use solana_sdk::packet::Packet;
 use solana_sdk::{
-    account_utils::State,
+    account_utils::StateMut,
     client::{AsyncClient, SyncClient},
     clock::{get_complete_segment_from_slot, get_segment_from_slot, Slot},
     commitment_config::CommitmentConfig,

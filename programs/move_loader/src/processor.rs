@@ -6,12 +6,12 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount,
+    account_utils::State,
     instruction::InstructionError,
     instruction_processor_utils::{is_executable, limited_deserialize, next_keyed_account},
     move_loader::id,
     pubkey::Pubkey,
     sysvar::rent,
-    account_utils::State,
 };
 use types::{
     account_address::AccountAddress,
@@ -206,13 +206,13 @@ impl MoveProcessor {
 
     fn data_store_to_keyed_accounts(
         data_store: DataStore,
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
     ) -> Result<(), InstructionError> {
         let mut write_sets = data_store
             .into_write_sets()
             .map_err(|_| InstructionError::GenericError)?;
 
-        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let mut keyed_accounts_iter = keyed_accounts.iter();
 
         // Genesis account holds both mint and stdlib
         let genesis = next_keyed_account(&mut keyed_accounts_iter)?;
@@ -255,11 +255,11 @@ impl MoveProcessor {
     }
 
     pub fn do_write(
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
         offset: u32,
         bytes: &[u8],
     ) -> Result<(), InstructionError> {
-        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let mut keyed_accounts_iter = keyed_accounts.iter();
         let keyed_account = next_keyed_account(&mut keyed_accounts_iter)?;
 
         if keyed_account.signer_key().is_none() {
@@ -281,8 +281,8 @@ impl MoveProcessor {
         Ok(())
     }
 
-    pub fn do_finalize(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
-        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+    pub fn do_finalize(keyed_accounts: &[KeyedAccount]) -> Result<(), InstructionError> {
+        let mut keyed_accounts_iter = keyed_accounts.iter();
         let finalized = next_keyed_account(&mut keyed_accounts_iter)?;
         let rent = next_keyed_account(&mut keyed_accounts_iter)?;
 
@@ -362,10 +362,10 @@ impl MoveProcessor {
     }
 
     pub fn do_create_genesis(
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
         amount: u64,
     ) -> Result<(), InstructionError> {
-        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let mut keyed_accounts_iter = keyed_accounts.iter();
         let genesis = next_keyed_account(&mut keyed_accounts_iter)?;
 
         if genesis.owner()? != id() {
@@ -386,12 +386,12 @@ impl MoveProcessor {
     }
 
     pub fn do_invoke_main(
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
         sender_address: AccountAddress,
         function_name: String,
         args: Vec<TransactionArgument>,
     ) -> Result<(), InstructionError> {
-        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let mut keyed_accounts_iter = keyed_accounts.iter();
         let script = next_keyed_account(&mut keyed_accounts_iter)?;
 
         trace!(
@@ -409,7 +409,7 @@ impl MoveProcessor {
             return Err(InstructionError::AccountNotExecutable);
         }
 
-        let data_accounts = keyed_accounts_iter.into_slice();
+        let data_accounts = keyed_accounts_iter.as_slice();
 
         let mut data_store = Self::keyed_accounts_to_data_store(&data_accounts)?;
         let verified_script = Self::deserialize_verified_script(&script.try_account_ref()?.data)?;
@@ -431,7 +431,7 @@ impl MoveProcessor {
 
     pub fn process_instruction(
         _program_id: &Pubkey,
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
         solana_logger::setup();
@@ -500,14 +500,14 @@ mod tests {
 
         let code = "main() { return; }";
         let sender_address = AccountAddress::default();
-        let mut script = LibraAccount::create_script(&sender_address, code, vec![]);
+        let script = LibraAccount::create_script(&sender_address, code, vec![]);
         let rent_id = rent::id();
-        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+        MoveProcessor::do_finalize(&keyed_accounts).unwrap();
         let _ = MoveProcessor::deserialize_verified_script(&script.account.borrow().data).unwrap();
     }
 
@@ -516,14 +516,14 @@ mod tests {
         solana_logger::setup();
 
         let amount = 10_000_000;
-        let mut unallocated = LibraAccount::create_unallocated(BIG_ENOUGH);
+        let unallocated = LibraAccount::create_unallocated(BIG_ENOUGH);
 
-        let mut keyed_accounts = vec![KeyedAccount::new(
+        let keyed_accounts = vec![KeyedAccount::new(
             &unallocated.key,
             false,
-            &mut unallocated.account,
+            &unallocated.account,
         )];
-        MoveProcessor::do_create_genesis(&mut keyed_accounts, amount).unwrap();
+        MoveProcessor::do_create_genesis(&keyed_accounts, amount).unwrap();
 
         assert_eq!(
             bincode::deserialize::<LibraAccountState>(
@@ -541,30 +541,25 @@ mod tests {
 
         let code = "main() { return; }";
         let sender_address = AccountAddress::default();
-        let mut script = LibraAccount::create_script(&sender_address, code, vec![]);
-        let mut genesis = LibraAccount::create_genesis(1_000_000_000);
+        let script = LibraAccount::create_script(&sender_address, code, vec![]);
+        let genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
-        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+        MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&genesis.key, false, &mut genesis.account),
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&genesis.key, false, &genesis.account),
         ];
 
-        MoveProcessor::do_invoke_main(
-            &mut keyed_accounts,
-            sender_address,
-            "main".to_string(),
-            vec![],
-        )
-        .unwrap();
+        MoveProcessor::do_invoke_main(&keyed_accounts, sender_address, "main".to_string(), vec![])
+            .unwrap();
     }
 
     #[test]
@@ -578,12 +573,12 @@ mod tests {
                 }
             }
         ";
-        let mut module = LibraAccount::create_module(code, vec![]);
+        let module = LibraAccount::create_module(code, vec![]);
         let rent_id = rent::id();
-        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&module.key, true, &mut module.account),
-            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
+        let keyed_accounts = vec![
+            KeyedAccount::new(&module.key, true, &module.account),
+            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
         keyed_accounts[0]
             .account
@@ -591,7 +586,7 @@ mod tests {
             .data
             .resize(BIG_ENOUGH, 0);
 
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+        MoveProcessor::do_finalize(&keyed_accounts).unwrap();
     }
 
     #[test]
@@ -605,26 +600,26 @@ mod tests {
             }
         ";
         let sender_address = AccountAddress::default();
-        let mut script = LibraAccount::create_script(&sender_address, code, vec![]);
-        let mut genesis = LibraAccount::create_genesis(1_000_000_000);
+        let script = LibraAccount::create_script(&sender_address, code, vec![]);
+        let genesis = LibraAccount::create_genesis(1_000_000_000);
 
         let rent_id = rent::id();
-        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+        MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&genesis.key, false, &mut genesis.account),
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&genesis.key, false, &genesis.account),
         ];
 
         assert_eq!(
             MoveProcessor::do_invoke_main(
-                &mut keyed_accounts,
+                &keyed_accounts,
                 sender_address,
                 "main".to_string(),
                 vec![],
@@ -640,8 +635,8 @@ mod tests {
         let mut data_store = DataStore::default();
 
         let amount = 42;
-        let mut accounts = mint_coins(amount).unwrap();
-        let mut accounts_iter = accounts.iter_mut();
+        let accounts = mint_coins(amount).unwrap();
+        let mut accounts_iter = accounts.iter();
 
         let _script = next_libra_account(&mut accounts_iter).unwrap();
         let genesis = next_libra_account(&mut accounts_iter).unwrap();
@@ -665,8 +660,8 @@ mod tests {
     fn test_invoke_pay_from_sender() {
         solana_logger::setup();
         let amount_to_mint = 42;
-        let mut accounts = mint_coins(amount_to_mint).unwrap();
-        let mut accounts_iter = accounts.iter_mut();
+        let accounts = mint_coins(amount_to_mint).unwrap();
+        let mut accounts_iter = accounts.iter();
 
         let _script = next_libra_account(&mut accounts_iter).unwrap();
         let genesis = next_libra_account(&mut accounts_iter).unwrap();
@@ -680,28 +675,28 @@ mod tests {
                 return;
             }
         ";
-        let mut script = LibraAccount::create_script(&genesis.address, code, vec![]);
-        let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
+        let script = LibraAccount::create_script(&genesis.address, code, vec![]);
+        let payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
-        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+        MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&genesis.key, false, &mut genesis.account),
-            KeyedAccount::new(&sender.key, false, &mut sender.account),
-            KeyedAccount::new(&payee.key, false, &mut payee.account),
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&genesis.key, false, &genesis.account),
+            KeyedAccount::new(&sender.key, false, &sender.account),
+            KeyedAccount::new(&payee.key, false, &payee.account),
         ];
 
         let amount = 2;
         MoveProcessor::do_invoke_main(
-            &mut keyed_accounts,
+            &keyed_accounts,
             sender.address.clone(),
             "main".to_string(),
             vec![
@@ -739,13 +734,13 @@ mod tests {
         ",
             universal_truth
         );
-        let mut module = LibraAccount::create_module(&code, vec![]);
+        let module = LibraAccount::create_module(&code, vec![]);
 
         let rent_id = rent::id();
-        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&module.key, true, &mut module.account),
-            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
+        let keyed_accounts = vec![
+            KeyedAccount::new(&module.key, true, &module.account),
+            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
         keyed_accounts[0]
             .account
@@ -753,13 +748,13 @@ mod tests {
             .data
             .resize(BIG_ENOUGH, 0);
 
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+        MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
         // Next invoke the published module
 
         let amount_to_mint = 84;
-        let mut accounts = mint_coins(amount_to_mint).unwrap();
-        let mut accounts_iter = accounts.iter_mut();
+        let accounts = mint_coins(amount_to_mint).unwrap();
+        let mut accounts_iter = accounts.iter();
 
         let _script = next_libra_account(&mut accounts_iter).unwrap();
         let genesis = next_libra_account(&mut accounts_iter).unwrap();
@@ -780,32 +775,32 @@ mod tests {
             ",
             module.address
         );
-        let mut script = LibraAccount::create_script(
+        let script = LibraAccount::create_script(
             &genesis.address,
             &code,
             vec![&module.account.borrow().data],
         );
-        let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
+        let payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
-        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+        MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&genesis.key, false, &mut genesis.account),
-            KeyedAccount::new(&sender.key, false, &mut sender.account),
-            KeyedAccount::new(&module.key, false, &mut module.account),
-            KeyedAccount::new(&payee.key, false, &mut payee.account),
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&genesis.key, false, &genesis.account),
+            KeyedAccount::new(&sender.key, false, &sender.account),
+            KeyedAccount::new(&module.key, false, &module.account),
+            KeyedAccount::new(&payee.key, false, &payee.account),
         ];
 
         MoveProcessor::do_invoke_main(
-            &mut keyed_accounts,
+            &keyed_accounts,
             sender.address.clone(),
             "main".to_string(),
             vec![TransactionArgument::Address(payee.address.clone())],
@@ -833,27 +828,27 @@ mod tests {
                 return;
             }
         ";
-        let mut genesis = LibraAccount::create_genesis(1_000_000_000);
-        let mut script = LibraAccount::create_script(&genesis.address.clone(), code, vec![]);
-        let mut payee = LibraAccount::create_unallocated(BIG_ENOUGH);
+        let genesis = LibraAccount::create_genesis(1_000_000_000);
+        let script = LibraAccount::create_script(&genesis.address.clone(), code, vec![]);
+        let payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
         let rent_id = rent::id();
-        let mut rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&rent_id, false, &mut rent_account),
+        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
-        MoveProcessor::do_finalize(&mut keyed_accounts).unwrap();
+        MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &mut script.account),
-            KeyedAccount::new(&genesis.key, false, &mut genesis.account),
-            KeyedAccount::new(&payee.key, false, &mut payee.account),
+        let keyed_accounts = vec![
+            KeyedAccount::new(&script.key, true, &script.account),
+            KeyedAccount::new(&genesis.key, false, &genesis.account),
+            KeyedAccount::new(&payee.key, false, &payee.account),
         ];
 
         MoveProcessor::do_invoke_main(
-            &mut keyed_accounts,
+            &keyed_accounts,
             account_config::association_address(),
             "main".to_string(),
             vec![
