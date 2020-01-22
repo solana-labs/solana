@@ -106,7 +106,6 @@ args=(
   --gossip-port 8001
   --rpc-port 8899
   --rpc-faucet-address 127.0.0.1:9900
-  --accounts "$dataDir"/accounts
   --log -
   --enable-rpc-exit
   --init-complete-file "$dataDir"/init-completed
