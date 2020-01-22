@@ -46,7 +46,7 @@ impl NonceState {
 
 pub trait NonceAccount {
     fn advance_nonce_account(
-        &mut self,
+        &self,
         recent_blockhashes: &RecentBlockhashes,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError>;
