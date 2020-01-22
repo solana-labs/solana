@@ -51,9 +51,9 @@ indexes are each an unsigned 8-bit index into that same vector.
 
 ## Short Vector Format
 
-A *short vector* is serialized the same way as a vector (vector length,
+A short vector is serialized the same way as a vector (vector length,
 followed by each item), except that the vector length has a multi-byte encoding
-called *short u16*.
+called short u16.
 
 ## Short u16 Format
 
