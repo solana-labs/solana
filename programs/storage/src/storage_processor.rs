@@ -3,13 +3,12 @@
 //!  and give reward for good proofs.
 use crate::{storage_contract::StorageAccount, storage_instruction::StorageInstruction};
 use solana_sdk::{
-    account::{Account, KeyedAccount},
+    account::KeyedAccount,
     instruction::InstructionError,
     instruction_processor_utils::limited_deserialize,
     pubkey::Pubkey,
     sysvar::{clock::Clock, rewards::Rewards, Sysvar},
 };
-use std::cell::RefMut;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -90,13 +89,13 @@ pub fn process_instruction(
             let mut rest = rest
                 .iter()
                 .map(|keyed_account| Ok((keyed_account, keyed_account.try_account_ref_mut()?)))
-                .collect::<Result<Vec<(&KeyedAccount, RefMut<Account>)>, InstructionError>>()?;
+                .collect::<Result<Vec<_>, InstructionError>>()?;
             let mut rest = rest
                 .iter_mut()
                 .map(|(keyed_account, account_ref)| {
                     StorageAccount::new(*keyed_account.unsigned_key(), account_ref)
                 })
-                .collect::<Vec<StorageAccount>>();
+                .collect::<Vec<_>>();
             storage_account.proof_validation(&me_id, clock, segment, proofs, &mut rest)
         }
     }
