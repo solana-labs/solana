@@ -5,7 +5,6 @@ steps:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "gce-perf-cpu-only"
-      RAMP_UP_TIME: 0
       TEST_DURATION_SECONDS: 600
       NUMBER_OF_VALIDATOR_NODES: 5
       ENABLE_GPU: "false"
@@ -14,6 +13,6 @@ steps:
       CLIENT_OPTIONS: "bench-tps=2=--tx_count 20000 --thread-batch-sleep-ms 250"
       TESTNET_ZONES: "us-west1-a,us-west1-b,us-central1-a,europe-west4-a"
       USE_PUBLIC_IP_ADDRESSES: "true"
-      ADDITIONAL_FLAGS: "--dedicated"
+      ADDITIONAL_FLAGS: ""
     agents:
       - "queue=gce-deploy"

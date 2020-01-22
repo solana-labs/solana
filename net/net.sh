@@ -1009,6 +1009,7 @@ logs)
   ;;
 netem)
   if [[ -n $netemConfigFile ]]; then
+    remoteNetemConfigFile="$(basename "$netemConfigFile")"
     if [[ $netemCommand = "add" ]]; then
       for ipAddress in "${validatorIpList[@]}"; do
         "$here"/scp.sh "$netemConfigFile" solana@"$ipAddress":~/solana
@@ -1016,7 +1017,7 @@ netem)
     fi
     for i in "${!validatorIpList[@]}"; do
       "$here"/ssh.sh solana@"${validatorIpList[$i]}" 'solana/scripts/net-shaper.sh' \
-      "$netemCommand" ~solana/solana/"$netemConfigFile" "${#validatorIpList[@]}" "$i"
+      "$netemCommand" ~solana/solana/"$remoteNetemConfigFile" "${#validatorIpList[@]}" "$i"
     done
   else
     num_nodes=$((${#validatorIpList[@]}*netemPartition/100))
