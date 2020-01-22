@@ -1,11 +1,11 @@
 use crate::{
     cli::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys,
-        get_blockhash_fee_calculator, log_instruction_custom_error, replace_signatures,
-        required_lamports_from, return_signers, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult, SigningAuthority,
+        get_blockhash_fee_calculator, log_instruction_custom_error, nonce_authority_arg,
+        replace_signatures, required_lamports_from, return_signers, CliCommand, CliCommandInfo,
+        CliConfig, CliError, ProcessResult, SigningAuthority,
     },
-    nonce::{check_nonce_account, NONCE_ARG, NONCE_AUTHORITY_ARG},
+    nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use console::style;
@@ -48,7 +48,7 @@ fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(STAKE_AUTHORITY_ARG.name)
         .long(STAKE_AUTHORITY_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR")
+        .value_name("KEYPAIR of PUBKEY")
         .validator(is_pubkey_or_keypair_or_ask_keyword)
         .help(STAKE_AUTHORITY_ARG.help)
 }
@@ -57,7 +57,7 @@ fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
         .long(WITHDRAW_AUTHORITY_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR")
+        .value_name("KEYPAIR or PUBKEY")
         .validator(is_pubkey_or_keypair_or_ask_keyword)
         .help(WITHDRAW_AUTHORITY_ARG.help)
 }
@@ -189,23 +189,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_hash)
                         .help("Use the supplied blockhash"),
                 )
-                .arg(
-                    Arg::with_name(NONCE_ARG.name)
-                        .long(NONCE_ARG.long)
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .requires("blockhash")
-                        .validator(is_pubkey)
-                        .help(NONCE_ARG.help)
-                )
-                .arg(
-                    Arg::with_name(NONCE_AUTHORITY_ARG.name)
-                        .long(NONCE_AUTHORITY_ARG.long)
-                        .takes_value(true)
-                        .requires(NONCE_ARG.name)
-                        .validator(is_keypair_or_ask_keyword)
-                        .help(NONCE_AUTHORITY_ARG.help)
-                ),
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-authorize-staker")
@@ -252,23 +237,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_hash)
                         .help("Use the supplied blockhash"),
                 )
-                .arg(
-                    Arg::with_name(NONCE_ARG.name)
-                        .long(NONCE_ARG.long)
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .requires("blockhash")
-                        .validator(is_pubkey)
-                        .help(NONCE_ARG.help)
-                )
-                .arg(
-                    Arg::with_name(NONCE_AUTHORITY_ARG.name)
-                        .long(NONCE_AUTHORITY_ARG.long)
-                        .takes_value(true)
-                        .requires(NONCE_ARG.name)
-                        .validator(is_keypair_or_ask_keyword)
-                        .help(NONCE_AUTHORITY_ARG.help)
-                ),
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-authorize-withdrawer")
@@ -315,23 +285,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_hash)
                         .help("Use the supplied blockhash"),
                 )
-                .arg(
-                    Arg::with_name(NONCE_ARG.name)
-                        .long(NONCE_ARG.long)
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .requires("blockhash")
-                        .validator(is_pubkey)
-                        .help(NONCE_ARG.help)
-                )
-                .arg(
-                    Arg::with_name(NONCE_AUTHORITY_ARG.name)
-                        .long(NONCE_AUTHORITY_ARG.long)
-                        .takes_value(true)
-                        .requires(NONCE_ARG.name)
-                        .validator(is_keypair_or_ask_keyword)
-                        .help(NONCE_AUTHORITY_ARG.help)
-                ),
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
         )
         .subcommand(
             SubCommand::with_name("deactivate-stake")
@@ -368,23 +323,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_hash)
                         .help("Use the supplied blockhash"),
                 )
-                .arg(
-                    Arg::with_name(NONCE_ARG.name)
-                        .long(NONCE_ARG.long)
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .requires("blockhash")
-                        .validator(is_pubkey)
-                        .help(NONCE_ARG.help)
-                )
-                .arg(
-                    Arg::with_name(NONCE_AUTHORITY_ARG.name)
-                        .long(NONCE_AUTHORITY_ARG.long)
-                        .takes_value(true)
-                        .requires(NONCE_ARG.name)
-                        .validator(is_keypair_or_ask_keyword)
-                        .help(NONCE_AUTHORITY_ARG.help)
-                ),
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
         )
         .subcommand(
             SubCommand::with_name("withdraw-stake")

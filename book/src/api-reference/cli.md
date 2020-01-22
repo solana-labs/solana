@@ -322,13 +322,16 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-        --nonce-authority <KEYPAIR>         Specify nonce authority if different from account
+        --ask-seed-phrase <KEYPAIR NAME>
+            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
+
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -u, --url <URL>                              JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                         /path/to/id.json
+        --nonce-authority <KEYPAIR or PUBKEY>
+            Provide the nonce authority keypair to use when signing a nonced transaction
 
 ARGS:
     <NONCE_ACCOUNT>           Address of the nonce account
@@ -694,20 +697,25 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>       Securely recover a keypair using a seed phrase and optional passphrase
-                                               [possible values: keypair]
-        --blockhash <BLOCKHASH>                Use the supplied blockhash
-    -C, --config <PATH>                        Configuration file to use [default:
-                                               ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                            JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                       /path/to/id.json
-        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced 
-                                               transaction. Nonced transactions are useful when a transaction 
-                                               requires a lengthy signing process. Learn more about nonced 
-                                               transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <nonce_authority>    Provide the nonce authority keypair to use when signing a nonced
-                                               transaction
-        --signer <PUBKEY=BASE58_SIG>...        Provide a public-key/signature pair for the transaction
+        --ask-seed-phrase <KEYPAIR NAME>
+            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
+
+        --blockhash <BLOCKHASH>                  Use the supplied blockhash
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -u, --url <URL>                              JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                         /path/to/id.json
+        --nonce <PUBKEY>
+            Provide the nonce account to use when creating a nonced 
+            transaction. Nonced transactions are useful when a transaction 
+            requires a lengthy signing process. Learn more about nonced 
+            transactions at https://docs.solana.com/offline-signing/durable-nonce
+        --nonce-authority <KEYPAIR or PUBKEY>
+            Provide the nonce authority keypair to use when signing a nonced transaction
+
+        --signer <PUBKEY=BASE58_SIG>...          Provide a public-key/signature pair for the transaction
+        --stake-authority <KEYPAIR of PUBKEY>    Public key of authorized staker (defaults to cli config pubkey)
 
 ARGS:
     <STAKE ACCOUNT>    Stake account to be deactivated.
@@ -730,20 +738,25 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>       Securely recover a keypair using a seed phrase and optional passphrase
-                                               [possible values: keypair]
-        --blockhash <BLOCKHASH>                Use the supplied blockhash
-    -C, --config <PATH>                        Configuration file to use [default:
-                                               ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                            JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                       /path/to/id.json
-        --nonce <PUBKEY>                       Provide the nonce account to use when creating a nonced 
-                                               transaction. Nonced transactions are useful when a transaction 
-                                               requires a lengthy signing process. Learn more about nonced 
-                                               transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <nonce_authority>    Provide the nonce authority keypair to use when signing a nonced
-                                               transaction
-        --signer <PUBKEY=BASE58_SIG>...        Provide a public-key/signature pair for the transaction
+        --ask-seed-phrase <KEYPAIR NAME>
+            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
+
+        --blockhash <BLOCKHASH>                  Use the supplied blockhash
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -u, --url <URL>                              JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                         /path/to/id.json
+        --nonce <PUBKEY>
+            Provide the nonce account to use when creating a nonced 
+            transaction. Nonced transactions are useful when a transaction 
+            requires a lengthy signing process. Learn more about nonced 
+            transactions at https://docs.solana.com/offline-signing/durable-nonce
+        --nonce-authority <KEYPAIR or PUBKEY>
+            Provide the nonce authority keypair to use when signing a nonced transaction
+
+        --signer <PUBKEY=BASE58_SIG>...          Provide a public-key/signature pair for the transaction
+        --stake-authority <KEYPAIR of PUBKEY>    Public key of authorized staker (defaults to cli config pubkey)
 
 ARGS:
     <STAKE ACCOUNT>    Stake account to delegate
@@ -1009,13 +1022,17 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-        --nonce-authority <KEYPAIR>         Specify nonce authority if different from account
+        --ask-seed-phrase <KEYPAIR NAME>
+            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
+
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -u, --url <URL>                              JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                         /path/to/id.json
+        --nonce-authority <KEYPAIR or PUBKEY>
+            Provide the nonce authority keypair to use when signing a nonced transaction
+
 
 ARGS:
     <NONCE ACCOUNT>    Address of the nonce account
@@ -1039,23 +1056,27 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>        Securely recover a keypair using a seed phrase and optional passphrase
-                                                [possible values: keypair]
-        --blockhash <BLOCKHASH>                 Use the supplied blockhash
-    -C, --config <PATH>                         Configuration file to use [default:
-                                                ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                             JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                        /path/to/id.json
-        --nonce <PUBKEY>                        Provide the nonce account to use when creating a nonced 
-                                                transaction. Nonced transactions are useful when a transaction 
-                                                requires a lengthy signing process. Learn more about nonced 
-                                                transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <nonce_authority>     Provide the nonce authority keypair to use when signing a nonced
-                                                transaction
-        --signer <PUBKEY=BASE58_SIG>...         Provide a public-key/signature pair for the transaction
-        --after <DATETIME>                      A timestamp after which transaction will execute
-        --require-timestamp-from <PUBKEY>       Require timestamp from this third party
-        --require-signature-from <PUBKEY>...    Any third party signatures required to unlock the lamports
+        --ask-seed-phrase <KEYPAIR NAME>
+            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
+
+        --blockhash <BLOCKHASH>                  Use the supplied blockhash
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -u, --url <URL>                              JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                         /path/to/id.json
+        --nonce <PUBKEY>
+            Provide the nonce account to use when creating a nonced 
+            transaction. Nonced transactions are useful when a transaction 
+            requires a lengthy signing process. Learn more about nonced 
+            transactions at https://docs.solana.com/offline-signing/durable-nonce
+        --nonce-authority <KEYPAIR or PUBKEY>
+            Provide the nonce authority keypair to use when signing a nonced transaction
+
+        --signer <PUBKEY=BASE58_SIG>...          Provide a public-key/signature pair for the transaction
+        --after <DATETIME>                       A timestamp after which transaction will execute
+        --require-timestamp-from <PUBKEY>        Require timestamp from this third party
+        --require-signature-from <PUBKEY>...     Any third party signatures required to unlock the lamports
 
 ARGS:
     <TO PUBKEY>    The pubkey of recipient
@@ -1431,12 +1452,25 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
+        --ask-seed-phrase <KEYPAIR NAME>
+            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
+
+        --blockhash <BLOCKHASH>                  Use the supplied blockhash
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -u, --url <URL>                              JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                         /path/to/id.json
+        --nonce <PUBKEY>
+            Provide the nonce account to use when creating a nonced 
+            transaction. Nonced transactions are useful when a transaction 
+            requires a lengthy signing process. Learn more about nonced 
+            transactions at https://docs.solana.com/offline-signing/durable-nonce
+        --nonce-authority <KEYPAIR or PUBKEY>
+            Provide the nonce authority keypair to use when signing a nonced transaction
+
+        --signer <PUBKEY=BASE58_SIG>...          Provide a public-key/signature pair for the transaction
+        --stake-authority <KEYPAIR of PUBKEY>    Public key of authorized staker (defaults to cli config pubkey)
 
 ARGS:
     <STAKE ACCOUNT>       Stake account in which to set the authorized staker
@@ -1459,12 +1493,25 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
+        --ask-seed-phrase <KEYPAIR NAME>
+            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
+
+        --blockhash <BLOCKHASH>                     Use the supplied blockhash
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -u, --url <URL>                                 JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                            /path/to/id.json
+        --nonce <PUBKEY>
+            Provide the nonce account to use when creating a nonced 
+            transaction. Nonced transactions are useful when a transaction 
+            requires a lengthy signing process. Learn more about nonced 
+            transactions at https://docs.solana.com/offline-signing/durable-nonce
+        --nonce-authority <KEYPAIR or PUBKEY>
+            Provide the nonce authority keypair to use when signing a nonced transaction
+
+        --signer <PUBKEY=BASE58_SIG>...             Provide a public-key/signature pair for the transaction
+        --withdraw-authority <KEYPAIR or PUBKEY>    Public key of authorized withdrawer (defaults to cli config pubkey)
 
 ARGS:
     <STAKE ACCOUNT>       Stake account in which to set the authorized withdrawer
@@ -1630,13 +1677,17 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-        --nonce-authority <KEYPAIR>         Specify nonce authority if different from account
+        --ask-seed-phrase <KEYPAIR NAME>
+            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
+
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -u, --url <URL>                              JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                         /path/to/id.json
+        --nonce-authority <KEYPAIR or PUBKEY>
+            Provide the nonce authority keypair to use when signing a nonced transaction
+
 
 ARGS:
     <NONCE ACCOUNT>          Nonce account from to withdraw from
@@ -1661,12 +1712,15 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Securely recover a keypair using a seed phrase and optional passphrase
-                                            [possible values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
+        --ask-seed-phrase <KEYPAIR NAME>
+            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
+
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -u, --url <URL>                                 JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                            /path/to/id.json
+        --withdraw-authority <KEYPAIR or PUBKEY>    Public key of authorized withdrawer (defaults to cli config pubkey)
 
 ARGS:
     <STAKE ACCOUNT>          Stake account from which to withdraw
