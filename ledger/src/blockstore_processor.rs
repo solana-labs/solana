@@ -37,6 +37,9 @@ use std::{
 };
 use thiserror::Error;
 
+pub type BlockstoreProcessorResult =
+    result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError>;
+
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
                     .thread_name(|ix| format!("blockstore_processor_{}", ix))
@@ -271,8 +274,7 @@ pub fn process_blockstore(
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     opts: ProcessOptions,
-) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError>
-{
+) -> BlockstoreProcessorResult {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
             *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
@@ -297,8 +299,7 @@ pub fn process_blockstore_from_root(
     bank: Arc<Bank>,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
-) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError>
-{
+) -> BlockstoreProcessorResult {
     info!("processing ledger from root slot {}...", bank.slot());
     let allocated = thread_mem_usage::Allocatedp::default();
     let initial_allocation = allocated.get();
@@ -357,7 +358,7 @@ pub fn process_blockstore_from_root(
     };
 
     info!(
-        "ledger processed in {}ms. {} MB allocated. {} fork{} at {}",
+        "ledger processed in {}ms. {} MB allocated. {} fork{} at {}, with {} frozen bank{}",
         duration_as_ms(&now.elapsed()),
         allocated.since(initial_allocation) / 1_000_000,
         bank_forks_info.len(),
@@ -365,8 +366,15 @@ pub fn process_blockstore_from_root(
         bank_forks_info
             .iter()
             .map(|bfi| bfi.bank_slot.to_string())
-            .join(", ")
+            .join(", "),
+        bank_forks.frozen_banks().len(),
+        if bank_forks.frozen_banks().len() > 1 {
+            "s"
+        } else {
+            ""
+        },
     );
+    assert!(bank_forks.active_banks().is_empty());
 
     Ok((bank_forks, bank_forks_info, leader_schedule_cache))
 }
