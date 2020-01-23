@@ -114,7 +114,9 @@ pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hash::Hash;
+    use crate::hash::HASH_BYTES;
+    use rand::seq::SliceRandom;
+    use rand::thread_rng;
 
     #[test]
     fn test_size_of() {
@@ -148,5 +150,35 @@ mod tests {
             create_account_with_data(42, vec![(0u64, &def_hash); MAX_ENTRIES + 1].into_iter());
         let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
         assert_eq!(recent_blockhashes.len(), MAX_ENTRIES);
+    }
+
+    #[test]
+    fn test_create_account_unsorted() {
+        let mut unsorted_recent_blockhashes: Vec<_> = (0..MAX_ENTRIES)
+            .map(|i| {
+                (i as u64, {
+                    // create hash with visibly recognizable ordering
+                    let mut h = [0; HASH_BYTES];
+                    h[HASH_BYTES - 1] = i as u8;
+                    Hash::new(&h)
+                })
+            })
+            .collect();
+        unsorted_recent_blockhashes.shuffle(&mut thread_rng());
+
+        let account = create_account_with_data(
+            42,
+            unsorted_recent_blockhashes
+                .iter()
+                .map(|(i, hash)| (*i, hash)),
+        );
+        let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
+
+        let mut expected_recent_blockhashes: Vec<_> =
+            (unsorted_recent_blockhashes.into_iter().map(|(_, b)| b)).collect();
+        expected_recent_blockhashes.sort();
+        expected_recent_blockhashes.reverse();
+
+        assert_eq!(*recent_blockhashes, expected_recent_blockhashes);
     }
 }
