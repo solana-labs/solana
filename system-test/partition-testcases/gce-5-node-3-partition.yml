@@ -12,7 +12,7 @@ steps:
       CLIENT_OPTIONS: "bench-tps=2=--tx_count 15000 --thread-batch-sleep-ms 250"
       TESTNET_ZONES: "us-west1-a"
       USE_PUBLIC_IP_ADDRESSES: "true"
-      ADDITIONAL_FLAGS: ""
+      ADDITIONAL_FLAGS: "--dedicated"
       APPLY_PARTITIONS: "true"
       NETEM_CONFIG_FILE: "system-test/netem-configs/partial-loss-three-partitions"
       PARTITION_ACTIVE_DURATION: 30
