@@ -133,7 +133,8 @@ mod tests {
         }
 
         // Create a packageable snapshot
-        let output_tar_path = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
+        let output_tar_path =
+            snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
         let snapshot_package = SnapshotPackage::new(
             5,
             vec![],

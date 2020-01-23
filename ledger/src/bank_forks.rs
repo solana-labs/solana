@@ -192,7 +192,7 @@ impl BankForks {
                     root,
                     &root_bank.src.roots(),
                     snapshot_package_sender.as_ref().unwrap(),
-                    snapshot_utils::get_snapshot_tar_path(&config.snapshot_package_output_path),
+                    snapshot_utils::get_snapshot_archive_path(&config.snapshot_package_output_path),
                 );
                 if r.is_err() {
                     warn!("Error generating snapshot for bank: {}, err: {:?}", root, r);

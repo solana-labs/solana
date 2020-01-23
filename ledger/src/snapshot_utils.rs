@@ -481,7 +481,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     Ok(bank)
 }
 
-pub fn get_snapshot_tar_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
+pub fn get_snapshot_archive_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
     snapshot_output_dir.as_ref().join("snapshot.tar.bz2")
 }
 
