@@ -1,16 +1,23 @@
-use solana_ledger::snapshot_package::{SnapshotPackage, SnapshotPackageReceiver};
-use solana_ledger::snapshot_utils::{
-    serialize_status_cache, SnapshotError, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR, TAR_VERSION_FILE,
+use solana_ledger::{
+    snapshot_package::{SnapshotPackage, SnapshotPackageReceiver},
+    snapshot_utils::{
+        serialize_status_cache, SnapshotError, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR,
+        TAR_VERSION_FILE,
+    },
 };
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
-use std::fs;
-use std::process::ExitStatus;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::RecvTimeoutError;
-use std::sync::Arc;
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
+use std::{
+    fs,
+    process::ExitStatus,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::RecvTimeoutError,
+        Arc,
+    },
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
+};
 use symlink;
 use tempfile::TempDir;
 use thiserror::Error;
@@ -284,7 +291,7 @@ mod tests {
         // before we compare, stick an empty status_cache in this dir so that the package comparision works
         // This is needed since the status_cache is added by the packager and is not collected from
         // the source dir for snapshots
-        let dummy_slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
+        let dummy_slot_deltas: Vec<SlotDelta<transaction::Result<()>>> = vec![];
         snapshot_utils::serialize_snapshot_data_file(
             &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
             MAX_SNAPSHOT_DATA_FILE_SIZE,

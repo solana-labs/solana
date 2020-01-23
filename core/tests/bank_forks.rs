@@ -22,8 +22,7 @@ mod tests {
         hash::hashv,
         pubkey::Pubkey,
         signature::{Keypair, KeypairUtil},
-        system_transaction,
-        transaction::Result as TransactionResult,
+        system_transaction, transaction,
     };
     use std::{fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc};
     use tempfile::TempDir;
@@ -310,7 +309,7 @@ mod tests {
         // before we compare, stick an empty status_cache in this dir so that the package comparision works
         // This is needed since the status_cache is added by the packager and is not collected from
         // the source dir for snapshots
-        let dummy_slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
+        let dummy_slot_deltas: Vec<SlotDelta<transaction::Result<()>>> = vec![];
         snapshot_utils::serialize_snapshot_data_file(
             &saved_snapshots_dir
                 .path()
