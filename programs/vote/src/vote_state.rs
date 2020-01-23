@@ -497,6 +497,15 @@ impl VoteState {
         let slashable_slots = self.slashable_slots(&[slashable_slot]);
         self.has_been_slashed = self.has_been_slashed || slashable_slots.is_empty();
     }
+    pub fn previous_signer(&self, signers: &HashSet<Pubkey>) -> bool {
+        signers.contains(&self.authorized_voter)
+            || self
+                .prior_voters
+                .buf
+                .iter()
+                .filter(|v| v.0 == Pubkey::default())
+                .any(|v| signers.contains(&v.0))
+    }
 }
 
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
@@ -627,7 +636,7 @@ pub fn process_vote(
 }
 
 pub fn slash_state(
-    vote_account: &mut KeyedAccount,
+    vote_account: &KeyedAccount,
     slot_hashes: &[SlotHash],
     program_id: &Pubkey,
     tx: &Transaction,
@@ -663,7 +672,7 @@ pub fn slash_state(
                 continue;
             }
             //verify that the transaction was signed by the expected signers
-            if verify_authorized_signer(&vote_state.authorized_voter, &signers).is_err() {
+            if vote_state.previous_signer(&signers) {
                 continue;
             }
             //slash the slot
