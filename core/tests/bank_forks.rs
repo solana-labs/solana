@@ -22,8 +22,7 @@ mod tests {
         hash::hashv,
         pubkey::Pubkey,
         signature::{Keypair, KeypairUtil},
-        system_transaction,
-        transaction::Result as TransactionResult,
+        system_transaction, transaction,
     };
     use std::{
         fs,
@@ -318,7 +317,7 @@ mod tests {
         // before we compare, stick an empty status_cache in this dir so that the package comparision works
         // This is needed since the status_cache is added by the packager and is not collected from
         // the source dir for snapshots
-        let slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
+        let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> = vec![];
         let dummy_status_cache =
             File::create(saved_snapshots_dir.path().join("status_cache")).unwrap();
         let mut status_cache_stream = BufWriter::new(dummy_status_cache);
