@@ -3,6 +3,7 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     cmp, fmt,
     rc::Rc,
+    ops::{Deref},
 };
 
 /// Account information that is mutable by a program
@@ -27,11 +28,11 @@ pub struct AccountInfo<'a> {
 
 impl<'a> fmt::Debug for AccountInfo<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let data_len = cmp::min(64, self.m.borrow().data.len());
+        let data_len = cmp::min(64, self.data.len());
         let data_str = if data_len > 0 {
             format!(
                 " data: {}",
-                hex::encode(self.m.borrow().data[..data_len].to_vec())
+                hex::encode(self.data[..data_len].to_vec())
             )
         } else {
             "".to_string()
@@ -39,8 +40,8 @@ impl<'a> fmt::Debug for AccountInfo<'a> {
         write!(
             f,
             "AccountInfo {{ lamports: {} data.len: {} owner: {} {} }}",
-            self.m.borrow().lamports,
-            self.m.borrow().data.len(),
+            self.lamports,
+            self.data.len(),
             self.owner,
             data_str,
         )
@@ -60,20 +61,20 @@ impl<'a> AccountInfo<'a> {
         self.key
     }
 
-    pub fn try_account_ref(&'a self) -> Result<Ref<AccountInfoMut>, u32> {
-        self.try_borrow()
-    }
-
-    pub fn try_account_ref_mut(&'a self) -> Result<RefMut<'a, AccountInfoMut>, u32> {
-        self.try_borrow_mut()
-    }
-
-    fn try_borrow(&self) -> Result<Ref<AccountInfoMut>, u32> {
+    pub fn try_borrow(&self) -> Result<Ref<AccountInfoMut<'a>>, u32> {
         self.m.try_borrow().map_err(|_| std::u32::MAX)
     }
 
-    fn try_borrow_mut(&self) -> Result<RefMut<'a, AccountInfoMut>, u32> {
+    pub fn try_borrow_mut(&self) -> Result<RefMut<AccountInfoMut<'a>>, u32> {
         self.m.try_borrow_mut().map_err(|_| std::u32::MAX)
+    }
+
+    pub fn borrow(&self) -> Ref<AccountInfoMut<'a>> {
+        self.m.borrow()
+    }
+
+    pub fn borrow_mut(&self) -> RefMut<AccountInfoMut<'a>> {
+        self.m.borrow_mut()
     }
 
     pub fn new(
@@ -92,14 +93,22 @@ impl<'a> AccountInfo<'a> {
     }
 
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
-        bincode::deserialize(&self.m.borrow().data)
+        bincode::deserialize(&self.data)
     }
 
     pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
-        if bincode::serialized_size(state)? > self.m.borrow().data.len() as u64 {
+        if bincode::serialized_size(state)? > self.data.len() as u64 {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
         bincode::serialize_into(&mut self.m.borrow_mut().data[..], state)
+    }
+}
+
+impl<'a> Deref for AccountInfo<'a> {
+    type Target = AccountInfoMut<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe {self.m.as_ptr().as_ref().unwrap()}
     }
 }
 
