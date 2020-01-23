@@ -1,8 +1,7 @@
 use crate::{
-    bank_forks::{BankForks, SnapshotConfig},
+    bank_forks::SnapshotConfig,
     blockstore::Blockstore,
-    blockstore_processor::{self, BankForksInfo, BlockstoreProcessorError, ProcessOptions},
-    leader_schedule_cache::LeaderScheduleCache,
+    blockstore_processor::{self, BlockstoreProcessorResult, ProcessOptions},
     snapshot_utils,
 };
 use log::*;
@@ -15,7 +14,7 @@ pub fn load(
     account_paths: Vec<PathBuf>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
-) -> Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError> {
+) -> BlockstoreProcessorResult {
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
             "Initializing snapshot path: {:?}",
