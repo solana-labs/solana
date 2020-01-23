@@ -3,13 +3,11 @@ use clap::{
 };
 use histogram;
 use serde_json::json;
-use solana_ledger::blockstore_db::Database;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
     blockstore::Blockstore,
-    blockstore_db,
-    blockstore_db::Column,
+    blockstore_db::{self, Column, Database},
     blockstore_processor,
     rooted_slot_iterator::RootedSlotIterator,
 };
