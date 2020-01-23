@@ -18,8 +18,8 @@ _ cargo +"$rust_stable" clippy --version
 _ cargo +"$rust_stable" clippy --all --exclude solana-sdk-c -- --deny=warnings
 _ cargo +"$rust_stable" clippy --manifest-path sdk-c/Cargo.toml -- --deny=warnings
 
-_ cargo +"$rust_stable" audit --version
-_ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0013 --ignore RUSTSEC-2018-0015
+#_ cargo +"$rust_stable" audit --version
+#_ cargo +"$rust_stable" audit --ignore RUSTSEC-2019-0013 --ignore RUSTSEC-2018-0015
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ book/build.sh
@@ -28,7 +28,7 @@ _ ci/check-ssh-keys.sh
 
 {
   cd programs/bpf
-  _ cargo +"$rust_stable" audit
+  #_ cargo +"$rust_stable" audit
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
