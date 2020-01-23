@@ -518,12 +518,18 @@ impl Bank {
     where
         F: Fn(&Option<Account>) -> Account,
     {
-        let old_account = self.get_sysvar_account(pubkey);
-        let mut account = updater(&old_account);
-        if let Some(old_account) = old_account {
-            account.hash = old_account.hash;
+        let cold_account = self.get_cold_account(pubkey);
+        let mut new_account = updater(&cold_account);
+
+        // Normally, just use the hash from parent slot.  However, use the
+        // existing stored hash if any for the sake of bank hash's idempotent.
+        if let Some((hot_account, _)) = self.get_account_modified_since_parent(pubkey) {
+            new_account.hash = hot_account.hash;
+        } else if let Some(cold_account) = cold_account {
+            new_account.hash = cold_account.hash;
         }
-        self.store_account(pubkey, &account);
+
+        self.store_account(pubkey, &new_account);
     }
 
     fn update_clock(&self) {
@@ -1706,8 +1712,15 @@ impl Bank {
             .map(|(acc, _slot)| acc)
     }
 
-    fn get_sysvar_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        // Exclude the current really to fetch the parent Bank's sysvar hash
+    // Exclude self to really fetch the parent Bank's account hash and data.
+    // This is mainly for sysvar accounts.
+    //
+    // Being idempotent is needed to make the lazy initialization possible,
+    // especially for update_slot_hashes at the moment, which can be called
+    // multiple times with the same slot in the case of forking.
+    //
+    // Generally, all of sysvar update granularity should be slot boundaries.
+    fn get_cold_account(&self, pubkey: &Pubkey) -> Option<Account> {
         let mut ancestors = self.ancestors.clone();
         ancestors.remove(&self.slot());
         self.rc
@@ -3930,7 +3943,7 @@ mod tests {
 
         let bank0_state = bank0.hash_internal_state();
         let bank0 = Arc::new(bank0);
-        // Checkpointing should result in a new state
+        // Checkpointing should result in a new state while freezing the parent
         let bank2 = new_from_parent(&bank0);
         assert_ne!(bank0_state, bank2.hash_internal_state());
         // Checkpointing should modify the checkpoint's state when freezed
@@ -3948,6 +3961,7 @@ mod tests {
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
         assert!(bank2.verify_hash_internal_state());
+        assert!(bank3.verify_hash_internal_state());
     }
 
     // Test that two bank forks with the same accounts should not hash to the same value.
@@ -4190,6 +4204,87 @@ mod tests {
 
         let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
         assert_eq!(None, bank3.get_account_modified_since_parent(&pubkey));
+    }
+
+    #[test]
+    fn test_bank_update_sysvar_account() {
+        use solana_sdk::bank_hash::BankHash;
+        use sysvar::clock::Clock;
+
+        let dummy_clock_id = Pubkey::new_rand();
+        let (genesis_config, _mint_keypair) = create_genesis_config(500);
+
+        let expected_previous_slot = 3;
+        let expected_next_slot = expected_previous_slot + 1;
+
+        // First, initialize the clock sysvar
+        let bank1 = Arc::new(Bank::new(&genesis_config));
+        bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
+            assert!(optional_account.is_none());
+            Clock {
+                slot: expected_previous_slot,
+                ..Clock::default()
+            }
+            .create_account(1)
+        });
+        let current_account = bank1.get_account(&dummy_clock_id).unwrap();
+        let removed_bank_hash = BankHash::from_hash(&current_account.hash);
+        assert_eq!(
+            expected_previous_slot,
+            Clock::from_account(&current_account).unwrap().slot
+        );
+
+        // Updating should increment the clock's slot
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
+        let mut expected_base_hash = bank2.rc.accounts.bank_hash_at(bank2.slot);
+        bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
+            let slot = Clock::from_account(optional_account.as_ref().unwrap())
+                .unwrap()
+                .slot
+                + 1;
+
+            Clock {
+                slot,
+                ..Clock::default()
+            }
+            .create_account(1)
+        });
+        let current_account = bank2.get_account(&dummy_clock_id).unwrap();
+        let added_bank_hash = BankHash::from_hash(&current_account.hash);
+        expected_base_hash.xor(removed_bank_hash);
+        expected_base_hash.xor(added_bank_hash);
+        assert_eq!(
+            expected_next_slot,
+            Clock::from_account(&current_account).unwrap().slot
+        );
+        assert_eq!(
+            expected_base_hash,
+            bank2.rc.accounts.bank_hash_at(bank2.slot)
+        );
+
+        // Updating again should give bank1's sysvar to the closure not bank2's.
+        // Thus, assert with same expected_next_slot as previously
+        bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
+            let slot = Clock::from_account(optional_account.as_ref().unwrap())
+                .unwrap()
+                .slot
+                + 1;
+
+            Clock {
+                slot,
+                ..Clock::default()
+            }
+            .create_account(1)
+        });
+        let current_account = bank2.get_account(&dummy_clock_id).unwrap();
+        assert_eq!(
+            expected_next_slot,
+            Clock::from_account(&current_account).unwrap().slot
+        );
+        assert_eq!(
+            expected_base_hash,
+            bank2.rc.accounts.bank_hash_at(bank2.slot)
+        );
     }
 
     #[test]

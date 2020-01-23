@@ -758,6 +758,14 @@ impl AccountsDB {
         let hash_info = bank_hashes
             .get(&parent_slot)
             .expect("accounts_db::set_hash::no parent slot");
+        if bank_hashes.get(&slot).is_some() {
+            error!(
+                "set_hash: already exists; forks with same child slot: {}!?",
+                slot
+            );
+            return;
+        }
+
         let hash = hash_info.hash;
         let new_hash_info = BankHashInfo {
             hash,
