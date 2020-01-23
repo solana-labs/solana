@@ -86,7 +86,7 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .snapshot_path,
-            snapshot_utils::get_snapshot_tar_path(snapshot_package_output_path),
+            snapshot_utils::get_snapshot_archive_path(snapshot_package_output_path),
         )
         .unwrap();
 
@@ -143,12 +143,15 @@ mod tests {
             slot_snapshot_paths
                 .last()
                 .expect("no snapshots found in path"),
-            snapshot_utils::get_snapshot_tar_path(&snapshot_config.snapshot_package_output_path),
+            snapshot_utils::get_snapshot_archive_path(
+                &snapshot_config.snapshot_package_output_path,
+            ),
             &snapshot_config.snapshot_path,
             &last_bank.src.roots(),
         )
         .unwrap();
-        SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
+
+        snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
         restore_from_snapshot(bank_forks, vec![accounts_dir.path().to_path_buf()]);
     }
@@ -324,7 +327,7 @@ mod tests {
         serialize_into(&mut status_cache_stream, &slot_deltas).unwrap();
         status_cache_stream.flush().unwrap();
 
-        snapshot_utils::verify_snapshot_tar(
+        snapshot_utils::verify_snapshot_archive(
             saved_tar,
             saved_snapshots_dir.path(),
             saved_accounts_dir

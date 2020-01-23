@@ -651,12 +651,13 @@ fn test_snapshot_restart_tower() {
         .as_ref()
         .unwrap()
         .snapshot_package_output_path;
-    let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
+    let tar = snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
     wait_for_next_snapshot(&cluster, &tar);
 
     // Copy tar to validator's snapshot output directory
-    let validator_tar_path =
-        snapshot_utils::get_snapshot_tar_path(&validator_snapshot_test_config.snapshot_output_path);
+    let validator_tar_path = snapshot_utils::get_snapshot_archive_path(
+        &validator_snapshot_test_config.snapshot_output_path,
+    );
     fs::hard_link(tar, &validator_tar_path).unwrap();
 
     // Restart validator from snapshot, the validator's tower state in this snapshot
@@ -702,7 +703,7 @@ fn test_snapshots_blockstore_floor() {
 
     trace!("Waiting for snapshot tar to be generated with slot",);
 
-    let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
+    let tar = snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
     loop {
         if tar.exists() {
             trace!("snapshot tar exists");
@@ -712,8 +713,9 @@ fn test_snapshots_blockstore_floor() {
     }
 
     // Copy tar to validator's snapshot output directory
-    let validator_tar_path =
-        snapshot_utils::get_snapshot_tar_path(&validator_snapshot_test_config.snapshot_output_path);
+    let validator_tar_path = snapshot_utils::get_snapshot_archive_path(
+        &validator_snapshot_test_config.snapshot_output_path,
+    );
     fs::hard_link(tar, &validator_tar_path).unwrap();
     let slot_floor = snapshot_utils::bank_slot_from_archive(&validator_tar_path).unwrap();
 
@@ -803,7 +805,7 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        let tar = snapshot_utils::get_snapshot_tar_path(&snapshot_package_output_path);
+        let tar = snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
         wait_for_next_snapshot(&cluster, &tar);
 
         // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
