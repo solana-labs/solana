@@ -3081,8 +3081,8 @@ mod tests {
 
         // set up stakes, vote, and storage accounts
         bank.store_account(&stake_id, &stake_account);
-        bank.store_account(&validator_id, &validator_account.borrow());
-        bank.store_account(&archiver_id, &archiver_account.borrow());
+        bank.store_account(&validator_id, &validator_account);
+        bank.store_account(&archiver_id, &archiver_account);
 
         // generate some rewards
         let mut vote_state = VoteState::from(&vote_account).unwrap();
