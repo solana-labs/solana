@@ -7,7 +7,7 @@ use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 use solana_sdk::{
-    account_utils::State, message::Message, pubkey::Pubkey, signature::KeypairUtil,
+    account_utils::StateMut, message::Message, pubkey::Pubkey, signature::KeypairUtil,
     system_instruction::SystemError, transaction::Transaction,
 };
 use solana_storage_program::storage_instruction::{self, StorageAccountType};

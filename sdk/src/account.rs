@@ -247,8 +247,8 @@ impl<'a> From<(&'a Pubkey, bool, &'a RefCell<Account>)> for KeyedAccount<'a> {
     }
 }
 
-impl<'a> From<&'a mut (&'a Pubkey, &'a RefCell<Account>)> for KeyedAccount<'a> {
-    fn from((key, account): &'a mut (&'a Pubkey, &'a RefCell<Account>)) -> Self {
+impl<'a> From<&'a (&'a Pubkey, &'a RefCell<Account>)> for KeyedAccount<'a> {
+    fn from((key, account): &'a (&'a Pubkey, &'a RefCell<Account>)) -> Self {
         Self {
             is_signer: false,
             is_writable: true,
@@ -259,16 +259,16 @@ impl<'a> From<&'a mut (&'a Pubkey, &'a RefCell<Account>)> for KeyedAccount<'a> {
 }
 
 pub fn create_keyed_accounts<'a>(
-    accounts: &'a mut [(&'a Pubkey, &'a RefCell<Account>)],
+    accounts: &'a [(&'a Pubkey, &'a RefCell<Account>)],
 ) -> Vec<KeyedAccount<'a>> {
-    accounts.iter_mut().map(Into::into).collect()
+    accounts.iter().map(Into::into).collect()
 }
 
 pub fn create_keyed_is_signer_accounts<'a>(
-    accounts: &'a mut [(&'a Pubkey, bool, &'a mut RefCell<Account>)],
+    accounts: &'a [(&'a Pubkey, bool, &'a RefCell<Account>)],
 ) -> Vec<KeyedAccount<'a>> {
     accounts
-        .iter_mut()
+        .iter()
         .map(|(key, is_signer, account)| KeyedAccount {
             is_signer: *is_signer,
             is_writable: false,
@@ -279,10 +279,10 @@ pub fn create_keyed_is_signer_accounts<'a>(
 }
 
 pub fn create_keyed_readonly_accounts(
-    accounts: &mut [(Pubkey, RefCell<Account>)],
+    accounts: &[(Pubkey, RefCell<Account>)],
 ) -> Vec<KeyedAccount> {
     accounts
-        .iter_mut()
+        .iter()
         .map(|(key, account)| KeyedAccount {
             is_signer: false,
             is_writable: false,

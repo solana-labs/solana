@@ -351,7 +351,7 @@ pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> In
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
@@ -361,8 +361,8 @@ pub fn process_instruction(
 
     let signers = get_signers(keyed_accounts);
 
-    let keyed_accounts = &mut keyed_accounts.iter_mut();
-    let me = &mut next_keyed_account(keyed_accounts)?;
+    let keyed_accounts = &mut keyed_accounts.iter();
+    let me = &next_keyed_account(keyed_accounts)?;
 
     match limited_deserialize(data)? {
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
@@ -387,12 +387,12 @@ pub fn process_instruction(
             )
         }
         StakeInstruction::Split(lamports) => {
-            let split_stake = &mut next_keyed_account(keyed_accounts)?;
+            let split_stake = &next_keyed_account(keyed_accounts)?;
             me.split(lamports, split_stake, &signers)
         }
 
         StakeInstruction::Withdraw(lamports) => {
-            let to = &mut next_keyed_account(keyed_accounts)?;
+            let to = &next_keyed_account(keyed_accounts)?;
             me.withdraw(
                 lamports,
                 to,
@@ -420,7 +420,7 @@ mod tests {
     }
 
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
-        let mut accounts: Vec<_> = instruction
+        let accounts: Vec<_> = instruction
             .accounts
             .iter()
             .map(|meta| {
@@ -441,13 +441,13 @@ mod tests {
             .collect();
 
         {
-            let mut keyed_accounts: Vec<_> = instruction
+            let keyed_accounts: Vec<_> = instruction
                 .accounts
                 .iter()
-                .zip(accounts.iter_mut())
+                .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(&Pubkey::default(), &mut keyed_accounts, &instruction.data)
+            super::process_instruction(&Pubkey::default(), &keyed_accounts, &instruction.data)
         }
     }
 
@@ -525,7 +525,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [],
+                &[],
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
                     Lockup::default()
@@ -539,10 +539,10 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(
+                &[KeyedAccount::new(
                     &Pubkey::default(),
                     false,
-                    &mut create_default_account(),
+                    &create_default_account(),
                 )],
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
@@ -557,9 +557,9 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account(),),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &mut create_default_account(),)
+                &[
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account(),),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_account(),)
                 ],
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
@@ -574,12 +574,12 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
+                &[
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::rent::id(),
                         false,
-                        &mut RefCell::new(sysvar::rent::create_account(0, &Rent::default()))
+                        &RefCell::new(sysvar::rent::create_account(0, &Rent::default()))
                     )
                 ],
                 &serialize(&StakeInstruction::Initialize(
@@ -595,10 +595,10 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(
+                &[KeyedAccount::new(
                     &Pubkey::default(),
                     false,
-                    &mut create_default_account()
+                    &create_default_account()
                 ),],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
@@ -609,10 +609,10 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(
+                &[KeyedAccount::new(
                     &Pubkey::default(),
                     false,
-                    &mut create_default_account()
+                    &create_default_account()
                 )],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
@@ -623,18 +623,18 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), true, &mut create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
+                &[
+                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &mut RefCell::new(sysvar::clock::Clock::default().create_account(1))
+                        &RefCell::new(sysvar::clock::Clock::default().create_account(1))
                     ),
                     KeyedAccount::new(
                         &config::id(),
                         false,
-                        &mut RefCell::new(config::create_account(0, &config::Config::default()))
+                        &RefCell::new(config::create_account(0, &config::Config::default()))
                     ),
                 ],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -646,18 +646,18 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
+                &[
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &mut RefCell::new(sysvar::rewards::create_account(1, 0.0, 0.0))
+                        &RefCell::new(sysvar::rewards::create_account(1, 0.0, 0.0))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &mut RefCell::new(sysvar::stake_history::create_account(
+                        &RefCell::new(sysvar::stake_history::create_account(
                             1,
                             &StakeHistory::default()
                         ))
@@ -672,10 +672,10 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(
+                &[KeyedAccount::new(
                     &Pubkey::default(),
                     false,
-                    &mut create_default_account()
+                    &create_default_account()
                 )],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
             ),
@@ -686,12 +686,12 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
+                &[
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &mut RefCell::new(sysvar::rewards::create_account(1, 0.0, 0.0))
+                        &RefCell::new(sysvar::rewards::create_account(1, 0.0, 0.0))
                     ),
                 ],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
@@ -703,7 +703,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [],
+                &[],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),

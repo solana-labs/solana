@@ -28,11 +28,11 @@ fn set_owner(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     let new_owner_pubkey: Pubkey = limited_deserialize(data)?;
-    let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
+    let keyed_accounts_iter = &mut keyed_accounts.iter();
     let account_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
     let mut account_owner_pubkey: Pubkey =
         limited_deserialize(&account_keyed_account.try_account_ref()?.data)?;
@@ -154,8 +154,8 @@ mod tests {
         let mut account_owner_pubkey = Pubkey::new_rand();
         let owner_pubkey = account_owner_pubkey;
         let new_owner_pubkey = Pubkey::new_rand();
-        let mut account = Account::new_ref(1, 0, &system_program::id());
-        let owner_keyed_account = KeyedAccount::new(&owner_pubkey, false, &mut account); // <-- Attack! Setting owner without the original owner's signature.
+        let account = Account::new_ref(1, 0, &system_program::id());
+        let owner_keyed_account = KeyedAccount::new(&owner_pubkey, false, &account); // <-- Attack! Setting owner without the original owner's signature.
         let err = set_owner(
             &mut account_owner_pubkey,
             new_owner_pubkey,
@@ -169,9 +169,9 @@ mod tests {
     fn test_ownable_incorrect_owner() {
         let mut account_owner_pubkey = Pubkey::new_rand();
         let new_owner_pubkey = Pubkey::new_rand();
-        let mut account = Account::new_ref(1, 0, &system_program::id());
+        let account = Account::new_ref(1, 0, &system_program::id());
         let mallory_pubkey = Pubkey::new_rand(); // <-- Attack! Signing with wrong pubkey
-        let owner_keyed_account = KeyedAccount::new(&mallory_pubkey, true, &mut account);
+        let owner_keyed_account = KeyedAccount::new(&mallory_pubkey, true, &account);
         let err = set_owner(
             &mut account_owner_pubkey,
             new_owner_pubkey,

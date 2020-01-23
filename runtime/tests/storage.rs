@@ -7,7 +7,7 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
 };
 use solana_sdk::{
-    account_utils::State,
+    account_utils::StateMut,
     client::SyncClient,
     clock::{get_segment_from_slot, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
     hash::{hash, Hash},

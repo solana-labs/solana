@@ -156,7 +156,7 @@ impl ExchangeProcessor {
         Ok(())
     }
 
-    fn do_account_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+    fn do_account_request(keyed_accounts: &[KeyedAccount]) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
         const NEW_ACCOUNT_INDEX: usize = 1;
 
@@ -178,7 +178,7 @@ impl ExchangeProcessor {
     }
 
     fn do_transfer_request(
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
         token: Token,
         tokens: u64,
     ) -> Result<(), InstructionError> {
@@ -266,7 +266,7 @@ impl ExchangeProcessor {
     }
 
     fn do_order_request(
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
         info: &OrderRequestInfo,
     ) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
@@ -322,7 +322,7 @@ impl ExchangeProcessor {
         )
     }
 
-    fn do_order_cancellation(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+    fn do_order_cancellation(keyed_accounts: &[KeyedAccount]) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
         const ORDER_INDEX: usize = 1;
 
@@ -354,7 +354,7 @@ impl ExchangeProcessor {
         )
     }
 
-    fn do_swap_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+    fn do_swap_request(keyed_accounts: &[KeyedAccount]) -> Result<(), InstructionError> {
         const TO_ORDER_INDEX: usize = 1;
         const FROM_ORDER_INDEX: usize = 2;
         const PROFIT_ACCOUNT_INDEX: usize = 3;
@@ -438,7 +438,7 @@ impl ExchangeProcessor {
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();

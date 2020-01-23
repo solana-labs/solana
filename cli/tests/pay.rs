@@ -6,7 +6,7 @@ use solana_cli::cli::{
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
-    account_utils::State,
+    account_utils::StateMut,
     hash::Hash,
     nonce_state::NonceState,
     pubkey::Pubkey,

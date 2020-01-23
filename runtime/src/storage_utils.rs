@@ -1,6 +1,6 @@
 use crate::bank::Bank;
 use solana_sdk::account::Account;
-use solana_sdk::account_utils::State;
+use solana_sdk::account_utils::StateMut;
 use solana_sdk::pubkey::Pubkey;
 use solana_storage_program::storage_contract::StorageContract;
 use std::collections::{HashMap, HashSet};

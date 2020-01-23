@@ -1307,13 +1307,13 @@ impl Bank {
                 (Ok((accounts, loaders, _rents)), hash_age_kind) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
-                    let (mut account_refcells, mut loader_refcells) =
+                    let (account_refcells, loader_refcells) =
                         Self::into_refcells(accounts, loaders);
 
                     let process_result = self.message_processor.process_message(
                         tx.message(),
-                        &mut loader_refcells,
-                        &mut account_refcells,
+                        &loader_refcells,
+                        &account_refcells,
                     );
 
                     Self::from_refcells(accounts, loaders, account_refcells, loader_refcells);
@@ -2174,7 +2174,7 @@ mod tests {
     use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
         account::KeyedAccount,
-        account_utils::State,
+        account_utils::StateMut,
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::create_genesis_config,
@@ -2487,7 +2487,7 @@ mod tests {
 
     fn mock_process_instruction(
         _program_id: &Pubkey,
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
         data: &[u8],
     ) -> result::Result<(), InstructionError> {
         if let Ok(instruction) = bincode::deserialize(data) {
@@ -4734,7 +4734,7 @@ mod tests {
 
         fn mock_vote_processor(
             _pubkey: &Pubkey,
-            _ka: &mut [KeyedAccount],
+            _ka: &[KeyedAccount],
             _data: &[u8],
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::CustomError(42))
@@ -4779,7 +4779,7 @@ mod tests {
 
         fn mock_vote_processor(
             _pubkey: &Pubkey,
-            _ka: &mut [KeyedAccount],
+            _ka: &[KeyedAccount],
             _data: &[u8],
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::CustomError(42))
@@ -4821,7 +4821,7 @@ mod tests {
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
-            _ka: &mut [KeyedAccount],
+            _ka: &[KeyedAccount],
             _data: &[u8],
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::CustomError(42))
@@ -5362,7 +5362,7 @@ mod tests {
 
         fn mock_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &mut [KeyedAccount],
+            keyed_accounts: &[KeyedAccount],
             data: &[u8],
         ) -> result::Result<(), InstructionError> {
             let lamports = data[0] as u64;

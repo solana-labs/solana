@@ -63,7 +63,7 @@ impl SpvProcessor {
     }
 
     pub fn do_client_request(
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
         request_info: &ClientRequestInfo,
     ) -> Result<(), InstructionError> {
         if keyed_accounts.len() != 2 {
@@ -76,7 +76,7 @@ impl SpvProcessor {
         Ok(()) //placeholder
     }
 
-    pub fn do_cancel_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+    pub fn do_cancel_request(keyed_accounts: &[KeyedAccount]) -> Result<(), InstructionError> {
         if keyed_accounts.len() != 2 {
             error!("Client Request invalid accounts argument length (should be 2)")
         }
@@ -86,7 +86,7 @@ impl SpvProcessor {
     }
 
     pub fn do_submit_proof(
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &[KeyedAccount],
         proof_info: &Proof,
     ) -> Result<(), InstructionError> {
         if keyed_accounts.len() != 2 {
@@ -99,7 +99,7 @@ impl SpvProcessor {
 }
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     // solana_logger::setup();

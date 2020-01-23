@@ -48,7 +48,7 @@ pub fn check_elf(prog: &[u8]) -> Result<(), Error> {
 
 pub fn serialize_parameters(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<Vec<u8>, InstructionError> {
     assert_eq!(32, mem::size_of::<Pubkey>());
@@ -56,7 +56,7 @@ pub fn serialize_parameters(
     let mut v: Vec<u8> = Vec::new();
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .unwrap();
-    for keyed_account in keyed_accounts.iter_mut() {
+    for keyed_account in keyed_accounts.iter() {
         v.write_u64::<LittleEndian>(keyed_account.signer_key().is_some() as u64)
             .unwrap();
         v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
@@ -74,7 +74,7 @@ pub fn serialize_parameters(
 }
 
 pub fn deserialize_parameters(
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
 ) -> Result<(), InstructionError> {
     assert_eq!(32, mem::size_of::<Pubkey>());
@@ -103,7 +103,7 @@ pub fn deserialize_parameters(
     }
 
     let mut start = mem::size_of::<u64>();
-    for keyed_account in keyed_accounts.iter_mut() {
+    for keyed_account in keyed_accounts.iter() {
         start += mem::size_of::<u64>() // signer_key boolean
             + mem::size_of::<Pubkey>(); // pubkey
         let lamports = LittleEndian::read_u64(&buffer[start..]);
@@ -142,7 +142,7 @@ pub fn deserialize_parameters(
 
 pub fn process_instruction(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup_with_default("solana=info");
@@ -153,7 +153,7 @@ pub fn process_instruction(
     }
 
     if is_executable(keyed_accounts)? {
-        let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+        let mut keyed_accounts_iter = keyed_accounts.iter();
         let program = next_keyed_account(&mut keyed_accounts_iter)?;
         let program_account = program.try_account_ref_mut()?;
         let (mut vm, heap_region) = match create_vm(&program_account.data) {
@@ -163,12 +163,12 @@ pub fn process_instruction(
                 return Err(InstructionError::GenericError);
             }
         };
-        let parameter_accounts = keyed_accounts_iter.into_slice();
-        let mut parameter_bytes =
+        let parameter_accounts = keyed_accounts_iter.as_slice();
+        let parameter_bytes =
             serialize_parameters(program_id, parameter_accounts, &instruction_data)?;
 
         info!("Call BPF program");
-        match vm.execute_program(parameter_bytes.as_mut_slice(), &[], &[heap_region]) {
+        match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
             Ok(status) => match u32::try_from(status) {
                 Ok(status) => {
                     if status > 0 {
@@ -191,7 +191,7 @@ pub fn process_instruction(
     } else if !keyed_accounts.is_empty() {
         match limited_deserialize(instruction_data)? {
             LoaderInstruction::Write { offset, bytes } => {
-                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let mut keyed_accounts_iter = keyed_accounts.iter();
                 let program = next_keyed_account(&mut keyed_accounts_iter)?;
                 if program.signer_key().is_none() {
                     warn!("key[0] did not sign the transaction");
@@ -207,7 +207,7 @@ pub fn process_instruction(
                 program.try_account_ref_mut()?.data[offset..offset + len].copy_from_slice(&bytes);
             }
             LoaderInstruction::Finalize => {
-                let mut keyed_accounts_iter = keyed_accounts.iter_mut();
+                let mut keyed_accounts_iter = keyed_accounts.iter();
                 let program = next_keyed_account(&mut keyed_accounts_iter)?;
                 let rent = next_keyed_account(&mut keyed_accounts_iter)?;
 
@@ -259,8 +259,8 @@ mod tests {
     fn test_bpf_loader_write() {
         let program_id = Pubkey::new_rand();
         let program_key = Pubkey::new_rand();
-        let mut program_account = Account::new_ref(1, 0, &program_id);
-        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
+        let program_account = Account::new_ref(1, 0, &program_id);
+        let keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         let instruction_data = bincode::serialize(&LoaderInstruction::Write {
             offset: 3,
             bytes: vec![1, 2, 3],
@@ -270,21 +270,21 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &mut vec![], &instruction_data)
+            process_instruction(&program_id, &vec![], &instruction_data)
         );
 
         // Case: Not signed
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
+            process_instruction(&program_id, &keyed_accounts, &instruction_data)
         );
 
         // Case: Write bytes to an offset
-        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &mut program_account)];
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         keyed_accounts[0].account.borrow_mut().data = vec![0; 6];
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
+            process_instruction(&program_id, &keyed_accounts, &instruction_data)
         );
         assert_eq!(
             vec![0, 0, 0, 1, 2, 3],
@@ -292,11 +292,11 @@ mod tests {
         );
 
         // Case: Overflow
-        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &mut program_account)];
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         keyed_accounts[0].account.borrow_mut().data = vec![0; 5];
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
-            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
+            process_instruction(&program_id, &keyed_accounts, &instruction_data)
         );
     }
 
@@ -309,34 +309,34 @@ mod tests {
         let mut elf = Vec::new();
         let rent = rent::Rent::default();
         file.read_to_end(&mut elf).unwrap();
-        let mut program_account = Account::new_ref(rent.minimum_balance(elf.len()), 0, &program_id);
+        let program_account = Account::new_ref(rent.minimum_balance(elf.len()), 0, &program_id);
         program_account.borrow_mut().data = elf;
-        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         let instruction_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
 
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &mut vec![], &instruction_data)
+            process_instruction(&program_id, &vec![], &instruction_data)
         );
 
-        let mut rent_account = RefCell::new(rent::create_account(1, &rent));
-        keyed_accounts.push(KeyedAccount::new(&rent_key, false, &mut rent_account));
+        let rent_account = RefCell::new(rent::create_account(1, &rent));
+        keyed_accounts.push(KeyedAccount::new(&rent_key, false, &rent_account));
 
         // Case: Not signed
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
+            process_instruction(&program_id, &keyed_accounts, &instruction_data)
         );
 
         // Case: Finalize
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&program_key, true, &mut program_account),
-            KeyedAccount::new(&rent_key, false, &mut rent_account),
+        let keyed_accounts = vec![
+            KeyedAccount::new(&program_key, true, &program_account),
+            KeyedAccount::new(&rent_key, false, &rent_account),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
+            process_instruction(&program_id, &keyed_accounts, &instruction_data)
         );
         assert!(keyed_accounts[0].account.borrow().executable);
 
@@ -344,13 +344,13 @@ mod tests {
 
         // Case: Finalize
         program_account.borrow_mut().data[0] = 0; // bad elf
-        let mut keyed_accounts = vec![
-            KeyedAccount::new(&program_key, true, &mut program_account),
-            KeyedAccount::new(&rent_key, false, &mut rent_account),
+        let keyed_accounts = vec![
+            KeyedAccount::new(&program_key, true, &program_account),
+            KeyedAccount::new(&rent_key, false, &rent_account),
         ];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&program_id, &mut keyed_accounts, &instruction_data)
+            process_instruction(&program_id, &keyed_accounts, &instruction_data)
         );
     }
 
@@ -365,42 +365,38 @@ mod tests {
         let mut file = File::open("test_elfs/noop.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
-        let mut program_account = Account::new_ref(1, 0, &program_id);
+        let program_account = Account::new_ref(1, 0, &program_id);
         program_account.borrow_mut().data = elf;
         program_account.borrow_mut().executable = true;
 
-        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &mut program_account)];
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
 
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &mut vec![], &vec![])
+            process_instruction(&program_id, &vec![], &vec![])
         );
 
         // Case: Only a program account
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &vec![])
+            process_instruction(&program_id, &keyed_accounts, &vec![])
         );
 
         // Case: Account not executable
         keyed_accounts[0].account.borrow_mut().executable = false;
         assert_eq!(
             Err(InstructionError::InvalidInstructionData),
-            process_instruction(&program_id, &mut keyed_accounts, &vec![])
+            process_instruction(&program_id, &keyed_accounts, &vec![])
         );
         keyed_accounts[0].account.borrow_mut().executable = true;
 
         // Case: With program and parameter account
-        let mut parameter_account = Account::new_ref(1, 0, &program_id);
-        keyed_accounts.push(KeyedAccount::new(
-            &program_key,
-            false,
-            &mut parameter_account,
-        ));
+        let parameter_account = Account::new_ref(1, 0, &program_id);
+        keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &vec![])
+            process_instruction(&program_id, &keyed_accounts, &vec![])
         );
 
         // Case: With duplicate accounts
@@ -410,7 +406,7 @@ mod tests {
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &mut keyed_accounts, &vec![])
+            process_instruction(&program_id, &keyed_accounts, &vec![])
         );
     }
 }

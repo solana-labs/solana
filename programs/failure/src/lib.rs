@@ -10,7 +10,7 @@ solana_sdk::declare_program!(
 
 fn process_instruction(
     _program_id: &Pubkey,
-    _keyed_accounts: &mut [KeyedAccount],
+    _keyed_accounts: &[KeyedAccount],
     _data: &[u8],
 ) -> Result<(), InstructionError> {
     Err(InstructionError::GenericError)

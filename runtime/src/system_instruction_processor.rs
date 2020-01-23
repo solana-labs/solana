@@ -2,7 +2,7 @@ use log::*;
 
 use solana_sdk::{
     account::{get_signers, Account, KeyedAccount},
-    account_utils::State,
+    account_utils::StateMut,
     instruction::InstructionError,
     instruction_processor_utils::{limited_deserialize, next_keyed_account},
     nonce_state::{NonceAccount, NonceState},
@@ -125,7 +125,7 @@ fn allocate_and_assign(
 }
 
 fn create_account(
-    from: &mut KeyedAccount,
+    from: &KeyedAccount,
     to: &mut Account,
     to_address: &Address,
     lamports: u64,
@@ -137,11 +137,7 @@ fn create_account(
     transfer(from, to, lamports)
 }
 
-fn transfer(
-    from: &mut KeyedAccount,
-    to: &mut Account,
-    lamports: u64,
-) -> Result<(), InstructionError> {
+fn transfer(from: &KeyedAccount, to: &mut Account, lamports: u64) -> Result<(), InstructionError> {
     if lamports == 0 {
         return Ok(());
     }
@@ -171,7 +167,7 @@ fn transfer(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
 ) -> Result<(), InstructionError> {
     let instruction = limited_deserialize(instruction_data)?;
@@ -180,7 +176,7 @@ pub fn process_instruction(
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
     let signers = get_signers(keyed_accounts);
-    let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
+    let keyed_accounts_iter = &mut keyed_accounts.iter();
 
     match instruction {
         SystemInstruction::CreateAccount {
@@ -371,15 +367,15 @@ mod tests {
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
         let to = Pubkey::new_rand();
-        let mut from_account = Account::new_ref(100, 0, &system_program::id());
-        let mut to_account = Account::new_ref(0, 0, &Pubkey::default());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
+        let to_account = Account::new_ref(0, 0, &Pubkey::default());
 
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&from, true, &mut from_account),
-                    KeyedAccount::new(&to, true, &mut to_account)
+                &[
+                    KeyedAccount::new(&from, true, &from_account),
+                    KeyedAccount::new(&to, true, &to_account)
                 ],
                 &bincode::serialize(&SystemInstruction::CreateAccount {
                     lamports: 50,
@@ -403,15 +399,15 @@ mod tests {
         let seed = "shiny pepper";
         let to = create_address_with_seed(&from, seed, &new_program_owner).unwrap();
 
-        let mut from_account = Account::new_ref(100, 0, &system_program::id());
-        let mut to_account = Account::new_ref(0, 0, &Pubkey::default());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
+        let to_account = Account::new_ref(0, 0, &Pubkey::default());
 
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&from, true, &mut from_account),
-                    KeyedAccount::new(&to, false, &mut to_account)
+                &[
+                    KeyedAccount::new(&from, true, &from_account),
+                    KeyedAccount::new(&to, false, &to_account)
                 ],
                 &bincode::serialize(&SystemInstruction::CreateAccountWithSeed {
                     base: from,
@@ -456,7 +452,7 @@ mod tests {
 
         assert_eq!(
             create_account(
-                &mut KeyedAccount::new(&from, false, &from_account),
+                &KeyedAccount::new(&from, false, &from_account),
                 &mut to_account,
                 &to_address,
                 50,
@@ -482,7 +478,7 @@ mod tests {
 
         assert_eq!(
             create_account(
-                &mut KeyedAccount::new(&from, false, &from_account), // no signer
+                &KeyedAccount::new(&from, false, &from_account), // no signer
                 &mut to_account,
                 &to.into(),
                 0,
@@ -508,13 +504,13 @@ mod tests {
         // Attempt to create account with more lamports than remaining in from_account
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new_ref(100, 0, &system_program::id());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
 
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &KeyedAccount::new(&from, true, &from_account),
             &mut to_account,
             &to.into(),
             150,
@@ -527,7 +523,7 @@ mod tests {
 
     #[test]
     fn test_request_more_than_allowed_data_length() {
-        let mut from_account = Account::new_ref(100, 0, &system_program::id());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
         let from = Pubkey::new_rand();
         let mut to_account = Account::default();
         let to = Pubkey::new_rand();
@@ -537,7 +533,7 @@ mod tests {
 
         // Trying to request more data length than permitted will result in failure
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &KeyedAccount::new(&from, true, &from_account),
             &mut to_account,
             &address,
             50,
@@ -553,7 +549,7 @@ mod tests {
 
         // Trying to request equal or less data length than permitted will be successful
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &KeyedAccount::new(&from, true, &from_account),
             &mut to_account,
             &address,
             50,
@@ -582,7 +578,7 @@ mod tests {
         let owned_address = owned_key.into();
 
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &from_account),
+            &KeyedAccount::new(&from, true, &from_account),
             &mut owned_account,
             &owned_address,
             50,
@@ -600,7 +596,7 @@ mod tests {
         let mut owned_account = Account::new(0, 1, &Pubkey::default());
         let unchanged_account = owned_account.clone();
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &from_account),
+            &KeyedAccount::new(&from, true, &from_account),
             &mut owned_account,
             &owned_address,
             50,
@@ -616,7 +612,7 @@ mod tests {
         // Verify that create_account works even if `to` has a non-zero balance
         let mut owned_account = Account::new(1, 0, &Pubkey::default());
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &from_account),
+            &KeyedAccount::new(&from, true, &from_account),
             &mut owned_account,
             &owned_address,
             50,
@@ -634,7 +630,7 @@ mod tests {
         // Attempt to create an account without signing the transfer
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new_ref(100, 0, &system_program::id());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let owned_key = Pubkey::new_rand();
         let mut owned_account = Account::new(0, 0, &Pubkey::default());
@@ -643,7 +639,7 @@ mod tests {
 
         // Haven't signed from account
         let result = create_account(
-            &mut KeyedAccount::new(&from, false, &mut from_account),
+            &KeyedAccount::new(&from, false, &from_account),
             &mut owned_account,
             &owned_address,
             50,
@@ -656,7 +652,7 @@ mod tests {
         // Haven't signed to account
         let mut owned_account = Account::new(0, 0, &Pubkey::default());
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &KeyedAccount::new(&from, true, &from_account),
             &mut owned_account,
             &owned_address,
             50,
@@ -669,7 +665,7 @@ mod tests {
         // support creation/assignment with zero lamports (ephemeral account)
         let mut owned_account = Account::new(0, 0, &Pubkey::default());
         let result = create_account(
-            &mut KeyedAccount::new(&from, false, &mut from_account),
+            &KeyedAccount::new(&from, false, &from_account),
             &mut owned_account,
             &owned_address,
             0,
@@ -684,7 +680,7 @@ mod tests {
     fn test_create_sysvar_invalid_id() {
         // Attempt to create system account in account already owned by another program
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new_ref(100, 0, &system_program::id());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let to = Pubkey::new_rand();
         let mut to_account = Account::default();
@@ -694,7 +690,7 @@ mod tests {
 
         // fail to create a sysvar::id() owned account
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &KeyedAccount::new(&from, true, &from_account),
             &mut to_account,
             &to_address,
             50,
@@ -711,7 +707,7 @@ mod tests {
         // Attempt to create system account in account with populated data
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new_ref(100, 0, &system_program::id());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let populated_key = Pubkey::new_rand();
         let mut populated_account = Account {
@@ -726,7 +722,7 @@ mod tests {
         let populated_address = populated_key.into();
 
         let result = create_account(
-            &mut KeyedAccount::new(&from, true, &mut from_account),
+            &KeyedAccount::new(&from, true, &from_account),
             &mut populated_account,
             &populated_address,
             50,
@@ -740,7 +736,7 @@ mod tests {
     #[test]
     fn test_create_from_account_is_nonce_fail() {
         let nonce = Pubkey::new_rand();
-        let mut nonce_account = Account::new_ref_data(
+        let nonce_account = Account::new_ref_data(
             42,
             &nonce_state::NonceState::Initialized(
                 nonce_state::Meta::new(&Pubkey::default()),
@@ -749,7 +745,7 @@ mod tests {
             &system_program::id(),
         )
         .unwrap();
-        let mut from = KeyedAccount::new(&nonce, true, &mut nonce_account);
+        let from = KeyedAccount::new(&nonce, true, &nonce_account);
         let new = Pubkey::new_rand();
 
         let mut new_account = Account::default();
@@ -759,7 +755,7 @@ mod tests {
 
         assert_eq!(
             create_account(
-                &mut from,
+                &from,
                 &mut new_account,
                 &new_address,
                 42,
@@ -798,11 +794,11 @@ mod tests {
             Ok(())
         );
 
-        let mut account = RefCell::new(account);
+        let account = RefCell::new(account);
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(&pubkey, true, &mut account)],
+                &[KeyedAccount::new(&pubkey, true, &account)],
                 &bincode::serialize(&SystemInstruction::Assign {
                     program_id: new_program_owner
                 })
@@ -837,17 +833,17 @@ mod tests {
             program_id: Pubkey::new_rand(),
         };
         let data = serialize(&instruction).unwrap();
-        let result = process_instruction(&system_program::id(), &mut [], &data);
+        let result = process_instruction(&system_program::id(), &[], &data);
         assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
 
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new_ref(100, 0, &system_program::id());
+        let from_account = Account::new_ref(100, 0, &system_program::id());
         // Attempt to transfer with no destination
         let instruction = SystemInstruction::Transfer { lamports: 0 };
         let data = serialize(&instruction).unwrap();
         let result = process_instruction(
             &system_program::id(),
-            &mut [KeyedAccount::new(&from, true, &mut from_account)],
+            &[KeyedAccount::new(&from, true, &from_account)],
             &data,
         );
         assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
@@ -858,23 +854,23 @@ mod tests {
         let from = Pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
-        let mut from_keyed_account = KeyedAccount::new(&from, true, &from_account);
-        transfer(&mut from_keyed_account, &mut to_account, 50).unwrap();
+        let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
+        transfer(&from_keyed_account, &mut to_account, 50).unwrap();
         let from_lamports = from_keyed_account.account.borrow().lamports;
         let to_lamports = to_account.lamports;
         assert_eq!(from_lamports, 50);
         assert_eq!(to_lamports, 51);
 
         // Attempt to move more lamports than remaining in from_account
-        let mut from_keyed_account = KeyedAccount::new(&from, true, &from_account);
-        let result = transfer(&mut from_keyed_account, &mut to_account, 100);
+        let from_keyed_account = KeyedAccount::new(&from, true, &from_account);
+        let result = transfer(&from_keyed_account, &mut to_account, 100);
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
         assert_eq!(to_account.lamports, 51);
 
         // test unsigned transfer of zero
-        let mut from_keyed_account = KeyedAccount::new(&from, false, &from_account);
-        assert!(transfer(&mut from_keyed_account, &mut to_account, 0,).is_ok(),);
+        let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
+        assert!(transfer(&from_keyed_account, &mut to_account, 0,).is_ok(),);
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
         assert_eq!(to_account.lamports, 51);
     }
@@ -882,7 +878,7 @@ mod tests {
     #[test]
     fn test_transfer_lamports_from_nonce_account_fail() {
         let from = Pubkey::new_rand();
-        let mut from_account = Account::new_ref_data(
+        let from_account = Account::new_ref_data(
             100,
             &nonce_state::NonceState::Initialized(nonce_state::Meta::new(&from), Hash::default()),
             &system_program::id(),
@@ -896,7 +892,7 @@ mod tests {
         let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
         assert_eq!(
             transfer(
-                &mut KeyedAccount::new(&from, true, &mut from_account),
+                &KeyedAccount::new(&from, true, &from_account),
                 &mut to_account,
                 50,
             ),
@@ -1010,7 +1006,7 @@ mod tests {
     }
 
     fn process_nonce_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
-        let mut accounts: Vec<_> = instruction
+        let accounts: Vec<_> = instruction
             .accounts
             .iter()
             .map(|meta| {
@@ -1028,17 +1024,13 @@ mod tests {
             .collect();
 
         {
-            let mut keyed_accounts_iter: Vec<_> = instruction
+            let keyed_accounts: Vec<_> = instruction
                 .accounts
                 .iter()
-                .zip(accounts.iter_mut())
+                .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut keyed_accounts_iter,
-                &instruction.data,
-            )
+            super::process_instruction(&Pubkey::default(), &keyed_accounts, &instruction.data)
         }
     }
 
@@ -1058,7 +1050,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [],
+                &[],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
@@ -1070,7 +1062,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(
+                &[KeyedAccount::new(
                     &Pubkey::default(),
                     true,
                     &create_default_account(),
@@ -1086,7 +1078,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
+                &[
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
@@ -1102,11 +1094,11 @@ mod tests {
 
     #[test]
     fn test_process_nonce_ix_ok() {
-        let mut nonce_acc = nonce_state::create_account(1_000_000);
+        let nonce_acc = nonce_state::create_account(1_000_000);
         super::process_instruction(
             &Pubkey::default(),
-            &mut [
-                KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc),
+            &[
+                KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
                 KeyedAccount::new(
                     &sysvar::recent_blockhashes::id(),
                     false,
@@ -1125,8 +1117,8 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc,),
+                &[
+                    KeyedAccount::new(&Pubkey::default(), true, &nonce_acc,),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
@@ -1157,7 +1149,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [],
+                &[],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
@@ -1169,7 +1161,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(
+                &[KeyedAccount::new(
                     &Pubkey::default(),
                     true,
                     &create_default_account()
@@ -1185,7 +1177,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
+                &[
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
                     KeyedAccount::new(
@@ -1205,11 +1197,11 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
+                &[
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
-                        &mut nonce_state::create_account(1_000_000),
+                        &nonce_state::create_account(1_000_000),
                     ),
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(
@@ -1230,13 +1222,13 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
+                &[
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
-                        &mut nonce_state::create_account(1_000_000),
+                        &nonce_state::create_account(1_000_000),
                     ),
-                    KeyedAccount::new(&Pubkey::default(), true, &mut create_default_account()),
+                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
@@ -1255,7 +1247,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [],
+                &[],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
@@ -1267,10 +1259,10 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(
+                &[KeyedAccount::new(
                     &Pubkey::default(),
                     true,
-                    &mut nonce_state::create_account(1_000_000),
+                    &nonce_state::create_account(1_000_000),
                 ),],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
@@ -1283,11 +1275,11 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
+                &[
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
-                        &mut nonce_state::create_account(1_000_000),
+                        &nonce_state::create_account(1_000_000),
                     ),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
@@ -1306,11 +1298,11 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
+                &[
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
-                        &mut nonce_state::create_account(1_000_000),
+                        &nonce_state::create_account(1_000_000),
                     ),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
@@ -1330,11 +1322,11 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
+                &[
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
-                        &mut nonce_state::create_account(1_000_000),
+                        &nonce_state::create_account(1_000_000),
                     ),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
@@ -1351,11 +1343,11 @@ mod tests {
 
     #[test]
     fn test_process_authorize_ix_ok() {
-        let mut nonce_acc = nonce_state::create_account(1_000_000);
+        let nonce_acc = nonce_state::create_account(1_000_000);
         super::process_instruction(
             &Pubkey::default(),
-            &mut [
-                KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc),
+            &[
+                KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
                 KeyedAccount::new(
                     &sysvar::recent_blockhashes::id(),
                     false,
@@ -1369,7 +1361,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [KeyedAccount::new(&Pubkey::default(), true, &mut nonce_acc,),],
+                &[KeyedAccount::new(&Pubkey::default(), true, &nonce_acc,),],
                 &serialize(&SystemInstruction::AuthorizeNonceAccount(Pubkey::default(),)).unwrap(),
             ),
             Ok(()),

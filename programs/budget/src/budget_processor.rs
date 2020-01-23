@@ -18,9 +18,9 @@ use solana_sdk::{
 /// will progress one step.
 fn apply_signature(
     budget_state: &mut BudgetState,
-    witness_keyed_account: &mut KeyedAccount,
-    contract_keyed_account: &mut KeyedAccount,
-    to_keyed_account: Result<&mut KeyedAccount, InstructionError>,
+    witness_keyed_account: &KeyedAccount,
+    contract_keyed_account: &KeyedAccount,
+    to_keyed_account: Result<&KeyedAccount, InstructionError>,
 ) -> Result<(), InstructionError> {
     let mut final_payment = None;
     if let Some(ref mut expr) = budget_state.pending_budget {
@@ -54,9 +54,9 @@ fn apply_signature(
 /// will progress one step.
 fn apply_timestamp(
     budget_state: &mut BudgetState,
-    witness_keyed_account: &mut KeyedAccount,
-    contract_keyed_account: &mut KeyedAccount,
-    to_keyed_account: Result<&mut KeyedAccount, InstructionError>,
+    witness_keyed_account: &KeyedAccount,
+    contract_keyed_account: &KeyedAccount,
+    to_keyed_account: Result<&KeyedAccount, InstructionError>,
     dt: DateTime<Utc>,
 ) -> Result<(), InstructionError> {
     // Check to see if any timelocked transactions can be completed.
@@ -84,9 +84,9 @@ fn apply_timestamp(
 /// Process an AccountData Witness and any payment waiting on it.
 fn apply_account_data(
     budget_state: &mut BudgetState,
-    witness_keyed_account: &mut KeyedAccount,
-    contract_keyed_account: &mut KeyedAccount,
-    to_keyed_account: Result<&mut KeyedAccount, InstructionError>,
+    witness_keyed_account: &KeyedAccount,
+    contract_keyed_account: &KeyedAccount,
+    to_keyed_account: Result<&KeyedAccount, InstructionError>,
 ) -> Result<(), InstructionError> {
     // Check to see if any timelocked transactions can be completed.
     let mut final_payment = None;
@@ -114,10 +114,10 @@ fn apply_account_data(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    let keyed_accounts_iter = &mut keyed_accounts.iter_mut();
+    let keyed_accounts_iter = &mut keyed_accounts.iter();
     let instruction = limited_deserialize(data)?;
 
     trace!("process_instruction: {:?}", instruction);

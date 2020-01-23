@@ -176,7 +176,7 @@ pub fn withdraw(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup_with_default("solana=info");
@@ -186,7 +186,7 @@ pub fn process_instruction(
 
     let signers = get_signers(keyed_accounts);
 
-    let keyed_accounts = &mut keyed_accounts.iter_mut();
+    let keyed_accounts = &mut keyed_accounts.iter();
     let me = &mut next_keyed_account(keyed_accounts)?;
 
     match limited_deserialize(data)? {
@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn test_vote_process_instruction_decode_bail() {
         assert_eq!(
-            super::process_instruction(&Pubkey::default(), &mut [], &[],),
+            super::process_instruction(&Pubkey::default(), &[], &[],),
             Err(InstructionError::NotEnoughAccountKeys),
         );
     }
@@ -261,13 +261,13 @@ mod tests {
             accounts.push(RefCell::new(Account::default()));
         }
         {
-            let mut keyed_accounts: Vec<_> = instruction
+            let keyed_accounts: Vec<_> = instruction
                 .accounts
                 .iter()
-                .zip(accounts.iter_mut())
+                .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(&Pubkey::default(), &mut keyed_accounts, &instruction.data)
+            super::process_instruction(&Pubkey::default(), &keyed_accounts, &instruction.data)
         }
     }
 

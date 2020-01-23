@@ -124,8 +124,7 @@ pub fn verify_account_changes(
     Ok(())
 }
 
-pub type ProcessInstruction =
-    fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), InstructionError>;
+pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<instruction_processor_utils::Entrypoint>>>;
 
@@ -168,8 +167,8 @@ impl MessageProcessor {
         &self,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_accounts: &mut [(Pubkey, RefCell<Account>)],
-        program_accounts: &mut [Rc<RefCell<Account>>],
+        executable_accounts: &[(Pubkey, RefCell<Account>)],
+        program_accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         let mut keyed_accounts = create_keyed_readonly_accounts(executable_accounts);
@@ -186,7 +185,7 @@ impl MessageProcessor {
                     is_writable,
                 )
             })
-            .zip(program_accounts.iter_mut())
+            .zip(program_accounts.iter())
             .map(|((key, is_signer, is_writable), account)| {
                 if is_writable {
                     KeyedAccount::new(key, is_signer, account)
@@ -205,25 +204,21 @@ impl MessageProcessor {
         let loader_id = keyed_accounts[0].unsigned_key();
         for (id, process_instruction) in &self.instruction_processors {
             if id == loader_id {
-                return process_instruction(
-                    &program_id,
-                    &mut keyed_accounts[1..],
-                    &instruction.data,
-                );
+                return process_instruction(&program_id, &keyed_accounts[1..], &instruction.data);
             }
         }
 
         native_loader::invoke_entrypoint(
             &program_id,
-            &mut keyed_accounts,
+            &keyed_accounts,
             &instruction.data,
             &self.symbol_cache,
         )
     }
 
     pub fn verify_account_references(
-        executable_accounts: &mut [(Pubkey, RefCell<Account>)],
-        program_accounts: &mut [Rc<RefCell<Account>>],
+        executable_accounts: &[(Pubkey, RefCell<Account>)],
+        program_accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         for account in program_accounts.iter() {
             account
@@ -263,14 +258,14 @@ impl MessageProcessor {
         &self,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_accounts: &mut [(Pubkey, RefCell<Account>)],
-        program_accounts: &mut [Rc<RefCell<Account>>],
+        executable_accounts: &[(Pubkey, RefCell<Account>)],
+        program_accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         assert_eq!(instruction.accounts.len(), program_accounts.len());
         let program_id = instruction.program_id(&message.account_keys);
         // Copy only what we need to verify after instruction processing
         let pre_accounts: Vec<_> = program_accounts
-            .iter_mut()
+            .iter()
             .enumerate()
             .map(|(i, account)| {
                 let is_writable = message.is_writable(instruction.accounts[i] as usize);
@@ -310,31 +305,26 @@ impl MessageProcessor {
     pub fn process_message(
         &self,
         message: &Message,
-        loaders: &mut [Vec<(Pubkey, RefCell<Account>)>],
-        accounts: &mut [Rc<RefCell<Account>>],
+        loaders: &[Vec<(Pubkey, RefCell<Account>)>],
+        accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_index = message
                 .program_position(instruction.program_id_index as usize)
                 .ok_or(TransactionError::InvalidAccountIndex)?;
-            let executable_accounts = &mut loaders[executable_index];
+            let executable_accounts = &loaders[executable_index];
 
             // TODO: panics on an index out of bounds if an executable
             // account is also included as a regular account for an instruction, because the
             // executable account is not passed in as part of the accounts slice
-            let mut program_accounts: Vec<_> = instruction
+            let program_accounts: Vec<_> = instruction
                 .accounts
                 .iter()
                 .map(|i| accounts[*i as usize].clone())
                 .collect();
 
-            self.execute_instruction(
-                message,
-                instruction,
-                executable_accounts,
-                &mut program_accounts,
-            )
-            .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+            self.execute_instruction(message, instruction, executable_accounts, &program_accounts)
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(())
     }
@@ -379,26 +369,28 @@ mod tests {
 
     #[test]
     fn test_verify_account_references() {
-        let mut executable_accounts = vec![(Pubkey::new_rand(), RefCell::new(Account::default()))];
-        let mut program_accounts = vec![Rc::new(RefCell::new(Account::default()))];
+        let executable_accounts = vec![(Pubkey::new_rand(), RefCell::new(Account::default()))];
+        let program_accounts = vec![Rc::new(RefCell::new(Account::default()))];
 
         assert!(MessageProcessor::verify_account_references(
-            &mut executable_accounts,
-            &mut program_accounts,
+            &executable_accounts,
+            &program_accounts,
         )
         .is_ok());
 
         let cloned = program_accounts[0].clone();
         let _borrowed = cloned.borrow();
         assert_eq!(
-            MessageProcessor::verify_account_references(
-                &mut executable_accounts,
-                &mut program_accounts,
-            ),
+            MessageProcessor::verify_account_references(&executable_accounts, &program_accounts,),
             Err(InstructionError::AccountBorrowOutstanding)
         );
 
-        // TODO when the `&mut`s go away test outstanding executable_account refs
+        let cloned = executable_accounts[0].1.clone();
+        let _borrowed = cloned.borrow();
+        assert_eq!(
+            MessageProcessor::verify_account_references(&executable_accounts, &program_accounts,),
+            Err(InstructionError::AccountBorrowOutstanding)
+        );
     }
 
     #[test]
@@ -408,10 +400,10 @@ mod tests {
         let account2 = Rc::new(RefCell::new(Account::new(2, 1, &owner_pubkey)));
         let account3 = Rc::new(RefCell::new(Account::new(3, 1, &owner_pubkey)));
 
-        assert_eq!(0, MessageProcessor::sum_account_lamports(&mut vec![]));
+        assert_eq!(0, MessageProcessor::sum_account_lamports(&vec![]));
         assert_eq!(
             6,
-            MessageProcessor::sum_account_lamports(&mut vec![
+            MessageProcessor::sum_account_lamports(&vec![
                 account1.clone(),
                 account2.clone(),
                 account3.clone()
@@ -419,7 +411,7 @@ mod tests {
         );
         assert_eq!(
             3,
-            MessageProcessor::sum_account_lamports(&mut vec![
+            MessageProcessor::sum_account_lamports(&vec![
                 account1.clone(),
                 account2.clone(),
                 account1.clone()
@@ -427,7 +419,7 @@ mod tests {
         );
         assert_eq!(
             1,
-            MessageProcessor::sum_account_lamports(&mut vec![
+            MessageProcessor::sum_account_lamports(&vec![
                 account1.clone(),
                 account1.clone(),
                 account1.clone()
@@ -435,7 +427,7 @@ mod tests {
         );
         assert_eq!(
             6,
-            MessageProcessor::sum_account_lamports(&mut vec![
+            MessageProcessor::sum_account_lamports(&vec![
                 account1.clone(),
                 account2.clone(),
                 account3.clone(),
@@ -805,7 +797,7 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &mut [KeyedAccount],
+            keyed_accounts: &[KeyedAccount],
             data: &[u8],
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -854,7 +846,7 @@ mod tests {
             account_metas.clone(),
         )]);
 
-        let result = message_processor.process_message(&message, &mut loaders, &mut accounts);
+        let result = message_processor.process_message(&message, &loaders, &accounts);
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
         assert_eq!(accounts[1].borrow().lamports, 0);
@@ -865,7 +857,7 @@ mod tests {
             account_metas.clone(),
         )]);
 
-        let result = message_processor.process_message(&message, &mut loaders, &mut accounts);
+        let result = message_processor.process_message(&message, &loaders, &accounts);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -880,7 +872,7 @@ mod tests {
             account_metas,
         )]);
 
-        let result = message_processor.process_message(&message, &mut loaders, &mut accounts);
+        let result = message_processor.process_message(&message, &loaders, &accounts);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -901,7 +893,7 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &mut [KeyedAccount],
+            keyed_accounts: &[KeyedAccount],
             data: &[u8],
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -976,7 +968,7 @@ mod tests {
             &MockSystemInstruction::BorrowFail,
             account_metas.clone(),
         )]);
-        let result = message_processor.process_message(&message, &mut loaders, &mut accounts);
+        let result = message_processor.process_message(&message, &loaders, &accounts);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -991,7 +983,7 @@ mod tests {
             &MockSystemInstruction::MultiBorrowMut,
             account_metas.clone(),
         )]);
-        let result = message_processor.process_message(&message, &mut loaders, &mut accounts);
+        let result = message_processor.process_message(&message, &loaders, &accounts);
         assert_eq!(result, Ok(()));
 
         // Do work on the same account but at different location in keyed_accounts[]
@@ -1003,7 +995,7 @@ mod tests {
             },
             account_metas,
         )]);
-        let result = message_processor.process_message(&message, &mut loaders, &mut accounts);
+        let result = message_processor.process_message(&message, &loaders, &accounts);
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);

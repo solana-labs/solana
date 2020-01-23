@@ -4,7 +4,7 @@ use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{Account, KeyedAccount},
-    account_utils::State,
+    account_utils::StateMut,
     clock::Epoch,
     hash::Hash,
     instruction::InstructionError,
@@ -366,7 +366,7 @@ impl<'a> StorageAccount<'a> {
 
     pub fn claim_storage_reward(
         &mut self,
-        rewards_pool: &mut KeyedAccount,
+        rewards_pool: &KeyedAccount,
         clock: sysvar::clock::Clock,
         rewards: sysvar::rewards::Rewards,
         owner: &mut StorageAccount,
@@ -417,7 +417,7 @@ impl<'a> StorageAccount<'a> {
 fn check_redeemable(
     credits: &mut Credits,
     storage_point_value: f64,
-    rewards_pool: &mut KeyedAccount,
+    rewards_pool: &KeyedAccount,
     owner: &mut StorageAccount,
 ) -> Result<(), InstructionError> {
     let rewards = (credits.redeemable as f64 * storage_point_value) as u64;
@@ -619,7 +619,7 @@ mod tests {
         };
         let mut rewards_pool = RefCell::new(create_rewards_pool());
         let pool_id = rewards_pools::id();
-        let mut keyed_pool_account = KeyedAccount::new(&pool_id, false, &mut rewards_pool);
+        let keyed_pool_account = KeyedAccount::new(&pool_id, false, &mut rewards_pool);
         let mut owner = StorageAccount {
             id: Pubkey::default(),
             account: &mut owner_account,
@@ -628,7 +628,7 @@ mod tests {
         // check that redeeming from depleted pools fails
         keyed_pool_account.account.borrow_mut().lamports = 0;
         assert_eq!(
-            check_redeemable(&mut credits, 1.0, &mut keyed_pool_account, &mut owner),
+            check_redeemable(&mut credits, 1.0, &keyed_pool_account, &mut owner),
             Err(InstructionError::CustomError(
                 StorageError::RewardPoolDepleted as u32,
             ))
@@ -637,7 +637,7 @@ mod tests {
 
         keyed_pool_account.account.borrow_mut().lamports = 200;
         assert_eq!(
-            check_redeemable(&mut credits, 1.0, &mut keyed_pool_account, &mut owner),
+            check_redeemable(&mut credits, 1.0, &keyed_pool_account, &mut owner),
             Ok(())
         );
         // check that the owner's balance increases

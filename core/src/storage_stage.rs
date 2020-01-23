@@ -14,7 +14,7 @@ use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_runtime::{bank::Bank, storage_utils::archiver_accounts};
 use solana_sdk::{
     account::Account,
-    account_utils::State,
+    account_utils::StateMut,
     clock::{get_segment_from_slot, Slot},
     hash::Hash,
     instruction::Instruction,
