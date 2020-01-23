@@ -4,7 +4,10 @@ use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
-use solana_runtime::{bank::Bank, status_cache::SlotDelta};
+use solana_runtime::{
+    bank::{self, Bank},
+    status_cache::SlotDelta,
+};
 use solana_sdk::{clock::Slot, transaction};
 use std::{
     cmp::Ordering,
@@ -266,7 +269,7 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
 
 fn rebuild_bank_from_snapshots<P>(
     snapshot_version: &str,
-    local_account_paths: &[PathBuf],
+    account_paths: &[PathBuf],
     unpacked_snapshots_dir: &PathBuf,
     append_vecs_path: P,
 ) -> Result<Bank>
@@ -287,7 +290,7 @@ where
     info!("Loading bank from {:?}", &root_paths.snapshot_file_path);
     let file = File::open(&root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
-    let bank: Bank = match snapshot_version {
+    let mut bank: Bank = match snapshot_version {
         env!("CARGO_PKG_VERSION") => deserialize_from(&mut stream)?,
         "v0.22.3" => {
             let bank0223: solana_runtime::bank::LegacyBank0223 = deserialize_from(&mut stream)?;
@@ -302,8 +305,12 @@ where
     };
 
     // Rebuild accounts
+    bank.set_bank_rc(
+        bank::BankRc::new(account_paths.to_vec(), 0, bank.slot()),
+        bank::StatusCacheRc::default(),
+    );
     bank.rc
-        .accounts_from_stream(&mut stream, local_account_paths, append_vecs_path)?;
+        .accounts_from_stream(&mut stream, account_paths, append_vecs_path)?;
 
     // Rebuild status cache
     let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
