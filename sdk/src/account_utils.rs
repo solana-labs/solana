@@ -10,9 +10,6 @@ pub trait StateMut<T> {
     fn state(&self) -> Result<T, InstructionError>;
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
 }
-
-// TODO duplicate trait needed?
-/// Convenience trait to covert bincode errors to instruction errors.
 pub trait State<T> {
     fn state(&self) -> Result<T, InstructionError>;
     fn set_state(&self, state: &T) -> Result<(), InstructionError>;
