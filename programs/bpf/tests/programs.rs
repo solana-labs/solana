@@ -27,10 +27,14 @@ mod bpf {
     mod bpf_c {
         use super::*;
         use solana_runtime::loader_utils::create_invoke_instruction;
+        use solana_sdk::account::Account;
         use solana_sdk::bpf_loader;
         use solana_sdk::client::SyncClient;
+        use solana_sdk::instruction::{AccountMeta, Instruction};
         use solana_sdk::signature::KeypairUtil;
         use std::io::Read;
+        use std::sync::Arc;
+        use solana_sdk::pubkey::Pubkey;
 
         #[test]
         fn test_program_bpf_c() {
@@ -71,6 +75,81 @@ mod bpf {
                     assert!(result.is_err());
                 }
             }
+        }
+
+        #[test]
+        fn test_program_bpf_c_duplicate_accounts() {
+            solana_logger::setup();
+
+            let filename = create_bpf_path("dup_accounts");
+            let mut file = File::open(filename).unwrap();
+            let mut elf = Vec::new();
+            file.read_to_end(&mut elf).unwrap();
+
+            let GenesisConfigInfo {
+                genesis_config,
+                mint_keypair,
+                ..
+            } = create_genesis_config(50);
+
+            let bank = Arc::new(Bank::new(&genesis_config));
+            let bank_client = BankClient::new_shared(&bank);
+            let program_id = load_program(&bank_client, &mint_keypair, &bpf_loader::id(), elf);
+
+            let payee_account = Account::new(10, 1, &program_id);
+            let payee_pubkey = Pubkey::new_rand();
+            bank.store_account(&payee_pubkey, &payee_account);
+
+            let account = Account::new(10, 1, &program_id);
+            let pubkey = Pubkey::new_rand();
+            let account_metas = vec![
+                AccountMeta::new(mint_keypair.pubkey(), true),
+                AccountMeta::new(payee_pubkey, false),
+                AccountMeta::new(pubkey, false),
+                AccountMeta::new(pubkey, false),
+            ];
+
+            bank.store_account(&pubkey, &account);
+            let instruction = Instruction::new(program_id, &1u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+            assert!(result.is_ok());
+            assert_eq!(data[0], 1);
+
+            bank.store_account(&pubkey, &account);
+            let instruction = Instruction::new(program_id, &2u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+            assert!(result.is_ok());
+            assert_eq!(data[0], 2);
+
+            bank.store_account(&pubkey, &account);
+            let instruction = Instruction::new(program_id, &3u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+            assert!(result.is_ok());
+            assert_eq!(data[0], 3);
+
+            bank.store_account(&pubkey, &account);
+            let instruction = Instruction::new(program_id, &4u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let lamports = bank_client.get_balance(&pubkey).unwrap();
+            assert!(result.is_ok());
+            assert_eq!(lamports, 11);
+
+            bank.store_account(&pubkey, &account);
+            let instruction = Instruction::new(program_id, &5u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let lamports = bank_client.get_balance(&pubkey).unwrap();
+            assert!(result.is_ok());
+            assert_eq!(lamports, 12);
+
+            bank.store_account(&pubkey, &account);
+            let instruction = Instruction::new(program_id, &6u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            let lamports = bank_client.get_balance(&pubkey).unwrap();
+            assert!(result.is_ok());
+            assert_eq!(lamports, 13);
         }
     }
 
@@ -193,7 +272,9 @@ mod bpf {
             bank.store_account(&pubkey, &account);
             let instruction = Instruction::new(program_id, &3u8, account_metas.clone());
             let result = bank_client.send_instruction(&mint_keypair, instruction);
-            assert!(!result.is_ok());
+            let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+            assert!(result.is_ok());
+            assert_eq!(data[0], 3);
 
             bank.store_account(&pubkey, &account);
             let instruction = Instruction::new(program_id, &4u8, account_metas.clone());
@@ -212,7 +293,9 @@ mod bpf {
             bank.store_account(&pubkey, &account);
             let instruction = Instruction::new(program_id, &6u8, account_metas.clone());
             let result = bank_client.send_instruction(&mint_keypair, instruction);
-            assert!(!result.is_ok());
+            let lamports = bank_client.get_balance(&pubkey).unwrap();
+            assert!(result.is_ok());
+            assert_eq!(lamports, 13);
         }
     }
 }
