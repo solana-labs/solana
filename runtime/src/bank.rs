@@ -452,22 +452,6 @@ impl Bank {
         &self.collector_id
     }
 
-    pub fn create_with_genesis(
-        genesis_config: &GenesisConfig,
-        account_paths: Vec<PathBuf>,
-        status_cache_rc: &StatusCacheRc,
-        id: AppendVecId,
-    ) -> Self {
-        let mut bank = Self::default();
-        bank.set_bank_rc(
-            &BankRc::new(account_paths, id, bank.slot()),
-            &status_cache_rc,
-        );
-        bank.process_genesis_config(genesis_config);
-        bank.ancestors.insert(0, 0);
-        bank
-    }
-
     pub fn slot(&self) -> Slot {
         self.slot
     }
@@ -1543,9 +1527,9 @@ impl Bank {
         self.rc.accounts.clone()
     }
 
-    pub fn set_bank_rc(&mut self, bank_rc: &BankRc, status_cache_rc: &StatusCacheRc) {
-        self.rc.accounts = bank_rc.accounts.clone();
-        self.src.status_cache = status_cache_rc.status_cache.clone()
+    pub fn set_bank_rc(&mut self, bank_rc: BankRc, status_cache_rc: StatusCacheRc) {
+        self.rc = bank_rc;
+        self.src = status_cache_rc;
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -4460,7 +4444,7 @@ mod tests {
         let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
         let ref_sc = StatusCacheRc::default();
         ref_sc.status_cache.write().unwrap().add_root(2);
-        dbank.set_bank_rc(&BankRc::new(dbank_paths.clone(), 0, dbank.slot()), &ref_sc);
+        dbank.set_bank_rc(BankRc::new(dbank_paths.clone(), 0, dbank.slot()), ref_sc);
         // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
         let copied_accounts = TempDir::new().unwrap();
         copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
