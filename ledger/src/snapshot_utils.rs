@@ -139,7 +139,7 @@ where
     }
 }
 
-pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
+pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<SlotSnapshotPaths> {
     bank.purge_zero_lamport_accounts();
     let slot = bank.slot();
     // snapshot_path/slot
@@ -148,11 +148,7 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
 
     // the snapshot is stored as snapshot_path/slot/slot
     let snapshot_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
-    info!(
-        "creating snapshot {}, path: {:?}",
-        bank.slot(),
-        snapshot_file_path,
-    );
+    info!("Creating snapshot {}, path: {:?}", slot, snapshot_file_path);
 
     let snapshot_file = File::create(&snapshot_file_path)?;
     // snapshot writer
@@ -166,12 +162,13 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
 
     info!(
         "{} for slot {} at {:?}",
-        bank_rc_serialize,
-        bank.slot(),
-        snapshot_file_path,
+        bank_rc_serialize, slot, snapshot_file_path,
     );
 
-    Ok(())
+    Ok(SlotSnapshotPaths {
+        slot,
+        snapshot_file_path,
+    })
 }
 
 pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<()> {
