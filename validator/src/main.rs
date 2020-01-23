@@ -323,7 +323,8 @@ fn download_ledger(
     download_tar_bz2(rpc_addr, "genesis.tar.bz2", ledger_path, false)?;
 
     if !no_snapshot_fetch {
-        let snapshot_package = solana_ledger::snapshot_utils::get_snapshot_tar_path(ledger_path);
+        let snapshot_package =
+            solana_ledger::snapshot_utils::get_snapshot_archive_path(ledger_path);
         if snapshot_package.exists() {
             fs::remove_file(&snapshot_package)
                 .map_err(|err| format!("error removing {:?}: {}", snapshot_package, err))?;
