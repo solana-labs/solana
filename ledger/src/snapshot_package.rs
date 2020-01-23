@@ -10,6 +10,7 @@ pub type SnapshotPackageSender = Sender<SnapshotPackage>;
 pub type SnapshotPackageReceiver = Receiver<SnapshotPackage>;
 pub type SnapshotPackageSendError = SendError<SnapshotPackage>;
 
+#[derive(Debug)]
 pub struct SnapshotPackage {
     pub root: u64,
     pub slot_deltas: Vec<SlotDelta<TransactionResult<()>>>,

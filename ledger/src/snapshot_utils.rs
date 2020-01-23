@@ -204,19 +204,18 @@ where
     Ok(ret)
 }
 
-pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()> {
+pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<SlotSnapshotPaths> {
     bank.purge_zero_lamport_accounts();
     let slot = bank.slot();
     // snapshot_path/slot
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);
     fs::create_dir_all(slot_snapshot_dir.clone())?;
 
-    // the snapshot is stored as snapshot_path/slot/slot
+    // the bank snapshot is stored as snapshot_path/slot/slot
     let snapshot_bank_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
     info!(
-        "creating snapshot {}, path: {:?}",
-        bank.slot(),
-        snapshot_bank_file_path,
+        "Creating snapshot for slot {}, path: {:?}",
+        slot, snapshot_bank_file_path,
     );
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
@@ -234,7 +233,7 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
     datapoint_info!(
         "snapshot-bank-file",
-        ("slot", bank.slot(), i64),
+        ("slot", slot, i64),
         ("size", consumed_size, i64)
     );
 
@@ -242,12 +241,13 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<()>
 
     info!(
         "{} for slot {} at {:?}",
-        bank_serialize,
-        bank.slot(),
-        snapshot_bank_file_path,
+        bank_serialize, slot, snapshot_bank_file_path,
     );
 
-    Ok(())
+    Ok(SlotSnapshotPaths {
+        slot,
+        snapshot_file_path: snapshot_bank_file_path,
+    })
 }
 
 pub fn serialize_status_cache(
