@@ -718,10 +718,6 @@ fn process_pending_slots(
             allocated.since(initial_allocation)
         );
 
-        if slot >= dev_halt_at_slot {
-            break;
-        }
-
         process_next_slots(
             &bank,
             &meta,
@@ -730,6 +726,10 @@ fn process_pending_slots(
             &mut pending_slots,
             &mut fork_info,
         )?;
+
+        if slot >= dev_halt_at_slot {
+            break;
+        }
     }
 
     Ok(fork_info)
