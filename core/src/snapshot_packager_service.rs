@@ -1,19 +1,24 @@
 use crate::result::{Error, Result};
 use bincode::serialize_into;
-use solana_ledger::snapshot_package::{SnapshotPackage, SnapshotPackageReceiver};
-use solana_ledger::snapshot_utils::{self, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR, TAR_VERSION_FILE};
+use solana_ledger::{
+    snapshot_package::{SnapshotPackage, SnapshotPackageReceiver},
+    snapshot_utils::{self, TAR_ACCOUNTS_DIR, TAR_SNAPSHOTS_DIR, TAR_VERSION_FILE},
+};
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::status_cache::SlotDelta;
-use solana_sdk::transaction::Result as TransactionResult;
-use std::fs;
-use std::fs::File;
-use std::io::{BufWriter, Error as IOError, ErrorKind};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::RecvTimeoutError;
-use std::sync::Arc;
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
+use solana_sdk::transaction;
+use std::{
+    fs::{self, File},
+    io::{BufWriter, Error as IOError, ErrorKind},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::RecvTimeoutError,
+        Arc,
+    },
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
+};
 use symlink;
 use tempfile::TempDir;
 
@@ -169,7 +174,7 @@ impl SnapshotPackagerService {
     }
 
     fn serialize_status_cache(
-        slot_deltas: &[SlotDelta<TransactionResult<()>>],
+        slot_deltas: &[SlotDelta<transaction::Result<()>>],
         snapshot_links: &TempDir,
     ) -> Result<()> {
         // the status cache is stored as snapshot_path/status_cache
@@ -288,7 +293,7 @@ mod tests {
         // before we compare, stick an empty status_cache in this dir so that the package comparision works
         // This is needed since the status_cache is added by the packager and is not collected from
         // the source dir for snapshots
-        let slot_deltas: Vec<SlotDelta<TransactionResult<()>>> = vec![];
+        let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> = vec![];
         let dummy_status_cache = File::create(snapshots_dir.join("status_cache")).unwrap();
         let mut status_cache_stream = BufWriter::new(dummy_status_cache);
         serialize_into(&mut status_cache_stream, &slot_deltas).unwrap();
