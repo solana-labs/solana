@@ -148,25 +148,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .arg(
                     Arg::with_name("ignore_case")
                         .long("ignore-case")
-                        .help("Perform case insensitive matches"),
-                )
-                .arg(
-                    Arg::with_name("includes")
-                        .long("includes")
-                        .value_name("BASE58")
-                        .takes_value(true)
-                        .multiple(true)
-                        .validator(|value| {
-                            bs58::decode(&value).into_vec()
-                                .map(|_| ())
-                                .map_err(|err| format!("{}: {:?}", value, err))
-                        })
-                        .help("Save keypair if its public key includes this string\n(may be specified multiple times)"),
+                        .help("Performs case insensitive matches"),
                 )
                 .arg(
                     Arg::with_name("starts_with")
                         .long("starts-with")
-                        .value_name("BASE58 PREFIX")
+                        .value_name("PREFIX COUNT")
+                        .number_of_values(2)
                         .takes_value(true)
                         .multiple(true)
                         .validator(|value| {
@@ -174,7 +162,35 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 .map(|_| ())
                                 .map_err(|err| format!("{}: {:?}", value, err))
                         })
-                        .help("Save keypair if its public key starts with this prefix\n(may be specified multiple times)"),
+                        .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol 4"),
+                )
+                .arg(
+                    Arg::with_name("ends_with")
+                        .long("ends-with")
+                        .value_name("SUFFIX COUNT")
+                        .number_of_values(2)
+                        .takes_value(true)
+                        .multiple(true)
+                        .validator(|value| {
+                            bs58::decode(&value).into_vec()
+                                .map(|_| ())
+                                .map_err(|err| format!("{}: {:?}", value, err))
+                        })
+                        .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana 4"),
+                )
+                .arg(
+                    Arg::with_name("starts_and_ends_with")
+                        .long("starts-and-ends-with")
+                        .value_name("PREFIX SUFFIX COUNT")
+                        .number_of_values(3)
+                        .takes_value(true)
+                        .multiple(true)
+                        .validator(|value| {
+                            bs58::decode(&value).into_vec()
+                                .map(|_| ())
+                                .map_err(|err| format!("{}: {:?}", value, err))
+                        })
+                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol ana 4"),
                 ),
         )
         .subcommand(
@@ -311,14 +327,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
         ("grind", Some(matches)) => {
             let ignore_case = matches.is_present("ignore_case");
-            let includes = if matches.is_present("includes") {
-                values_t_or_exit!(matches, "includes", String)
-                    .into_iter()
-                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
-                    .collect()
-            } else {
-                HashSet::new()
-            };
+       
 
             let starts_with = if matches.is_present("starts_with") {
                 values_t_or_exit!(matches, "starts_with", String)
@@ -329,29 +338,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 HashSet::new()
             };
 
-            if includes.is_empty() && starts_with.is_empty() {
-                eprintln!(
-                    "Error: No keypair search criteria provided (--includes or --starts-with)"
-                );
-                exit(1);
-            }
-
             let attempts = Arc::new(AtomicU64::new(1));
             let found = Arc::new(AtomicU64::new(0));
             let start = Instant::now();
 
-            println!(
-                "Searching with {} threads for a pubkey containing {:?} or starting with {:?}",
-                num_cpus::get(),
-                includes,
-                starts_with
-            );
+            // println!(
+            //     "Searching with {} threads for a pubkey containing {:?} or starting with {:?}",
+            //     num_cpus::get(),
+            //     includes,
+            //     starts_with
+            // );
 
             let _threads = (0..num_cpus::get())
                 .map(|_| {
                     let attempts = attempts.clone();
                     let found = found.clone();
-                    let includes = includes.clone();
                     let starts_with = starts_with.clone();
 
                     thread::spawn(move || loop {
@@ -372,9 +373,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             pubkey = pubkey.to_lowercase();
                         }
 
-                        if starts_with.iter().any(|s| pubkey.starts_with(s))
-                            || includes.iter().any(|s| pubkey.contains(s))
-                        {
+                        if starts_with.iter().any(|s| pubkey.starts_with(s)) {
                             let found = found.fetch_add(1, Ordering::Relaxed);
                             output_keypair(
                                 &keypair,
