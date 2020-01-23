@@ -321,13 +321,27 @@ impl Tower {
             if let Some(fork_stake) = stake_lockouts.get(&vote.slot) {
                 let lockout = fork_stake.stake as f64 / total_staked as f64;
                 trace!(
-                    "fork_stake {} {} {} {}",
+                    "fork_stake slot: {} lockout: {} fork_stake: {} total_stake: {}",
                     slot,
                     lockout,
                     fork_stake.stake,
                     total_staked
                 );
-                lockout > self.threshold_size
+                for (new_lockout, original_lockout) in
+                    lockouts.votes.iter().zip(self.lockouts.votes.iter())
+                {
+                    if new_lockout.slot == original_lockout.slot {
+                        if new_lockout.confirmation_count <= self.threshold_depth as u32 {
+                            break;
+                        }
+                        if new_lockout.confirmation_count != original_lockout.confirmation_count {
+                            return lockout > self.threshold_size;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                true
             } else {
                 false
             }
@@ -740,6 +754,34 @@ mod test {
         let stakes = HashMap::new();
         tower.record_vote(0, Hash::default());
         assert!(!tower.check_vote_stake_threshold(1, &stakes, 2));
+    }
+
+    #[test]
+    fn test_check_vote_threshold_lockouts_not_updated() {
+        solana_logger::setup();
+        let mut tower = Tower::new_for_tests(1, 0.67);
+        let stakes = vec![
+            (
+                0,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 8,
+                },
+            ),
+            (
+                1,
+                StakeLockout {
+                    stake: 2,
+                    lockout: 8,
+                },
+            ),
+        ]
+        .into_iter()
+        .collect();
+        tower.record_vote(0, Hash::default());
+        tower.record_vote(1, Hash::default());
+        tower.record_vote(2, Hash::default());
+        assert!(tower.check_vote_stake_threshold(6, &stakes, 2));
     }
 
     #[test]
