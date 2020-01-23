@@ -74,7 +74,6 @@ ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader
 }
 
 args+=(
-  --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader/accounts
   --enable-rpc-exit
   --ledger "$ledger_dir"
   --rpc-port 8899
