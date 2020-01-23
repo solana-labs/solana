@@ -1,5 +1,6 @@
 use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg, SubCommand,
+    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg,
+    ArgMatches, SubCommand,
 };
 use histogram;
 use serde_json::json;
@@ -8,8 +9,9 @@ use solana_ledger::{
     bank_forks_utils,
     blockstore::Blockstore,
     blockstore_db::{self, Column, Database},
-    blockstore_processor,
+    blockstore_processor::{BankForksInfo, BlockstoreProcessorResult, ProcessOptions},
     rooted_slot_iterator::RootedSlotIterator,
+    snapshot_utils,
 };
 use solana_sdk::{
     clock::Slot, genesis_config::GenesisConfig, instruction_processor_utils::limited_deserialize,
@@ -172,7 +174,7 @@ fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result
 #[allow(clippy::cognitive_complexity)]
 fn graph_forks(
     bank_forks: &BankForks,
-    bank_forks_info: &[blockstore_processor::BankForksInfo],
+    bank_forks_info: &[BankForksInfo],
     include_all_votes: bool,
 ) -> String {
     // Search all forks and collect the last vote made by each validator
@@ -512,6 +514,35 @@ fn open_database(ledger_path: &Path) -> Database {
     }
 }
 
+fn load_bank_forks(
+    arg_matches: &ArgMatches,
+    ledger_path: &PathBuf,
+    process_options: ProcessOptions,
+) -> BlockstoreProcessorResult {
+    let snapshot_config = if arg_matches.is_present("no_snapshot") {
+        None
+    } else {
+        Some(SnapshotConfig {
+            snapshot_interval_slots: 0, // Value doesn't matter
+            snapshot_package_output_path: ledger_path.clone(),
+            snapshot_path: ledger_path.clone().join("snapshot"),
+        })
+    };
+    let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
+        account_paths.split(',').map(PathBuf::from).collect()
+    } else {
+        vec![ledger_path.join("accounts")]
+    };
+
+    bank_forks_utils::load(
+        &open_genesis_config(&ledger_path),
+        &open_blockstore(&ledger_path),
+        account_paths,
+        snapshot_config.as_ref(),
+        process_options,
+    )
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
@@ -523,6 +554,23 @@ fn main() {
         .takes_value(true)
         .default_value("0")
         .help("Start at this slot");
+
+    let no_snapshot_arg = Arg::with_name("no_snapshot")
+        .long("no-snapshot")
+        .takes_value(false)
+        .help("Do not start from a local snapshot if present");
+
+    let account_paths_arg = Arg::with_name("account_paths")
+        .long("accounts")
+        .value_name("PATHS")
+        .takes_value(true)
+        .help("Comma separated persistent accounts location");
+
+    let halt_at_slot_arg = Arg::with_name("halt_at_slot")
+        .long("halt-at-slot")
+        .value_name("SLOT")
+        .takes_value(true)
+        .help("Halt processing at the given slot");
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -568,8 +616,7 @@ fn main() {
                     .required(false)
                     .help("Additionally print all the non-empty slots within the bounds"),
             )
-        )
-        .subcommand(
+        ).subcommand(
             SubCommand::with_name("json")
             .about("Print the ledger in JSON format")
             .arg(&starting_slot_arg)
@@ -577,44 +624,51 @@ fn main() {
         .subcommand(
             SubCommand::with_name("verify")
             .about("Verify the ledger")
-            .arg(
-                Arg::with_name("no_snapshot")
-                    .long("no-snapshot")
-                    .takes_value(false)
-                    .help("Do not start from a local snapshot if present"),
-            )
-            .arg(
-                Arg::with_name("account_paths")
-                    .long("accounts")
-                    .value_name("PATHS")
-                    .takes_value(true)
-                    .help("Comma separated persistent accounts location"),
-            )
-            .arg(
-                Arg::with_name("halt_at_slot")
-                    .long("halt-at-slot")
-                    .value_name("SLOT")
-                    .takes_value(true)
-                    .help("Halt processing at the given slot"),
-            )
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(&halt_at_slot_arg)
             .arg(
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
                     .takes_value(false)
                     .help("Skip ledger PoH verification"),
             )
+        ).subcommand(
+            SubCommand::with_name("graph")
+            .about("Create a Graphviz rendering of the ledger")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(&halt_at_slot_arg)
             .arg(
-                Arg::with_name("graph_forks")
-                    .long("graph-forks")
-                    .value_name("FILENAME")
-                    .takes_value(true)
-                    .help("Create a Graphviz DOT file representing the active forks once the ledger is verified"),
+                Arg::with_name("include_all_votes")
+                    .long("include-all-votes")
+                    .help("Include all votes in the graph"),
             )
             .arg(
-                Arg::with_name("graph_forks_include_all_votes")
-                    .long("graph-forks-include-all-votes")
-                    .requires("graph_forks")
-                    .help("Include all votes in forks graph"),
+                Arg::with_name("graph_filename")
+                    .index(1)
+                    .value_name("FILENAME")
+                    .takes_value(true)
+                    .help("Output file"),
+            )
+        ).subcommand(
+            SubCommand::with_name("create-snapshot")
+            .about("Create a new ledger snapshot")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(
+                Arg::with_name("snapshot_slot")
+                    .index(1)
+                    .value_name("SLOT")
+                    .takes_value(true)
+                    .help("Slot at which to create the snapshot"),
+            )
+            .arg(
+                Arg::with_name("output_directory")
+                    .index(2)
+                    .value_name("DIR")
+                    .takes_value(true)
+                    .help("Output directory for the snapshot"),
             )
         ).subcommand(
             SubCommand::with_name("prune")
@@ -703,67 +757,106 @@ fn main() {
             );
         }
         ("verify", Some(arg_matches)) => {
-            println!("Verifying ledger...");
-
-            let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
-            let poh_verify = !arg_matches.is_present("skip_poh_verify");
-
-            let snapshot_config = if arg_matches.is_present("no_snapshot") {
-                None
-            } else {
-                Some(SnapshotConfig {
-                    snapshot_interval_slots: 0, // Value doesn't matter
-                    snapshot_package_output_path: ledger_path.clone(),
-                    snapshot_path: ledger_path.clone().join("snapshot"),
-                })
-            };
-            let account_paths = if let Some(account_paths) = matches.value_of("account_paths") {
-                account_paths.split(',').map(PathBuf::from).collect()
-            } else {
-                vec![ledger_path.join("accounts")]
+            let process_options = ProcessOptions {
+                poh_verify: !arg_matches.is_present("skip_poh_verify"),
+                dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                ..ProcessOptions::default()
             };
 
-            let process_options = blockstore_processor::ProcessOptions {
-                poh_verify,
-                dev_halt_at_slot,
-                ..blockstore_processor::ProcessOptions::default()
+            load_bank_forks(arg_matches, &ledger_path, process_options).unwrap_or_else(|err| {
+                eprintln!("Ledger verification failed: {:?}", err);
+                exit(1);
+            });
+            println!("Ok");
+        }
+        ("graph", Some(arg_matches)) => {
+            let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
+
+            let process_options = ProcessOptions {
+                poh_verify: false,
+                dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                ..ProcessOptions::default()
             };
 
-            match bank_forks_utils::load(
-                &open_genesis_config(&ledger_path),
-                &open_blockstore(&ledger_path),
-                account_paths,
-                snapshot_config.as_ref(),
-                process_options,
-            ) {
+            match load_bank_forks(arg_matches, &ledger_path, process_options) {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache)) => {
-                    println!("Ok");
+                    let dot = graph_forks(
+                        &bank_forks,
+                        &bank_forks_info,
+                        arg_matches.is_present("include_all_votes"),
+                    );
 
-                    if let Some(output_file) = arg_matches.value_of("graph_forks") {
-                        let dot = graph_forks(
-                            &bank_forks,
-                            &bank_forks_info,
-                            arg_matches.is_present("graph_forks_include_all_votes"),
-                        );
+                    let extension = Path::new(&output_file).extension();
+                    let result = if extension == Some(OsStr::new("pdf")) {
+                        render_dot(dot, &output_file, "pdf")
+                    } else if extension == Some(OsStr::new("png")) {
+                        render_dot(dot, &output_file, "png")
+                    } else {
+                        File::create(&output_file)
+                            .and_then(|mut file| file.write_all(&dot.into_bytes()))
+                    };
 
-                        let extension = Path::new(output_file).extension();
-                        let result = if extension == Some(OsStr::new("pdf")) {
-                            render_dot(dot, output_file, "pdf")
-                        } else if extension == Some(OsStr::new("png")) {
-                            render_dot(dot, output_file, "png")
-                        } else {
-                            File::create(output_file)
-                                .and_then(|mut file| file.write_all(&dot.into_bytes()))
-                        };
-
-                        match result {
-                            Ok(_) => println!("Wrote {}", output_file),
-                            Err(err) => eprintln!("Unable to write {}: {}", output_file, err),
-                        }
+                    match result {
+                        Ok(_) => println!("Wrote {}", output_file),
+                        Err(err) => eprintln!("Unable to write {}: {}", output_file, err),
                     }
                 }
                 Err(err) => {
-                    eprintln!("Ledger verification failed: {:?}", err);
+                    eprintln!("Failed to load ledger: {:?}", err);
+                    exit(1);
+                }
+            }
+        }
+        ("create-snapshot", Some(arg_matches)) => {
+            let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
+            let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
+
+            let process_options = ProcessOptions {
+                poh_verify: false,
+                dev_halt_at_slot: Some(snapshot_slot),
+                ..ProcessOptions::default()
+            };
+            match load_bank_forks(arg_matches, &ledger_path, process_options) {
+                Ok((bank_forks, _bank_forks_info, _leader_schedule_cache)) => {
+                    let bank = bank_forks.get(snapshot_slot).unwrap_or_else(|| {
+                        eprintln!("Error: Slot {} is not available", snapshot_slot);
+                        exit(1);
+                    });
+
+                    println!("Creating a snapshot of slot {}", bank.slot());
+                    bank.squash();
+
+                    let temp_dir = tempfile::TempDir::new().unwrap_or_else(|err| {
+                        eprintln!("Unable to create temporary directory: {}", err);
+                        exit(1);
+                    });
+
+                    snapshot_utils::add_snapshot(&temp_dir, &bank)
+                        .and_then(|slot_snapshot_paths| {
+                            snapshot_utils::package_snapshot(
+                                &bank,
+                                &slot_snapshot_paths,
+                                snapshot_utils::get_snapshot_archive_path(output_directory),
+                                &temp_dir,
+                                &bank.src.roots(),
+                            )
+                        })
+                        .and_then(|package| {
+                            snapshot_utils::archive_snapshot_package(&package).map(|ok| {
+                                println!(
+                                    "Successfully created snapshot for slot {}: {:?}",
+                                    snapshot_slot, package.tar_output_file
+                                );
+                                ok
+                            })
+                        })
+                        .unwrap_or_else(|err| {
+                            eprintln!("Unable to create snapshot archive: {}", err);
+                            exit(1);
+                        });
+                }
+                Err(err) => {
+                    eprintln!("Failed to load ledger: {:?}", err);
                     exit(1);
                 }
             }
