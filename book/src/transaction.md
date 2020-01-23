@@ -4,11 +4,11 @@ This chapter documents the binary format of a transaction.
 
 ## Transaction Format
 
-A transaction contains a [compact-array](#Compact-Array-Format) of signatures,
-followed by a [message](#Message-Format).  Each item in the signatures array is
-a [digital signature](#Signature-Format) of the given message. The Solana
+A transaction contains a [compact-array](#compact-array-format) of signatures,
+followed by a [message](#message-format).  Each item in the signatures array is
+a [digital signature](#signature-format) of the given message. The Solana
 runtime verifies that the number of signatures matches the number in the first
-8 bits of the [message header](#Message-Header-Format). It also verifies that
+8 bits of the [message header](#message-header-format). It also verifies that
 each signature was signed by the private key corresponding to the public key at
 the same index in the message's account addresses array.
 
@@ -19,10 +19,10 @@ Each digital signature is in the ed25519 binary format and consumes 64 bytes.
 
 ## Message Format
 
-A message contains a [header](#Message-Header-Format), followed by a
-compact-array of [account addresses](#Account-Address-Format), followed by a
-recent [blockhash](#Blockhash-Format), followed by a compact-array of
-[instructions](#Instruction-Format).
+A message contains a [header](#message-header-format), followed by a
+compact-array of [account addresses](#account-addresses-format), followed by a
+recent [blockhash](#blockhash-format), followed by a compact-array of
+[instructions](#instruction-format).
 
 ### Message Header Format
 
