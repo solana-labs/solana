@@ -231,11 +231,10 @@ SUBCOMMANDS:
     nonce-account                       Show the contents of a nonce account
     pay                                 Send a payment
     ping                                Submit transactions sequentially
-    redeem-vote-credits                 Redeem credits in the stake account
     send-signature                      Send a signature to authorize a transfer
     send-timestamp                      Send a timestamp to unlock a transfer
+    show-stake-account                  Show the contents of a stake account
     slot                                Get current slot
-    stake-account                       Show the contents of a stake account
     stake-authorize-staker              Authorize a new stake signing keypair for the given stake account
     stake-authorize-withdrawer          Authorize a new withdraw signing keypair for the given stake account
     stake-history                       Show the stake history
@@ -1182,34 +1181,6 @@ OPTIONS:
     -t, --timeout <SECONDS>                 Wait up to timeout seconds for transaction confirmation [default: 15]
 ```
 
-#### solana-redeem-vote-credits
-```text
-solana-redeem-vote-credits 
-Redeem credits in the stake account
-
-USAGE:
-    solana redeem-vote-credits [FLAGS] [OPTIONS] <STAKE ACCOUNT> <VOTE ACCOUNT>
-
-FLAGS:
-    -h, --help                           Prints help information
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-
-ARGS:
-    <STAKE ACCOUNT>    Address of the stake account in which to redeem credits
-    <VOTE ACCOUNT>     The vote account to which the stake is currently delegated.
-```
-
 #### solana-send-signature
 ```text
 solana-send-signature 
@@ -1267,6 +1238,34 @@ ARGS:
     <PROCESS ID>    The process id of the transfer to unlock
 ```
 
+#### solana-show-stake-account
+```text
+solana-show-stake-account 
+Show the contents of a stake account
+
+USAGE:
+    solana show-stake-account [FLAGS] [OPTIONS] <STAKE ACCOUNT>
+
+FLAGS:
+    -h, --help                           Prints help information
+        --lamports                       Display balance in lamports instead of SOL
+        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
+                                         official English word list
+    -V, --version                        Prints version information
+    -v, --verbose                        Show extra information header
+
+OPTIONS:
+        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
+                                            values: keypair]
+    -C, --config <PATH>                     Configuration file to use [default:
+                                            ~/.config/solana/cli/config.yml]
+    -u, --url <URL>                         JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                    /path/to/id.json
+
+ARGS:
+    <STAKE ACCOUNT>    Address of the stake account to display
+```
+
 #### solana-slot
 ```text
 solana-slot 
@@ -1290,34 +1289,6 @@ OPTIONS:
                                             ~/.config/solana/cli/config.yml]
     -u, --url <URL>                         JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                    /path/to/id.json
-```
-
-#### solana-stake-account
-```text
-solana-stake-account 
-Show the contents of a stake account
-
-USAGE:
-    solana stake-account [FLAGS] [OPTIONS] <STAKE ACCOUNT>
-
-FLAGS:
-    -h, --help                           Prints help information
-        --lamports                       Display balance in lamports instead of SOL
-        --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
-                                         official English word list
-    -V, --version                        Prints version information
-    -v, --verbose                        Show extra information header
-
-OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json
-
-ARGS:
-    <STAKE ACCOUNT>    Address of the stake account to display
 ```
 
 #### solana-stake-authorize-staker

@@ -109,27 +109,6 @@ Updates the account with a new authorized staker or withdrawer, according to the
 
   `StakeState::authorized_staker` or `authorized_withdrawer` is set to to `Pubkey`.
 
-### StakeInstruction::RedeemVoteCredits
-
-The staker or the owner of the Stake account sends a transaction with this instruction to claim rewards.
-
-The Vote account and the Stake account pair maintain a lifetime counter of total rewards generated and claimed. Rewards are paid according to a point value supplied by the Bank from inflation. A `point` is one credit \* one staked lamport, rewards paid are proportional to the number of lamports staked.
-
-* `account[0]` - RW - The StakeState::Stake instance that is redeeming rewards.
-* `account[1]` - R - The VoteState instance, must be the same as `StakeState::voter_pubkey`
-* `account[2]` - RW - The StakeState::RewardsPool instance that will fulfill the request \(picked at random\).
-* `account[3]` - R - sysvar::rewards account from the Bank that carries point value.
-* `account[4]` - R - sysvar::stake\_history account from the Bank that carries stake warmup/cooldown history
-
-Reward is paid out for the difference between `VoteState::credits` to `StakeState::Stake::credits_observed`, multiplied by `sysvar::rewards::Rewards::validator_point_value`. `StakeState::Stake::credits_observed` is updated to`VoteState::credits`. The commission is deposited into the Vote account token balance, and the reward is deposited to the Stake account token balance and the stake account's `stake` is increased by the same amount \(re-invested\).
-
-```text
-let credits_to_claim = vote_state.credits - stake_state.credits_observed;
-stake_state.credits_observed = vote_state.credits;
-```
-
-`credits_to_claim` is used to compute the reward and commission, and `StakeState::Stake::credits_observed` is updated to the latest `VoteState::credits` value.
-
 ### StakeInstruction::Deactivate
 
 A staker may wish to withdraw from the network. To do so he must first deactivate his stake, and wait for cool down.

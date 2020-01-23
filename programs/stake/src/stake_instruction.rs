@@ -11,9 +11,7 @@ use solana_sdk::{
     instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
-    sysvar::{
-        self, clock::Clock, rent::Rent, rewards::Rewards, stake_history::StakeHistory, Sysvar,
-    },
+    sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory, Sysvar},
 };
 use thiserror::Error;
 
@@ -79,17 +77,6 @@ pub enum StakeInstruction {
     ///   by one epoch
     ///
     DelegateStake,
-
-    /// Redeem credits in the stake account
-    ///
-    /// Expects 5 Accounts:
-    ///    0 - StakeAccount to be updated with rewards
-    ///    1 - VoteAccount to which the Stake is delegated,
-    ///    2 - RewardsPool Stake Account from which to redeem credits
-    ///    3 - Rewards sysvar Account that carries points values
-    ///    4 - StakeHistory sysvar that carries stake warmup/cooldown history
-    ///
-    RedeemVoteCredits,
 
     /// Split u64 tokens and stake off a stake account into another stake
     ///   account. Requires Authorized::staker signature and the
@@ -302,17 +289,6 @@ pub fn authorize(
     )
 }
 
-pub fn redeem_vote_credits(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*stake_pubkey, false),
-        AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new(crate::rewards_pools::random_id(), false),
-        AccountMeta::new_readonly(sysvar::rewards::id(), false),
-        AccountMeta::new_readonly(sysvar::stake_history::id(), false),
-    ];
-    Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
-}
-
 pub fn delegate_stake(
     stake_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
@@ -410,17 +386,6 @@ pub fn process_instruction(
                 &signers,
             )
         }
-        StakeInstruction::RedeemVoteCredits => {
-            let vote = &mut next_keyed_account(keyed_accounts)?;
-            let rewards_pool = &mut next_keyed_account(keyed_accounts)?;
-
-            me.redeem_vote_credits(
-                vote,
-                rewards_pool,
-                &Rewards::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-            )
-        }
         StakeInstruction::Split(lamports) => {
             let split_stake = &mut next_keyed_account(keyed_accounts)?;
             me.split(lamports, split_stake, &signers)
@@ -494,10 +459,6 @@ mod tests {
                 &Authorized::default(),
                 &Lockup::default()
             )),
-            Err(InstructionError::InvalidAccountData),
-        );
-        assert_eq!(
-            process_instruction(&redeem_vote_credits(&Pubkey::default(), &Pubkey::default())),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
@@ -658,35 +619,6 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
-        // catches the number of args check
-        assert_eq!(
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                ],
-                &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
-            ),
-            Err(InstructionError::NotEnoughAccountKeys),
-        );
-
-        // catches the type of args check
-        assert_eq!(
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                ],
-                &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
-            ),
-            Err(InstructionError::InvalidArgument),
-        );
-
         // gets the check non-deserialize-able account in delegate_stake
         assert_eq!(
             super::process_instruction(
@@ -706,33 +638,6 @@ mod tests {
                     ),
                 ],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-            ),
-            Err(InstructionError::InvalidAccountData),
-        );
-
-        // gets the deserialization checks in redeem_vote_credits
-        assert_eq!(
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut create_default_account()),
-                    KeyedAccount::new(
-                        &sysvar::rewards::id(),
-                        false,
-                        &mut RefCell::new(sysvar::rewards::create_account(1, 0.0, 0.0))
-                    ),
-                    KeyedAccount::new(
-                        &sysvar::stake_history::id(),
-                        false,
-                        &mut RefCell::new(sysvar::stake_history::create_account(
-                            1,
-                            &StakeHistory::default()
-                        ))
-                    ),
-                ],
-                &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
             ),
             Err(InstructionError::InvalidAccountData),
         );

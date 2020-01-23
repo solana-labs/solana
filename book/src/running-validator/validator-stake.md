@@ -54,11 +54,7 @@ solana delegate-stake ~/validator-stake-keypair.json ~/some-other-validator-vote
 ```
 
 Assuming the node is voting, now you're up and running and generating validator
-rewards. You'll want to periodically redeem/claim your rewards:
-
-```bash
-solana redeem-vote-credits ~/validator-stake-keypair.json ~/validator-vote-keypair.json
-```
+rewards. Rewards are paid automatically on epoch boundaries.
 
 The rewards lamports earned are split between your stake account and the vote
 account according to the commission rate set in the vote account. Rewards can
@@ -132,6 +128,3 @@ depending on active stake and the size of your stake.
 
 Note that a stake account may only be used once, so after deactivation, use the
 cli's `withdraw-stake` command to recover the previously staked lamports.
-
-Be sure and redeem your credits before withdrawing all your lamports. Once the
-account is fully withdrawn, the account is destroyed.

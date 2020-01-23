@@ -373,29 +373,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(withdraw_authority_arg())
            )
         .subcommand(
-            SubCommand::with_name("redeem-vote-credits")
-                .about("Redeem credits in the stake account")
-                .arg(
-                    Arg::with_name("stake_account_pubkey")
-                        .index(1)
-                        .value_name("STAKE ACCOUNT")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Address of the stake account in which to redeem credits")
-                )
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(2)
-                        .value_name("VOTE ACCOUNT")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("The vote account to which the stake is currently delegated.")
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("stake-account")
+            SubCommand::with_name("show-stake-account")
                 .about("Show the contents of a stake account")
                 .alias("show-stake-account")
                 .arg(
@@ -544,16 +522,6 @@ pub fn parse_stake_authorize(
             nonce_account,
             nonce_authority,
         },
-        require_keypair: true,
-    })
-}
-
-pub fn parse_redeem_vote_credits(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-
-    Ok(CliCommandInfo {
-        command: CliCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey),
         require_keypair: true,
     })
 }
@@ -889,33 +857,6 @@ pub fn process_withdraw_stake(
         ixs,
         Some(&config.keypair.pubkey()),
         &[&config.keypair, withdraw_authority],
-        recent_blockhash,
-    );
-    check_account_for_fee(
-        rpc_client,
-        &config.keypair.pubkey(),
-        &fee_calculator,
-        &tx.message,
-    )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
-    log_instruction_custom_error::<StakeError>(result)
-}
-
-pub fn process_redeem_vote_credits(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    stake_account_pubkey: &Pubkey,
-    vote_account_pubkey: &Pubkey,
-) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = vec![stake_instruction::redeem_vote_credits(
-        stake_account_pubkey,
-        vote_account_pubkey,
-    )];
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &[&config.keypair],
         recent_blockhash,
     );
     check_account_for_fee(

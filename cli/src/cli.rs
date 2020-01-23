@@ -269,7 +269,6 @@ pub enum CliCommand {
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<SigningAuthority>,
     },
-    RedeemVoteCredits(Pubkey, Pubkey),
     ShowStakeHistory {
         use_lamports_unit: bool,
     },
@@ -489,9 +488,8 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         ("stake-authorize-withdrawer", Some(matches)) => {
             parse_stake_authorize(matches, StakeAuthorize::Withdrawer)
         }
-        ("redeem-vote-credits", Some(matches)) => parse_redeem_vote_credits(matches),
-        ("stake-account", Some(matches)) => parse_show_stake_account(matches),
-        ("stake-history", Some(matches)) => parse_show_stake_history(matches),
+        ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
+        ("show-stake-history", Some(matches)) => parse_show_stake_history(matches),
         // Storage Commands
         ("create-archiver-storage-account", Some(matches)) => {
             parse_storage_create_archiver_account(matches)
@@ -1420,14 +1418,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_account,
             nonce_authority.as_ref(),
         ),
-        CliCommand::RedeemVoteCredits(stake_account_pubkey, vote_account_pubkey) => {
-            process_redeem_vote_credits(
-                &rpc_client,
-                config,
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-            )
-        }
         CliCommand::ShowStakeAccount {
             pubkey: stake_account_pubkey,
             use_lamports_unit,
