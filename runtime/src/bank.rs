@@ -446,7 +446,7 @@ impl Bank {
             new.ancestors.insert(p.slot(), i + 1);
         });
 
-        new.update_slot_hashes(parent.slot(), parent.hash());
+        new.update_slot_hashes();
         new.update_rewards(parent.epoch());
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock();
@@ -556,13 +556,13 @@ impl Bank {
         });
     }
 
-    fn update_slot_hashes(&self, parent_slot: Slot, parent_hash: Hash) {
+    fn update_slot_hashes(&self) {
         self.update_sysvar_account(&sysvar::slot_hashes::id(), |account| {
             let mut slot_hashes = account
                 .as_ref()
                 .map(|account| SlotHashes::from_account(&account).unwrap())
                 .unwrap_or_default();
-            slot_hashes.add(parent_slot, parent_hash);
+            slot_hashes.add(self.parent_slot, self.parent_hash);
             slot_hashes.create_account(1)
         });
     }
@@ -1717,7 +1717,7 @@ impl Bank {
     //
     // Being idempotent is needed to make the lazy initialization possible,
     // especially for update_slot_hashes at the moment, which can be called
-    // multiple times with the same slot in the case of forking.
+    // multiple times with the same parent_slot in the case of forking.
     //
     // Generally, all of sysvar update granularity should be slot boundaries.
     fn get_cold_account(&self, pubkey: &Pubkey) -> Option<Account> {

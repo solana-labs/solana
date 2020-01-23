@@ -760,8 +760,8 @@ impl AccountsDB {
             .expect("accounts_db::set_hash::no parent slot");
         if bank_hashes.get(&slot).is_some() {
             error!(
-                "set_hash: already exists; forks with same child slot: {}!?",
-                slot
+                "set_hash: already exists; multiple forks with shared slot {} as child (parent: {})!?",
+                slot, parent_slot,
             );
             return;
         }
