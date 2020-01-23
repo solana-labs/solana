@@ -140,7 +140,8 @@ mod tests {
             &last_bank.src.roots(),
         )
         .unwrap();
-        SnapshotPackagerService::package_snapshots(&snapshot_package).unwrap();
+
+        snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
         restore_from_snapshot(bank_forks, vec![accounts_dir.path().to_path_buf()]);
     }
@@ -322,7 +323,7 @@ mod tests {
         )
         .unwrap();
 
-        snapshot_utils::verify_snapshot_tar(
+        snapshot_utils::verify_snapshot_archive(
             saved_tar,
             saved_snapshots_dir.path(),
             saved_accounts_dir

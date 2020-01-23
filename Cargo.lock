@@ -4005,6 +4005,7 @@ dependencies = [
  "solana-sdk 0.23.0",
  "solana-stake-program 0.23.0",
  "solana-vote-program 0.23.0",
+ "symlink 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sys-info 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "tar 0.4.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
