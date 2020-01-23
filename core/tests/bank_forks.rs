@@ -78,7 +78,7 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .snapshot_path,
-            snapshot_utils::get_snapshot_tar_path(snapshot_package_output_path),
+            snapshot_utils::get_snapshot_archive_path(snapshot_package_output_path),
         )
         .unwrap();
 
@@ -135,7 +135,9 @@ mod tests {
             slot_snapshot_paths
                 .last()
                 .expect("no snapshots found in path"),
-            snapshot_utils::get_snapshot_tar_path(&snapshot_config.snapshot_package_output_path),
+            snapshot_utils::get_snapshot_archive_path(
+                &snapshot_config.snapshot_package_output_path,
+            ),
             &snapshot_config.snapshot_path,
             &last_bank.src.roots(),
         )

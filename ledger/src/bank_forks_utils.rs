@@ -26,8 +26,9 @@ pub fn load(
         fs::create_dir_all(&snapshot_config.snapshot_path)
             .expect("Couldn't create snapshot directory");
 
-        let tar =
-            snapshot_utils::get_snapshot_tar_path(&snapshot_config.snapshot_package_output_path);
+        let tar = snapshot_utils::get_snapshot_archive_path(
+            &snapshot_config.snapshot_package_output_path,
+        );
         if tar.exists() {
             info!("Loading snapshot package: {:?}", tar);
             // Fail hard here if snapshot fails to load, don't silently continue
