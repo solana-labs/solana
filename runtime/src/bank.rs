@@ -458,22 +458,6 @@ impl Bank {
         &self.collector_id
     }
 
-    pub fn create_with_genesis(
-        genesis_config: &GenesisConfig,
-        account_paths: Vec<PathBuf>,
-        status_cache_rc: &StatusCacheRc,
-        id: AppendVecId,
-    ) -> Self {
-        let mut bank = Self::default();
-        bank.set_bank_rc(
-            &BankRc::new(account_paths, id, bank.slot()),
-            &status_cache_rc,
-        );
-        bank.process_genesis_config(genesis_config);
-        bank.ancestors.insert(0, 0);
-        bank
-    }
-
     pub fn slot(&self) -> Slot {
         self.slot
     }
