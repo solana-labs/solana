@@ -3656,6 +3656,7 @@ dependencies = [
  "solana-runtime 0.22.4",
  "solana-sdk 0.22.4",
  "solana-vote-program 0.22.4",
+ "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
