@@ -74,7 +74,6 @@ ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
 }
 
 args+=(
-  --accounts "$SOLANA_CONFIG_DIR"/bootstrap-validator/accounts
   --enable-rpc-exit
   --ledger "$ledger_dir"
   --rpc-port 8899
