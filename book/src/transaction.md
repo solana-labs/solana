@@ -20,7 +20,7 @@ Each digital signature is in the ed25519 binary format and consumes 64 bytes.
 ## Message Format
 
 A message contains a [header](#message-header-format), followed by a
-compact-array of [account addresses](#account-address-format), followed by a
+compact-array of [account addresses](#account-addresses-format), followed by a
 recent [blockhash](#blockhash-format), followed by a compact-array of
 [instructions](#instruction-format).
 
