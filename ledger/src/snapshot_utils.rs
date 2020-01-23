@@ -5,7 +5,7 @@ use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    bank::{deserialize_from_snapshot, Bank, MAX_SNAPSHOT_DATA_FILE_SIZE},
+    bank::{self, deserialize_from_snapshot, Bank, MAX_SNAPSHOT_DATA_FILE_SIZE},
     status_cache::SlotDelta,
 };
 use solana_sdk::transaction::Result as TransactionResult;
@@ -391,7 +391,7 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
 
 fn rebuild_bank_from_snapshots<P>(
     snapshot_version: &str,
-    local_account_paths: &[PathBuf],
+    account_paths: &[PathBuf],
     unpacked_snapshots_dir: &PathBuf,
     append_vecs_path: P,
 ) -> Result<Bank>
@@ -413,7 +413,7 @@ where
         &root_paths.snapshot_file_path,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
-            let bank: Bank = match snapshot_version {
+            let mut bank: Bank = match snapshot_version {
                 env!("CARGO_PKG_VERSION") => deserialize_from_snapshot(stream.by_ref())?,
                 "v0.22.3" => {
                     let bank0223: solana_runtime::bank::LegacyBank0223 =
@@ -428,11 +428,12 @@ where
                 }
             };
             // Rebuild accounts
-            bank.rc.accounts_from_stream(
-                stream.by_ref(),
-                local_account_paths,
-                &append_vecs_path,
-            )?;
+            bank.set_bank_rc(
+                bank::BankRc::new(account_paths.to_vec(), 0, bank.slot()),
+                bank::StatusCacheRc::default(),
+            );
+            bank.rc
+                .accounts_from_stream(stream.by_ref(), account_paths, &append_vecs_path)?;
             Ok(bank)
         },
     )?;

@@ -348,7 +348,12 @@ impl<'a> Serialize for AccountsDBSerialize<'a> {
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
         serialize_into(
             &mut wr,
-            &(self.slot, &*bank_hashes.get(&self.slot).unwrap()),
+            &(
+                self.slot,
+                &*bank_hashes
+                    .get(&self.slot)
+                    .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", self.slot)),
+            ),
         )
         .map_err(Error::custom)?;
         let len = wr.position() as usize;
