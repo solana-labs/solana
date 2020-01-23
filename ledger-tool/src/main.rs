@@ -173,13 +173,13 @@ fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result
 
 #[allow(clippy::cognitive_complexity)]
 fn graph_forks(
-    bank_forks: BankForks,
-    bank_forks_info: Vec<blockstore_processor::BankForksInfo>,
+    bank_forks: &BankForks,
+    bank_forks_info: &[blockstore_processor::BankForksInfo],
     include_all_votes: bool,
 ) -> String {
     // Search all forks and collect the last vote made by each validator
     let mut last_votes = HashMap::new();
-    for bfi in &bank_forks_info {
+    for bfi in bank_forks_info {
         let bank = bank_forks.banks.get(&bfi.bank_slot).unwrap();
 
         let total_stake = bank
@@ -221,7 +221,7 @@ fn graph_forks(
     dot.push("    style=invis".to_string());
     let mut styled_slots = HashSet::new();
     let mut all_votes: HashMap<Pubkey, HashMap<Slot, VoteState>> = HashMap::new();
-    for bfi in &bank_forks_info {
+    for bfi in bank_forks_info {
         let bank = bank_forks.banks.get(&bfi.bank_slot).unwrap();
         let mut bank = bank.clone();
 
@@ -737,8 +737,8 @@ fn main() {
 
                     if let Some(output_file) = arg_matches.value_of("graph_forks") {
                         let dot = graph_forks(
-                            bank_forks,
-                            bank_forks_info,
+                            &bank_forks,
+                            &bank_forks_info,
                             arg_matches.is_present("graph_forks_include_all_votes"),
                         );
 
