@@ -21,7 +21,7 @@ use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ffi::OsStr,
-    fs::File,
+    fs::{self, File},
     io::{self, stdout, Write},
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
@@ -530,13 +530,13 @@ fn main() {
         .about(crate_description!())
         .version(solana_clap_utils::version!())
         .arg(
-            Arg::with_name("ledger")
+            Arg::with_name("ledger_path")
                 .short("l")
                 .long("ledger")
                 .value_name("DIR")
                 .takes_value(true)
                 .global(true)
-                .help("Use directory for ledger location"),
+                .help("Use DIR for ledger location"),
         )
         .subcommand(
             SubCommand::with_name("print")
@@ -665,7 +665,13 @@ fn main() {
         )
         .get_matches();
 
-    let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger", String));
+    let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger_path", String));
+
+    // Canonicalize ledger path to avoid issues with symlink creation
+    let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
+        eprintln!("Unable to access ledger path: {:?}", err);
+        exit(1);
+    });
 
     match matches.subcommand() {
         ("print", Some(args_matches)) => {
