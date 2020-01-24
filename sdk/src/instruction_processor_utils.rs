@@ -1,7 +1,7 @@
 use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
-use num_traits::{FromPrimitive, ToPrimitive};
+use num_traits::FromPrimitive;
 
-// Native program ENTRYPOINT prototype
+// Prototype of a native program entry point
 pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
@@ -98,15 +98,6 @@ macro_rules! declare_program(
         }
     )
 );
-
-impl<T> From<T> for InstructionError
-where
-    T: ToPrimitive,
-{
-    fn from(error: T) -> Self {
-        InstructionError::CustomError(error.to_u32().unwrap_or(0xbad_c0de))
-    }
-}
 
 /// Return the next KeyedAccount or a NotEnoughAccountKeys instruction error
 pub fn next_keyed_account<I: Iterator>(iter: &mut I) -> Result<I::Item, InstructionError> {

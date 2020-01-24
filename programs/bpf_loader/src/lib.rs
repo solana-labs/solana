@@ -145,11 +145,12 @@ pub fn process_instruction(
 
         info!("Call BPF program");
         match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
-            Ok(status) => match u32::try_from(status) {
+            Ok(status) => match u32::try_from(status & std::u32::MAX as u64) {
                 Ok(status) => {
-                    if status > 0 {
-                        warn!("BPF program failed: {}", status);
-                        return Err(InstructionError::CustomError(status));
+                    if status != 0 {
+                        let error: InstructionError = status.into();
+                        warn!("BPF program failed: {:?}", error);
+                        return Err(error);
                     }
                 }
                 Err(e) => {

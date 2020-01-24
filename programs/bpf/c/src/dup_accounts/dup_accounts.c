@@ -9,14 +9,11 @@
  */
 
 extern uint32_t entrypoint(const uint8_t *input) {
-  #define FAILURE 1
-  #define INVALID_INPUT 2
-
   SolKeyedAccount ka[4];
   SolParameters params = (SolParameters) { .ka = ka };
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
-    return INVALID_INPUT;
+    return INVALID_ARGUMENT;
   }
 
   switch (params.data[0]) {
@@ -51,7 +48,7 @@ extern uint32_t entrypoint(const uint8_t *input) {
           break;
       default:
           sol_log("Unrecognized command");
-          return FAILURE;
+          return INVALID_INSTRUCTION_DATA;
   }
   return SUCCESS;
 }

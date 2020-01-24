@@ -3,9 +3,24 @@
 #![allow(unreachable_code)]
 
 extern crate solana_sdk;
+use num_derive::FromPrimitive;
+
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, info, log::*, pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, info, log::*, program_error::ProgramError,
+    pubkey::Pubkey,
 };
+use thiserror::Error;
+
+#[derive(Error, Debug, Clone, PartialEq, FromPrimitive)]
+pub enum NoopError {
+    #[error("Eek")]
+    Eek = 42,
+}
+impl From<NoopError> for ProgramError {
+    fn from(e: NoopError) -> Self {
+        ProgramError::CustomError(e as u32)
+    }
+}
 
 #[derive(Debug, PartialEq)]
 struct SStruct {
@@ -24,9 +39,17 @@ fn process_instruction(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
-) -> u32 {
+) -> Result<(), ProgramError> {
     info!("Program identifier:");
     program_id.log();
+
+    //    if !instruction_data.is_empty() && instruction_data[0] == 0xff {
+    //        return Err(NoopError::Eek.into());
+    //    }
+
+    // if accounts.is_empty() {
+    //     return Err(ProgramError::NotEnoughAccountKeys);
+    // }
 
     // Log the provided account keys and instruction input data.  In the case of
     // the no-op program, no account keys or input data are expected but real
@@ -58,7 +81,7 @@ fn process_instruction(
         panic!();
     }
 
-    SUCCESS
+    Ok(())
 }
 
 #[cfg(test)]
