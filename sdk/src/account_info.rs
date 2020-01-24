@@ -1,17 +1,18 @@
-use crate::{account::Account, entrypoint::FAILURE, pubkey::Pubkey};
+use crate::{account::Account, pubkey::Pubkey};
 use std::{
     cell::{Ref, RefCell, RefMut},
     cmp, fmt,
     rc::Rc,
 };
 
+/// Account information that is mutable by a program
 pub struct AccountInfoMut<'a> {
     /// Number of lamports owned by this account
     pub lamports: &'a mut u64,
     /// On-chain data within this account
     pub data: &'a mut [u8],
 }
-/// Key and its associated account data
+/// Account information
 #[derive(Clone)]
 pub struct AccountInfo<'a> {
     /// Public key of the account
@@ -68,11 +69,11 @@ impl<'a> AccountInfo<'a> {
     }
 
     fn try_borrow(&self) -> Result<Ref<AccountInfoMut>, u32> {
-        self.m.try_borrow().map_err(|_| FAILURE)
+        self.m.try_borrow().map_err(|_| std::u32::MAX)
     }
 
     fn try_borrow_mut(&self) -> Result<RefMut<'a, AccountInfoMut>, u32> {
-        self.m.try_borrow_mut().map_err(|_| FAILURE)
+        self.m.try_borrow_mut().map_err(|_| std::u32::MAX)
     }
 
     pub fn new(

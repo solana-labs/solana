@@ -1,5 +1,7 @@
 //! @brief Solana Rust-based BPF program entrypoint and its parameter types
 
+#![cfg(feature = "program")]
+
 extern crate alloc;
 
 use crate::{
@@ -22,7 +24,6 @@ pub type ProcessInstruction =
 
 /// Programs indicate success with a return value of 0
 pub const SUCCESS: u32 = 0;
-pub const FAILURE: u32 = 0;
 
 /// Declare entrypoint of the program.
 ///
