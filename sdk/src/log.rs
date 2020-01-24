@@ -1,5 +1,7 @@
 //! @brief Solana Rust-based BPF program logging
 
+#![cfg(feature = "program")]
+
 use crate::{account_info::AccountInfo, pubkey::Pubkey};
 
 /// Prints a string

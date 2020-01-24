@@ -2,7 +2,6 @@
 extern crate self as solana_sdk;
 
 pub mod account;
-pub mod account_info;
 pub mod account_utils;
 pub mod bpf_loader;
 pub mod clock;
@@ -56,6 +55,7 @@ pub mod timing;
 pub use solana_sdk_macro::declare_id;
 
 // On-chain program specific modules
+pub mod account_info;
 pub mod entrypoint;
 pub mod log;
 
