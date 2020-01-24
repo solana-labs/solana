@@ -426,6 +426,12 @@ pub fn process_get_epoch_info(
     println!();
     println_name_value("Slot:", &epoch_info.absolute_slot.to_string());
     println_name_value("Epoch:", &epoch_info.epoch.to_string());
+    let start_slot = epoch_info.absolute_slot - epoch_info.slot_index;
+    let end_slot = start_slot + epoch_info.slots_in_epoch;
+    println_name_value(
+        "Epoch slot range:",
+        &format!("[{}..{})", start_slot, end_slot),
+    );
     println_name_value(
         "Epoch completed percent:",
         &format!(
