@@ -1,6 +1,6 @@
 # Programming Model
 
-A client _app_ interacts with a Solana cluster by sending it _transactions_ with one or more _instructions_. The Solana _runtime_ passes those instructions to user-contributed _programs_. An instruction might, for example, tell a program to transfer _lamports_ from one _account_ to another or create an interactive contract that governs how lamports are transfered. Instructions are executed sequentially and atomically. If any instruction is invalid, any changes made within the transaction are discarded.
+An _app_ interacts with a Solana cluster by sending it _transactions_ with one or more _instructions_. The Solana _runtime_ passes those instructions to user-contributed _programs_. An instruction might, for example, tell a program to transfer _lamports_ from one _account_ to another or create an interactive contract that governs how lamports are transfered. Instructions are executed sequentially and atomically. If any instruction is invalid, any changes made within the transaction are discarded.
 
 ### Accounts and Signatures
 
