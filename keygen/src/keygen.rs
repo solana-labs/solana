@@ -73,6 +73,66 @@ fn output_keypair(
     Ok(())
 }
 
+fn grind_validator_starts_with(v: String) -> Result<(), String> {
+    if v.matches(":").count() != 1 || (v.starts_with(":") || v.ends_with(":")) {
+        return Err(String::from("Expected : between PREFFIX and COUNT"));
+    }
+    let args: Vec<&str> = v.split(':').collect();
+    let s = bs58::decode(&args[0]).into_vec()
+    .map(|_| ())
+    .map_err(|err| format!("{}: {:?}", args[0], err));
+    if s.is_err() {
+        return s;
+    }
+    let count = args[1].parse::<u32>();
+    if count.is_err() || count.unwrap() == 0 {
+        return Err(String::from("Expected COUNT to be of type u32"));
+    }
+    Ok(())
+}
+
+fn grind_validator_ends_with(v: String) -> Result<(), String> {
+    if v.matches(":").count() != 1 || (v.starts_with(":") || v.ends_with(":")) {
+        return Err(String::from("Expected : between SUFFIX and COUNT"));
+    }
+    let args: Vec<&str> = v.split(':').collect();
+    let s = bs58::decode(&args[0]).into_vec()
+    .map(|_| ())
+    .map_err(|err| format!("{}: {:?}", args[0], err));
+    if s.is_err() {
+        return s;
+    }
+    let count = args[1].parse::<u32>();
+    if count.is_err() || count.unwrap() == 0 {
+        return Err(String::from("Expected COUNT to be of type u32"));
+    }
+    Ok(())
+}
+
+fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
+    if v.matches(":").count() != 2 || (v.starts_with(":") || v.ends_with(":")) {
+        return Err(String::from("Expected : between PREFFIX and SUFFIX and COUNT"));
+    }
+    let args: Vec<&str> = v.split(':').collect();
+    let p = bs58::decode(&args[0]).into_vec()
+    .map(|_| ())
+    .map_err(|err| format!("{}: {:?}", args[0], err));
+    if p.is_err() {
+        return p;
+    }
+    let s = bs58::decode(&args[1]).into_vec()
+    .map(|_| ())
+    .map_err(|err| format!("{}: {:?}", args[1], err));
+    if s.is_err() {
+        return s;
+    }
+    let count = args[2].parse::<u32>();
+    if count.is_err() || count.unwrap() == 0 {
+        return Err(String::from("Expected COUNT to be a u32"));
+    }
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -153,44 +213,32 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .arg(
                     Arg::with_name("starts_with")
                         .long("starts-with")
-                        .value_name("PREFIX COUNT")
-                        .number_of_values(2)
+                        .value_name("PREFIX:COUNT")
+                        .number_of_values(1)
                         .takes_value(true)
                         .multiple(true)
-                        .validator(|value| {
-                            bs58::decode(&value).into_vec()
-                                .map(|_| ())
-                                .map_err(|err| format!("{}: {:?}", value, err))
-                        })
-                        .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol 4"),
+                        .validator(grind_validator_starts_with)
+                        .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u32"),
                 )
                 .arg(
                     Arg::with_name("ends_with")
                         .long("ends-with")
-                        .value_name("SUFFIX COUNT")
-                        .number_of_values(2)
+                        .value_name("SUFFIX:COUNT")
+                        .number_of_values(1)
                         .takes_value(true)
                         .multiple(true)
-                        .validator(|value| {
-                            bs58::decode(&value).into_vec()
-                                .map(|_| ())
-                                .map_err(|err| format!("{}: {:?}", value, err))
-                        })
-                        .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana 4"),
+                        .validator(grind_validator_ends_with)
+                        .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is Base58\nCOUNT type is u32"),
                 )
                 .arg(
                     Arg::with_name("starts_and_ends_with")
                         .long("starts-and-ends-with")
-                        .value_name("PREFIX SUFFIX COUNT")
-                        .number_of_values(3)
+                        .value_name("PREFIX:SUFFIX:COUNT")
+                        .number_of_values(1)
                         .takes_value(true)
                         .multiple(true)
-                        .validator(|value| {
-                            bs58::decode(&value).into_vec()
-                                .map(|_| ())
-                                .map_err(|err| format!("{}: {:?}", value, err))
-                        })
-                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol ana 4"),
+                        .validator(grind_validator_starts_and_ends_with)
+                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFFIX and SUFFIX type is Base58\nCOUNT type is u32"),
                 ),
         )
         .subcommand(
