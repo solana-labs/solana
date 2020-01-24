@@ -1,33 +1,46 @@
 use crate::{account::Account, pubkey::Pubkey};
-use std::{cmp, fmt};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    cmp, fmt,
+    rc::Rc,
+};
 
-/// AccountInfo
-pub struct AccountInfo<'a> {
-    /// Public key of the account
-    pub key: &'a Pubkey,
-    /// Was the transaction signed by this account's public key?
-    pub is_signer: bool,
+/// Account information that is mutable by a program
+pub struct AccountInfoMut<'a> {
     /// Number of lamports owned by this account
     pub lamports: &'a mut u64,
     /// On-chain data within this account
     pub data: &'a mut [u8],
+}
+/// Account information
+#[derive(Clone)]
+pub struct AccountInfo<'a> {
+    /// Public key of the account
+    pub key: &'a Pubkey,
+    // Was the transaction signed by this account's public key?
+    pub is_signer: bool,
+    /// Account members that are mutable by the program
+    pub m: Rc<RefCell<AccountInfoMut<'a>>>,
     /// Program that owns this account
     pub owner: &'a Pubkey,
 }
 
 impl<'a> fmt::Debug for AccountInfo<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let data_len = cmp::min(64, self.data.len());
+        let data_len = cmp::min(64, self.m.borrow().data.len());
         let data_str = if data_len > 0 {
-            format!(" data: {}", hex::encode(self.data[..data_len].to_vec()))
+            format!(
+                " data: {}",
+                hex::encode(self.m.borrow().data[..data_len].to_vec())
+            )
         } else {
             "".to_string()
         };
         write!(
             f,
             "AccountInfo {{ lamports: {} data.len: {} owner: {} {} }}",
-            self.lamports,
-            self.data.len(),
+            self.m.borrow().lamports,
+            self.m.borrow().data.len(),
             self.owner,
             data_str,
         )
@@ -47,6 +60,22 @@ impl<'a> AccountInfo<'a> {
         self.key
     }
 
+    pub fn try_account_ref(&'a self) -> Result<Ref<AccountInfoMut>, u32> {
+        self.try_borrow()
+    }
+
+    pub fn try_account_ref_mut(&'a self) -> Result<RefMut<'a, AccountInfoMut>, u32> {
+        self.try_borrow_mut()
+    }
+
+    fn try_borrow(&self) -> Result<Ref<AccountInfoMut>, u32> {
+        self.m.try_borrow().map_err(|_| std::u32::MAX)
+    }
+
+    fn try_borrow_mut(&self) -> Result<RefMut<'a, AccountInfoMut>, u32> {
+        self.m.try_borrow_mut().map_err(|_| std::u32::MAX)
+    }
+
     pub fn new(
         key: &'a Pubkey,
         is_signer: bool,
@@ -57,57 +86,56 @@ impl<'a> AccountInfo<'a> {
         Self {
             key,
             is_signer,
-            lamports,
-            data,
+            m: Rc::new(RefCell::new(AccountInfoMut { lamports, data })),
             owner,
         }
     }
 
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
-        bincode::deserialize(&self.data)
+        bincode::deserialize(&self.m.borrow().data)
     }
 
     pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
-        if bincode::serialized_size(state)? > self.data.len() as u64 {
+        if bincode::serialized_size(state)? > self.m.borrow().data.len() as u64 {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
-        bincode::serialize_into(&mut self.data[..], state)
+        bincode::serialize_into(&mut self.m.borrow_mut().data[..], state)
     }
 }
 
 impl<'a> From<(&'a Pubkey, &'a mut Account)> for AccountInfo<'a> {
     fn from((key, account): (&'a Pubkey, &'a mut Account)) -> Self {
-        Self {
+        Self::new(
             key,
-            is_signer: false,
-            lamports: &mut account.lamports,
-            data: &mut account.data,
-            owner: &account.owner,
-        }
+            false,
+            &mut account.lamports,
+            &mut account.data,
+            &account.owner,
+        )
     }
 }
 
 impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for AccountInfo<'a> {
     fn from((key, is_signer, account): (&'a Pubkey, bool, &'a mut Account)) -> Self {
-        Self {
+        Self::new(
             key,
             is_signer,
-            lamports: &mut account.lamports,
-            data: &mut account.data,
-            owner: &account.owner,
-        }
+            &mut account.lamports,
+            &mut account.data,
+            &account.owner,
+        )
     }
 }
 
 impl<'a> From<&'a mut (Pubkey, Account)> for AccountInfo<'a> {
     fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
-        Self {
+        Self::new(
             key,
-            is_signer: false,
-            lamports: &mut account.lamports,
-            data: &mut account.data,
-            owner: &account.owner,
-        }
+            false,
+            &mut account.lamports,
+            &mut account.data,
+            &account.owner,
+        )
     }
 }
 
@@ -120,12 +148,14 @@ pub fn create_is_signer_account_infos<'a>(
 ) -> Vec<AccountInfo<'a>> {
     accounts
         .iter_mut()
-        .map(|(key, is_signer, account)| AccountInfo {
-            key,
-            is_signer: *is_signer,
-            lamports: &mut account.lamports,
-            data: &mut account.data,
-            owner: &account.owner,
+        .map(|(key, is_signer, account)| {
+            AccountInfo::new(
+                key,
+                *is_signer,
+                &mut account.lamports,
+                &mut account.data,
+                &account.owner,
+            )
         })
         .collect()
 }

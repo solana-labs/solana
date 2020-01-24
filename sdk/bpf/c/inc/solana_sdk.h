@@ -226,31 +226,42 @@ SOL_FN_PREFIX bool sol_deserialize(
     return false;
   }
   params->ka_num = *(uint64_t *) input;
-  if (ka_num < *(uint64_t *) input) {
+  input += sizeof(uint64_t);
+  if (ka_num < params->ka_num) {
     return false;
   }
 
-  input += sizeof(uint64_t);
   for (int i = 0; i < params->ka_num; i++) {
-    // key
-    params->ka[i].is_signer = *(uint64_t *) input != 0;
-    input += sizeof(uint64_t);
-    params->ka[i].key = (SolPubkey *) input;
-    input += sizeof(SolPubkey);
+    uint8_t dup_info = input[0];
+    input += sizeof(uint8_t);
+    if (dup_info == 0) {
+      // key
+      params->ka[i].is_signer = *(uint64_t *) input != 0;
+      input += sizeof(uint64_t);
+      params->ka[i].key = (SolPubkey *) input;
+      input += sizeof(SolPubkey);
 
-    // lamports
-    params->ka[i].lamports = (uint64_t *) input;
-    input += sizeof(uint64_t);
+      // lamports
+      params->ka[i].lamports = (uint64_t *) input;
+      input += sizeof(uint64_t);
 
-    // account userdata
-    params->ka[i].userdata_len = *(uint64_t *) input;
-    input += sizeof(uint64_t);
-    params->ka[i].userdata = (uint8_t *) input;
-    input += params->ka[i].userdata_len;
+      // account userdata
+      params->ka[i].userdata_len = *(uint64_t *) input;
+      input += sizeof(uint64_t);
+      params->ka[i].userdata = (uint8_t *) input;
+      input += params->ka[i].userdata_len;
 
-    // owner
-    params->ka[i].owner = (SolPubkey *) input;
-    input += sizeof(SolPubkey);
+      // owner
+      params->ka[i].owner = (SolPubkey *) input;
+      input += sizeof(SolPubkey);
+    } else {
+      params->ka[i].is_signer = params->ka[dup_info].is_signer;
+      params->ka[i].key = params->ka[dup_info].key;
+      params->ka[i].lamports = params->ka[dup_info].lamports;
+      params->ka[i].userdata_len = params->ka[dup_info].userdata_len;
+      params->ka[i].userdata = params->ka[dup_info].userdata;
+      params->ka[i].owner = params->ka[dup_info].owner;
+    }
   }
 
   params->data_len = *(uint64_t *) input;

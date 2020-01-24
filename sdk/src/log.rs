@@ -89,9 +89,9 @@ pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
         sol_log("- Key");
         account.key.log();
         sol_log("- Lamports");
-        sol_log_64(0, 0, 0, 0, *account.lamports);
+        sol_log_64(0, 0, 0, 0, *account.m.borrow().lamports);
         sol_log("- Account data length");
-        sol_log_64(0, 0, 0, 0, account.data.len() as u64);
+        sol_log_64(0, 0, 0, 0, account.m.borrow().data.len() as u64);
         sol_log("- Owner");
         account.owner.log();
     }

@@ -8,7 +8,6 @@ use log::*;
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::{
     account::KeyedAccount,
-    hash::{Hash, Hasher},
     instruction::InstructionError,
     instruction_processor_utils::{is_executable, limited_deserialize, next_keyed_account},
     loader_instruction::LoaderInstruction,
@@ -16,7 +15,6 @@ use solana_sdk::{
     sysvar::rent,
 };
 use std::{
-    collections::HashMap,
     convert::TryFrom,
     io::{prelude::*, Error},
     mem,
@@ -46,6 +44,16 @@ pub fn check_elf(prog: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
+/// Look for a duplicate account and return its position if found
+pub fn is_dup(accounts: &[KeyedAccount], keyed_account: &KeyedAccount) -> (bool, usize) {
+    for (i, account) in accounts.iter().enumerate() {
+        if account == keyed_account {
+            return (true, i);
+        }
+    }
+    (false, 0)
+}
+
 pub fn serialize_parameters(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
@@ -56,16 +64,22 @@ pub fn serialize_parameters(
     let mut v: Vec<u8> = Vec::new();
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .unwrap();
-    for keyed_account in keyed_accounts.iter() {
-        v.write_u64::<LittleEndian>(keyed_account.signer_key().is_some() as u64)
-            .unwrap();
-        v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
-        v.write_u64::<LittleEndian>(keyed_account.lamports()?)
-            .unwrap();
-        v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
-            .unwrap();
-        v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
-        v.write_all(keyed_account.owner()?.as_ref()).unwrap();
+    for (i, keyed_account) in keyed_accounts.iter().enumerate() {
+        let (is_dup, position) = is_dup(&keyed_accounts[..i], keyed_account);
+        if is_dup {
+            v.write_u8(position as u8).unwrap();
+        } else {
+            v.write_u8(0).unwrap();
+            v.write_u64::<LittleEndian>(keyed_account.signer_key().is_some() as u64)
+                .unwrap();
+            v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
+            v.write_u64::<LittleEndian>(keyed_account.lamports()?)
+                .unwrap();
+            v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
+                .unwrap();
+            v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
+            v.write_all(keyed_account.owner()?.as_ref()).unwrap();
+        }
     }
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
     v.write_all(data).unwrap();
@@ -79,63 +93,25 @@ pub fn deserialize_parameters(
 ) -> Result<(), InstructionError> {
     assert_eq!(32, mem::size_of::<Pubkey>());
 
-    let calculate_hash = |lamports: u64, data: &[u8]| -> Hash {
-        let mut hasher = Hasher::default();
-        let mut buf = [0u8; 8];
-        LittleEndian::write_u64(&mut buf[..], lamports);
-        hasher.hash(&buf);
-        hasher.hash(data);
-        hasher.result()
-    };
-
-    // remember any duplicate accounts
-    let mut map: HashMap<Pubkey, (Hash, bool)> = HashMap::new();
-    for (i, keyed_account) in keyed_accounts.iter().enumerate() {
-        if keyed_accounts[i + 1..].contains(keyed_account)
-            && !map.contains_key(keyed_account.unsigned_key())
-        {
-            let hash = calculate_hash(
-                keyed_account.lamports()?,
-                &keyed_account.try_account_ref()?.data,
-            );
-            map.insert(*keyed_account.unsigned_key(), (hash, false));
-        }
-    }
-
-    let mut start = mem::size_of::<u64>();
+    let mut start = mem::size_of::<u64>(); // number of accounts
     for keyed_account in keyed_accounts.iter() {
-        start += mem::size_of::<u64>() // signer_key boolean
-            + mem::size_of::<Pubkey>(); // pubkey
-        let lamports = LittleEndian::read_u64(&buffer[start..]);
-        start += mem::size_of::<u64>() // lamports
-            + mem::size_of::<u64>(); // length tag
-        let end = start + keyed_account.data_len()?;
-        let data_start = start;
-        let data_end = end;
-
-        // if duplicate, modified, and dirty, then bail
-        let mut do_update = true;
-        if let Some((hash, is_dirty)) = map.get_mut(keyed_account.unsigned_key()) {
-            let new_hash = calculate_hash(lamports, &buffer[data_start..data_end]);
-            if *hash != new_hash {
-                if *is_dirty {
-                    return Err(InstructionError::DuplicateAccountOutOfSync);
-                }
-                *is_dirty = true; // fail if modified again
-            } else {
-                do_update = false; // no changes, don't need to update account
-            }
-        }
-        if do_update {
-            keyed_account.try_account_ref_mut()?.lamports = lamports;
+        let duplicate = buffer[start] != 0; // duplicate info
+        start += 1;
+        if !duplicate {
+            start += mem::size_of::<u64>(); // is_signer
+            start += mem::size_of::<Pubkey>(); // pubkey
+            keyed_account.try_account_ref_mut()?.lamports =
+                LittleEndian::read_u64(&buffer[start..]);
+            start += mem::size_of::<u64>() // lamports
+                + mem::size_of::<u64>(); // data length
+            let end = start + keyed_account.data_len()?;
             keyed_account
                 .try_account_ref_mut()?
                 .data
-                .clone_from_slice(&buffer[data_start..data_end]);
+                .clone_from_slice(&buffer[start..end]);
+            start += keyed_account.data_len()? // data
+                + mem::size_of::<Pubkey>(); // owner
         }
-
-        start += keyed_account.data_len()? // data
-            + mem::size_of::<Pubkey>(); // owner
     }
     Ok(())
 }

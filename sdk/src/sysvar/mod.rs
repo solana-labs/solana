@@ -71,10 +71,10 @@ pub trait Sysvar:
         bincode::serialize_into(&mut account.data[..], self).ok()
     }
     fn from_account_info(account_info: &AccountInfo) -> Option<Self> {
-        bincode::deserialize(&account_info.data).ok()
+        bincode::deserialize(&account_info.m.borrow().data).ok()
     }
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
-        bincode::serialize_into(&mut account_info.data[..], self).ok()
+        bincode::serialize_into(&mut account_info.m.borrow_mut().data[..], self).ok()
     }
     fn from_keyed_account(keyed_account: &KeyedAccount) -> Result<Self, InstructionError> {
         if !Self::check_id(keyed_account.unsigned_key()) {
