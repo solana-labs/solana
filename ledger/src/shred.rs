@@ -403,7 +403,10 @@ impl Shred {
                 .for_each(|(accum, seed)| *accum ^= *seed)
         });
         // convert accum into a u16
-        ((accum[0] as u16) << 8) | accum[1] as u16
+        let version = ((accum[0] as u16) << 8) | accum[1] as u16;
+
+        // ensure version is never zero, to avoid looking like an uninitialized version
+        version.saturating_add(1)
     }
 }
 
@@ -1468,7 +1471,7 @@ pub mod tests {
             0xa5, 0xa5, 0x5a, 0x5a,
         ];
         let version = Shred::version_from_hash(&Hash::new(&hash));
-        assert_eq!(version, 0);
+        assert_eq!(version, 1);
         let hash = [
             0xa5u8, 0xa5, 0x5a, 0x5a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0,
@@ -1480,7 +1483,7 @@ pub mod tests {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         let version = Shred::version_from_hash(&Hash::new(&hash));
-        assert_eq!(version, 0x5a5a);
+        assert_eq!(version, 0x5a5b);
     }
 
     #[test]
