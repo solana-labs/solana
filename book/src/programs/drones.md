@@ -16,6 +16,8 @@ Creator of on-chain game tic-tac-toe hosts a drone that responds to airdrop requ
 
 Creator of a new on-chain token \(ERC-20 interface\), may wish to do a worldwide airdrop to distribute its tokens to millions of users over just a few seconds. That drone cannot spend resources interacting with the Solana cluster. Instead, the drone should only verify the client is unique and human, and then return the signature. It may also want to listen to the Solana cluster for recent entry IDs to support client retries and to ensure the airdrop is targeting the desired cluster.
 
+Note: the Solana cluster will not parallelize transactions funded by the same fee-paying account. This means that the max throughput of a single fee-paying account is limited to the number of _ticks_ processed per second by the current leader. Add additional fee-paying accounts to improve throughput.
+
 ## Attack vectors
 
 ### Invalid recent\_blockhash
