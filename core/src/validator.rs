@@ -295,14 +295,14 @@ impl Validator {
 
         if config.wait_for_supermajority {
             info!(
-                "Waiting for more than 66% of activated stake at slot {} to be in gossip...",
+                "Waiting for more than 75% of activated stake at slot {} to be in gossip...",
                 bank.slot()
             );
             loop {
                 let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info);
 
                 info!("{}% of activated stake in gossip", gossip_stake_percent,);
-                if gossip_stake_percent > 66 {
+                if gossip_stake_percent > 75 {
                     break;
                 }
                 sleep(Duration::new(1, 0));
