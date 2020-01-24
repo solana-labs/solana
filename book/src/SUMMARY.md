@@ -25,7 +25,7 @@
   * [Publishing Validator Info](running-validator/validator-info.md)
   * [Troubleshooting](running-validator/validator-troubleshoot.md)
 * [Running an Archiver](running-archiver.md)
-* [A Solana Cluster](cluster/README.md)
+* [Understanding Solana's Architecture](cluster/README.md)
   * [Synchronization](cluster/synchronization.md)
   * [Leader Rotation](cluster/leader-rotation.md)
   * [Fork Generation](cluster/fork-generation.md)
