@@ -712,15 +712,18 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit() {
         solana_logger::setup();
+        error!("cluster_start_and_exit start");
         let num_nodes = 1;
         let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 100, 3);
         assert_eq!(cluster.validators.len(), num_nodes);
         assert_eq!(cluster.archivers.len(), 0);
+        error!("cluster_start_and_exit exit");
     }
 
     #[test]
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
+        error!("cluster_start_and_exit_with_config start");
         let mut validator_config = ValidatorConfig::default();
         validator_config.rpc_config.enable_validator_exit = true;
         validator_config.storage_slots_per_turn = SLOTS_PER_TURN_TEST;
@@ -739,5 +742,6 @@ mod test {
         let cluster = LocalCluster::new(&config);
         assert_eq!(cluster.validators.len(), NUM_NODES);
         assert_eq!(cluster.archivers.len(), num_archivers);
+        error!("cluster_start_and_exit_with_config end");
     }
 }

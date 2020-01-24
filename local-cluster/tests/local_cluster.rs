@@ -209,7 +209,7 @@ fn run_cluster_partition(
     leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
 ) {
     solana_logger::setup();
-    info!("PARTITION_TEST!");
+    error!("PARTITION_TEST start {}", partitions.len());
     let num_nodes = partitions.len();
     let node_stakes: Vec<_> = partitions
         .iter()
@@ -282,7 +282,7 @@ fn run_cluster_partition(
             validator_index += 1;
         }
     }
-    info!(
+    error!(
         "PARTITION_TEST starting cluster with {:?} partitions",
         partitions
     );
@@ -293,7 +293,7 @@ fn run_cluster_partition(
 
     let now = timestamp();
     let timeout = partition_start as u64 - now as u64;
-    info!(
+    error!(
         "PARTITION_TEST sleeping until partition start timeout {}",
         timeout
     );
@@ -301,10 +301,10 @@ fn run_cluster_partition(
     if timeout > 0 {
         sleep(Duration::from_millis(timeout as u64));
     }
-    info!("PARTITION_TEST done sleeping until partition start timeout");
+    error!("PARTITION_TEST done sleeping until partition start timeout");
     let now = timestamp();
     let timeout = partition_end as u64 - now as u64;
-    info!(
+    error!(
         "PARTITION_TEST sleeping until partition end timeout {}",
         timeout
     );
@@ -343,14 +343,14 @@ fn run_cluster_partition(
     }
 
     assert!(alive_node_contact_infos.len() > 0);
-    info!("PARTITION_TEST discovering nodes");
+    error!("PARTITION_TEST discovering nodes");
     let (cluster_nodes, _) = discover_cluster(
         &alive_node_contact_infos[0].gossip,
         alive_node_contact_infos.len(),
     )
     .unwrap();
-    info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
-    info!("PARTITION_TEST looking for new roots on all nodes");
+    error!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
+    error!("PARTITION_TEST looking for new roots on all nodes");
     let mut roots = vec![HashSet::new(); alive_node_contact_infos.len()];
     let mut done = false;
     while !done {
@@ -367,7 +367,7 @@ fn run_cluster_partition(
         }
         sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
     }
-    info!("PARTITION_TEST done spending on all node");
+    error!("PARTITION_TEST done spending on all node");
 }
 
 #[allow(unused_attributes)]
@@ -395,6 +395,8 @@ fn test_cluster_partition_1_1_1() {
 #[test]
 #[serial]
 fn test_kill_partition() {
+    solana_logger::setup();
+    error!("kill_partition start");
     // This test:
     // 1) Spins up three partitions
     // 2) Forces more slots in the leader schedule for the first partition so
@@ -431,7 +433,8 @@ fn test_kill_partition() {
             LeaderSchedule::new_from_schedule(leader_schedule),
             validator_keys,
         )),
-    )
+    );
+    error!("kill_partition end");
 }
 
 #[test]

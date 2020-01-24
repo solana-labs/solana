@@ -25,7 +25,7 @@ use std::{
 /// Then download shreds from one of them.
 fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
     solana_logger::setup();
-    info!("starting archiver test");
+    error!("starting archiver test {} {}", num_nodes, num_archivers);
 
     let mut validator_config = ValidatorConfig::default();
     let slots_per_segment = 8;
@@ -61,6 +61,7 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
     let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
         cluster_nodes[0].clone(),
     )));
+    error!("downloading from archiver.");
     let path = get_tmp_ledger_path!();
     let blockstore = Arc::new(Blockstore::open(&path).unwrap());
     Archiver::download_from_archiver(
@@ -70,6 +71,7 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
         slots_per_segment,
     )
     .unwrap();
+    error!("ending archiver test {} {}", num_nodes, num_archivers);
 }
 
 #[test]
@@ -90,7 +92,7 @@ fn test_archiver_startup_leader_hang() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     solana_logger::setup();
-    info!("starting archiver test");
+    error!("starting archiver test");
 
     let leader_ledger_path = std::path::PathBuf::from("archiver_test_leader_ledger");
     let (genesis_config, _mint_keypair) = create_genesis_config(10_000);
@@ -157,6 +159,9 @@ fn test_archiver_startup_ledger_hang() {
 #[test]
 #[serial]
 fn test_account_setup() {
+    solana_logger::setup();
+    warn!("account_setup start");
+
     let num_nodes = 1;
     let num_archivers = 1;
     let mut validator_config = ValidatorConfig::default();
@@ -191,4 +196,5 @@ fn test_account_setup() {
             1
         );
     });
+    warn!("account_setup end");
 }
