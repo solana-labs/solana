@@ -5,9 +5,9 @@ cd "$(dirname "$0")"
 
 usage=$(cargo -q run -p solana-cli -- -C ~/.foo --help | sed 's|'"$HOME"'|~|g')
 
-out=${1:-src/api-reference/cli.md}
+out=${1:-src/cli/usage.md}
 
-cat src/api-reference/.cli.md.header > "$out"
+cat src/cli/.usage.md.header > "$out"
 
 section() {
   declare mark=${2:-"###"}

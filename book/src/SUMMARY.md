@@ -1,8 +1,8 @@
 # Table of contents
 
 * [Introduction](introduction.md)
-* [Using Solana](using-solana.md)
-  * [Command-line Client](cli.md)
+* [Using Solana from the Command-line](cli/README.md)
+  * [Command-line Usage](cli/usage.md)
   * [Paper Wallet](paper-wallet/README.md)
     * [Installation](paper-wallet/installation.md)
     * [Paper Wallet Usage](paper-wallet/usage.md)
@@ -41,7 +41,7 @@
   * [Blockstore](validator/blockstore.md)
   * [Gossip Service](validator/gossip.md)
   * [The Runtime](validator/runtime.md)
-* [Building from Source](getting-started/README.md)
+* [Building from Source](building-from-source.md)
 * [Terminology](terminology.md)
 * [Implemented Design Proposals](implemented-proposals/README.md)
   * [Cluster Software Installation and Updates](implemented-proposals/installer.md)
