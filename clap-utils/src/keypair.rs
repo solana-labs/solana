@@ -80,7 +80,7 @@ pub fn keypair_from_seed_phrase(
         keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)?
     } else {
         let sanitized = sanitize_seed_phrase(seed_phrase);
-        let mnemonic = Mnemonic::from_phrase(sanitized, Language::English)?;
+        let mnemonic = Mnemonic::from_phrase(&sanitized, Language::English)?;
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
         keypair_from_seed(seed.as_bytes())?
