@@ -2,8 +2,8 @@ use crate::{account::Account, pubkey::Pubkey};
 use std::{
     cell::{Ref, RefCell, RefMut},
     cmp, fmt,
+    ops::Deref,
     rc::Rc,
-    ops::{Deref},
 };
 
 /// Account information that is mutable by a program
@@ -30,10 +30,7 @@ impl<'a> fmt::Debug for AccountInfo<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let data_len = cmp::min(64, self.data.len());
         let data_str = if data_len > 0 {
-            format!(
-                " data: {}",
-                hex::encode(self.data[..data_len].to_vec())
-            )
+            format!(" data: {}", hex::encode(self.data[..data_len].to_vec()))
         } else {
             "".to_string()
         };
@@ -108,7 +105,7 @@ impl<'a> Deref for AccountInfo<'a> {
     type Target = AccountInfoMut<'a>;
 
     fn deref(&self) -> &Self::Target {
-        unsafe {self.m.as_ptr().as_ref().unwrap()}
+        unsafe { self.m.as_ptr().as_ref().unwrap() }
     }
 }
 
