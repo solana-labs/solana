@@ -142,6 +142,7 @@ testnet-beta|testnet-beta-perf)
 testnet)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
+  export CLOUDSDK_CORE_PROJECT=testnet-solana-com
   ;;
 testnet-perf)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
@@ -157,6 +158,7 @@ tds)
   : "${TDS_CHANNEL_OR_TAG:=edge}"
   CHANNEL_OR_TAG="$TDS_CHANNEL_OR_TAG"
   CHANNEL_BRANCH="$CI_BRANCH"
+  export CLOUDSDK_CORE_PROJECT=tour-de-sol
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
