@@ -518,15 +518,15 @@ impl Bank {
     where
         F: Fn(&Option<Account>) -> Account,
     {
-        let cold_account = self.get_cold_account(pubkey);
-        let mut new_account = updater(&cold_account);
+        let old_account = self.get_sysvar_account(pubkey);
+        let mut new_account = updater(&old_account);
 
-        // Normally, just use the hash from parent slot.  However, use the
+        // Normally, just use the hash from parent slot. However, use the
         // existing stored hash if any for the sake of bank hash's idempotent.
-        if let Some((hot_account, _)) = self.get_account_modified_since_parent(pubkey) {
-            new_account.hash = hot_account.hash;
-        } else if let Some(cold_account) = cold_account {
-            new_account.hash = cold_account.hash;
+        if let Some((modified_account, _)) = self.get_account_modified_since_parent(pubkey) {
+            new_account.hash = modified_account.hash;
+        } else if let Some(old_account) = old_account {
+            new_account.hash = old_account.hash;
         }
 
         self.store_account(pubkey, &new_account);
@@ -1713,14 +1713,13 @@ impl Bank {
     }
 
     // Exclude self to really fetch the parent Bank's account hash and data.
-    // This is mainly for sysvar accounts.
     //
     // Being idempotent is needed to make the lazy initialization possible,
     // especially for update_slot_hashes at the moment, which can be called
     // multiple times with the same parent_slot in the case of forking.
     //
     // Generally, all of sysvar update granularity should be slot boundaries.
-    fn get_cold_account(&self, pubkey: &Pubkey) -> Option<Account> {
+    fn get_sysvar_account(&self, pubkey: &Pubkey) -> Option<Account> {
         let mut ancestors = self.ancestors.clone();
         ancestors.remove(&self.slot());
         self.rc
@@ -4236,7 +4235,7 @@ mod tests {
 
         // Updating should increment the clock's slot
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
-        let mut expected_base_hash = bank2.rc.accounts.bank_hash_at(bank2.slot);
+        let mut expected_bank_hash = bank2.rc.accounts.bank_hash_at(bank2.slot);
         bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
             let slot = Clock::from_account(optional_account.as_ref().unwrap())
                 .unwrap()
@@ -4251,14 +4250,14 @@ mod tests {
         });
         let current_account = bank2.get_account(&dummy_clock_id).unwrap();
         let added_bank_hash = BankHash::from_hash(&current_account.hash);
-        expected_base_hash.xor(removed_bank_hash);
-        expected_base_hash.xor(added_bank_hash);
+        expected_bank_hash.xor(removed_bank_hash);
+        expected_bank_hash.xor(added_bank_hash);
         assert_eq!(
             expected_next_slot,
             Clock::from_account(&current_account).unwrap().slot
         );
         assert_eq!(
-            expected_base_hash,
+            expected_bank_hash,
             bank2.rc.accounts.bank_hash_at(bank2.slot)
         );
 
@@ -4282,7 +4281,7 @@ mod tests {
             Clock::from_account(&current_account).unwrap().slot
         );
         assert_eq!(
-            expected_base_hash,
+            expected_bank_hash,
             bank2.rc.accounts.bank_hash_at(bank2.slot)
         );
     }
