@@ -4,7 +4,11 @@ extern crate solana_sdk;
 use solana_sdk::{account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, pubkey::Pubkey};
 
 entrypoint!(process_instruction);
-fn process_instruction(_program_id: &Pubkey, accounts: &mut [AccountInfo], _data: &[u8]) -> u32 {
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &mut [AccountInfo],
+    _instruction_data: &[u8],
+) -> u32 {
     // account 0 is the mint and not owned by this program, any debit of its lamports
     // should result in a failed program execution.  Test to ensure that this debit
     // is seen by the runtime and fails as expected

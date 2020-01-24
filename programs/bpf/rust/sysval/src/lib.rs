@@ -17,7 +17,11 @@ use solana_sdk::{
 };
 
 entrypoint!(process_instruction);
-fn process_instruction(_program_id: &Pubkey, accounts: &mut [AccountInfo], _data: &[u8]) -> u32 {
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &mut [AccountInfo],
+    _instruction_data: &[u8],
+) -> u32 {
     // Clock
     info!("Clock identifier:");
     sysvar::clock::id().log();

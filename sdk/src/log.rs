@@ -36,7 +36,7 @@ pub fn sol_log(message: &str) {
     }
 }
 extern "C" {
-    fn sol_log_(message: *const u8, length: u64);
+    fn sol_log_(message: *const u8, len: u64);
 }
 
 /// Prints 64 bit values represented as hexadecimal to stdout
@@ -59,7 +59,7 @@ extern "C" {
 #[allow(dead_code)]
 pub fn sol_log_slice(slice: &[u8]) {
     for (i, s) in slice.iter().enumerate() {
-        sol_log_64(0, 0, 0, i as u64, u64::from(*s));
+        info!(0, 0, 0, i, *s);
     }
 }
 
@@ -70,7 +70,7 @@ pub trait Log {
 impl Log for Pubkey {
     fn log(&self) {
         for (i, k) in self.to_bytes().iter().enumerate() {
-            sol_log_64(0, 0, 0, i as u64, u64::from(*k));
+            info!(0, 0, 0, i, *k);
         }
     }
 }
@@ -82,19 +82,19 @@ impl Log for Pubkey {
 #[allow(dead_code)]
 pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
     for (i, account) in accounts.iter().enumerate() {
-        sol_log("AccountInfo");
-        sol_log_64(0, 0, 0, 0, i as u64);
-        sol_log("- Is signer");
-        sol_log_64(0, 0, 0, 0, account.is_signer as u64);
-        sol_log("- Key");
+        info!("AccountInfo");
+        info!(0, 0, 0, 0, i);
+        info!("- Is signer");
+        info!(0, 0, 0, 0, account.is_signer);
+        info!("- Key");
         account.key.log();
-        sol_log("- Lamports");
-        sol_log_64(0, 0, 0, 0, *account.m.borrow().lamports);
-        sol_log("- Account data length");
-        sol_log_64(0, 0, 0, 0, account.m.borrow().data.len() as u64);
-        sol_log("- Owner");
+        info!("- Lamports");
+        info!(0, 0, 0, 0, *account.m.borrow().lamports);
+        info!("- Account data length");
+        info!(0, 0, 0, 0, account.m.borrow().data.len());
+        info!("- Owner");
         account.owner.log();
     }
-    sol_log("Instruction data");
+    info!("Instruction data");
     sol_log_slice(data);
 }

@@ -20,7 +20,11 @@ fn return_sstruct() -> SStruct {
 }
 
 entrypoint!(process_instruction);
-fn process_instruction(program_id: &Pubkey, accounts: &mut [AccountInfo], data: &[u8]) -> u32 {
+fn process_instruction(
+    program_id: &Pubkey,
+    accounts: &mut [AccountInfo],
+    instruction_data: &[u8],
+) -> u32 {
     info!("Program identifier:");
     program_id.log();
 
@@ -28,7 +32,7 @@ fn process_instruction(program_id: &Pubkey, accounts: &mut [AccountInfo], data: 
     // the no-op program, no account keys or input data are expected but real
     // programs will have specific requirements so they can do their work.
     info!("Account keys and instruction input data:");
-    sol_log_params(accounts, data);
+    sol_log_params(accounts, instruction_data);
 
     {
         // Test - use std methods, unwrap

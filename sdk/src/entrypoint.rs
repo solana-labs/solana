@@ -9,10 +9,12 @@ use crate::{
     pubkey::Pubkey,
 };
 use alloc::vec::Vec;
-use core::mem::size_of;
-use core::slice::{from_raw_parts, from_raw_parts_mut};
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::{
+    cell::RefCell,
+    mem::size_of,
+    rc::Rc,
+    slice::{from_raw_parts, from_raw_parts_mut},
+};
 
 /// User implemented program entrypoint
 ///
@@ -20,7 +22,7 @@ use std::rc::Rc;
 /// accounts: Accounts passed as part of the instruction
 /// data: Instruction data
 pub type ProcessInstruction =
-    fn(program_id: &Pubkey, accounts: &mut [AccountInfo], data: &[u8]) -> u32;
+    fn(program_id: &Pubkey, accounts: &mut [AccountInfo], instruction_data: &[u8]) -> u32;
 
 /// Programs indicate success with a return value of 0
 pub const SUCCESS: u32 = 0;
@@ -29,7 +31,7 @@ pub const SUCCESS: u32 = 0;
 ///
 /// Deserialize the program input parameters and call
 /// the user defined `ProcessInstruction`.  Users must call
-/// this function otherwise an entrypoint for
+/// this macro otherwise an entrypoint for
 /// their program will not be created.
 #[macro_export]
 macro_rules! entrypoint {
@@ -38,8 +40,9 @@ macro_rules! entrypoint {
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u32 {
             unsafe {
-                let (program_id, mut accounts, data) = $crate::entrypoint::deserialize(input);
-                $process_instruction(&program_id, &mut accounts, &data)
+                let (program_id, mut accounts, instruction_data) =
+                    $crate::entrypoint::deserialize(input);
+                $process_instruction(&program_id, &mut accounts, &instruction_data)
             }
         }
     };
@@ -67,8 +70,8 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
         if dup_info == 0 {
             let is_signer = {
                 #[allow(clippy::cast_ptr_alignment)]
-                let is_signer_val = *(input.add(offset) as *const u64);
-                (is_signer_val != 0)
+                let is_signer = *(input.add(offset) as *const u64);
+                (is_signer != 0)
             };
             offset += size_of::<u64>();
 
@@ -80,11 +83,11 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             offset += size_of::<u64>();
 
             #[allow(clippy::cast_ptr_alignment)]
-            let data_length = *(input.add(offset) as *const u64) as usize;
+            let data_len = *(input.add(offset) as *const u64) as usize;
             offset += size_of::<u64>();
 
-            let data = { from_raw_parts_mut(input.add(offset), data_length) };
-            offset += data_length;
+            let data = { from_raw_parts_mut(input.add(offset), data_len) };
+            offset += data_len;
 
             let owner: &Pubkey = &*(input.add(offset) as *const Pubkey);
             offset += size_of::<Pubkey>();
@@ -92,8 +95,8 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let m = Rc::new(RefCell::new(AccountInfoMut { lamports, data }));
 
             accounts.push(AccountInfo {
-                key,
                 is_signer,
+                key,
                 m,
                 owner,
             });
@@ -106,15 +109,15 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
     // Instruction data
 
     #[allow(clippy::cast_ptr_alignment)]
-    let data_length = *(input.add(offset) as *const u64) as usize;
+    let instruction_data_len = *(input.add(offset) as *const u64) as usize;
     offset += size_of::<u64>();
 
-    let data = { from_raw_parts(input.add(offset), data_length) };
-    offset += data_length;
+    let instruction_data = { from_raw_parts(input.add(offset), instruction_data_len) };
+    offset += instruction_data_len;
 
     // Program Id
 
     let program_id: &Pubkey = &*(input.add(offset) as *const Pubkey);
 
-    (program_id, accounts, data)
+    (program_id, accounts, instruction_data)
 }
