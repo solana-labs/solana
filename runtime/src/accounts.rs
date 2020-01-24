@@ -664,7 +664,6 @@ mod tests {
     use solana_sdk::rent::Rent;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_program;
-    use solana_sdk::sysvar;
     use solana_sdk::transaction::Transaction;
     use std::io::Cursor;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -1292,14 +1291,6 @@ mod tests {
     #[should_panic]
     fn test_accounts_empty_bank_hash() {
         let accounts = Accounts::new(Vec::new());
-        accounts.bank_hash_at(0);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_accounts_empty_account_bank_hash() {
-        let accounts = Accounts::new(Vec::new());
-        accounts.store_slow(0, &Pubkey::default(), &Account::new(1, 0, &sysvar::id()));
         accounts.bank_hash_at(0);
     }
 

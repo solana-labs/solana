@@ -38,7 +38,6 @@ use solana_sdk::bank_hash::BankHash;
 use solana_sdk::clock::{Epoch, Slot};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::sysvar;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult};
@@ -764,6 +763,14 @@ impl AccountsDB {
         let hash_info = bank_hashes
             .get(&parent_slot)
             .expect("accounts_db::set_hash::no parent slot");
+        if bank_hashes.get(&slot).is_some() {
+            error!(
+                "set_hash: already exists; multiple forks with shared slot {} as child (parent: {})!?",
+                slot, parent_slot,
+            );
+            return;
+        }
+
         let hash = hash_info.hash;
         let new_hash_info = BankHashInfo {
             hash,
@@ -1033,18 +1040,16 @@ impl AccountsDB {
             |(collector, mismatch_found): &mut (Vec<BankHash>, bool),
              option: Option<(&Pubkey, Account, Slot)>| {
                 if let Some((pubkey, account, slot)) = option {
-                    if !sysvar::check_id(&account.owner) {
-                        let hash = Self::hash_account(slot, &account, pubkey);
-                        if hash != account.hash {
-                            *mismatch_found = true;
-                        }
-                        if *mismatch_found {
-                            return;
-                        }
-                        let hash = BankHash::from_hash(&hash);
-                        debug!("xoring..{} key: {}", hash, pubkey);
-                        collector.push(hash);
+                    let hash = Self::hash_account(slot, &account, pubkey);
+                    if hash != account.hash {
+                        *mismatch_found = true;
                     }
+                    if *mismatch_found {
+                        return;
+                    }
+                    let hash = BankHash::from_hash(&hash);
+                    debug!("xoring..{} key: {}", hash, pubkey);
+                    collector.push(hash);
                 }
             },
         );
@@ -1167,26 +1172,22 @@ impl AccountsDB {
         let hashes: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
-                if !sysvar::check_id(&account.owner) {
-                    let hash = BankHash::from_hash(&account.hash);
-                    stats.update(account);
-                    let new_hash = Self::hash_account(slot_id, account, pubkey);
-                    let new_bank_hash = BankHash::from_hash(&new_hash);
-                    debug!(
-                        "hash_accounts: key: {} xor {} current: {}",
-                        pubkey, hash, hash_state
-                    );
-                    if !had_account {
-                        hash_state = hash;
-                        had_account = true;
-                    } else {
-                        hash_state.xor(hash);
-                    }
-                    hash_state.xor(new_bank_hash);
-                    new_hash
+                let hash = BankHash::from_hash(&account.hash);
+                stats.update(account);
+                let new_hash = Self::hash_account(slot_id, account, pubkey);
+                let new_bank_hash = BankHash::from_hash(&new_hash);
+                debug!(
+                    "hash_accounts: key: {} xor {} current: {}",
+                    pubkey, hash, hash_state
+                );
+                if !had_account {
+                    hash_state = hash;
+                    had_account = true;
                 } else {
-                    Hash::default()
+                    hash_state.xor(hash);
                 }
+                hash_state.xor(new_bank_hash);
+                new_hash
             })
             .collect();
 
