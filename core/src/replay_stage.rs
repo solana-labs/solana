@@ -87,7 +87,7 @@ pub struct ReplayStage {
 }
 
 #[derive(Default)]
-pub struct ReplaySlotStats(ConfirmationTiming);
+pub(crate) struct ReplaySlotStats(ConfirmationTiming);
 impl std::ops::Deref for ReplaySlotStats {
     type Target = ConfirmationTiming;
     fn deref(&self) -> &Self::Target {
@@ -101,7 +101,7 @@ impl std::ops::DerefMut for ReplaySlotStats {
 }
 
 #[derive(Debug, Clone, Default)]
-struct ForkStats {
+pub(crate) struct ForkStats {
     weight: u128,
     fork_weight: u128,
     total_staked: u64,
@@ -110,9 +110,9 @@ struct ForkStats {
     has_voted: bool,
     is_recent: bool,
     is_empty: bool,
-    vote_threshold: bool,
-    is_locked_out: bool,
-    stake_lockouts: HashMap<u64, StakeLockout>,
+    pub(crate) vote_threshold: bool,
+    pub(crate) is_locked_out: bool,
+    pub(crate) stake_lockouts: HashMap<u64, StakeLockout>,
     computed: bool,
     confirmation_reported: bool,
 }
@@ -141,9 +141,9 @@ impl ReplaySlotStats {
     }
 }
 
-struct ForkProgress {
+pub(crate) struct ForkProgress {
     is_dead: bool,
-    fork_stats: ForkStats,
+    pub(crate) fork_stats: ForkStats,
     replay_stats: ReplaySlotStats,
     replay_progress: ConfirmationProgress,
 }
@@ -588,11 +588,7 @@ impl ReplayStage {
             blockstore
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
-            bank_forks
-                .write()
-                .unwrap()
-                .set_root(new_root, snapshot_package_sender);
-            Self::handle_new_root(&bank_forks, progress);
+            Self::handle_new_root(new_root, &bank_forks, progress, snapshot_package_sender);
             latest_root_senders.iter().for_each(|s| {
                 if let Err(e) = s.send(new_root) {
                     trace!("latest root send failed: {:?}", e);
@@ -742,10 +738,10 @@ impl ReplayStage {
         did_complete_bank
     }
 
-    fn select_fork(
+    pub(crate) fn select_fork(
         my_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
         tower: &Tower,
         progress: &mut HashMap<u64, ForkProgress>,
     ) -> VoteAndPoHBank {
@@ -786,7 +782,13 @@ impl ReplayStage {
                         bank.vote_accounts().into_iter(),
                         &ancestors,
                     );
-                    Self::confirm_forks(tower, &stake_lockouts, total_staked, progress, bank_forks);
+                    Self::confirm_forks(
+                        tower,
+                        &stake_lockouts,
+                        total_staked,
+                        progress,
+                        &bank_forks,
+                    );
                     stats.total_staked = total_staked;
                     stats.weight = bank_weight;
                     stats.fork_weight = stats.weight
@@ -880,7 +882,7 @@ impl ReplayStage {
         stake_lockouts: &HashMap<u64, StakeLockout>,
         total_staked: u64,
         progress: &mut HashMap<u64, ForkProgress>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
     ) {
         for (slot, prog) in progress.iter_mut() {
             if !prog.fork_stats.confirmation_reported {
@@ -908,10 +910,16 @@ impl ReplayStage {
         }
     }
 
-    fn handle_new_root(
-        bank_forks: &Arc<RwLock<BankForks>>,
+    pub(crate) fn handle_new_root(
+        new_root: u64,
+        bank_forks: &RwLock<BankForks>,
         progress: &mut HashMap<u64, ForkProgress>,
+        snapshot_package_sender: &Option<SnapshotPackageSender>,
     ) {
+        bank_forks
+            .write()
+            .unwrap()
+            .set_root(new_root, snapshot_package_sender);
         let r_bank_forks = bank_forks.read().unwrap();
         progress.retain(|k, _| r_bank_forks.get(*k).is_some());
     }
@@ -1354,10 +1362,21 @@ pub(crate) mod tests {
         let genesis_config = create_genesis_config(10_000).genesis_config;
         let bank0 = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
+        let root = 3;
+        let root_bank = Bank::new_from_parent(
+            bank_forks.read().unwrap().get(0).unwrap(),
+            &Pubkey::default(),
+            root,
+        );
+        bank_forks.write().unwrap().insert(root_bank);
         let mut progress = HashMap::new();
-        progress.insert(5, ForkProgress::new(Hash::default()));
-        ReplayStage::handle_new_root(&bank_forks, &mut progress);
-        assert!(progress.is_empty());
+        for i in 0..=root {
+            progress.insert(i, ForkProgress::new(Hash::default()));
+        }
+        ReplayStage::handle_new_root(root, &bank_forks, &mut progress, &None);
+        assert_eq!(bank_forks.read().unwrap().root(), root);
+        assert_eq!(progress.len(), 1);
+        assert!(progress.get(&root).is_some());
     }
 
     #[test]
