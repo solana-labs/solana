@@ -6,10 +6,14 @@ use solana_sdk::{
 };
 
 entrypoint!(process_instruction);
-fn process_instruction(_program_id: &Pubkey, accounts: &mut [AccountInfo], data: &[u8]) -> u32 {
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &mut [AccountInfo],
+    instruction_data: &[u8],
+) -> u32 {
     const FAILURE: u32 = 1;
 
-    match data[0] {
+    match instruction_data[0] {
         1 => {
             info!("modify first account data");
             accounts[2].m.borrow_mut().data[0] = 1;
