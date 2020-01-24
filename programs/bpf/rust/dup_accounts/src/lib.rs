@@ -16,32 +16,32 @@ fn process_instruction(
     match instruction_data[0] {
         1 => {
             info!("modify first account data");
-            accounts[2].m.borrow_mut().data[0] = 1;
+            accounts[2].borrow_mut().data[0] = 1;
         }
         2 => {
             info!("modify first account data");
-            accounts[3].m.borrow_mut().data[0] = 2;
+            accounts[3].borrow_mut().data[0] = 2;
         }
         3 => {
             info!("modify both account data");
-            accounts[2].m.borrow_mut().data[0] += 1;
-            accounts[3].m.borrow_mut().data[0] += 2;
+            accounts[2].borrow_mut().data[0] += 1;
+            accounts[3].borrow_mut().data[0] += 2;
         }
         4 => {
             info!("modify first account lamports");
-            *accounts[1].m.borrow_mut().lamports -= 1;
-            *accounts[2].m.borrow_mut().lamports += 1;
+            *accounts[1].borrow_mut().lamports -= 1;
+            *accounts[2].borrow_mut().lamports += 1;
         }
         5 => {
             info!("modify first account lamports");
-            *accounts[1].m.borrow_mut().lamports -= 2;
-            *accounts[3].m.borrow_mut().lamports += 2;
+            *accounts[1].borrow_mut().lamports -= 2;
+            *accounts[3].borrow_mut().lamports += 2;
         }
         6 => {
             info!("modify both account lamports");
-            *accounts[1].m.borrow_mut().lamports -= 3;
-            *accounts[2].m.borrow_mut().lamports += 1;
-            *accounts[3].m.borrow_mut().lamports += 2;
+            *accounts[1].borrow_mut().lamports -= 3;
+            *accounts[2].borrow_mut().lamports += 1;
+            *accounts[3].borrow_mut().lamports += 2;
         }
         _ => {
             info!("Unrecognized command");

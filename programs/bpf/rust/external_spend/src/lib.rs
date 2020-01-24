@@ -12,7 +12,7 @@ fn process_instruction(
     // account 0 is the mint and not owned by this program, any debit of its lamports
     // should result in a failed program execution.  Test to ensure that this debit
     // is seen by the runtime and fails as expected
-    *accounts[0].m.borrow_mut().lamports -= 1;
+    *accounts[0].borrow_mut().lamports -= 1;
 
     SUCCESS
 }

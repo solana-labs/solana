@@ -27,11 +27,11 @@ pub struct AccountInfo<'a> {
 
 impl<'a> fmt::Debug for AccountInfo<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let data_len = cmp::min(64, self.m.borrow().data.len());
+        let data_len = cmp::min(64, self.data_len());
         let data_str = if data_len > 0 {
             format!(
                 " data: {}",
-                hex::encode(self.m.borrow().data[..data_len].to_vec())
+                hex::encode(self.borrow().data[..data_len].to_vec())
             )
         } else {
             "".to_string()
@@ -39,8 +39,8 @@ impl<'a> fmt::Debug for AccountInfo<'a> {
         write!(
             f,
             "AccountInfo {{ lamports: {} data.len: {} owner: {} {} }}",
-            self.m.borrow().lamports,
-            self.m.borrow().data.len(),
+            self.lamports(),
+            self.data_len(),
             self.owner,
             data_str,
         )
@@ -60,20 +60,24 @@ impl<'a> AccountInfo<'a> {
         self.key
     }
 
-    pub fn try_account_ref(&'a self) -> Result<Ref<AccountInfoMut>, u32> {
-        self.try_borrow()
+    pub fn lamports(&self) -> u64 {
+        *self.borrow().lamports
     }
 
-    pub fn try_account_ref_mut(&'a self) -> Result<RefMut<'a, AccountInfoMut>, u32> {
-        self.try_borrow_mut()
+    pub fn data_len(&self) -> usize {
+        self.borrow().data.len()
     }
 
-    fn try_borrow(&self) -> Result<Ref<AccountInfoMut>, u32> {
-        self.m.try_borrow().map_err(|_| std::u32::MAX)
+    pub fn data_is_empty(&self) -> bool {
+        self.borrow().data.is_empty()
     }
 
-    fn try_borrow_mut(&self) -> Result<RefMut<'a, AccountInfoMut>, u32> {
-        self.m.try_borrow_mut().map_err(|_| std::u32::MAX)
+    pub fn borrow(&self) -> Ref<AccountInfoMut> {
+        self.m.borrow()
+    }
+
+    pub fn borrow_mut(&self) -> RefMut<AccountInfoMut<'a>> {
+        self.m.borrow_mut()
     }
 
     pub fn new(
@@ -92,14 +96,14 @@ impl<'a> AccountInfo<'a> {
     }
 
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
-        bincode::deserialize(&self.m.borrow().data)
+        bincode::deserialize(&self.borrow().data)
     }
 
     pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
-        if bincode::serialized_size(state)? > self.m.borrow().data.len() as u64 {
+        if bincode::serialized_size(state)? > self.data_len() as u64 {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
-        bincode::serialize_into(&mut self.m.borrow_mut().data[..], state)
+        bincode::serialize_into(&mut self.borrow_mut().data[..], state)
     }
 }
 
