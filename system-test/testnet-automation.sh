@@ -267,9 +267,15 @@ function launchTestnet() {
         WHERE time > now() - '"$TEST_DURATION_SECONDS"'s
         GROUP BY time(1s), host_id)'
 
+  declare q_last_tower_distance_observed='
+      SELECT MEAN("tower_distance") as "last_tower_distance" FROM (
+            SELECT last("slot") - last("root") as "tower_distance"
+              FROM "'$TESTNET_TAG'"."autogen"."tower-observed"
+              GROUP BY host_id)'
+
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
-    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation;$q_max_tower_distance_observed" |
+    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation;$q_max_tower_distance_observed;$q_last_tower_distance_observed" |
     python system-test/testnet-automation-json-parser.py >>"$RESULT_FILE"
 
   execution_step "Writing test results to ${RESULT_FILE}"
