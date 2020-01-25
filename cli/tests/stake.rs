@@ -119,6 +119,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -131,6 +132,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -207,6 +209,7 @@ fn test_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -219,6 +222,7 @@ fn test_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -300,6 +304,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
@@ -315,6 +320,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -328,6 +334,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
@@ -341,6 +348,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -428,6 +436,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
 
@@ -449,6 +458,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: Some(config_keypair.into()),
+        fee_payer: None,
     };
     process_command(&config).unwrap();
 
@@ -503,6 +513,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -528,6 +539,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -554,6 +566,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     let sign_reply = process_command(&config).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
@@ -567,6 +580,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -615,6 +629,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
+        fee_payer: None,
     };
     let sign_reply = process_command(&config).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
@@ -629,6 +644,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();

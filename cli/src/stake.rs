@@ -1,9 +1,9 @@
 use crate::{
     cli::{
-        build_balance_message, check_account_for_fee, check_unique_pubkeys,
+        build_balance_message, check_account_for_fee, check_unique_pubkeys, fee_payer_arg,
         log_instruction_custom_error, nonce_authority_arg, replace_signatures,
         required_lamports_from, return_signers, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult, SigningAuthority,
+        ProcessResult, SigningAuthority, FEE_PAYER_ARG,
     },
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::*,
@@ -175,6 +175,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .offline_args()
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
+                .arg(fee_payer_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-authorize-staker")
@@ -201,6 +202,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .offline_args()
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
+                .arg(fee_payer_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-authorize-withdrawer")
@@ -227,6 +229,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .offline_args()
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
+                .arg(fee_payer_arg())
         )
         .subcommand(
             SubCommand::with_name("deactivate-stake")
@@ -243,6 +246,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .offline_args()
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
+                .arg(fee_payer_arg())
         )
         .subcommand(
             SubCommand::with_name("split-stake")
@@ -407,6 +411,8 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
         SigningAuthority::new_from_matches(&matches, STAKE_AUTHORITY_ARG.name, signers.as_deref())?;
     let nonce_authority =
         SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+    let fee_payer =
+        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DelegateStake {
@@ -419,6 +425,7 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
             blockhash_query,
             nonce_account,
             nonce_authority,
+            fee_payer,
         },
         require_keypair,
     })
@@ -442,6 +449,8 @@ pub fn parse_stake_authorize(
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let nonce_authority =
         SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+    let fee_payer =
+        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeAuthorize {
@@ -454,6 +463,7 @@ pub fn parse_stake_authorize(
             blockhash_query,
             nonce_account,
             nonce_authority,
+            fee_payer,
         },
         require_keypair: true,
     })
@@ -503,6 +513,8 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
         SigningAuthority::new_from_matches(&matches, STAKE_AUTHORITY_ARG.name, signers.as_deref())?;
     let nonce_authority =
         SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+    let fee_payer =
+        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DeactivateStake {
@@ -513,6 +525,7 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
             blockhash_query,
             nonce_account,
             nonce_authority,
+            fee_payer,
         },
         require_keypair,
     })
@@ -661,6 +674,7 @@ pub fn process_stake_authorize(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&SigningAuthority>,
+    fee_payer: Option<&SigningAuthority>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
@@ -679,11 +693,12 @@ pub fn process_stake_authorize(
     let (nonce_authority, nonce_authority_pubkey) = nonce_authority
         .map(|a| (a.keypair(), a.pubkey()))
         .unwrap_or((&config.keypair, config.keypair.pubkey()));
+    let fee_payer = fee_payer.map(|f| f.keypair()).unwrap_or(&config.keypair);
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
             ixs,
-            Some(&config.keypair.pubkey()),
-            &[&config.keypair, nonce_authority, authority],
+            Some(&fee_payer.pubkey()),
+            &[fee_payer, nonce_authority, authority],
             nonce_account,
             &nonce_authority.pubkey(),
             recent_blockhash,
@@ -691,8 +706,8 @@ pub fn process_stake_authorize(
     } else {
         Transaction::new_signed_with_payer(
             ixs,
-            Some(&config.keypair.pubkey()),
-            &[&config.keypair, authority],
+            Some(&fee_payer.pubkey()),
+            &[fee_payer, authority],
             recent_blockhash,
         )
     };
@@ -717,6 +732,7 @@ pub fn process_stake_authorize(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -727,6 +743,7 @@ pub fn process_deactivate_stake_account(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&SigningAuthority>,
+    fee_payer: Option<&SigningAuthority>,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
@@ -740,11 +757,12 @@ pub fn process_deactivate_stake_account(
     let (nonce_authority, nonce_authority_pubkey) = nonce_authority
         .map(|a| (a.keypair(), a.pubkey()))
         .unwrap_or((&config.keypair, config.keypair.pubkey()));
+    let fee_payer = fee_payer.map(|f| f.keypair()).unwrap_or(&config.keypair);
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
             ixs,
-            Some(&config.keypair.pubkey()),
-            &[&config.keypair, nonce_authority, stake_authority],
+            Some(&fee_payer.pubkey()),
+            &[fee_payer, nonce_authority, stake_authority],
             nonce_account,
             &nonce_authority.pubkey(),
             recent_blockhash,
@@ -752,8 +770,8 @@ pub fn process_deactivate_stake_account(
     } else {
         Transaction::new_signed_with_payer(
             ixs,
-            Some(&config.keypair.pubkey()),
-            &[&config.keypair, stake_authority],
+            Some(&fee_payer.pubkey()),
+            &[fee_payer, stake_authority],
             recent_blockhash,
         )
     };
@@ -1090,6 +1108,7 @@ pub fn process_delegate_stake(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&SigningAuthority>,
+    fee_payer: Option<&SigningAuthority>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
@@ -1150,11 +1169,12 @@ pub fn process_delegate_stake(
     let (nonce_authority, nonce_authority_pubkey) = nonce_authority
         .map(|a| (a.keypair(), a.pubkey()))
         .unwrap_or((&config.keypair, config.keypair.pubkey()));
+    let fee_payer = fee_payer.map(|f| f.keypair()).unwrap_or(&config.keypair);
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
             ixs,
-            Some(&config.keypair.pubkey()),
-            &[&config.keypair, nonce_authority, stake_authority],
+            Some(&fee_payer.pubkey()),
+            &[fee_payer, nonce_authority, stake_authority],
             nonce_account,
             &nonce_authority.pubkey(),
             recent_blockhash,
@@ -1162,8 +1182,8 @@ pub fn process_delegate_stake(
     } else {
         Transaction::new_signed_with_payer(
             ixs,
-            Some(&config.keypair.pubkey()),
-            &[&config.keypair, stake_authority],
+            Some(&fee_payer.pubkey()),
+            &[fee_payer, stake_authority],
             recent_blockhash,
         )
     };
@@ -1237,6 +1257,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1263,6 +1284,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1292,6 +1314,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1323,6 +1346,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1356,6 +1380,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1382,6 +1407,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1417,6 +1443,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account_pubkey),
                     nonce_authority: Some(nonce_authority_keypair.into()),
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1537,6 +1564,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1570,6 +1598,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1596,6 +1625,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1625,6 +1655,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1652,6 +1683,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1684,6 +1716,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: false
             }
@@ -1718,6 +1751,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: false
             }
@@ -1792,6 +1826,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1820,6 +1855,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1846,6 +1882,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1870,6 +1907,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: true
             }
@@ -1899,6 +1937,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: false
             }
@@ -1930,6 +1969,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
+                    fee_payer: None,
                 },
                 require_keypair: false
             }

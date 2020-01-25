@@ -14,7 +14,7 @@ use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
-use solana_clap_utils::{input_parsers::*, input_validators::*};
+use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -50,6 +50,23 @@ use std::{
 };
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
+
+pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
+    name: "fee_payer",
+    long: "fee-payer",
+    help: "Specify the fee-payer account. This may be a keypair file, the ASK keyword \n\
+           or the pubkey of an offline signer, provided an appropriate --signer argument \n\
+           is also passed. Defaults to the client keypair.",
+};
+
+pub fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(FEE_PAYER_ARG.name)
+        .long(FEE_PAYER_ARG.long)
+        .takes_value(true)
+        .value_name("KEYPAIR or PUBKEY")
+        .validator(is_pubkey_or_keypair_or_ask_keyword)
+        .help(FEE_PAYER_ARG.help)
+}
 
 #[derive(Debug)]
 pub struct KeypairEq(Keypair);
@@ -264,6 +281,7 @@ pub enum CliCommand {
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<SigningAuthority>,
+        fee_payer: Option<SigningAuthority>,
     },
     DelegateStake {
         stake_account_pubkey: Pubkey,
@@ -275,6 +293,7 @@ pub enum CliCommand {
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<SigningAuthority>,
+        fee_payer: Option<SigningAuthority>,
     },
     SplitStake {
         stake_account_pubkey: Pubkey,
@@ -305,6 +324,7 @@ pub enum CliCommand {
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<SigningAuthority>,
+        fee_payer: Option<SigningAuthority>,
     },
     WithdrawStake {
         stake_account_pubkey: Pubkey,
@@ -1397,6 +1417,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash_query,
             nonce_account,
             ref nonce_authority,
+            ref fee_payer,
         } => process_deactivate_stake_account(
             &rpc_client,
             config,
@@ -1407,6 +1428,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash_query,
             *nonce_account,
             nonce_authority.as_ref(),
+            fee_payer.as_ref(),
         ),
         CliCommand::DelegateStake {
             stake_account_pubkey,
@@ -1418,6 +1440,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash_query,
             nonce_account,
             ref nonce_authority,
+            ref fee_payer,
         } => process_delegate_stake(
             &rpc_client,
             config,
@@ -1430,6 +1453,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash_query,
             *nonce_account,
             nonce_authority.as_ref(),
+            fee_payer.as_ref(),
         ),
         CliCommand::SplitStake {
             stake_account_pubkey,
@@ -1478,6 +1502,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash_query,
             nonce_account,
             ref nonce_authority,
+            ref fee_payer,
         } => process_stake_authorize(
             &rpc_client,
             config,
@@ -1490,6 +1515,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash_query,
             *nonce_account,
             nonce_authority.as_ref(),
+            fee_payer.as_ref(),
         ),
 
         CliCommand::WithdrawStake {
@@ -2803,6 +2829,7 @@ mod tests {
             blockhash_query: BlockhashQuery::default(),
             nonce_account: None,
             nonce_authority: None,
+            fee_payer: None,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
