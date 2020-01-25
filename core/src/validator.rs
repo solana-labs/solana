@@ -66,7 +66,7 @@ pub struct ValidatorConfig {
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
-    pub partition_cfg: Option<PartitionCfg>,
+    pub partition_cfg: Option<Arc<Mutex<PartitionCfg>>>,
     pub fixed_leader_schedule: Option<FixedSchedule>,
     pub wait_for_supermajority: bool,
     pub new_hard_forks: Option<Vec<Slot>>,

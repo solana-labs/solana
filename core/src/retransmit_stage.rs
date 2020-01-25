@@ -213,7 +213,7 @@ impl RetransmitStage {
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
-        cfg: Option<PartitionCfg>,
+        cfg: Option<Arc<Mutex<PartitionCfg>>>,
         shred_version: u16,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
@@ -245,7 +245,10 @@ impl RetransmitStage {
             move |id, shred, working_bank, last_root| {
                 let is_connected = cfg
                     .as_ref()
-                    .map(|x| x.is_connected(&working_bank, &leader_schedule_cache, shred))
+                    .map(|x| {
+                        let mut cfg = x.lock().unwrap();
+                        cfg.is_connected(&working_bank, &leader_schedule_cache, shred)
+                    })
                     .unwrap_or(true);
                 let rv = should_retransmit_and_persist(
                     shred,

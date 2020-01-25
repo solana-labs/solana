@@ -84,7 +84,7 @@ impl Tvu {
         completed_slots_receiver: CompletedSlotsReceiver,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         sigverify_disabled: bool,
-        cfg: Option<PartitionCfg>,
+        cfg: Option<Arc<Mutex<PartitionCfg>>>,
         shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
     ) -> Self {
