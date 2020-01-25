@@ -2092,6 +2092,7 @@ mod tests {
     use solana_sdk::{
         account::Account,
         nonce_state::{Meta as NonceMeta, NonceState},
+        pubkey::Pubkey,
         signature::{read_keypair_file, write_keypair_file},
         system_program,
         transaction::TransactionError,
@@ -2110,6 +2111,13 @@ mod tests {
         let _ignored = std::fs::remove_file(&path);
 
         path
+    }
+
+    #[test]
+    fn test_signing_authority_dummy_keypairs() {
+        let signing_authority: SigningAuthority = Pubkey::new(&[1u8; 32]).into();
+        assert_eq!(signing_authority, Pubkey::new(&[1u8; 32]).into());
+        assert_ne!(signing_authority, Pubkey::new(&[2u8; 32]).into());
     }
 
     #[test]
