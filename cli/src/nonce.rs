@@ -10,7 +10,7 @@ use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     hash::Hash,
-    nonce_state::NonceState,
+    nonce_state::{Meta, NonceState},
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
     system_instruction::{
@@ -558,7 +558,7 @@ pub fn process_show_nonce_account(
         ))
         .into());
     }
-    let print_account = |hash: Option<Hash>| {
+    let print_account = |data: Option<(Meta, Hash)>| {
         println!(
             "balance: {}",
             build_balance_message(nonce_account.lamports, use_lamports_unit, true)
@@ -571,15 +571,21 @@ pub fn process_show_nonce_account(
                 true
             )
         );
-        match hash {
-            Some(hash) => println!("nonce: {}", hash),
-            None => println!("nonce: uninitialized"),
+        match data {
+            Some((meta, hash)) => {
+                println!("nonce: {}", hash);
+                println!("authority: {}", meta.nonce_authority);
+            }
+            None => {
+                println!("nonce: uninitialized");
+                println!("authority: uninitialized");
+            }
         }
         Ok("".to_string())
     };
     match nonce_account.state() {
         Ok(NonceState::Uninitialized) => print_account(None),
-        Ok(NonceState::Initialized(_, hash)) => print_account(Some(hash)),
+        Ok(NonceState::Initialized(meta, hash)) => print_account(Some((meta, hash))),
         Err(err) => Err(CliError::RpcRequestError(format!(
             "Account data could not be deserialized to nonce state: {:?}",
             err
