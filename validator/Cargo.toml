@@ -12,7 +12,7 @@ homepage = "https://solana.com/"
 bzip2 = "0.3.3"
 clap = "2.33.0"
 chrono = { version = "0.4.10", features = ["serde"] }
-console = "0.9.1"
+console = "0.9.2"
 log = "0.4.8"
 indicatif = "0.13.0"
 rand = "0.6.5"
