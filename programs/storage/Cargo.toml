@@ -1,6 +1,6 @@
 [package]
 name = "solana-storage-program"
-version = "0.23.0"
+version = "0.24.0"
 description = "Solana Storage program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -16,8 +16,8 @@ num-derive = "0.3"
 num-traits = "0.2"
 serde = "1.0.104"
 serde_derive = "1.0.103"
-solana-logger = { path = "../../logger", version = "0.23.0" }
-solana-sdk = { path = "../../sdk", version = "0.23.0" }
+solana-logger = { path = "../../logger", version = "0.24.0" }
+solana-sdk = { path = "../../sdk", version = "0.24.0" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
