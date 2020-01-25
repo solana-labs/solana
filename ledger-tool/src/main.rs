@@ -514,6 +514,15 @@ fn open_database(ledger_path: &Path) -> Database {
     }
 }
 
+// This function is duplicated in validator/src/main.rs...
+fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
+    if matches.is_present(name) {
+        Some(values_t_or_exit!(matches, name, Slot))
+    } else {
+        None
+    }
+}
+
 fn load_bank_forks(
     arg_matches: &ArgMatches,
     ledger_path: &PathBuf,
@@ -554,23 +563,26 @@ fn main() {
         .takes_value(true)
         .default_value("0")
         .help("Start at this slot");
-
     let no_snapshot_arg = Arg::with_name("no_snapshot")
         .long("no-snapshot")
         .takes_value(false)
         .help("Do not start from a local snapshot if present");
-
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
         .takes_value(true)
         .help("Comma separated persistent accounts location");
-
     let halt_at_slot_arg = Arg::with_name("halt_at_slot")
         .long("halt-at-slot")
         .value_name("SLOT")
         .takes_value(true)
         .help("Halt processing at the given slot");
+    let hard_forks_arg = Arg::with_name("hard_forks")
+        .long("hard-fork")
+        .value_name("SLOT")
+        .multiple(true)
+        .takes_value(true)
+        .help("Add a hard fork at this slot");
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -627,6 +639,7 @@ fn main() {
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
+            .arg(&hard_forks_arg)
             .arg(
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
@@ -639,6 +652,7 @@ fn main() {
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
+            .arg(&hard_forks_arg)
             .arg(
                 Arg::with_name("include_all_votes")
                     .long("include-all-votes")
@@ -656,6 +670,7 @@ fn main() {
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&hard_forks_arg)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -758,8 +773,9 @@ fn main() {
         }
         ("verify", Some(arg_matches)) => {
             let process_options = ProcessOptions {
-                poh_verify: !arg_matches.is_present("skip_poh_verify"),
                 dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                poh_verify: !arg_matches.is_present("skip_poh_verify"),
                 ..ProcessOptions::default()
             };
 
@@ -773,8 +789,9 @@ fn main() {
             let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
 
             let process_options = ProcessOptions {
-                poh_verify: false,
                 dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                poh_verify: false,
                 ..ProcessOptions::default()
             };
 
@@ -812,8 +829,9 @@ fn main() {
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
 
             let process_options = ProcessOptions {
-                poh_verify: false,
                 dev_halt_at_slot: Some(snapshot_slot),
+                new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                poh_verify: false,
                 ..ProcessOptions::default()
             };
             match load_bank_forks(arg_matches, &ledger_path, process_options) {
