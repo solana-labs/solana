@@ -72,6 +72,7 @@ else
 
   query() {
     echo "$*"
+    set -x
     curl -XPOST \
       "$host/query?u=${username}&p=${password}" \
       --data-urlencode "q=$*"
