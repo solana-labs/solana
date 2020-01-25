@@ -1,5 +1,7 @@
 use bzip2::bufread::BzDecoder;
-use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
+use clap::{
+    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg, ArgMatches,
+};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
@@ -18,6 +20,7 @@ use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
+    rpc::JsonRpcConfig,
     validator::{Validator, ValidatorConfig},
 };
 use solana_ledger::bank_forks::SnapshotConfig;
@@ -341,6 +344,15 @@ fn download_ledger(
     Ok(())
 }
 
+// This function is duplicated in ledger-tool/src/main.rs...
+fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
+    if matches.is_present(name) {
+        Some(values_t_or_exit!(matches, name, Slot))
+    } else {
+        None
+    }
+}
+
 #[allow(clippy::cognitive_complexity)]
 pub fn main() {
     let default_dynamic_port_range =
@@ -577,6 +589,14 @@ pub fn main() {
                 .takes_value(false)
                 .help("After processing the ledger, wait until a supermajority of stake is visible on gossip before starting PoH"),
         )
+        .arg(
+            Arg::with_name("hard_forks")
+                .long("hard-fork")
+                .value_name("SLOT")
+                .multiple(true)
+                .takes_value(true)
+                .help("Add a hard fork at this slot"),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(
@@ -618,16 +638,26 @@ pub fn main() {
         exit(1);
     });
 
-    let mut validator_config = ValidatorConfig::default();
-    validator_config.dev_sigverify_disabled = matches.is_present("dev_no_sigverify");
-    validator_config.dev_halt_at_slot = value_t!(matches, "dev_halt_at_slot", Slot).ok();
-
-    validator_config.rpc_config.enable_validator_exit = matches.is_present("enable_rpc_exit");
-    validator_config.wait_for_supermajority = matches.is_present("wait_for_supermajority");
-
-    validator_config.rpc_config.faucet_addr = matches.value_of("rpc_faucet_addr").map(|address| {
-        solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
-    });
+    let mut validator_config = ValidatorConfig {
+        blockstream_unix_socket: matches
+            .value_of("blockstream_unix_socket")
+            .map(PathBuf::from),
+        dev_sigverify_disabled: matches.is_present("dev_no_sigverify"),
+        dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
+        expected_genesis_hash: matches
+            .value_of("expected_genesis_hash")
+            .map(|s| Hash::from_str(&s).unwrap()),
+        new_hard_forks: hardforks_of(&matches, "hard_forks"),
+        rpc_config: JsonRpcConfig {
+            enable_validator_exit: matches.is_present("enable_rpc_exit"),
+            faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
+                solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
+            }),
+        },
+        voting_disabled: matches.is_present("no_voting"),
+        wait_for_supermajority: matches.is_present("wait_for_supermajority"),
+        ..ValidatorConfig::default()
+    };
 
     let dynamic_port_range =
         solana_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
@@ -692,14 +722,6 @@ pub fn main() {
         warn!("--vote-signer-address ignored");
     }
 
-    validator_config.blockstream_unix_socket = matches
-        .value_of("blockstream_unix_socket")
-        .map(PathBuf::from);
-
-    validator_config.expected_genesis_hash = matches
-        .value_of("expected_genesis_hash")
-        .map(|s| Hash::from_str(&s).unwrap());
-
     println!(
         "{} {}",
         style(crate_name!()).bold(),
@@ -742,10 +764,6 @@ pub fn main() {
         ]
         .join(","),
     );
-
-    if matches.is_present("no_voting") {
-        validator_config.voting_disabled = true;
-    }
 
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
         // Disable voting because normal (=not bootstrapping) validator rejects
