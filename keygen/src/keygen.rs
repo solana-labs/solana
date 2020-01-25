@@ -21,7 +21,7 @@ use std::{
     path::Path,
     process::exit,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
     thread,
@@ -374,8 +374,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             output_keypair(&keypair, &outfile, "recovered")?;
         }
         ("grind", Some(matches)) => {
+            #[derive(Debug)]
+            struct GrindMatch {
+                front: String,
+                end: String,
+                count: u32,
+                found: AtomicUsize
+            }
+            // let grind_match = Arc::new(Vec::<GrindMatch>::new());
             let ignore_case = matches.is_present("ignore_case");
-       
 
             let starts_with = if matches.is_present("starts_with") {
                 values_t_or_exit!(matches, "starts_with", String)
@@ -386,6 +393,50 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 HashSet::new()
             };
 
+            let ends_with = if matches.is_present("ends_with") {
+                values_t_or_exit!(matches, "ends_with", String)
+                .into_iter()
+                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+            let mut ews = Vec::<GrindMatch>::new();
+            for ew in &ends_with {
+                let args: Vec<&str> = ew.split(':').collect(); 
+                ews.push(GrindMatch{front: "".to_string(), end: args[0].to_lowercase(), count: args[1].parse::<u32>().unwrap(), found: AtomicUsize::new(0)})
+            }
+            //         .into_iter()
+            //         .map(|s| if ignore_case { 
+            //             let args: Vec<&str> = s.split(':').collect();
+            //             GrindMatch{front: "".to_string(), end: args[0].to_lowercase(), count: args[1].parse::<u32>().unwrap(), found: AtomicUsize::new(0)} 
+            //         } else { 
+            //             let args: Vec<&str> = s.split(':').collect();
+            //             GrindMatch{front: "".to_string(), end: args[0].to_string(), count: args[1].parse::<u32>().unwrap(), found: AtomicUsize::new(0)} 
+            //         })
+            //         .collect()
+            // } else {
+            //     HashSet::new()
+            // };
+            println!("{:?}",ends_with);
+            println!("{:?}",ews);
+
+            let starts_and_ends_with = if matches.is_present("starts_and_ends_with") {
+                values_t_or_exit!(matches, "starts_and_ends_with", String)
+                    .into_iter()
+                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+
+            if starts_with.is_empty() && ends_with.is_empty() && starts_and_ends_with.is_empty() {
+                eprintln!(
+                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and_ends_with)"
+                );
+                exit(1);
+            }
+
             let attempts = Arc::new(AtomicU64::new(1));
             let found = Arc::new(AtomicU64::new(0));
             let start = Instant::now();
@@ -393,7 +444,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // println!(
             //     "Searching with {} threads for a pubkey containing {:?} or starting with {:?}",
             //     num_cpus::get(),
-            //     includes,
             //     starts_with
             // );
 
