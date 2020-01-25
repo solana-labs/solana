@@ -31,7 +31,7 @@ use solana_sdk::{
     message::Message,
     native_token::lamports_to_sol,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{keypair_from_seed, Keypair, KeypairUtil, Signature},
     system_instruction::{create_address_with_seed, SystemError, MAX_ADDRESS_SEED_LEN},
     system_transaction,
     transaction::{Transaction, TransactionError},
@@ -125,7 +125,7 @@ impl From<Keypair> for SigningAuthority {
 
 impl From<Pubkey> for SigningAuthority {
     fn from(pubkey: Pubkey) -> Self {
-        SigningAuthority::Offline(pubkey, Keypair::new())
+        SigningAuthority::Offline(pubkey, keypair_from_seed(pubkey.as_ref()).unwrap())
     }
 }
 
