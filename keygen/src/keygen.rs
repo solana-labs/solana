@@ -25,6 +25,7 @@ use std::{
         Arc,
     },
     thread,
+    time::Instant,
 };
 
 const NO_PASSPHRASE: &str = "";
@@ -217,7 +218,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple(true)
                         .validator(grind_validator_starts_with)
-                        .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u32"),
+                        .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
                     Arg::with_name("ends_with")
@@ -227,7 +228,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple(true)
                         .validator(grind_validator_ends_with)
-                        .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is Base58\nCOUNT type is u32"),
+                        .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
                     Arg::with_name("starts_and_ends_with")
@@ -237,7 +238,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple(true)
                         .validator(grind_validator_starts_and_ends_with)
-                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFFIX and SUFFIX type is Base58\nCOUNT type is u32"),
+                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFFIX and SUFFIX type is Base58\nCOUNT type is u64"),
                 ),
         )
         .subcommand(
@@ -373,7 +374,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             output_keypair(&keypair, &outfile, "recovered")?;
         }
         ("grind", Some(matches)) => {
-            #[derive(Debug)]
             struct Match {
                 starts: String,
                 ends: String,
@@ -444,13 +444,60 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 });
             }
 
+            let mut starting_messages = Vec::<String>::new();
+            for i in 0..grind_matches.len() {
+                if !grind_matches[i].starts.is_empty() && grind_matches[i].ends.is_empty() {
+                    let pk: String;
+                    if grind_matches[i].count > 1 {
+                        pk = "pubkeys".to_string();
+                    } else {
+                        pk = "pubkey".to_string();
+                    }
+                    starting_messages.push(format!("{} {} that starts with '{}'",grind_matches[i].count, pk,grind_matches[i].starts))
+                } else if grind_matches[i].starts.is_empty() && !grind_matches[i].ends.is_empty() {
+                    let pk: String;
+                    if grind_matches[i].count > 1 {
+                        pk = "pubkeys".to_string();
+                    } else {
+                        pk = "pubkey".to_string();
+                    }
+                    starting_messages.push(format!("{} {} that ends with '{}'",grind_matches[i].count, pk,grind_matches[i].ends))
+                } else if !grind_matches[i].starts.is_empty() && !grind_matches[i].ends.is_empty() {                       
+                    let pk: String;
+                    if grind_matches[i].count > 1 {
+                        pk = "pubkeys".to_string();
+                    } else {
+                        pk = "pubkey".to_string();
+                    }
+                    starting_messages.push(format!("{} {} that starts with '{}' and ends with '{}'",grind_matches[i].count, pk,grind_matches[i].starts,grind_matches[i].ends))
+                }
+            }
+            println!("Searching with {} threads for:", num_cpus::get());
+            for el in starting_messages {
+                println!("\t{}",el);
+            }
+
             let grind_matches_thread_safe = Arc::new(grind_matches);
+            let attempts = Arc::new(AtomicU64::new(1));
+            let found = Arc::new(AtomicU64::new(0));
+            let start = Instant::now();
 
             let _threads = (0..num_cpus::get())
                 .map(|_| {
+                    let attempts = attempts.clone();
+                    let found = found.clone();
                     let grind_matches_thread_safe = grind_matches_thread_safe.clone();
 
                     thread::spawn(move || loop {
+                        let attempts = attempts.fetch_add(1, Ordering::Relaxed);
+                        if attempts % 1_000_000 == 0 {
+                            println!(
+                                "Searched {} keypairs in {}s. {} matches found.",
+                                attempts,
+                                start.elapsed().as_secs(),
+                                found.load(Ordering::Relaxed),
+                            );
+                        }
                         let keypair = Keypair::new();
                         let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
                         if ignore_case {
@@ -465,23 +512,29 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             if !grind_matches_thread_safe[i].starts.is_empty() && 
                                 grind_matches_thread_safe[i].ends.is_empty() && 
                                 pubkey.starts_with(&grind_matches_thread_safe[i].starts) {
+                                    let _found = found.fetch_add(1, Ordering::Relaxed);
                                     grind_matches_thread_safe[i].found.fetch_add(1, Ordering::Relaxed);
+                                    println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
                                     write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
                             } else if grind_matches_thread_safe[i].starts.is_empty() && 
                                 !grind_matches_thread_safe[i].ends.is_empty() && 
                                 pubkey.ends_with(&grind_matches_thread_safe[i].ends) {
+                                    let _found = found.fetch_add(1, Ordering::Relaxed);
                                     grind_matches_thread_safe[i].found.fetch_add(1, Ordering::Relaxed);
+                                    println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
                                     write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
                             } else if !grind_matches_thread_safe[i].starts.is_empty() &&
                                 !grind_matches_thread_safe[i].ends.is_empty() && 
                                 pubkey.starts_with(&grind_matches_thread_safe[i].starts) && 
                                 pubkey.ends_with(&grind_matches_thread_safe[i].ends) {
+                                    let _found = found.fetch_add(1, Ordering::Relaxed);
                                     grind_matches_thread_safe[i].found.fetch_add(1, Ordering::Relaxed);
-                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
+                                    println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
+                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();       
                             }
                         }
                         if total_matches_found == grind_matches_thread_safe.len() {
-                            std::process::exit(0);
+                            exit(0);
                         }
                     });
                 })
