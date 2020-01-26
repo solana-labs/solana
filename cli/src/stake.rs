@@ -6,6 +6,7 @@ use crate::{
         CliConfig, CliError, ProcessResult, SigningAuthority,
     },
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
+    offline::*,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use console::style;
@@ -172,29 +173,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("The vote account to which the stake will be delegated")
                 )
                 .arg(stake_authority_arg())
-                .arg(
-                    Arg::with_name("sign_only")
-                        .long("sign-only")
-                        .takes_value(false)
-                        .help("Sign the transaction offline"),
-                )
-                .arg(
-                    Arg::with_name("signer")
-                        .long("signer")
-                        .value_name("PUBKEY=BASE58_SIG")
-                        .takes_value(true)
-                        .validator(is_pubkey_sig)
-                        .multiple(true)
-                        .help("Provide a public-key/signature pair for the transaction"),
-                )
-                .arg(
-                    Arg::with_name("blockhash")
-                        .long("blockhash")
-                        .value_name("BLOCKHASH")
-                        .takes_value(true)
-                        .validator(is_hash)
-                        .help("Use the supplied blockhash"),
-                )
+                .offline_args()
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
         )
@@ -220,29 +199,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("New authorized staker")
                 )
                 .arg(stake_authority_arg())
-                .arg(
-                    Arg::with_name("sign_only")
-                        .long("sign-only")
-                        .takes_value(false)
-                        .help("Sign the transaction offline"),
-                )
-                .arg(
-                    Arg::with_name("signer")
-                        .long("signer")
-                        .value_name("PUBKEY=BASE58_SIG")
-                        .takes_value(true)
-                        .validator(is_pubkey_sig)
-                        .multiple(true)
-                        .help("Provide a public-key/signature pair for the transaction"),
-                )
-                .arg(
-                    Arg::with_name("blockhash")
-                        .long("blockhash")
-                        .value_name("BLOCKHASH")
-                        .takes_value(true)
-                        .validator(is_hash)
-                        .help("Use the supplied blockhash"),
-                )
+                .offline_args()
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
         )
@@ -268,29 +225,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("New authorized withdrawer")
                 )
                 .arg(withdraw_authority_arg())
-                .arg(
-                    Arg::with_name("sign_only")
-                        .long("sign-only")
-                        .takes_value(false)
-                        .help("Sign the transaction offline"),
-                )
-                .arg(
-                    Arg::with_name("signer")
-                        .long("signer")
-                        .value_name("PUBKEY=BASE58_SIG")
-                        .takes_value(true)
-                        .validator(is_pubkey_sig)
-                        .multiple(true)
-                        .help("Provide a public-key/signature pair for the transaction"),
-                )
-                .arg(
-                    Arg::with_name("blockhash")
-                        .long("blockhash")
-                        .value_name("BLOCKHASH")
-                        .takes_value(true)
-                        .validator(is_hash)
-                        .help("Use the supplied blockhash"),
-                )
+                .offline_args()
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
         )
@@ -306,29 +241,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Stake account to be deactivated.")
                 )
                 .arg(stake_authority_arg())
-                .arg(
-                    Arg::with_name("sign_only")
-                        .long("sign-only")
-                        .takes_value(false)
-                        .help("Sign the transaction offline"),
-                )
-                .arg(
-                    Arg::with_name("signer")
-                        .long("signer")
-                        .value_name("PUBKEY=BASE58_SIG")
-                        .takes_value(true)
-                        .validator(is_pubkey_sig)
-                        .multiple(true)
-                        .help("Provide a public-key/signature pair for the transaction"),
-                )
-                .arg(
-                    Arg::with_name("blockhash")
-                        .long("blockhash")
-                        .value_name("BLOCKHASH")
-                        .takes_value(true)
-                        .validator(is_hash)
-                        .help("Use the supplied blockhash"),
-                )
+                .offline_args()
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
         )
@@ -437,9 +350,9 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let force = matches.is_present("force");
-    let sign_only = matches.is_present("sign_only");
-    let signers = pubkeys_sigs_of(&matches, "signer");
-    let blockhash = value_of(matches, "blockhash");
+    let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
+    let blockhash = value_of(matches, BLOCKHASH_ARG.name);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
@@ -487,8 +400,8 @@ pub fn parse_stake_authorize(
         StakeAuthorize::Staker => STAKE_AUTHORITY_ARG.name,
         StakeAuthorize::Withdrawer => WITHDRAW_AUTHORITY_ARG.name,
     };
-    let sign_only = matches.is_present("sign_only");
-    let signers = pubkeys_sigs_of(&matches, "signer");
+    let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
     let authority = if matches.is_present(authority_flag) {
         Some(SigningAuthority::new_from_matches(
             &matches,
@@ -498,7 +411,7 @@ pub fn parse_stake_authorize(
     } else {
         None
     };
-    let blockhash = value_of(matches, "blockhash");
+    let blockhash = value_of(matches, BLOCKHASH_ARG.name);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
         Some(SigningAuthority::new_from_matches(
@@ -528,9 +441,9 @@ pub fn parse_stake_authorize(
 
 pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let sign_only = matches.is_present("sign_only");
-    let signers = pubkeys_sigs_of(&matches, "signer");
-    let blockhash = value_of(matches, "blockhash");
+    let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
+    let blockhash = value_of(matches, BLOCKHASH_ARG.name);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
