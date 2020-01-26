@@ -261,6 +261,12 @@ fn test_offline_stake_delegation_and_deactivation() {
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&config_stake.keypair, tmp_file.as_file_mut()).unwrap();
 
+    let mut config_offline = CliConfig::default();
+    config_offline.json_rpc_url = String::default();
+    config_offline.command = CliCommand::ClusterVersion;
+    // Verfiy that we cannot reach the cluster
+    process_command(&config_offline).unwrap_err();
+
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
@@ -269,6 +275,15 @@ fn test_offline_stake_delegation_and_deactivation() {
     )
     .unwrap();
     check_balance(100_000, &rpc_client, &config_validator.keypair.pubkey());
+
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config_offline.keypair.pubkey(),
+        100_000,
+    )
+    .unwrap();
+    check_balance(100_000, &rpc_client, &config_offline.keypair.pubkey());
 
     // Create vote account
     config_validator.command = CliCommand::CreateVoteAccount {
@@ -294,7 +309,7 @@ fn test_offline_stake_delegation_and_deactivation() {
 
     // Delegate stake offline
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
-    config_validator.command = CliCommand::DelegateStake {
+    config_offline.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
         stake_authority: None,
@@ -306,10 +321,8 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: None,
         fee_payer: None,
     };
-    let sig_response = process_command(&config_validator).unwrap();
+    let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-
-    // Delegate stake online
     config_payer.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
@@ -326,7 +339,7 @@ fn test_offline_stake_delegation_and_deactivation() {
 
     // Deactivate stake offline
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
-    config_validator.command = CliCommand::DeactivateStake {
+    config_offline.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         stake_authority: None,
         sign_only: true,
@@ -336,10 +349,8 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: None,
         fee_payer: None,
     };
-    let sig_response = process_command(&config_validator).unwrap();
+    let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-
-    // Deactivate stake online
     config_payer.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         stake_authority: None,
@@ -483,6 +494,15 @@ fn test_stake_authorize() {
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
         .unwrap();
 
+    let mut config_offline = CliConfig::default();
+    config_offline.json_rpc_url = String::default();
+    config_offline.command = CliCommand::ClusterVersion;
+    // Verfiy that we cannot reach the cluster
+    process_command(&config_offline).unwrap_err();
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config_offline.keypair.pubkey(), 100_000)
+        .unwrap();
+
     // Create stake account, identity is authority
     let stake_keypair = Keypair::new();
     let stake_account_pubkey = stake_keypair.pubkey();
@@ -525,10 +545,9 @@ fn test_stake_authorize() {
     assert_eq!(current_authority, online_authority_pubkey);
 
     // Assign new offline stake authority
-    let offline_authority = Keypair::new();
-    let offline_authority_pubkey = offline_authority.pubkey();
+    let offline_authority_pubkey = config_offline.keypair.pubkey();
     let (offline_authority_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&offline_authority, tmp_file.as_file_mut()).unwrap();
+    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: offline_authority_pubkey,
@@ -556,7 +575,7 @@ fn test_stake_authorize() {
     let (nonced_authority_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonced_authority, tmp_file.as_file_mut()).unwrap();
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
-    config.command = CliCommand::StakeAuthorize {
+    config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: nonced_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
@@ -568,7 +587,7 @@ fn test_stake_authorize() {
         nonce_authority: None,
         fee_payer: None,
     };
-    let sign_reply = process_command(&config).unwrap();
+    let sign_reply = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
@@ -619,7 +638,7 @@ fn test_stake_authorize() {
     let online_authority_pubkey = online_authority.pubkey();
     let (_online_authority_file, mut tmp_file) = make_tmp_file();
     write_keypair(&online_authority, tmp_file.as_file_mut()).unwrap();
-    config.command = CliCommand::StakeAuthorize {
+    config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: online_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
@@ -631,7 +650,7 @@ fn test_stake_authorize() {
         nonce_authority: None,
         fee_payer: None,
     };
-    let sign_reply = process_command(&config).unwrap();
+    let sign_reply = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
     assert_eq!(blockhash, nonce_hash);
     config.command = CliCommand::StakeAuthorize {
