@@ -2,6 +2,7 @@ use crate::{
     cluster_query::*,
     display::{println_name_value, println_signers},
     nonce::{self, *},
+    offline::*,
     stake::*,
     storage::*,
     validator_info::*,
@@ -599,9 +600,9 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             let timestamp_pubkey = value_of(&matches, "timestamp_pubkey");
             let witnesses = values_of(&matches, "witness");
             let cancelable = matches.is_present("cancelable");
-            let sign_only = matches.is_present("sign_only");
-            let signers = pubkeys_sigs_of(&matches, "signer");
-            let blockhash = value_of(&matches, "blockhash");
+            let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+            let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
+            let blockhash = value_of(&matches, BLOCKHASH_ARG.name);
             let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
             let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
                 Some(SigningAuthority::new_from_matches(
@@ -1973,31 +1974,9 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .long("cancelable")
                         .takes_value(false),
                 )
-                .arg(
-                    Arg::with_name("sign_only")
-                        .long("sign-only")
-                        .takes_value(false)
-                        .help("Sign the transaction offline"),
-                )
+                .offline_args()
                 .arg(nonce_arg())
-                .arg(nonce_authority_arg())
-                .arg(
-                    Arg::with_name("signer")
-                        .long("signer")
-                        .value_name("PUBKEY=BASE58_SIG")
-                        .takes_value(true)
-                        .validator(is_pubkey_sig)
-                        .multiple(true)
-                        .help("Provide a public-key/signature pair for the transaction"),
-                )
-                .arg(
-                    Arg::with_name("blockhash")
-                        .long("blockhash")
-                        .value_name("BLOCKHASH")
-                        .takes_value(true)
-                        .validator(is_hash)
-                        .help("Use the supplied blockhash"),
-                ),
+                .arg(nonce_authority_arg()),
         )
         .subcommand(
             SubCommand::with_name("send-signature")

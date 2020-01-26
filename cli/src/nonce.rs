@@ -3,6 +3,7 @@ use crate::cli::{
     log_instruction_custom_error, required_lamports_from, CliCommand, CliCommandInfo, CliConfig,
     CliError, ProcessResult, SigningAuthority,
 };
+use crate::offline::BLOCKHASH_ARG;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
@@ -55,7 +56,7 @@ pub fn nonce_arg<'a, 'b>() -> Arg<'a, 'b> {
         .long(NONCE_ARG.long)
         .takes_value(true)
         .value_name("PUBKEY")
-        .requires("blockhash")
+        .requires(BLOCKHASH_ARG.name)
         .validator(is_pubkey)
         .help(NONCE_ARG.help)
 }
