@@ -300,7 +300,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     config_validator.command = CliCommand::CreateStakeAccount {
         stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
         seed: None,
-        staker: None,
+        staker: Some(config_offline.keypair.pubkey().into()),
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
@@ -326,14 +326,14 @@ fn test_offline_stake_delegation_and_deactivation() {
     config_payer.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
-        stake_authority: None,
+        stake_authority: Some(config_offline.keypair.pubkey().into()),
         force: true,
         sign_only: false,
         signers: Some(signers),
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: None,
+        fee_payer: Some(config_offline.keypair.pubkey().into()),
     };
     process_command(&config_payer).unwrap();
 
@@ -353,13 +353,13 @@ fn test_offline_stake_delegation_and_deactivation() {
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
     config_payer.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
-        stake_authority: None,
+        stake_authority: Some(config_offline.keypair.pubkey().into()),
         sign_only: false,
         signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: None,
+        fee_payer: Some(config_offline.keypair.pubkey().into()),
     };
     process_command(&config_payer).unwrap();
 
@@ -599,7 +599,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: None,
+        fee_payer: Some(offline_authority_pubkey.into()),
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -620,7 +620,7 @@ fn test_stake_authorize() {
     config.command = CliCommand::CreateNonceAccount {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
         seed: None,
-        nonce_authority: Some(config.keypair.pubkey()),
+        nonce_authority: Some(config_offline.keypair.pubkey()),
         lamports: minimum_nonce_balance,
     };
     process_command(&config).unwrap();
@@ -662,8 +662,8 @@ fn test_stake_authorize() {
         signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_account.pubkey()),
-        nonce_authority: None,
-        fee_payer: None,
+        nonce_authority: Some(offline_authority_pubkey.into()),
+        fee_payer: Some(offline_authority_pubkey.into()),
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
