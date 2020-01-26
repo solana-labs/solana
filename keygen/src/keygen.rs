@@ -380,7 +380,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 count: u64,
                 found: AtomicU64
             }
-            let mut total_matches_count = 0;
             let mut grind_matches = Vec::<Match>::new();
 
             let ignore_case = matches.is_present("ignore_case");
@@ -425,7 +424,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     count: args[1].parse::<u64>().unwrap(),
                     found: AtomicU64::new(0)
                 });
-                total_matches_count = total_matches_count + args[1].parse::<u64>().unwrap();
             }
             for ew in &ends_with_args {
                 let args: Vec<&str> = ew.split(':').collect(); 
@@ -435,7 +433,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     count: args[1].parse::<u64>().unwrap(),
                     found: AtomicU64::new(0)
                 });
-                total_matches_count = total_matches_count + args[1].parse::<u64>().unwrap();
             }
             for swew in &starts_and_ends_with_args {
                 let args: Vec<&str> = swew.split(':').collect(); 
@@ -445,7 +442,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     count: args[2].parse::<u64>().unwrap(),
                     found: AtomicU64::new(0)
                 });
-                total_matches_count = total_matches_count + args[2].parse::<u64>().unwrap();
             }
 
             let grind_matches_thread_safe = Arc::new(grind_matches);
@@ -453,7 +449,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let _threads = (0..num_cpus::get())
                 .map(|_| {
                     let grind_matches_thread_safe = grind_matches_thread_safe.clone();
-                    let total_matches_count = total_matches_count.clone();
 
                     thread::spawn(move || loop {
                         let keypair = Keypair::new();
@@ -485,8 +480,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                     write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
                             }
                         }
-                        println!("count: {} -- found: {}",total_matches_count,total_matches_found);
-                        if total_matches_found == total_matches_count {
+                        if total_matches_found == grind_matches_thread_safe.len() {
                             std::process::exit(0);
                         }
                     });
