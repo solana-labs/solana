@@ -1090,11 +1090,15 @@ mod tests {
             }
         );
         // Test Authorize Subcommand w/ sign-only
+        let blockhash = Hash::default();
+        let blockhash_string = format!("{}", blockhash);
         let test_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             &subcommand,
             &stake_account_string,
             &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
             "--sign-only",
         ]);
         assert_eq!(
@@ -1107,7 +1111,7 @@ mod tests {
                     authority: None,
                     sign_only: true,
                     signers: None,
-                    blockhash: None,
+                    blockhash: Some(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1123,6 +1127,8 @@ mod tests {
             &subcommand,
             &stake_account_string,
             &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
             "--signer",
             &signer,
         ]);
@@ -1136,7 +1142,7 @@ mod tests {
                     authority: None,
                     sign_only: false,
                     signers: Some(vec![(keypair.pubkey(), sig)]),
-                    blockhash: None,
+                    blockhash: Some(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1152,6 +1158,8 @@ mod tests {
             &subcommand,
             &stake_account_string,
             &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
             "--signer",
             &signer,
             "--signer",
@@ -1167,7 +1175,7 @@ mod tests {
                     authority: None,
                     sign_only: false,
                     signers: Some(vec![(keypair.pubkey(), sig), (keypair2.pubkey(), sig2),]),
-                    blockhash: None,
+                    blockhash: Some(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1175,8 +1183,6 @@ mod tests {
             }
         );
         // Test Authorize Subcommand w/ blockhash
-        let blockhash = Hash::default();
-        let blockhash_string = format!("{}", blockhash);
         let test_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             &subcommand,
@@ -1451,6 +1457,8 @@ mod tests {
             "delegate-stake",
             &stake_account_string,
             &vote_account_string,
+            "--blockhash",
+            &blockhash_string,
             "--sign-only",
         ]);
         assert_eq!(
@@ -1463,7 +1471,7 @@ mod tests {
                     force: false,
                     sign_only: true,
                     signers: None,
-                    blockhash: None,
+                    blockhash: Some(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1480,6 +1488,8 @@ mod tests {
             "delegate-stake",
             &stake_account_string,
             &vote_account_string,
+            "--blockhash",
+            &blockhash_string,
             "--signer",
             &signer1,
         ]);
@@ -1493,7 +1503,7 @@ mod tests {
                     force: false,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1)]),
-                    blockhash: None,
+                    blockhash: Some(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1510,6 +1520,8 @@ mod tests {
             "delegate-stake",
             &stake_account_string,
             &vote_account_string,
+            "--blockhash",
+            &blockhash_string,
             "--signer",
             &signer1,
             "--signer",
@@ -1525,7 +1537,7 @@ mod tests {
                     force: false,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
-                    blockhash: None,
+                    blockhash: Some(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1665,6 +1677,8 @@ mod tests {
             "test",
             "deactivate-stake",
             &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
             "--sign-only",
         ]);
         assert_eq!(
@@ -1675,7 +1689,7 @@ mod tests {
                     stake_authority: None,
                     sign_only: true,
                     signers: None,
-                    blockhash: None,
+                    blockhash: Some(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1691,6 +1705,8 @@ mod tests {
             "test",
             "deactivate-stake",
             &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
             "--signer",
             &signer1,
         ]);
@@ -1702,7 +1718,7 @@ mod tests {
                     stake_authority: None,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1)]),
-                    blockhash: None,
+                    blockhash: Some(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1718,6 +1734,8 @@ mod tests {
             "test",
             "deactivate-stake",
             &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
             "--signer",
             &signer1,
             "--signer",
@@ -1731,7 +1749,7 @@ mod tests {
                     stake_authority: None,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
-                    blockhash: None,
+                    blockhash: Some(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
