@@ -35,6 +35,7 @@ fn sign_only_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(SIGN_ONLY_ARG.name)
         .long(SIGN_ONLY_ARG.long)
         .takes_value(false)
+        .requires(BLOCKHASH_ARG.name)
         .help(SIGN_ONLY_ARG.help)
 }
 
@@ -44,6 +45,7 @@ fn signer_arg<'a, 'b>() -> Arg<'a, 'b> {
         .takes_value(true)
         .value_name("BASE58_PUBKEY=BASE58_SIG")
         .validator(is_pubkey_sig)
+        .requires(BLOCKHASH_ARG.name)
         .multiple(true)
         .help(SIGNER_ARG.help)
 }
