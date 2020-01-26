@@ -21,11 +21,10 @@ use std::{
     path::Path,
     process::exit,
     sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicU64, Ordering},
         Arc,
     },
     thread,
-    time::Instant,
 };
 
 const NO_PASSPHRASE: &str = "";
@@ -84,7 +83,7 @@ fn grind_validator_starts_with(v: String) -> Result<(), String> {
     if s.is_err() {
         return s;
     }
-    let count = args[1].parse::<u32>();
+    let count = args[1].parse::<u64>();
     if count.is_err() || count.unwrap() == 0 {
         return Err(String::from("Expected COUNT to be of type u32"));
     }
@@ -102,7 +101,7 @@ fn grind_validator_ends_with(v: String) -> Result<(), String> {
     if s.is_err() {
         return s;
     }
-    let count = args[1].parse::<u32>();
+    let count = args[1].parse::<u64>();
     if count.is_err() || count.unwrap() == 0 {
         return Err(String::from("Expected COUNT to be of type u32"));
     }
@@ -126,7 +125,7 @@ fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
     if s.is_err() {
         return s;
     }
-    let count = args[2].parse::<u32>();
+    let count = args[2].parse::<u64>();
     if count.is_err() || count.unwrap() == 0 {
         return Err(String::from("Expected COUNT to be a u32"));
     }
@@ -375,16 +374,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
         ("grind", Some(matches)) => {
             #[derive(Debug)]
-            struct GrindMatch {
-                front: String,
-                end: String,
-                count: u32,
-                found: AtomicUsize
+            struct Match {
+                starts: String,
+                ends: String,
+                count: u64,
+                found: AtomicU64
             }
-            // let grind_match = Arc::new(Vec::<GrindMatch>::new());
+            let mut total_matches_count = 0;
+            let mut grind_matches = Vec::<Match>::new();
+
             let ignore_case = matches.is_present("ignore_case");
 
-            let starts_with = if matches.is_present("starts_with") {
+            let starts_with_args = if matches.is_present("starts_with") {
                 values_t_or_exit!(matches, "starts_with", String)
                     .into_iter()
                     .map(|s| if ignore_case { s.to_lowercase() } else { s })
@@ -392,36 +393,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             } else {
                 HashSet::new()
             };
-
-            let ends_with = if matches.is_present("ends_with") {
+            let ends_with_args = if matches.is_present("ends_with") {
                 values_t_or_exit!(matches, "ends_with", String)
-                .into_iter()
+                    .into_iter()
                     .map(|s| if ignore_case { s.to_lowercase() } else { s })
                     .collect()
             } else {
                 HashSet::new()
             };
-            let mut ews = Vec::<GrindMatch>::new();
-            for ew in &ends_with {
-                let args: Vec<&str> = ew.split(':').collect(); 
-                ews.push(GrindMatch{front: "".to_string(), end: args[0].to_lowercase(), count: args[1].parse::<u32>().unwrap(), found: AtomicUsize::new(0)})
-            }
-            //         .into_iter()
-            //         .map(|s| if ignore_case { 
-            //             let args: Vec<&str> = s.split(':').collect();
-            //             GrindMatch{front: "".to_string(), end: args[0].to_lowercase(), count: args[1].parse::<u32>().unwrap(), found: AtomicUsize::new(0)} 
-            //         } else { 
-            //             let args: Vec<&str> = s.split(':').collect();
-            //             GrindMatch{front: "".to_string(), end: args[0].to_string(), count: args[1].parse::<u32>().unwrap(), found: AtomicUsize::new(0)} 
-            //         })
-            //         .collect()
-            // } else {
-            //     HashSet::new()
-            // };
-            println!("{:?}",ends_with);
-            println!("{:?}",ews);
-
-            let starts_and_ends_with = if matches.is_present("starts_and_ends_with") {
+            let starts_and_ends_with_args = if matches.is_present("starts_and_ends_with") {
                 values_t_or_exit!(matches, "starts_and_ends_with", String)
                     .into_iter()
                     .map(|s| if ignore_case { s.to_lowercase() } else { s })
@@ -430,55 +410,84 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 HashSet::new()
             };
 
-            if starts_with.is_empty() && ends_with.is_empty() && starts_and_ends_with.is_empty() {
+            if starts_with_args.is_empty() && ends_with_args.is_empty() && starts_and_ends_with_args.is_empty() {
                 eprintln!(
-                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and_ends_with)"
+                    "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with)"
                 );
                 exit(1);
             }
 
-            let attempts = Arc::new(AtomicU64::new(1));
-            let found = Arc::new(AtomicU64::new(0));
-            let start = Instant::now();
+            for sw in &starts_with_args {
+                let args: Vec<&str> = sw.split(':').collect(); 
+                grind_matches.push(Match{
+                    starts: args[0].to_lowercase(),
+                    ends: "".to_string(),
+                    count: args[1].parse::<u64>().unwrap(),
+                    found: AtomicU64::new(0)
+                });
+                total_matches_count = total_matches_count + args[1].parse::<u64>().unwrap();
+            }
+            for ew in &ends_with_args {
+                let args: Vec<&str> = ew.split(':').collect(); 
+                grind_matches.push(Match{
+                    starts: "".to_string(),
+                    ends: args[0].to_lowercase(),
+                    count: args[1].parse::<u64>().unwrap(),
+                    found: AtomicU64::new(0)
+                });
+                total_matches_count = total_matches_count + args[1].parse::<u64>().unwrap();
+            }
+            for swew in &starts_and_ends_with_args {
+                let args: Vec<&str> = swew.split(':').collect(); 
+                grind_matches.push(Match{
+                    starts: args[0].to_lowercase(),
+                    ends: args[1].to_lowercase(),
+                    count: args[2].parse::<u64>().unwrap(),
+                    found: AtomicU64::new(0)
+                });
+                total_matches_count = total_matches_count + args[2].parse::<u64>().unwrap();
+            }
 
-            // println!(
-            //     "Searching with {} threads for a pubkey containing {:?} or starting with {:?}",
-            //     num_cpus::get(),
-            //     starts_with
-            // );
+            let grind_matches_thread_safe = Arc::new(grind_matches);
 
             let _threads = (0..num_cpus::get())
                 .map(|_| {
-                    let attempts = attempts.clone();
-                    let found = found.clone();
-                    let starts_with = starts_with.clone();
+                    let grind_matches_thread_safe = grind_matches_thread_safe.clone();
+                    let total_matches_count = total_matches_count.clone();
 
                     thread::spawn(move || loop {
-                        let attempts = attempts.fetch_add(1, Ordering::Relaxed);
-                        if attempts % 5_000_000 == 0 {
-                            println!(
-                                "Searched {} keypairs in {}s. {} matches found",
-                                attempts,
-                                start.elapsed().as_secs(),
-                                found.load(Ordering::Relaxed),
-                            );
-                        }
-
                         let keypair = Keypair::new();
                         let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
-
                         if ignore_case {
                             pubkey = pubkey.to_lowercase();
                         }
-
-                        if starts_with.iter().any(|s| pubkey.starts_with(s)) {
-                            let found = found.fetch_add(1, Ordering::Relaxed);
-                            output_keypair(
-                                &keypair,
-                                &format!("{}.json", keypair.pubkey()),
-                                &format!("{}", found),
-                            )
-                            .unwrap();
+                        let mut total_matches_found = 0;
+                        for i in 0..grind_matches_thread_safe.len() {
+                            if grind_matches_thread_safe[i].count == grind_matches_thread_safe[i].found.load(Ordering::Relaxed) {
+                                total_matches_found = total_matches_found + 1;
+                                continue;
+                            }
+                            if !grind_matches_thread_safe[i].starts.is_empty() && 
+                                grind_matches_thread_safe[i].ends.is_empty() && 
+                                pubkey.starts_with(&grind_matches_thread_safe[i].starts) {
+                                    grind_matches_thread_safe[i].found.fetch_add(1, Ordering::Relaxed);
+                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
+                            } else if grind_matches_thread_safe[i].starts.is_empty() && 
+                                !grind_matches_thread_safe[i].ends.is_empty() && 
+                                pubkey.ends_with(&grind_matches_thread_safe[i].ends) {
+                                    grind_matches_thread_safe[i].found.fetch_add(1, Ordering::Relaxed);
+                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
+                            } else if !grind_matches_thread_safe[i].starts.is_empty() &&
+                                !grind_matches_thread_safe[i].ends.is_empty() && 
+                                pubkey.starts_with(&grind_matches_thread_safe[i].starts) && 
+                                pubkey.ends_with(&grind_matches_thread_safe[i].ends) {
+                                    grind_matches_thread_safe[i].found.fetch_add(1, Ordering::Relaxed);
+                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
+                            }
+                        }
+                        println!("count: {} -- found: {}",total_matches_count,total_matches_found);
+                        if total_matches_found == total_matches_count {
+                            std::process::exit(0);
                         }
                     });
                 })
