@@ -31,7 +31,7 @@ use solana_sdk::{
     message::Message,
     native_token::lamports_to_sol,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{keypair_from_seed, Keypair, KeypairUtil, Signature},
     system_instruction::{create_address_with_seed, SystemError, MAX_ADDRESS_SEED_LEN},
     system_transaction,
     transaction::{Transaction, TransactionError},
@@ -125,7 +125,7 @@ impl From<Keypair> for SigningAuthority {
 
 impl From<Pubkey> for SigningAuthority {
     fn from(pubkey: Pubkey) -> Self {
-        SigningAuthority::Offline(pubkey, Keypair::new())
+        SigningAuthority::Offline(pubkey, keypair_from_seed(pubkey.as_ref()).unwrap())
     }
 }
 
@@ -2092,6 +2092,7 @@ mod tests {
     use solana_sdk::{
         account::Account,
         nonce_state::{Meta as NonceMeta, NonceState},
+        pubkey::Pubkey,
         signature::{read_keypair_file, write_keypair_file},
         system_program,
         transaction::TransactionError,
@@ -2110,6 +2111,13 @@ mod tests {
         let _ignored = std::fs::remove_file(&path);
 
         path
+    }
+
+    #[test]
+    fn test_signing_authority_dummy_keypairs() {
+        let signing_authority: SigningAuthority = Pubkey::new(&[1u8; 32]).into();
+        assert_eq!(signing_authority, Pubkey::new(&[1u8; 32]).into());
+        assert_ne!(signing_authority, Pubkey::new(&[2u8; 32]).into());
     }
 
     #[test]
