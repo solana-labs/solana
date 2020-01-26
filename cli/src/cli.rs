@@ -1871,7 +1871,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         )
         .subcommand(
             SubCommand::with_name("create-address-with-seed")
-                .about("Generate a dervied account address with a seed")
+                .about("Generate a derived account address with a seed")
                 .arg(
                     Arg::with_name("seed")
                         .index(1)

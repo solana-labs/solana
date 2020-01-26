@@ -212,7 +212,7 @@ SUBCOMMANDS:
     cluster-version                     Get the version of the cluster entrypoint
     config                              Solana command-line tool configuration settings
     confirm                             Confirm transaction by signature
-    create-address-with-seed            Generate a dervied account address with a seed
+    create-address-with-seed            Generate a derived account address with a seed
     create-archiver-storage-account     Create an archiver storage account
     create-nonce-account                Create a nonce account
     create-stake-account                Create a stake account
@@ -618,7 +618,7 @@ ARGS:
 #### solana-create-address-with-seed
 ```text
 solana-create-address-with-seed 
-Generate a dervied account address with a seed
+Generate a derived account address with a seed
 
 USAGE:
     solana create-address-with-seed [FLAGS] [OPTIONS] <SEED_STRING> <PROGRAM_ID>
