@@ -2362,12 +2362,16 @@ mod tests {
         );
 
         // Test Pay Subcommand w/ sign-only
+        let blockhash = Hash::default();
+        let blockhash_string = format!("{}", blockhash);
         let test_pay = test_commands.clone().get_matches_from(vec![
             "test",
             "pay",
             &pubkey_string,
             "50",
             "lamports",
+            "--blockhash",
+            &blockhash_string,
             "--sign-only",
         ]);
         assert_eq!(
@@ -2376,6 +2380,7 @@ mod tests {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50,
                     to: pubkey,
+                    blockhash: Some(blockhash),
                     sign_only: true,
                     ..PayCommand::default()
                 }),
@@ -2393,6 +2398,8 @@ mod tests {
             &pubkey_string,
             "50",
             "lamports",
+            "--blockhash",
+            &blockhash_string,
             "--signer",
             &signer1,
         ]);
@@ -2402,6 +2409,7 @@ mod tests {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50,
                     to: pubkey,
+                    blockhash: Some(blockhash),
                     signers: Some(vec![(key1, sig1)]),
                     ..PayCommand::default()
                 }),
@@ -2419,6 +2427,8 @@ mod tests {
             &pubkey_string,
             "50",
             "lamports",
+            "--blockhash",
+            &blockhash_string,
             "--signer",
             &signer1,
             "--signer",
@@ -2430,6 +2440,7 @@ mod tests {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50,
                     to: pubkey,
+                    blockhash: Some(blockhash),
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
                     ..PayCommand::default()
                 }),
@@ -2438,8 +2449,6 @@ mod tests {
         );
 
         // Test Pay Subcommand w/ Blockhash
-        let blockhash = Hash::default();
-        let blockhash_string = format!("{}", blockhash);
         let test_pay = test_commands.clone().get_matches_from(vec![
             "test",
             "pay",
