@@ -1,13 +1,11 @@
 use assert_matches::assert_matches;
 use log::*;
 use serial_test_derive::serial;
+use solana_client::rpc_client::RpcClient;
 use solana_client::thin_client::create_client;
 use solana_core::{
-    broadcast_stage::BroadcastStageType,
-    consensus::VOTE_THRESHOLD_DEPTH,
-    gossip_service::discover_cluster,
-    partition_cfg::{Partition, PartitionCfg},
-    validator::ValidatorConfig,
+    broadcast_stage::BroadcastStageType, consensus::VOTE_THRESHOLD_DEPTH,
+    gossip_service::discover_cluster, validator::ValidatorConfig,
 };
 use solana_ledger::{
     bank_forks::SnapshotConfig, blockstore::Blockstore, leader_schedule::FixedSchedule,
@@ -27,7 +25,7 @@ use solana_sdk::{
     poh_config::PohConfig,
     signature::{Keypair, KeypairUtil},
 };
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::{HashMap, HashSet},
     fs, iter,
@@ -248,7 +246,7 @@ fn run_cluster_partition(
     };
 
     let validator_pubkeys: Vec<_> = validator_keys.iter().map(|v| v.pubkey()).collect();
-    let mut config = ClusterConfig {
+    let config = ClusterConfig {
         cluster_lamports,
         node_stakes,
         validator_configs: vec![validator_config.clone(); num_nodes],
@@ -256,46 +254,47 @@ fn run_cluster_partition(
         ..ClusterConfig::default()
     };
 
-    // Wait until the leader schedule produces an epoch with > VOTE_THRESHOLD_DEPTH slots
-    let mut validator_index = 0;
-    for (i, partition) in partitions.iter().enumerate() {
-        for _ in partition.iter() {
-            let mut p1 = Partition::default();
-            p1.num_partitions = partitions.len();
-            p1.my_partition = i;
-            p1.partition_start_epoch_length = 1 << VOTE_THRESHOLD_DEPTH;
-            p1.partition_duration_ms = leader_schedule_time as u64;
-            config.validator_configs[validator_index].partition_cfg =
-                Some(Arc::new(Mutex::new(PartitionCfg::new(vec![p1]))));
-            validator_index += 1;
-        }
-    }
+    let enable_partition = Some(Arc::new(AtomicBool::new(true)));
     info!(
         "PARTITION_TEST starting cluster with {:?} partitions slots_per_epoch: {}",
         partitions, config.slots_per_epoch,
     );
     let mut cluster = LocalCluster::new(&config);
 
-    info!("PARTITION_TEST sleeping until partition end",);
+    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
+
+    info!("PARTITION_TEST sleeping until partition starting condition",);
     loop {
-        let mut all_done = true;
-        for validator_config in &config.validator_configs {
-            let partition_cfg = validator_config
-                .partition_cfg
-                .as_ref()
-                .unwrap()
-                .lock()
-                .unwrap();
-            if !partition_cfg.all_partitions_done() {
-                all_done = false;
+        let mut reached_epoch = true;
+        for node in &cluster_nodes {
+            let node_client = RpcClient::new_socket(node.rpc);
+            if let Ok(epoch_info) = node_client.get_epoch_info() {
+                info!("slots_per_epoch: {:?}", epoch_info);
+                if epoch_info.slots_in_epoch <= (1 << VOTE_THRESHOLD_DEPTH) {
+                    reached_epoch = false;
+                    break;
+                }
+            } else {
+                reached_epoch = false;
             }
         }
-        if all_done {
+
+        if reached_epoch {
+            info!("PARTITION_TEST start partition");
+            enable_partition
+                .clone()
+                .unwrap()
+                .store(false, Ordering::Relaxed);
             break;
         } else {
-            sleep(Duration::from_millis(10));
+            sleep(Duration::from_millis(100));
         }
     }
+    sleep(Duration::from_millis(leader_schedule_time));
+
+    info!("PARTITION_TEST remove partition");
+    enable_partition.unwrap().store(true, Ordering::Relaxed);
+
     let mut dead_nodes = HashSet::new();
     let mut alive_node_contact_infos = vec![];
     let should_exits: Vec<_> = partitions
