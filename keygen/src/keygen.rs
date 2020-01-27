@@ -469,17 +469,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 total_matches_found = total_matches_found + 1;
                                 continue;
                             }
-                            if (!grind_matches_thread_safe[i].starts.is_empty() && 
-                                grind_matches_thread_safe[i].ends.is_empty() && 
-                                pubkey.starts_with(&grind_matches_thread_safe[i].starts)) || 
+                            if (!grind_matches_thread_safe[i].starts.is_empty() &&
+                                grind_matches_thread_safe[i].ends.is_empty() &&
+                                pubkey.starts_with(&grind_matches_thread_safe[i].starts)) ||
                                 
-                                (grind_matches_thread_safe[i].starts.is_empty() && 
-                                !grind_matches_thread_safe[i].ends.is_empty() && 
-                                pubkey.ends_with(&grind_matches_thread_safe[i].ends)) || 
+                                (grind_matches_thread_safe[i].starts.is_empty() &&
+                                !grind_matches_thread_safe[i].ends.is_empty() &&
+                                pubkey.ends_with(&grind_matches_thread_safe[i].ends)) ||
                                 
                                 (!grind_matches_thread_safe[i].starts.is_empty() &&
-                                !grind_matches_thread_safe[i].ends.is_empty() && 
-                                pubkey.starts_with(&grind_matches_thread_safe[i].starts) && 
+                                !grind_matches_thread_safe[i].ends.is_empty() &&
+                                pubkey.starts_with(&grind_matches_thread_safe[i].starts) &&
                                 pubkey.ends_with(&grind_matches_thread_safe[i].ends))
                             {
                                     let _found = found.fetch_add(1, Ordering::Relaxed);
