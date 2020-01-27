@@ -489,8 +489,8 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         ("stake-authorize-withdrawer", Some(matches)) => {
             parse_stake_authorize(matches, StakeAuthorize::Withdrawer)
         }
-        ("show-stake-account", Some(matches)) => parse_show_stake_account(matches),
-        ("show-stake-history", Some(matches)) => parse_show_stake_history(matches),
+        ("stake-account", Some(matches)) => parse_show_stake_account(matches),
+        ("stake-history", Some(matches)) => parse_show_stake_history(matches),
         // Storage Commands
         ("create-archiver-storage-account", Some(matches)) => {
             parse_storage_create_archiver_account(matches)
