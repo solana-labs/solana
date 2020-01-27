@@ -2901,7 +2901,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::cognitive_complexity)]
-    fn test_rent() {
+    fn test_rent_complex() {
         let mock_program_id = Pubkey::new(&[2u8; 32]);
 
         let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
@@ -2941,6 +2941,8 @@ mod tests {
             generic_rent_due_for_system_account,
         );
 
+        let magic_rent_number = 131; // yuck, derive this value programmatically one day
+
         let t1 = system_transaction::transfer(
             &keypairs[0],
             &keypairs[1].pubkey(),
@@ -2962,7 +2964,7 @@ mod tests {
         let t4 = system_transaction::transfer(
             &keypairs[6],
             &keypairs[7].pubkey(),
-            48991,
+            generic_rent_due_for_system_account + 1,
             genesis_config.hash(),
         );
         let t5 = system_transaction::transfer(
@@ -3002,19 +3004,19 @@ mod tests {
 
         let mut rent_collected = 0;
 
-        // 48992 - 48990(Rent) - 1(transfer)
+        // 48992 - generic_rent_due_for_system_account(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[0].pubkey()), 1);
         rent_collected += generic_rent_due_for_system_account;
 
-        // 48992 - 48990(Rent) + 1(transfer)
+        // 48992 - generic_rent_due_for_system_account(Rent) + 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[1].pubkey()), 3);
         rent_collected += generic_rent_due_for_system_account;
 
-        // 48992 - 48990(Rent) - 1(transfer)
+        // 48992 - generic_rent_due_for_system_account(Rent) - 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[2].pubkey()), 1);
         rent_collected += generic_rent_due_for_system_account;
 
-        // 48992 - 48990(Rent) + 1(transfer)
+        // 48992 - generic_rent_due_for_system_account(Rent) + 1(transfer)
         assert_eq!(bank.get_balance(&keypairs[3].pubkey()), 3);
         rent_collected += generic_rent_due_for_system_account;
 
@@ -3022,45 +3024,46 @@ mod tests {
         assert_eq!(bank.get_balance(&keypairs[4].pubkey()), 10);
         assert_eq!(bank.get_balance(&keypairs[5].pubkey()), 10);
 
-        // 98004 - 48990(Rent) - 48991(transfer)
+        // 98004 - generic_rent_due_for_system_account(Rent) - 48991(transfer)
         assert_eq!(bank.get_balance(&keypairs[6].pubkey()), 23);
         rent_collected += generic_rent_due_for_system_account;
 
-        // 0 + 48990(transfer) - 917(Rent)
+        // 0 + 48990(transfer) - magic_rent_number(Rent)
         assert_eq!(
             bank.get_balance(&keypairs[7].pubkey()),
-            generic_rent_due_for_system_account + 1 - 917
+            generic_rent_due_for_system_account + 1 - magic_rent_number
         );
+
         // Epoch should be updated
         // Rent deducted on store side
         let account8 = bank.get_account(&keypairs[7].pubkey()).unwrap();
         // Epoch should be set correctly.
         assert_eq!(account8.rent_epoch, bank.epoch + 1);
-        rent_collected += 917;
+        rent_collected += magic_rent_number;
 
-        // 49921 - 48900(Rent) - 929(Transfer)
+        // 49921 - generic_rent_due_for_system_account(Rent) - 929(Transfer)
         assert_eq!(bank.get_balance(&keypairs[8].pubkey()), 2);
         rent_collected += generic_rent_due_for_system_account;
 
         let account10 = bank.get_account(&keypairs[9].pubkey()).unwrap();
         // Account was overwritten at load time, since it didn't have sufficient balance to pay rent
-        // Then, at store time we deducted 917 rent for the current epoch, once it has balance
+        // Then, at store time we deducted `magic_rent_number` rent for the current epoch, once it has balance
         assert_eq!(account10.rent_epoch, bank.epoch + 1);
         // account data is blank now
         assert_eq!(account10.data.len(), 0);
-        // 10 - 10(Rent) + 929(Transfer) - 917(Rent)
-        assert_eq!(account10.lamports, 12);
-        rent_collected += 927;
+        // 10 - 10(Rent) + 929(Transfer) - magic_rent_number(Rent)
+        assert_eq!(account10.lamports, 929 - magic_rent_number);
+        rent_collected += magic_rent_number + 10;
 
-        // 48993 - 48990(Rent)
+        // 48993 - generic_rent_due_for_system_account(Rent)
         assert_eq!(bank.get_balance(&keypairs[10].pubkey()), 3);
         rent_collected += generic_rent_due_for_system_account;
 
-        // 48993 - 48990(Rent) + 1(Addition by program)
+        // 48993 - generic_rent_due_for_system_account(Rent) + 1(Addition by program)
         assert_eq!(bank.get_balance(&keypairs[11].pubkey()), 4);
         rent_collected += generic_rent_due_for_system_account;
 
-        // 48993 - 48990(Rent) - 1(Deduction by program)
+        // 48993 - generic_rent_due_for_system_account(Rent) - 1(Deduction by program)
         assert_eq!(bank.get_balance(&keypairs[12].pubkey()), 2);
         rent_collected += generic_rent_due_for_system_account;
 

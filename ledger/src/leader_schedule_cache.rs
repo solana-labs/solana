@@ -396,11 +396,11 @@ mod tests {
         );
         assert_eq!(
             cache.next_leader_slot(&pubkey, 0, &bank, None),
-            Some((1, 6047999))
+            Some((1, 863999))
         );
         assert_eq!(
             cache.next_leader_slot(&pubkey, 1, &bank, None),
-            Some((2, 6047999))
+            Some((2, 863999))
         );
         assert_eq!(
             cache.next_leader_slot(
