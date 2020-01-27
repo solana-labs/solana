@@ -78,7 +78,9 @@ fn grind_validator_starts_with(v: String) -> Result<(), String> {
         return Err(String::from("Expected : between PREFIX and COUNT"));
     }
     let args: Vec<&str> = v.split(':').collect();
-    bs58::decode(&args[0]).into_vec().map_err(|err| format!("{}: {:?}", args[0], err))?;
+    bs58::decode(&args[0])
+        .into_vec()
+        .map_err(|err| format!("{}: {:?}", args[0], err))?;
     let count = args[1].parse::<u64>();
     if count.is_err() || count.unwrap() == 0 {
         return Err(String::from("Expected COUNT to be of type u64"));
@@ -91,7 +93,9 @@ fn grind_validator_ends_with(v: String) -> Result<(), String> {
         return Err(String::from("Expected : between SUFFIX and COUNT"));
     }
     let args: Vec<&str> = v.split(':').collect();
-    bs58::decode(&args[0]).into_vec().map_err(|err| format!("{}: {:?}", args[0], err))?;
+    bs58::decode(&args[0])
+        .into_vec()
+        .map_err(|err| format!("{}: {:?}", args[0], err))?;
     let count = args[1].parse::<u64>();
     if count.is_err() || count.unwrap() == 0 {
         return Err(String::from("Expected COUNT to be of type u64"));
@@ -101,11 +105,17 @@ fn grind_validator_ends_with(v: String) -> Result<(), String> {
 
 fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
     if v.matches(":").count() != 2 || (v.starts_with(":") || v.ends_with(":")) {
-        return Err(String::from("Expected : between PREFIX and SUFFIX and COUNT"));
+        return Err(String::from(
+            "Expected : between PREFIX and SUFFIX and COUNT",
+        ));
     }
     let args: Vec<&str> = v.split(':').collect();
-    bs58::decode(&args[0]).into_vec().map_err(|err| format!("{}: {:?}", args[0], err))?;
-    bs58::decode(&args[1]).into_vec().map_err(|err| format!("{}: {:?}", args[1], err))?;
+    bs58::decode(&args[0])
+        .into_vec()
+        .map_err(|err| format!("{}: {:?}", args[0], err))?;
+    bs58::decode(&args[1])
+        .into_vec()
+        .map_err(|err| format!("{}: {:?}", args[1], err))?;
     let count = args[2].parse::<u64>();
     if count.is_err() || count.unwrap() == 0 {
         return Err(String::from("Expected COUNT to be a u64"));
@@ -357,7 +367,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             struct Match {
                 starts: String,
                 ends: String,
-                count: AtomicU64
+                count: AtomicU64,
             }
             let mut grind_matches = Vec::<Match>::new();
 
@@ -388,7 +398,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 HashSet::new()
             };
 
-            if starts_with_args.is_empty() && ends_with_args.is_empty() && starts_and_ends_with_args.is_empty() {
+            if starts_with_args.is_empty()
+                && ends_with_args.is_empty()
+                && starts_and_ends_with_args.is_empty()
+            {
                 eprintln!(
                     "Error: No keypair search criteria provided (--starts-with or --ends-with or --starts-and-ends-with)"
                 );
@@ -396,27 +409,27 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
 
             for sw in &starts_with_args {
-                let args: Vec<&str> = sw.split(':').collect(); 
-                grind_matches.push(Match{
+                let args: Vec<&str> = sw.split(':').collect();
+                grind_matches.push(Match {
                     starts: args[0].to_lowercase(),
                     ends: "".to_string(),
-                    count: AtomicU64::new(args[1].parse::<u64>().unwrap())
+                    count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
                 });
             }
             for ew in &ends_with_args {
-                let args: Vec<&str> = ew.split(':').collect(); 
-                grind_matches.push(Match{
+                let args: Vec<&str> = ew.split(':').collect();
+                grind_matches.push(Match {
                     starts: "".to_string(),
                     ends: args[0].to_lowercase(),
-                    count: AtomicU64::new(args[1].parse::<u64>().unwrap())
+                    count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
                 });
             }
             for swew in &starts_and_ends_with_args {
-                let args: Vec<&str> = swew.split(':').collect(); 
-                grind_matches.push(Match{
+                let args: Vec<&str> = swew.split(':').collect();
+                grind_matches.push(Match {
                     starts: args[0].to_lowercase(),
                     ends: args[1].to_lowercase(),
-                    count: AtomicU64::new(args[2].parse::<u64>().unwrap())
+                    count: AtomicU64::new(args[2].parse::<u64>().unwrap()),
                 });
             }
 
@@ -434,7 +447,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     st = "starts".to_string();
                     en = "ends".to_string();
                 }
-                println!("\t{} {} that {} with '{}' and {} with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,st,grind_matches[i].starts,en,grind_matches[i].ends);
+                println!(
+                    "\t{} {} that {} with '{}' and {} with '{}'",
+                    grind_matches[i].count.load(Ordering::Relaxed),
+                    pk,
+                    st,
+                    grind_matches[i].starts,
+                    en,
+                    grind_matches[i].ends
+                );
             }
 
             let grind_matches_thread_safe = Arc::new(grind_matches);
@@ -469,23 +490,27 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 total_matches_found = total_matches_found + 1;
                                 continue;
                             }
-                            if (!grind_matches_thread_safe[i].starts.is_empty() &&
-                                grind_matches_thread_safe[i].ends.is_empty() &&
-                                pubkey.starts_with(&grind_matches_thread_safe[i].starts)) ||
-                                
-                                (grind_matches_thread_safe[i].starts.is_empty() &&
-                                !grind_matches_thread_safe[i].ends.is_empty() &&
-                                pubkey.ends_with(&grind_matches_thread_safe[i].ends)) ||
-                                
-                                (!grind_matches_thread_safe[i].starts.is_empty() &&
-                                !grind_matches_thread_safe[i].ends.is_empty() &&
-                                pubkey.starts_with(&grind_matches_thread_safe[i].starts) &&
-                                pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                            if (!grind_matches_thread_safe[i].starts.is_empty()
+                                && grind_matches_thread_safe[i].ends.is_empty()
+                                && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
+                                || (grind_matches_thread_safe[i].starts.is_empty()
+                                    && !grind_matches_thread_safe[i].ends.is_empty()
+                                    && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                                || (!grind_matches_thread_safe[i].starts.is_empty()
+                                    && !grind_matches_thread_safe[i].ends.is_empty()
+                                    && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
+                                    && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
                             {
-                                    let _found = found.fetch_add(1, Ordering::Relaxed);
-                                    grind_matches_thread_safe[i].count.fetch_sub(1, Ordering::Relaxed);
-                                    println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
-                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
+                                let _found = found.fetch_add(1, Ordering::Relaxed);
+                                grind_matches_thread_safe[i]
+                                    .count
+                                    .fetch_sub(1, Ordering::Relaxed);
+                                println!(
+                                    "Wrote keypair to {}",
+                                    &format!("{}.json", keypair.pubkey())
+                                );
+                                write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey()))
+                                    .unwrap();
                             }
                         }
                         if total_matches_found == grind_matches_thread_safe.len() {
