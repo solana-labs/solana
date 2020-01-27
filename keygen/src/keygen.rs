@@ -423,12 +423,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             println!("Searching with {} threads for:", num_cpus::get());
             for i in 0..grind_matches.len() {
                 let pk: String;
+                let st: String;
+                let en: String;
                 if grind_matches[i].count.load(Ordering::Relaxed) > 1 {
                     pk = "pubkeys".to_string();
+                    st = "start".to_string();
+                    en = "end".to_string();
                 } else {
                     pk = "pubkey".to_string();
+                    st = "starts".to_string();
+                    en = "ends".to_string();
                 }
-                println!("\t{} {} that starts with '{}' and ends with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,grind_matches[i].starts,grind_matches[i].ends);
+                println!("\t{} {} that {} with '{}' and {} with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,st,grind_matches[i].starts,en,grind_matches[i].ends);
             }
 
             let grind_matches_thread_safe = Arc::new(grind_matches);
@@ -463,28 +469,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 total_matches_found = total_matches_found + 1;
                                 continue;
                             }
-                            if !grind_matches_thread_safe[i].starts.is_empty() && 
+                            if (!grind_matches_thread_safe[i].starts.is_empty() && 
                                 grind_matches_thread_safe[i].ends.is_empty() && 
-                                pubkey.starts_with(&grind_matches_thread_safe[i].starts) {
-                                    let _found = found.fetch_add(1, Ordering::Relaxed);
-                                    grind_matches_thread_safe[i].count.fetch_sub(1, Ordering::Relaxed);
-                                    println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
-                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
-                            } else if grind_matches_thread_safe[i].starts.is_empty() && 
+                                pubkey.starts_with(&grind_matches_thread_safe[i].starts)) || 
+                                
+                                (grind_matches_thread_safe[i].starts.is_empty() && 
                                 !grind_matches_thread_safe[i].ends.is_empty() && 
-                                pubkey.ends_with(&grind_matches_thread_safe[i].ends) {
-                                    let _found = found.fetch_add(1, Ordering::Relaxed);
-                                    grind_matches_thread_safe[i].count.fetch_sub(1, Ordering::Relaxed);
-                                    println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
-                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
-                            } else if !grind_matches_thread_safe[i].starts.is_empty() &&
+                                pubkey.ends_with(&grind_matches_thread_safe[i].ends)) || 
+                                
+                                (!grind_matches_thread_safe[i].starts.is_empty() &&
                                 !grind_matches_thread_safe[i].ends.is_empty() && 
                                 pubkey.starts_with(&grind_matches_thread_safe[i].starts) && 
-                                pubkey.ends_with(&grind_matches_thread_safe[i].ends) {
+                                pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                            {
                                     let _found = found.fetch_add(1, Ordering::Relaxed);
                                     grind_matches_thread_safe[i].count.fetch_sub(1, Ordering::Relaxed);
                                     println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
-                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();       
+                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
                             }
                         }
                         if total_matches_found == grind_matches_thread_safe.len() {
