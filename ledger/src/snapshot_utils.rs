@@ -353,9 +353,9 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         f.read_to_string(&mut snapshot_version)?;
         snapshot_version
     } else {
-        // Once v0.23.x is deployed, this default can be removed and snapshots without a version
+        // Once 0.23.x is deployed, this default can be removed and snapshots without a version
         // file can be rejected
-        String::from("v0.22.3")
+        String::from("0.22.3")
     };
 
     let bank = rebuild_bank_from_snapshots(
@@ -431,7 +431,7 @@ where
     let mut stream = BufReader::new(file);
     let mut bank: Bank = match snapshot_version {
         env!("CARGO_PKG_VERSION") => deserialize_from(&mut stream)?,
-        "v0.22.3" => {
+        "0.22.3" => {
             let bank0223: solana_runtime::bank::LegacyBank0223 = deserialize_from(&mut stream)?;
             bank0223.into()
         }
