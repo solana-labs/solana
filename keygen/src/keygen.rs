@@ -75,7 +75,7 @@ fn output_keypair(
 
 fn grind_validator_starts_with(v: String) -> Result<(), String> {
     if v.matches(":").count() != 1 || (v.starts_with(":") || v.ends_with(":")) {
-        return Err(String::from("Expected : between PREFFIX and COUNT"));
+        return Err(String::from("Expected : between PREFIX and COUNT"));
     }
     let args: Vec<&str> = v.split(':').collect();
     let s = bs58::decode(&args[0]).into_vec()
@@ -111,7 +111,7 @@ fn grind_validator_ends_with(v: String) -> Result<(), String> {
 
 fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
     if v.matches(":").count() != 2 || (v.starts_with(":") || v.ends_with(":")) {
-        return Err(String::from("Expected : between PREFFIX and SUFFIX and COUNT"));
+        return Err(String::from("Expected : between PREFIX and SUFFIX and COUNT"));
     }
     let args: Vec<&str> = v.split(':').collect();
     let p = bs58::decode(&args[0]).into_vec()
@@ -238,7 +238,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple(true)
                         .validator(grind_validator_starts_and_ends_with)
-                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFFIX and SUFFIX type is Base58\nCOUNT type is u64"),
+                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
                 ),
         )
         .subcommand(
