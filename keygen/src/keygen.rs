@@ -420,37 +420,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 });
             }
 
-            let mut starting_messages = Vec::<String>::new();
-            for i in 0..grind_matches.len() {
-                if !grind_matches[i].starts.is_empty() && grind_matches[i].ends.is_empty() {
-                    let pk: String;
-                    if grind_matches[i].count.load(Ordering::Relaxed) > 1 {
-                        pk = "pubkeys".to_string();
-                    } else {
-                        pk = "pubkey".to_string();
-                    }
-                    starting_messages.push(format!("{} {} that starts with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,grind_matches[i].starts))
-                } else if grind_matches[i].starts.is_empty() && !grind_matches[i].ends.is_empty() {
-                    let pk: String;
-                    if grind_matches[i].count.load(Ordering::Relaxed) > 1 {
-                        pk = "pubkeys".to_string();
-                    } else {
-                        pk = "pubkey".to_string();
-                    }
-                    starting_messages.push(format!("{} {} that ends with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,grind_matches[i].ends))
-                } else if !grind_matches[i].starts.is_empty() && !grind_matches[i].ends.is_empty() {                       
-                    let pk: String;
-                    if grind_matches[i].count.load(Ordering::Relaxed) > 1 {
-                        pk = "pubkeys".to_string();
-                    } else {
-                        pk = "pubkey".to_string();
-                    }
-                    starting_messages.push(format!("{} {} that starts with '{}' and ends with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,grind_matches[i].starts,grind_matches[i].ends))
-                }
-            }
             println!("Searching with {} threads for:", num_cpus::get());
-            for el in starting_messages {
-                println!("\t{}",el);
+            for i in 0..grind_matches.len() {
+                let pk: String;
+                if grind_matches[i].count.load(Ordering::Relaxed) > 1 {
+                    pk = "pubkeys".to_string();
+                } else {
+                    pk = "pubkey".to_string();
+                }
+                println!("\t{} {} that starts with '{}' and ends with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,grind_matches[i].starts,grind_matches[i].ends);
             }
 
             let grind_matches_thread_safe = Arc::new(grind_matches);
