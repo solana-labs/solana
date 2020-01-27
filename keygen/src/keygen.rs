@@ -357,8 +357,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             struct Match {
                 starts: String,
                 ends: String,
-                count: u64,
-                found: AtomicU64
+                count: AtomicU64
             }
             let mut grind_matches = Vec::<Match>::new();
 
@@ -401,8 +400,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 grind_matches.push(Match{
                     starts: args[0].to_lowercase(),
                     ends: "".to_string(),
-                    count: args[1].parse::<u64>().unwrap(),
-                    found: AtomicU64::new(0)
+                    count: AtomicU64::new(args[1].parse::<u64>().unwrap())
                 });
             }
             for ew in &ends_with_args {
@@ -410,8 +408,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 grind_matches.push(Match{
                     starts: "".to_string(),
                     ends: args[0].to_lowercase(),
-                    count: args[1].parse::<u64>().unwrap(),
-                    found: AtomicU64::new(0)
+                    count: AtomicU64::new(args[1].parse::<u64>().unwrap())
                 });
             }
             for swew in &starts_and_ends_with_args {
@@ -419,8 +416,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 grind_matches.push(Match{
                     starts: args[0].to_lowercase(),
                     ends: args[1].to_lowercase(),
-                    count: args[2].parse::<u64>().unwrap(),
-                    found: AtomicU64::new(0)
+                    count: AtomicU64::new(args[2].parse::<u64>().unwrap())
                 });
             }
 
@@ -428,28 +424,28 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             for i in 0..grind_matches.len() {
                 if !grind_matches[i].starts.is_empty() && grind_matches[i].ends.is_empty() {
                     let pk: String;
-                    if grind_matches[i].count > 1 {
+                    if grind_matches[i].count.load(Ordering::Relaxed) > 1 {
                         pk = "pubkeys".to_string();
                     } else {
                         pk = "pubkey".to_string();
                     }
-                    starting_messages.push(format!("{} {} that starts with '{}'",grind_matches[i].count, pk,grind_matches[i].starts))
+                    starting_messages.push(format!("{} {} that starts with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,grind_matches[i].starts))
                 } else if grind_matches[i].starts.is_empty() && !grind_matches[i].ends.is_empty() {
                     let pk: String;
-                    if grind_matches[i].count > 1 {
+                    if grind_matches[i].count.load(Ordering::Relaxed) > 1 {
                         pk = "pubkeys".to_string();
                     } else {
                         pk = "pubkey".to_string();
                     }
-                    starting_messages.push(format!("{} {} that ends with '{}'",grind_matches[i].count, pk,grind_matches[i].ends))
+                    starting_messages.push(format!("{} {} that ends with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,grind_matches[i].ends))
                 } else if !grind_matches[i].starts.is_empty() && !grind_matches[i].ends.is_empty() {                       
                     let pk: String;
-                    if grind_matches[i].count > 1 {
+                    if grind_matches[i].count.load(Ordering::Relaxed) > 1 {
                         pk = "pubkeys".to_string();
                     } else {
                         pk = "pubkey".to_string();
                     }
-                    starting_messages.push(format!("{} {} that starts with '{}' and ends with '{}'",grind_matches[i].count, pk,grind_matches[i].starts,grind_matches[i].ends))
+                    starting_messages.push(format!("{} {} that starts with '{}' and ends with '{}'",grind_matches[i].count.load(Ordering::Relaxed), pk,grind_matches[i].starts,grind_matches[i].ends))
                 }
             }
             println!("Searching with {} threads for:", num_cpus::get());
@@ -485,7 +481,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         }
                         let mut total_matches_found = 0;
                         for i in 0..grind_matches_thread_safe.len() {
-                            if grind_matches_thread_safe[i].count == grind_matches_thread_safe[i].found.load(Ordering::Relaxed) {
+                            if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
                                 total_matches_found = total_matches_found + 1;
                                 continue;
                             }
@@ -493,14 +489,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 grind_matches_thread_safe[i].ends.is_empty() && 
                                 pubkey.starts_with(&grind_matches_thread_safe[i].starts) {
                                     let _found = found.fetch_add(1, Ordering::Relaxed);
-                                    grind_matches_thread_safe[i].found.fetch_add(1, Ordering::Relaxed);
+                                    grind_matches_thread_safe[i].count.fetch_sub(1, Ordering::Relaxed);
                                     println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
                                     write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
                             } else if grind_matches_thread_safe[i].starts.is_empty() && 
                                 !grind_matches_thread_safe[i].ends.is_empty() && 
                                 pubkey.ends_with(&grind_matches_thread_safe[i].ends) {
                                     let _found = found.fetch_add(1, Ordering::Relaxed);
-                                    grind_matches_thread_safe[i].found.fetch_add(1, Ordering::Relaxed);
+                                    grind_matches_thread_safe[i].count.fetch_sub(1, Ordering::Relaxed);
                                     println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
                                     write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();
                             } else if !grind_matches_thread_safe[i].starts.is_empty() &&
@@ -508,7 +504,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 pubkey.starts_with(&grind_matches_thread_safe[i].starts) && 
                                 pubkey.ends_with(&grind_matches_thread_safe[i].ends) {
                                     let _found = found.fetch_add(1, Ordering::Relaxed);
-                                    grind_matches_thread_safe[i].found.fetch_add(1, Ordering::Relaxed);
+                                    grind_matches_thread_safe[i].count.fetch_sub(1, Ordering::Relaxed);
                                     println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
                                     write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey())).unwrap();       
                             }
