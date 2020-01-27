@@ -74,7 +74,7 @@ fn output_keypair(
 }
 
 fn grind_validator_starts_with(v: String) -> Result<(), String> {
-    if v.matches(":").count() != 1 || (v.starts_with(":") || v.ends_with(":")) {
+    if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
         return Err(String::from("Expected : between PREFIX and COUNT"));
     }
     let args: Vec<&str> = v.split(':').collect();
@@ -89,7 +89,7 @@ fn grind_validator_starts_with(v: String) -> Result<(), String> {
 }
 
 fn grind_validator_ends_with(v: String) -> Result<(), String> {
-    if v.matches(":").count() != 1 || (v.starts_with(":") || v.ends_with(":")) {
+    if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
         return Err(String::from("Expected : between SUFFIX and COUNT"));
     }
     let args: Vec<&str> = v.split(':').collect();
@@ -104,7 +104,7 @@ fn grind_validator_ends_with(v: String) -> Result<(), String> {
 }
 
 fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
-    if v.matches(":").count() != 2 || (v.starts_with(":") || v.ends_with(":")) {
+    if v.matches(':').count() != 2 || (v.starts_with(':') || v.ends_with(':')) {
         return Err(String::from(
             "Expected : between PREFIX and SUFFIX and COUNT",
         ));
@@ -434,27 +434,25 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
 
             println!("Searching with {} threads for:", num_cpus::get());
-            for i in 0..grind_matches.len() {
-                let pk: String;
-                let st: String;
-                let en: String;
-                if grind_matches[i].count.load(Ordering::Relaxed) > 1 {
-                    pk = "pubkeys".to_string();
-                    st = "start".to_string();
-                    en = "end".to_string();
+            for gm in &grind_matches {
+                let mut msg = Vec::<String>::new();
+                if gm.count.load(Ordering::Relaxed) > 1 {
+                    msg.push("pubkeys".to_string());
+                    msg.push("start".to_string());
+                    msg.push("end".to_string());
                 } else {
-                    pk = "pubkey".to_string();
-                    st = "starts".to_string();
-                    en = "ends".to_string();
+                    msg.push("pubkey".to_string());
+                    msg.push("starts".to_string());
+                    msg.push("ends".to_string());
                 }
                 println!(
                     "\t{} {} that {} with '{}' and {} with '{}'",
-                    grind_matches[i].count.load(Ordering::Relaxed),
-                    pk,
-                    st,
-                    grind_matches[i].starts,
-                    en,
-                    grind_matches[i].ends
+                    gm.count.load(Ordering::Relaxed),
+                    msg[0],
+                    msg[1],
+                    gm.starts,
+                    msg[2],
+                    gm.ends
                 );
             }
 
@@ -487,7 +485,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         let mut total_matches_found = 0;
                         for i in 0..grind_matches_thread_safe.len() {
                             if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
-                                total_matches_found = total_matches_found + 1;
+                                total_matches_found += 1;
                                 continue;
                             }
                             if (!grind_matches_thread_safe[i].starts.is_empty()
