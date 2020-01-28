@@ -48,28 +48,30 @@ const UNINITIALIZED_ACCOUNT: u32 = BUILTIN_ERROR_START + 9;
 const NOT_ENOUGH_ACCOUNT_KEYS: u32 = BUILTIN_ERROR_START + 10;
 const ACCOUNT_BORROW_FAILED: u32 = BUILTIN_ERROR_START + 11;
 
-/// Is builtin if 31st bit is set
-fn is_builtin_error(error: u32) -> bool {
+/// Is this a builtin error? (is 31th bit set?)
+fn is_builtin(error: u32) -> bool {
     (error & BUILTIN_ERROR_START) != 0
 }
 
 /// If a program defined error conflicts with a builtin error
-/// its 30th bit is set before returning to distinguish it
-const CONFLICTING_ERROR: u32 = 0x4000_0000; // 30st bit set
+/// its 30th bit is set before returning to distinguish it.
+/// The side effect is that the original error's 30th bit
+/// value is lost, be aware.
+const CONFLICTING_ERROR_MARK: u32 = 0x4000_0000; // 30st bit set
 
-/// Is a conflicting error if 30th bit is set
-fn is_conflicting_error(error: u32) -> bool {
-    (error & CONFLICTING_ERROR) != 0
+/// Is this error marked as conflicting? (is 30th bit set?)
+fn is_marked_conflicting(error: u32) -> bool {
+    (error & CONFLICTING_ERROR_MARK) != 0
 }
 
-/// Convert to a conflicting error
-fn to_conflicting_error(error: u32) -> u32 {
-    error | CONFLICTING_ERROR
+/// Mark as a conflicting error
+fn mark_conflicting(error: u32) -> u32 {
+    error | CONFLICTING_ERROR_MARK
 }
 
-/// Converts from a conflicting error
-fn from_conflicting_error(error: u32) -> u32 {
-    error & !CONFLICTING_ERROR
+/// Unmark as a conflicting error
+fn unmark_conflicting(error: u32) -> u32 {
+    error & !CONFLICTING_ERROR_MARK
 }
 
 impl From<ProgramError> for u32 {
@@ -87,8 +89,8 @@ impl From<ProgramError> for u32 {
             ProgramError::NotEnoughAccountKeys => NOT_ENOUGH_ACCOUNT_KEYS,
             ProgramError::AccountBorrowFailed => ACCOUNT_BORROW_FAILED,
             ProgramError::CustomError(error) => {
-                if error == 0 || is_builtin_error(error) {
-                    to_conflicting_error(error)
+                if error == 0 || is_builtin(error) {
+                    mark_conflicting(error)
                 } else {
                     error
                 }
@@ -116,8 +118,8 @@ where
             NOT_ENOUGH_ACCOUNT_KEYS => InstructionError::NotEnoughAccountKeys,
             ACCOUNT_BORROW_FAILED => InstructionError::AccountBorrowFailed,
             _ => {
-                if is_conflicting_error(error) {
-                    InstructionError::ConflictingError(from_conflicting_error(error))
+                if is_marked_conflicting(error) {
+                    InstructionError::ConflictingError(unmark_conflicting(error))
                 } else {
                     InstructionError::CustomError(error)
                 }

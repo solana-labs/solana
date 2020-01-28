@@ -57,9 +57,9 @@ static_assert(sizeof(uint64_t) == 8);
 #define SUCCESS 0
 
 /**
- * Built-in program error return values have the 31st bit set.  Programs
+ * Builtin program error return values have the 31st bit set.  Programs
  * may define their own values but their 31st bit should be unset
- * to avoid conflicting with the system errors
+ * to avoid conflicting with the builtin errors
  */
 #define BUILTIN_ERROR_START 0x80000000
 
