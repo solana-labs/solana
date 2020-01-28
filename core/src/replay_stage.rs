@@ -527,6 +527,9 @@ impl ReplayStage {
         let tx_count = tx_count_after - tx_count_before;
 
         confirm_result.map_err(|err| {
+            // LedgerCleanupService should not be cleaning up anything
+            // that comes after the root, so we should not see any
+            // errors related to the slot being purged
             let slot = bank.slot();
             warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
             datapoint_error!(

@@ -383,7 +383,11 @@ impl JsonRpcRequestProcessor {
         let stakes = HashMap::new();
         let stakes = bank.epoch_vote_accounts(epoch).unwrap_or(&stakes);
 
-        Ok(self.blockstore.get_block_time(slot, slot_duration, stakes))
+        Ok(self
+            .blockstore
+            .get_block_time(slot, slot_duration, stakes)
+            .ok()
+            .unwrap_or(None))
     }
 }
 
