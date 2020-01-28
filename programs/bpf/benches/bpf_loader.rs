@@ -4,12 +4,7 @@ extern crate test;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_rbpf::EbpfVm;
-use std::env;
-use std::fs::File;
-use std::io::Error;
-use std::io::Read;
-use std::mem;
-use std::path::PathBuf;
+use std::{env, fs::File, io::Error, io::Read, mem, path::PathBuf};
 use test::Bencher;
 
 /// BPF program file extension

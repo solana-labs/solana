@@ -1,8 +1,6 @@
 extern crate walkdir;
 
-use std::env;
-use std::path::Path;
-use std::process::Command;
+use std::{env, path::Path, process::Command};
 use walkdir::WalkDir;
 
 fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
