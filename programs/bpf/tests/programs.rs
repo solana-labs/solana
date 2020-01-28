@@ -163,7 +163,8 @@ mod bpf {
             client::SyncClient,
             clock::DEFAULT_SLOTS_PER_EPOCH,
             instruction::{AccountMeta, Instruction},
-            pubkey::Pubkeysignature::{Keypair, KeypairUtil},
+            pubkey::Pubkey,
+            signature::{Keypair, KeypairUtil},
             sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
         };
         use std::io::Read;
