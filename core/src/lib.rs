@@ -30,7 +30,6 @@ pub mod gossip_service;
 pub mod ledger_cleanup_service;
 pub mod local_vote_signer_service;
 pub mod packet;
-pub mod partition_cfg;
 pub mod poh_recorder;
 pub mod poh_service;
 pub mod recvmmsg;
