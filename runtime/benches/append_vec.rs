@@ -12,8 +12,8 @@ use std::{
     thread::sleep,
     thread::spawn,
     time::Duration,
-    Bencher,
 };
+use test::Bencher;
 
 #[bench]
 fn append_vec_append(bencher: &mut Bencher) {
