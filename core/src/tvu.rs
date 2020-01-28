@@ -6,7 +6,6 @@ use crate::{
     cluster_info::ClusterInfo,
     commitment::BlockCommitmentCache,
     ledger_cleanup_service::LedgerCleanupService,
-    partition_cfg::PartitionCfg,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
@@ -84,7 +83,7 @@ impl Tvu {
         completed_slots_receiver: CompletedSlotsReceiver,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         sigverify_disabled: bool,
-        cfg: Option<PartitionCfg>,
+        cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
     ) -> Self {
