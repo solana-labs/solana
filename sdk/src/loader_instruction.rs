@@ -1,6 +1,8 @@
-use crate::instruction::{AccountMeta, Instruction};
-use crate::pubkey::Pubkey;
-use crate::sysvar::rent;
+use crate::{
+    instruction::{AccountMeta, Instruction},
+    pubkey::Pubkey,
+    sysvar::rent,
+};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum LoaderInstruction {

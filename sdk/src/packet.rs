@@ -1,8 +1,10 @@
 use crate::clock::Slot;
 use bincode::Result;
 use serde::Serialize;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::{fmt, io};
+use std::{
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    {fmt, io},
+};
 
 /// Maximum over-the-wire size of a Transaction
 ///   1280 is IPv6 minimum MTU

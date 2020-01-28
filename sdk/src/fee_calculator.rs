@@ -133,8 +133,7 @@ impl FeeCalculator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pubkey::Pubkey;
-    use crate::system_instruction;
+    use crate::{pubkey::Pubkey, system_instruction};
 
     #[test]
     fn test_fee_calculator_burn() {

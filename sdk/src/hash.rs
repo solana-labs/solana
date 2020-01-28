@@ -2,10 +2,7 @@
 
 use bs58;
 use sha2::{Digest, Sha256};
-use std::convert::TryFrom;
-use std::fmt;
-use std::mem;
-use std::str::FromStr;
+use std::{convert::TryFrom, fmt, mem, str::FromStr};
 
 pub const HASH_BYTES: usize = 32;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]

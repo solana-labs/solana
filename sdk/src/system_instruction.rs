@@ -1,10 +1,12 @@
-use crate::hash::hashv;
-use crate::instruction::{AccountMeta, Instruction, WithSigner};
-use crate::instruction_processor_utils::DecodeError;
-use crate::nonce_state::NonceState;
-use crate::pubkey::Pubkey;
-use crate::system_program;
-use crate::sysvar::{recent_blockhashes, rent};
+use crate::{
+    hash::hashv,
+    instruction::{AccountMeta, Instruction, WithSigner},
+    instruction_processor_utils::DecodeError,
+    nonce_state::NonceState,
+    pubkey::Pubkey,
+    system_program,
+    sysvar::{recent_blockhashes, rent},
+};
 use num_derive::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
 

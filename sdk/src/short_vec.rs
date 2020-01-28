@@ -1,9 +1,9 @@
-use serde::de::{self, Deserializer, SeqAccess, Visitor};
-use serde::ser::{self, SerializeTuple, Serializer};
-use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::marker::PhantomData;
-use std::mem::size_of;
+use serde::{
+    de::{self, Deserializer, SeqAccess, Visitor},
+    ser::{self, SerializeTuple, Serializer},
+    {Deserialize, Serialize},
+};
+use std::{fmt, marker::PhantomData, mem::size_of};
 
 /// Same as u16, but serialized with 1 to 3 bytes. If the value is above
 /// 0x7f, the top bit is set and the remaining value is stored in the next

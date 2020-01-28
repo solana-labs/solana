@@ -1,5 +1,4 @@
-use crate::account::Account;
-use crate::hash::Hash;
+use crate::{account::Account, hash::Hash};
 
 crate::declare_id!("NativeLoader1111111111111111111111111111111");
 
