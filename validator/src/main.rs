@@ -584,10 +584,17 @@ pub fn main() {
                 .help("Redirect logging to the specified file, '-' for standard error"),
         )
         .arg(
+            Arg::with_name("no_wait_for_supermajority")
+                .long("no-wait-for-supermajority")
+                .takes_value(false)
+                .help("After processing the ledger, do not wait until a supermajority of stake is visible on gossip before starting PoH"),
+        )
+        .arg(
+            // Legacy flag that is now enabled by default.  Remove this flag a couple months after the 0.23.0
+            // release
             Arg::with_name("wait_for_supermajority")
                 .long("wait-for-supermajority")
-                .takes_value(false)
-                .help("After processing the ledger, wait until a supermajority of stake is visible on gossip before starting PoH"),
+                .hidden(true)
         )
         .arg(
             Arg::with_name("hard_forks")
@@ -655,7 +662,7 @@ pub fn main() {
             }),
         },
         voting_disabled: matches.is_present("no_voting"),
-        wait_for_supermajority: matches.is_present("wait_for_supermajority"),
+        wait_for_supermajority: !matches.is_present("no_wait_for_supermajority"),
         ..ValidatorConfig::default()
     };
 
