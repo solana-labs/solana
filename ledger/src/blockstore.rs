@@ -90,6 +90,7 @@ pub struct Blockstore {
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<Slot>>>,
+    pub lowest_cleanup_slot: Arc<RwLock<u64>>,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -207,7 +208,7 @@ impl Blockstore {
 
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
-        Ok(Blockstore {
+        let blockstore = Blockstore {
             db,
             meta_cf,
             dead_slots_cf,
@@ -222,7 +223,9 @@ impl Blockstore {
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
             last_root,
-        })
+            lowest_cleanup_slot: Arc::new(RwLock::new(0)),
+        };
+        Ok(blockstore)
     }
 
     pub fn open_with_signal(
@@ -1059,6 +1062,12 @@ impl Blockstore {
         to_index: u64,
         buffer: &mut [u8],
     ) -> Result<(u64, usize)> {
+        // lowest_cleanup_slot is the last slot that was not cleaned up by
+        // LedgerCleanupService
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        if *lowest_cleanup_slot > slot {
+            return Err(BlockstoreError::SlotCleanedUp);
+        }
         let meta_cf = self.db.column::<cf::SlotMeta>();
         let mut buffer_offset = 0;
         let mut last_index = 0;
@@ -1288,14 +1297,26 @@ impl Blockstore {
         slot: Slot,
         slot_duration: Duration,
         stakes: &HashMap<Pubkey, (u64, Account)>,
-    ) -> Option<UnixTimestamp> {
+    ) -> Result<Option<UnixTimestamp>> {
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        // lowest_cleanup_slot is the last slot that was not cleaned up by
+        // LedgerCleanupService
+        if *lowest_cleanup_slot > slot {
+            return Err(BlockstoreError::SlotCleanedUp);
+        }
+
         let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = self
             .get_timestamp_slots(slot, TIMESTAMP_SLOT_INTERVAL, TIMESTAMP_SLOT_RANGE)
             .into_iter()
             .flat_map(|query_slot| self.get_block_timestamps(query_slot).unwrap_or_default())
             .collect();
 
-        calculate_stake_weighted_timestamp(unique_timestamps, stakes, slot, slot_duration)
+        Ok(calculate_stake_weighted_timestamp(
+            unique_timestamps,
+            stakes,
+            slot,
+            slot_duration,
+        ))
     }
 
     fn get_timestamp_slots(
@@ -1346,6 +1367,12 @@ impl Blockstore {
         slot: Slot,
         encoding: Option<RpcTransactionEncoding>,
     ) -> Result<RpcConfirmedBlock> {
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        // lowest_cleanup_slot is the last slot that was not cleaned up by
+        // LedgerCleanupService
+        if *lowest_cleanup_slot > slot {
+            return Err(BlockstoreError::SlotCleanedUp);
+        }
         let encoding = encoding.unwrap_or(RpcTransactionEncoding::Json);
         if self.is_root(slot) {
             let slot_meta_cf = self.db.column::<cf::SlotMeta>();
@@ -1466,6 +1493,14 @@ impl Blockstore {
         if self.is_dead(slot) {
             return Err(BlockstoreError::DeadSlot);
         }
+
+        // lowest_cleanup_slot is the last slot that was not cleaned up by
+        // LedgerCleanupService
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        if *lowest_cleanup_slot > slot {
+            return Err(BlockstoreError::SlotCleanedUp);
+        }
+
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
         let slot_meta = slot_meta_cf.get(slot)?;
         if slot_meta.is_none() {
@@ -4886,10 +4921,11 @@ pub mod tests {
             })
             .sum();
         expected_time /= total_stake;
-        assert_eq!(block_time_slot_3.unwrap() as u64, expected_time);
+        assert_eq!(block_time_slot_3.unwrap().unwrap() as u64, expected_time);
         assert_eq!(
             blockstore
                 .get_block_time(8, slot_duration.clone(), &stakes)
+                .unwrap()
                 .unwrap() as u64,
             expected_time + 2 // At 400ms block duration, 5 slots == 2sec
         );
