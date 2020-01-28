@@ -6,7 +6,7 @@ use solana_sdk::{account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, pub
 entrypoint!(process_instruction);
 fn process_instruction(
     _program_id: &Pubkey,
-    accounts: &mut [AccountInfo],
+    accounts: &[AccountInfo],
     _instruction_data: &[u8],
 ) -> u32 {
     // account 0 is the mint and not owned by this program, any debit of its lamports

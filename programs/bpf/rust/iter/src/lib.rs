@@ -1,8 +1,7 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
 extern crate solana_sdk;
-use solana_sdk::entrypoint::SUCCESS;
-use solana_sdk::info;
+use solana_sdk::{entrypoint::SUCCESS, info};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
@@ -22,7 +21,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
 #[cfg(test)]
 mod test {
     use super::*;
-    // Pulls in the stubs requried for `info!()`
+    // Pulls in the stubs required for `info!()`
     solana_sdk_bpf_test::stubs!();
 
     #[test]
