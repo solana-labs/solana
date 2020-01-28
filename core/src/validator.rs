@@ -56,6 +56,7 @@ pub struct ValidatorConfig {
     pub dev_sigverify_disabled: bool,
     pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
+    pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
     pub transaction_status_service_disabled: bool,
     pub blockstream_unix_socket: Option<PathBuf>,
@@ -77,6 +78,7 @@ impl Default for ValidatorConfig {
             dev_sigverify_disabled: false,
             dev_halt_at_slot: None,
             expected_genesis_hash: None,
+            expected_shred_version: None,
             voting_disabled: false,
             transaction_status_service_disabled: false,
             blockstream_unix_socket: None,
@@ -193,6 +195,16 @@ impl Validator {
         node.info.shred_version =
             compute_shred_version(&genesis_hash, &bank.hard_forks().read().unwrap());
         Self::print_node_info(&node);
+
+        if let Some(expected_shred_version) = config.expected_shred_version {
+            if expected_shred_version != node.info.shred_version {
+                error!(
+                    "shred version mismatch: expected {}",
+                    expected_shred_version
+                );
+                process::exit(1);
+            }
+        }
 
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
             node.info.clone(),

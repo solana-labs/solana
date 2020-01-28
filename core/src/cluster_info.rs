@@ -272,7 +272,7 @@ impl ClusterInfo {
 
                 let ip_addr = node.gossip.ip();
                 format!(
-                    "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5} | {:5}| {:5} | {:5}| {:5} | {:5}| {:5}| v{}\n",
+                    "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5} | {:5}| {:5} | {:5}| {:5} | {:5}| {:5}| {}\n",
                     if ContactInfo::is_valid_address(&node.gossip) {
                         ip_addr.to_string()
                     } else {
