@@ -21,7 +21,7 @@ use std::{
     path::Path,
     process::exit,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     thread,
@@ -155,11 +155,11 @@ fn grind_print_info(grind_matches: &[GrindMatch]) {
 }
 
 fn grind_parse_args(
-    grind_matches: &mut Vec<GrindMatch>,
     starts_with_args: HashSet<String>,
     ends_with_args: HashSet<String>,
     starts_and_ends_with_args: HashSet<String>,
-) {
+) -> Vec<GrindMatch> {
+    let mut grind_matches = Vec::<GrindMatch>::new();
     for sw in starts_with_args {
         let args: Vec<&str> = sw.split(':').collect();
         grind_matches.push(GrindMatch {
@@ -184,6 +184,8 @@ fn grind_parse_args(
             count: AtomicU64::new(args[2].parse::<u64>().unwrap()),
         });
     }
+    grind_print_info(&grind_matches);
+    grind_matches
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -466,48 +468,26 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 exit(1);
             }
 
-            grind_print_info(&grind_matches);
-            grind_parse_args(
-                &mut grind_matches,
-                starts_with_args,
-                ends_with_args,
-                starts_and_ends_with_args,
-            );
-            // println!("Searching with {} threads for:", num_cpus::get());
-            // for gm in &grind_matches {
-            //     let mut msg = Vec::<String>::new();
-            //     if gm.count.load(Ordering::Relaxed) > 1 {
-            //         msg.push("pubkeys".to_string());
-            //         msg.push("start".to_string());
-            //         msg.push("end".to_string());
-            //     } else {
-            //         msg.push("pubkey".to_string());
-            //         msg.push("starts".to_string());
-            //         msg.push("ends".to_string());
-            //     }
-            //     println!(
-            //         "\t{} {} that {} with '{}' and {} with '{}'",
-            //         gm.count.load(Ordering::Relaxed),
-            //         msg[0],
-            //         msg[1],
-            //         gm.starts,
-            //         msg[2],
-            //         gm.ends
-            //     );
-            // }
+            let grind_matches =
+                grind_parse_args(starts_with_args, ends_with_args, starts_and_ends_with_args);
 
             let grind_matches_thread_safe = Arc::new(grind_matches);
             let attempts = Arc::new(AtomicU64::new(1));
             let found = Arc::new(AtomicU64::new(0));
             let start = Instant::now();
+            let done = Arc::new(AtomicBool::new(false));
 
             let _threads = (0..num_cpus::get())
                 .map(|_| {
+                    let done = done.clone();
                     let attempts = attempts.clone();
                     let found = found.clone();
                     let grind_matches_thread_safe = grind_matches_thread_safe.clone();
 
                     thread::spawn(move || loop {
+                        if done.load(Ordering::Relaxed) {
+                            return;
+                        }
                         let attempts = attempts.fetch_add(1, Ordering::Relaxed);
                         if attempts % 1_000_000 == 0 {
                             println!(
@@ -552,7 +532,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             }
                         }
                         if total_matches_found == grind_matches_thread_safe.len() {
-                            exit(0);
+                            done.store(true, Ordering::Relaxed);
                         }
                     });
                 })
