@@ -305,6 +305,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     process_command(&config_validator).unwrap();
 
     // Delegate stake offline
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: config_vote.keypair.pubkey(),
@@ -312,7 +313,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         force: true,
         sign_only: true,
         signers: None,
-        blockhash: None,
+        blockhash: Some(blockhash),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -334,12 +335,13 @@ fn test_offline_stake_delegation_and_deactivation() {
     process_command(&config_payer).unwrap();
 
     // Deactivate stake offline
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_validator.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         stake_authority: None,
         sign_only: true,
         signers: None,
-        blockhash: None,
+        blockhash: Some(blockhash),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -557,6 +559,7 @@ fn test_stake_authorize() {
     let nonced_authority_pubkey = nonced_authority.pubkey();
     let (nonced_authority_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonced_authority, tmp_file.as_file_mut()).unwrap();
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: nonced_authority_pubkey,
@@ -564,7 +567,7 @@ fn test_stake_authorize() {
         authority: Some(read_keypair_file(&offline_authority_file).unwrap().into()),
         sign_only: true,
         signers: None,
-        blockhash: None,
+        blockhash: Some(blockhash),
         nonce_account: None,
         nonce_authority: None,
     };
