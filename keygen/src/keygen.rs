@@ -475,8 +475,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let start = Instant::now();
             let done = Arc::new(AtomicBool::new(false));
 
-            let _threads = 0..num_cpus::get();
-            for _ in _threads {
+            for _ in 0..num_cpus::get() {
                 let done = done.clone();
                 let attempts = attempts.clone();
                 let found = found.clone();
