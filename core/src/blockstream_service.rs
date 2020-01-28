@@ -58,31 +58,35 @@ impl BlockstreamService {
         let timeout = Duration::new(1, 0);
         let (slot, slot_leader) = slot_full_receiver.recv_timeout(timeout)?;
 
-        let entries = blockstore.get_slot_entries(slot, 0, None).unwrap();
-        let blockstore_meta = blockstore.meta(slot).unwrap().unwrap();
-        let _parent_slot = if slot == 0 {
-            None
-        } else {
-            Some(blockstore_meta.parent_slot)
-        };
-        let ticks_per_slot = entries.iter().filter(|entry| entry.is_tick()).count() as u64;
-        let mut tick_height = ticks_per_slot * slot;
+        // Slot might not exist due to LedgerCleanupService, check first
+        let blockstore_meta = blockstore.meta(slot).unwrap();
+        if let Some(blockstore_meta) = blockstore_meta {
+            // Return error to main loop. Thread won't exit, will just log the error
+            let entries = blockstore.get_slot_entries(slot, 0, None)?;
+            let _parent_slot = if slot == 0 {
+                None
+            } else {
+                Some(blockstore_meta.parent_slot)
+            };
+            let ticks_per_slot = entries.iter().filter(|entry| entry.is_tick()).count() as u64;
+            let mut tick_height = ticks_per_slot * slot;
 
-        for (i, entry) in entries.iter().enumerate() {
-            if entry.is_tick() {
-                tick_height += 1;
-            }
-            blockstream
-                .emit_entry_event(slot, tick_height, &slot_leader, &entry)
-                .unwrap_or_else(|e| {
-                    debug!("Blockstream error: {:?}, {:?}", e, blockstream.output);
-                });
-            if i == entries.len() - 1 {
+            for (i, entry) in entries.iter().enumerate() {
+                if entry.is_tick() {
+                    tick_height += 1;
+                }
                 blockstream
-                    .emit_block_event(slot, tick_height, &slot_leader, entry.hash)
+                    .emit_entry_event(slot, tick_height, &slot_leader, &entry)
                     .unwrap_or_else(|e| {
                         debug!("Blockstream error: {:?}, {:?}", e, blockstream.output);
                     });
+                if i == entries.len() - 1 {
+                    blockstream
+                        .emit_block_event(slot, tick_height, &slot_leader, entry.hash)
+                        .unwrap_or_else(|e| {
+                            debug!("Blockstream error: {:?}, {:?}", e, blockstream.output);
+                        });
+                }
             }
         }
         Ok(())

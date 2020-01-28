@@ -68,9 +68,13 @@ impl LedgerCleanupService {
         let disk_utilization_pre = blockstore.storage_size();
 
         let root = new_root_receiver.recv_timeout(Duration::from_secs(1))?;
+
+        // Notify blockstore of impending purge
         if root > *next_purge_batch {
             //cleanup
-            blockstore.purge_slots(0, Some(root - max_ledger_slots));
+            let lowest_slot = root - max_ledger_slots;
+            *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_slot;
+            blockstore.purge_slots(0, Some(lowest_slot));
             *next_purge_batch += DEFAULT_PURGE_BATCH_SIZE;
         }
 
