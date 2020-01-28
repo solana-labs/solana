@@ -14,17 +14,18 @@ use thiserror::Error;
 /// Reasons a transaction might be rejected.
 #[derive(Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionError {
-    /// This Pubkey is being processed in another transaction
+    /// An account is already being processed in another transaction in a way
+    /// that does not support parallelism
     AccountInUse,
 
-    /// Pubkey appears twice in the same transaction, typically in a pay-to-self
-    /// transaction.
+    /// A `Pubkey` appears twice in the transaction's `account_keys`.  Instructions can reference
+    /// `Pubkey`s more than once but the message must contain a list with no duplicate keys
     AccountLoadedTwice,
 
-    /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
+    /// Attempt to debit an account but found no record of a prior credit.
     AccountNotFound,
 
-    /// Attempt to load program from `Pubkey`, but it doesn't exist.
+    /// Attempt to load a program that does not exist
     ProgramAccountNotFound,
 
     /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
@@ -33,7 +34,7 @@ pub enum TransactionError {
     /// This account may not be used to pay transaction fees
     InvalidAccountForFee,
 
-    /// The bank has seen `Signature` before. This can occur under normal operation
+    /// The bank has seen this `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `recent_blockhash`, or as a double-spend attack.
     DuplicateSignature,
@@ -42,13 +43,14 @@ pub enum TransactionError {
     /// the `recent_blockhash` has been discarded.
     BlockhashNotFound,
 
-    /// The program returned an error
+    /// An error occurred while processing an instruction. The first element of the tuple
+    /// indicates the instruction index in which the error occurred.
     InstructionError(u8, InstructionError),
 
-    /// Loader call chain too deep
+    /// Loader call chain is too deep
     CallChainTooDeep,
 
-    /// Transaction has a fee but has no signature present
+    /// Transaction requires a fee but has no signature present
     MissingSignatureForFee,
 
     /// Transaction contains an invalid account reference
