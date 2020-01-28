@@ -3,7 +3,6 @@
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     packet::Packets,
-    partition_cfg::PartitionCfg,
     repair_service::RepairStrategy,
     result::{Error, Result},
     streamer::PacketReceiver,
@@ -22,7 +21,7 @@ use solana_sdk::epoch_schedule::EpochSchedule;
 use std::{
     cmp,
     net::UdpSocket,
-    sync::atomic::AtomicBool,
+    sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::channel,
     sync::mpsc::RecvTimeoutError,
     sync::Mutex,
@@ -213,7 +212,7 @@ impl RetransmitStage {
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
-        cfg: Option<PartitionCfg>,
+        cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
@@ -245,7 +244,7 @@ impl RetransmitStage {
             move |id, shred, working_bank, last_root| {
                 let is_connected = cfg
                     .as_ref()
-                    .map(|x| x.is_connected(&working_bank, &leader_schedule_cache, shred))
+                    .map(|x| x.load(Ordering::Relaxed))
                     .unwrap_or(true);
                 let rv = should_retransmit_and_persist(
                     shred,
