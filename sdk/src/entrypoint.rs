@@ -20,7 +20,7 @@ use std::{
 ///
 /// program_id: Program ID of the currently executing program
 /// accounts: Accounts passed as part of the instruction
-/// data: Instruction data
+/// instruction_data: Instruction data
 pub type ProcessInstruction =
     fn(program_id: &Pubkey, accounts: &[AccountInfo], instruction_data: &[u8]) -> u32;
 
@@ -29,7 +29,7 @@ pub const SUCCESS: u32 = 0;
 
 /// Declare the entry point of the program.
 ///
-/// Deserialize the program input parameters and call
+/// Deserialize the program input arguments and call
 /// the user defined `ProcessInstruction` function.
 /// Users must call this macro otherwise an entry point for
 /// their program will not be created.
