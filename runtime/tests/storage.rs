@@ -26,8 +26,7 @@ use solana_storage_program::{
     storage_instruction::{self, StorageAccountType},
     storage_processor::process_instruction,
 };
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 const TICKS_IN_SEGMENT: u64 = DEFAULT_SLOTS_PER_SEGMENT * DEFAULT_TICKS_PER_SLOT;
 

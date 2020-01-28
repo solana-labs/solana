@@ -2,11 +2,11 @@
 
 extern crate test;
 
-use solana_runtime::accounts::{create_test_accounts, Accounts};
-use solana_runtime::bank::*;
-use solana_sdk::account::Account;
-use solana_sdk::genesis_config::create_genesis_config;
-use solana_sdk::pubkey::Pubkey;
+use solana_runtime::{
+    accounts::{create_test_accounts, Accounts},
+    bank::*,
+};
+use solana_sdk::{account::Account, genesis_config::create_genesis_config, pubkey::Pubkey};
 use std::{path::PathBuf, sync::Arc};
 use test::Bencher;
 

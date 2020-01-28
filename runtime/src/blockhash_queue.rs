@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::timing::timestamp;
+use solana_sdk::{fee_calculator::FeeCalculator, hash::Hash, timing::timestamp};
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -122,8 +120,7 @@ impl BlockhashQueue {
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::clock::MAX_RECENT_BLOCKHASHES;
-    use solana_sdk::hash::hash;
+    use solana_sdk::{clock::MAX_RECENT_BLOCKHASHES, hash::hash};
 
     #[test]
     fn test_register_hash() {

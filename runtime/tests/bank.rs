@@ -1,9 +1,6 @@
 use solana_runtime::bank::Bank;
-use solana_sdk::genesis_config::create_genesis_config;
-use solana_sdk::hash::hash;
-use solana_sdk::pubkey::Pubkey;
-use std::sync::Arc;
-use std::thread::Builder;
+use solana_sdk::{genesis_config::create_genesis_config, hash::hash, pubkey::Pubkey};
+use std::{sync::Arc, thread::Builder};
 
 #[test]
 fn test_race_register_tick_freeze() {

@@ -2188,29 +2188,27 @@ impl From<LegacyBank0223> for Bank {
 mod tests {
     use super::*;
     use crate::{
-        accounts_db::get_temp_accounts_paths,
-        accounts_db::tests::copy_append_vecs,
+        accounts_db::{get_temp_accounts_paths, tests::copy_append_vecs},
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         status_cache::MAX_CACHE_ENTRIES,
     };
     use bincode::{serialize_into, serialized_size};
-    use solana_sdk::instruction::AccountMeta;
-    use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
         account::KeyedAccount,
         account_utils::StateMut,
         clock::DEFAULT_TICKS_PER_SLOT,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::create_genesis_config,
-        instruction::{CompiledInstruction, Instruction, InstructionError},
+        instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         message::{Message, MessageHeader},
         nonce_state,
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, KeypairUtil},
-        system_instruction, system_program,
+        system_instruction,
+        system_program::{self, solana_system_program},
         sysvar::{fees::Fees, rewards::Rewards},
         timing::duration_as_s,
     };

@@ -5,13 +5,11 @@ use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
 use log::*;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils;
-use solana_sdk::pubkey::Pubkey;
-use std::env;
-use std::path::PathBuf;
-use std::str;
+use solana_sdk::{
+    account::KeyedAccount, instruction::InstructionError, instruction_processor_utils,
+    pubkey::Pubkey,
+};
+use std::{env, path::PathBuf, str};
 
 /// Dynamic link library prefixes
 #[cfg(unix)]

@@ -2,8 +2,7 @@
 
 extern crate test;
 
-use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::{seq::SliceRandom, thread_rng};
 use solana_runtime::transaction_utils::OrderedIterator;
 use test::Bencher;
 

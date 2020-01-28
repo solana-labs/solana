@@ -1,5 +1,4 @@
 use log::*;
-
 use solana_sdk::{
     account::{get_signers, Account, KeyedAccount},
     account_utils::StateMut,
@@ -13,7 +12,6 @@ use solana_sdk::{
     system_program,
     sysvar::{self, recent_blockhashes::RecentBlockhashes, rent::Rent, Sysvar},
 };
-
 use std::collections::HashSet;
 
 // represents an address that may or may not have been generated

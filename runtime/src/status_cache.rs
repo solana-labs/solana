@@ -1,11 +1,15 @@
 use log::*;
 use rand::{thread_rng, Rng};
 use serde::Serialize;
-use solana_sdk::clock::{Slot, MAX_RECENT_BLOCKHASHES};
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::Signature;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use solana_sdk::{
+    clock::{Slot, MAX_RECENT_BLOCKHASHES},
+    hash::Hash,
+    signature::Signature,
+};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
 
 pub const MAX_CACHE_ENTRIES: usize = MAX_RECENT_BLOCKHASHES;
 const CACHED_SIGNATURE_SIZE: usize = 20;

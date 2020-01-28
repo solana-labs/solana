@@ -4,8 +4,10 @@ extern crate test;
 use bv::BitVec;
 use fnv::FnvHasher;
 use solana_runtime::bloom::{Bloom, BloomHashIndex};
-use solana_sdk::hash::{hash, Hash};
-use solana_sdk::signature::Signature;
+use solana_sdk::{
+    hash::{hash, Hash},
+    signature::Signature,
+};
 use std::collections::HashSet;
 use std::hash::Hasher;
 use test::Bencher;
