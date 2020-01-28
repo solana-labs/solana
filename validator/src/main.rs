@@ -200,6 +200,7 @@ fn get_rpc_addr(
     node: &Node,
     identity_keypair: &Arc<Keypair>,
     entrypoint_gossip: &SocketAddr,
+    expected_shred_version: Option<u16>,
 ) -> (RpcClient, SocketAddr) {
     let mut cluster_info = ClusterInfo::new(
         ClusterInfo::spy_contact_info(&identity_keypair.pubkey()),
@@ -208,61 +209,74 @@ fn get_rpc_addr(
     cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint_gossip));
     let cluster_info = Arc::new(RwLock::new(cluster_info));
 
-    let exit = Arc::new(AtomicBool::new(false));
+    let gossip_exit_flag = Arc::new(AtomicBool::new(false));
     let gossip_service = GossipService::new(
         &cluster_info.clone(),
         None,
         None,
         node.sockets.gossip.try_clone().unwrap(),
-        &exit,
+        &gossip_exit_flag,
     );
 
     let (rpc_client, rpc_addr) = loop {
         info!(
-            "Searching for RPC service...\n{}",
+            "Searching for RPC service, shred version={:?}...\n{}",
+            expected_shred_version,
             cluster_info.read().unwrap().contact_info_trace()
         );
 
-        let (gossip_peers, rpc_peers) = {
-            let cluster_info = cluster_info.read().unwrap();
-            (cluster_info.gossip_peers(), cluster_info.rpc_peers())
-        };
+        let mut rpc_peers = cluster_info.read().unwrap().rpc_peers();
 
-        let found_entrypoint = gossip_peers
+        let shred_version_required = !rpc_peers
             .iter()
-            .any(|contact_info| contact_info.gossip == *entrypoint_gossip);
+            .all(|contact_info| contact_info.shred_version == rpc_peers[0].shred_version);
 
-        if found_entrypoint & !rpc_peers.is_empty() {
-            let (id, rpc_addr) = {
-                // Prefer the entrypoint's RPC service if present, otherwise pick a node at random
-                if let Some(contact_info) = rpc_peers
-                    .iter()
-                    .find(|contact_info| contact_info.gossip == *entrypoint_gossip)
-                {
-                    (contact_info.id, contact_info.rpc)
-                } else {
-                    let i = thread_rng().gen_range(0, rpc_peers.len());
-                    (rpc_peers[i].id, rpc_peers[i].rpc)
-                }
+        if let Some(expected_shred_version) = expected_shred_version {
+            // Filter out rpc peers that don't match the expected shred version
+            rpc_peers = rpc_peers
+                .into_iter()
+                .filter(|contact_info| contact_info.shred_version == expected_shred_version)
+                .collect::<Vec<_>>();
+        }
+
+        if !rpc_peers.is_empty() {
+            // Prefer the entrypoint's RPC service if present, otherwise pick a node at random
+            let contact_info = if let Some(contact_info) = rpc_peers
+                .iter()
+                .find(|contact_info| contact_info.gossip == *entrypoint_gossip)
+            {
+                Some(contact_info.clone())
+            } else if shred_version_required {
+                // Require the user supply a shred version if there are conflicting shred version in
+                // gossip to reduce the chance of human error
+                warn!("Multiple shred versions detected, unable to select an RPC service. Restart with --expected-shred-version");
+                None
+            } else {
+                // Pick a node at random
+                Some(rpc_peers[thread_rng().gen_range(0, rpc_peers.len())].clone())
             };
 
-            info!("Contacting RPC port of node {}: {:?}", id, rpc_addr);
-            let rpc_client = RpcClient::new_socket(rpc_addr);
-            match rpc_client.get_version() {
-                Ok(rpc_version) => {
-                    info!("RPC node version: {}", rpc_version.solana_core);
-                    break (rpc_client, rpc_addr);
-                }
-                Err(err) => {
-                    warn!("Failed to get RPC version: {}", err);
+            if let Some(ContactInfo { id, rpc, .. }) = contact_info {
+                info!("Contacting RPC port of node {}: {:?}", id, rpc);
+                let rpc_client = RpcClient::new_socket(rpc);
+                match rpc_client.get_version() {
+                    Ok(rpc_version) => {
+                        info!("RPC node version: {}", rpc_version.solana_core);
+                        break (rpc_client, rpc);
+                    }
+                    Err(err) => {
+                        warn!("Failed to get RPC version: {}", err);
+                    }
                 }
             }
+        } else {
+            info!("No RPC service found");
         }
 
         sleep(Duration::from_secs(1));
     };
 
-    exit.store(true, Ordering::Relaxed);
+    gossip_exit_flag.store(true, Ordering::Relaxed);
     gossip_service.join().unwrap();
 
     (rpc_client, rpc_addr)
@@ -576,6 +590,13 @@ pub fn main() {
                 .help("Require the genesis have this hash"),
         )
         .arg(
+            Arg::with_name("expected_shred_version")
+                .long("expected-shred-version")
+                .value_name("VERSION")
+                .takes_value(true)
+                .help("Require the shred version be this value"),
+        )
+        .arg(
             Arg::with_name("logfile")
                 .short("o")
                 .long("log")
@@ -654,6 +675,7 @@ pub fn main() {
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
             .map(|s| Hash::from_str(&s).unwrap()),
+        expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
@@ -866,8 +888,12 @@ pub fn main() {
         );
 
         if !no_genesis_fetch {
-            let (rpc_client, rpc_addr) =
-                get_rpc_addr(&node, &identity_keypair, &cluster_entrypoint.gossip);
+            let (rpc_client, rpc_addr) = get_rpc_addr(
+                &node,
+                &identity_keypair,
+                &cluster_entrypoint.gossip,
+                validator_config.expected_shred_version,
+            );
 
             download_ledger(&rpc_addr, &ledger_path, no_snapshot_fetch).unwrap_or_else(|err| {
                 error!("Failed to initialize ledger: {}", err);
