@@ -129,7 +129,7 @@ fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
     Ok(())
 }
 
-fn grind_print_info(grind_matches: &Vec<GrindMatch>) {
+fn grind_print_info(grind_matches: &[GrindMatch]) {
     println!("Searching with {} threads for:", num_cpus::get());
     for gm in grind_matches {
         let mut msg = Vec::<String>::new();
