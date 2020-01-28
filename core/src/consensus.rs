@@ -573,9 +573,9 @@ mod test {
                     Bank::new_from_parent(&parent_bank, &Pubkey::default(), missing_slot);
 
                 // Simulate ingesting the cluster's votes for the parent into this bank
-                for (pk, v) in cluster_votes.iter() {
-                    if v.contains(&parent_bank.slot()) {
-                        let keypairs = validator_keypairs.get(pk).unwrap();
+                for (pubkey, vote) in cluster_votes.iter() {
+                    if vote.contains(&parent_bank.slot()) {
+                        let keypairs = validator_keypairs.get(pubkey).unwrap();
                         let node_pubkey = keypairs.node_keypair.pubkey();
                         let vote_pubkey = keypairs.vote_keypair.pubkey();
                         let last_blockhash = parent_bank.last_blockhash();
@@ -697,7 +697,7 @@ mod test {
             let node_pubkey = keypairs.node_keypair.pubkey();
             let vote_pubkey = keypairs.vote_keypair.pubkey();
 
-            let sk = Pubkey::new_rand();
+            let stake_key = Pubkey::new_rand();
             let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, 100);
             let stake_account = stake_state::create_account(
                 &Pubkey::new_rand(),
@@ -709,14 +709,14 @@ mod test {
 
             genesis_config.accounts.extend(vec![
                 (vote_pubkey, vote_account.clone()),
-                (sk, stake_account),
+                (stake_key, stake_account),
             ]);
         }
 
         let bank0 = Bank::new(&genesis_config);
 
-        for pk in validator_keypairs.keys() {
-            bank0.transfer(10_000, &mint_keypair, pk).unwrap();
+        for pubkey in validator_keypairs.keys() {
+            bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
         }
 
         bank0.freeze();
