@@ -1,4 +1,4 @@
-//! @brief Solana Rust-based BPF program entrypoint and its parameter types
+//! @brief Solana Rust-based BPF program entry point and its parameter types
 
 #![cfg(feature = "program")]
 
@@ -16,22 +16,22 @@ use std::{
     slice::{from_raw_parts, from_raw_parts_mut},
 };
 
-/// User implemented program entrypoint
+/// User implemented function to process an instruction
 ///
 /// program_id: Program ID of the currently executing program
 /// accounts: Accounts passed as part of the instruction
-/// data: Instruction data
+/// instruction_data: Instruction data
 pub type ProcessInstruction =
-    fn(program_id: &Pubkey, accounts: &mut [AccountInfo], instruction_data: &[u8]) -> u32;
+    fn(program_id: &Pubkey, accounts: &[AccountInfo], instruction_data: &[u8]) -> u32;
 
 /// Programs indicate success with a return value of 0
 pub const SUCCESS: u32 = 0;
 
-/// Declare entrypoint of the program.
+/// Declare the entry point of the program.
 ///
-/// Deserialize the program input parameters and call
-/// the user defined `ProcessInstruction`.  Users must call
-/// this macro otherwise an entrypoint for
+/// Deserialize the program input arguments and call
+/// the user defined `ProcessInstruction` function.
+/// Users must call this macro otherwise an entry point for
 /// their program will not be created.
 #[macro_export]
 macro_rules! entrypoint {
@@ -40,15 +40,15 @@ macro_rules! entrypoint {
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u32 {
             unsafe {
-                let (program_id, mut accounts, instruction_data) =
+                let (program_id, accounts, instruction_data) =
                     $crate::entrypoint::deserialize(input);
-                $process_instruction(&program_id, &mut accounts, &instruction_data)
+                $process_instruction(&program_id, &accounts, &instruction_data)
             }
         }
     };
 }
 
-/// Deserialize the input parameters
+/// Deserialize the input arguments
 ///
 /// # Safety
 #[allow(clippy::type_complexity)]

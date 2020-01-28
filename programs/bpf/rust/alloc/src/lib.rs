@@ -3,10 +3,8 @@
 #[macro_use]
 extern crate alloc;
 extern crate solana_sdk;
-use solana_sdk::entrypoint::SUCCESS;
-use solana_sdk::info;
-use std::alloc::Layout;
-use std::mem;
+use solana_sdk::{entrypoint::SUCCESS, info};
+use std::{alloc::Layout, mem};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
@@ -22,7 +20,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
     }
 
     unsafe {
-        // Test modest allocation and deallocation
+        // Test modest allocation and de-allocation
 
         let layout = Layout::from_size_align(100, mem::align_of::<u8>()).unwrap();
         let ptr = alloc::alloc::alloc(layout);
