@@ -126,6 +126,7 @@ pub struct Validator {
 }
 
 impl Validator {
+    #[allow(clippy::cognitive_complexity)]
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
@@ -171,6 +172,15 @@ impl Validator {
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
+
+        info!("Starting validator from slot {}", bank.slot());
+        {
+            let hard_forks: Vec<_> = bank.hard_forks().read().unwrap().iter().copied().collect();
+            if !hard_forks.is_empty() {
+                info!("Hard forks: {:?}", hard_forks);
+            }
+        }
+
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
@@ -474,7 +484,7 @@ fn compute_shred_version(genesis_hash: &Hash, hard_forks: &HardForks) -> u16 {
     let mut hash = *genesis_hash;
     for (slot, count) in hard_forks.iter() {
         let mut buf = [0u8; 16];
-        LittleEndian::write_u64(&mut buf[..7], *slot);
+        LittleEndian::write_u64(&mut buf[..8], *slot);
         LittleEndian::write_u64(&mut buf[8..], *count as u64);
         hash = extend_and_hash(&hash, &buf);
     }
@@ -652,6 +662,16 @@ mod tests {
     use super::*;
     use crate::genesis_utils::create_genesis_config_with_leader;
     use std::fs::remove_dir_all;
+
+    #[test]
+    fn test_compute_shred_version() {
+        let mut hard_forks = HardForks::default();
+        assert_eq!(compute_shred_version(&Hash::default(), &hard_forks), 1);
+        hard_forks.register(1);
+        assert_eq!(compute_shred_version(&Hash::default(), &hard_forks), 55551);
+        hard_forks.register(1);
+        assert_eq!(compute_shred_version(&Hash::default(), &hard_forks), 46353);
+    }
 
     #[test]
     fn validator_exit() {

@@ -448,7 +448,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     } else {
         // Once v0.23.x is deployed, this default can be removed and snapshots without a version
         // file can be rejected
-        String::from("v0.22.3")
+        String::from("0.22.3")
     };
 
     let bank = rebuild_bank_from_snapshots(
@@ -525,7 +525,7 @@ where
         |stream| {
             let mut bank: Bank = match snapshot_version {
                 env!("CARGO_PKG_VERSION") => deserialize_from_snapshot(stream.by_ref())?,
-                "v0.22.3" => {
+                "0.22.3" => {
                     let bank0223: solana_runtime::bank::LegacyBank0223 =
                         deserialize_from_snapshot(stream.by_ref())?;
                     bank0223.into()
