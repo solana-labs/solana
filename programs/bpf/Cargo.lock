@@ -2006,6 +2006,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-error-handling"
+version = "0.24.0"
+dependencies = [
+ "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.24.0",
+ "solana-sdk-bpf-test 0.24.0",
+ "thiserror 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "solana-bpf-rust-external-spend"
 version = "0.24.0"
 dependencies = [
@@ -2042,11 +2053,8 @@ dependencies = [
 name = "solana-bpf-rust-noop"
 version = "0.24.0"
 dependencies = [
- "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk 0.24.0",
  "solana-sdk-bpf-test 0.24.0",
- "thiserror 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

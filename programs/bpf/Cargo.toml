@@ -38,6 +38,7 @@ members = [
     "rust/alloc",
     "rust/dep_crate",
     "rust/dup_accounts",
+    "rust/error_handling",
     "rust/external_spend",
     "rust/iter",
     "rust/many_args",

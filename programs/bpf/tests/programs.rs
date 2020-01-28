@@ -162,10 +162,11 @@ mod bpf {
             bpf_loader,
             client::SyncClient,
             clock::DEFAULT_SLOTS_PER_EPOCH,
-            instruction::{AccountMeta, Instruction},
+            instruction::{AccountMeta, Instruction, InstructionError},
             pubkey::Pubkey,
             signature::{Keypair, KeypairUtil},
             sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
+            transaction::TransactionError,
         };
         use std::io::Read;
         use std::sync::Arc;
@@ -299,6 +300,62 @@ mod bpf {
             let lamports = bank_client.get_balance(&pubkey).unwrap();
             assert!(result.is_ok());
             assert_eq!(lamports, 13);
+        }
+
+        #[test]
+        fn test_program_bpf_rust_error_handling() {
+            solana_logger::setup();
+
+            let filename = create_bpf_path("solana_bpf_rust_error_handling");
+            let mut file = File::open(filename).unwrap();
+            let mut elf = Vec::new();
+            file.read_to_end(&mut elf).unwrap();
+
+            let GenesisConfigInfo {
+                genesis_config,
+                mint_keypair,
+                ..
+            } = create_genesis_config(50);
+
+            let bank = Bank::new(&genesis_config);
+            let bank_client = BankClient::new(bank);
+            let program_id = load_program(&bank_client, &mint_keypair, &bpf_loader::id(), elf);
+            let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
+
+            let instruction = Instruction::new(program_id, &1u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            assert!(result.is_ok());
+
+            let instruction = Instruction::new(program_id, &2u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            assert_eq!(
+                result.unwrap_err().unwrap(),
+                TransactionError::InstructionError(0, InstructionError::AccountBorrowFailed)
+            );
+
+            let instruction = Instruction::new(program_id, &3u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            assert_eq!(
+                result.unwrap_err().unwrap(),
+                TransactionError::InstructionError(0, InstructionError::CustomError(42))
+            );
+
+            let instruction = Instruction::new(program_id, &4u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            assert_eq!(
+                result.unwrap_err().unwrap(),
+                TransactionError::InstructionError(0, InstructionError::ConflictingError(0))
+            );
+
+            let instruction = Instruction::new(program_id, &5u8, account_metas.clone());
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            assert_eq!(
+                result.unwrap_err().unwrap(),
+                TransactionError::InstructionError(
+                    0,
+                    InstructionError::ConflictingError(0x8000_002d)
+                )
+            );
         }
     }
 }
