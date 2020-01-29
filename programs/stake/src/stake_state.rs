@@ -1627,9 +1627,10 @@ mod tests {
         vote_keyed_account.set_state(&VoteState::default()).unwrap();
 
         stake_keyed_account
-            .delegate_stake(
+            .delegate(
                 &vote_keyed_account,
                 &Clock::default(),
+                &StakeHistory::default(),
                 &Config::default(),
                 &vec![stake_pubkey].into_iter().collect(),
             )
