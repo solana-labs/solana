@@ -765,6 +765,8 @@ pub fn main() {
         .join(","),
     );
 
+    info!("Starting validator with: {:#?}", std::env::args_os());
+
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
         // Disable voting because normal (=not bootstrapping) validator rejects
         // non-voting accounts (= ephemeral keypairs).
