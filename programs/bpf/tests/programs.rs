@@ -1,12 +1,12 @@
 #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 mod bpf {
-    use solana_runtime::bank::Bank;
-    use solana_runtime::bank_client::BankClient;
-    use solana_runtime::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_runtime::loader_utils::load_program;
-    use std::env;
-    use std::fs::File;
-    use std::path::PathBuf;
+    use solana_runtime::{
+        bank::Bank,
+        bank_client::BankClient,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        loader_utils::load_program,
+    };
+    use std::{env, fs::File, path::PathBuf};
 
     /// BPF program file extension
     const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
@@ -27,14 +27,15 @@ mod bpf {
     mod bpf_c {
         use super::*;
         use solana_runtime::loader_utils::create_invoke_instruction;
-        use solana_sdk::account::Account;
-        use solana_sdk::bpf_loader;
-        use solana_sdk::client::SyncClient;
-        use solana_sdk::instruction::{AccountMeta, Instruction};
-        use solana_sdk::signature::KeypairUtil;
-        use std::io::Read;
-        use std::sync::Arc;
-        use solana_sdk::pubkey::Pubkey;
+        use solana_sdk::{
+            account::Account,
+            bpf_loader,
+            client::SyncClient,
+            instruction::{AccountMeta, Instruction},
+            pubkey::Pubkey,
+            signature::KeypairUtil,
+        };
+        use std::{io::Read, sync::Arc};
 
         #[test]
         fn test_program_bpf_c() {
@@ -156,14 +157,16 @@ mod bpf {
     #[cfg(feature = "bpf_rust")]
     mod bpf_rust {
         use super::*;
-        use solana_sdk::account::Account;
-        use solana_sdk::bpf_loader;
-        use solana_sdk::client::SyncClient;
-        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        use solana_sdk::instruction::{AccountMeta, Instruction};
-        use solana_sdk::pubkey::Pubkey;
-        use solana_sdk::signature::{Keypair, KeypairUtil};
-        use solana_sdk::sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history};
+        use solana_sdk::{
+            account::Account,
+            bpf_loader,
+            client::SyncClient,
+            clock::DEFAULT_SLOTS_PER_EPOCH,
+            instruction::{AccountMeta, Instruction},
+            pubkey::Pubkey,
+            signature::{Keypair, KeypairUtil},
+            sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
+        };
         use std::io::Read;
         use std::sync::Arc;
 
