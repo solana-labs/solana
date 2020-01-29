@@ -113,6 +113,14 @@ pub enum StakeInstruction {
     ///    1 - Syscall Account that carries epoch
     ///
     Deactivate,
+
+    /// Set stake lockup
+    ///    requires Lockup::custodian signature
+    ///
+    /// Expects 1 Account:
+    ///    0 - initialized StakeAccount
+    ///
+    SetLockup(Lockup),
 }
 
 fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Lockup) -> Instruction {
@@ -349,6 +357,15 @@ pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> In
     Instruction::new(id(), &StakeInstruction::Deactivate, account_metas)
 }
 
+pub fn set_lockup(
+    stake_pubkey: &Pubkey,
+    lockup: &Lockup,
+    custodian_pubkey: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*stake_pubkey, false)].with_signer(custodian_pubkey);
+    Instruction::new(id(), &StakeInstruction::SetLockup(*lockup), account_metas)
+}
+
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
@@ -405,6 +422,8 @@ pub fn process_instruction(
             &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             &signers,
         ),
+
+        StakeInstruction::SetLockup(lockup) => me.set_lockup(&lockup, &signers),
     }
 }
 
@@ -513,6 +532,14 @@ mod tests {
         );
         assert_eq!(
             process_instruction(&deactivate_stake(&Pubkey::default(), &Pubkey::default())),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(&set_lockup(
+                &Pubkey::default(),
+                &Lockup::default(),
+                &Pubkey::default()
+            )),
             Err(InstructionError::InvalidAccountData),
         );
     }

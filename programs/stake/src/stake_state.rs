@@ -121,6 +121,18 @@ pub struct Meta {
 }
 
 impl Meta {
+    pub fn set_lockup(
+        &mut self,
+        lockup: &Lockup,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError> {
+        if !signers.contains(&self.lockup.custodian) {
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+        self.lockup = *lockup;
+        Ok(())
+    }
+
     pub fn authorize(
         &mut self,
         authority: &Pubkey,
@@ -537,6 +549,11 @@ pub trait StakeAccount {
         clock: &sysvar::clock::Clock,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError>;
+    fn set_lockup(
+        &self,
+        lockup: &Lockup,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError>;
     fn split(
         &self,
         lamports: u64,
@@ -638,6 +655,23 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             self.set_state(&StakeState::Stake(meta, stake))
         } else {
             Err(InstructionError::InvalidAccountData)
+        }
+    }
+    fn set_lockup(
+        &self,
+        lockup: &Lockup,
+        signers: &HashSet<Pubkey>,
+    ) -> Result<(), InstructionError> {
+        match self.state()? {
+            StakeState::Initialized(mut meta) => {
+                meta.set_lockup(lockup, signers)?;
+                self.set_state(&StakeState::Initialized(meta))
+            }
+            StakeState::Stake(mut meta, stake) => {
+                meta.set_lockup(lockup, signers)?;
+                self.set_state(&StakeState::Stake(meta, stake))
+            }
+            _ => Err(InstructionError::InvalidAccountData),
         }
     }
 
@@ -1574,6 +1608,100 @@ mod tests {
         assert_eq!(
             stake_keyed_account.deactivate_stake(&clock, &signers),
             Err(StakeError::AlreadyDeactivated.into())
+        );
+    }
+
+    #[test]
+    fn test_set_lockup() {
+        let stake_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+        let stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+
+        // wrong state, should fail
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
+        assert_eq!(
+            stake_keyed_account.set_lockup(&Lockup::default(), &HashSet::default(),),
+            Err(InstructionError::InvalidAccountData)
+        );
+
+        // initalize the stake
+        let custodian = Pubkey::new_rand();
+        stake_keyed_account
+            .initialize(
+                &Authorized::auto(&stake_pubkey),
+                &Lockup {
+                    unix_timestamp: 1,
+                    epoch: 1,
+                    custodian,
+                },
+                &Rent::free(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            stake_keyed_account.set_lockup(&Lockup::default(), &HashSet::default(),),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &Lockup {
+                    unix_timestamp: 1,
+                    epoch: 1,
+                    custodian,
+                },
+                &vec![custodian].into_iter().collect()
+            ),
+            Ok(())
+        );
+
+        // delegate stake
+        let vote_pubkey = Pubkey::new_rand();
+        let vote_account = RefCell::new(vote_state::create_account(
+            &vote_pubkey,
+            &Pubkey::new_rand(),
+            0,
+            100,
+        ));
+        let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
+        vote_keyed_account.set_state(&VoteState::default()).unwrap();
+
+        stake_keyed_account
+            .delegate_stake(
+                &vote_keyed_account,
+                &Clock::default(),
+                &Config::default(),
+                &vec![stake_pubkey].into_iter().collect(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &Lockup {
+                    unix_timestamp: 1,
+                    epoch: 1,
+                    custodian,
+                },
+                &HashSet::default(),
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+        assert_eq!(
+            stake_keyed_account.set_lockup(
+                &Lockup {
+                    unix_timestamp: 1,
+                    epoch: 1,
+                    custodian,
+                },
+                &vec![custodian].into_iter().collect()
+            ),
+            Ok(())
         );
     }
 
