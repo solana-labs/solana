@@ -15,7 +15,6 @@ use solana_sdk::{
     sysvar::rent,
 };
 use std::{
-    convert::TryFrom,
     io::{prelude::*, Error},
     mem,
 };
@@ -145,19 +144,15 @@ pub fn process_instruction(
 
         info!("Call BPF program");
         match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
-            Ok(status) => match u32::try_from(status & std::u32::MAX as u64) {
-                Ok(status) => {
-                    if status != 0 {
-                        let error: InstructionError = status.into();
-                        warn!("BPF program failed: {:?}", error);
-                        return Err(error);
-                    }
+            Ok(status) => {
+                // drop upper 32bits, programs only return lower 32bits
+                let status = status as u32;
+                if status != 0 {
+                    let error: InstructionError = status.into();
+                    warn!("BPF program failed: {:?}", error);
+                    return Err(error);
                 }
-                Err(e) => {
-                    warn!("BPF VM encountered invalid status: {}", e);
-                    return Err(InstructionError::GenericError);
-                }
-            },
+            }
             Err(e) => {
                 warn!("BPF VM failed to run program: {}", e);
                 return Err(InstructionError::GenericError);
