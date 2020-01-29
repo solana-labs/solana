@@ -145,7 +145,7 @@ pub fn process_instruction(
         info!("Call BPF program");
         match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
             Ok(status) => {
-                // drop upper 32bits, programs only return lower 32bits
+                // ignore upper 32bits if any, programs only return lower 32bits
                 let status = status as u32;
                 if status != 0 {
                     let error: InstructionError = status.into();
