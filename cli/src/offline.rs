@@ -33,15 +33,19 @@ pub enum BlockhashSpec {
 }
 
 impl BlockhashSpec {
-    pub fn new_from_matches(matches: &ArgMatches<'_>) -> Self {
-        let blockhash = value_of(matches, BLOCKHASH_ARG.name);
-        let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    pub fn new(blockhash: Option<Hash>, sign_only: bool) -> Self {
         match blockhash {
             Some(hash) if sign_only => Self::Full(hash, FeeCalculator::default()),
             Some(hash) if !sign_only => Self::Partial(hash),
             None if !sign_only => Self::Undeclared,
             _ => panic!("Cannot resolve blockhash"),
         }
+    }
+
+    pub fn new_from_matches(matches: &ArgMatches<'_>) -> Self {
+        let blockhash = value_of(matches, BLOCKHASH_ARG.name);
+        let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+        BlockhashSpec::new(blockhash, sign_only)
     }
 
     pub fn get_blockhash_fee_calculator(
@@ -119,6 +123,30 @@ mod tests {
     };
     use solana_sdk::{fee_calculator::FeeCalculator, hash::hash};
     use std::collections::HashMap;
+
+    #[test]
+    fn test_blockhashspec_new_ok() {
+        let blockhash = hash(&[1u8]);
+
+        assert_eq!(
+            BlockhashSpec::new(Some(blockhash), true),
+            BlockhashSpec::Full(blockhash, FeeCalculator::default()),
+        );
+        assert_eq!(
+            BlockhashSpec::new(Some(blockhash), false),
+            BlockhashSpec::Partial(blockhash),
+        );
+        assert_eq!(
+            BlockhashSpec::new(None, false),
+            BlockhashSpec::Undeclared,
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_blockhashspec_new_fail() {
+        BlockhashSpec::new(None, true);
+    }
 
     #[test]
     fn test_blockhashspec_new_from_matches_ok() {
