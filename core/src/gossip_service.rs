@@ -6,7 +6,6 @@ use crate::streamer;
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blockstore::Blockstore;
 use solana_perf::recycler::Recycler;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -24,7 +23,6 @@ pub struct GossipService {
 impl GossipService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        blockstore: Option<Arc<Blockstore>>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         gossip_socket: UdpSocket,
         exit: &Arc<AtomicBool>,
@@ -47,7 +45,6 @@ impl GossipService {
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),
-            blockstore,
             bank_forks.clone(),
             request_receiver,
             response_sender.clone(),
@@ -283,8 +280,7 @@ fn make_gossip_node(
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
     let cluster_info = Arc::new(RwLock::new(cluster_info));
-    let gossip_service =
-        GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);
+    let gossip_service = GossipService::new(&cluster_info.clone(), None, gossip_socket, &exit);
     (gossip_service, ip_echo, cluster_info)
 }
 
@@ -303,7 +299,7 @@ mod tests {
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new_with_invalid_keypair(tn.info.clone());
         let c = Arc::new(RwLock::new(cluster_info));
-        let d = GossipService::new(&c, None, None, tn.sockets.gossip, &exit);
+        let d = GossipService::new(&c, None, tn.sockets.gossip, &exit);
         exit.store(true, Ordering::Relaxed);
         d.join().unwrap();
     }
