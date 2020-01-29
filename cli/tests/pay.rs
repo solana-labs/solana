@@ -289,9 +289,11 @@ fn test_offline_pay_tx() {
     check_balance(50, &rpc_client, &config_offline.keypair.pubkey());
     check_balance(50, &rpc_client, &config_online.keypair.pubkey());
 
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
+        blockhash: Some(blockhash),
         sign_only: true,
         ..PayCommand::default()
     });
