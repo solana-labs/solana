@@ -10,7 +10,7 @@
  *
  */
 
-import BN from 'bn.js';
+import * as BufferLayout from 'buffer-layout';
 
 declare module '@solana/web3.js' {
   // === src/publickey.js ===
@@ -55,6 +55,21 @@ declare module '@solana/web3.js' {
   };
 
   declare export type Commitment = 'max' | 'recent';
+
+  declare export type SignatureStatusResult =
+    | SignatureSuccess
+    | TransactionError
+    | null;
+
+  declare export type BlockhashAndFeeCalculator = {
+    blockhash: Blockhash,
+    feeCalculator: FeeCalculator,
+  };
+
+  declare export type PublicKeyAndAccount = {
+    pubkey: PublicKey,
+    account: AccountInfo,
+  };
 
   declare export type AccountInfo = {
     executable: boolean,
@@ -138,6 +153,11 @@ declare module '@solana/web3.js' {
     firstNormalSlot: number,
   };
 
+  declare export type VoteAccountStatus = {
+    current: Array<VoteAccountInfo>,
+    delinquent: Array<VoteAccountInfo>,
+  };
+
   declare export class Connection {
     constructor(endpoint: string, commitment: ?Commitment): Connection;
     getAccountInfoAndContext(
@@ -217,6 +237,27 @@ declare module '@solana/web3.js' {
   }
 
   // === src/stake-program.js ===
+  declare export type StakeAuthorizationType = {|
+    index: number,
+  |};
+
+  declare export class Authorized {
+    staker: PublicKey;
+    withdrawer: PublicKey;
+    constructor(staker: PublicKey, withdrawer: PublicKey): Authorized;
+  }
+
+  declare export class Lockup {
+    unixTimestamp: number;
+    epoch: number;
+    custodian: PublicKey;
+    constructor(
+      unixTimestamp: number,
+      epoch: number,
+      custodian: PublicKey,
+    ): Lockup;
+  }
+
   declare export class StakeProgram {
     static programId: PublicKey;
     static space: number;
@@ -444,7 +485,10 @@ declare module '@solana/web3.js' {
   ): Promise<TransactionSignature>;
 
   // === src/util/testnet.js ===
-  declare export function testnetChannelEndpoint(channel?: string): string;
+  declare export function testnetChannelEndpoint(
+    channel?: string,
+    tls?: boolean,
+  ): string;
 
   declare export var LAMPORTS_PER_SOL: number;
 }
