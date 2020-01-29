@@ -3,21 +3,19 @@
 extern crate test;
 
 use log::*;
-use solana_runtime::bank::*;
-use solana_runtime::bank_client::BankClient;
-use solana_runtime::loader_utils::create_invoke_instruction;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::client::AsyncClient;
-use solana_sdk::client::SyncClient;
-use solana_sdk::clock::MAX_RECENT_BLOCKHASHES;
-use solana_sdk::genesis_config::create_genesis_config;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::transaction::Transaction;
-use std::sync::Arc;
-use std::thread::sleep;
-use std::time::Duration;
+use solana_runtime::{bank::*, bank_client::BankClient, loader_utils::create_invoke_instruction};
+use solana_sdk::{
+    account::KeyedAccount,
+    client::AsyncClient,
+    client::SyncClient,
+    clock::MAX_RECENT_BLOCKHASHES,
+    genesis_config::create_genesis_config,
+    instruction::InstructionError,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    transaction::Transaction,
+};
+use std::{sync::Arc, thread::sleep, time::Duration};
 use test::Bencher;
 
 const BUILTIN_PROGRAM_ID: [u8; 32] = [

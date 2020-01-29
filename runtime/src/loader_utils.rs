@@ -1,11 +1,13 @@
 use serde::Serialize;
-use solana_sdk::client::Client;
-use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::loader_instruction;
-use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction;
+use solana_sdk::{
+    client::Client,
+    instruction::{AccountMeta, Instruction},
+    loader_instruction,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    system_instruction,
+};
 
 pub fn load_program<T: Client>(
     bank_client: &T,

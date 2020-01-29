@@ -3,9 +3,7 @@ use bv::BitVec;
 use fnv::FnvHasher;
 use rand::{self, Rng};
 use serde::{Deserialize, Serialize};
-use std::cmp;
-use std::hash::Hasher;
-use std::marker::PhantomData;
+use std::{cmp, hash::Hasher, marker::PhantomData};
 
 /// Generate a stable hash of `self` for each `hash_index`
 /// Best effort can be made for uniqueness of each hash.

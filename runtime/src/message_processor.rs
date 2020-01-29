@@ -1,18 +1,17 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::{create_keyed_readonly_accounts, Account, KeyedAccount};
-use solana_sdk::clock::Epoch;
-use solana_sdk::instruction::{CompiledInstruction, InstructionError};
-use solana_sdk::instruction_processor_utils;
-use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_program;
-use solana_sdk::transaction::TransactionError;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::RwLock;
+use solana_sdk::{
+    account::{create_keyed_readonly_accounts, Account, KeyedAccount},
+    clock::Epoch,
+    instruction::{CompiledInstruction, InstructionError},
+    instruction_processor_utils,
+    message::Message,
+    pubkey::Pubkey,
+    system_program,
+    transaction::TransactionError,
+};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::RwLock};
 
 #[cfg(unix)]
 use libloading::os::unix::*;
@@ -342,9 +341,11 @@ pub fn is_zeroed(buf: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
-    use solana_sdk::message::Message;
-    use solana_sdk::native_loader::create_loadable_account;
+    use solana_sdk::{
+        instruction::{AccountMeta, Instruction, InstructionError},
+        message::Message,
+        native_loader::create_loadable_account,
+    };
 
     #[test]
     fn test_is_zeroed() {

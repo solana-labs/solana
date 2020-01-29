@@ -1,6 +1,8 @@
 use solana_sdk::pubkey::Pubkey;
-use std::collections::{HashMap, HashSet};
-use std::sync::{RwLock, RwLockReadGuard};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{RwLock, RwLockReadGuard},
+};
 
 pub type Slot = u64;
 type SlotList<T> = Vec<(Slot, T)>;

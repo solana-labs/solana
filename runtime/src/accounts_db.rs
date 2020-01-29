@@ -18,33 +18,39 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
-use crate::accounts_index::AccountsIndex;
-use crate::append_vec::{AppendVec, StoredAccount, StoredMeta};
-use crate::bank::deserialize_from_snapshot;
+use crate::{
+    accounts_index::AccountsIndex,
+    append_vec::{AppendVec, StoredAccount, StoredMeta},
+    bank::deserialize_from_snapshot,
+};
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use fs_extra::dir::CopyOptions;
 use log::*;
 use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use rayon::ThreadPool;
-use serde::de::{MapAccess, Visitor};
-use serde::ser::{SerializeMap, Serializer};
-use serde::{Deserialize, Serialize};
+use rayon::{prelude::*, ThreadPool};
+use serde::{
+    de::{MapAccess, Visitor},
+    ser::{SerializeMap, Serializer},
+    Deserialize, Serialize,
+};
 use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::account::Account;
-use solana_sdk::bank_hash::BankHash;
-use solana_sdk::clock::{Epoch, Slot};
-use solana_sdk::hash::{Hash, Hasher};
-use solana_sdk::pubkey::Pubkey;
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult};
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
+use solana_sdk::{
+    account::Account,
+    bank_hash::BankHash,
+    clock::{Epoch, Slot},
+    hash::{Hash, Hasher},
+    pubkey::Pubkey,
+};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult},
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicUsize, Ordering},
+    sync::{Arc, RwLock},
+};
 use tempfile::TempDir;
 
 pub const DEFAULT_FILE_SIZE: u64 = 4 * 1024 * 1024;
@@ -1320,10 +1326,8 @@ pub mod tests {
     use assert_matches::assert_matches;
     use bincode::serialize_into;
     use rand::{thread_rng, Rng};
-    use solana_sdk::account::Account;
-    use solana_sdk::hash::HASH_BYTES;
-    use std::fs;
-    use std::str::FromStr;
+    use solana_sdk::{account::Account, hash::HASH_BYTES};
+    use std::{fs, str::FromStr};
     use tempfile::TempDir;
 
     #[test]

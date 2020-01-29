@@ -3,8 +3,7 @@
 extern crate test;
 
 use rand::{thread_rng, Rng};
-use solana_runtime::accounts_db::AccountInfo;
-use solana_runtime::accounts_index::AccountsIndex;
+use solana_runtime::{accounts_db::AccountInfo, accounts_index::AccountsIndex};
 use solana_sdk::pubkey::Pubkey;
 use test::Bencher;
 

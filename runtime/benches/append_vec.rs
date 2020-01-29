@@ -2,13 +2,17 @@
 extern crate test;
 
 use rand::{thread_rng, Rng};
-use solana_runtime::append_vec::test_utils::{create_test_account, get_append_vec_path};
-use solana_runtime::append_vec::AppendVec;
+use solana_runtime::append_vec::{
+    test_utils::{create_test_account, get_append_vec_path},
+    AppendVec,
+};
 use solana_sdk::hash::Hash;
-use std::sync::{Arc, Mutex};
-use std::thread::sleep;
-use std::thread::spawn;
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    thread::sleep,
+    thread::spawn,
+    time::Duration,
+};
 use test::Bencher;
 
 #[bench]

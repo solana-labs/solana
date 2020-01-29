@@ -1,9 +1,8 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
-use solana_sdk::account::Account;
-use solana_sdk::clock::Epoch;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::sysvar::stake_history::StakeHistory;
+use solana_sdk::{
+    account::Account, clock::Epoch, pubkey::Pubkey, sysvar::stake_history::StakeHistory,
+};
 use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
 use solana_vote_program::vote_state::VoteState;
 use std::collections::HashMap;

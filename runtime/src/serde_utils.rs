@@ -1,5 +1,7 @@
-use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::{
+    fmt,
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+};
 
 struct U64Visitor;
 impl<'a> serde::de::Visitor<'a> for U64Visitor {

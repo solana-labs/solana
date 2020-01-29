@@ -1,10 +1,10 @@
-use solana_runtime::bank::Bank;
-use solana_runtime::bank_client::BankClient;
-use solana_runtime::loader_utils::create_invoke_instruction;
-use solana_sdk::client::SyncClient;
-use solana_sdk::genesis_config::create_genesis_config;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::KeypairUtil;
+use solana_runtime::{
+    bank::Bank, bank_client::BankClient, loader_utils::create_invoke_instruction,
+};
+use solana_sdk::{
+    client::SyncClient, genesis_config::create_genesis_config, pubkey::Pubkey,
+    signature::KeypairUtil,
+};
 
 #[test]
 fn test_program_native_noop() {
