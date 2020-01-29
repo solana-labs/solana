@@ -1,8 +1,6 @@
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
-use crate::pubkey::Pubkey;
-use crate::short_vec;
-use crate::system_instruction::SystemError;
+use crate::{pubkey::Pubkey, short_vec, system_instruction::SystemError};
 use bincode::serialize;
 use serde::Serialize;
 

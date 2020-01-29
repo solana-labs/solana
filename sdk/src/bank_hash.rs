@@ -3,8 +3,7 @@ use bincode::deserialize_from;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize, Serializer};
-use std::fmt;
-use std::io::Cursor;
+use std::{fmt, io::Cursor};
 
 // Type for representing a bank accounts state.
 // Taken by xor of a sha256 of accounts state for lower 32-bytes, and

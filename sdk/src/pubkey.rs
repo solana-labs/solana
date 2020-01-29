@@ -1,8 +1,4 @@
-use std::convert::TryFrom;
-use std::error;
-use std::fmt;
-use std::mem;
-use std::str::FromStr;
+use std::{convert::TryFrom, error, fmt, mem, str::FromStr};
 
 pub use bs58;
 

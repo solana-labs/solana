@@ -6,8 +6,7 @@ use crate::{
     pubkey::Pubkey,
     system_instruction::NonceError,
     system_program,
-    sysvar::recent_blockhashes::RecentBlockhashes,
-    sysvar::rent::Rent,
+    sysvar::{recent_blockhashes::RecentBlockhashes, rent::Rent},
 };
 use serde_derive::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashSet};

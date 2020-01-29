@@ -1,6 +1,8 @@
-use crate::hash::Hash;
-use crate::instruction::InstructionError;
-use crate::{clock::Epoch, pubkey::Pubkey};
+use crate::{
+    hash::Hash,
+    instruction::InstructionError,
+    {clock::Epoch, pubkey::Pubkey},
+};
 use std::{
     cell::{Ref, RefCell, RefMut},
     cmp, fmt,

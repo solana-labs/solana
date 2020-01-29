@@ -4,9 +4,7 @@ use crate::{
     sysvar::Sysvar,
 };
 use bincode::serialize;
-use std::collections::BinaryHeap;
-use std::iter::FromIterator;
-use std::ops::Deref;
+use std::{collections::BinaryHeap, iter::FromIterator, ops::Deref};
 
 const MAX_ENTRIES: usize = 32;
 

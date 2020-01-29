@@ -1,9 +1,11 @@
 //! A library for generating a message from a sequence of instructions
 
-use crate::hash::Hash;
-use crate::instruction::{AccountMeta, CompiledInstruction, Instruction};
-use crate::pubkey::Pubkey;
-use crate::short_vec;
+use crate::{
+    hash::Hash,
+    instruction::{AccountMeta, CompiledInstruction, Instruction},
+    pubkey::Pubkey,
+    short_vec,
+};
 use itertools::Itertools;
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
@@ -245,8 +247,10 @@ impl Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instruction::AccountMeta;
-    use crate::signature::{Keypair, KeypairUtil};
+    use crate::{
+        instruction::AccountMeta,
+        signature::{Keypair, KeypairUtil},
+    };
 
     #[test]
     fn test_message_unique_program_ids() {
