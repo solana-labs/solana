@@ -192,6 +192,7 @@ pub enum CliCommand {
     GetTransactionCount {
         commitment_config: CommitmentConfig,
     },
+    LeaderSchedule,
     Ping {
         lamports: u64,
         interval: Duration,
@@ -449,6 +450,10 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         }),
         ("get-slot", Some(matches)) => parse_get_slot(matches),
         ("get-transaction-count", Some(matches)) => parse_get_transaction_count(matches),
+        ("leader-schedule", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::LeaderSchedule,
+            require_keypair: false,
+        }),
         ("ping", Some(matches)) => parse_cluster_ping(matches),
         ("show-block-production", Some(matches)) => parse_show_block_production(matches),
         ("show-gossip", Some(_matches)) => Ok(CliCommandInfo {
@@ -1260,6 +1265,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetTransactionCount { commitment_config } => {
             process_get_transaction_count(&rpc_client, commitment_config)
         }
+        CliCommand::LeaderSchedule => process_leader_schedule(&rpc_client),
         CliCommand::Ping {
             lamports,
             interval,
