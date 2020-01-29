@@ -1,7 +1,7 @@
 use serde_json::Value;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
-    offline::BlockhashSpec,
+    offline::BlockhashQuery,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
@@ -136,7 +136,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         force: true,
         sign_only: false,
         signers: None,
-        blockhash_spec: BlockhashSpec::default(),
+        blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -148,7 +148,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         stake_authority: None,
         sign_only: false,
         signers: None,
-        blockhash_spec: BlockhashSpec::default(),
+        blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -224,7 +224,7 @@ fn test_stake_delegation_and_deactivation() {
         force: true,
         sign_only: false,
         signers: None,
-        blockhash_spec: BlockhashSpec::default(),
+        blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -236,7 +236,7 @@ fn test_stake_delegation_and_deactivation() {
         stake_authority: None,
         sign_only: false,
         signers: None,
-        blockhash_spec: BlockhashSpec::default(),
+        blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -317,7 +317,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         force: true,
         sign_only: true,
         signers: None,
-        blockhash_spec: BlockhashSpec::Full(blockhash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -332,7 +332,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         force: true,
         sign_only: false,
         signers: Some(signers),
-        blockhash_spec: BlockhashSpec::Full(blockhash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -345,7 +345,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_authority: None,
         sign_only: true,
         signers: None,
-        blockhash_spec: BlockhashSpec::Full(blockhash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -358,7 +358,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_authority: None,
         sign_only: false,
         signers: Some(signers),
-        blockhash_spec: BlockhashSpec::Partial(blockhash),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -445,7 +445,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         force: true,
         sign_only: false,
         signers: None,
-        blockhash_spec: BlockhashSpec::Full(nonce_hash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
     };
@@ -466,7 +466,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         stake_authority: None,
         sign_only: false,
         signers: None,
-        blockhash_spec: BlockhashSpec::Partial(nonce_hash),
+        blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: Some(config_keypair.into()),
     };
@@ -520,7 +520,7 @@ fn test_stake_authorize() {
         authority: None,
         sign_only: false,
         signers: None,
-        blockhash_spec: BlockhashSpec::default(),
+        blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -545,7 +545,7 @@ fn test_stake_authorize() {
         authority: Some(read_keypair_file(&online_authority_file).unwrap().into()),
         sign_only: false,
         signers: None,
-        blockhash_spec: BlockhashSpec::default(),
+        blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -571,7 +571,7 @@ fn test_stake_authorize() {
         authority: Some(read_keypair_file(&offline_authority_file).unwrap().into()),
         sign_only: true,
         signers: None,
-        blockhash_spec: BlockhashSpec::Full(blockhash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -584,7 +584,7 @@ fn test_stake_authorize() {
         authority: Some(offline_authority_pubkey.into()),
         sign_only: false,
         signers: Some(signers),
-        blockhash_spec: BlockhashSpec::Partial(blockhash),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
     };
@@ -632,7 +632,7 @@ fn test_stake_authorize() {
         authority: Some(read_keypair_file(&nonced_authority_file).unwrap().into()),
         sign_only: true,
         signers: None,
-        blockhash_spec: BlockhashSpec::Full(nonce_hash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
     };
@@ -646,7 +646,7 @@ fn test_stake_authorize() {
         authority: Some(nonced_authority_pubkey.into()),
         sign_only: false,
         signers: Some(signers),
-        blockhash_spec: BlockhashSpec::Partial(blockhash),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
     };

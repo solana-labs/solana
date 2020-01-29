@@ -26,18 +26,18 @@ pub const SIGNER_ARG: ArgConstant<'static> = ArgConstant {
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum BlockhashSpec {
-    Full(Hash, FeeCalculator),
-    Partial(Hash),
-    Undeclared,
+pub enum BlockhashQuery {
+    None(Hash, FeeCalculator),
+    FeeCalculator(Hash),
+    All,
 }
 
-impl BlockhashSpec {
+impl BlockhashQuery {
     pub fn new(blockhash: Option<Hash>, sign_only: bool) -> Self {
         match blockhash {
-            Some(hash) if sign_only => Self::Full(hash, FeeCalculator::default()),
-            Some(hash) if !sign_only => Self::Partial(hash),
-            None if !sign_only => Self::Undeclared,
+            Some(hash) if sign_only => Self::None(hash, FeeCalculator::default()),
+            Some(hash) if !sign_only => Self::FeeCalculator(hash),
+            None if !sign_only => Self::All,
             _ => panic!("Cannot resolve blockhash"),
         }
     }
@@ -45,7 +45,7 @@ impl BlockhashSpec {
     pub fn new_from_matches(matches: &ArgMatches<'_>) -> Self {
         let blockhash = value_of(matches, BLOCKHASH_ARG.name);
         let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-        BlockhashSpec::new(blockhash, sign_only)
+        BlockhashQuery::new(blockhash, sign_only)
     }
 
     pub fn get_blockhash_fee_calculator(
@@ -53,9 +53,9 @@ impl BlockhashSpec {
         rpc_client: &RpcClient,
     ) -> Result<(Hash, FeeCalculator), Box<dyn std::error::Error>> {
         let (hash, fee_calc) = match self {
-            BlockhashSpec::Full(hash, fee_calc) => (Some(hash), Some(fee_calc)),
-            BlockhashSpec::Partial(hash) => (Some(hash), None),
-            BlockhashSpec::Undeclared => (None, None),
+            BlockhashQuery::None(hash, fee_calc) => (Some(hash), Some(fee_calc)),
+            BlockhashQuery::FeeCalculator(hash) => (Some(hash), None),
+            BlockhashQuery::All => (None, None),
         };
         if None == fee_calc {
             let (cluster_hash, fee_calc) = rpc_client.get_recent_blockhash()?;
@@ -66,9 +66,9 @@ impl BlockhashSpec {
     }
 }
 
-impl Default for BlockhashSpec {
+impl Default for BlockhashQuery {
     fn default() -> Self {
-        BlockhashSpec::Undeclared
+        BlockhashQuery::All
     }
 }
 
@@ -129,23 +129,20 @@ mod tests {
         let blockhash = hash(&[1u8]);
 
         assert_eq!(
-            BlockhashSpec::new(Some(blockhash), true),
-            BlockhashSpec::Full(blockhash, FeeCalculator::default()),
+            BlockhashQuery::new(Some(blockhash), true),
+            BlockhashQuery::None(blockhash, FeeCalculator::default()),
         );
         assert_eq!(
-            BlockhashSpec::new(Some(blockhash), false),
-            BlockhashSpec::Partial(blockhash),
+            BlockhashQuery::new(Some(blockhash), false),
+            BlockhashQuery::FeeCalculator(blockhash),
         );
-        assert_eq!(
-            BlockhashSpec::new(None, false),
-            BlockhashSpec::Undeclared,
-        );
+        assert_eq!(BlockhashQuery::new(None, false), BlockhashQuery::All,);
     }
 
     #[test]
     #[should_panic]
     fn test_blockhashspec_new_fail() {
-        BlockhashSpec::new(None, true);
+        BlockhashQuery::new(None, true);
     }
 
     #[test]
@@ -161,8 +158,8 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            BlockhashSpec::new_from_matches(&matches),
-            BlockhashSpec::Full(blockhash, FeeCalculator::default()),
+            BlockhashQuery::new_from_matches(&matches),
+            BlockhashQuery::None(blockhash, FeeCalculator::default()),
         );
 
         let matches = test_commands.clone().get_matches_from(vec![
@@ -171,16 +168,16 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            BlockhashSpec::new_from_matches(&matches),
-            BlockhashSpec::Partial(blockhash),
+            BlockhashQuery::new_from_matches(&matches),
+            BlockhashQuery::FeeCalculator(blockhash),
         );
 
         let matches = test_commands
             .clone()
             .get_matches_from(vec!["blockhashspec_test"]);
         assert_eq!(
-            BlockhashSpec::new_from_matches(&matches),
-            BlockhashSpec::Undeclared,
+            BlockhashQuery::new_from_matches(&matches),
+            BlockhashQuery::All,
         );
     }
 
@@ -196,7 +193,7 @@ mod tests {
         let matches = test_commands
             .clone()
             .get_matches_from(vec!["blockhashspec_test", "--sign-only"]);
-        BlockhashSpec::new_from_matches(&matches);
+        BlockhashQuery::new_from_matches(&matches);
     }
 
     #[test]
@@ -218,7 +215,7 @@ mod tests {
         );
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
-            BlockhashSpec::Undeclared
+            BlockhashQuery::All
                 .get_blockhash_fee_calculator(&rpc_client)
                 .unwrap(),
             (rpc_blockhash, rpc_fee_calc.clone()),
@@ -230,7 +227,7 @@ mod tests {
         );
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
-            BlockhashSpec::Partial(test_blockhash)
+            BlockhashQuery::FeeCalculator(test_blockhash)
                 .get_blockhash_fee_calculator(&rpc_client)
                 .unwrap(),
             (test_blockhash, rpc_fee_calc.clone()),
@@ -242,13 +239,13 @@ mod tests {
         );
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
-            BlockhashSpec::Full(test_blockhash, FeeCalculator::default())
+            BlockhashQuery::None(test_blockhash, FeeCalculator::default())
                 .get_blockhash_fee_calculator(&rpc_client)
                 .unwrap(),
             (test_blockhash, FeeCalculator::default()),
         );
         let rpc_client = RpcClient::new_mock("fails".to_string());
-        assert!(BlockhashSpec::Undeclared
+        assert!(BlockhashQuery::All
             .get_blockhash_fee_calculator(&rpc_client)
             .is_err());
     }
