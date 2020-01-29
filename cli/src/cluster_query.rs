@@ -54,6 +54,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Get the version of the cluster entrypoint"),
         )
         .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
+        .subcommand(SubCommand::with_name("leader-schedule").about("Display leader schedule"))
         .subcommand(SubCommand::with_name("get-block-time")
             .about("Get estimated production time of a block")
             .arg(
@@ -362,6 +363,41 @@ pub fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
         "blockhash: {}\nlamports per signature: {}",
         recent_blockhash, fee_calculator.lamports_per_signature
     ))
+}
+
+pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
+    let epoch_info = rpc_client.get_epoch_info()?;
+    let first_slot_in_epoch = epoch_info.absolute_slot - epoch_info.slot_index;
+
+    let leader_schedule = rpc_client.get_leader_schedule(Some(first_slot_in_epoch))?;
+    if leader_schedule.is_none() {
+        return Err(format!(
+            "Unable to fetch leader schedule for slot {}",
+            first_slot_in_epoch
+        )
+        .into());
+    }
+    let leader_schedule = leader_schedule.unwrap();
+
+    let mut leader_per_slot_index = Vec::new();
+    for (pubkey, leader_slots) in leader_schedule.iter() {
+        for slot_index in leader_slots.iter() {
+            if *slot_index >= leader_per_slot_index.len() {
+                leader_per_slot_index.resize(*slot_index + 1, "?");
+            }
+            leader_per_slot_index[*slot_index] = pubkey;
+        }
+    }
+
+    for (slot_index, leader) in leader_per_slot_index.iter().enumerate() {
+        println!(
+            "  {:<15} {:<44}",
+            first_slot_in_epoch + slot_index as u64,
+            leader
+        );
+    }
+
+    Ok("".to_string())
 }
 
 pub fn process_get_block_time(rpc_client: &RpcClient, slot: Slot) -> ProcessResult {
