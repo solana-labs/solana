@@ -3,11 +3,7 @@
 #![cfg(feature = "program")]
 
 extern crate alloc;
-
-use crate::{
-    account_info::{AccountInfo, AccountInfoMut},
-    pubkey::Pubkey,
-};
+use crate::{account_info::AccountInfo, pubkey::Pubkey};
 use alloc::vec::Vec;
 use std::{
     cell::RefCell,
@@ -79,25 +75,26 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             offset += size_of::<Pubkey>();
 
             #[allow(clippy::cast_ptr_alignment)]
-            let lamports = &mut *(input.add(offset) as *mut u64);
+            let lamports = Rc::new(RefCell::new(&mut *(input.add(offset) as *mut u64)));
             offset += size_of::<u64>();
 
             #[allow(clippy::cast_ptr_alignment)]
             let data_len = *(input.add(offset) as *const u64) as usize;
             offset += size_of::<u64>();
 
-            let data = { from_raw_parts_mut(input.add(offset), data_len) };
+            let data = Rc::new(RefCell::new({
+                from_raw_parts_mut(input.add(offset), data_len)
+            }));
             offset += data_len;
 
             let owner: &Pubkey = &*(input.add(offset) as *const Pubkey);
             offset += size_of::<Pubkey>();
 
-            let m = Rc::new(RefCell::new(AccountInfoMut { lamports, data }));
-
             accounts.push(AccountInfo {
                 is_signer,
                 key,
-                m,
+                lamports,
+                data,
                 owner,
             });
         } else {
