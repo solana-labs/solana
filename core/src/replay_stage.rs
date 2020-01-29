@@ -185,7 +185,7 @@ impl ReplayStage {
 
         let (root_bank_sender, root_bank_receiver) = channel();
         trace!("replay stage");
-        let mut tower = Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
+        let mut tower = Tower::new(&my_pubkey, &bank_forks.read().unwrap());
 
         // Start the replay stage loop
 

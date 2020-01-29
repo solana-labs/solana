@@ -11,10 +11,7 @@ use solana_sdk::{
 use solana_vote_program::vote_state::{
     BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
 };
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::{HashMap, HashSet};
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
@@ -48,7 +45,7 @@ pub struct Tower {
 }
 
 impl Tower {
-    pub fn new(node_pubkey: &Pubkey, vote_account_pubkey: &Pubkey, bank_forks: &BankForks) -> Self {
+    pub fn new(node_pubkey: &Pubkey, bank_forks: &BankForks) -> Self {
         let mut tower = Self {
             node_pubkey: *node_pubkey,
             threshold_depth: VOTE_THRESHOLD_DEPTH,
@@ -58,8 +55,7 @@ impl Tower {
             last_timestamp: BlockTimestamp::default(),
         };
 
-        tower.initialize_lockouts_from_bank_forks(&bank_forks, vote_account_pubkey);
-
+        tower.lockouts.root_slot = Some(bank_forks.root());
         tower
     }
 
@@ -401,56 +397,6 @@ impl Tower {
         for slot in slot_with_ancestors {
             let entry = &mut stake_lockouts.entry(slot).or_default();
             entry.stake += lamports;
-        }
-    }
-
-    fn bank_weight(&self, bank: &Bank, ancestors: &HashMap<Slot, HashSet<Slot>>) -> u128 {
-        let (_, _, bank_weight) =
-            self.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter(), ancestors);
-        bank_weight
-    }
-
-    fn find_heaviest_bank(&self, bank_forks: &BankForks) -> Option<Arc<Bank>> {
-        let ancestors = bank_forks.ancestors();
-        let mut bank_weights: Vec<_> = bank_forks
-            .frozen_banks()
-            .values()
-            .map(|b| {
-                (
-                    self.bank_weight(b, &ancestors),
-                    b.parents().len(),
-                    b.clone(),
-                )
-            })
-            .collect();
-        bank_weights.sort_by_key(|b| (b.0, b.1));
-        bank_weights.pop().map(|b| b.2)
-    }
-
-    fn initialize_lockouts_from_bank_forks(
-        &mut self,
-        bank_forks: &BankForks,
-        vote_account_pubkey: &Pubkey,
-    ) {
-        if let Some(bank) = self.find_heaviest_bank(bank_forks) {
-            let root = bank_forks.root();
-            if let Some((_stake, vote_account)) = bank.vote_accounts().get(vote_account_pubkey) {
-                let mut vote_state = VoteState::deserialize(&vote_account.data)
-                    .expect("vote_account isn't a VoteState?");
-                vote_state.root_slot = Some(root);
-                vote_state.votes.retain(|v| v.slot > root);
-                trace!(
-                    "{} lockouts initialized to {:?}",
-                    self.node_pubkey,
-                    vote_state
-                );
-
-                assert_eq!(
-                    vote_state.node_pubkey, self.node_pubkey,
-                    "vote account's node_pubkey doesn't match",
-                );
-                self.lockouts = vote_state;
-            }
         }
     }
 
