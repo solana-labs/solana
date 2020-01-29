@@ -1448,6 +1448,71 @@ mod tests {
                 require_keypair: true
             }
         );
+        // Test Authorize Subcommand w/ fee-payer
+        let (fee_payer_keypair_file, mut fee_payer_tmp_file) = make_tmp_file();
+        let fee_payer_keypair = Keypair::new();
+        write_keypair(&fee_payer_keypair, fee_payer_tmp_file.as_file_mut()).unwrap();
+        let fee_payer_pubkey = fee_payer_keypair.pubkey();
+        let fee_payer_string = fee_payer_pubkey.to_string();
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            &subcommand,
+            &stake_account_string,
+            &stake_account_string,
+            "--fee-payer",
+            &fee_payer_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorized_pubkey: stake_account_pubkey,
+                    stake_authorize,
+                    authority: None,
+                    sign_only: false,
+                    signers: None,
+                    blockhash_query: BlockhashQuery::All,
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: Some(read_keypair_file(&fee_payer_keypair_file).unwrap().into()),
+                },
+                require_keypair: true
+            }
+        );
+        // Test Authorize Subcommand w/ absentee fee-payer
+        let sig = fee_payer_keypair.sign_message(&[0u8]);
+        let signer = format!("{}={}", fee_payer_string, sig);
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            &subcommand,
+            &stake_account_string,
+            &stake_account_string,
+            "--fee-payer",
+            &fee_payer_string,
+            "--blockhash",
+            &blockhash_string,
+            "--signer",
+            &signer,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorized_pubkey: stake_account_pubkey,
+                    stake_authorize,
+                    authority: None,
+                    sign_only: false,
+                    signers: Some(vec![(fee_payer_pubkey, sig)]),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: Some(fee_payer_pubkey.into()),
+                },
+                require_keypair: true
+            }
+        );
     }
 
     #[test]
@@ -1757,6 +1822,73 @@ mod tests {
             }
         );
 
+        // Test Delegate Subcommand w/ fee-payer
+        let (fee_payer_keypair_file, mut fee_payer_tmp_file) = make_tmp_file();
+        let fee_payer_keypair = Keypair::new();
+        write_keypair(&fee_payer_keypair, fee_payer_tmp_file.as_file_mut()).unwrap();
+        let fee_payer_pubkey = fee_payer_keypair.pubkey();
+        let fee_payer_string = fee_payer_pubkey.to_string();
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            &stake_account_string,
+            &vote_account_string,
+            "--fee-payer",
+            &fee_payer_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_delegate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    stake_authority: None,
+                    force: false,
+                    sign_only: false,
+                    signers: None,
+                    blockhash_query: BlockhashQuery::All,
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: Some(read_keypair_file(&fee_payer_keypair_file).unwrap().into()),
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test Delegate Subcommand w/ absentee fee-payer
+        let sig = fee_payer_keypair.sign_message(&[0u8]);
+        let signer = format!("{}={}", fee_payer_string, sig);
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            &stake_account_string,
+            &vote_account_string,
+            "--fee-payer",
+            &fee_payer_string,
+            "--blockhash",
+            &blockhash_string,
+            "--signer",
+            &signer,
+        ]);
+        assert_eq!(
+            parse_command(&test_delegate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    stake_authority: None,
+                    force: false,
+                    sign_only: false,
+                    signers: Some(vec![(fee_payer_pubkey, sig)]),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: Some(fee_payer_pubkey.into()),
+                },
+                require_keypair: false
+            }
+        );
+
         // Test WithdrawStake Subcommand
         let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1970,6 +2102,62 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: None,
                     fee_payer: None,
+                },
+                require_keypair: false
+            }
+        );
+
+        // Test Deactivate Subcommand w/ fee-payer
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &stake_account_string,
+            "--fee-payer",
+            &fee_payer_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_deactivate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DeactivateStake {
+                    stake_account_pubkey,
+                    stake_authority: None,
+                    sign_only: false,
+                    signers: None,
+                    blockhash_query: BlockhashQuery::All,
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: Some(read_keypair_file(&fee_payer_keypair_file).unwrap().into()),
+                },
+                require_keypair: true
+            }
+        );
+
+        // Test Deactivate Subcommand w/ absentee fee-payer
+        let sig = fee_payer_keypair.sign_message(&[0u8]);
+        let signer = format!("{}={}", fee_payer_string, sig);
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &stake_account_string,
+            "--fee-payer",
+            &fee_payer_string,
+            "--blockhash",
+            &blockhash_string,
+            "--signer",
+            &signer,
+        ]);
+        assert_eq!(
+            parse_command(&test_deactivate_stake).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DeactivateStake {
+                    stake_account_pubkey,
+                    stake_authority: None,
+                    sign_only: false,
+                    signers: Some(vec![(fee_payer_pubkey, sig)]),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: Some(fee_payer_pubkey.into()),
                 },
                 require_keypair: false
             }
