@@ -13,7 +13,7 @@ export PS4="++"
 #
 (
   set -x
-  d=$HOME/cargo-target-cache/"$BUILDKITE_LABEL"
+  d=$HOME/cargo-target-cache/"$BUILDKITE_PULL_REQUEST_BASE_BRANCH"/"$BUILDKITE_LABEL"
   MAX_CACHE_SIZE=18 # gigabytes
 
   if [[ -d $d ]]; then

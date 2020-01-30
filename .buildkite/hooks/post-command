@@ -5,7 +5,7 @@
 #
 (
   set -x
-  d=$HOME/cargo-target-cache/"$BUILDKITE_LABEL"
+  d=$HOME/cargo-target-cache/"$BUILDKITE_PULL_REQUEST_BASE_BRANCH"/"$BUILDKITE_LABEL"
   mkdir -p "$d"
   set -x
   rsync -a --delete --link-dest="$PWD" target "$d"
