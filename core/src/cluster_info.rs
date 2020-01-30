@@ -405,7 +405,8 @@ impl ClusterInfo {
             .map(|x| x.value.contact_info().unwrap())
     }
 
-    pub fn rpc_peers(&self) -> Vec<ContactInfo> {
+    /// all validators that have a valid rpc port regardless of `shred_version`.
+    pub fn all_rpc_peers(&self) -> Vec<ContactInfo> {
         let me = self.my_data();
         self.gossip
             .crds
@@ -413,8 +414,6 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me.id)
-            /* shred_version not considered for rpc peers (ie, caller must select version
-            if desired) */
             .filter(|x| ContactInfo::is_valid_address(&x.rpc))
             .cloned()
             .collect()
@@ -1132,23 +1131,25 @@ impl ClusterInfo {
                     let table_size = obj.read().unwrap().gossip.crds.table.len();
                     datapoint_debug!(
                         "cluster_info-purge",
-                        ("tabel_size", table_size as i64, i64),
+                        ("table_size", table_size as i64, i64),
                         ("purge_stake_timeout", timeout as i64, i64)
                     );
                     // Adopt the entrypoint's `shred_version` if ours is unset
                     if adopt_shred_version {
                         // If gossip was given an entrypoint, lookup its id
-                        let entrypoint_id =  obj.read().unwrap().entrypoint.as_ref().map(|e| e.id);
+                        let entrypoint_id = obj.read().unwrap().entrypoint.as_ref().map(|e| e.id);
                         if let Some(entrypoint_id) = entrypoint_id {
-                            info!("Shred version unknown, looking for the entrypoint:{:?} Shred version", entrypoint_id);
                             // If a pull from the entrypoint was successful, it should exist in the crds table
                             let entrypoint = obj.read().unwrap().lookup(&entrypoint_id).cloned();
                             if let Some(entrypoint) = entrypoint {
                                 let mut self_info = obj.read().unwrap().my_data();
                                 if entrypoint.shred_version == 0 {
-                                    warn!("entrypoint is running an invalid shred_version: 0");
+                                    info!("Unable to adopt entrypoint's shred version");
                                 } else {
-                                    info!("Setting Shred version to {:?} from entrypoint {:?}", entrypoint.shred_version, entrypoint.id);
+                                    info!(
+                                        "Setting shred version to {:?} from entrypoint {:?}",
+                                        entrypoint.shred_version, entrypoint.id
+                                    );
                                     self_info.shred_version = entrypoint.shred_version;
                                     obj.write().unwrap().insert_self(self_info);
                                     adopt_shred_version = false;
