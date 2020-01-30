@@ -94,10 +94,10 @@ pub fn deserialize_parameters(
     assert_eq!(32, mem::size_of::<Pubkey>());
 
     let mut start = mem::size_of::<u64>(); // number of accounts
-    for keyed_account in keyed_accounts.iter() {
-        let duplicate = buffer[start] != 0; // duplicate info
-        start += 1;
-        if !duplicate {
+    for (i, keyed_account) in keyed_accounts.iter().enumerate() {
+        let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
+        start += 1; // is_dup
+        if !is_dup {
             start += mem::size_of::<u64>(); // is_signer
             start += mem::size_of::<Pubkey>(); // pubkey
             keyed_account.try_account_ref_mut()?.lamports =
