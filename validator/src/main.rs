@@ -684,14 +684,14 @@ pub fn main() {
         expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
-            rpc_ports: value_t!(matches, "rpc_port", u16)
-                .ok()
-                .map(|rpc_port| (rpc_port, rpc_port + 1)),
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
         },
+        rpc_ports: value_t!(matches, "rpc_port", u16)
+            .ok()
+            .map(|rpc_port| (rpc_port, rpc_port + 1)),
         voting_disabled: matches.is_present("no_voting"),
         wait_for_supermajority: !matches.is_present("no_wait_for_supermajority"),
         ..ValidatorConfig::default()
@@ -863,7 +863,7 @@ pub fn main() {
         Node::new_with_external_ip(&identity_keypair.pubkey(), &gossip_addr, dynamic_port_range);
 
     if !private_rpc {
-        if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_config.rpc_ports {
+        if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_port);
             node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_port);
             tcp_ports = vec![rpc_port, rpc_pubsub_port];
