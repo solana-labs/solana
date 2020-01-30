@@ -45,19 +45,11 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     Ok(Response { context, value })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct JsonRpcConfig {
-    pub enable_validator_exit: bool, // Enable the 'validatorExit' command
+    pub rpc_ports: Option<(u16, u16)>, // (API, PubSub)
+    pub enable_validator_exit: bool,   // Enable the 'validatorExit' command
     pub faucet_addr: Option<SocketAddr>,
-}
-
-impl Default for JsonRpcConfig {
-    fn default() -> Self {
-        Self {
-            enable_validator_exit: false,
-            faucet_addr: None,
-        }
-    }
 }
 
 #[derive(Clone)]
