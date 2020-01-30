@@ -225,7 +225,7 @@ fn get_rpc_addr(
             cluster_info.read().unwrap().contact_info_trace()
         );
 
-        let mut rpc_peers = cluster_info.read().unwrap().rpc_peers();
+        let mut rpc_peers = cluster_info.read().unwrap().all_rpc_peers();
 
         let shred_version_required = !rpc_peers
             .iter()
@@ -246,10 +246,10 @@ fn get_rpc_addr(
                 .find(|contact_info| contact_info.gossip == *entrypoint_gossip)
             {
                 Some(contact_info.clone())
-            } else if shred_version_required {
+            } else if shred_version_required && expected_shred_version.is_none() {
                 // Require the user supply a shred version if there are conflicting shred version in
                 // gossip to reduce the chance of human error
-                warn!("Multiple shred versions detected, unable to select an RPC service. Restart with --expected-shred-version");
+                warn!("Multiple shred versions in gossip.  Restart with --expected-shred-version");
                 None
             } else {
                 // Pick a node at random
