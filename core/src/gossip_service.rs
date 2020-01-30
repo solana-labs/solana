@@ -197,10 +197,10 @@ fn spy(
         tvu_peers = spy_ref
             .read()
             .unwrap()
-            .tvu_peers()
+            .all_tvu_peers()
             .into_iter()
             .collect::<Vec<_>>();
-        archivers = spy_ref.read().unwrap().storage_peers();
+        archivers = spy_ref.read().unwrap().all_storage_peers();
         if let Some(num) = num_nodes {
             if tvu_peers.len() + archivers.len() >= num {
                 if let Some(gossip_addr) = find_node_by_gossip_addr {
