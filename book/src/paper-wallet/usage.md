@@ -30,6 +30,10 @@ command will generate a random seed phrase, ask you to enter an optional
 passphrase, and then will display the derived public key and the generated seed
 phrase for your paper wallet.
 
+After copying down your seed phrase, you can use the
+[public key derivation](#public-key-derivation) instructions to verify that you
+have not made any errors.
+
 ```bash
 solana-keygen new --no-outfile
 ```
