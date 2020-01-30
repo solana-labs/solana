@@ -1,12 +1,14 @@
 use chrono::prelude::*;
 use serde_json::Value;
-use solana_cli::cli::{
-    process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand,
+use solana_cli::{
+    cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
+    offline::BlockhashQuery,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
+    fee_calculator::FeeCalculator,
     hash::Hash,
     nonce_state::NonceState,
     pubkey::Pubkey,
@@ -293,7 +295,7 @@ fn test_offline_pay_tx() {
     config_offline.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        blockhash: Some(blockhash),
+        blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         sign_only: true,
         ..PayCommand::default()
     });
@@ -320,7 +322,7 @@ fn test_offline_pay_tx() {
         lamports: 10,
         to: bob_pubkey,
         signers: Some(signers),
-        blockhash: Some(blockhash_str.parse::<Hash>().unwrap()),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash_str.parse::<Hash>().unwrap()),
         ..PayCommand::default()
     });
     process_command(&config_online).unwrap();
@@ -391,7 +393,7 @@ fn test_nonced_pay_tx() {
     config.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        blockhash: Some(nonce_hash),
+        blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
         ..PayCommand::default()
     });
