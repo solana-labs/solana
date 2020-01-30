@@ -21,6 +21,9 @@ pub type ProcessInstruction = fn(
     instruction_data: &[u8],
 ) -> Result<(), ProgramError>;
 
+/// Programs indicate success with a return value of 0
+pub const SUCCESS: u64 = 0;
+
 /// Declare the entry point of the program.
 ///
 /// Deserialize the program input arguments and call
@@ -36,7 +39,7 @@ macro_rules! entrypoint {
             let (program_id, accounts, instruction_data) =
                 unsafe { $crate::entrypoint::deserialize(input) };
             match $process_instruction(&program_id, &accounts, &instruction_data) {
-                Ok(()) => $crate::program_error::SUCCESS,
+                Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(error) => error.into(),
             }
         }

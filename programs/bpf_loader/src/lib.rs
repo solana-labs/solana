@@ -8,10 +8,10 @@ use log::*;
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::{
     account::KeyedAccount,
+    entrypoint::SUCCESS,
     instruction::InstructionError,
     instruction_processor_utils::{is_executable, limited_deserialize, next_keyed_account},
     loader_instruction::LoaderInstruction,
-    program_error::SUCCESS,
     pubkey::Pubkey,
     sysvar::rent,
 };

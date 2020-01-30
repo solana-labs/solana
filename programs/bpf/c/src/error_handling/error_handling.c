@@ -24,12 +24,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
       sol_log("return a builtin");
       return ERROR_INVALID_ACCOUNT_DATA;
     case(3):
-      sol_log("return custom error 0");
-      return 0;
-    case(4):
       sol_log("return custom error 42");
       return 42;
-    case(5):
+    case(4):
       sol_log("return an invalid error");
       return ERROR_INVALID_ACCOUNT_DATA + 1;
     default:

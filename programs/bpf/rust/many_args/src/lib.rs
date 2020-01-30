@@ -2,7 +2,7 @@
 
 mod helper;
 extern crate solana_sdk;
-use solana_sdk::{info, program_error::SUCCESS};
+use solana_sdk::{entrypoint::SUCCESS, info};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {

@@ -51,6 +51,9 @@ static_assert(sizeof(uint64_t) == 8);
  */
 #define NULL 0
 
+/** Indicates the instruction was processed successfully */
+#define SUCCESS 0
+
 /**
  * Builtin program status values occupy the upper 32 bits of the program return
  * value.  Programs may define their own error values but they must be confined
@@ -58,8 +61,8 @@ static_assert(sizeof(uint64_t) == 8);
  */
 #define TO_BUILTIN(error) ((uint64_t)(error) << 32)
 
-/** Indicates the instruction was processed successfully */
-#define SUCCESS TO_BUILTIN(1)
+/** Note: Not applicable to program written in C */
+#define ERROR_CUSTOM_ZERO TO_BUILTIN(1)
 /** The arguments provided to a program instruction where invalid */
 #define ERROR_INVALID_ARGUMENT TO_BUILTIN(2)
 /** An instruction's data contents was invalid */

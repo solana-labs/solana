@@ -2,7 +2,7 @@
 
 extern crate solana_sdk;
 use byteorder::{ByteOrder, LittleEndian};
-use solana_sdk::program_error::SUCCESS;
+use solana_sdk::entrypoint::SUCCESS;
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {

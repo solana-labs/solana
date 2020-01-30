@@ -38,7 +38,7 @@ macro_rules! to_builtin {
     };
 }
 
-pub const SUCCESS: u64 = to_builtin!(1);
+const CUSTOM_ZERO: u64 = to_builtin!(1);
 const INVALID_ARGUMENT: u64 = to_builtin!(2);
 const INVALID_INSTRUCTION_DATA: u64 = to_builtin!(3);
 const INVALID_ACCOUNT_DATA: u64 = to_builtin!(4);
@@ -71,7 +71,13 @@ impl From<ProgramError> for u64 {
             ProgramError::UninitializedAccount => UNINITIALIZED_ACCOUNT,
             ProgramError::NotEnoughAccountKeys => NOT_ENOUGH_ACCOUNT_KEYS,
             ProgramError::AccountBorrowFailed => ACCOUNT_BORROW_FAILED,
-            ProgramError::CustomError(error) => error as u64,
+            ProgramError::CustomError(error) => {
+                if error == 0 {
+                    CUSTOM_ZERO
+                } else {
+                    error as u64
+                }
+            }
         }
     }
 }
@@ -83,6 +89,7 @@ where
     fn from(error: T) -> Self {
         let error = error.to_u64().unwrap_or(0xbad_c0de);
         match error {
+            CUSTOM_ZERO => InstructionError::CustomError(0),
             INVALID_ARGUMENT => InstructionError::InvalidArgument,
             INVALID_INSTRUCTION_DATA => InstructionError::InvalidInstructionData,
             INVALID_ACCOUNT_DATA => InstructionError::InvalidAccountData,
