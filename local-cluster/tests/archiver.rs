@@ -73,12 +73,14 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
 }
 
 #[test]
+#[ignore]
 #[serial]
 fn test_archiver_startup_1_node() {
     run_archiver_startup_basic(1, 1);
 }
 
 #[test]
+#[ignore]
 #[serial]
 fn test_archiver_startup_2_nodes() {
     run_archiver_startup_basic(2, 1);
