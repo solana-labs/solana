@@ -522,6 +522,8 @@ impl Archiver {
         let mut contact_info = node_info.clone();
         contact_info.tvu = "0.0.0.0:0".parse().unwrap();
         contact_info.wallclock = timestamp();
+        // copy over the adopted shred_version from the entrypoint
+        contact_info.shred_version = cluster_info.read().unwrap().my_data().shred_version;
         {
             let mut cluster_info_w = cluster_info.write().unwrap();
             cluster_info_w.insert_self(contact_info);

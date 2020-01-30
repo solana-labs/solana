@@ -413,7 +413,8 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me.id)
-            .filter(|x| x.shred_version == me.shred_version)
+            /* shred_version not considered for rpc peers (ie, caller must select version
+            if desired) */
             .filter(|x| ContactInfo::is_valid_address(&x.rpc))
             .cloned()
             .collect()
@@ -1093,6 +1094,7 @@ impl ClusterInfo {
             .spawn(move || {
                 let mut last_push = timestamp();
                 let mut last_contact_info_trace = timestamp();
+                let mut adopt_shred_version = obj.read().unwrap().my_data().shred_version == 0;
                 let recycler = PacketsRecycler::default();
                 loop {
                     let start = timestamp();
@@ -1133,6 +1135,27 @@ impl ClusterInfo {
                         ("tabel_size", table_size as i64, i64),
                         ("purge_stake_timeout", timeout as i64, i64)
                     );
+                    // Adopt the entrypoint's `shred_version` if ours is unset
+                    if adopt_shred_version {
+                        // If gossip was given an entrypoint, lookup its id
+                        let entrypoint_id =  obj.read().unwrap().entrypoint.as_ref().map(|e| e.id);
+                        if let Some(entrypoint_id) = entrypoint_id {
+                            info!("Shred version unknown, looking for the entrypoint:{:?} Shred version", entrypoint_id);
+                            // If a pull from the entrypoint was successful, it should exist in the crds table
+                            let entrypoint = obj.read().unwrap().lookup(&entrypoint_id).cloned();
+                            if let Some(entrypoint) = entrypoint {
+                                let mut self_info = obj.read().unwrap().my_data();
+                                if entrypoint.shred_version == 0 {
+                                    warn!("entrypoint is running an invalid shred_version: 0");
+                                } else {
+                                    info!("Setting Shred version to {:?} from entrypoint {:?}", entrypoint.shred_version, entrypoint.id);
+                                    self_info.shred_version = entrypoint.shred_version;
+                                    obj.write().unwrap().insert_self(self_info);
+                                    adopt_shred_version = false;
+                                }
+                            }
+                        }
+                    }
                     //TODO: possibly tune this parameter
                     //we saw a deadlock passing an obj.read().unwrap().timeout into sleep
                     if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
