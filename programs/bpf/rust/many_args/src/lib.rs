@@ -2,10 +2,10 @@
 
 mod helper;
 extern crate solana_sdk;
-use solana_sdk::{entrypoint::SUCCESS, info};
+use solana_sdk::{info, program_error::SUCCESS};
 
 #[no_mangle]
-pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
+pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     info!("Call same package");
     assert_eq!(crate::helper::many_args(1, 2, 3, 4, 5, 6, 7, 8, 9), 45);
 

@@ -11,17 +11,17 @@
  */
 #define NUM_KA 3
 
-extern uint32_t entrypoint(const uint8_t *input) {
+extern uint64_t entrypoint(const uint8_t *input) {
   SolKeyedAccount ka[NUM_KA];
   SolParameters params = (SolParameters) { .ka = ka };
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
-    return INVALID_ARGUMENT;
+    return ERROR_INVALID_ARGUMENT;
   }
 
   if (!params.ka[0].is_signer) {
     sol_log("Transaction not signed by key 0");
-    return MISSING_REQUIRED_SIGNATURES;
+    return ERROR_MISSING_REQUIRED_SIGNATURES;
   }
 
   int64_t lamports = *(int64_t *)params.data;

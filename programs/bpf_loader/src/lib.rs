@@ -11,6 +11,7 @@ use solana_sdk::{
     instruction::InstructionError,
     instruction_processor_utils::{is_executable, limited_deserialize, next_keyed_account},
     loader_instruction::LoaderInstruction,
+    program_error::SUCCESS,
     pubkey::Pubkey,
     sysvar::rent,
 };
@@ -145,9 +146,7 @@ pub fn process_instruction(
         info!("Call BPF program");
         match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
             Ok(status) => {
-                // ignore upper 32bits if any, programs only return lower 32bits
-                let status = status as u32;
-                if status != 0 {
+                if status != SUCCESS {
                     let error: InstructionError = status.into();
                     warn!("BPF program failed: {:?}", error);
                     return Err(error);

@@ -1,10 +1,10 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
 extern crate solana_sdk;
-use solana_sdk::{entrypoint::SUCCESS, info};
+use solana_sdk::{info, program_error::SUCCESS};
 
 #[no_mangle]
-pub extern "C" fn entrypoint(_input: *mut u8) -> u32 {
+pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     const ITERS: usize = 100;
     let ones = [1_u64; ITERS];
     let mut sum: u64 = 0;

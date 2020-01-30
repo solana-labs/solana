@@ -52,39 +52,36 @@ static_assert(sizeof(uint64_t) == 8);
 #define NULL 0
 
 /**
- * SUCCESS return value
+ * Builtin program status values occupy the upper 32 bits of the program return
+ * value.  Programs may define their own error values but they must be confined
+ * to the lower 32 bits.
  */
-#define SUCCESS 0
+#define TO_BUILTIN(error) ((uint64_t)(error) << 32)
 
-/**
- * Builtin program error return values have the 31st bit set.  Programs
- * may define their own values but their 31st and 30th bit must be unset
- * to avoid conflicting with the builtin errors
- */
-#define BUILTIN_ERROR_START 0x80000000
-
+/** Indicates the instruction was processed successfully */
+#define SUCCESS TO_BUILTIN(1)
 /** The arguments provided to a program instruction where invalid */
-#define INVALID_ARGUMENT (BUILTIN_ERROR_START + 0)
+#define ERROR_INVALID_ARGUMENT TO_BUILTIN(2)
 /** An instruction's data contents was invalid */
-#define INVALID_INSTRUCTION_DATA (BUILTIN_ERROR_START + 1)
+#define ERROR_INVALID_INSTRUCTION_DATA TO_BUILTIN(3)
 /** An account's data contents was invalid */
-#define INVALID_ACCOUNT_DATA (BUILTIN_ERROR_START + 2)
+#define ERROR_INVALID_ACCOUNT_DATA TO_BUILTIN(4)
 /** An account's data was too small */
-#define ACCOUNT_DATA_TOO_SMALL (BUILTIN_ERROR_START + 3)
+#define ERROR_ACCOUNT_DATA_TOO_SMALL TO_BUILTIN(5)
 /** An account's balance was too small to complete the instruction */
-#define INSUFFICIENT_FUNDS (BUILTIN_ERROR_START + 4)
+#define ERROR_INSUFFICIENT_FUNDS TO_BUILTIN(6)
 /** The account did not have the expected program id */
-#define INCORRECT_PROGRAM_ID (BUILTIN_ERROR_START + 5)
+#define ERROR_INCORRECT_PROGRAM_ID TO_BUILTIN(7)
 /** A signature was required but not found */
-#define MISSING_REQUIRED_SIGNATURES (BUILTIN_ERROR_START + 6)
+#define ERROR_MISSING_REQUIRED_SIGNATURES TO_BUILTIN(8)
 /** An initialize instruction was sent to an account that has already been initialized */
-#define ACCOUNT_ALREADY_INITIALIZED (BUILTIN_ERROR_START + 7)
+#define ERROR_ACCOUNT_ALREADY_INITIALIZED TO_BUILTIN(9)
 /** An attempt to operate on an account that hasn't been initialized */
-#define UNINITIALIZED_ACCOUNT (BUILTIN_ERROR_START + 8)
+#define ERROR_UNINITIALIZED_ACCOUNT TO_BUILTIN(10)
 /** The instruction expected additional account keys */
-#define NOT_ENOUGH_ACCOUNT_KEYS (BUILTIN_ERROR_START + 9)
+#define ERROR_NOT_ENOUGH_ACCOUNT_KEYS TO_BUILTIN(11)
 /** Note: Not applicable to program written in C */
-#define ACCOUNT_BORROW_FAILED (BUILTIN_ERROR_START + 10)
+#define ERROR_ACCOUNT_BORROW_FAILED TO_BUILTIN(12)
 
 /**
  * Boolean type
@@ -367,7 +364,7 @@ SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
  * @param input Buffer of serialized input parameters.  Use sol_deserialize() to decode
  * @return 0 if the instruction executed successfully
  */
-uint32_t entrypoint(const uint8_t *input);
+uint64_t entrypoint(const uint8_t *input);
 
 
 #ifdef SOL_TEST

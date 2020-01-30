@@ -3,7 +3,7 @@
 struct foo {const uint8_t *input;};
 void foo(const uint8_t *input, struct foo foo) ;
 
-extern uint32_t entrypoint(const uint8_t *input) {
+extern uint64_t entrypoint(const uint8_t *input) {
   struct foo f;
   f.input = input;
   foo(input, f);
