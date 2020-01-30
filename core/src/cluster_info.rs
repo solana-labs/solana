@@ -2722,6 +2722,14 @@ mod tests {
         cluster_info.insert_info(contact_info);
         stakes.insert(id3, 10);
 
+        // normal but with different shred version
+        let id4 = Pubkey::new(&[4u8; 32]);
+        let mut contact_info = ContactInfo::new_localhost(&id4, timestamp());
+        contact_info.shred_version = 1;
+        assert_ne!(contact_info.shred_version, d.shred_version);
+        cluster_info.insert_info(contact_info.clone());
+        stakes.insert(id4, 10);
+
         let stakes = Arc::new(stakes);
         let (peers, peers_and_stakes) = cluster_info.sorted_tvu_peers_and_stakes(Some(stakes));
         assert_eq!(peers.len(), 2);
