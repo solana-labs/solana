@@ -413,6 +413,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me.id)
+            .filter(|x| x.shred_version == me.shred_version)
             .filter(|x| ContactInfo::is_valid_address(&x.rpc))
             .cloned()
             .collect()
@@ -440,13 +441,15 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me)
+            /* shred_version not considered for gossip peers (ie, spy nodes do not set
+            shred_version) */
             .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .cloned()
             .collect()
     }
 
-    /// all validators that have a valid tvu port.
-    pub fn tvu_peers(&self) -> Vec<ContactInfo> {
+    /// all validators that have a valid tvu port regardless of `shred_version`.
+    pub fn all_tvu_peers(&self) -> Vec<ContactInfo> {
         let me = self.my_data();
         self.gossip
             .crds
@@ -460,7 +463,37 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// all peers that have a valid storage addr
+    /// all validators that have a valid tvu port and are on the same `shred_version`.
+    pub fn tvu_peers(&self) -> Vec<ContactInfo> {
+        let me = self.my_data();
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.contact_info())
+            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .filter(|x| !ClusterInfo::is_archiver(x))
+            .filter(|x| x.id != me.id)
+            .filter(|x| x.shred_version == me.shred_version)
+            .cloned()
+            .collect()
+    }
+
+    /// all peers that have a valid storage addr regardless of `shred_version`.
+    pub fn all_storage_peers(&self) -> Vec<ContactInfo> {
+        let me = self.my_data();
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.contact_info())
+            .filter(|x| ContactInfo::is_valid_address(&x.storage_addr))
+            .filter(|x| x.id != me.id)
+            .cloned()
+            .collect()
+    }
+
+    /// all peers that have a valid storage addr and are on the same `shred_version`.
     pub fn storage_peers(&self) -> Vec<ContactInfo> {
         let me = self.my_data();
         self.gossip
@@ -470,6 +503,7 @@ impl ClusterInfo {
             .filter_map(|x| x.value.contact_info())
             .filter(|x| ContactInfo::is_valid_address(&x.storage_addr))
             .filter(|x| x.id != me.id)
+            .filter(|x| x.shred_version == me.shred_version)
             .cloned()
             .collect()
     }
@@ -483,6 +517,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me.id)
+            .filter(|x| x.shred_version == me.shred_version)
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
             .filter(|x| ContactInfo::is_valid_address(&x.tvu_forwards))
             .cloned()
@@ -495,6 +530,7 @@ impl ClusterInfo {
         ClusterInfo::tvu_peers(self)
             .into_iter()
             .filter(|x| x.id != me.id)
+            .filter(|x| x.shred_version == me.shred_version)
             .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .filter(|x| {
                 self.get_epoch_state_for_node(&x.id, None)
