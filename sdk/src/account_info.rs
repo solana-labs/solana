@@ -1,17 +1,6 @@
 use crate::{account::Account, pubkey::Pubkey};
-use std::{
-    cell::{Ref, RefCell, RefMut},
-    cmp, fmt,
-    rc::Rc,
-};
+use std::{cell::RefCell, cmp, fmt, rc::Rc};
 
-/// Account information that is mutable by a program
-pub struct AccountInfoMut<'a> {
-    /// Number of lamports owned by this account
-    pub lamports: &'a mut u64,
-    /// On-chain data within this account
-    pub data: &'a mut [u8],
-}
 /// Account information
 #[derive(Clone)]
 pub struct AccountInfo<'a> {
@@ -20,7 +9,9 @@ pub struct AccountInfo<'a> {
     // Was the transaction signed by this account's public key?
     pub is_signer: bool,
     /// Account members that are mutable by the program
-    pub m: Rc<RefCell<AccountInfoMut<'a>>>,
+    pub lamports: Rc<RefCell<&'a mut u64>>,
+    /// Account members that are mutable by the program
+    pub data: Rc<RefCell<&'a mut [u8]>>,
     /// Program that owns this account
     pub owner: &'a Pubkey,
 }
@@ -31,7 +22,7 @@ impl<'a> fmt::Debug for AccountInfo<'a> {
         let data_str = if data_len > 0 {
             format!(
                 " data: {}",
-                hex::encode(self.borrow().data[..data_len].to_vec())
+                hex::encode(self.data.borrow()[..data_len].to_vec())
             )
         } else {
             "".to_string()
@@ -61,23 +52,15 @@ impl<'a> AccountInfo<'a> {
     }
 
     pub fn lamports(&self) -> u64 {
-        *self.borrow().lamports
+        **self.lamports.borrow()
     }
 
     pub fn data_len(&self) -> usize {
-        self.borrow().data.len()
+        self.data.borrow().len()
     }
 
     pub fn data_is_empty(&self) -> bool {
-        self.borrow().data.is_empty()
-    }
-
-    pub fn borrow(&self) -> Ref<AccountInfoMut> {
-        self.m.borrow()
-    }
-
-    pub fn borrow_mut(&self) -> RefMut<AccountInfoMut<'a>> {
-        self.m.borrow_mut()
+        self.data.borrow().is_empty()
     }
 
     pub fn new(
@@ -90,20 +73,21 @@ impl<'a> AccountInfo<'a> {
         Self {
             key,
             is_signer,
-            m: Rc::new(RefCell::new(AccountInfoMut { lamports, data })),
+            lamports: Rc::new(RefCell::new(lamports)),
+            data: Rc::new(RefCell::new(data)),
             owner,
         }
     }
 
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
-        bincode::deserialize(&self.borrow().data)
+        bincode::deserialize(&self.data.borrow())
     }
 
     pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
         if bincode::serialized_size(state)? > self.data_len() as u64 {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
-        bincode::serialize_into(&mut self.borrow_mut().data[..], state)
+        bincode::serialize_into(&mut self.data.borrow_mut()[..], state)
     }
 }
 
