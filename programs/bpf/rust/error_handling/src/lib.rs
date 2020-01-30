@@ -54,7 +54,7 @@ fn process_instruction(
         }
         _ => {
             info!("Unrecognized command");
-            Err(ProgramError::InvalidArgument)
+            Err(ProgramError::InvalidInstructionData)
         }
     }
 }
