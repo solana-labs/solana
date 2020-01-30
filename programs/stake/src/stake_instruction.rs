@@ -306,6 +306,7 @@ pub fn delegate_stake(
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new_readonly(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(sysvar::stake_history::id(), false),
         AccountMeta::new_readonly(crate::config::id(), false),
     ]
     .with_signer(authorized_pubkey);
@@ -396,9 +397,10 @@ pub fn process_instruction(
         StakeInstruction::DelegateStake => {
             let vote = next_keyed_account(keyed_accounts)?;
 
-            me.delegate_stake(
+            me.delegate(
                 &vote,
                 &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &config::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
@@ -418,7 +420,7 @@ pub fn process_instruction(
                 &signers,
             )
         }
-        StakeInstruction::Deactivate => me.deactivate_stake(
+        StakeInstruction::Deactivate => me.deactivate(
             &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             &signers,
         ),
@@ -657,6 +659,13 @@ mod tests {
                         &sysvar::clock::id(),
                         false,
                         &RefCell::new(sysvar::clock::Clock::default().create_account(1))
+                    ),
+                    KeyedAccount::new(
+                        &sysvar::stake_history::id(),
+                        false,
+                        &RefCell::new(
+                            sysvar::stake_history::StakeHistory::default().create_account(1)
+                        )
                     ),
                     KeyedAccount::new(
                         &config::id(),
