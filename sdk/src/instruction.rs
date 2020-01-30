@@ -93,6 +93,11 @@ pub enum InstructionError {
     /// NOTE: u64 requires special serialization to avoid the loss of precision in JS clients and
     /// so is not used for now.
     CustomError(u32),
+
+    /// Like CustomError but the return value from the program conflicted with
+    /// a builtin error.  The value held by this variant is the u32 error code
+    /// returned by the program but with the 30th bit cleared.
+    ConflictingError(u32),
 }
 
 impl InstructionError {

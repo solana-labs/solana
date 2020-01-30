@@ -16,7 +16,7 @@ extern uint32_t entrypoint(const uint8_t *input) {
   sol_log(__FILE__);
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
-    return INVALID_INPUT;
+    return INVALID_ARGUMENT;
   }
 
   // Log the provided input parameters.  In the case of  the no-op

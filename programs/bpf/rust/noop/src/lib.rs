@@ -3,8 +3,10 @@
 #![allow(unreachable_code)]
 
 extern crate solana_sdk;
+
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, info, log::*, pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, info, log::*, program_error::ProgramError,
+    pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq)]
@@ -24,7 +26,7 @@ fn process_instruction(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
-) -> u32 {
+) -> Result<(), ProgramError> {
     info!("Program identifier:");
     program_id.log();
 
@@ -58,7 +60,7 @@ fn process_instruction(
         panic!();
     }
 
-    SUCCESS
+    Ok(())
 }
 
 #[cfg(test)]

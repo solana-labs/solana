@@ -2,7 +2,7 @@
 
 extern crate solana_sdk;
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, info, pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, info, program_error::ProgramError, pubkey::Pubkey,
 };
 
 entrypoint!(process_instruction);
@@ -10,9 +10,7 @@ fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
-) -> u32 {
-    const FAILURE: u32 = 1;
-
+) -> Result<(), ProgramError> {
     match instruction_data[0] {
         1 => {
             info!("modify first account data");
@@ -45,8 +43,8 @@ fn process_instruction(
         }
         _ => {
             info!("Unrecognized command");
-            return FAILURE;
+            return Err(ProgramError::InvalidArgument);
         }
     }
-    SUCCESS
+    Ok(())
 }

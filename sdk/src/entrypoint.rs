@@ -1,9 +1,7 @@
 //! @brief Solana Rust-based BPF program entry point and its parameter types
 
-#![cfg(feature = "program")]
-
 extern crate alloc;
-use crate::{account_info::AccountInfo, pubkey::Pubkey};
+use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
 use alloc::vec::Vec;
 use std::{
     cell::RefCell,
@@ -17,8 +15,11 @@ use std::{
 /// program_id: Program ID of the currently executing program
 /// accounts: Accounts passed as part of the instruction
 /// instruction_data: Instruction data
-pub type ProcessInstruction =
-    fn(program_id: &Pubkey, accounts: &[AccountInfo], instruction_data: &[u8]) -> u32;
+pub type ProcessInstruction = fn(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> Result<(), ProgramError>;
 
 /// Programs indicate success with a return value of 0
 pub const SUCCESS: u32 = 0;
@@ -35,10 +36,11 @@ macro_rules! entrypoint {
         /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u32 {
-            unsafe {
-                let (program_id, accounts, instruction_data) =
-                    $crate::entrypoint::deserialize(input);
-                $process_instruction(&program_id, &accounts, &instruction_data)
+            let (program_id, accounts, instruction_data) =
+                unsafe { $crate::entrypoint::deserialize(input) };
+            match $process_instruction(&program_id, &accounts, &instruction_data) {
+                Ok(()) => $crate::entrypoint::SUCCESS,
+                Err(error) => error.into(),
             }
         }
     };

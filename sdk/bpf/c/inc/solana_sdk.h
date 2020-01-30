@@ -57,6 +57,36 @@ static_assert(sizeof(uint64_t) == 8);
 #define SUCCESS 0
 
 /**
+ * Builtin program error return values have the 31st bit set.  Programs
+ * may define their own values but their 31st and 30th bit must be unset
+ * to avoid conflicting with the builtin errors
+ */
+#define BUILTIN_ERROR_START 0x80000000
+
+/** The arguments provided to a program instruction where invalid */
+#define INVALID_ARGUMENT (BUILTIN_ERROR_START + 0)
+/** An instruction's data contents was invalid */
+#define INVALID_INSTRUCTION_DATA (BUILTIN_ERROR_START + 1)
+/** An account's data contents was invalid */
+#define INVALID_ACCOUNT_DATA (BUILTIN_ERROR_START + 2)
+/** An account's data was too small */
+#define ACCOUNT_DATA_TOO_SMALL (BUILTIN_ERROR_START + 3)
+/** An account's balance was too small to complete the instruction */
+#define INSUFFICIENT_FUNDS (BUILTIN_ERROR_START + 4)
+/** The account did not have the expected program id */
+#define INCORRECT_PROGRAM_ID (BUILTIN_ERROR_START + 5)
+/** A signature was required but not found */
+#define MISSING_REQUIRED_SIGNATURES (BUILTIN_ERROR_START + 6)
+/** An initialize instruction was sent to an account that has already been initialized */
+#define ACCOUNT_ALREADY_INITIALIZED (BUILTIN_ERROR_START + 7)
+/** An attempt to operate on an account that hasn't been initialized */
+#define UNINITIALIZED_ACCOUNT (BUILTIN_ERROR_START + 8)
+/** The instruction expected additional account keys */
+#define NOT_ENOUGH_ACCOUNT_KEYS (BUILTIN_ERROR_START + 9)
+/** Note: Not applicable to program written in C */
+#define ACCOUNT_BORROW_FAILED (BUILTIN_ERROR_START + 10)
+
+/**
  * Boolean type
  */
 #ifndef __cplusplus
