@@ -75,10 +75,10 @@ pub enum InstructionError {
     /// The instruction expected an executable account
     AccountNotExecutable,
 
-    /// Failed to borrow a reference to an account, already borrowed
+    /// Failed to borrow a reference to account data, already borrowed
     AccountBorrowFailed,
 
-    /// Account has an outstanding reference after a program's execution
+    /// Account data has an outstanding reference after a program's execution
     AccountBorrowOutstanding,
 
     /// The same account was multiply passed to an on-chain program's entrypoint, but the program

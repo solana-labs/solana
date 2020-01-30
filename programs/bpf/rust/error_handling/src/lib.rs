@@ -28,7 +28,7 @@ impl From<MyError> for ProgramError {
 entrypoint!(process_instruction);
 fn process_instruction(
     _program_id: &Pubkey,
-    _accounts: &[AccountInfo],
+    accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> Result<(), ProgramError> {
     match instruction_data[0] {
@@ -38,7 +38,7 @@ fn process_instruction(
         }
         2 => {
             info!("return a builtin");
-            Err(ProgramError::AccountBorrowFailed)
+            Err(ProgramError::InvalidAccountData)
         }
         3 => {
             info!("return custom error");
@@ -51,6 +51,12 @@ fn process_instruction(
         5 => {
             info!("return error that conflicts with builtin");
             Err(MyError::ConflictingBuiltin.into())
+        }
+        6 => {
+            let data = accounts[0].try_borrow_mut_data()?;
+            let data2 = accounts[0].try_borrow_mut_data()?;
+            assert_eq!(*data, *data2);
+            Ok(())
         }
         _ => {
             info!("Unrecognized command");
