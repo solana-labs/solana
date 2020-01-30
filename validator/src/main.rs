@@ -225,7 +225,7 @@ fn get_rpc_addr(
             cluster_info.read().unwrap().contact_info_trace()
         );
 
-        let mut rpc_peers = cluster_info.read().unwrap().rpc_peers();
+        let mut rpc_peers = cluster_info.read().unwrap().all_rpc_peers();
 
         let shred_version_required = !rpc_peers
             .iter()

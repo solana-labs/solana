@@ -742,7 +742,7 @@ impl Archiver {
     ) -> result::Result<u64, Error> {
         let rpc_peers = {
             let cluster_info = cluster_info.read().unwrap();
-            cluster_info.rpc_peers()
+            cluster_info.all_rpc_peers()
         };
         debug!("rpc peers: {:?}", rpc_peers);
         if !rpc_peers.is_empty() {
@@ -798,7 +798,7 @@ impl Archiver {
         loop {
             let rpc_peers = {
                 let cluster_info = cluster_info.read().unwrap();
-                cluster_info.rpc_peers()
+                cluster_info.all_rpc_peers()
             };
             debug!("rpc peers: {:?}", rpc_peers);
             if !rpc_peers.is_empty() {
