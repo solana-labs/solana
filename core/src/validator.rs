@@ -127,7 +127,6 @@ pub struct Validator {
 }
 
 impl Validator {
-    #[allow(clippy::cognitive_complexity)]
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
@@ -312,47 +311,7 @@ impl Validator {
                 .set_entrypoint(entrypoint_info.clone());
         }
 
-        if config.wait_for_supermajority {
-            info!(
-                "Waiting for more than 75% of activated stake at slot {} to be in gossip...",
-                bank.slot()
-            );
-            loop {
-                let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info);
-
-                info!("{}% of activated stake in gossip", gossip_stake_percent,);
-                if gossip_stake_percent > 75 {
-                    break;
-                }
-                sleep(Duration::new(1, 0));
-            }
-        }
-
-        let sockets = Sockets {
-            repair: node
-                .sockets
-                .repair
-                .try_clone()
-                .expect("Failed to clone repair socket"),
-            retransmit: node
-                .sockets
-                .retransmit_sockets
-                .iter()
-                .map(|s| s.try_clone().expect("Failed to clone retransmit socket"))
-                .collect(),
-            fetch: node
-                .sockets
-                .tvu
-                .iter()
-                .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
-                .collect(),
-            forwards: node
-                .sockets
-                .tvu_forwards
-                .iter()
-                .map(|s| s.try_clone().expect("Failed to clone TVU forwards Sockets"))
-                .collect(),
-        };
+        wait_for_supermajority(config, &bank, &cluster_info);
 
         let voting_keypair = if config.voting_disabled {
             None
@@ -373,7 +332,31 @@ impl Validator {
             storage_keypair,
             &bank_forks,
             &cluster_info,
-            sockets,
+            Sockets {
+                repair: node
+                    .sockets
+                    .repair
+                    .try_clone()
+                    .expect("Failed to clone repair socket"),
+                retransmit: node
+                    .sockets
+                    .retransmit_sockets
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone retransmit socket"))
+                    .collect(),
+                fetch: node
+                    .sockets
+                    .tvu
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
+                    .collect(),
+                forwards: node
+                    .sockets
+                    .tvu_forwards
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone TVU forwards Sockets"))
+                    .collect(),
+            },
             blockstore.clone(),
             &storage_state,
             config.blockstream_unix_socket.as_ref(),
@@ -565,6 +548,30 @@ fn new_banks_from_blockstore(
         leader_schedule_cache,
         genesis_config.poh_config,
     )
+}
+
+fn wait_for_supermajority(
+    config: &ValidatorConfig,
+    bank: &Arc<Bank>,
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
+) {
+    if !config.wait_for_supermajority {
+        return;
+    }
+
+    info!(
+        "Waiting for more than 75% of activated stake at slot {} to be in gossip...",
+        bank.slot()
+    );
+    loop {
+        let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info);
+
+        info!("{}% of activated stake in gossip", gossip_stake_percent,);
+        if gossip_stake_percent > 75 {
+            break;
+        }
+        sleep(Duration::new(1, 0));
+    }
 }
 
 pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
