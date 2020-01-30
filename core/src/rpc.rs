@@ -728,11 +728,14 @@ impl RpcSol for RpcSolImpl {
                 None
             }
         }
+        let shred_version = cluster_info.my_data().shred_version;
         Ok(cluster_info
             .all_peers()
             .iter()
             .filter_map(|(contact_info, _)| {
-                if ContactInfo::is_valid_address(&contact_info.gossip) {
+                if shred_version == contact_info.shred_version
+                    && ContactInfo::is_valid_address(&contact_info.gossip)
+                {
                     Some(RpcContactInfo {
                         pubkey: contact_info.id.to_string(),
                         gossip: Some(contact_info.gossip),
