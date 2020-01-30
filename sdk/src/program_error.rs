@@ -32,9 +32,10 @@ pub enum ProgramError {
 }
 
 /// Builtin return values occupy the upper 32 bits
+const BUILTIN_BIT_SHIFT: usize = 32;
 macro_rules! to_builtin {
     ($error:expr) => {
-        ($error as u64) << 32
+        ($error as u64) << BUILTIN_BIT_SHIFT
     };
 }
 
@@ -50,12 +51,6 @@ const ACCOUNT_ALREADY_INITIALIZED: u64 = to_builtin!(9);
 const UNINITIALIZED_ACCOUNT: u64 = to_builtin!(10);
 const NOT_ENOUGH_ACCOUNT_KEYS: u64 = to_builtin!(11);
 const ACCOUNT_BORROW_FAILED: u64 = to_builtin!(12);
-
-/// A valid error either has bits in the upper or lower 32 but not both
-#[allow(clippy::verbose_bit_mask)]
-fn is_valid_error(error: u64) -> bool {
-    ((error & 0xffff_ffff_0000_0000) == 0) | ((error & 0x0000_0000_ffff_ffff) == 0)
-}
 
 impl From<ProgramError> for u64 {
     fn from(error: ProgramError) -> Self {
@@ -102,10 +97,11 @@ where
             NOT_ENOUGH_ACCOUNT_KEYS => InstructionError::NotEnoughAccountKeys,
             ACCOUNT_BORROW_FAILED => InstructionError::AccountBorrowFailed,
             _ => {
-                if !is_valid_error(error) {
-                    InstructionError::InvalidError(error as u32)
-                } else {
+                // A valid custom error has no bits set in the upper 32
+                if error >> BUILTIN_BIT_SHIFT == 0 {
                     InstructionError::CustomError(error as u32)
+                } else {
+                    InstructionError::InvalidError((error >> BUILTIN_BIT_SHIFT) as u32)
                 }
             }
         }

@@ -91,9 +91,9 @@ pub enum InstructionError {
     /// or serialized to a u32 integer.
     CustomError(u32),
 
-    /// Like `CustomError` but the return value from the program was invalid.  Valid program
-    /// errors either have a builtin error in the upper 32 bits or a user-defined error in
-    /// the lower 32 bits.  The value held by this variant is the lower 32 bits of the value
+    /// Like `CustomError` but the return value from the program was invalid.  Valid
+    /// errors are either a defined builtin error value or a user-defined error in
+    /// the lower 32 bits.  The value held by this variant is the upper 32 bits of the value
     /// returned by the program.
     InvalidError(u32),
 }
