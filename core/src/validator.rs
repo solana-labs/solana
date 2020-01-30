@@ -116,8 +116,7 @@ impl ValidatorExit {
 pub struct Validator {
     pub id: Pubkey,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
-    rpc_service: Option<JsonRpcService>,
-    rpc_pubsub_service: Option<PubSubService>,
+    rpc_service: Option<(JsonRpcService, PubSubService)>,
     transaction_status_service: Option<TransactionStatusService>,
     gossip_service: GossipService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
@@ -219,36 +218,32 @@ impl Validator {
 
         let blockstore = Arc::new(blockstore);
 
-        let rpc_service = if node.info.rpc.port() == 0 {
-            None
-        } else {
-            Some(JsonRpcService::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
-                config.rpc_config.clone(),
-                bank_forks.clone(),
-                block_commitment_cache.clone(),
-                blockstore.clone(),
-                cluster_info.clone(),
-                genesis_hash,
-                ledger_path,
-                storage_state.clone(),
-                validator_exit.clone(),
-            ))
-        };
-
         let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
-        let rpc_pubsub_service = if node.info.rpc_pubsub.port() == 0 {
-            None
-        } else {
-            Some(PubSubService::new(
-                &subscriptions,
-                SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                    node.info.rpc_pubsub.port(),
-                ),
-                &exit,
-            ))
-        };
+
+        let rpc_service = config
+            .rpc_config
+            .rpc_ports
+            .map(|(rpc_port, rpc_pubsub_port)| {
+                (
+                    JsonRpcService::new(
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
+                        config.rpc_config.clone(),
+                        bank_forks.clone(),
+                        block_commitment_cache.clone(),
+                        blockstore.clone(),
+                        cluster_info.clone(),
+                        genesis_hash,
+                        ledger_path,
+                        storage_state.clone(),
+                        validator_exit.clone(),
+                    ),
+                    PubSubService::new(
+                        &subscriptions,
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
+                        &exit,
+                    ),
+                )
+            });
 
         let (transaction_status_sender, transaction_status_service) =
             if rpc_service.is_some() && !config.transaction_status_service_disabled {
@@ -420,7 +415,6 @@ impl Validator {
             id,
             gossip_service,
             rpc_service,
-            rpc_pubsub_service,
             transaction_status_service,
             tpu,
             tvu,
@@ -471,10 +465,8 @@ impl Validator {
     pub fn join(self) -> Result<()> {
         self.poh_service.join()?;
         drop(self.poh_recorder);
-        if let Some(rpc_service) = self.rpc_service {
+        if let Some((rpc_service, rpc_pubsub_service)) = self.rpc_service {
             rpc_service.join()?;
-        }
-        if let Some(rpc_pubsub_service) = self.rpc_pubsub_service {
             rpc_pubsub_service.join()?;
         }
         if let Some(transaction_status_service) = self.transaction_status_service {
