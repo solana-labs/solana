@@ -202,6 +202,23 @@ impl HashAgeKind {
     }
 }
 
+// This struct is a collection of all of various parameters used for creating a child bank from
+// parent bank. All passed parameters must be via this config to be hashed and SPV-ed. Only the
+// exception is previous_bank.hash().
+//
+// This struct propagates all of cumulative runtime state of ledger, equivalent to replaying
+// all the transactions since genesis.
+// It is named as XxxConfig because of similarity to the role of GenesisConfig,
+// which creates the genesis bank;
+// Its serialized binary is hashed into the `slot_hash` for the slot of a frozen bank.
+// So, this struct will be hashed at every slot boundary, so this is preferred to be small
+#[derive(Serialize)]
+pub struct BankConfig { // or BankState // slot_config
+    // what about bank.hard_forks?
+    // protect account_db.write_version as well? <= write_version isn't deterministic...
+    // ...
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default, Deserialize, Serialize)]
 pub struct Bank {
@@ -280,7 +297,7 @@ pub struct Bank {
     /// Bank block_height
     block_height: u64,
 
-    /// The pubkey to send transactions fees to.
+    /// The pubkey to send transactions fees to. // serde skip?
     collector_id: Pubkey,
 
     /// Fees that have been collected
@@ -321,7 +338,7 @@ pub struct Bank {
     #[serde(deserialize_with = "deserialize_atomicbool")]
     is_delta: AtomicBool,
 
-    /// The Message processor
+    /// The Message processor // serde skip?
     message_processor: MessageProcessor,
 
     /// Callback to be notified when a bank enters a new Epoch
@@ -341,7 +358,7 @@ impl Default for BlockhashQueue {
 }
 
 impl Bank {
-    pub fn new(genesis_config: &GenesisConfig) -> Self {
+    pub fn new_with_genesis(genesis_config: &GenesisConfig) -> Self {
         Self::new_with_paths(&genesis_config, Vec::new())
     }
 
@@ -369,13 +386,16 @@ impl Bank {
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         parent.freeze();
-        assert_ne!(slot, parent.slot());
 
+        let config = parent.bank_config();
+        let bank = Self::new_from_config(config, parent.hash(), slot);
+
+        // inherit shared (resource-like) fields inside the validator process
         let rc = BankRc {
             accounts: Arc::new(Accounts::new_from_parent(
                 &parent.rc.accounts,
                 slot,
-                parent.slot(),
+                bank.parent_slot,
             )),
             parent: RwLock::new(Some(parent.clone())),
             slot,
@@ -383,77 +403,82 @@ impl Bank {
         let src = StatusCacheRc {
             status_cache: parent.src.status_cache.clone(),
         };
-        let epoch_schedule = parent.epoch_schedule;
-        let epoch = epoch_schedule.get_epoch(slot);
+        bank.collector_id = *collector_id;
+        bank.genesis_creation_time = parent.genesis_creation_time;
+        bank.entered_epoch_callback = parent.entered_epoch_callback.clone();
+        bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
+        bank.last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed));
+        bank.message_processor = MessageProcessor::default();
 
-        let mut new = Bank {
-            rc,
-            src,
-            slot,
-            epoch,
-            blockhash_queue: RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
+        // TODO: create those from AccountsDB? is it possible?
+        // or verify structural integrity of these caches from snapshot instead of hashing into the slot hash
+        //   is it possible first of all with tamper-residence?
+        // due to possibility of being large in number for these fields, is there perf.-wise concerns?
+        // this is like verify_hash_internal_state
+        stakes: RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(epoch)),
+        epoch_stakes: parent.epoch_stakes.clone(),
+        storage_accounts: RwLock::new(parent.storage_accounts.read().unwrap().clone()),
 
-            // TODO: clean this up, soo much special-case copying...
-            hashes_per_tick: parent.hashes_per_tick,
-            ticks_per_slot: parent.ticks_per_slot,
-            ns_per_slot: parent.ns_per_slot,
-            genesis_creation_time: parent.genesis_creation_time,
-            slots_per_segment: parent.slots_per_segment,
-            slots_per_year: parent.slots_per_year,
-            epoch_schedule,
-            collected_rent: AtomicU64::new(0),
-            rent_collector: parent.rent_collector.clone_with_epoch(epoch),
-            max_tick_height: (slot + 1) * parent.ticks_per_slot,
-            block_height: parent.block_height + 1,
-            fee_calculator: FeeCalculator::new_derived(
-                &parent.fee_calculator,
-                parent.signature_count() as usize,
-            ),
-            capitalization: AtomicU64::new(parent.capitalization()),
-            inflation: parent.inflation.clone(),
-            transaction_count: AtomicU64::new(parent.transaction_count()),
-            stakes: RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(epoch)),
-            epoch_stakes: parent.epoch_stakes.clone(),
-            storage_accounts: RwLock::new(parent.storage_accounts.read().unwrap().clone()),
-            parent_hash: parent.hash(),
-            parent_slot: parent.slot(),
-            collector_id: *collector_id,
-            collector_fees: AtomicU64::new(0),
-            ancestors: HashMap::new(),
-            hash: RwLock::new(Hash::default()),
-            is_delta: AtomicBool::new(false),
-            tick_height: AtomicU64::new(parent.tick_height.load(Ordering::Relaxed)),
-            signature_count: AtomicU64::new(0),
-            message_processor: MessageProcessor::default(),
-            entered_epoch_callback: parent.entered_epoch_callback.clone(),
-            hard_forks: parent.hard_forks.clone(),
-            last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
-        };
+        assert_ne!(bank.slot, bank.parent_slot);
 
         datapoint_debug!(
             "bank-new_from_parent-heights",
-            ("slot_height", slot, i64),
-            ("block_height", new.block_height, i64)
+            ("slot_height", bank.slot, i64),
+            ("block_height", bank.block_height, i64)
         );
 
+        bank
+    }
+
+    // derive various carried-over states from the BankConfig of previous bank!
+    // this is potentially untrusted which should be protected by hashing and SPV
+    pub fn new_from_config(config, parent_hash, slot) -> Self {
+        let epoch = config.epoch_schedule.get_epoch(slot);
+
+        let mut new = Bank {
+            slot,
+            epoch,
+            hashes_per_tick: config.hashes_per_tick,
+            ticks_per_slot: config.ticks_per_slot,
+            ns_per_slot: config.ns_per_slot,
+            slots_per_segment: config.slots_per_segment,
+            slots_per_year: config.slots_per_year,
+            epoch_schedule: config.epoch_schedule,
+            rent_collector: config.rent_collector.clone_with_epoch(epoch),
+            max_tick_height: (slot + 1) * config.ticks_per_slot,
+            block_height: config.block_height + 1,
+            fee_calculator: FeeCalculator::new_derived(
+                &config.fee_calculator,
+                config.signature_count as usize,
+            ),
+            capitalization: AtomicU64::new(config.capitalization),
+            inflation: config.inflation.clone(),
+            transaction_count: AtomicU64::new(config.transaction_count),
+            parent_hash,
+            parent_slot: config.slot,
+            tick_height: AtomicU64::new(config.tick_height),
+            hard_forks: config.hard_forks.clone(),
+            ..Self::default()
+        };
+
+        new.ancestors = vec![bank.slot(), 0].collect();
+        new.parents().iter().enumerate().for_each(|(i, p)| {
+            new.ancestors.insert(p.slot, i + 1);
+        });
+
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-        if parent.epoch() < new.epoch() {
+        if config.epoch < new.epoch {
             if let Some(entered_epoch_callback) =
-                parent.entered_epoch_callback.read().unwrap().as_ref()
+                new.entered_epoch_callback.read().unwrap().as_ref()
             {
                 entered_epoch_callback(&mut new)
             }
         }
 
         new.update_epoch_stakes(leader_schedule_epoch);
-        new.ancestors.insert(new.slot(), 0);
-        new.parents().iter().enumerate().for_each(|(i, p)| {
-            new.ancestors.insert(p.slot(), i + 1);
-        });
-
         new.update_slot_hashes();
-        new.update_rewards(parent.epoch());
-        new.update_stake_history(Some(parent.epoch()));
+        new.update_rewards(config.epoch);
+        new.update_stake_history(Some(config.epoch));
         new.update_clock();
         new.update_fees();
         new.update_recent_blockhashes();
@@ -1786,14 +1811,21 @@ impl Bank {
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
         let accounts_delta_hash = self.rc.accounts.bank_hash_info_at(self.slot());
-        let mut signature_count_buf = [0u8; 8];
-        LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
+
+        let bank_config = self.bank_config().serialize_into();
+        let len = serialized_size(&bank_config).unwrap()
+        let mut bank_config_buf = vec![0u8; len as usize];
+        let mut writer = Cursor::new(&mut bank_config_buf[..]);
+        serialize_into(&mut writer, &bank_config).unwrap();
+
+        let status_cache_hash = ....
 
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
             accounts_delta_hash.hash.as_ref(),
-            &signature_count_buf,
             self.last_blockhash().as_ref(),
+            bank_config_buf.as_ref(), // mainly for snapshot
+            status_cache_hash.as_ref(), // as par #7053
         ]);
 
         if let Some(buf) = self
@@ -1811,7 +1843,7 @@ impl Bank {
             self.slot(),
             hash,
             accounts_delta_hash.hash,
-            self.signature_count(),
+            bank_config,
             self.last_blockhash(),
         );
 
