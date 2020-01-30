@@ -74,7 +74,6 @@
   * [Durable Transaction Nonces](implemented-proposals/durable-tx-nonces.md)
   * [Validator Timestamp Oracle](implemented-proposals/validator-timestamp-oracle.md)
   * [Commitment](implemented-proposals/commitment.md)
-  * [Snapshot Verification](implemented-proposals/snapshot-verification.md)
 * [Accepted Design Proposals](proposals/README.md)
   * [Ledger Replication](proposals/ledger-replication-to-implement.md)
   * [Secure Vote Signing](proposals/vote-signing-to-implement.md)
