@@ -63,6 +63,7 @@ pub struct ValidatorConfig {
     pub storage_slots_per_turn: u64,
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
+    pub rpc_ports: Option<(u16, u16)>, // (API, PubSub)
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
@@ -86,6 +87,7 @@ impl Default for ValidatorConfig {
             max_ledger_slots: None,
             account_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
+            rpc_ports: None,
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             enable_partition: None,
@@ -219,30 +221,34 @@ impl Validator {
 
         let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
 
-        let rpc_service = config
-            .rpc_config
-            .rpc_ports
-            .map(|(rpc_port, rpc_pubsub_port)| {
-                (
-                    JsonRpcService::new(
-                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
-                        config.rpc_config.clone(),
-                        bank_forks.clone(),
-                        block_commitment_cache.clone(),
-                        blockstore.clone(),
-                        cluster_info.clone(),
-                        genesis_hash,
-                        ledger_path,
-                        storage_state.clone(),
-                        validator_exit.clone(),
-                    ),
-                    PubSubService::new(
-                        &subscriptions,
-                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
-                        &exit,
-                    ),
-                )
-            });
+        let rpc_service = config.rpc_ports.map(|(rpc_port, rpc_pubsub_port)| {
+            if ContactInfo::is_valid_address(&node.info.rpc) {
+                assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+                assert_eq!(rpc_port, node.info.rpc.port());
+                assert_eq!(rpc_pubsub_port, node.info.rpc_pubsub.port());
+            } else {
+                assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+            }
+            (
+                JsonRpcService::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
+                    config.rpc_config.clone(),
+                    bank_forks.clone(),
+                    block_commitment_cache.clone(),
+                    blockstore.clone(),
+                    cluster_info.clone(),
+                    genesis_hash,
+                    ledger_path,
+                    storage_state.clone(),
+                    validator_exit.clone(),
+                ),
+                PubSubService::new(
+                    &subscriptions,
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
+                    &exit,
+                ),
+            )
+        });
 
         let (transaction_status_sender, transaction_status_service) =
             if rpc_service.is_some() && !config.transaction_status_service_disabled {
@@ -597,8 +603,11 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 
     let leader_voting_keypair = Arc::new(voting_keypair);
     let storage_keypair = Arc::new(Keypair::new());
-    let mut config = ValidatorConfig::default();
-    config.transaction_status_service_disabled = true;
+    let config = ValidatorConfig {
+        transaction_status_service_disabled: true,
+        rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
+        ..ValidatorConfig::default()
+    };
     let node = Validator::new(
         node,
         &node_keypair,
@@ -699,8 +708,14 @@ mod tests {
 
         let voting_keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
-        let mut config = ValidatorConfig::default();
-        config.transaction_status_service_disabled = true;
+        let config = ValidatorConfig {
+            transaction_status_service_disabled: true,
+            rpc_ports: Some((
+                validator_node.info.rpc.port(),
+                validator_node.info.rpc_pubsub.port(),
+            )),
+            ..ValidatorConfig::default()
+        };
         let validator = Validator::new(
             validator_node,
             &Arc::new(validator_keypair),
@@ -733,8 +748,14 @@ mod tests {
                 ledger_paths.push(validator_ledger_path.clone());
                 let voting_keypair = Arc::new(Keypair::new());
                 let storage_keypair = Arc::new(Keypair::new());
-                let mut config = ValidatorConfig::default();
-                config.transaction_status_service_disabled = true;
+                let config = ValidatorConfig {
+                    transaction_status_service_disabled: true,
+                    rpc_ports: Some((
+                        validator_node.info.rpc.port(),
+                        validator_node.info.rpc_pubsub.port(),
+                    )),
+                    ..ValidatorConfig::default()
+                };
                 Validator::new(
                     validator_node,
                     &Arc::new(validator_keypair),
