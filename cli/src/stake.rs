@@ -1,9 +1,9 @@
 use crate::{
     cli::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys,
-        get_blockhash_fee_calculator, log_instruction_custom_error, nonce_authority_arg,
-        replace_signatures, required_lamports_from, return_signers, CliCommand, CliCommandInfo,
-        CliConfig, CliError, ProcessResult, SigningAuthority,
+        log_instruction_custom_error, nonce_authority_arg, replace_signatures,
+        required_lamports_from, return_signers, CliCommand, CliCommandInfo, CliConfig, CliError,
+        ProcessResult, SigningAuthority,
     },
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::*,
@@ -15,7 +15,6 @@ use solana_client::rpc_client::RpcClient;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::{
     account_utils::StateMut,
-    hash::Hash,
     pubkey::Pubkey,
     signature::KeypairUtil,
     system_instruction::{create_address_with_seed, SystemError},
@@ -352,7 +351,7 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let force = matches.is_present("force");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
-    let blockhash = value_of(matches, BLOCKHASH_ARG.name);
+    let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
@@ -382,7 +381,7 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
             force,
             sign_only,
             signers,
-            blockhash,
+            blockhash_query,
             nonce_account,
             nonce_authority,
         },
@@ -411,7 +410,7 @@ pub fn parse_stake_authorize(
     } else {
         None
     };
-    let blockhash = value_of(matches, BLOCKHASH_ARG.name);
+    let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
         Some(SigningAuthority::new_from_matches(
@@ -431,7 +430,7 @@ pub fn parse_stake_authorize(
             authority,
             sign_only,
             signers,
-            blockhash,
+            blockhash_query,
             nonce_account,
             nonce_authority,
         },
@@ -443,7 +442,7 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
-    let blockhash = value_of(matches, BLOCKHASH_ARG.name);
+    let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
@@ -471,7 +470,7 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
             stake_authority,
             sign_only,
             signers,
-            blockhash,
+            blockhash_query,
             nonce_account,
             nonce_authority,
         },
@@ -626,7 +625,7 @@ pub fn process_stake_authorize(
     authority: Option<&SigningAuthority>,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
-    blockhash: Option<Hash>,
+    blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&SigningAuthority>,
 ) -> ProcessResult {
@@ -636,7 +635,7 @@ pub fn process_stake_authorize(
     )?;
     let authority = authority.map(|a| a.keypair()).unwrap_or(&config.keypair);
     let (recent_blockhash, fee_calculator) =
-        get_blockhash_fee_calculator(rpc_client, sign_only, blockhash)?;
+        blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
     let ixs = vec![stake_instruction::authorize(
         stake_account_pubkey, // stake account to update
         &authority.pubkey(),  // currently authorized
@@ -692,12 +691,12 @@ pub fn process_deactivate_stake_account(
     stake_authority: Option<&SigningAuthority>,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
-    blockhash: Option<Hash>,
+    blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&SigningAuthority>,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
-        get_blockhash_fee_calculator(rpc_client, sign_only, blockhash)?;
+        blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
     let stake_authority = stake_authority
         .map(|a| a.keypair())
         .unwrap_or(&config.keypair);
@@ -913,7 +912,7 @@ pub fn process_delegate_stake(
     force: bool,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
-    blockhash: Option<Hash>,
+    blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&SigningAuthority>,
 ) -> ProcessResult {
@@ -966,7 +965,7 @@ pub fn process_delegate_stake(
     }
 
     let (recent_blockhash, fee_calculator) =
-        get_blockhash_fee_calculator(rpc_client, sign_only, blockhash)?;
+        blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
 
     let ixs = vec![stake_instruction::delegate_stake(
         stake_account_pubkey,
@@ -1018,7 +1017,11 @@ pub fn process_delegate_stake(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::{read_keypair_file, write_keypair};
+    use solana_sdk::{
+        fee_calculator::FeeCalculator,
+        hash::Hash,
+        signature::{read_keypair_file, write_keypair},
+    };
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -1056,7 +1059,7 @@ mod tests {
                     authority: None,
                     sign_only: false,
                     signers: None,
-                    blockhash: None,
+                    blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1082,7 +1085,7 @@ mod tests {
                     authority: Some(read_keypair_file(&authority_keypair_file).unwrap().into()),
                     sign_only: false,
                     signers: None,
-                    blockhash: None,
+                    blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1111,7 +1114,7 @@ mod tests {
                     authority: None,
                     sign_only: true,
                     signers: None,
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1142,7 +1145,7 @@ mod tests {
                     authority: None,
                     sign_only: false,
                     signers: Some(vec![(keypair.pubkey(), sig)]),
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1175,7 +1178,7 @@ mod tests {
                     authority: None,
                     sign_only: false,
                     signers: Some(vec![(keypair.pubkey(), sig), (keypair2.pubkey(), sig2),]),
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1201,7 +1204,7 @@ mod tests {
                     authority: None,
                     sign_only: false,
                     signers: None,
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1236,7 +1239,7 @@ mod tests {
                     authority: None,
                     sign_only: false,
                     signers: None,
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account_pubkey),
                     nonce_authority: Some(nonce_authority_keypair.into()),
                 },
@@ -1356,7 +1359,7 @@ mod tests {
                     force: false,
                     sign_only: false,
                     signers: None,
-                    blockhash: None,
+                    blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1389,7 +1392,7 @@ mod tests {
                     force: false,
                     sign_only: false,
                     signers: None,
-                    blockhash: None,
+                    blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1415,7 +1418,7 @@ mod tests {
                     force: true,
                     sign_only: false,
                     signers: None,
-                    blockhash: None,
+                    blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1444,7 +1447,7 @@ mod tests {
                     force: false,
                     sign_only: false,
                     signers: None,
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1471,7 +1474,7 @@ mod tests {
                     force: false,
                     sign_only: true,
                     signers: None,
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1503,7 +1506,7 @@ mod tests {
                     force: false,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1)]),
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1537,7 +1540,7 @@ mod tests {
                     force: false,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1611,7 +1614,7 @@ mod tests {
                     stake_authority: None,
                     sign_only: false,
                     signers: None,
-                    blockhash: None,
+                    blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1639,7 +1642,7 @@ mod tests {
                     ),
                     sign_only: false,
                     signers: None,
-                    blockhash: None,
+                    blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1665,7 +1668,7 @@ mod tests {
                     stake_authority: None,
                     sign_only: false,
                     signers: None,
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1689,7 +1692,7 @@ mod tests {
                     stake_authority: None,
                     sign_only: true,
                     signers: None,
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1718,7 +1721,7 @@ mod tests {
                     stake_authority: None,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1)]),
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
@@ -1749,7 +1752,7 @@ mod tests {
                     stake_authority: None,
                     sign_only: false,
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
-                    blockhash: Some(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
                 },
