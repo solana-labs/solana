@@ -177,7 +177,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetVoteAccounts parse failure: {}", err),
+                format!("GetVoteAccounts parse failure: {:?}", err),
             )
         })
     }
@@ -196,7 +196,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetClusterNodes parse failure: {}", err),
+                format!("GetClusterNodes parse failure: {:?}", err),
             )
         })
     }
@@ -215,7 +215,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetConfirmedBlock parse failure: {}", err),
+                format!("GetConfirmedBlock parse failure: {:?}", err),
             )
         })
     }
@@ -242,7 +242,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetConfirmedBlocks parse failure: {}", err),
+                format!("GetConfirmedBlocks parse failure: {:?}", err),
             )
         })
     }
@@ -293,7 +293,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetEpochInfo parse failure: {}", err),
+                format!("GetEpochInfo parse failure: {:?}", err),
             )
         })
     }
@@ -324,7 +324,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetLeaderSchedule failure: {}", err),
+                format!("GetLeaderSchedule failure: {:?}", err),
             )
         })
     }
@@ -343,7 +343,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetEpochSchedule parse failure: {}", err),
+                format!("GetEpochSchedule parse failure: {:?}", err),
             )
         })
     }
@@ -381,7 +381,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetVersion parse failure: {}", err),
+                format!("GetVersion parse failure: {:?}", err),
             )
         })
     }
@@ -400,7 +400,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("MinimumLedgerSlot parse failure: {}", err),
+                format!("MinimumLedgerSlot parse failure: {:?}", err),
             )
         })
     }
@@ -612,7 +612,7 @@ impl RpcClient {
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("AccountNotFound: pubkey={}: {}", pubkey, err),
+                    format!("AccountNotFound: pubkey={}: {:?}", pubkey, err),
                 )
             })?
     }
@@ -698,7 +698,7 @@ impl RpcClient {
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("AccountNotFound: pubkey={}: {}", pubkey, err),
+                    format!("AccountNotFound: pubkey={}: {:?}", pubkey, err),
                 )
             })?;
 
@@ -749,7 +749,7 @@ impl RpcClient {
         serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetTransactionCount parse failure: {}", err),
+                format!("GetTransactionCount parse failure: {:?}", err),
             )
         })
     }
