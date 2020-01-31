@@ -9,14 +9,14 @@
  */
 #define INVALID_INPUT 1
 
-extern uint32_t entrypoint(const uint8_t *input) {
+extern uint64_t entrypoint(const uint8_t *input) {
   SolKeyedAccount ka[1];
   SolParameters params = (SolParameters) { .ka = ka };
 
   sol_log(__FILE__);
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
-    return INVALID_ARGUMENT;
+    return ERROR_INVALID_ARGUMENT;
   }
 
   // Log the provided input parameters.  In the case of  the no-op

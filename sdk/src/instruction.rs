@@ -86,18 +86,14 @@ pub enum InstructionError {
     /// the runtime cannot determine which changes to pick or how to merge them if both are modified
     DuplicateAccountOutOfSync,
 
-    /// CustomError allows on-chain programs to implement program-specific error types and see
-    /// them returned by the Solana runtime. A CustomError may be any type that is represented
-    /// as or serialized to a u32 integer.
-    ///
-    /// NOTE: u64 requires special serialization to avoid the loss of precision in JS clients and
-    /// so is not used for now.
-    CustomError(u32),
+    /// The return value from the program was invalid.  Valid errors are either a defined builtin
+    /// error value or a user-defined error in the lower 32 bits.
+    InvalidError,
 
-    /// Like CustomError but the return value from the program conflicted with
-    /// a builtin error.  The value held by this variant is the u32 error code
-    /// returned by the program but with the 30th bit cleared.
-    ConflictingError(u32),
+    /// Allows on-chain programs to implement program-specific error types and see them returned
+    /// by the Solana runtime. A program-specific error may be any type that is represented as
+    /// or serialized to a u32 integer.
+    CustomError(u32),
 }
 
 impl InstructionError {

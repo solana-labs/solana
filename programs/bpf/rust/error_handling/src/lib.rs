@@ -9,15 +9,11 @@ use thiserror::Error;
 
 /// Custom program errors
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive)]
-// Clippy compains about 0x8000_002d, but we don't care about C compatibility here
-#[allow(clippy::enum_clike_unportable_variant)]
 pub enum MyError {
+    #[error("Default enum start")]
+    DefaultEnumStart,
     #[error("The Answer")]
     TheAnswer = 42,
-    #[error("Conflicting with success")]
-    ConflictingSuccess = 0,
-    #[error("Conflicting with builtin")]
-    ConflictingBuiltin = 0x8000_002d,
 }
 impl From<MyError> for ProgramError {
     fn from(e: MyError) -> Self {
@@ -41,16 +37,12 @@ fn process_instruction(
             Err(ProgramError::InvalidAccountData)
         }
         3 => {
-            info!("return custom error");
-            Err(MyError::TheAnswer.into())
+            info!("return default enum start value");
+            Err(MyError::DefaultEnumStart.into())
         }
         4 => {
-            info!("return error that conflicts with success");
-            Err(MyError::ConflictingSuccess.into())
-        }
-        5 => {
-            info!("return error that conflicts with builtin");
-            Err(MyError::ConflictingBuiltin.into())
+            info!("return custom error");
+            Err(MyError::TheAnswer.into())
         }
         6 => {
             let data = accounts[0].try_borrow_mut_data()?;

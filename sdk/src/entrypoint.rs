@@ -22,12 +22,12 @@ pub type ProcessInstruction = fn(
 ) -> Result<(), ProgramError>;
 
 /// Programs indicate success with a return value of 0
-pub const SUCCESS: u32 = 0;
+pub const SUCCESS: u64 = 0;
 
 /// Declare the entry point of the program.
 ///
 /// Deserialize the program input arguments and call
-/// the user defined `ProcessInstruction` function.
+/// the user defined `process_instruction` function.
 /// Users must call this macro otherwise an entry point for
 /// their program will not be created.
 #[macro_export]
@@ -35,7 +35,7 @@ macro_rules! entrypoint {
     ($process_instruction:ident) => {
         /// # Safety
         #[no_mangle]
-        pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u32 {
+        pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
             let (program_id, accounts, instruction_data) =
                 unsafe { $crate::entrypoint::deserialize(input) };
             match $process_instruction(&program_id, &accounts, &instruction_data) {

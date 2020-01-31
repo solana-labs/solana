@@ -6,7 +6,7 @@
 
 #include <solana_sdk.h>
 
-extern uint32_t entrypoint(const uint8_t *input) {
+extern uint64_t entrypoint(const uint8_t *input) {
   uint64_t x = *(uint64_t *) input;
   uint64_t *result = (uint64_t *) input + 1;
   uint64_t count = 0;
