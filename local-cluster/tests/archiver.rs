@@ -6,6 +6,7 @@ use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::discover_cluster,
+    serve_repair::ServeRepair,
     storage_stage::SLOTS_PER_TURN_TEST,
     validator::ValidatorConfig,
 };
@@ -61,10 +62,11 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
     let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
         cluster_nodes[0].clone(),
     )));
+    let serve_repair = ServeRepair::new(cluster_info);
     let path = get_tmp_ledger_path!();
     let blockstore = Arc::new(Blockstore::open(&path).unwrap());
     Archiver::download_from_archiver(
-        &cluster_info,
+        &serve_repair,
         &archiver_info,
         &blockstore,
         slots_per_segment,

@@ -16,6 +16,7 @@ use solana_core::{
     packet::{limited_deserialize, PACKET_DATA_SIZE},
     repair_service,
     repair_service::{RepairService, RepairSlotRange, RepairStrategy},
+    serve_repair::ServeRepair,
     shred_fetch_stage::ShredFetchStage,
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
     storage_stage::NUM_STORAGE_SAMPLES,
@@ -195,13 +196,7 @@ impl Archiver {
             Blockstore::open(ledger_path).expect("Expected to be able to open database ledger"),
         );
 
-        let gossip_service = GossipService::new(
-            &cluster_info,
-            Some(blockstore.clone()),
-            None,
-            node.sockets.gossip,
-            &exit,
-        );
+        let gossip_service = GossipService::new(&cluster_info, None, node.sockets.gossip, &exit);
 
         info!("Connecting to the cluster via {:?}", cluster_entrypoint);
         let (nodes, _) =
@@ -814,7 +809,7 @@ impl Archiver {
     /// It is recommended to use a temporary blockstore for this since the download will not verify
     /// shreds received and might impact the chaining of shreds across slots
     pub fn download_from_archiver(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        serve_repair: &ServeRepair,
         archiver_info: &ContactInfo,
         blockstore: &Arc<Blockstore>,
         slots_per_segment: u64,
@@ -834,10 +829,10 @@ impl Archiver {
             Recycler::default(),
             "archiver_reeciver",
         );
-        let id = cluster_info.read().unwrap().id();
+        let id = serve_repair.keypair().pubkey();
         info!(
             "Sending repair requests from: {} to: {}",
-            cluster_info.read().unwrap().my_data().id,
+            serve_repair.my_info().id,
             archiver_info.gossip
         );
         let repair_slot_range = RepairSlotRange {
@@ -857,9 +852,7 @@ impl Archiver {
                 let reqs: Vec<_> = repairs
                     .into_iter()
                     .filter_map(|repair_request| {
-                        cluster_info
-                            .read()
-                            .unwrap()
+                        serve_repair
                             .map_repair_request(&repair_request)
                             .map(|result| ((archiver_info.gossip, result), repair_request))
                             .ok()
