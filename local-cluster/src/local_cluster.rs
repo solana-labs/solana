@@ -705,6 +705,10 @@ impl Cluster for LocalCluster {
         cluster_validator_info.config = validator_config;
         self.restart_node(pubkey, cluster_validator_info);
     }
+
+    fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
+        self.validators.get(pubkey).map(|v| &v.info.contact_info)
+    }
 }
 
 impl Drop for LocalCluster {
