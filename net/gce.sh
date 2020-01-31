@@ -868,6 +868,7 @@ EOF
   ;;
 
 config)
+  failOnValidatorBootupFailure=false
   prepareInstancesAndWriteConfigFile
   ;;
 info)
