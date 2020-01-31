@@ -285,7 +285,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(withdraw_authority_arg())
            )
         .subcommand(
-            SubCommand::with_name("show-stake-account")
+            SubCommand::with_name("stake-account")
                 .about("Show the contents of a stake account")
                 .alias("show-stake-account")
                 .arg(
