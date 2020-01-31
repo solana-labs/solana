@@ -455,6 +455,10 @@ deploy() {
         TDS_CLIENT_COUNT="1"
       fi
 
+      if [[ -n $TDS_SLOTS_PER_EPOCH ]]; then
+        maybeSlotsPerEpoch=(--slots-per-epoch "$TDS_SLOTS_PER_EPOCH")
+      fi
+
       if [[ -z $ENABLE_GPU ]]; then
         maybeGpu=(-G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100")
       elif [[ $ENABLE_GPU == skip ]]; then
@@ -540,7 +544,7 @@ deploy() {
         ${maybeInternalNodesLamports} \
         ${maybeExternalAccountsFile} \
         --target-lamports-per-signature 0 \
-        --slots-per-epoch 4096 \
+        "${maybeSlotsPerEpoch[@]}" \
         ${maybeAdditionalDisk}
     )
     ;;
