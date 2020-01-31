@@ -3948,6 +3948,7 @@ dependencies = [
  "num_cpus 1.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rpassword 4.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-clap-utils 0.24.0",
+ "solana-cli 0.24.0",
  "solana-sdk 0.24.0",
  "tiny-bip39 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
