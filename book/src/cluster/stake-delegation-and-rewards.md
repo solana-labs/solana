@@ -29,11 +29,7 @@ VoteState is the current state of all the votes the validator has submitted to t
 * Account::lamports - The accumulated lamports from the commission. These do not count as stakes.
 * `authorized_voter` - Only this identity is authorized to submit votes. This field can only modified by this identity.
 * `node_pubkey` - The Solana node that votes in this account.
-* `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's
-
-  ```text
-                       address and the authorized vote signer
-  ```
+* `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's address and the authorized vote signer
 
 ### VoteInstruction::Initialize\(VoteInit\)
 
@@ -48,13 +44,11 @@ VoteState is the current state of all the votes the validator has submitted to t
 Updates the account with a new authorized voter or withdrawer, according to the VoteAuthorize parameter \(`Voter` or `Withdrawer`\). The transaction must be by signed by the Vote account's current `authorized_voter` or `authorized_withdrawer`.
 
 * `account[0]` - RW - The VoteState
-
   `VoteState::authorized_voter` or `authorized_withdrawer` is set to to `Pubkey`.
 
 ### VoteInstruction::Vote\(Vote\)
 
 * `account[0]` - RW - The VoteState
-
   `VoteState::lockouts` and `VoteState::credits` are updated according to voting lockout rules see [Tower BFT](../implemented-proposals/tower-bft.md)
 
 * `account[1]` - RO - `sysvar::slot_hashes` A list of some N most recent slots and their hashes for the vote to be verified against.
@@ -73,18 +67,10 @@ StakeState::Stake is the current delegation preference of the **staker** and con
 * `voter_pubkey` - The pubkey of the VoteState instance the lamports are delegated to.
 * `credits_observed` - The total credits claimed over the lifetime of the program.
 * `activated` - the epoch at which this stake was activated/delegated. The full stake will be counted after warm up.
-* `deactivated` - the epoch at which this stake was de-activated, some cool down epochs are required before the account
-
-  ```text
-              is fully deactivated, and the stake available for withdrawal
-  ```
+* `deactivated` - the epoch at which this stake was de-activated, some cool down epochs are required before the account is fully deactivated, and the stake available for withdrawal
 
 * `authorized_staker` - the pubkey of the entity that must sign delegation, activation, and deactivation transactions
-* `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's
-
-  ```text
-                       address, and the authorized staker
-  ```
+* `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's address, and the authorized staker
 
 ### StakeState::RewardsPool
 
@@ -168,7 +154,7 @@ Stakers who have delegated to that validator earn points in proportion to their 
 
 Stakes, once delegated, do not become effective immediately. They must first pass through a warm up period. During this period some portion of the stake is considered "effective", the rest is considered "activating". Changes occur on epoch boundaries.
 
-The stake program limits the rate of change to total network stake, reflected in the stake program's `config::warmup_rate` \(typically 25% per epoch\).
+The stake program limits the rate of change to total network stake, reflected in the stake program's `config::warmup_rate` \(set to 25% per epoch in the current implementation\).
 
 The amount of stake that can be warmed up each epoch is a function of the previous epoch's total effective stake, total activating stake, and the stake program's configured warmup rate.
 
