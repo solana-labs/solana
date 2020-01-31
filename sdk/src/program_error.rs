@@ -101,7 +101,7 @@ where
                 if error >> BUILTIN_BIT_SHIFT == 0 {
                     InstructionError::CustomError(error as u32)
                 } else {
-                    InstructionError::InvalidError((error >> BUILTIN_BIT_SHIFT) as u32)
+                    InstructionError::InvalidError
                 }
             }
         }
