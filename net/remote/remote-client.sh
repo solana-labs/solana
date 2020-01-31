@@ -75,7 +75,7 @@ solana-bench-exchange)
   "
   ;;
 idle)
-  # Add the mint keypair to idle clients for convenience
+  # Add the faucet keypair to idle clients for convenience
   net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/config/faucet-keypair.json ~/solana/
   exit 0
