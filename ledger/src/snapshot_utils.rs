@@ -525,11 +525,6 @@ where
         |stream| {
             let mut bank: Bank = match snapshot_version {
                 env!("CARGO_PKG_VERSION") => deserialize_from_snapshot(stream.by_ref())?,
-                "0.22.3" => {
-                    let bank0223: solana_runtime::bank::LegacyBank0223 =
-                        deserialize_from_snapshot(stream.by_ref())?;
-                    bank0223.into()
-                }
                 _ => {
                     return Err(get_io_error(&format!(
                         "unsupported snapshot version: {}",
