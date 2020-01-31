@@ -784,7 +784,7 @@ pub fn process_withdraw_stake(
 pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamports_unit: bool) {
     fn show_authorized(authorized: &Authorized) {
         println!("authorized staker: {}", authorized.staker);
-        println!("authorized withdrawer: {}", authorized.staker);
+        println!("authorized withdrawer: {}", authorized.withdrawer);
     }
     fn show_lockup(lockup: &Lockup) {
         println!("lockup epoch: {}", lockup.epoch);
