@@ -135,7 +135,7 @@ impl ClusterInfoRepairListener {
             }
 
             let lowest_slot = blockstore.lowest_slot();
-            let peers = cluster_info.read().unwrap().gossip_peers();
+            let peers = cluster_info.read().unwrap().tvu_peers();
             let mut peers_needing_repairs: HashMap<Pubkey, EpochSlots> = HashMap::new();
 
             // Iterate through all the known nodes in the network, looking for ones that
