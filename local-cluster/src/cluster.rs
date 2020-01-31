@@ -38,6 +38,7 @@ impl ClusterValidatorInfo {
 pub trait Cluster {
     fn get_node_pubkeys(&self) -> Vec<Pubkey>;
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient>;
+    fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo>;
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo;
     fn restart_node(&mut self, pubkey: &Pubkey, cluster_validator_info: ClusterValidatorInfo);
     fn exit_restart_node(&mut self, pubkey: &Pubkey, config: ValidatorConfig);
