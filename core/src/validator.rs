@@ -12,6 +12,8 @@ use crate::{
     rpc_pubsub_service::PubSubService,
     rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
+    serve_repair::ServeRepair,
+    serve_repair_service::ServeRepairService,
     sigverify,
     storage_stage::StorageState,
     tpu::Tpu,
@@ -121,6 +123,7 @@ pub struct Validator {
     rpc_service: Option<(JsonRpcService, PubSubService)>,
     transaction_status_service: Option<TransactionStatusService>,
     gossip_service: GossipService,
+    serve_repair_service: ServeRepairService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
     poh_service: PohService,
     tpu: Tpu,
@@ -302,9 +305,16 @@ impl Validator {
 
         let gossip_service = GossipService::new(
             &cluster_info,
-            Some(blockstore.clone()),
             Some(bank_forks.clone()),
             node.sockets.gossip,
+            &exit,
+        );
+
+        let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
+        let serve_repair_service = ServeRepairService::new(
+            &serve_repair,
+            Some(blockstore.clone()),
+            node.sockets.serve_repair,
             &exit,
         );
 
@@ -403,6 +413,7 @@ impl Validator {
         Self {
             id,
             gossip_service,
+            serve_repair_service,
             rpc_service,
             transaction_status_service,
             tpu,
@@ -463,6 +474,7 @@ impl Validator {
         }
 
         self.gossip_service.join()?;
+        self.serve_repair_service.join()?;
         self.tpu.join()?;
         self.tvu.join()?;
         self.ip_echo_server.shutdown_now();
