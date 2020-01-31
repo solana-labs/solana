@@ -131,6 +131,7 @@ impl JsonRpcService {
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
                         ]))
+                        .cors_max_age(86400)
                         .request_middleware(RpcRequestMiddleware::new(ledger_path))
                         .start_http(&rpc_addr);
                 if let Err(e) = server {
