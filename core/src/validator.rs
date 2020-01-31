@@ -63,6 +63,7 @@ pub struct ValidatorConfig {
     pub storage_slots_per_turn: u64,
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
+    pub rpc_ports: Option<(u16, u16)>, // (API, PubSub)
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_slots: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
@@ -86,6 +87,7 @@ impl Default for ValidatorConfig {
             max_ledger_slots: None,
             account_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
+            rpc_ports: None,
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             enable_partition: None,
@@ -116,8 +118,7 @@ impl ValidatorExit {
 pub struct Validator {
     pub id: Pubkey,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
-    rpc_service: Option<JsonRpcService>,
-    rpc_pubsub_service: Option<PubSubService>,
+    rpc_service: Option<(JsonRpcService, PubSubService)>,
     transaction_status_service: Option<TransactionStatusService>,
     gossip_service: GossipService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
@@ -128,7 +129,6 @@ pub struct Validator {
 }
 
 impl Validator {
-    #[allow(clippy::cognitive_complexity)]
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
@@ -219,36 +219,36 @@ impl Validator {
 
         let blockstore = Arc::new(blockstore);
 
-        let rpc_service = if node.info.rpc.port() == 0 {
-            None
-        } else {
-            Some(JsonRpcService::new(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
-                config.rpc_config.clone(),
-                bank_forks.clone(),
-                block_commitment_cache.clone(),
-                blockstore.clone(),
-                cluster_info.clone(),
-                genesis_hash,
-                ledger_path,
-                storage_state.clone(),
-                validator_exit.clone(),
-            ))
-        };
-
         let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
-        let rpc_pubsub_service = if node.info.rpc_pubsub.port() == 0 {
-            None
-        } else {
-            Some(PubSubService::new(
-                &subscriptions,
-                SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                    node.info.rpc_pubsub.port(),
+
+        let rpc_service = config.rpc_ports.map(|(rpc_port, rpc_pubsub_port)| {
+            if ContactInfo::is_valid_address(&node.info.rpc) {
+                assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+                assert_eq!(rpc_port, node.info.rpc.port());
+                assert_eq!(rpc_pubsub_port, node.info.rpc_pubsub.port());
+            } else {
+                assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+            }
+            (
+                JsonRpcService::new(
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
+                    config.rpc_config.clone(),
+                    bank_forks.clone(),
+                    block_commitment_cache.clone(),
+                    blockstore.clone(),
+                    cluster_info.clone(),
+                    genesis_hash,
+                    ledger_path,
+                    storage_state.clone(),
+                    validator_exit.clone(),
                 ),
-                &exit,
-            ))
-        };
+                PubSubService::new(
+                    &subscriptions,
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
+                    &exit,
+                ),
+            )
+        });
 
         let (transaction_status_sender, transaction_status_service) =
             if rpc_service.is_some() && !config.transaction_status_service_disabled {
@@ -317,47 +317,7 @@ impl Validator {
                 .set_entrypoint(entrypoint_info.clone());
         }
 
-        if config.wait_for_supermajority {
-            info!(
-                "Waiting for more than 75% of activated stake at slot {} to be in gossip...",
-                bank.slot()
-            );
-            loop {
-                let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info);
-
-                info!("{}% of activated stake in gossip", gossip_stake_percent,);
-                if gossip_stake_percent > 75 {
-                    break;
-                }
-                sleep(Duration::new(1, 0));
-            }
-        }
-
-        let sockets = Sockets {
-            repair: node
-                .sockets
-                .repair
-                .try_clone()
-                .expect("Failed to clone repair socket"),
-            retransmit: node
-                .sockets
-                .retransmit_sockets
-                .iter()
-                .map(|s| s.try_clone().expect("Failed to clone retransmit socket"))
-                .collect(),
-            fetch: node
-                .sockets
-                .tvu
-                .iter()
-                .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
-                .collect(),
-            forwards: node
-                .sockets
-                .tvu_forwards
-                .iter()
-                .map(|s| s.try_clone().expect("Failed to clone TVU forwards Sockets"))
-                .collect(),
-        };
+        wait_for_supermajority(config, &bank, &cluster_info);
 
         let voting_keypair = if config.voting_disabled {
             None
@@ -378,7 +338,31 @@ impl Validator {
             storage_keypair,
             &bank_forks,
             &cluster_info,
-            sockets,
+            Sockets {
+                repair: node
+                    .sockets
+                    .repair
+                    .try_clone()
+                    .expect("Failed to clone repair socket"),
+                retransmit: node
+                    .sockets
+                    .retransmit_sockets
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone retransmit socket"))
+                    .collect(),
+                fetch: node
+                    .sockets
+                    .tvu
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
+                    .collect(),
+                forwards: node
+                    .sockets
+                    .tvu_forwards
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone TVU forwards Sockets"))
+                    .collect(),
+            },
             blockstore.clone(),
             &storage_state,
             config.blockstream_unix_socket.as_ref(),
@@ -420,7 +404,6 @@ impl Validator {
             id,
             gossip_service,
             rpc_service,
-            rpc_pubsub_service,
             transaction_status_service,
             tpu,
             tvu,
@@ -471,10 +454,8 @@ impl Validator {
     pub fn join(self) -> Result<()> {
         self.poh_service.join()?;
         drop(self.poh_recorder);
-        if let Some(rpc_service) = self.rpc_service {
+        if let Some((rpc_service, rpc_pubsub_service)) = self.rpc_service {
             rpc_service.join()?;
-        }
-        if let Some(rpc_pubsub_service) = self.rpc_pubsub_service {
             rpc_pubsub_service.join()?;
         }
         if let Some(transaction_status_service) = self.transaction_status_service {
@@ -575,6 +556,30 @@ fn new_banks_from_blockstore(
     )
 }
 
+fn wait_for_supermajority(
+    config: &ValidatorConfig,
+    bank: &Arc<Bank>,
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
+) {
+    if !config.wait_for_supermajority {
+        return;
+    }
+
+    info!(
+        "Waiting for more than 75% of activated stake at slot {} to be in gossip...",
+        bank.slot()
+    );
+    loop {
+        let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info);
+
+        info!("{}% of activated stake in gossip", gossip_stake_percent,);
+        if gossip_stake_percent > 75 {
+            break;
+        }
+        sleep(Duration::new(1, 0));
+    }
+}
+
 pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
     use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
 
@@ -598,8 +603,11 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 
     let leader_voting_keypair = Arc::new(voting_keypair);
     let storage_keypair = Arc::new(Keypair::new());
-    let mut config = ValidatorConfig::default();
-    config.transaction_status_service_disabled = true;
+    let config = ValidatorConfig {
+        transaction_status_service_disabled: true,
+        rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
+        ..ValidatorConfig::default()
+    };
     let node = Validator::new(
         node,
         &node_keypair,
@@ -700,8 +708,14 @@ mod tests {
 
         let voting_keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
-        let mut config = ValidatorConfig::default();
-        config.transaction_status_service_disabled = true;
+        let config = ValidatorConfig {
+            transaction_status_service_disabled: true,
+            rpc_ports: Some((
+                validator_node.info.rpc.port(),
+                validator_node.info.rpc_pubsub.port(),
+            )),
+            ..ValidatorConfig::default()
+        };
         let validator = Validator::new(
             validator_node,
             &Arc::new(validator_keypair),
@@ -734,8 +748,14 @@ mod tests {
                 ledger_paths.push(validator_ledger_path.clone());
                 let voting_keypair = Arc::new(Keypair::new());
                 let storage_keypair = Arc::new(Keypair::new());
-                let mut config = ValidatorConfig::default();
-                config.transaction_status_service_disabled = true;
+                let config = ValidatorConfig {
+                    transaction_status_service_disabled: true,
+                    rpc_ports: Some((
+                        validator_node.info.rpc.port(),
+                        validator_node.info.rpc_pubsub.port(),
+                    )),
+                    ..ValidatorConfig::default()
+                };
                 Validator::new(
                     validator_node,
                     &Arc::new(validator_keypair),

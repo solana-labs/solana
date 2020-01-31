@@ -45,19 +45,10 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     Ok(Response { context, value })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct JsonRpcConfig {
     pub enable_validator_exit: bool, // Enable the 'validatorExit' command
     pub faucet_addr: Option<SocketAddr>,
-}
-
-impl Default for JsonRpcConfig {
-    fn default() -> Self {
-        Self {
-            enable_validator_exit: false,
-            faucet_addr: None,
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -1124,6 +1115,7 @@ pub mod tests {
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
         instruction::InstructionError,
+        rpc_port,
         signature::{Keypair, KeypairUtil},
         system_transaction,
         transaction::TransactionError,
@@ -1362,8 +1354,9 @@ pub mod tests {
             .expect("actual response deserialization");
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","result":[{{"pubkey": "{}", "gossip": "127.0.0.1:1235", "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:8899"}}],"id":1}}"#,
+            r#"{{"jsonrpc":"2.0","result":[{{"pubkey": "{}", "gossip": "127.0.0.1:1235", "tpu": "127.0.0.1:1234", "rpc": "127.0.0.1:{}"}}],"id":1}}"#,
             leader_pubkey,
+            rpc_port::DEFAULT_RPC_PORT
         );
 
         let expected: Response =
