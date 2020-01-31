@@ -1,5 +1,9 @@
-use crate::{account::Account, pubkey::Pubkey};
-use std::{cell::RefCell, cmp, fmt, rc::Rc};
+use crate::{account::Account, program_error::ProgramError, pubkey::Pubkey};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    cmp, fmt,
+    rc::Rc,
+};
 
 /// Account information
 #[derive(Clone)]
@@ -55,12 +59,48 @@ impl<'a> AccountInfo<'a> {
         **self.lamports.borrow()
     }
 
+    pub fn try_lamports(&self) -> Result<u64, ProgramError> {
+        Ok(**self.try_borrow_lamports()?)
+    }
+
     pub fn data_len(&self) -> usize {
         self.data.borrow().len()
     }
 
+    pub fn try_data_len(&self) -> Result<usize, ProgramError> {
+        Ok(self.try_borrow_data()?.len())
+    }
+
     pub fn data_is_empty(&self) -> bool {
         self.data.borrow().is_empty()
+    }
+
+    pub fn try_data_is_empty(&self) -> Result<bool, ProgramError> {
+        Ok(self.try_borrow_data()?.is_empty())
+    }
+
+    pub fn try_borrow_lamports(&self) -> Result<Ref<&mut u64>, ProgramError> {
+        self.lamports
+            .try_borrow()
+            .map_err(|_| ProgramError::AccountBorrowFailed)
+    }
+
+    pub fn try_borrow_mut_lamports(&self) -> Result<RefMut<&'a mut u64>, ProgramError> {
+        self.lamports
+            .try_borrow_mut()
+            .map_err(|_| ProgramError::AccountBorrowFailed)
+    }
+
+    pub fn try_borrow_data(&self) -> Result<Ref<&mut [u8]>, ProgramError> {
+        self.data
+            .try_borrow()
+            .map_err(|_| ProgramError::AccountBorrowFailed)
+    }
+
+    pub fn try_borrow_mut_data(&self) -> Result<RefMut<&'a mut [u8]>, ProgramError> {
+        self.data
+            .try_borrow_mut()
+            .map_err(|_| ProgramError::AccountBorrowFailed)
     }
 
     pub fn new(

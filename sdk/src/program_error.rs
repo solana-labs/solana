@@ -30,7 +30,7 @@ pub enum ProgramError {
     UninitializedAccount,
     /// The instruction expected additional account keys
     NotEnoughAccountKeys,
-    /// Failed to borrow a reference to an account, already borrowed
+    /// Failed to borrow a reference to account data, already borrowed
     AccountBorrowFailed,
 }
 
