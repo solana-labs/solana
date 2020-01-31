@@ -55,7 +55,7 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "unbecoming silver",
-        staker: "42yapY7Vrs5jqht9TCKZsPoyb4vDFYcPfRkqAP85NSAQ",
+        staker: "4AcoZa1P8fF5XK21RJsiuMRZPEScbbWNc75oakRFHiBz",
         lamports: 28_800 * LAMPORTS_PER_SOL,
     },
     StakerInfo {
