@@ -662,8 +662,11 @@ fn test_snapshot_restart_tower() {
     cluster.restart_node(&validator_id, validator_info);
 
     // Test cluster can still make progress and get confirmations in tower
+    // Use the restarted node as the discovery point so that we get updated
+    // validator's ContactInfo
+    let restarted_node_info = cluster.get_contact_info(&validator_id).unwrap();
     cluster_tests::spend_and_verify_all_nodes(
-        &cluster.entry_point_info,
+        &restarted_node_info,
         &cluster.funding_keypair,
         1,
         HashSet::new(),
