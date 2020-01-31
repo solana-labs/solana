@@ -213,7 +213,6 @@ fn get_rpc_addr(
     let gossip_service = GossipService::new(
         &cluster_info.clone(),
         None,
-        None,
         node.sockets.gossip.try_clone().unwrap(),
         &gossip_exit_flag,
     );

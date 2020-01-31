@@ -1,6 +1,10 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
-use crate::{cluster_info::ClusterInfo, result::Result};
+use crate::{
+    cluster_info::ClusterInfo,
+    result::Result,
+    serve_repair::{RepairType, ServeRepair},
+};
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
@@ -28,23 +32,6 @@ pub enum RepairStrategy {
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
     },
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RepairType {
-    Orphan(Slot),
-    HighestShred(Slot, u64),
-    Shred(Slot, u64),
-}
-
-impl RepairType {
-    pub fn slot(&self) -> Slot {
-        match self {
-            RepairType::Orphan(slot) => *slot,
-            RepairType::HighestShred(slot, _) => *slot,
-            RepairType::Shred(slot, _) => *slot,
-        }
-    }
 }
 
 pub struct RepairSlotRange {
@@ -96,6 +83,7 @@ impl RepairService {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
     ) {
+        let serve_repair = ServeRepair::new(cluster_info.clone());
         let mut epoch_slots: BTreeSet<Slot> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
         let mut current_root = 0;
@@ -153,9 +141,7 @@ impl RepairService {
                 let reqs: Vec<_> = repairs
                     .into_iter()
                     .filter_map(|repair_request| {
-                        cluster_info
-                            .read()
-                            .unwrap()
+                        serve_repair
                             .repair_request(&repair_request)
                             .map(|result| (result, repair_request))
                             .ok()
