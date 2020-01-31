@@ -221,8 +221,8 @@ EOF
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
 
-      if [[ -f net/keypairs/mint.json ]]; then
-        export FAUCET_KEYPAIR=net/keypairs/mint.json
+      if [[ -f net/keypairs/faucet.json ]]; then
+        export FAUCET_KEYPAIR=net/keypairs/faucet.json
       fi
       if [[ -f net/keypairs/bootstrap-validator-identity.json ]]; then
         export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
@@ -303,11 +303,11 @@ EOF
     fi
 
     set -x
-    # Add the mint keypair to validators for convenient access from tools
+    # Add the faucet keypair to validators for convenient access from tools
     # like bench-tps and add to blocktreamers to run a faucet
     scp "$entrypointIp":~/solana/config/faucet-keypair.json config/
     if [[ $nodeType = blockstreamer ]]; then
-      # Run another faucet with the mint keypair on the blockstreamer node.
+      # Run another faucet with the same keypair on the blockstreamer node.
       # Typically the blockstreamer node has a static IP/DNS name for hosting
       # the blockexplorer web app, and is a location that somebody would expect
       # to be able to airdrop from
