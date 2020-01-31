@@ -15,10 +15,7 @@ pub struct RpcClientRequest {
 
 impl RpcClientRequest {
     pub fn new(url: String) -> Self {
-        Self {
-            client: reqwest::blocking::Client::new(),
-            url,
-        }
+        Self::new_with_timeout(url, Duration::from_secs(20))
     }
 
     pub fn new_with_timeout(url: String, timeout: Duration) -> Self {
