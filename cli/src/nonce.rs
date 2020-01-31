@@ -234,15 +234,8 @@ impl NonceSubCommands for App<'_, '_> {
 pub fn parse_authorize_nonce_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let new_authority = pubkey_of(matches, "new_authority").unwrap();
-    let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            NONCE_AUTHORITY_ARG.name,
-            None,
-        )?)
-    } else {
-        None
-    };
+    let nonce_authority =
+        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, None)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::AuthorizeNonceAccount {
@@ -282,15 +275,8 @@ pub fn parse_get_nonce(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
 
 pub fn parse_new_nonce(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
-    let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            NONCE_AUTHORITY_ARG.name,
-            None,
-        )?)
-    } else {
-        None
-    };
+    let nonce_authority =
+        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, None)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::NewNonce {
@@ -320,15 +306,8 @@ pub fn parse_withdraw_from_nonce_account(
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
     let lamports = required_lamports_from(matches, "amount", "unit")?;
-    let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            NONCE_AUTHORITY_ARG.name,
-            None,
-        )?)
-    } else {
-        None
-    };
+    let nonce_authority =
+        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, None)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawFromNonceAccount {
