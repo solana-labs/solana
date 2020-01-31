@@ -50,8 +50,8 @@ fn get_keypair_from_matches(
     config: Config,
 ) -> Result<Keypair, Box<dyn error::Error>> {
     let mut path = dirs::home_dir().expect("home directory");
-    let infile = if matches.is_present("infile") {
-        matches.value_of("infile").unwrap()
+    let keypair = if matches.is_present("keypair") {
+        matches.value_of("keypair").unwrap()
     } else if config.keypair_path != "" {
         &config.keypair_path
     } else {
@@ -59,14 +59,14 @@ fn get_keypair_from_matches(
         path.to_str().unwrap()
     };
 
-    if infile == "-" {
+    if keypair == "-" {
         let mut stdin = std::io::stdin();
         read_keypair(&mut stdin)
-    } else if infile == ASK_KEYWORD {
+    } else if keypair == ASK_KEYWORD {
         let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
         keypair_from_seed_phrase("pubkey recovery", skip_validation, false)
     } else {
-        read_keypair_file(infile)
+        read_keypair_file(keypair)
     }
 }
 
@@ -225,7 +225,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Public key"),
                 )
                 .arg(
-                    Arg::with_name("infile")
+                    Arg::with_name("keypair")
                         .index(2)
                         .value_name("PATH")
                         .takes_value(true)
@@ -322,7 +322,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Display the pubkey from a keypair file")
                 .setting(AppSettings::DisableVersion)
                 .arg(
-                    Arg::with_name("infile")
+                    Arg::with_name("keypair")
                         .index(1)
                         .value_name("PATH")
                         .takes_value(true)
