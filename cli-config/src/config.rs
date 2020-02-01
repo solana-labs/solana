@@ -1,8 +1,10 @@
 // Wallet settings that can be configured for long-term use
 use serde_derive::{Deserialize, Serialize};
-use std::fs::{create_dir_all, File};
-use std::io::{self, Write};
-use std::path::Path;
+use std::{
+    fs::{create_dir_all, File},
+    io::{self, Write},
+    path::Path,
+};
 
 lazy_static! {
     pub static ref CONFIG_FILE: Option<String> = {

@@ -10,9 +10,9 @@ use solana_clap_utils::{
 };
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliError},
-    config::{self, Config},
     display::{println_name_value, println_name_value_or},
 };
+use solana_cli_config::config::{Config, CONFIG_FILE};
 use solana_sdk::signature::read_keypair_file;
 
 use std::error;
@@ -162,7 +162,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .takes_value(true)
             .global(true)
             .help("Configuration file to use");
-        if let Some(ref config_file) = *config::CONFIG_FILE {
+        if let Some(ref config_file) = *CONFIG_FILE {
             arg.default_value(&config_file)
         } else {
             arg
