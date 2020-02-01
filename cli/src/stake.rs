@@ -354,24 +354,10 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-    let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            STAKE_AUTHORITY_ARG.name,
-            signers.as_deref(),
-        )?)
-    } else {
-        None
-    };
-    let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            NONCE_AUTHORITY_ARG.name,
-            signers.as_deref(),
-        )?)
-    } else {
-        None
-    };
+    let stake_authority =
+        SigningAuthority::new_from_matches(&matches, STAKE_AUTHORITY_ARG.name, signers.as_deref())?;
+    let nonce_authority =
+        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DelegateStake {
@@ -401,26 +387,12 @@ pub fn parse_stake_authorize(
     };
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
-    let authority = if matches.is_present(authority_flag) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            authority_flag,
-            signers.as_deref(),
-        )?)
-    } else {
-        None
-    };
+    let authority =
+        SigningAuthority::new_from_matches(&matches, authority_flag, signers.as_deref())?;
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-    let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            NONCE_AUTHORITY_ARG.name,
-            signers.as_deref(),
-        )?)
-    } else {
-        None
-    };
+    let nonce_authority =
+        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeAuthorize {
@@ -445,24 +417,10 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-    let stake_authority = if matches.is_present(STAKE_AUTHORITY_ARG.name) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            STAKE_AUTHORITY_ARG.name,
-            signers.as_deref(),
-        )?)
-    } else {
-        None
-    };
-    let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            NONCE_AUTHORITY_ARG.name,
-            signers.as_deref(),
-        )?)
-    } else {
-        None
-    };
+    let stake_authority =
+        SigningAuthority::new_from_matches(&matches, STAKE_AUTHORITY_ARG.name, signers.as_deref())?;
+    let nonce_authority =
+        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DeactivateStake {
@@ -482,15 +440,8 @@ pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
     let lamports = required_lamports_from(matches, "amount", "unit")?;
-    let withdraw_authority = if matches.is_present(WITHDRAW_AUTHORITY_ARG.name) {
-        Some(SigningAuthority::new_from_matches(
-            &matches,
-            WITHDRAW_AUTHORITY_ARG.name,
-            None,
-        )?)
-    } else {
-        None
-    };
+    let withdraw_authority =
+        SigningAuthority::new_from_matches(&matches, WITHDRAW_AUTHORITY_ARG.name, None)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawStake {
