@@ -1,0 +1,15 @@
+steps:
+  - command: "system-test/testnet-automation.sh"
+    label: "COLO performance testnet CPU only (reduced validator and client count)"
+    env:
+      UPLOAD_RESULTS_TO_SLACK: "true"
+      CLOUD_PROVIDER: "colo"
+      TESTNET_TAG: "colo-perf-cpu-only"
+      ENABLE_GPU: "false"
+      TEST_DURATION_SECONDS: 600
+      NUMBER_OF_VALIDATOR_NODES: 3
+      NUMBER_OF_CLIENT_NODES: 1
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 40000 --thread-batch-sleep-ms 250"
+      ADDITIONAL_FLAGS: ""
+    agents:
+      - "queue=colo-deploy"
