@@ -8,7 +8,7 @@ use num_cpus;
 use solana_clap_utils::keypair::{
     keypair_from_seed_phrase, prompt_passphrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
-use solana_cli::config::{Config, CONFIG_FILE};
+use solana_cli_config::config::{Config, CONFIG_FILE};
 use solana_sdk::{
     pubkey::write_pubkey_file,
     signature::{
