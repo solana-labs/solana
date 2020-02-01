@@ -86,21 +86,26 @@ impl SigningAuthority {
         matches: &ArgMatches<'_>,
         name: &str,
         signers: Option<&[(Pubkey, Signature)]>,
-    ) -> Result<Self, CliError> {
-        keypair_of(matches, name)
-            .map(|keypair| keypair.into())
-            .or_else(|| {
-                pubkey_of(matches, name)
-                    .filter(|pubkey| {
-                        signers
-                            .and_then(|signers| {
-                                signers.iter().find(|(signer, _sig)| *signer == *pubkey)
-                            })
-                            .is_some()
-                    })
-                    .map(|pubkey| pubkey.into())
-            })
-            .ok_or_else(|| CliError::BadParameter("Invalid authority".to_string()))
+    ) -> Result<Option<Self>, CliError> {
+        if matches.is_present(name) {
+            keypair_of(matches, name)
+                .map(|keypair| keypair.into())
+                .or_else(|| {
+                    pubkey_of(matches, name)
+                        .filter(|pubkey| {
+                            signers
+                                .and_then(|signers| {
+                                    signers.iter().find(|(signer, _sig)| *signer == *pubkey)
+                                })
+                                .is_some()
+                        })
+                        .map(|pubkey| pubkey.into())
+                })
+                .ok_or_else(|| CliError::BadParameter("Invalid authority".to_string()))
+                .map(Some)
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn keypair(&self) -> &Keypair {
@@ -609,15 +614,11 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(&matches);
             let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-            let nonce_authority = if matches.is_present(NONCE_AUTHORITY_ARG.name) {
-                Some(SigningAuthority::new_from_matches(
-                    &matches,
-                    NONCE_AUTHORITY_ARG.name,
-                    signers.as_deref(),
-                )?)
-            } else {
-                None
-            };
+            let nonce_authority = SigningAuthority::new_from_matches(
+                &matches,
+                NONCE_AUTHORITY_ARG.name,
+                signers.as_deref(),
+            )?;
 
             Ok(CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
