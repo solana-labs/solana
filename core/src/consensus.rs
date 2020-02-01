@@ -597,7 +597,21 @@ mod test {
             let my_pubkey = my_keypairs.node_keypair.pubkey();
             let my_vote_pubkey = my_keypairs.vote_keypair.pubkey();
             let ancestors = bank_forks.read().unwrap().ancestors();
-            ReplayStage::select_fork(&my_pubkey, &ancestors, &bank_forks, tower, progress);
+            let mut frozen_banks: Vec<_> = bank_forks
+                .read()
+                .unwrap()
+                .frozen_banks()
+                .values()
+                .cloned()
+                .collect();
+            ReplayStage::compute_bank_stats(
+                &my_pubkey,
+                &ancestors,
+                &mut frozen_banks,
+                tower,
+                progress,
+            );
+            ReplayStage::select_fork(&frozen_banks, tower, progress);
 
             let bank = bank_forks
                 .read()
