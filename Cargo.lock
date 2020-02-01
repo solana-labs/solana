@@ -3726,7 +3726,7 @@ dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rpassword 4.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-hardware-wallet 0.24.0",
+ "solana-remote-wallet 0.24.0",
  "solana-sdk 0.24.0",
  "tiny-bip39 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3997,20 +3997,6 @@ dependencies = [
  "solana-logger 0.24.0",
  "solana-net-utils 0.24.0",
  "solana-sdk 0.24.0",
-]
-
-[[package]]
-name = "solana-hardware-wallet"
-version = "0.24.0"
-dependencies = [
- "base32 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hidapi 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rusb 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.24.0",
- "thiserror 1.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4333,6 +4319,20 @@ dependencies = [
  "cc 1.0.49 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "solana-remote-wallet"
+version = "0.24.0"
+dependencies = [
+ "base32 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hidapi 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rusb 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.24.0",
+ "thiserror 1.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

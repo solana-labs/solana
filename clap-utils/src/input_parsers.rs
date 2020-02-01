@@ -1,6 +1,7 @@
 use crate::keypair::{keypair_from_seed_phrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG};
 use chrono::DateTime;
 use clap::ArgMatches;
+use solana_remote_wallet::remote_wallet::DerivationPath;
 use solana_sdk::{
     clock::UnixTimestamp,
     native_token::sol_to_lamports,
@@ -98,6 +99,16 @@ pub fn amount_of(matches: &ArgMatches<'_>, name: &str, unit: &str) -> Option<u64
     } else {
         value_of(matches, name).map(sol_to_lamports)
     }
+}
+
+pub fn derivation_of(matches: &ArgMatches<'_>, name: &str) -> Option<DerivationPath> {
+    matches.value_of(name).map(|derivation_str| {
+        let derivation_str = derivation_str.replace("'", "");
+        let mut parts = derivation_str.split('/');
+        let account = parts.next().unwrap().parse::<u16>().unwrap();
+        let change = parts.next().map(|change| change.parse::<u16>().unwrap());
+        DerivationPath { account, change }
+    })
 }
 
 #[cfg(test)]
@@ -276,5 +287,41 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "--single", "1.5", "--unit", "lamports"]);
         assert_eq!(amount_of(&matches, "single", "unit"), None);
+    }
+
+    #[test]
+    fn test_derivation_of() {
+        let matches = app()
+            .clone()
+            .get_matches_from(vec!["test", "--single", "2/3"]);
+        assert_eq!(
+            derivation_of(&matches, "single"),
+            Some(DerivationPath {
+                account: 2,
+                change: Some(3)
+            })
+        );
+        assert_eq!(derivation_of(&matches, "another"), None);
+        let matches = app()
+            .clone()
+            .get_matches_from(vec!["test", "--single", "2"]);
+        assert_eq!(
+            derivation_of(&matches, "single"),
+            Some(DerivationPath {
+                account: 2,
+                change: None
+            })
+        );
+        assert_eq!(derivation_of(&matches, "another"), None);
+        let matches = app()
+            .clone()
+            .get_matches_from(vec!["test", "--single", "2'/3'"]);
+        assert_eq!(
+            derivation_of(&matches, "single"),
+            Some(DerivationPath {
+                account: 2,
+                change: Some(3)
+            })
+        );
     }
 }
