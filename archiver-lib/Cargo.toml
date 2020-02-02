@@ -19,7 +19,7 @@ solana-client = { path = "../client", version = "0.24.0" }
 solana-storage-program = { path = "../programs/storage", version = "0.24.0" }
 thiserror = "1.0"
 serde = "1.0.104"
-serde_json = "1.0.44"
+serde_json = "1.0.46"
 serde_derive = "1.0.103"
 solana-net-utils = { path = "../net-utils", version = "0.24.0" }
 solana-chacha = { path = "../chacha", version = "0.24.0" }
