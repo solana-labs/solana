@@ -327,21 +327,16 @@ impl Tower {
                     fork_stake.stake,
                     total_staked
                 );
-                for (new_lockout, original_lockout) in
-                    lockouts.votes.iter().zip(self.lockouts.votes.iter())
-                {
-                    if new_lockout.slot == original_lockout.slot {
-                        if new_lockout.confirmation_count <= self.threshold_depth as u32 {
-                            break;
+                if vote.confirmation_count as usize > self.threshold_depth {
+                    for old_vote in &self.lockouts.votes {
+                        if old_vote.slot == vote.slot
+                            && old_vote.confirmation_count == vote.confirmation_count
+                        {
+                            return true;
                         }
-                        if new_lockout.confirmation_count != original_lockout.confirmation_count {
-                            return lockout > self.threshold_size;
-                        }
-                    } else {
-                        break;
                     }
                 }
-                true
+                lockout > self.threshold_size
             } else {
                 false
             }
@@ -483,6 +478,202 @@ mod test {
         stakes
     }
 
+<<<<<<< HEAD
+=======
+    fn can_progress_on_fork(
+        my_pubkey: &Pubkey,
+        tower: &mut Tower,
+        start_slot: u64,
+        num_slots: u64,
+        bank_forks: &RwLock<BankForks>,
+        cluster_votes: &mut HashMap<Pubkey, Vec<u64>>,
+        keypairs: &HashMap<Pubkey, ValidatorKeypairs>,
+        progress: &mut HashMap<u64, ForkProgress>,
+    ) -> bool {
+        // Check that within some reasonable time, validator can make a new
+        // root on this fork
+        let old_root = tower.root();
+        let mut main_fork = tr(start_slot);
+        let mut tip = main_fork.root_mut();
+
+        for i in 1..num_slots {
+            tip.push_front(tr(start_slot + i));
+            tip = tip.first_mut().unwrap();
+        }
+        let mut voting_simulator = VoteSimulator::new(&main_fork);
+        for i in 1..num_slots {
+            voting_simulator.simulate_vote(
+                i + start_slot,
+                &bank_forks,
+                cluster_votes,
+                &keypairs,
+                keypairs.get(&my_pubkey).unwrap(),
+                progress,
+                tower,
+            );
+            if old_root != tower.root() {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    #[test]
+    fn test_simple_votes() {
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+
+        let mut keypairs = HashMap::new();
+        keypairs.insert(
+            node_pubkey,
+            ValidatorKeypairs::new(node_keypair, vote_keypair),
+        );
+
+        // Initialize BankForks
+        let (bank_forks, mut progress) = initialize_state(&HashMap::new(), &keypairs);
+        let bank_forks = RwLock::new(bank_forks);
+
+        // Create the tree of banks
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4) / tr(5)))));
+
+        // Set the voting behavior
+        let mut voting_simulator = VoteSimulator::new(&forks);
+        let votes = vec![0, 1, 2, 3, 4, 5];
+
+        // Simulate the votes
+        let mut tower = Tower::new_with_key(&node_pubkey);
+
+        let mut cluster_votes = HashMap::new();
+        for vote in votes {
+            assert_eq!(
+                VoteResult::Ok,
+                voting_simulator.simulate_vote(
+                    vote,
+                    &bank_forks,
+                    &mut cluster_votes,
+                    &keypairs,
+                    keypairs.get(&node_pubkey).unwrap(),
+                    &mut progress,
+                    &mut tower,
+                )
+            );
+        }
+
+        for i in 0..5 {
+            assert_eq!(tower.lockouts.votes[i].slot as usize, i);
+            assert_eq!(tower.lockouts.votes[i].confirmation_count as usize, 6 - i);
+        }
+    }
+
+    #[test]
+    fn test_double_partition() {
+        solana_logger::setup();
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let vote_pubkey = vote_keypair.pubkey();
+
+        let mut keypairs = HashMap::new();
+        info!("my_pubkey: {}", node_pubkey);
+        keypairs.insert(
+            node_pubkey,
+            ValidatorKeypairs::new(node_keypair, vote_keypair),
+        );
+
+        // Create the tree of banks in a BankForks object
+        let forks = tr(0)
+            / (tr(1)
+                / (tr(2)
+                    / (tr(3)
+                        / (tr(4)
+                            / (tr(5)
+                                / (tr(6)
+                                    / (tr(7)
+                                        / (tr(8)
+                                            / (tr(9)
+                                                // Minor fork 1
+                                                / (tr(10) / (tr(11) / (tr(12) / (tr(13) / (tr(14))))))
+                                                / (tr(43)
+                                                    / (tr(44)
+                                                        // Minor fork 2
+                                                        / (tr(45) / (tr(46) / (tr(47) / (tr(48) / (tr(49) / (tr(50)))))))
+                                                        / (tr(110)))))))))))));
+
+        // Set the voting behavior
+        let mut voting_simulator = VoteSimulator::new(&forks);
+        let mut votes: Vec<Slot> = vec![];
+        // Vote on the first minor fork
+        votes.extend((0..=14).into_iter());
+        // Come back to the main fork
+        votes.extend((43..=44).into_iter());
+        // Vote on the second minor fork
+        votes.extend((45..=50).into_iter());
+
+        let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
+        cluster_votes.insert(node_pubkey, votes.clone());
+        let (bank_forks, mut progress) = initialize_state(&cluster_votes, &keypairs);
+        let bank_forks = RwLock::new(bank_forks);
+
+        // Simulate the votes. Should fail on trying to come back to the main fork
+        // at 106 exclusively due to threshold failure
+        let mut tower = Tower::new_with_key(&node_pubkey);
+        for vote in &votes {
+            // All these votes should be ok
+            assert_eq!(
+                voting_simulator.simulate_vote(
+                    *vote,
+                    &bank_forks,
+                    &mut cluster_votes,
+                    &keypairs,
+                    keypairs.get(&node_pubkey).unwrap(),
+                    &mut progress,
+                    &mut tower,
+                ),
+                VoteResult::Ok
+            );
+        }
+
+        // Try to come back to main fork
+        let next_unlocked_slot = 110;
+        assert_eq!(
+            voting_simulator.simulate_vote(
+                next_unlocked_slot,
+                &bank_forks,
+                &mut cluster_votes,
+                &keypairs,
+                keypairs.get(&node_pubkey).unwrap(),
+                &mut progress,
+                &mut tower,
+            ),
+            VoteResult::Ok
+        );
+
+        info!("local tower: {:#?}", tower.lockouts.votes);
+        let vote_accounts = bank_forks
+            .read()
+            .unwrap()
+            .get(next_unlocked_slot)
+            .unwrap()
+            .vote_accounts();
+        let observed = vote_accounts.get(&vote_pubkey).unwrap();
+        let state = VoteState::from(&observed.1).unwrap();
+        info!("observed tower: {:#?}", state.votes);
+
+        assert!(can_progress_on_fork(
+            &node_pubkey,
+            &mut tower,
+            next_unlocked_slot,
+            200,
+            &bank_forks,
+            &mut cluster_votes,
+            &keypairs,
+            &mut progress
+        ));
+    }
+
+>>>>>>> 0172d2a06... Fix consensus threshold when new root is created (#8093)
     #[test]
     fn test_collect_vote_lockouts_sums() {
         //two accounts voting for slot 0 with 1 token staked
@@ -554,6 +745,24 @@ mod test {
         .into_iter()
         .collect();
         assert!(tower.check_vote_stake_threshold(0, &stakes, 2));
+    }
+
+    #[test]
+    fn test_check_vote_threshold_no_skip_lockout_with_new_root() {
+        solana_logger::setup();
+        let mut tower = Tower::new_for_tests(4, 0.67);
+        let mut stakes = HashMap::new();
+        for i in 0..(MAX_LOCKOUT_HISTORY as u64 + 1) {
+            stakes.insert(
+                i,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 8,
+                },
+            );
+            tower.record_vote(i, Hash::default());
+        }
+        assert!(!tower.check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2));
     }
 
     #[test]
