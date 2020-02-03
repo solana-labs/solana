@@ -26,12 +26,11 @@ declare print_free_tree=(
   ':runtime/src/**.rs'
   ':sdk/bpf/rust/rust-utils/**.rs'
   ':sdk/**.rs'
-  ':programs/bpf/rust/**.rs'
-  ':programs/stake/src/**.rs'
-  ':programs/vote/src/**.rs'
+  ':programs/**.rs'
   ':^**bin**.rs'
   ':^**bench**.rs'
   ':^**test**.rs'
+  ':^**/build.rs'
 )
 
 if _ git --no-pager grep -n "${prints[@]/#/-e}" -- "${print_free_tree[@]}"; then
