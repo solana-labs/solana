@@ -493,7 +493,7 @@ impl VoteState {
             return;
         }
         let slashable_slots = self.slashable_slots(&[slashable_slot]);
-        self.has_been_slashed = self.has_been_slashed || slashable_slots.is_empty();
+        self.has_been_slashed = self.has_been_slashed || !slashable_slots.is_empty();
     }
     pub fn previous_signer(&self, signers: &HashSet<Pubkey>) -> bool {
         signers.contains(&self.authorized_voter)
@@ -635,7 +635,7 @@ pub fn process_vote(
 
 pub fn slash_state(
     vote_account: &KeyedAccount,
-    slot_hashes: &slot_history::SlotHistory,
+    slot_history: &slot_history::SlotHistory,
     program_id: &Pubkey,
     tx: &Transaction,
 ) -> Result<(), InstructionError> {
@@ -675,7 +675,7 @@ pub fn slash_state(
             }
             //slash the slot
             for slot in vote.slots {
-                vote_state.slash(slot_hashes, slot);
+                vote_state.slash(slot_history, slot);
             }
         }
     }
