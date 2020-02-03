@@ -245,6 +245,55 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(nonce_authority_arg())
         )
         .subcommand(
+            SubCommand::with_name("split-stake")
+                .about("Split a stake account")
+                .arg(
+                    Arg::with_name("stake_account_pubkey")
+                        .index(1)
+                        .value_name("STAKE ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Stake account to be split")
+                )
+                .arg(
+                    Arg::with_name("split_stake_account")
+                        .index(2)
+                        .value_name("SPLIT STAKE ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_keypair_or_ask_keyword)
+                        .help("Keypair of the new stake account to split funds into")
+                )
+                .arg(
+                    Arg::with_name("amount")
+                        .index(3)
+                        .value_name("AMOUNT")
+                        .takes_value(true)
+                        .validator(is_amount)
+                        .required(true)
+                        .help("The amount to move into the new stake account (default unit SOL)")
+                )
+                .arg(
+                    Arg::with_name("unit")
+                        .index(4)
+                        .value_name("UNIT")
+                        .takes_value(true)
+                        .possible_values(&["SOL", "lamports"])
+                        .help("Specify unit to use for request")
+                )
+                .arg(
+                    Arg::with_name("seed")
+                        .long("seed")
+                        .value_name("SEED STRING")
+                        .takes_value(true)
+                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the SPLIT STAKE ACCOUNT pubkey")
+                )
+                .arg(stake_authority_arg())
+                .offline_args()
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
+        )
+        .subcommand(
             SubCommand::with_name("withdraw-stake")
                 .about("Withdraw the unstaked lamports from the stake account")
                 .arg(
@@ -410,6 +459,39 @@ pub fn parse_stake_authorize(
     })
 }
 
+pub fn parse_split_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+    let split_stake_account = keypair_of(matches, "split_stake_account").unwrap();
+    let lamports = required_lamports_from(matches, "amount", "unit")?;
+    let seed = matches.value_of("seed").map(|s| s.to_string());
+
+    let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
+    let blockhash_query = BlockhashQuery::new_from_matches(matches);
+    let require_keypair = signers.is_none();
+    let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let stake_authority =
+        SigningAuthority::new_from_matches(&matches, STAKE_AUTHORITY_ARG.name, signers.as_deref())?;
+    let nonce_authority =
+        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+
+    Ok(CliCommandInfo {
+        command: CliCommand::SplitStake {
+            stake_account_pubkey,
+            stake_authority,
+            sign_only,
+            signers,
+            blockhash_query,
+            nonce_account,
+            nonce_authority,
+            split_stake_account: split_stake_account.into(),
+            seed,
+            lamports,
+        },
+        require_keypair,
+    })
+}
+
 pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
@@ -512,7 +594,7 @@ pub fn process_create_stake_account(
 
     if lamports < minimum_balance {
         return Err(CliError::BadParameter(format!(
-            "need atleast {} lamports for stake account to be rent exempt, provided lamports: {}",
+            "need at least {} lamports for stake account to be rent exempt, provided lamports: {}",
             minimum_balance, lamports
         ))
         .into());
@@ -730,6 +812,148 @@ pub fn process_withdraw_stake(
     )?;
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<StakeError>(result)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn process_split_stake(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    stake_account_pubkey: &Pubkey,
+    stake_authority: Option<&SigningAuthority>,
+    sign_only: bool,
+    signers: &Option<Vec<(Pubkey, Signature)>>,
+    blockhash_query: &BlockhashQuery,
+    nonce_account: Option<Pubkey>,
+    nonce_authority: Option<&SigningAuthority>,
+    split_stake_account: &Keypair,
+    split_stake_account_seed: &Option<String>,
+    lamports: u64,
+) -> ProcessResult {
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
+        (
+            &split_stake_account.pubkey(),
+            "split_stake_account".to_string(),
+        ),
+    )?;
+    check_unique_pubkeys(
+        (&config.keypair.pubkey(), "cli keypair".to_string()),
+        (&stake_account_pubkey, "stake_account".to_string()),
+    )?;
+    check_unique_pubkeys(
+        (&stake_account_pubkey, "stake_account".to_string()),
+        (
+            &split_stake_account.pubkey(),
+            "split_stake_account".to_string(),
+        ),
+    )?;
+
+    let stake_authority = stake_authority
+        .map(|a| a.keypair())
+        .unwrap_or(&config.keypair);
+
+    let split_stake_account_address = if let Some(seed) = split_stake_account_seed {
+        create_address_with_seed(
+            &split_stake_account.pubkey(),
+            &seed,
+            &solana_stake_program::id(),
+        )?
+    } else {
+        split_stake_account.pubkey()
+    };
+
+    if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
+        let err_msg = if stake_account.owner == solana_stake_program::id() {
+            format!(
+                "Stake account {} already exists",
+                split_stake_account_address
+            )
+        } else {
+            format!(
+                "Account {} already exists and is not a stake account",
+                split_stake_account_address
+            )
+        };
+        return Err(CliError::BadParameter(err_msg).into());
+    }
+
+    let minimum_balance =
+        rpc_client.get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())?;
+
+    if lamports < minimum_balance {
+        return Err(CliError::BadParameter(format!(
+            "need at least {} lamports for stake account to be rent exempt, provided lamports: {}",
+            minimum_balance, lamports
+        ))
+        .into());
+    }
+
+    let (recent_blockhash, fee_calculator) =
+        blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
+
+    let ixs = if let Some(seed) = split_stake_account_seed {
+        stake_instruction::split_with_seed(
+            &stake_account_pubkey,
+            &stake_authority.pubkey(),
+            lamports,
+            &split_stake_account_address,
+            &split_stake_account.pubkey(),
+            seed,
+        )
+    } else {
+        stake_instruction::split(
+            &stake_account_pubkey,
+            &stake_authority.pubkey(),
+            lamports,
+            &split_stake_account_address,
+        )
+    };
+
+    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
+        .map(|a| (a.keypair(), a.pubkey()))
+        .unwrap_or((&config.keypair, config.keypair.pubkey()));
+
+    let mut tx = if let Some(nonce_account) = &nonce_account {
+        Transaction::new_signed_with_nonce(
+            ixs,
+            Some(&config.keypair.pubkey()),
+            &[
+                &config.keypair,
+                nonce_authority,
+                stake_authority,
+                split_stake_account,
+            ],
+            nonce_account,
+            &nonce_authority.pubkey(),
+            recent_blockhash,
+        )
+    } else {
+        Transaction::new_signed_with_payer(
+            ixs,
+            Some(&config.keypair.pubkey()),
+            &[&config.keypair, stake_authority, split_stake_account],
+            recent_blockhash,
+        )
+    };
+    if let Some(signers) = signers {
+        replace_signatures(&mut tx, &signers)?;
+    }
+    if sign_only {
+        return_signers(&tx)
+    } else {
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = rpc_client.get_account(nonce_account)?;
+            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
+        }
+        check_account_for_fee(
+            rpc_client,
+            &tx.message.account_keys[0],
+            &fee_calculator,
+            &tx.message,
+        )?;
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+        log_instruction_custom_error::<StakeError>(result)
+    }
 }
 
 pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamports_unit: bool) {
@@ -1708,6 +1932,41 @@ mod tests {
                     nonce_authority: None,
                 },
                 require_keypair: false
+            }
+        );
+
+        // Test SplitStake SubCommand
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let stake_account_keypair = Keypair::new();
+        write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
+        let (split_stake_account_keypair_file, mut tmp_file) = make_tmp_file();
+        let split_stake_account_keypair = Keypair::new();
+        write_keypair(&split_stake_account_keypair, tmp_file.as_file_mut()).unwrap();
+
+        let test_split_stake_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "split-stake",
+            &keypair_file,
+            &split_stake_account_keypair_file,
+            "50",
+            "lamports",
+        ]);
+        assert_eq!(
+            parse_command(&test_split_stake_account).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::SplitStake {
+                    stake_account_pubkey: stake_account_keypair.pubkey(),
+                    stake_authority: None,
+                    sign_only: false,
+                    signers: None,
+                    blockhash_query: BlockhashQuery::default(),
+                    nonce_account: None,
+                    nonce_authority: None,
+                    split_stake_account: split_stake_account_keypair.into(),
+                    seed: None,
+                    lamports: 50
+                },
+                require_keypair: true
             }
         );
     }
