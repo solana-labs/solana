@@ -4,6 +4,7 @@ use parking_lot::{Mutex, RwLock};
 use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::Transaction};
 use std::{
     fmt,
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -24,11 +25,11 @@ pub enum RemoteWalletError {
     #[error("device with non-supported product ID or vendor ID was detected")]
     InvalidDevice,
 
-    #[error("no device arrived")]
-    NoDeviceArrived,
+    #[error("invalid path: {0}")]
+    InvalidPath(String),
 
-    #[error("no device left")]
-    NoDeviceLeft,
+    #[error("no device found")]
+    NoDeviceFound,
 
     #[error("protocol error: {0}")]
     Protocol(&'static str),
@@ -171,10 +172,10 @@ pub enum RemoteWalletType {
 }
 
 /// Remote wallet information.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct RemoteWalletInfo {
-    /// RemoteWallet device name
-    pub name: String,
+    /// RemoteWallet device model
+    pub model: String,
     /// RemoteWallet device manufacturer
     pub manufacturer: String,
     /// RemoteWallet device serial number
@@ -183,7 +184,101 @@ pub struct RemoteWalletInfo {
     pub pubkey: Pubkey,
 }
 
-#[derive(Default, PartialEq)]
+impl RemoteWalletInfo {
+    pub fn parse_path(mut path: String) -> Result<(Self, DerivationPath), RemoteWalletError> {
+        if is_remote_wallet_path(&path).is_ok() {
+            let path = path.split_off(6);
+            let mut parts = path.split('/');
+            let mut wallet_info = RemoteWalletInfo::default();
+            let manufacturer = parts.next().unwrap();
+            wallet_info.manufacturer = manufacturer.to_string();
+            wallet_info.model = parts.next().unwrap_or("").to_string();
+            wallet_info.pubkey = parts
+                .next()
+                .and_then(|pubkey_str| Pubkey::from_str(pubkey_str).ok())
+                .unwrap_or_default();
+            let derivation_path = parts
+                .next()
+                .map(|account| {
+                    let account = account.parse::<u16>().unwrap();
+                    let change = parts.next().and_then(|change| change.parse::<u16>().ok());
+                    DerivationPath { account, change }
+                })
+                .unwrap_or(DerivationPath {
+                    account: 0,
+                    change: None,
+                });
+            Ok((wallet_info, derivation_path))
+        } else {
+            Err(RemoteWalletError::InvalidPath(path))
+        }
+    }
+
+    pub fn get_pretty_path(&self) -> String {
+        format!(
+            "usb://{}/{}/{:?}",
+            self.manufacturer, self.model, self.pubkey,
+        )
+    }
+}
+
+impl PartialEq for RemoteWalletInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.manufacturer == other.manufacturer
+            && (self.model == other.model || self.model == "" || other.model == "")
+            && (self.pubkey == other.pubkey
+                || self.pubkey == Pubkey::default()
+                || other.pubkey == Pubkey::default())
+    }
+}
+
+pub fn is_remote_wallet_path(value: &str) -> Result<(), String> {
+    if value.starts_with("usb://") {
+        let (_, path) = value.split_at(6);
+        let mut parts = path.split('/');
+        let manufacturer = parts.next().unwrap();
+        if manufacturer != "" {
+            if let Some(_model) = parts.next() {
+                if let Some(pubkey_str) = parts.next() {
+                    let _pubkey = Pubkey::from_str(pubkey_str).map_err(|e| {
+                        format!(
+                            "Unable to parse pubkey in remote wallet path, provided: {}, err: {:?}",
+                            pubkey_str, e
+                        )
+                    })?;
+                    if let Some(account) = parts.next() {
+                        let _account = account
+                            .parse::<u16>()
+                            .map_err(|e| {
+                                format!(
+                                    "Unable to parse account in remote wallet path, provided: {}, err: {:?}",
+                                    account, e
+                                )
+                            })?;
+
+                        if let Some(change) = parts.next() {
+                            let _change = change
+                                .parse::<u16>()
+                                .map_err(|e| {
+                                    format!(
+                                        "Unable to parse change in remote wallet path, provided: {}, err: {:?}",
+                                        account, e
+                                    )
+                                })?;
+                        }
+                    }
+                }
+            }
+            return Ok(());
+        }
+    }
+    Err(format!(
+        "Unable to parse input as remote wallet path, provided: {}",
+        value
+    ))
+}
+
+#[derive(Default, PartialEq, Clone)]
 pub struct DerivationPath {
     pub account: u16,
     pub change: Option<u16>,
@@ -209,4 +304,82 @@ pub fn is_valid_hid_device(usage_page: u16, interface_number: i32) -> bool {
 pub fn initialize_wallet_manager() -> Arc<RemoteWalletManager> {
     let hidapi = Arc::new(Mutex::new(hidapi::HidApi::new().unwrap()));
     RemoteWalletManager::new(hidapi)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_path() {
+        let pubkey = Pubkey::new_rand();
+        assert_eq!(
+            RemoteWalletInfo::parse_path(format!("usb://ledger/nano-s/{:?}/1/2", pubkey)).unwrap(),
+            (
+                RemoteWalletInfo {
+                    model: "nano-s".to_string(),
+                    manufacturer: "ledger".to_string(),
+                    serial: "".to_string(),
+                    pubkey,
+                },
+                DerivationPath {
+                    account: 1,
+                    change: Some(2),
+                }
+            )
+        )
+    }
+
+    #[test]
+    fn test_remote_wallet_info_partial_eq() {
+        let pubkey = Pubkey::new_rand();
+        let info = RemoteWalletInfo {
+            manufacturer: "Ledger".to_string(),
+            model: "Nano S".to_string(),
+            serial: "0001".to_string(),
+            pubkey: pubkey.clone(),
+        };
+        let mut test_info = RemoteWalletInfo::default();
+        test_info.manufacturer = "Not Ledger".to_string();
+        assert_ne!(info, test_info);
+        test_info.manufacturer = "Ledger".to_string();
+        assert_eq!(info, test_info);
+        test_info.model = "Other".to_string();
+        assert_ne!(info, test_info);
+        test_info.model = "Nano S".to_string();
+        assert_eq!(info, test_info);
+        let another_pubkey = Pubkey::new_rand();
+        test_info.pubkey = another_pubkey;
+        assert_ne!(info, test_info);
+        test_info.pubkey = pubkey;
+        assert_eq!(info, test_info);
+    }
+
+    #[test]
+    fn test_is_remote_wallet_path() {
+        assert!(is_remote_wallet_path("usb://").is_err());
+        assert_eq!(is_remote_wallet_path("usb://ledger"), Ok(()));
+        assert_eq!(is_remote_wallet_path("usb://ledger/nano-s"), Ok(()));
+        assert!(is_remote_wallet_path("usb://ledger/nano-s/notpubkey").is_err());
+
+        let pubkey = Pubkey::new_rand();
+        assert_eq!(
+            is_remote_wallet_path(&format!("usb://ledger/nano-s/{:?}", pubkey)),
+            Ok(())
+        );
+        assert_eq!(
+            is_remote_wallet_path(&format!("usb://ledger/nano-s/{:?}/1", pubkey)),
+            Ok(())
+        );
+        assert!(is_remote_wallet_path(&format!("usb://ledger/nano-s/{:?}/a", pubkey)).is_err());
+        assert!(is_remote_wallet_path(&format!("usb://ledger/nano-s/{:?}/65537", pubkey)).is_err());
+        assert_eq!(
+            is_remote_wallet_path(&format!("usb://ledger/nano-s/{:?}/1/1", pubkey)),
+            Ok(())
+        );
+        assert!(is_remote_wallet_path(&format!("usb://ledger/nano-s/{:?}/1/b", pubkey)).is_err());
+        assert!(
+            is_remote_wallet_path(&format!("usb://ledger/nano-s/{:?}/1/65537", pubkey)).is_err()
+        );
+    }
 }

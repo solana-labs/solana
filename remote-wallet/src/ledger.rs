@@ -1,15 +1,19 @@
-use crate::remote_wallet::{DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo};
+use crate::remote_wallet::{
+    initialize_wallet_manager, DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo,
+};
+use dialoguer::{theme::ColorfulTheme, Select};
 use log::*;
 use semver::Version as FirmwareVersion;
 use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::Transaction};
-use std::{cmp::min, fmt};
+use std::{cmp::min, fmt, sync::Arc};
 
 const APDU_TAG: u8 = 0x05;
 const APDU_CLA: u8 = 0xe0;
 const APDU_PAYLOAD_HEADER_LEN: usize = 7;
 
 const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; // 44'/501', Solana
-                                                                               // const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x00, 0x94]; // 44'/148', Stellar
+
+// const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x00, 0x94]; // 44'/148', Stellar
 
 /// Ledger vendor ID
 const LEDGER_VID: u16 = 0x2c97;
@@ -175,8 +179,9 @@ impl LedgerWallet {
         let status =
             (message[message.len() - 2] as usize) << 8 | (message[message.len() - 1] as usize);
         trace!("Read status {:x}", status);
+        #[allow(clippy::match_overlapping_arm)]
         match status {
-            // TODO: These need to be aligned with solana Ledger app error codes
+            // TODO: These need to be aligned with solana Ledger app error codes, and clippy allowance removed
             0x6700 => Err(RemoteWalletError::Protocol("Incorrect length")),
             0x6982 => Err(RemoteWalletError::Protocol(
                 "Security status not satisfied (Canceled by user)",
@@ -246,8 +251,9 @@ impl RemoteWallet for LedgerWallet {
             .manufacturer_string
             .clone()
             .unwrap_or_else(|| "Unknown".to_owned())
-            .to_lowercase();
-        let name = dev_info
+            .to_lowercase()
+            .replace(" ", "-");
+        let model = dev_info
             .product_string
             .clone()
             .unwrap_or_else(|| "Unknown".to_owned())
@@ -259,7 +265,7 @@ impl RemoteWallet for LedgerWallet {
             .unwrap_or_else(|| "Unknown".to_owned());
         self.get_pubkey(DerivationPath::default())
             .map(|pubkey| RemoteWalletInfo {
-                name,
+                model,
                 manufacturer,
                 serial,
                 pubkey,
@@ -345,6 +351,35 @@ pub fn is_valid_ledger(vendor_id: u16, _product_id: u16) -> bool {
     vendor_id == LEDGER_VID
 }
 
+///
+pub fn get_ledger_from_info(
+    info: RemoteWalletInfo,
+) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
+    let wallet_manager = initialize_wallet_manager();
+    let _device_count = wallet_manager.update_devices()?;
+    let devices = wallet_manager.list_devices();
+    let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = devices
+        .iter()
+        .filter(|&device_info| device_info == &info)
+        .map(|device_info| (device_info.pubkey, device_info.get_pretty_path()))
+        .unzip();
+    if pubkeys.is_empty() {
+        return Err(RemoteWalletError::NoDeviceFound);
+    }
+    let wallet_base_pubkey = if pubkeys.len() > 1 {
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Multiple hardware wallets found. Please select a device")
+            .default(0)
+            .items(&device_paths[..])
+            .interact()
+            .unwrap();
+        pubkeys[selection]
+    } else {
+        pubkeys[0]
+    };
+    wallet_manager.get_ledger(&wallet_base_pubkey)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -364,7 +399,7 @@ mod tests {
         let ledger_base_pubkey = wallet_manager
             .list_devices()
             .iter()
-            .filter(|d| d.manufacturer == "Ledger".to_string())
+            .filter(|d| d.manufacturer == "ledger".to_string())
             .nth(0)
             .map(|d| d.pubkey.clone())
             .expect("No ledger device detected");
