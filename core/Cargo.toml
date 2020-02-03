@@ -61,7 +61,7 @@ solana-vote-program = { path = "../programs/vote", version = "0.24.0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.24.0" }
 solana-sys-tuner = { path = "../sys-tuner", version = "0.24.0" }
 symlink = "0.1.0"
-sys-info = "0.5.8"
+sys-info = "0.5.9"
 tempfile = "3.1.0"
 thiserror = "1.0"
 tokio = "0.1"

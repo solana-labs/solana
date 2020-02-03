@@ -14,7 +14,7 @@ lazy_static = "1.4.0"
 log = "0.4.8"
 reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "rustls-tls"] }
 solana-sdk = { path = "../sdk", version = "0.24.0" }
-sys-info = "0.5.8"
+sys-info = "0.5.9"
 
 [dev-dependencies]
 rand = "0.6.5"

@@ -31,7 +31,7 @@ solana-sdk = { path = "../sdk", version = "0.24.0" }
 solana-stake-program = { path = "../programs/stake", version = "0.24.0" }
 solana-storage-program = { path = "../programs/storage", version = "0.24.0" }
 solana-vote-program = { path = "../programs/vote", version = "0.24.0" }
-sys-info = "0.5.8"
+sys-info = "0.5.9"
 tempfile = "3.1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "0.24.0" }
 itertools = "0.8.2"
