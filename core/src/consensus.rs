@@ -337,21 +337,16 @@ impl Tower {
                     fork_stake.stake,
                     total_staked
                 );
-                for (new_lockout, original_lockout) in
-                    lockouts.votes.iter().zip(self.lockouts.votes.iter())
-                {
-                    if new_lockout.slot == original_lockout.slot {
-                        if new_lockout.confirmation_count <= self.threshold_depth as u32 {
-                            break;
+                if vote.confirmation_count as usize > self.threshold_depth {
+                    for old_vote in &self.lockouts.votes {
+                        if old_vote.slot == vote.slot
+                            && old_vote.confirmation_count == vote.confirmation_count
+                        {
+                            return true;
                         }
-                        if new_lockout.confirmation_count != original_lockout.confirmation_count {
-                            return lockout > self.threshold_size;
-                        }
-                    } else {
-                        break;
                     }
                 }
-                true
+                lockout > self.threshold_size
             } else {
                 false
             }
@@ -832,6 +827,7 @@ mod test {
 
     #[test]
     fn test_double_partition() {
+        solana_logger::setup();
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
@@ -1006,6 +1002,24 @@ mod test {
         .into_iter()
         .collect();
         assert!(tower.check_vote_stake_threshold(0, &stakes, 2));
+    }
+
+    #[test]
+    fn test_check_vote_threshold_no_skip_lockout_with_new_root() {
+        solana_logger::setup();
+        let mut tower = Tower::new_for_tests(4, 0.67);
+        let mut stakes = HashMap::new();
+        for i in 0..(MAX_LOCKOUT_HISTORY as u64 + 1) {
+            stakes.insert(
+                i,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 8,
+                },
+            );
+            tower.record_vote(i, Hash::default());
+        }
+        assert!(!tower.check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2));
     }
 
     #[test]
