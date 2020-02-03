@@ -658,9 +658,7 @@ test('get confirmed block', async () => {
       result: null,
     },
   ]);
-  await expect(
-    connection.getConfirmedBlock(10000),
-  ).rejects.toThrow();
+  await expect(connection.getConfirmedBlock(10000)).rejects.toThrow();
 });
 
 test('get recent blockhash', async () => {
