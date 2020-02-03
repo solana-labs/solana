@@ -297,9 +297,13 @@ export class StakeProgram {
         {pubkey: stakeAccount, isSigner: false, isWritable: true},
         {pubkey: votePubkey, isSigner: false, isWritable: false},
         {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
-        {pubkey: SYSVAR_STAKE_HISTORY_PUBKEY, isSigner: false, isWritable: false},
+        {
+          pubkey: SYSVAR_STAKE_HISTORY_PUBKEY,
+          isSigner: false,
+          isWritable: false,
+        },
         {pubkey: STAKE_CONFIG_ID, isSigner: false, isWritable: false},
-        {pubkey: authorizedPubkey, isSigner: true, isWritable: false}
+        {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
       ],
       programId: this.programId,
       data,

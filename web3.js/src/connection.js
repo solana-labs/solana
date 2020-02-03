@@ -1056,7 +1056,7 @@ export class Connection {
     }
     assert(typeof result.result !== 'undefined');
     if (!result.result) {
-      throw new Error('Confirmed block '+slot+' not found');
+      throw new Error('Confirmed block ' + slot + ' not found');
     }
     return {
       blockhash: new PublicKey(result.result.blockhash).toString(),
