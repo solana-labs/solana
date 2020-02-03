@@ -1036,6 +1036,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         commitment::BlockCommitment,
+        consensus::test::{initialize_state, ValidatorKeypairs, VoteResult, VoteSimulator},
         consensus::Tower,
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         replay_stage::ReplayStage,
@@ -1073,6 +1074,7 @@ pub(crate) mod tests {
         iter,
         sync::{Arc, RwLock},
     };
+    use trees::tr;
 
     struct ForkInfo {
         leader: usize,
@@ -1889,5 +1891,73 @@ pub(crate) mod tests {
             }
         }
         Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_child_bank_heavier() {
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let mut keypairs = HashMap::new();
+        keypairs.insert(
+            node_pubkey,
+            ValidatorKeypairs::new(node_keypair, vote_keypair),
+        );
+
+        let (bank_forks, mut progress) = initialize_state(&keypairs);
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
+        let mut tower = Tower::new_with_key(&node_pubkey);
+
+        // Create the tree of banks in a BankForks object
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3))));
+
+        let mut voting_simulator = VoteSimulator::new(&forks);
+        let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
+        let votes: Vec<Slot> = vec![0, 2];
+        for vote in &votes {
+            assert_eq!(
+                voting_simulator.simulate_vote(
+                    *vote,
+                    &bank_forks,
+                    &mut cluster_votes,
+                    &keypairs,
+                    keypairs.get(&node_pubkey).unwrap(),
+                    &mut progress,
+                    &mut tower,
+                ),
+                VoteResult::Ok
+            );
+        }
+
+        let mut frozen_banks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .cloned()
+            .collect();
+
+        ReplayStage::compute_bank_stats(
+            &Pubkey::default(),
+            &bank_forks.read().unwrap().ancestors(),
+            &mut frozen_banks,
+            &tower,
+            &mut progress,
+        );
+
+        frozen_banks.sort_by_key(|bank| bank.slot());
+        for pair in frozen_banks.windows(2) {
+            let first = progress
+                .get(&pair[0].slot())
+                .unwrap()
+                .fork_stats
+                .fork_weight;
+            let second = progress
+                .get(&pair[1].slot())
+                .unwrap()
+                .fork_stats
+                .fork_weight;
+            assert!(second >= first);
+        }
     }
 }
