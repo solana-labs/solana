@@ -1,7 +1,6 @@
 // @flow
 
 import * as BufferLayout from 'buffer-layout';
-import hasha from 'hasha';
 
 import {encodeData} from './instruction';
 import type {InstructionType} from './instruction';
@@ -11,7 +10,6 @@ import {SystemProgram} from './system-program';
 import {
   SYSVAR_CLOCK_PUBKEY,
   SYSVAR_RENT_PUBKEY,
-  SYSVAR_REWARDS_PUBKEY,
   SYSVAR_STAKE_HISTORY_PUBKEY,
 } from './sysvar';
 import {Transaction, TransactionInstruction} from './transaction';
@@ -162,26 +160,6 @@ export const StakeAuthorizationLayout = Object.freeze({
     index: 1,
   },
 });
-
-class RewardsPoolPublicKey extends PublicKey {
-  static get rewardsPoolBaseId(): PublicKey {
-    return new PublicKey('StakeRewards1111111111111111111111111111111');
-  }
-
-  /**
-   * Generate Derive a public key from another key, a seed, and a programId.
-   */
-  static randomId(): PublicKey {
-    const randomInt = Math.floor(Math.random() * (256 - 1));
-    let pubkey = this.rewardsPoolBaseId;
-    for (let i = 0; i < randomInt; i++) {
-      const buffer = pubkey.toBuffer();
-      const hash = hasha(buffer, {algorithm: 'sha256'});
-      return new PublicKey('0x' + hash);
-    }
-    return pubkey;
-  }
-}
 
 /**
  * Factory class for transactions to interact with the Stake program
