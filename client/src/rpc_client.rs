@@ -410,15 +410,16 @@ impl RpcClient {
         transaction: &mut Transaction,
         signer_keys: &[&T],
     ) -> Result<String, ClientError> {
-        let mut send_retries = 20;
+        let mut send_tries = 20;
+
         loop {
-            let mut status_retries = 15;
+            let mut status_tries = 15;
             let signature_str = self.send_transaction(transaction)?;
             let status = loop {
                 let status = self.get_signature_status(&signature_str)?;
                 if status.is_none() {
-                    status_retries -= 1;
-                    if status_retries == 0 {
+                    status_tries -= 1;
+                    if status_tries == 0 {
                         break status;
                     }
                 } else {
@@ -429,26 +430,26 @@ impl RpcClient {
                     sleep(Duration::from_millis(500));
                 }
             };
-            send_retries = if let Some(result) = status.clone() {
+            send_tries = if let Some(result) = status.clone() {
                 match result {
                     Ok(_) => return Ok(signature_str),
                     Err(TransactionError::AccountInUse) => {
                         // Fetch a new blockhash and re-sign the transaction before sending it again
                         self.resign_transaction(transaction, signer_keys)?;
-                        send_retries - 1
+                        send_tries - 1
                     }
                     Err(_) => 0,
                 }
             } else {
-                send_retries - 1
+                send_tries - 1
             };
-            if send_retries == 0 {
+            if send_tries == 0 {
                 if let Some(err) = status {
                     return Err(err.unwrap_err().into());
                 } else {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("Transaction {:?} failed: {:?}", signature_str, status),
+                        format!("Transaction {} failed with status: {:?}", signature_str, status),
                     )
                     .into());
                 }
@@ -461,9 +462,9 @@ impl RpcClient {
         mut transactions: Vec<Transaction>,
         signer_keys: &[&T],
     ) -> Result<(), Box<dyn error::Error>> {
-        let mut send_retries = 5;
+        let mut send_tries = 5;
         loop {
-            let mut status_retries = 15;
+            let mut status_tries = 15;
 
             // Send all transactions
             let mut transactions_signatures = vec![];
@@ -480,8 +481,8 @@ impl RpcClient {
             }
 
             // Collect statuses for all the transactions, drop those that are confirmed
-            while status_retries > 0 {
-                status_retries -= 1;
+            while status_tries > 0 {
+                status_tries -= 1;
 
                 if cfg!(not(test)) {
                     // Retry twice a second
@@ -508,10 +509,10 @@ impl RpcClient {
                 }
             }
 
-            if send_retries == 0 {
+            if send_tries == 0 {
                 return Err(io::Error::new(io::ErrorKind::Other, "Transactions failed").into());
             }
-            send_retries -= 1;
+            send_tries -= 1;
 
             // Re-sign any failed transactions with a new blockhash and retry
             let (blockhash, _fee_calculator) =
