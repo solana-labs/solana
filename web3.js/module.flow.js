@@ -247,10 +247,6 @@ declare module '@solana/web3.js' {
       newAuthorized: PublicKey,
       stakeAuthorizationType: StakeAuthorizationType,
     ): Transaction;
-    static redeemVoteCredits(
-      stakeAccount: PublicKey,
-      votePubkey: PublicKey,
-    ): Transaction;
     static split(
       stakeAccount: PublicKey,
       authorizedPubkey: PublicKey,
