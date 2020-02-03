@@ -337,21 +337,15 @@ impl Tower {
                     fork_stake.stake,
                     total_staked
                 );
-                for (new_lockout, original_lockout) in
-                    lockouts.votes.iter().zip(self.lockouts.votes.iter())
-                {
-                    if new_lockout.slot == original_lockout.slot {
-                        if new_lockout.confirmation_count <= self.threshold_depth as u32 {
-                            break;
+                if let Some(new_vote) = self.lockouts.nth_recent_vote(self.threshold_depth + 1) {
+                    if let Some(old_vote) = self.lockouts.nth_recent_vote(self.threshold_depth + 1)
+                    {
+                        if new_vote.confirmation_count == old_vote.confirmation_count {
+                            return true;
                         }
-                        if new_lockout.confirmation_count != original_lockout.confirmation_count {
-                            return lockout > self.threshold_size;
-                        }
-                    } else {
-                        break;
                     }
                 }
-                true
+                lockout > self.threshold_size
             } else {
                 false
             }
