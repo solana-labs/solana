@@ -22,7 +22,7 @@ pub const SIGN_ONLY_ARG: ArgConstant<'static> = ArgConstant {
 pub const SIGNER_ARG: ArgConstant<'static> = ArgConstant {
     name: "signer",
     long: "signer",
-    help: "Provid a public-key/signature pair for the transaction",
+    help: "Provide a public-key/signature pair for the transaction",
 };
 
 #[derive(Clone, Debug, PartialEq)]
