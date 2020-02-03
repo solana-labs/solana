@@ -343,11 +343,6 @@ pub enum CliCommand {
         pubkey: Pubkey,
         use_lamports_unit: bool,
     },
-    Uptime {
-        pubkey: Pubkey,
-        aggregate: bool,
-        span: Option<u64>,
-    },
     VoteAuthorize {
         vote_account_pubkey: Pubkey,
         new_authorized_pubkey: Pubkey,
@@ -539,7 +534,6 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             parse_vote_authorize(matches, VoteAuthorize::Withdrawer)
         }
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches),
-        ("uptime", Some(matches)) => parse_vote_uptime_command(matches),
         // Wallet Commands
         ("address", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::Address,
@@ -1609,11 +1603,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &new_identity_pubkey,
             authorized_voter,
         ),
-        CliCommand::Uptime {
-            pubkey: vote_account_pubkey,
-            aggregate,
-            span,
-        } => process_uptime(&rpc_client, config, &vote_account_pubkey, *aggregate, *span),
 
         // Wallet Commands
 
