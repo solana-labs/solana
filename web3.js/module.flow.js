@@ -1,7 +1,7 @@
 /**
  * Flow Library definition for @solana/web3.js
  *
- * This file is manually generated from the contents of src/
+ * This file is manually maintained
  *
  * Usage: add the following line under the [libs] section of your project's
  * .flowconfig:

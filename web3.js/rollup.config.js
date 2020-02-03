@@ -1,6 +1,7 @@
 import babel from 'rollup-plugin-babel';
 import builtins from 'rollup-plugin-node-builtins';
 import commonjs from 'rollup-plugin-commonjs';
+import copy from 'rollup-plugin-copy';
 import globals from 'rollup-plugin-node-globals';
 import json from 'rollup-plugin-json';
 import nodeResolve from 'rollup-plugin-node-resolve';
@@ -22,6 +23,9 @@ function generateConfig(configType) {
         'process.env.NODE_ENV': JSON.stringify(env),
       }),
       commonjs(),
+      copy({
+        targets: [{src: 'module.d.ts', dest: 'lib', rename: 'index.d.ts'}],
+      }),
     ],
   };
 

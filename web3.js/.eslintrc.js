@@ -1,5 +1,4 @@
 module.exports = {
-  // eslint-disable-line import/no-commonjs
   env: {
     browser: true,
     es6: true,
@@ -47,4 +46,18 @@ module.exports = {
     'require-await': ['error'],
     semi: ['error', 'always'],
   },
+
+  // Used to lint the TypeScript type declaration file
+  overrides: [
+    {
+      files: ['*.d.ts'],
+      parser: '@typescript-eslint/parser',
+      plugins: ['@typescript-eslint'],
+      extends: [
+        'eslint:recommended',
+        'plugin:@typescript-eslint/eslint-recommended',
+        'plugin:@typescript-eslint/recommended',
+      ],
+    },
+  ],
 };
