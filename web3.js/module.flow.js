@@ -58,8 +58,7 @@ declare module '@solana/web3.js' {
 
   declare export type SignatureStatusResult =
     | SignatureSuccess
-    | TransactionError
-    | null;
+    | TransactionError;
 
   declare export type BlockhashAndFeeCalculator = {
     blockhash: Blockhash,
@@ -96,7 +95,7 @@ declare module '@solana/web3.js' {
         fee: number,
         preBalances: Array<number>,
         postBalances: Array<number>,
-        status: SignatureStatusResult,
+        status: ?SignatureStatusResult,
       },
     }>,
   };
@@ -128,6 +127,9 @@ declare module '@solana/web3.js' {
     keyedAccountInfo: KeyedAccountInfo,
   ) => void;
   declare type SlotChangeCallback = (slotInfo: SlotInfo) => void;
+  declare type SignatureResultCallback = (
+    signatureResult: SignatureStatusResult,
+  ) => void;
 
   declare export type SignatureSuccess = {|
     Ok: null,
@@ -227,8 +229,14 @@ declare module '@solana/web3.js' {
       programId: PublicKey,
       callback: ProgramAccountChangeCallback,
     ): number;
-    onSlotChange(callback: SlotChangeCallback): number;
     removeProgramAccountChangeListener(id: number): Promise<void>;
+    onSlotChange(callback: SlotChangeCallback): number;
+    removeSlotChangeListener(id: number): Promise<void>;
+    onSignature(
+      signature: TransactionSignature,
+      callback: SignatureResultCallback,
+    ): number;
+    removeSignatureListener(id: number): Promise<void>;
     validatorExit(): Promise<boolean>;
     getMinimumBalanceForRentExemption(
       dataLength: number,

@@ -114,6 +114,9 @@ declare module '@solana/web3.js' {
     keyedAccountInfo: KeyedAccountInfo,
   ) => void;
   export type SlotChangeCallback = (slotInfo: SlotInfo) => void;
+  export type SignatureResultCallback = (
+    signatureResult: SignatureStatusResult,
+  ) => void;
 
   export type SignatureSuccess = {
     Ok: null;
@@ -213,8 +216,14 @@ declare module '@solana/web3.js' {
       programId: PublicKey,
       callback: ProgramAccountChangeCallback,
     ): number;
-    onSlotChange(callback: SlotChangeCallback): number;
     removeProgramAccountChangeListener(id: number): Promise<void>;
+    onSlotChange(callback: SlotChangeCallback): number;
+    removeSlotChangeListener(id: number): Promise<void>;
+    onSignature(
+      signature: TransactionSignature,
+      callback: SignatureResultCallback,
+    ): number;
+    removeSignatureListener(id: number): Promise<void>;
     validatorExit(): Promise<boolean>;
     getMinimumBalanceForRentExemption(
       dataLength: number,
