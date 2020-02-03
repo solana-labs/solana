@@ -18,20 +18,22 @@ declare prints=(
 
 # Parts of the tree that are expected to be print free
 declare print_free_tree=(
-  'core/src'
-  'faucet/src'
-  'ledger/src'
-  'metrics/src'
-  'net-utils/src'
-  'runtime/src'
-  'sdk/bpf/rust/rust-utils'
-  'sdk/src'
-  'programs/bpf/rust'
-  'programs/stake/src'
-  'programs/vote/src'
+  ':core/src/**.rs'
+  ':faucet/src/**.rs'
+  ':ledger/src/**.rs'
+  ':metrics/src/**.rs'
+  ':net-utils/src/**.rs'
+  ':runtime/src/**.rs'
+  ':sdk/bpf/rust/rust-utils/**.rs'
+  ':sdk/**.rs'
+  ':programs/**.rs'
+  ':^**bin**.rs'
+  ':^**bench**.rs'
+  ':^**test**.rs'
+  ':^**/build.rs'
 )
 
-if _ git --no-pager grep -n --max-depth=0 "${prints[@]/#/-e }" -- "${print_free_tree[@]}"; then
+if _ git --no-pager grep -n "${prints[@]/#/-e}" -- "${print_free_tree[@]}"; then
     exit 1
 fi
 
