@@ -276,6 +276,18 @@ pub enum CliCommand {
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<SigningAuthority>,
     },
+    SplitStake {
+        stake_account_pubkey: Pubkey,
+        stake_authority: Option<SigningAuthority>,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: Option<SigningAuthority>,
+        split_stake_account: KeypairEq,
+        seed: Option<String>,
+        lamports: u64,
+    },
     ShowStakeHistory {
         use_lamports_unit: bool,
     },
@@ -493,6 +505,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         ("delegate-stake", Some(matches)) => parse_stake_delegate_stake(matches),
         ("withdraw-stake", Some(matches)) => parse_stake_withdraw_stake(matches),
         ("deactivate-stake", Some(matches)) => parse_stake_deactivate_stake(matches),
+        ("split-stake", Some(matches)) => parse_split_stake(matches),
         ("stake-authorize-staker", Some(matches)) => {
             parse_stake_authorize(matches, StakeAuthorize::Staker)
         }
@@ -1382,7 +1395,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lockup,
             *lamports,
         ),
-        // Deactivate stake account
         CliCommand::DeactivateStake {
             stake_account_pubkey,
             ref stake_authority,
@@ -1424,6 +1436,31 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash_query,
             *nonce_account,
             nonce_authority.as_ref(),
+        ),
+        CliCommand::SplitStake {
+            stake_account_pubkey,
+            ref stake_authority,
+            sign_only,
+            ref signers,
+            blockhash_query,
+            nonce_account,
+            ref nonce_authority,
+            split_stake_account,
+            seed,
+            lamports,
+        } => process_split_stake(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            stake_authority.as_ref(),
+            *sign_only,
+            signers,
+            blockhash_query,
+            *nonce_account,
+            nonce_authority.as_ref(),
+            split_stake_account,
+            seed,
+            *lamports,
         ),
         CliCommand::ShowStakeAccount {
             pubkey: stake_account_pubkey,
@@ -2771,6 +2808,23 @@ mod tests {
             blockhash_query: BlockhashQuery::default(),
             nonce_account: None,
             nonce_authority: None,
+        };
+        let signature = process_command(&config);
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+
+        let stake_pubkey = Pubkey::new_rand();
+        let split_stake_account = Keypair::new();
+        config.command = CliCommand::SplitStake {
+            stake_account_pubkey: stake_pubkey,
+            stake_authority: None,
+            sign_only: false,
+            signers: None,
+            blockhash_query: BlockhashQuery::default(),
+            nonce_account: None,
+            nonce_authority: None,
+            split_stake_account: split_stake_account.into(),
+            seed: None,
+            lamports: 1234,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
