@@ -18,6 +18,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     rent::Rent,
     slot_hashes::SlotHash,
+    slot_history,
     sysvar::clock::Clock,
     transaction::Transaction,
 };
@@ -486,13 +487,10 @@ impl VoteState {
     /// * slashable_slot - must be a slot which is not an ancestor of this bank
     /// Instruction must validate that the slashable_slot is not an ancestor of this bank,
     /// and that the vote is signed.
-    pub fn slash(&mut self, slot_hashes: &[SlotHash], slashable_slot: Slot) {
+    pub fn slash(&mut self, slot_history: &slot_history::SlotHistory, slashable_slot: Slot) {
         //verify that the slot is NOT an ancestor
-        for s in slot_hashes {
-            if s.0 == slashable_slot {
-                //slot is an ancestor
-                return;
-            }
+        if slot_history.check(slashable_slot) != slot_history::Check::NotFound {
+            return;
         }
         let slashable_slots = self.slashable_slots(&[slashable_slot]);
         self.has_been_slashed = self.has_been_slashed || slashable_slots.is_empty();
@@ -637,7 +635,7 @@ pub fn process_vote(
 
 pub fn slash_state(
     vote_account: &KeyedAccount,
-    slot_hashes: &[SlotHash],
+    slot_hashes: &slot_history::SlotHistory,
     program_id: &Pubkey,
     tx: &Transaction,
 ) -> Result<(), InstructionError> {

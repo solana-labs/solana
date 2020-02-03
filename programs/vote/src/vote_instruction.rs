@@ -15,7 +15,7 @@ use solana_sdk::{
     instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
-    sysvar::{self, clock::Clock, slot_hashes::SlotHashes, Sysvar},
+    sysvar::{self, clock::Clock, slot_hashes::SlotHashes, slot_history::SlotHistory, Sysvar},
     transaction::Transaction,
 };
 use thiserror::Error;
@@ -230,8 +230,8 @@ pub fn process_instruction(
             vote_state::withdraw(me, lamports, to, &signers)
         }
         VoteInstruction::SlashLockouts(tx) => {
-            let slot_hashes = SlotHashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?;
-            vote_state::slash_state(me, &slot_hashes, program_id, &tx)
+            let slot_history = SlotHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?;
+            vote_state::slash_state(me, &slot_history, program_id, &tx)
         }
     }
 }
