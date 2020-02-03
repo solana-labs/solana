@@ -832,6 +832,7 @@ mod test {
 
     #[test]
     fn test_double_partition() {
+        solana_logger::setup();
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
@@ -1006,6 +1007,24 @@ mod test {
         .into_iter()
         .collect();
         assert!(tower.check_vote_stake_threshold(0, &stakes, 2));
+    }
+
+    #[test]
+    fn test_check_vote_threshold_no_skip_lockout_with_new_root() {
+        solana_logger::setup();
+        let mut tower = Tower::new_for_tests(4, 0.67);
+        let mut stakes = HashMap::new();
+        for i in 0..(MAX_LOCKOUT_HISTORY as u64 + 1) {
+            stakes.insert(
+                i,
+                StakeLockout {
+                    stake: 1,
+                    lockout: 8,
+                },
+            );
+            tower.record_vote(i, Hash::default());
+        }
+        assert!(!tower.check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2));
     }
 
     #[test]
