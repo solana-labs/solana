@@ -87,7 +87,7 @@ test('delegate', () => {
     vote.publicKey,
   );
 
-  expect(transaction.keys).toHaveLength(5);
+  expect(transaction.keys).toHaveLength(6);
   expect(transaction.programId).toEqual(StakeProgram.programId);
   // TODO: Validate transaction contents more
 });
@@ -107,18 +107,6 @@ test('authorize', () => {
   );
 
   expect(transaction.keys).toHaveLength(3);
-  expect(transaction.programId).toEqual(StakeProgram.programId);
-  // TODO: Validate transaction contents more
-});
-
-test('redeemVoteCredits', () => {
-  const stake = new Account();
-  const vote = new Account();
-  let transaction;
-
-  transaction = StakeProgram.redeemVoteCredits(stake.publicKey, vote.publicKey);
-
-  expect(transaction.keys).toHaveLength(5);
   expect(transaction.programId).toEqual(StakeProgram.programId);
   // TODO: Validate transaction contents more
 });

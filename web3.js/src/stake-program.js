@@ -123,26 +123,22 @@ export const StakeInstructionLayout = Object.freeze({
     index: 2,
     layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
   },
-  RedeemVoteCredits: {
-    index: 3,
-    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
-  },
   Split: {
-    index: 4,
+    index: 3,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
     ]),
   },
   Withdraw: {
-    index: 5,
+    index: 4,
     layout: BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
     ]),
   },
   Deactivate: {
-    index: 6,
+    index: 5,
     layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
   },
 });
@@ -202,7 +198,7 @@ export class StakeProgram {
    * Max space of a Stake account
    */
   static get space(): number {
-    return 2008;
+    return 4008;
   }
 
   /**
@@ -301,8 +297,9 @@ export class StakeProgram {
         {pubkey: stakeAccount, isSigner: false, isWritable: true},
         {pubkey: votePubkey, isSigner: false, isWritable: false},
         {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
+        {pubkey: SYSVAR_STAKE_HISTORY_PUBKEY, isSigner: false, isWritable: false},
         {pubkey: STAKE_CONFIG_ID, isSigner: false, isWritable: false},
-        {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
+        {pubkey: authorizedPubkey, isSigner: true, isWritable: false}
       ],
       programId: this.programId,
       data,
@@ -330,38 +327,6 @@ export class StakeProgram {
         {pubkey: stakeAccount, isSigner: false, isWritable: true},
         {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: true},
         {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
-      ],
-      programId: this.programId,
-      data,
-    });
-  }
-
-  /**
-   * Generate a Transaction that authorizes a new PublicKey as Staker
-   * or Withdrawer on the Stake account.
-   */
-  static redeemVoteCredits(
-    stakeAccount: PublicKey,
-    votePubkey: PublicKey,
-  ): Transaction {
-    const type = StakeInstructionLayout.RedeemVoteCredits;
-    const data = encodeData(type);
-
-    return new Transaction().add({
-      keys: [
-        {pubkey: stakeAccount, isSigner: false, isWritable: true},
-        {pubkey: votePubkey, isSigner: false, isWritable: true},
-        {
-          pubkey: RewardsPoolPublicKey.randomId(),
-          isSigner: false,
-          isWritable: true,
-        },
-        {pubkey: SYSVAR_REWARDS_PUBKEY, isSigner: false, isWritable: false},
-        {
-          pubkey: SYSVAR_STAKE_HISTORY_PUBKEY,
-          isSigner: false,
-          isWritable: false,
-        },
       ],
       programId: this.programId,
       data,
