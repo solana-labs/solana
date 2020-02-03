@@ -1542,7 +1542,7 @@ export class Connection {
     const id = ++this._slotSubscriptionCounter;
     this._slotSubscriptions[id] = {
       callback,
-      subscriptionId: id,
+      subscriptionId: null,
     };
     this._updateSubscriptions();
     return id;
