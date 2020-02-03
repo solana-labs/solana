@@ -449,7 +449,10 @@ impl RpcClient {
                 } else {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("Transaction {} failed with status: {:?}", signature_str, status),
+                        format!(
+                            "Transaction {} failed with status: {:?}",
+                            signature_str, status
+                        ),
                     )
                     .into());
                 }
