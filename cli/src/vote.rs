@@ -1,10 +1,6 @@
-use crate::{
-    cli::{
-        build_balance_message, check_account_for_fee, check_unique_pubkeys,
-        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult,
-    },
-    cluster_query::aggregate_epoch_credits,
+use crate::cli::{
+    build_balance_message, check_account_for_fee, check_unique_pubkeys,
+    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
@@ -176,31 +172,6 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("uptime")
-                .about("Show the uptime of a validator, based on epoch voting history")
-                .arg(
-                    Arg::with_name("vote_account_pubkey")
-                        .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Vote account pubkey"),
-                )
-                .arg(
-                    Arg::with_name("span")
-                        .long("span")
-                        .value_name("NUM OF EPOCHS")
-                        .takes_value(true)
-                        .help("Number of recent epochs to examine"),
-                )
-                .arg(
-                    Arg::with_name("aggregate")
-                        .long("aggregate")
-                        .help("Aggregate uptime data across span"),
-                ),
-        )
     }
 }
 
@@ -266,24 +237,6 @@ pub fn parse_vote_get_account_command(
         command: CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
-        },
-        require_keypair: false,
-    })
-}
-
-pub fn parse_vote_uptime_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    let aggregate = matches.is_present("aggregate");
-    let span = if matches.is_present("span") {
-        Some(value_t_or_exit!(matches, "span", u64))
-    } else {
-        None
-    };
-    Ok(CliCommandInfo {
-        command: CliCommand::Uptime {
-            pubkey: vote_account_pubkey,
-            aggregate,
-            span,
         },
         require_keypair: false,
     })
@@ -517,60 +470,6 @@ pub fn process_show_vote_account(
     Ok("".to_string())
 }
 
-pub fn process_uptime(
-    rpc_client: &RpcClient,
-    _config: &CliConfig,
-    vote_account_pubkey: &Pubkey,
-    aggregate: bool,
-    span: Option<u64>,
-) -> ProcessResult {
-    let (_vote_account, vote_state) = get_vote_account(rpc_client, vote_account_pubkey)?;
-
-    let epoch_schedule = rpc_client.get_epoch_schedule()?;
-
-    println!("validator identity: {}", vote_state.node_pubkey);
-    println!("authorized voter: {}", vote_state.authorized_voter);
-    if !vote_state.votes.is_empty() {
-        println!("uptime:");
-
-        let epoch_credits: Vec<(u64, u64, u64)> = if let Some(x) = span {
-            vote_state
-                .epoch_credits()
-                .iter()
-                .rev()
-                .take(x as usize)
-                .cloned()
-                .collect()
-        } else {
-            vote_state.epoch_credits().iter().rev().cloned().collect()
-        };
-
-        if aggregate {
-            let (total_credits, total_slots, epochs) =
-                aggregate_epoch_credits(&epoch_credits, &epoch_schedule);
-            if total_slots > 0 {
-                let total_uptime = 100_f64 * total_credits as f64 / total_slots as f64;
-                println!("{:.2}% over {} epochs", total_uptime, epochs);
-            } else {
-                println!("Insufficient voting history available");
-            }
-        } else {
-            for (epoch, credits, prev_credits) in epoch_credits {
-                let credits_earned = credits - prev_credits;
-                let slots_in_epoch = epoch_schedule.get_slots_in_epoch(epoch);
-                let uptime = credits_earned as f64 / slots_in_epoch as f64;
-                println!("- epoch: {} {:.2}% uptime", epoch, uptime * 100_f64,);
-            }
-        }
-        if let Some(x) = span {
-            if x > vote_state.epoch_credits().len() as u64 {
-                println!("(span longer than available epochs)");
-            }
-        }
-    }
-    Ok("".to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -739,28 +638,6 @@ mod tests {
                         .into(),
                 },
                 require_keypair: true
-            }
-        );
-
-        // Test Uptime Subcommand
-        let pubkey = Pubkey::new_rand();
-        let matches = test_commands.clone().get_matches_from(vec![
-            "test",
-            "uptime",
-            &pubkey.to_string(),
-            "--span",
-            "4",
-            "--aggregate",
-        ]);
-        assert_eq!(
-            parse_command(&matches).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Uptime {
-                    pubkey,
-                    aggregate: true,
-                    span: Some(4)
-                },
-                require_keypair: false
             }
         );
     }
