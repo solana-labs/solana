@@ -4,7 +4,8 @@
 
 extern crate solana_sdk;
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, entrypoint::SUCCESS, info, log::*, pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, info, log::*, program_error::ProgramError,
+    pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq)]
@@ -20,7 +21,11 @@ fn return_sstruct() -> SStruct {
 }
 
 entrypoint!(process_instruction);
-fn process_instruction(program_id: &Pubkey, accounts: &mut [AccountInfo], data: &[u8]) -> u32 {
+fn process_instruction(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    ix_data: &[u8],
+) -> Result<(), ProgramError> {
     info!("Program identifier:");
     program_id.log();
 
@@ -28,7 +33,7 @@ fn process_instruction(program_id: &Pubkey, accounts: &mut [AccountInfo], data: 
     // the no-op program, no account keys or input data are expected but real
     // programs will have specific requirements so they can do their work.
     info!("Account keys and instruction input data:");
-    sol_log_params(accounts, data);
+    sol_log_params(accounts, ix_data);
 
     {
         // Test - use std methods, unwrap
@@ -54,7 +59,7 @@ fn process_instruction(program_id: &Pubkey, accounts: &mut [AccountInfo], data: 
         panic!();
     }
 
-    SUCCESS
+    Ok(())
 }
 
 #[cfg(test)]
