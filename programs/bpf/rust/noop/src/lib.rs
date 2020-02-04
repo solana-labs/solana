@@ -5,8 +5,7 @@
 extern crate solana_sdk;
 
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, info, log::*, program_error::ProgramError,
-    pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info, log::*, pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq)]
@@ -26,7 +25,7 @@ fn process_instruction(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
-) -> Result<(), ProgramError> {
+) -> ProgramResult {
     info!("Program identifier:");
     program_id.log();
 

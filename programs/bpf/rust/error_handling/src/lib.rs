@@ -6,7 +6,9 @@ use num_traits::FromPrimitive;
 
 use solana_sdk::{
     account_info::AccountInfo,
-    entrypoint, info,
+    entrypoint,
+    entrypoint::ProgramResult,
+    info,
     instruction_processor_utils::DecodeError,
     program_error::{PrintProgramError, ProgramError},
     pubkey::Pubkey,
@@ -48,9 +50,7 @@ fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
-) -> Result<(), ProgramError> {
-    ProgramError::CustomError(42).print::<MyError>();
-
+) -> ProgramResult {
     match instruction_data[0] {
         1 => {
             info!("return success");

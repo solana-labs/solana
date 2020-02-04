@@ -2,7 +2,8 @@
 
 extern crate solana_sdk;
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, info, program_error::ProgramError, pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info,
+    program_error::ProgramError, pubkey::Pubkey,
 };
 
 entrypoint!(process_instruction);
@@ -10,7 +11,7 @@ fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
-) -> Result<(), ProgramError> {
+) -> ProgramResult {
     match instruction_data[0] {
         1 => {
             info!("modify first account data");
