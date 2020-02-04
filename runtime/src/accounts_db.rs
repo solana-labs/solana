@@ -182,7 +182,7 @@ pub enum AccountStorageStatus {
 }
 
 #[derive(Debug)]
-pub enum BankHashVerificatonError {
+pub enum BankHashVerificationError {
     MismatchedAccountHash,
     MismatchedBankHash,
     MissingBankHash,
@@ -1038,8 +1038,8 @@ impl AccountsDB {
         &self,
         slot: Slot,
         ancestors: &HashMap<Slot, usize>,
-    ) -> Result<(), BankHashVerificatonError> {
-        use BankHashVerificatonError::*;
+    ) -> Result<(), BankHashVerificationError> {
+        use BankHashVerificationError::*;
 
         let (hashes, mismatch_found) = self.scan_accounts(
             ancestors,
@@ -2314,7 +2314,7 @@ pub mod tests {
 
     #[test]
     fn test_verify_bank_hash() {
-        use BankHashVerificatonError::*;
+        use BankHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDB::new(Vec::new());
 
@@ -2367,7 +2367,7 @@ pub mod tests {
 
     #[test]
     fn test_verify_bank_hash_bad_account_hash() {
-        use BankHashVerificatonError::*;
+        use BankHashVerificationError::*;
         solana_logger::setup();
         let db = AccountsDB::new(Vec::new());
 
