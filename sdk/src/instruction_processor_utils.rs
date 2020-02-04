@@ -1,9 +1,16 @@
-use crate::{account::KeyedAccount, instruction::InstructionError};
+use crate::{
+    account::KeyedAccount, instruction::InstructionError, program_error::ProgramError,
+    pubkey::Pubkey,
+};
 use num_traits::FromPrimitive;
 
-/// Return the next KeyedAccount or a NotEnoughAccountKeys instruction error
 pub fn next_keyed_account<I: Iterator>(iter: &mut I) -> Result<I::Item, InstructionError> {
     iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
+}
+
+/// Return the next AccountInfo or a NotEnoughAccountKeys error
+pub fn next_account_info<I: Iterator>(iter: &mut I) -> Result<I::Item, ProgramError> {
+    iter.next().ok_or(ProgramError::NotEnoughAccountKeys)
 }
 
 /// Return true if the first keyed_account is executable, used to determine if
