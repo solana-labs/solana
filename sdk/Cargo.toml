@@ -1,6 +1,6 @@
 [package]
 name = "solana-sdk"
-version = "0.22.7"
+version = "0.22.8"
 description = "Solana SDK"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -47,9 +47,9 @@ serde_json = { version = "1.0.44", optional = true }
 sha2 = "0.8.0"
 thiserror = "1.0"
 ed25519-dalek = { version = "=1.0.0-pre.1", optional = true }
-solana-crate-features = { path = "../crate-features", version = "0.22.7", optional = true }
-solana-logger = { path = "../logger", version = "0.22.7", optional = true }
-solana-sdk-macro = { path = "macro", version = "0.22.7" }
+solana-crate-features = { path = "../crate-features", version = "0.22.8", optional = true }
+solana-logger = { path = "../logger", version = "0.22.8", optional = true }
+solana-sdk-macro = { path = "macro", version = "0.22.8" }
 
 [dev-dependencies]
 tiny-bip39 = "0.6.2"
