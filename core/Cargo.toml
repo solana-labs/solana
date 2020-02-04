@@ -32,7 +32,7 @@ jsonrpc-ws-server = "14.0.5"
 libc = "0.2.66"
 log = "0.4.8"
 memmap = { version = "0.7.0", optional = true }
-nix = "0.16.1"
+nix = "0.17.0"
 num-traits = "0.2"
 rand = "0.6.5"
 rand_chacha = "0.1.1"
