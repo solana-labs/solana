@@ -4,6 +4,7 @@ use crate::{
     account::{Account, KeyedAccount},
     account_info::AccountInfo,
     instruction::InstructionError,
+    program_error::ProgramError,
     pubkey::Pubkey,
 };
 
@@ -70,8 +71,8 @@ pub trait Sysvar:
     fn to_account(&self, account: &mut Account) -> Option<()> {
         bincode::serialize_into(&mut account.data[..], self).ok()
     }
-    fn from_account_info(account_info: &AccountInfo) -> Option<Self> {
-        bincode::deserialize(&account_info.data.borrow()).ok()
+    fn from_account_info(account_info: &AccountInfo) -> Result<Self, ProgramError> {
+        bincode::deserialize(&account_info.data.borrow()).map_err(|_| ProgramError::InvalidArgument)
     }
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
         bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
