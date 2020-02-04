@@ -1534,4 +1534,45 @@ pub mod tests {
             assert_eq!(s.common_header.fec_set_index, expected_fec_set_index);
         });
     }
+
+    #[test]
+    fn test_max_coding_shreds() {
+        let keypair = Arc::new(Keypair::new());
+        let hash = hash(Hash::default().as_ref());
+        let version = Shred::version_from_hash(&hash);
+        assert_ne!(version, 0);
+        let shredder =
+            Shredder::new(0, 0, 1.0, keypair, 0, version).expect("Failed in creating shredder");
+
+        let entries: Vec<_> = (0..500)
+            .map(|_| {
+                let keypair0 = Keypair::new();
+                let keypair1 = Keypair::new();
+                let tx0 =
+                    system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+                Entry::new(&Hash::default(), 1, vec![tx0])
+            })
+            .collect();
+
+        let start_index = 0x12;
+        let (data_shreds, _next_index) =
+            shredder.entries_to_data_shreds(&entries, true, start_index);
+
+        assert!(data_shreds.len() > MAX_DATA_SHREDS_PER_FEC_BLOCK as usize);
+
+        (1..=MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
+            .into_iter()
+            .for_each(|count| {
+                let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[..count]);
+                assert_eq!(coding_shreds.len(), count);
+            });
+
+        let coding_shreds = shredder.data_shreds_to_coding_shreds(
+            &data_shreds[..MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 1],
+        );
+        assert_eq!(
+            coding_shreds.len(),
+            MAX_DATA_SHREDS_PER_FEC_BLOCK as usize * 2
+        );
+    }
 }
