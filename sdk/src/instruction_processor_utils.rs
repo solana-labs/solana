@@ -1,6 +1,6 @@
 use crate::{
     account::KeyedAccount, account_info::AccountInfo, instruction::InstructionError,
-    program_error::ProgramError, pubkey::Pubkey,
+    program_error::ProgramError,
 };
 use num_traits::FromPrimitive;
 
@@ -8,7 +8,6 @@ use num_traits::FromPrimitive;
 pub fn next_keyed_account<'a, I: Iterator<Item = &'a KeyedAccount<'a>>>(
     iter: &mut I,
 ) -> Result<I::Item, InstructionError> {
->>>>>>> nudge
     iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
 }
 
