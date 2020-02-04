@@ -230,7 +230,8 @@ pub fn process_instruction(
             vote_state::withdraw(me, lamports, to, &signers)
         }
         VoteInstruction::SlashLockouts(tx) => {
-            let slot_history = SlotHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?;
+            let slot_history =
+                SlotHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?;
             vote_state::slash_state(me, &slot_history, program_id, &tx)
         }
     }

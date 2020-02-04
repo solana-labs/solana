@@ -1588,4 +1588,10 @@ mod tests {
         assert!(s1.slashable_slots(&s2.slots()).is_empty());
         assert!(s2.slashable_slots(&s1.slots()).is_empty());
     }
+    #[test]
+    fn test_slashable_slots_same_slots() {
+        let mut s1 = VoteState::default();
+        s1.process_slot_vote_unchecked(1);
+        assert!(s1.slashable_slots(&[1]).is_empty());
+    }
 }
