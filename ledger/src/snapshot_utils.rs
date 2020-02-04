@@ -25,6 +25,8 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
+pub const SNAPSHOT_VERSION: &str = "0.22.6"; // format!("{}\n", env!("CARGO_PKG_VERSION"));
+
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
     pub slot: Slot,
@@ -192,10 +194,8 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
 
     // Write version file
     {
-        let snapshot_version = format!("{}\n", env!("CARGO_PKG_VERSION"));
         let mut f = std::fs::File::create(staging_version_file)?;
-        //f.write_all(&snapshot_version.to_string().into_bytes())?;
-        f.write_all(&snapshot_version.into_bytes())?;
+        f.write_all(&SNAPSHOT_VERSION.to_string().into_bytes())?;
     }
 
     // Tar the staging directory into the archive at `archive_path`
@@ -430,7 +430,7 @@ where
     let file = File::open(&root_paths.snapshot_file_path)?;
     let mut stream = BufReader::new(file);
     let mut bank: Bank = match snapshot_version {
-        env!("CARGO_PKG_VERSION") => deserialize_from(&mut stream)?,
+        SNAPSHOT_VERSION => deserialize_from(&mut stream)?,
         "0.22.3" => {
             let bank0223: solana_runtime::bank::LegacyBank0223 = deserialize_from(&mut stream)?;
             bank0223.into()
