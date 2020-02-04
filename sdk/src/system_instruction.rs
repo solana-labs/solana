@@ -10,14 +10,19 @@ use crate::{
 use num_derive::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
 
-#[derive(Serialize, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum SystemError {
+    #[error("an account with the same addreess already exists")]
     AccountAlreadyInUse,
+    #[error("account does not have enought lamports to perform the operation")]
     ResultWithNegativeLamports,
+    #[error("cannot assign account to this program id")]
     InvalidProgramId,
+    #[error("cannot allocate account data of this length")]
     InvalidAccountDataLength,
-    InvalidSeed,
+    #[error("length of requsted seed is too long")]
     MaxSeedLengthExceeded,
+    #[error("provided address does not match addressed derived from seed")]
     AddressWithSeedMismatch,
 }
 
@@ -26,13 +31,6 @@ impl<T> DecodeError<T> for SystemError {
         "SystemError"
     }
 }
-
-impl std::fmt::Display for SystemError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "error")
-    }
-}
-impl std::error::Error for SystemError {}
 
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum NonceError {
