@@ -7,10 +7,12 @@ use std::{
     cell::RefCell,
     mem::size_of,
     rc::Rc,
+    // Hide Result from bindgen gets confused about generics in non-generic type declarations
+    result::Result as ResultGeneric,
     slice::{from_raw_parts, from_raw_parts_mut},
 };
 
-pub type ProgramResult = Result<(), ProgramError>;
+pub type ProgramResult = ResultGeneric<(), ProgramError>;
 
 /// User implemented function to process an instruction
 ///

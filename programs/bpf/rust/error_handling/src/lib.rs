@@ -5,8 +5,13 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info,
-    program_error::ProgramError, pubkey::Pubkey,
+    account_info::AccountInfo,
+    entrypoint,
+    entrypoint::ProgramResult,
+    info,
+    instruction_processor_utils::DecodeError,
+    program_error::{PrintProgramError, ProgramError},
+    pubkey::Pubkey,
 };
 use thiserror::Error;
 
