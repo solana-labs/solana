@@ -251,7 +251,7 @@ pub fn process_show_storage_account(
         CliError::RpcRequestError(format!("Unable to deserialize storage account: {:?}", err))
     })?;
     println!("{:#?}", storage_contract);
-    println!("account lamports: {}", account.lamports);
+    println!("Account Lamports: {}", account.lamports);
     Ok("".to_string())
 }
 

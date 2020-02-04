@@ -451,11 +451,11 @@ pub fn process_get_epoch_info(
     let start_slot = epoch_info.absolute_slot - epoch_info.slot_index;
     let end_slot = start_slot + epoch_info.slots_in_epoch;
     println_name_value(
-        "Epoch slot range:",
+        "Epoch Slot Range:",
         &format!("[{}..{})", start_slot, end_slot),
     );
     println_name_value(
-        "Epoch completed percent:",
+        "Epoch Completed Percent:",
         &format!(
             "{:>3.3}%",
             epoch_info.slot_index as f64 / epoch_info.slots_in_epoch as f64 * 100_f64
@@ -463,14 +463,14 @@ pub fn process_get_epoch_info(
     );
     let remaining_slots_in_epoch = epoch_info.slots_in_epoch - epoch_info.slot_index;
     println_name_value(
-        "Epoch completed slots:",
+        "Epoch Completed Slots:",
         &format!(
             "{}/{} ({} remaining)",
             epoch_info.slot_index, epoch_info.slots_in_epoch, remaining_slots_in_epoch
         ),
     );
     println_name_value(
-        "Epoch completed time:",
+        "Epoch Completed Time:",
         &format!(
             "{}/{} ({} remaining)",
             slot_to_human_time(epoch_info.slot_index),
@@ -695,8 +695,8 @@ pub fn process_ping(
 ) -> ProcessResult {
     let to = Keypair::new().pubkey();
 
-    println_name_value("Source account:", &config.keypair.pubkey().to_string());
-    println_name_value("Destination account:", &to.to_string());
+    println_name_value("Source Account:", &config.keypair.pubkey().to_string());
+    println_name_value("Destination Account:", &to.to_string());
     println!();
 
     let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
