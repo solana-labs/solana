@@ -1,34 +1,76 @@
-use crate::instruction::InstructionError;
-use num_traits::ToPrimitive;
+use crate::{instruction::InstructionError, instruction_processor_utils::DecodeError};
+use num_traits::{FromPrimitive, ToPrimitive};
+use thiserror::Error;
+
+#[cfg(feature = "program")]
+use crate::info;
+#[cfg(not(feature = "program"))]
+use log::info;
 
 /// Reasons the program may fail
+#[derive(Clone, Debug, Deserialize, Eq, Error, PartialEq, Serialize)]
 pub enum ProgramError {
     /// Allows on-chain programs to implement program-specific error types and see them returned
     /// by the Solana runtime. A program-specific error may be any type that is represented as
     /// or serialized to a u32 integer.
+    #[error("Custom program error: {0}")]
     CustomError(u32),
-    /// The arguments provided to a program instruction where invalid
+    #[error("The arguments provided to a program instruction where invalid")]
     InvalidArgument,
-    /// An instruction's data contents was invalid
+    #[error("An instruction's data contents was invalid")]
     InvalidInstructionData,
-    /// An account's data contents was invalid
+    #[error("An account's data contents was invalid")]
     InvalidAccountData,
-    /// An account's data was too small
+    #[error("An account's data was too small")]
     AccountDataTooSmall,
-    /// An account's balance was too small to complete the instruction
+    #[error("An account's balance was too small to complete the instruction")]
     InsufficientFunds,
-    /// The account did not have the expected program id
+    #[error("The account did not have the expected program id")]
     IncorrectProgramId,
-    /// A signature was required but not found
+    #[error("A signature was required but not found")]
     MissingRequiredSignature,
-    /// An initialize instruction was sent to an account that has already been initialized.
+    #[error("An initialize instruction was sent to an account that has already been initialized")]
     AccountAlreadyInitialized,
-    /// An attempt to operate on an account that hasn't been initialized.
+    #[error("An attempt to operate on an account that hasn't been initialized")]
     UninitializedAccount,
-    /// The instruction expected additional account keys
+    #[error("The instruction expected additional account keys")]
     NotEnoughAccountKeys,
-    /// Failed to borrow a reference to account data, already borrowed
+    #[error("Failed to borrow a reference to account data, already borrowed")]
     AccountBorrowFailed,
+}
+
+pub trait PrintProgramError {
+    fn print<E>(&self)
+    where
+        E: 'static + std::error::Error + DecodeError<E> + PrintProgramError + FromPrimitive;
+}
+
+impl PrintProgramError for ProgramError {
+    fn print<E>(&self)
+    where
+        E: 'static + std::error::Error + DecodeError<E> + PrintProgramError + FromPrimitive,
+    {
+        match self {
+            ProgramError::CustomError(error) => {
+                if let Some(custom_error) = E::decode_custom_error_to_enum(*error) {
+                    custom_error.print::<E>();
+                } else {
+                    info!("Error: Unknown");
+                }
+            }
+            ProgramError::InvalidArgument => info!("Error: InvalidArgument"),
+            ProgramError::InvalidInstructionData => info!("Error: InvalidInstructionData"),
+            ProgramError::InvalidAccountData => info!("Error: InvalidAccountData"),
+            ProgramError::AccountDataTooSmall => info!("Error: AccountDataTooSmall"),
+            ProgramError::InsufficientFunds => info!("Error: InsufficientFunds"),
+            ProgramError::IncorrectProgramId => info!("Error: IncorrectProgramId"),
+            ProgramError::MissingRequiredSignature => info!("Error: MissingRequiredSignature"),
+            ProgramError::AccountAlreadyInitialized => info!("Error: AccountAlreadyInitialized"),
+            ProgramError::UninitializedAccount => info!("Error: UninitializedAccount"),
+            ProgramError::NotEnoughAccountKeys => info!("Error: NotEnoughAccountKeys"),
+            ProgramError::AccountBorrowFailed => info!("Error: AccountBorrowFailed"),
+        }
+    }
 }
 
 /// Builtin return values occupy the upper 32 bits
