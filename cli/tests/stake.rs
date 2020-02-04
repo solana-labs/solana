@@ -1,22 +1,19 @@
-use serde_json::Value;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
-    offline::BlockhashQuery,
+    offline::{parse_sign_only_reply_string, BlockhashQuery},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
     fee_calculator::FeeCalculator,
-    hash::Hash,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil, Signature},
+    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil},
     system_instruction::create_address_with_seed,
 };
 use solana_stake_program::stake_state::{Lockup, StakeAuthorize, StakeState};
 use std::fs::remove_dir_all;
-use std::str::FromStr;
 use std::sync::mpsc::channel;
 
 #[cfg(test)]
@@ -42,23 +39,6 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
         }
         sleep(Duration::from_millis(500));
     });
-}
-
-fn parse_sign_only_reply_string(reply: &str) -> (Hash, Vec<(Pubkey, Signature)>) {
-    let object: Value = serde_json::from_str(&reply).unwrap();
-    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
-    let blockhash = blockhash_str.parse::<Hash>().unwrap();
-    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
-    let signers = signer_strings
-        .iter()
-        .map(|signer_string| {
-            let mut signer = signer_string.as_str().unwrap().split('=');
-            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-            (key, sig)
-        })
-        .collect();
-    (blockhash, signers)
 }
 
 #[test]
