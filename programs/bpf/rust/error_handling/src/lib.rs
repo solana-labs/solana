@@ -2,8 +2,14 @@
 
 extern crate solana_sdk;
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
+
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, info, program_error::ProgramError, pubkey::Pubkey,
+    account_info::AccountInfo,
+    entrypoint, info,
+    instruction_processor_utils::DecodeError,
+    program_error::{PrintProgramError, ProgramError},
+    pubkey::Pubkey,
 };
 use thiserror::Error;
 
@@ -20,6 +26,22 @@ impl From<MyError> for ProgramError {
         ProgramError::CustomError(e as u32)
     }
 }
+impl<T> DecodeError<T> for MyError {
+    fn type_of() -> &'static str {
+        "MyError"
+    }
+}
+impl PrintProgramError for MyError {
+    fn print<E>(&self)
+    where
+        E: 'static + std::error::Error + DecodeError<E> + PrintProgramError + FromPrimitive,
+    {
+        match self {
+            MyError::DefaultEnumStart => info!("Error: Default enum start"),
+            MyError::TheAnswer => info!("Error: The Answer"),
+        }
+    }
+}
 
 entrypoint!(process_instruction);
 fn process_instruction(
@@ -27,6 +49,8 @@ fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> Result<(), ProgramError> {
+    ProgramError::CustomError(42).print::<MyError>();
+
     match instruction_data[0] {
         1 => {
             info!("return success");
