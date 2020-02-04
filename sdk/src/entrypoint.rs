@@ -1,4 +1,4 @@
-//! @brief Solana Rust-based BPF program entry point and its parameter types
+//! @brief Solana Rust-based BPF program entry point
 
 extern crate alloc;
 use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
