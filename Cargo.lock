@@ -3772,6 +3772,7 @@ dependencies = [
  "solana-faucet 0.24.0",
  "solana-logger 0.24.0",
  "solana-net-utils 0.24.0",
+ "solana-remote-wallet 0.24.0",
  "solana-runtime 0.24.0",
  "solana-sdk 0.24.0",
  "solana-stake-program 0.24.0",
