@@ -1,11 +1,13 @@
 use clap::{App, Arg, ArgMatches};
+use serde_json::Value;
 use solana_clap_utils::{
     input_parsers::value_of,
     input_validators::{is_hash, is_pubkey_sig},
     ArgConstant,
 };
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::{fee_calculator::FeeCalculator, hash::Hash};
+use solana_sdk::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey, signature::Signature};
+use std::str::FromStr;
 
 pub const BLOCKHASH_ARG: ArgConstant<'static> = ArgConstant {
     name: "blockhash",
@@ -110,6 +112,23 @@ impl OfflineArgs for App<'_, '_> {
             .arg(sign_only_arg())
             .arg(signer_arg())
     }
+}
+
+pub fn parse_sign_only_reply_string(reply: &str) -> (Hash, Vec<(Pubkey, Signature)>) {
+    let object: Value = serde_json::from_str(&reply).unwrap();
+    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
+    let blockhash = blockhash_str.parse::<Hash>().unwrap();
+    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
+    let signers = signer_strings
+        .iter()
+        .map(|signer_string| {
+            let mut signer = signer_string.as_str().unwrap().split('=');
+            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
+            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
+            (key, sig)
+        })
+        .collect();
+    (blockhash, signers)
 }
 
 #[cfg(test)]

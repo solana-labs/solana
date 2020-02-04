@@ -2,20 +2,18 @@ use chrono::prelude::*;
 use serde_json::Value;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
-    offline::BlockhashQuery,
+    offline::{parse_sign_only_reply_string, BlockhashQuery},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
     fee_calculator::FeeCalculator,
-    hash::Hash,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil, Signature},
+    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil},
 };
 use std::fs::remove_dir_all;
-use std::str::FromStr;
 use std::sync::mpsc::channel;
 
 #[cfg(test)]
@@ -305,24 +303,12 @@ fn test_offline_pay_tx() {
     check_balance(50, &rpc_client, &config_online.keypair.pubkey());
     check_balance(0, &rpc_client, &bob_pubkey);
 
-    let object: Value = serde_json::from_str(&sig_response).unwrap();
-    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
-    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
-    let signers: Vec<_> = signer_strings
-        .iter()
-        .map(|signer_string| {
-            let mut signer = signer_string.as_str().unwrap().split('=');
-            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-            (key, sig)
-        })
-        .collect();
-
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
     config_online.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
         signers: Some(signers),
-        blockhash_query: BlockhashQuery::FeeCalculator(blockhash_str.parse::<Hash>().unwrap()),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         ..PayCommand::default()
     });
     process_command(&config_online).unwrap();
