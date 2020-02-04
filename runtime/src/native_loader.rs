@@ -6,8 +6,7 @@ use libloading::os::unix::*;
 use libloading::os::windows::*;
 use log::*;
 use solana_sdk::{
-    account::KeyedAccount, instruction::InstructionError, instruction_processor_utils,
-    pubkey::Pubkey,
+    account::KeyedAccount, entrypoint_native, instruction::InstructionError, pubkey::Pubkey,
 };
 use std::{env, path::PathBuf, str};
 
@@ -87,7 +86,7 @@ pub fn invoke_entrypoint(
     let path = create_path(&name);
     match library_open(&path) {
         Ok(library) => unsafe {
-            let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
+            let entrypoint: Symbol<entrypoint_native::Entrypoint> =
                 match library.get(name.as_bytes()) {
                     Ok(s) => s,
                     Err(e) => {

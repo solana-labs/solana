@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
+    entrypoint_native,
     instruction::{CompiledInstruction, InstructionError},
-    instruction_processor_utils,
     message::Message,
     pubkey::Pubkey,
     system_program,
@@ -125,7 +125,7 @@ pub fn verify_account_changes(
 
 pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 
-pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<instruction_processor_utils::Entrypoint>>>;
+pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<entrypoint_native::Entrypoint>>>;
 
 #[derive(Serialize, Deserialize)]
 pub struct MessageProcessor {
