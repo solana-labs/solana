@@ -2318,7 +2318,7 @@ mod tests {
         account::Account,
         nonce_state::{Meta as NonceMeta, NonceState},
         pubkey::Pubkey,
-        signature::{read_keypair_file, write_keypair_file},
+        signature::{keypair_from_seed, read_keypair_file, write_keypair_file},
         system_program,
         transaction::TransactionError,
     };
@@ -3304,5 +3304,164 @@ mod tests {
         // Failure case
         config.command = CliCommand::Deploy("bad/file/location.so".to_string());
         assert!(process_command(&config).is_err());
+    }
+
+    #[test]
+    fn test_parse_transfer_subcommand() {
+        let test_commands = app("test", "desc", "version");
+
+        //Test Transfer Subcommand, lamports
+        let from_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+        let from_pubkey = from_keypair.pubkey();
+        let from_string = from_pubkey.to_string();
+        let to_keypair = keypair_from_seed(&[1u8; 32]).unwrap();
+        let to_pubkey = to_keypair.pubkey();
+        let to_string = to_pubkey.to_string();
+        let test_transfer = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "transfer", &to_string, "42", "lamports"]);
+        assert_eq!(
+            parse_command(&test_transfer).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Transfer {
+                    lamports: 42,
+                    to: to_pubkey,
+                    from: None,
+                    sign_only: false,
+                    signers: None,
+                    blockhash_query: BlockhashQuery::All,
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: None,
+                },
+                require_keypair: true,
+            }
+        );
+
+        //Test Transfer Subcommand, SOL
+        let test_transfer = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "transfer", &to_string, "42"]);
+        assert_eq!(
+            parse_command(&test_transfer).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Transfer {
+                    lamports: 42_000_000_000,
+                    to: to_pubkey,
+                    from: None,
+                    sign_only: false,
+                    signers: None,
+                    blockhash_query: BlockhashQuery::All,
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: None,
+                },
+                require_keypair: true,
+            }
+        );
+
+        //Test Transfer Subcommand, offline sign
+        let blockhash = Hash::new(&[1u8; 32]);
+        let blockhash_string = blockhash.to_string();
+        let test_transfer = test_commands.clone().get_matches_from(vec![
+            "test",
+            "transfer",
+            &to_string,
+            "42",
+            "lamports",
+            "--blockhash",
+            &blockhash_string,
+            "--sign-only",
+        ]);
+        assert_eq!(
+            parse_command(&test_transfer).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Transfer {
+                    lamports: 42,
+                    to: to_pubkey,
+                    from: None,
+                    sign_only: true,
+                    signers: None,
+                    blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: None,
+                },
+                require_keypair: true,
+            }
+        );
+
+        //Test Transfer Subcommand, submit offline `from`
+        let from_sig = from_keypair.sign_message(&[0u8]);
+        let from_signer = format!("{}={}", from_pubkey, from_sig);
+        let test_transfer = test_commands.clone().get_matches_from(vec![
+            "test",
+            "transfer",
+            &to_string,
+            "42",
+            "lamports",
+            "--from",
+            &from_string,
+            "--fee-payer",
+            &from_string,
+            "--signer",
+            &from_signer,
+            "--blockhash",
+            &blockhash_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_transfer).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Transfer {
+                    lamports: 42,
+                    to: to_pubkey,
+                    from: Some(from_pubkey.into()),
+                    sign_only: false,
+                    signers: Some(vec![(from_pubkey, from_sig)]),
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    nonce_account: None,
+                    nonce_authority: None,
+                    fee_payer: Some(from_pubkey.into()),
+                },
+                require_keypair: true,
+            }
+        );
+
+        //Test Transfer Subcommand, with nonce
+        let nonce_address = Pubkey::new(&[1u8; 32]);
+        let nonce_address_string = nonce_address.to_string();
+        let nonce_authority = keypair_from_seed(&[2u8; 32]).unwrap();
+        let nonce_authority_file = make_tmp_path("nonce_authority_file");
+        write_keypair_file(&nonce_authority, &nonce_authority_file).unwrap();
+        let test_transfer = test_commands.clone().get_matches_from(vec![
+            "test",
+            "transfer",
+            &to_string,
+            "42",
+            "lamports",
+            "--blockhash",
+            &blockhash_string,
+            "--nonce",
+            &nonce_address_string,
+            "--nonce-authority",
+            &nonce_authority_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_transfer).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Transfer {
+                    lamports: 42,
+                    to: to_pubkey,
+                    from: None,
+                    sign_only: false,
+                    signers: None,
+                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    nonce_account: Some(nonce_address.into()),
+                    nonce_authority: Some(read_keypair_file(&nonce_authority_file).unwrap().into()),
+                    fee_payer: None,
+                },
+                require_keypair: true,
+            }
+        );
     }
 }
