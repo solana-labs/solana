@@ -4,9 +4,10 @@ extern crate solana_sdk;
 use solana_sdk::{
     account_info::AccountInfo,
     clock::{get_segment_from_slot, DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
-    entrypoint, info,
+    entrypoint,
+    entrypoint::ProgramResult,
+    info,
     log::Log,
-    program_error::ProgramError,
     pubkey::Pubkey,
     rent,
     sysvar::{
@@ -20,7 +21,7 @@ fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],
     _instruction_data: &[u8],
-) -> Result<(), ProgramError> {
+) -> ProgramResult {
     // Clock
     info!("Clock identifier:");
     sysvar::clock::id().log();

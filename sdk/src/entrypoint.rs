@@ -10,16 +10,15 @@ use std::{
     slice::{from_raw_parts, from_raw_parts_mut},
 };
 
+pub type ProgramResult = Result<(), ProgramError>;
+
 /// User implemented function to process an instruction
 ///
 /// program_id: Program ID of the currently executing program
 /// accounts: Accounts passed as part of the instruction
 /// instruction_data: Instruction data
-pub type ProcessInstruction = fn(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
-    instruction_data: &[u8],
-) -> Result<(), ProgramError>;
+pub type ProcessInstruction =
+    fn(program_id: &Pubkey, accounts: &[AccountInfo], instruction_data: &[u8]) -> ProgramResult;
 
 /// Programs indicate success with a return value of 0
 pub const SUCCESS: u64 = 0;
