@@ -466,7 +466,7 @@ impl Tower {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
     use crate::replay_stage::{ForkProgress, ReplayStage};
     use solana_ledger::bank_forks::BankForks;
@@ -489,13 +489,13 @@ mod test {
     use std::{thread::sleep, time::Duration};
     use trees::{tr, Node, Tree};
 
-    struct ValidatorKeypairs {
+    pub(crate) struct ValidatorKeypairs {
         node_keypair: Keypair,
         vote_keypair: Keypair,
     }
 
     impl ValidatorKeypairs {
-        fn new(node_keypair: Keypair, vote_keypair: Keypair) -> Self {
+        pub(crate) fn new(node_keypair: Keypair, vote_keypair: Keypair) -> Self {
             Self {
                 node_keypair,
                 vote_keypair,
@@ -503,19 +503,19 @@ mod test {
         }
     }
 
-    struct VoteSimulator<'a> {
+    pub(crate) struct VoteSimulator<'a> {
         searchable_nodes: HashMap<u64, &'a Node<u64>>,
     }
 
     impl<'a> VoteSimulator<'a> {
-        pub fn new(forks: &'a Tree<u64>) -> Self {
+        pub(crate) fn new(forks: &'a Tree<u64>) -> Self {
             let mut searchable_nodes = HashMap::new();
             let root = forks.root();
             searchable_nodes.insert(root.data, root);
             Self { searchable_nodes }
         }
 
-        pub fn simulate_vote(
+        pub(crate) fn simulate_vote(
             &mut self,
             vote_slot: Slot,
             bank_forks: &RwLock<BankForks>,
@@ -592,7 +592,21 @@ mod test {
             let my_pubkey = my_keypairs.node_keypair.pubkey();
             let my_vote_pubkey = my_keypairs.vote_keypair.pubkey();
             let ancestors = bank_forks.read().unwrap().ancestors();
-            ReplayStage::select_fork(&my_pubkey, &ancestors, &bank_forks, tower, progress);
+            let mut frozen_banks: Vec<_> = bank_forks
+                .read()
+                .unwrap()
+                .frozen_banks()
+                .values()
+                .cloned()
+                .collect();
+            ReplayStage::compute_bank_stats(
+                &my_pubkey,
+                &ancestors,
+                &mut frozen_banks,
+                tower,
+                progress,
+            );
+            ReplayStage::select_fork(&frozen_banks, tower, progress);
 
             let bank = bank_forks
                 .read()
@@ -666,21 +680,17 @@ mod test {
     }
 
     #[derive(PartialEq, Debug)]
-    enum VoteResult {
+    pub(crate) enum VoteResult {
         LockedOut(u64),
         FailedThreshold(u64),
         FailedAllChecks(u64),
         Ok,
     }
 
-    // Setup BankForks with banks including all the votes per validator as
-    // specified in the input `validator_votes`
-    fn initialize_state(
-        validator_votes: &HashMap<Pubkey, Vec<u64>>,
+    // Setup BankForks with bank 0 and all the validator accounts
+    pub(crate) fn initialize_state(
         validator_keypairs: &HashMap<Pubkey, ValidatorKeypairs>,
     ) -> (BankForks, HashMap<u64, ForkProgress>) {
-        assert!(validator_votes.len() < 1_000_000);
-
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,
@@ -790,7 +800,7 @@ mod test {
         );
 
         // Initialize BankForks
-        let (bank_forks, mut progress) = initialize_state(&HashMap::new(), &keypairs);
+        let (bank_forks, mut progress) = initialize_state(&keypairs);
         let bank_forks = RwLock::new(bank_forks);
 
         // Create the tree of banks
@@ -870,8 +880,7 @@ mod test {
         votes.extend((45..=50).into_iter());
 
         let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
-        cluster_votes.insert(node_pubkey, votes.clone());
-        let (bank_forks, mut progress) = initialize_state(&cluster_votes, &keypairs);
+        let (bank_forks, mut progress) = initialize_state(&keypairs);
         let bank_forks = RwLock::new(bank_forks);
 
         // Simulate the votes. Should fail on trying to come back to the main fork
