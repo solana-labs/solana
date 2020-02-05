@@ -540,11 +540,11 @@ pub fn process_show_nonce_account(
     }
     let print_account = |data: Option<(Meta, Hash)>| {
         println!(
-            "balance: {}",
+            "Balance: {}",
             build_balance_message(nonce_account.lamports, use_lamports_unit, true)
         );
         println!(
-            "minimum balance required: {}",
+            "Minimum Balance Required: {}",
             build_balance_message(
                 rpc_client.get_minimum_balance_for_rent_exemption(NonceState::size())?,
                 use_lamports_unit,
@@ -553,12 +553,12 @@ pub fn process_show_nonce_account(
         );
         match data {
             Some((meta, hash)) => {
-                println!("nonce: {}", hash);
-                println!("authority: {}", meta.nonce_authority);
+                println!("Nonce: {}", hash);
+                println!("Authority: {}", meta.nonce_authority);
             }
             None => {
-                println!("nonce: uninitialized");
-                println!("authority: uninitialized");
+                println!("Nonce: uninitialized");
+                println!("Authority: uninitialized");
             }
         }
         Ok("".to_string())

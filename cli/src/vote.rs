@@ -429,25 +429,25 @@ pub fn process_show_vote_account(
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
 
     println!(
-        "account balance: {}",
+        "Account Balance: {}",
         build_balance_message(vote_account.lamports, use_lamports_unit, true)
     );
-    println!("validator identity: {}", vote_state.node_pubkey);
-    println!("authorized voter: {}", vote_state.authorized_voter);
+    println!("Validator Identity: {}", vote_state.node_pubkey);
+    println!("Authorized Voter: {}", vote_state.authorized_voter);
     println!(
-        "authorized withdrawer: {}",
+        "Authorized Withdrawer: {}",
         vote_state.authorized_withdrawer
     );
-    println!("credits: {}", vote_state.credits());
-    println!("commission: {}%", vote_state.commission);
+    println!("Credits: {}", vote_state.credits());
+    println!("Commission: {}%", vote_state.commission);
     println!(
-        "root slot: {}",
+        "Root Slot: {}",
         match vote_state.root_slot {
             Some(slot) => slot.to_string(),
             None => "~".to_string(),
         }
     );
-    println!("recent timestamp: {:?}", vote_state.last_timestamp);
+    println!("Recent Timestamp: {:?}", vote_state.last_timestamp);
     if !vote_state.votes.is_empty() {
         println!("recent votes:");
         for vote in &vote_state.votes {
@@ -457,7 +457,7 @@ pub fn process_show_vote_account(
             );
         }
 
-        println!("epoch voting history:");
+        println!("Epoch Voting History:");
         for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
             let credits_earned = credits - prev_credits;
             let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
