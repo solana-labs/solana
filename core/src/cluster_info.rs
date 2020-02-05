@@ -356,23 +356,6 @@ impl ClusterInfo {
         (txs, max_ts)
     }
 
-    pub fn get_all_epoch_states(&self, since: Option<u64>) -> (Vec<EpochSlots>, u64) {
-        let vals = self
-            .gossip
-            .crds
-            .table
-            .filter(|x| x.insert_timestamp > since)
-            .filter_map(|x| {
-                x.value
-                    .epoch_slots()
-                    .map(|v| (x.insert_timestamp, v.clone()))
-            })
-            .collect();
-        let max_ts = vals.iter().map(|x| x.0).max().unwrap_or(since);
-        let vals: Vec<EpochSlots> = vals.into_iter().map(|x| x.1).collect();
-        (vals, max_ts)
-    }
-
     pub fn get_epoch_state_for_node(
         &self,
         pubkey: &Pubkey,
