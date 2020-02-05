@@ -1,6 +1,6 @@
 //! named accounts for synthesized data accounts for bank state, etc.
 //!
-//! this account carries the Bank's most recent blockhashes for some N parents
+//! this account carries the Bank's most recent bank hashes for some N parents
 //!
 pub use crate::slot_hashes::SlotHashes;
 
