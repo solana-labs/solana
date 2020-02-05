@@ -75,11 +75,8 @@ impl<T: Clone> AccountsIndex<T> {
     ) -> Option<(RwLockReadGuard<SlotList<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
             let lock = list.read().unwrap();
-            if let Some(found_index) = self.latest_slot(ancestors, &lock) {
-                Some((lock, found_index))
-            } else {
-                None
-            }
+            let found_index = self.latest_slot(ancestors, &lock)?;
+            Some((lock, found_index))
         })
     }
 

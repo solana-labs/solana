@@ -100,10 +100,7 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Option<RpcAccount>> {
         let bank = &*self.bank(commitment);
-        match pubkey {
-            Ok(key) => new_response(bank, bank.get_account(&key).map(RpcAccount::encode)),
-            Err(e) => Err(e),
-        }
+        pubkey.and_then(|key| new_response(bank, bank.get_account(&key).map(RpcAccount::encode)))
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -148,10 +145,7 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<u64> {
         let bank = &*self.bank(commitment);
-        match pubkey {
-            Ok(key) => new_response(bank, bank.get_balance(&key)),
-            Err(e) => Err(e),
-        }
+        pubkey.and_then(|key| new_response(bank, bank.get_balance(&key)))
     }
 
     fn get_recent_blockhash(
