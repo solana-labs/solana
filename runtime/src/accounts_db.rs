@@ -1071,6 +1071,10 @@ impl AccountsDB {
             if calculated_hash == found_hash_info.hash {
                 Ok(())
             } else {
+                warn!(
+                    "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
+                    slot, calculated_hash, found_hash_info.hash
+                );
                 Err(MismatchedBankHash)
             }
         } else {
