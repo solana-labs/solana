@@ -54,7 +54,6 @@ use std::{
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
-pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -1613,6 +1612,34 @@ impl ReplayStage {
         }
 
         did_newly_reach_threshold
+    }
+
+    fn compute_switch_threshold(
+        slot: u64,
+        ancestors: &HashMap<u64, HashSet<u64>>,
+        descendants: &HashMap<u64, HashSet<u64>>,
+        tower: &Tower,
+        switch_threshold: &mut HashMap<u64, bool>,
+        total_staked: u64,
+        progress: &ProgressMap,
+    ) {
+        if !switch_threshold.contains_key(&slot) {
+            for ancestor in ancestors
+                .get(&slot)
+                .expect("Frozen bank must exist in ancestors list")
+            {
+                // If any ancestors pass the switch threshold check, then this slot also passes
+                if *switch_threshold.get(&ancestor).unwrap_or(false) {
+                    switch_threshold.insert(slot, true);
+                    return;
+                }
+            }
+
+            switch_threshold.insert(
+                slot,
+                tower.check_switch_threshold(slot, ancestors, descendants, progress, total_staked),
+            );
+        }
     }
 
     fn confirm_forks(

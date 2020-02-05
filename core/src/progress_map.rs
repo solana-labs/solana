@@ -2,6 +2,7 @@ use crate::{
     cluster_info_vote_listener::SlotVoteTracker, cluster_slots::SlotPubkeys,
     consensus::StakeLockout, replay_stage::SUPERMINORITY_THRESHOLD,
 };
+use bio::data_structures::interval_tree::IntervalTree;
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
@@ -13,6 +14,8 @@ use std::{
     rc::Rc,
     sync::{Arc, RwLock},
 };
+
+pub(crate) type StakeRanges = IntervalTree<Slot, HashMap<Pubkey, u64>>;
 
 #[derive(Default)]
 pub(crate) struct ReplaySlotStats(ConfirmationTiming);
@@ -91,6 +94,7 @@ pub(crate) struct ForkProgress {
     // so these stats do not span all of time
     pub(crate) num_blocks_on_fork: u64,
     pub(crate) num_dropped_blocks_on_fork: u64,
+    pub(crate) stake_ranges: StakeRanges,
 }
 
 impl ForkProgress {
