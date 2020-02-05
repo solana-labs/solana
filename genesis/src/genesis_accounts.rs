@@ -20,7 +20,7 @@ const UNLOCKS_BY_TENTHS_FOR_60_MONTHS: UnlockInfo = UnlockInfo {
     cliff_years: 0.5,
     unlocks: 9,
     unlock_years: 0.5,
-    custodian: "11111111111111111111111111111111",
+    custodian: "6LnFgiECFQKUcxNYDvUBMxgjeGQzzy4kgxGhantoxfUe",
 };
 
 // no lockups
@@ -29,7 +29,7 @@ const UNLOCKS_ALL_DAY_ZERO: UnlockInfo = UnlockInfo {
     cliff_years: 0.0,
     unlocks: 0,
     unlock_years: 0.0,
-    custodian: "11111111111111111111111111111111",
+    custodian: "6LnFgiECFQKUcxNYDvUBMxgjeGQzzy4kgxGhantoxfUe",
 };
 
 pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
