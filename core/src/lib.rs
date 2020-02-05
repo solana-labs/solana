@@ -36,6 +36,7 @@ pub mod repair_service;
 pub mod replay_stage;
 mod result;
 pub mod retransmit_stage;
+pub mod rewards_recorder_service;
 pub mod rpc;
 pub mod rpc_pubsub;
 pub mod rpc_pubsub_service;

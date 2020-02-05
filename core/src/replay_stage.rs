@@ -6,6 +6,7 @@ use crate::{
     consensus::{StakeLockout, Tower},
     poh_recorder::PohRecorder,
     result::Result,
+    rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
 };
 use solana_ledger::{
@@ -77,6 +78,7 @@ pub struct ReplayStageConfig {
     pub snapshot_package_sender: Option<SnapshotPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
+    pub rewards_sender: Option<RewardsRecorderSender>,
 }
 
 pub struct ReplayStage {
@@ -179,6 +181,7 @@ impl ReplayStage {
             snapshot_package_sender,
             block_commitment_cache,
             transaction_status_sender,
+            rewards_sender,
         } = config;
 
         let (root_bank_sender, root_bank_receiver) = channel();
@@ -219,6 +222,7 @@ impl ReplayStage {
                         &bank_forks,
                         &leader_schedule_cache,
                         &subscriptions,
+                        rewards_sender.clone(),
                     );
                     datapoint_debug!(
                         "replay_stage-memory",
@@ -395,6 +399,7 @@ impl ReplayStage {
                             &poh_recorder,
                             &leader_schedule_cache,
                             &subscriptions,
+                            rewards_sender.clone(),
                         );
 
                         if let Some(bank) = poh_recorder.lock().unwrap().bank() {
@@ -468,6 +473,7 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
+        rewards_sender: Option<RewardsRecorderSender>,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -533,6 +539,7 @@ impl ReplayStage {
                 .unwrap()
                 .insert(Bank::new_from_parent(&parent, my_pubkey, poh_slot));
 
+            Self::record_rewards(&tpu_bank, &rewards_sender);
             poh_recorder.lock().unwrap().set_bank(&tpu_bank);
         } else {
             error!("{} No next leader found", my_pubkey);
@@ -976,6 +983,7 @@ impl ReplayStage {
         forks_lock: &RwLock<BankForks>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
+        rewards_sender: Option<RewardsRecorderSender>,
     ) {
         // Find the next slot that chains to the old slot
         let forks = forks_lock.read().unwrap();
@@ -1011,10 +1019,10 @@ impl ReplayStage {
                     forks.root()
                 );
                 subscriptions.notify_slot(child_slot, parent_slot, forks.root());
-                new_banks.insert(
-                    child_slot,
-                    Bank::new_from_parent(&parent_bank, &leader, child_slot),
-                );
+
+                let child_bank = Bank::new_from_parent(&parent_bank, &leader, child_slot);
+                Self::record_rewards(&child_bank, &rewards_sender);
+                new_banks.insert(child_slot, child_bank);
             }
         }
         drop(forks);
@@ -1022,6 +1030,16 @@ impl ReplayStage {
         let mut forks = forks_lock.write().unwrap();
         for (_, bank) in new_banks {
             forks.insert(bank);
+        }
+    }
+
+    fn record_rewards(bank: &Bank, rewards_sender: &Option<RewardsRecorderSender>) {
+        if let Some(rewards_sender) = rewards_sender {
+            if let Some(ref rewards) = bank.rewards {
+                rewards_sender
+                    .send((bank.slot(), rewards.iter().copied().collect()))
+                    .unwrap_or_else(|err| warn!("rewards_sender failed: {:?}", err));
+            }
         }
     }
 
@@ -1382,6 +1400,7 @@ pub(crate) mod tests {
                 &bank_forks,
                 &leader_schedule_cache,
                 &subscriptions,
+                None,
             );
             assert!(bank_forks.read().unwrap().get(1).is_some());
 
@@ -1394,6 +1413,7 @@ pub(crate) mod tests {
                 &bank_forks,
                 &leader_schedule_cache,
                 &subscriptions,
+                None,
             );
             assert!(bank_forks.read().unwrap().get(1).is_some());
             assert!(bank_forks.read().unwrap().get(2).is_some());

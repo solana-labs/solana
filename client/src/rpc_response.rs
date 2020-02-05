@@ -33,12 +33,21 @@ pub struct RpcBlockCommitment<T> {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct RpcReward {
+    pub pubkey: String,
+    pub lamports: i64,
+}
+
+pub type RpcRewards = Vec<RpcReward>;
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedBlock {
     pub previous_blockhash: String,
     pub blockhash: String,
     pub parent_slot: Slot,
     pub transactions: Vec<RpcTransactionWithStatusMeta>,
+    pub rewards: RpcRewards,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]

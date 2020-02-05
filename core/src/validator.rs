@@ -8,6 +8,7 @@ use crate::{
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::PohRecorder,
     poh_service::PohService,
+    rewards_recorder_service::RewardsRecorderService,
     rpc::JsonRpcConfig,
     rpc_pubsub_service::PubSubService,
     rpc_service::JsonRpcService,
@@ -120,6 +121,7 @@ pub struct Validator {
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     rpc_service: Option<(JsonRpcService, PubSubService)>,
     transaction_status_service: Option<TransactionStatusService>,
+    rewards_recorder_service: Option<RewardsRecorderService>,
     gossip_service: GossipService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
     poh_service: PohService,
@@ -265,6 +267,21 @@ impl Validator {
                 (None, None)
             };
 
+        let (rewards_sender, rewards_recorder_service) =
+            if rpc_service.is_some() && !config.transaction_status_service_disabled {
+                let (rewards_sender, rewards_receiver) = unbounded();
+                (
+                    Some(rewards_sender),
+                    Some(RewardsRecorderService::new(
+                        rewards_receiver,
+                        blockstore.clone(),
+                        &exit,
+                    )),
+                )
+            } else {
+                (None, None)
+            };
+
         info!(
             "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",
             bank.epoch(),
@@ -378,6 +395,7 @@ impl Validator {
             config.enable_partition.clone(),
             node.info.shred_version,
             transaction_status_sender.clone(),
+            rewards_sender,
         );
 
         if config.dev_sigverify_disabled {
@@ -405,6 +423,7 @@ impl Validator {
             gossip_service,
             rpc_service,
             transaction_status_service,
+            rewards_recorder_service,
             tpu,
             tvu,
             poh_service,
@@ -460,6 +479,10 @@ impl Validator {
         }
         if let Some(transaction_status_service) = self.transaction_status_service {
             transaction_status_service.join()?;
+        }
+
+        if let Some(rewards_recorder_service) = self.rewards_recorder_service {
+            rewards_recorder_service.join()?;
         }
 
         self.gossip_service.join()?;
