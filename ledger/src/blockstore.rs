@@ -22,8 +22,8 @@ use rayon::{
 };
 use rocksdb::DBRawIterator;
 use solana_client::rpc_response::{
-    RpcConfirmedBlock, RpcEncodedTransaction, RpcTransactionEncoding, RpcTransactionStatus,
-    RpcTransactionWithStatusMeta,
+    RpcConfirmedBlock, RpcEncodedTransaction, RpcRewards, RpcTransactionEncoding,
+    RpcTransactionStatus, RpcTransactionWithStatusMeta,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
@@ -86,6 +86,7 @@ pub struct Blockstore {
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
+    rewards_cf: LedgerColumn<cf::Rewards>,
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
@@ -195,6 +196,7 @@ impl Blockstore {
         let data_shred_cf = db.column();
         let code_shred_cf = db.column();
         let transaction_status_cf = db.column();
+        let rewards_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -219,6 +221,7 @@ impl Blockstore {
             data_shred_cf,
             code_shred_cf,
             transaction_status_cf,
+            rewards_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
@@ -346,6 +349,10 @@ impl Blockstore {
             & self
                 .db
                 .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, from_slot, to_slot)
+                .unwrap_or(false)
+            & self
+                .db
+                .delete_range_cf::<cf::Rewards>(&mut write_batch, from_slot, to_slot)
                 .unwrap_or(false);
         if let Err(e) = self.db.write(write_batch) {
             error!(
@@ -397,6 +404,10 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .transaction_status_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .rewards_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false);
         Ok(result)
@@ -1396,6 +1407,12 @@ impl Blockstore {
                 let blockhash = get_last_hash(slot_entries.iter())
                     .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
 
+                let rewards = self
+                    .rewards_cf
+                    .get(slot)
+                    .expect("Expect rewards get to succeed")
+                    .unwrap_or_else(|| vec![]);
+
                 let block = RpcConfirmedBlock {
                     previous_blockhash: previous_blockhash.to_string(),
                     blockhash: blockhash.to_string(),
@@ -1405,6 +1422,7 @@ impl Blockstore {
                         encoding,
                         slot_transaction_iterator,
                     ),
+                    rewards,
                 };
                 return Ok(block);
             }
@@ -1440,6 +1458,10 @@ impl Blockstore {
         status: &RpcTransactionStatus,
     ) -> Result<()> {
         self.transaction_status_cf.put(index, status)
+    }
+
+    pub fn write_rewards(&self, index: Slot, rewards: RpcRewards) -> Result<()> {
+        self.rewards_cf.put(index, &rewards)
     }
 
     fn get_block_timestamps(&self, slot: Slot) -> Result<Vec<(Pubkey, (Slot, UnixTimestamp))>> {
@@ -2574,6 +2596,13 @@ pub mod tests {
                 .unwrap()
                 .next()
                 .map(|((slot, _), _)| slot >= min_slot)
+                .unwrap_or(true)
+            & blockstore
+                .db
+                .iter::<cf::Rewards>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|(slot, _)| slot >= min_slot)
                 .unwrap_or(true);
         assert!(condition_met);
     }
@@ -4826,6 +4855,7 @@ pub mod tests {
             parent_slot: slot - 1,
             blockhash: blockhash.to_string(),
             previous_blockhash: Hash::default().to_string(),
+            rewards: vec![],
         };
         // The previous_blockhash of `expected_block` is default because its parent slot is a
         // root, but empty of entries. This is special handling for snapshot root slots.
@@ -4846,6 +4876,7 @@ pub mod tests {
             parent_slot: slot,
             blockhash: blockhash.to_string(),
             previous_blockhash: blockhash.to_string(),
+            rewards: vec![],
         };
         assert_eq!(confirmed_block, expected_block);
 

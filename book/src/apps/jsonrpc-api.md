@@ -303,6 +303,9 @@ The result field will be an object with the following fields:
      * `fee: <u64>` - fee this transaction was charged, as u64 integer
      * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
      * `postBalances: <array>` - array of u64 account balances after the transaction was processed
+* `rewards: <array>` - an array of JSON objects containing:
+  * `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
+  * `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
 
 #### Example:
 

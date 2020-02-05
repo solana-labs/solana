@@ -776,7 +776,7 @@ pub fn redeem_rewards(
     vote_account: &mut Account,
     point_value: f64,
     stake_history: Option<&StakeHistory>,
-) -> Result<u64, InstructionError> {
+) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
         let vote_state = vote_account.state()?;
 
@@ -788,7 +788,7 @@ pub fn redeem_rewards(
 
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
 
-            Ok(stakers_reward + voters_reward)
+            Ok((stakers_reward, voters_reward))
         } else {
             Err(StakeError::NoCreditsToRedeem.into())
         }

@@ -333,6 +333,10 @@ pub struct Bank {
     /// Last time when the cluster info vote listener has synced with this bank
     #[serde(skip)]
     pub last_vote_sync: AtomicU64,
+
+    /// Rewards that were paid out immediately after this bank was created
+    #[serde(skip)]
+    pub rewards: Option<Vec<(Pubkey, i64)>>,
 }
 
 impl Default for BlockhashQueue {
@@ -429,6 +433,7 @@ impl Bank {
             entered_epoch_callback: parent.entered_epoch_callback.clone(),
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
+            rewards: None,
         };
 
         datapoint_debug!(
@@ -614,15 +619,16 @@ impl Bank {
         //  years_elapsed =   slots_elapsed                               /  slots/year
         let period = self.epoch_schedule.get_slots_in_epoch(epoch) as f64 / self.slots_per_year;
 
-        let inflation = self.inflation.read().unwrap();
+        let (validator_rewards, storage_rewards) = {
+            let inflation = self.inflation.read().unwrap();
 
-        let validator_rewards =
-            (*inflation).validator(year) * self.capitalization() as f64 * period;
+            (
+                (*inflation).validator(year) * self.capitalization() as f64 * period,
+                (*inflation).storage(year) * self.capitalization() as f64 * period,
+            )
+        };
 
         let validator_points = self.stakes.write().unwrap().claim_points();
-
-        let storage_rewards = (*inflation).storage(year) * self.capitalization() as f64 * period;
-
         let storage_points = self.storage_accounts.write().unwrap().claim_points();
 
         let (validator_point_value, storage_point_value) = self.check_point_values(
@@ -634,7 +640,6 @@ impl Bank {
         });
 
         let validator_rewards = self.pay_validator_rewards(validator_point_value);
-
         self.capitalization.fetch_add(
             validator_rewards + storage_rewards as u64,
             Ordering::Relaxed,
@@ -643,9 +648,12 @@ impl Bank {
 
     /// iterate over all stakes, redeem vote credits for each stake we can
     ///   successfully load and parse, return total payout
-    fn pay_validator_rewards(&self, point_value: f64) -> u64 {
+    fn pay_validator_rewards(&mut self, point_value: f64) -> u64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
-        self.stake_delegations()
+        let mut validator_rewards = HashMap::new();
+
+        let total_validator_rewards = self
+            .stake_delegations()
             .iter()
             .map(|(stake_pubkey, delegation)| {
                 match (
@@ -659,10 +667,22 @@ impl Bank {
                             point_value,
                             Some(&stake_history),
                         );
-                        if let Ok(rewards) = rewards {
+                        if let Ok((stakers_reward, voters_reward)) = rewards {
                             self.store_account(&stake_pubkey, &stake_account);
                             self.store_account(&delegation.voter_pubkey, &vote_account);
-                            rewards
+
+                            if voters_reward > 0 {
+                                *validator_rewards
+                                    .entry(delegation.voter_pubkey)
+                                    .or_insert(0i64) += voters_reward as i64;
+                            }
+
+                            if stakers_reward > 0 {
+                                *validator_rewards.entry(*stake_pubkey).or_insert(0i64) +=
+                                    stakers_reward as i64;
+                            }
+
+                            stakers_reward + voters_reward
                         } else {
                             debug!(
                                 "stake_state::redeem_rewards() failed for {}: {:?}",
@@ -674,7 +694,11 @@ impl Bank {
                     (_, _) => 0,
                 }
             })
-            .sum()
+            .sum();
+
+        assert_eq!(self.rewards, None);
+        self.rewards = Some(validator_rewards.drain().collect());
+        total_validator_rewards
     }
 
     pub fn update_recent_blockhashes(&self) {
@@ -3003,6 +3027,7 @@ mod tests {
             ..GenesisConfig::default()
         }));
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
+        assert_eq!(bank.rewards, None);
 
         let ((vote_id, mut vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
@@ -3060,6 +3085,16 @@ mod tests {
                 - inflation as f64)
                 .abs()
                 < 1.0 // rounding, truncating
+        );
+
+        // verify validator rewards show up in bank1.rewards vector
+        // (currently storage rewards will not show up)
+        assert_eq!(
+            bank1.rewards,
+            Some(vec![(
+                stake_id,
+                (rewards.validator_point_value * validator_points as f64) as i64
+            )])
         );
     }
 
