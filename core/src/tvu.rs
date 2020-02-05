@@ -9,6 +9,7 @@ use crate::{
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
+    rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
     shred_fetch_stage::ShredFetchStage,
     sigverify_shreds::ShredSigVerifier,
@@ -86,6 +87,7 @@ impl Tvu {
         cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
+        rewards_sender: Option<RewardsRecorderSender>,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -170,6 +172,7 @@ impl Tvu {
             snapshot_package_sender,
             block_commitment_cache,
             transaction_status_sender,
+            rewards_sender,
         };
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
@@ -311,6 +314,7 @@ pub mod tests {
             false,
             None,
             0,
+            None,
             None,
         );
         exit.store(true, Ordering::Relaxed);
