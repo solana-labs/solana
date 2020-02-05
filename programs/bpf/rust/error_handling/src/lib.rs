@@ -9,7 +9,7 @@ use solana_sdk::{
     entrypoint,
     entrypoint::ProgramResult,
     info,
-    instruction_processor_utils::DecodeError,
+    program_utils::DecodeError,
     program_error::{PrintProgramError, ProgramError},
     pubkey::Pubkey,
 };
