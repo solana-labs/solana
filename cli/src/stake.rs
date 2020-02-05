@@ -958,12 +958,12 @@ pub fn process_split_stake(
 
 pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamports_unit: bool) {
     fn show_authorized(authorized: &Authorized) {
-        println!("authorized staker: {}", authorized.staker);
-        println!("authorized withdrawer: {}", authorized.withdrawer);
+        println!("Authorized Staker: {}", authorized.staker);
+        println!("Authorized Withdrawer: {}", authorized.withdrawer);
     }
     fn show_lockup(lockup: &Lockup) {
-        println!("lockup epoch: {}", lockup.epoch);
-        println!("lockup custodian: {}", lockup.custodian);
+        println!("Lockup Epoch: {}", lockup.epoch);
+        println!("Lockup Custodian: {}", lockup.custodian);
     }
     match stake_state {
         StakeState::Stake(
@@ -973,19 +973,19 @@ pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamp
             stake,
         ) => {
             println!(
-                "total stake: {}",
+                "Total Stake: {}",
                 build_balance_message(stake_lamports, use_lamports_unit, true)
             );
-            println!("credits observed: {}", stake.credits_observed);
+            println!("Credits Observed: {}", stake.credits_observed);
             println!(
-                "delegated stake: {}",
+                "Delegated Stake: {}",
                 build_balance_message(stake.delegation.stake, use_lamports_unit, true)
             );
             if stake.delegation.voter_pubkey != Pubkey::default() {
-                println!("delegated voter pubkey: {}", stake.delegation.voter_pubkey);
+                println!("Delegated Voter Pubkey: {}", stake.delegation.voter_pubkey);
             }
             println!(
-                "stake activates starting from epoch: {}",
+                "Stake activates starting from epoch: {}",
                 if stake.delegation.activation_epoch < std::u64::MAX {
                     stake.delegation.activation_epoch
                 } else {
@@ -994,23 +994,23 @@ pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamp
             );
             if stake.delegation.deactivation_epoch < std::u64::MAX {
                 println!(
-                    "stake deactivates starting from epoch: {}",
+                    "Stake deactivates starting from epoch: {}",
                     stake.delegation.deactivation_epoch
                 );
             }
             show_authorized(&authorized);
             show_lockup(&lockup);
         }
-        StakeState::RewardsPool => println!("stake account is a rewards pool"),
-        StakeState::Uninitialized => println!("stake account is uninitialized"),
+        StakeState::RewardsPool => println!("Stake account is a rewards pool"),
+        StakeState::Uninitialized => println!("Stake account is uninitialized"),
         StakeState::Initialized(Meta {
             authorized, lockup, ..
         }) => {
             println!(
-                "total stake: {}",
+                "Total Stake: {}",
                 build_balance_message(stake_lamports, use_lamports_unit, true)
             );
-            println!("stake account is undelegated");
+            println!("Stake account is undelegated");
             show_authorized(&authorized);
             show_lockup(&lockup);
         }
