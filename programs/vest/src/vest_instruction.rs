@@ -5,7 +5,7 @@ use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
-    instruction_processor_utils::DecodeError,
+    program_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction,
 };

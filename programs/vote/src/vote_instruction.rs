@@ -12,7 +12,7 @@ use solana_metrics::datapoint_debug;
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
     instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
-    instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
+    program_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
     sysvar::{self, clock::Clock, slot_hashes::SlotHashes, Sysvar},

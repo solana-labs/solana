@@ -5,7 +5,7 @@ use bincode::serialize_into;
 use solana_sdk::{
     account::KeyedAccount,
     instruction::InstructionError,
-    instruction_processor_utils::{limited_deserialize, next_keyed_account},
+    program_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
 };
 

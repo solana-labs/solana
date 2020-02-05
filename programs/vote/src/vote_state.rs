@@ -583,7 +583,7 @@ mod tests {
         account::{get_signers, Account},
         account_utils::StateMut,
         hash::hash,
-        instruction_processor_utils::next_keyed_account,
+        program_utils::next_keyed_account,
     };
     use std::cell::RefCell;
 

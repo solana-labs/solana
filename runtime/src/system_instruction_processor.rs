@@ -3,8 +3,8 @@ use solana_sdk::{
     account::{get_signers, Account, KeyedAccount},
     account_utils::StateMut,
     instruction::InstructionError,
-    instruction_processor_utils::{limited_deserialize, next_keyed_account},
     nonce_state::{NonceAccount, NonceState},
+    program_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
     system_instruction::{
         create_address_with_seed, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,

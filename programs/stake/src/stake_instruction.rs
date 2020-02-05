@@ -8,7 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
     instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
-    instruction_processor_utils::{limited_deserialize, next_keyed_account, DecodeError},
+    program_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
     sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory, Sysvar},

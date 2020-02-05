@@ -33,7 +33,7 @@ use solana_sdk::{
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
     genesis_config::GenesisConfig,
     hash::Hash,
-    instruction_processor_utils::limited_deserialize,
+    program_utils::limited_deserialize,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
     timing::timestamp,
