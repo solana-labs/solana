@@ -7,7 +7,7 @@ use log::*;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::limited_deserialize;
+use solana_sdk::program_utils::limited_deserialize;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 

@@ -10,7 +10,7 @@ use solana_sdk::{
     account::KeyedAccount,
     hash::hash,
     instruction::InstructionError,
-    instruction_processor_utils::{limited_deserialize, next_keyed_account},
+    program_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
 };
 

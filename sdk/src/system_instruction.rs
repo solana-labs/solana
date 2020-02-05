@@ -1,8 +1,8 @@
 use crate::{
     hash::hashv,
     instruction::{AccountMeta, Instruction, WithSigner},
-    instruction_processor_utils::DecodeError,
     nonce_state::NonceState,
+    program_utils::DecodeError,
     pubkey::Pubkey,
     system_program,
     sysvar::{recent_blockhashes, rent},

@@ -9,7 +9,7 @@ use solana_config_program::get_config_data;
 use solana_sdk::{
     account::{Account, KeyedAccount},
     instruction::InstructionError,
-    instruction_processor_utils::{limited_deserialize, next_keyed_account},
+    program_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
 };
 use std::cell::RefMut;

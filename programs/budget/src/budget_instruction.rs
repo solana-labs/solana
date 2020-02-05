@@ -6,7 +6,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     hash::Hash,
     instruction::{AccountMeta, Instruction},
-    instruction_processor_utils::DecodeError,
+    program_utils::DecodeError,
     pubkey::Pubkey,
     system_instruction,
 };

@@ -10,8 +10,8 @@ use solana_sdk::{
     account::KeyedAccount,
     entrypoint::SUCCESS,
     instruction::InstructionError,
-    instruction_processor_utils::{is_executable, limited_deserialize, next_keyed_account},
     loader_instruction::LoaderInstruction,
+    program_utils::{is_executable, limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
     sysvar::rent,
 };

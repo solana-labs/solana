@@ -5,7 +5,7 @@ use crate::{storage_contract::StorageAccount, storage_instruction::StorageInstru
 use solana_sdk::{
     account::KeyedAccount,
     instruction::InstructionError,
-    instruction_processor_utils::limited_deserialize,
+    program_utils::limited_deserialize,
     pubkey::Pubkey,
     sysvar::{clock::Clock, rewards::Rewards, Sysvar},
 };

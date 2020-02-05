@@ -14,8 +14,8 @@ use solana_ledger::{
     snapshot_utils,
 };
 use solana_sdk::{
-    clock::Slot, genesis_config::GenesisConfig, instruction_processor_utils::limited_deserialize,
-    native_token::lamports_to_sol, pubkey::Pubkey,
+    clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol,
+    program_utils::limited_deserialize, pubkey::Pubkey,
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
