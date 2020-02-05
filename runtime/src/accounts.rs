@@ -370,7 +370,12 @@ impl Accounts {
     }
 
     pub fn verify_bank_hash(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {
-        self.accounts_db.verify_bank_hash(slot, ancestors).is_ok()
+        if let Err(err) = self.accounts_db.verify_bank_hash(slot, ancestors) {
+            warn!("verify_bank_hash failed: {:?}", err);
+            false
+        } else {
+            true
+        }
     }
 
     pub fn load_by_program(
