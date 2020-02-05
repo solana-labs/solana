@@ -10,6 +10,7 @@ pub mod broadcast_stage;
 pub mod cluster_info_vote_listener;
 pub mod commitment;
 pub mod shred_fetch_stage;
+pub mod watchdog;
 #[macro_use]
 pub mod contact_info;
 pub mod blockstream;
