@@ -24,21 +24,25 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                 if let Some(config_file) = matches.value_of("config_file") {
                     let config = Config::load(config_file).unwrap_or_default();
                     if let Some(field) = subcommand_matches.value_of("specific_setting") {
-                        let (value, default_value) = match field {
-                            "url" => (config.url, CliConfig::default_json_rpc_url()),
-                            "keypair" => (config.keypair_path, CliConfig::default_keypair_path()),
+                        let (field_name, value, default_value) = match field {
+                            "url" => ("RPC Url", config.url, CliConfig::default_json_rpc_url()),
+                            "keypair" => (
+                                "Key Path",
+                                config.keypair_path,
+                                CliConfig::default_keypair_path(),
+                            ),
                             _ => unreachable!(),
                         };
-                        println_name_value_or(&format!("* {}:", field), &value, &default_value);
+                        println_name_value_or(&format!("{}:", field_name), &value, &default_value);
                     } else {
-                        println_name_value("Wallet Config:", config_file);
+                        println_name_value("Config File:", config_file);
                         println_name_value_or(
-                            "* url:",
+                            "RPC Url:",
                             &config.url,
                             &CliConfig::default_json_rpc_url(),
                         );
                         println_name_value_or(
-                            "* keypair:",
+                            "Key Path:",
                             &config.keypair_path,
                             &CliConfig::default_keypair_path(),
                         );
@@ -61,9 +65,9 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                         config.keypair_path = keypair.to_string();
                     }
                     config.save(config_file)?;
-                    println_name_value("Wallet Config Updated:", config_file);
-                    println_name_value("* url:", &config.url);
-                    println_name_value("* keypair:", &config.keypair_path);
+                    println_name_value("Config File:", config_file);
+                    println_name_value("RPC URL:", &config.url);
+                    println_name_value("Keypair Path:", &config.keypair_path);
                 } else {
                     println!(
                         "{} Either provide the `--config` arg or ensure home directory exists to use the default config location",

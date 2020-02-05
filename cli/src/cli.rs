@@ -1233,10 +1233,10 @@ fn process_witness(
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
     if config.verbose {
+        println_name_value("RPC URL:", &config.json_rpc_url);
         if let Some(keypair_path) = &config.keypair_path {
-            println_name_value("Keypair:", keypair_path);
+            println_name_value("Keypair Path:", keypair_path);
         }
-        println_name_value("RPC Endpoint:", &config.json_rpc_url);
     }
 
     let mut _rpc_client;

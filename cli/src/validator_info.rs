@@ -22,8 +22,8 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil},
     transaction::Transaction,
 };
-
 use std::error;
+use titlecase::titlecase;
 
 pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
 pub const MAX_LONG_FIELD_LENGTH: usize = 300;
@@ -390,9 +390,12 @@ pub fn process_get_validator_info(rpc_client: &RpcClient, pubkey: Option<Pubkey>
             parse_validator_info(&validator_info_pubkey, &validator_info_account)?;
         println!();
         println_name_value("Validator Identity Pubkey:", &validator_pubkey.to_string());
-        println_name_value("  info pubkey:", &validator_info_pubkey.to_string());
+        println_name_value("  Info Pubkey:", &validator_info_pubkey.to_string());
         for (key, value) in validator_info.iter() {
-            println_name_value(&format!("  {}:", key), &value.as_str().unwrap_or("?"));
+            println_name_value(
+                &format!("  {}:", titlecase(key)),
+                &value.as_str().unwrap_or("?"),
+            );
         }
     }
 

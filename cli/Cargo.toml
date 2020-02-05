@@ -26,7 +26,6 @@ reqwest = { version = "0.10.1", default-features = false, features = ["blocking"
 serde = "1.0.104"
 serde_derive = "1.0.103"
 serde_json = "1.0.44"
-serde_yaml = "0.8.11"
 solana-budget-program = { path = "../programs/budget", version = "0.23.3" }
 solana-clap-utils = { path = "../clap-utils", version = "0.23.3" }
 solana-cli-config = { path = "../cli-config", version = "0.23.3" }
@@ -41,6 +40,7 @@ solana-stake-program = { path = "../programs/stake", version = "0.23.3" }
 solana-storage-program = { path = "../programs/storage", version = "0.23.3" }
 solana-vote-program = { path = "../programs/vote", version = "0.23.3" }
 solana-vote-signer = { path = "../vote-signer", version = "0.23.3" }
+titlecase = "1.1.0"
 url = "2.1.1"
 
 [dev-dependencies]
