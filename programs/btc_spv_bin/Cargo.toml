@@ -13,7 +13,6 @@ clap="2.33.0"
 reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde="1.0.104"
 serde_derive="1.0.103"
-serde_json = "1.0.46"
 hex = "0.3.2"
 
 [[bin]]

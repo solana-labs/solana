@@ -9,11 +9,8 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-bincode = "1.2.1"
 clap = "2.33.0"
 histogram = "*"
-serde = "1.0.104"
-serde_derive = "1.0.103"
 serde_json = "1.0.46"
 serde_yaml = "0.8.11"
 solana-clap-utils = { path = "../clap-utils", version = "0.24.0" }
