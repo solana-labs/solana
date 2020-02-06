@@ -16,6 +16,7 @@ use std::sync::mpsc::channel;
 use std::time::Duration;
 
 #[test]
+#[ignore]
 fn test_exchange_local_cluster() {
     solana_logger::setup();
 
