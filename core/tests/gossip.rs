@@ -21,7 +21,8 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService
         test_node.info.clone(),
         keypair,
     )));
-    let gossip_service = GossipService::new(&cluster_info, None, test_node.sockets.gossip, exit);
+    let gossip_service =
+        GossipService::new(&cluster_info, None, None, test_node.sockets.gossip, exit);
     let _ = cluster_info.read().unwrap().my_data();
     (
         cluster_info,

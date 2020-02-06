@@ -17,7 +17,7 @@ pub struct ContactInfo {
     pub tvu: SocketAddr,
     /// address to forward shreds to
     pub tvu_forwards: SocketAddr,
-    /// address to send repair responses to
+    /// address to send repairs to
     pub repair: SocketAddr,
     /// transactions address
     pub tpu: SocketAddr,
@@ -29,8 +29,6 @@ pub struct ContactInfo {
     pub rpc: SocketAddr,
     /// websocket for JSON-RPC push notifications
     pub rpc_pubsub: SocketAddr,
-    /// address to send repair requests to
-    pub serve_repair: SocketAddr,
     /// latest wallclock picked
     pub wallclock: u64,
     /// node shred version
@@ -87,7 +85,6 @@ impl Default for ContactInfo {
             storage_addr: socketaddr_any!(),
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
-            serve_repair: socketaddr_any!(),
             wallclock: 0,
             shred_version: 0,
         }
@@ -107,7 +104,6 @@ impl ContactInfo {
         storage_addr: SocketAddr,
         rpc: SocketAddr,
         rpc_pubsub: SocketAddr,
-        serve_repair: SocketAddr,
         now: u64,
     ) -> Self {
         Self {
@@ -121,7 +117,6 @@ impl ContactInfo {
             storage_addr,
             rpc,
             rpc_pubsub,
-            serve_repair,
             wallclock: now,
             shred_version: 0,
         }
@@ -139,7 +134,6 @@ impl ContactInfo {
             socketaddr!("127.0.0.1:1240"),
             socketaddr!("127.0.0.1:1241"),
             socketaddr!("127.0.0.1:1242"),
-            socketaddr!("127.0.0.1:1243"),
             now,
         )
     }
@@ -151,7 +145,6 @@ impl ContactInfo {
         assert!(addr.ip().is_multicast());
         Self::new(
             &Pubkey::new_rand(),
-            addr,
             addr,
             addr,
             addr,
@@ -181,7 +174,6 @@ impl ContactInfo {
         let repair = next_port(&bind_addr, 5);
         let rpc_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
         let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
-        let serve_repair = next_port(&bind_addr, 6);
         Self::new(
             pubkey,
             gossip_addr,
@@ -193,7 +185,6 @@ impl ContactInfo {
             "0.0.0.0:0".parse().unwrap(),
             rpc_addr,
             rpc_pubsub_addr,
-            serve_repair,
             timestamp(),
         )
     }
@@ -210,7 +201,6 @@ impl ContactInfo {
         Self::new(
             &Pubkey::default(),
             *gossip_addr,
-            daddr,
             daddr,
             daddr,
             daddr,
@@ -277,7 +267,6 @@ mod tests {
         assert!(ci.rpc_pubsub.ip().is_unspecified());
         assert!(ci.tpu.ip().is_unspecified());
         assert!(ci.storage_addr.ip().is_unspecified());
-        assert!(ci.serve_repair.ip().is_unspecified());
     }
     #[test]
     fn test_multicast() {
@@ -289,7 +278,6 @@ mod tests {
         assert!(ci.rpc_pubsub.ip().is_multicast());
         assert!(ci.tpu.ip().is_multicast());
         assert!(ci.storage_addr.ip().is_multicast());
-        assert!(ci.serve_repair.ip().is_multicast());
     }
     #[test]
     fn test_entry_point() {
@@ -302,7 +290,6 @@ mod tests {
         assert!(ci.rpc_pubsub.ip().is_unspecified());
         assert!(ci.tpu.ip().is_unspecified());
         assert!(ci.storage_addr.ip().is_unspecified());
-        assert!(ci.serve_repair.ip().is_unspecified());
     }
     #[test]
     fn test_socketaddr() {
@@ -315,9 +302,7 @@ mod tests {
         assert_eq!(ci.rpc.port(), rpc_port::DEFAULT_RPC_PORT);
         assert_eq!(ci.rpc_pubsub.port(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         assert!(ci.storage_addr.ip().is_unspecified());
-        assert_eq!(ci.serve_repair.port(), 16);
     }
-
     #[test]
     fn replayed_data_new_with_socketaddr_with_pubkey() {
         let keypair = Keypair::new();
@@ -338,9 +323,6 @@ mod tests {
             d1.rpc_pubsub,
             socketaddr!(format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT))
         );
-        assert_eq!(d1.tvu_forwards, socketaddr!("127.0.0.1:1238"));
-        assert_eq!(d1.repair, socketaddr!("127.0.0.1:1239"));
-        assert_eq!(d1.serve_repair, socketaddr!("127.0.0.1:1240"));
     }
 
     #[test]
