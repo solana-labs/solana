@@ -25,6 +25,8 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
+// The maximum age of a value received over pull responses
+pub const CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS: u64 = 60000;
 pub const FALSE_RATE: f64 = 0.1f64;
 pub const KEYS: f64 = 8f64;
 
@@ -117,6 +119,7 @@ pub struct CrdsGossipPull {
     /// hash and insert time
     purged_values: VecDeque<(Hash, u64)>,
     pub crds_timeout: u64,
+    pub msg_timeout: u64,
 }
 
 impl Default for CrdsGossipPull {
@@ -125,6 +128,7 @@ impl Default for CrdsGossipPull {
             purged_values: VecDeque::new(),
             pull_request_time: HashMap::new(),
             crds_timeout: CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+            msg_timeout: CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         }
     }
 }
@@ -215,6 +219,11 @@ impl CrdsGossipPull {
     ) -> usize {
         let mut failed = 0;
         for r in response {
+            if now > r.wallclock() + self.msg_timeout || now + self.msg_timeout < r.wallclock() {
+                inc_new_counter_error!("cluster_info-gossip_pull_response_value_timeout", 1);
+                failed += 1;
+                continue;
+            }
             let owner = r.label().pubkey();
             let old = crds.insert(r, now);
             failed += old.is_err() as usize;
