@@ -1825,7 +1825,7 @@ impl Bank {
     }
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
-    /// snaphsot.
+    /// snapshot.
     pub fn verify_hash_internal_state(&self) -> bool {
         self.rc
             .accounts
