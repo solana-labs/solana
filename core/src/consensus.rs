@@ -348,7 +348,6 @@ impl Tower {
             .slots
             .last()
             .map(|last_vote| {
-                println!("slot: {}", slot);
                 let last_vote_ancestors = ancestors.get(&last_vote).unwrap();
                 let slot_ancestors = ancestors.get(&slot).unwrap();
                 // Ancestors doesn't contain the slot itself, so have to check
