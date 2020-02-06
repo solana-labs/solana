@@ -193,11 +193,8 @@ impl LeaderScheduleCache {
             cache_result
         } else {
             let (epoch, slot_index) = bank.get_epoch_and_slot_index(slot);
-            if let Some(epoch_schedule) = self.compute_epoch_schedule(epoch, bank) {
-                Some(epoch_schedule[slot_index])
-            } else {
-                None
-            }
+            self.compute_epoch_schedule(epoch, bank)
+                .map(|epoch_schedule| epoch_schedule[slot_index])
         }
     }
 

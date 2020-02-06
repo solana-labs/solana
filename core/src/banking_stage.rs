@@ -660,10 +660,7 @@ impl BankingStage {
         transactions
             .into_iter()
             .zip(indexes)
-            .filter_map(|(tx, index)| match tx {
-                None => None,
-                Some(tx) => Some((tx, index)),
-            })
+            .filter_map(|(tx, index)| tx.map(|tx| (tx, index)))
             .unzip()
     }
 

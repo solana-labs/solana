@@ -32,7 +32,6 @@ solana-sdk = { path = "../sdk", version = "0.24.0" }
 solana-vote-program = { path = "../programs/vote", version = "0.24.0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.24.0" }
 tar = "0.4.26"
-tempfile = "3.1.0"
 
 [target."cfg(unix)".dependencies]
 gag = "0.1.10"

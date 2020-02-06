@@ -9,7 +9,6 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-log = "0.4.8"
 solana-sdk = { path = "../../sdk", version = "0.24.0" }
 
 [dev-dependencies]

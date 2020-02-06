@@ -96,7 +96,7 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidInstructionData);
     }
 
-    config_keyed_account.try_account_ref_mut()?.data[0..data.len()].copy_from_slice(&data);
+    config_keyed_account.try_account_ref_mut()?.data[..data.len()].copy_from_slice(&data);
     Ok(())
 }
 

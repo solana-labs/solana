@@ -20,7 +20,6 @@ rand_chacha = "0.1.1"
 rand_core = { version = ">=0.2, <0.4", default-features = false }
 solana-sdk = { path = "../sdk", version = "0.24.0" }
 ed25519-dalek = "1.0.0-pre.1"
-sha2 = "0.8.1"
 
 [build-dependencies]
 cbindgen = "0.13.0"

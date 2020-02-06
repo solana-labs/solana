@@ -9,13 +9,11 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-bs58 = "0.3.0"
 clap = "2.33"
 jsonrpc-core = "14.0.5"
 jsonrpc-derive = "14.0.5"
 jsonrpc-http-server = "14.0.5"
 log = "0.4.8"
-serde = "1.0.104"
 serde_json = "1.0.46"
 solana-clap-utils = { path = "../clap-utils", version = "0.24.0" }
 solana-metrics = { path = "../metrics", version = "0.24.0" }

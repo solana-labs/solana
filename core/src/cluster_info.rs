@@ -402,8 +402,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me.id)
-            .filter(|x| ContactInfo::is_valid_address(&x.rpc))
+            .filter(|x| x.id != me.id && ContactInfo::is_valid_address(&x.rpc))
             .cloned()
             .collect()
     }
@@ -429,10 +428,8 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me)
-            /* shred_version not considered for gossip peers (ie, spy nodes do not set
-            shred_version) */
-            .filter(|x| ContactInfo::is_valid_address(&x.gossip))
+            // shred_version not considered for gossip peers (ie, spy nodes do not set shred_version)
+            .filter(|x| x.id != me && ContactInfo::is_valid_address(&x.gossip))
             .cloned()
             .collect()
     }
@@ -445,9 +442,11 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
-            .filter(|x| !ClusterInfo::is_archiver(x))
-            .filter(|x| x.id != me.id)
+            .filter(|x| {
+                ContactInfo::is_valid_address(&x.tvu)
+                    && !ClusterInfo::is_archiver(x)
+                    && x.id != me.id
+            })
             .cloned()
             .collect()
     }
@@ -460,10 +459,12 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
-            .filter(|x| !ClusterInfo::is_archiver(x))
-            .filter(|x| x.id != me.id)
-            .filter(|x| x.shred_version == me.shred_version)
+            .filter(|x| {
+                ContactInfo::is_valid_address(&x.tvu)
+                    && !ClusterInfo::is_archiver(x)
+                    && x.id != me.id
+                    && x.shred_version == me.shred_version
+            })
             .cloned()
             .collect()
     }
@@ -476,8 +477,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| ContactInfo::is_valid_address(&x.storage_addr))
-            .filter(|x| x.id != me.id)
+            .filter(|x| ContactInfo::is_valid_address(&x.storage_addr) && x.id != me.id)
             .cloned()
             .collect()
     }
@@ -490,9 +490,11 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| ContactInfo::is_valid_address(&x.storage_addr))
-            .filter(|x| x.id != me.id)
-            .filter(|x| x.shred_version == me.shred_version)
+            .filter(|x| {
+                ContactInfo::is_valid_address(&x.storage_addr)
+                    && x.id != me.id
+                    && x.shred_version == me.shred_version
+            })
             .cloned()
             .collect()
     }
@@ -505,10 +507,12 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me.id)
-            .filter(|x| x.shred_version == me.shred_version)
-            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
-            .filter(|x| ContactInfo::is_valid_address(&x.tvu_forwards))
+            .filter(|x| {
+                x.id != me.id
+                    && x.shred_version == me.shred_version
+                    && ContactInfo::is_valid_address(&x.tvu)
+                    && ContactInfo::is_valid_address(&x.tvu_forwards)
+            })
             .cloned()
             .collect()
     }
@@ -518,13 +522,15 @@ impl ClusterInfo {
         let me = self.my_data();
         ClusterInfo::tvu_peers(self)
             .into_iter()
-            .filter(|x| x.id != me.id)
-            .filter(|x| x.shred_version == me.shred_version)
-            .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .filter(|x| {
-                self.get_epoch_state_for_node(&x.id, None)
-                    .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
-                    .unwrap_or_else(|| /* fallback to legacy behavior */ true)
+                x.id != me.id
+                    && x.shred_version == me.shred_version
+                    && ContactInfo::is_valid_address(&x.gossip)
+                    && {
+                        self.get_epoch_state_for_node(&x.id, None)
+                            .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
+                            .unwrap_or_else(|| /* fallback to legacy behavior */ true)
+                    }
             })
             .collect()
     }
@@ -621,8 +627,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me)
-            .filter(|x| ContactInfo::is_valid_address(&x.tpu))
+            .filter(|x| x.id != me && ContactInfo::is_valid_address(&x.tpu))
             .cloned()
             .collect()
     }
@@ -984,12 +989,11 @@ impl ClusterInfo {
                     .and_then(CrdsValue::contact_info)
                     .map(|p| (p.gossip, messages))
             })
-            .map(|(peer, msgs)| {
+            .flat_map(|(peer, msgs)| {
                 Self::split_gossip_messages(msgs)
                     .into_iter()
                     .map(move |payload| (peer, Protocol::PushMessage(self_id, payload)))
             })
-            .flatten()
             .collect()
     }
 

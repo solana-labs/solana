@@ -87,8 +87,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         if let Some(stored_forks) = sigmap.get(&sig_slice) {
             let res = stored_forks
                 .iter()
-                .filter(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
-                .nth(0)
+                .find(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
                 .cloned();
             if res.is_some() {
                 return res;

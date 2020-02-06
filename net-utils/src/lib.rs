@@ -338,10 +338,8 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
 
-    match sock.bind(&SockAddr::from(addr)) {
-        Ok(_) => Result::Ok(sock.into_udp_socket()),
-        Err(err) => Err(err),
-    }
+    sock.bind(&SockAddr::from(addr))
+        .and_then(|_| Result::Ok(sock.into_udp_socket()))
 }
 
 // binds both a UdpSocket and a TcpListener
@@ -350,13 +348,9 @@ pub fn bind_common(port: u16, reuseaddr: bool) -> io::Result<(UdpSocket, TcpList
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
     let sock_addr = SockAddr::from(addr);
-    match sock.bind(&sock_addr) {
-        Ok(_) => match TcpListener::bind(&addr) {
-            Ok(listener) => Result::Ok((sock.into_udp_socket(), listener)),
-            Err(err) => Err(err),
-        },
-        Err(err) => Err(err),
-    }
+    sock.bind(&sock_addr).and_then(|_| {
+        TcpListener::bind(&addr).and_then(|listener| Result::Ok((sock.into_udp_socket(), listener)))
+    })
 }
 
 pub fn find_available_port_in_range(range: PortRange) -> io::Result<u16> {
