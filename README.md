@@ -120,16 +120,13 @@ $ cargo test
 Local Testnet
 ---
 
-Start your own testnet locally, instructions are in the book [Solana: Blockchain Rebuild for Scale: Getting Started](https://docs.solana.com/book/getting-started).
+Start your own testnet locally, instructions are in the book [Solana: Blockchain Rebuild for Scale: Getting Started](https://docs.solana.com/book/building-from-source).
 
 Remote Testnets
 ---
 
-We maintain several testnets:
-
 * `testnet` - public stable testnet accessible via testnet.solana.com. Runs 24/7
-* `testnet-beta` - public beta channel testnet accessible via beta.testnet.solana.com. Runs 24/7
-* `testnet-edge` - public edge channel testnet accessible via edge.testnet.solana.com. Runs 24/7
+
 
 ## Deploy process
 
