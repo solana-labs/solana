@@ -214,6 +214,7 @@ impl CrdsGossipPull {
         &mut self,
         crds: &mut Crds,
         from: &Pubkey,
+        timeouts: &HashMap<Pubkey, u64>,
         response: Vec<CrdsValue>,
         now: u64,
     ) -> usize {
@@ -223,14 +224,23 @@ impl CrdsGossipPull {
             if now > r.wallclock() + self.msg_timeout || now + self.msg_timeout < r.wallclock() {
                 match &r.label() {
                     CrdsValueLabel::ContactInfo(_) => {
-                        // do not accept old ContactInfos
-                        inc_new_counter_warn!("cluster_info-gossip_pull_response_value_timeout", 1);
-                        failed += 1;
-                        continue;
+                        // check if this ContactInfo is actually too old, it's possible that it has
+                        // stake and so might have a longer effective timeout
+                        let timeout = *timeouts
+                            .get(&owner)
+                            .unwrap_or_else(|| timeouts.get(&Pubkey::default()).unwrap());
+                        if now > r.wallclock() + timeout || now + timeout < r.wallclock() {
+                            inc_new_counter_warn!(
+                                "cluster_info-gossip_pull_response_value_timeout",
+                                1
+                            );
+                            failed += 1;
+                            continue;
+                        }
                     }
-                    // Before discarding this value, check if a ContactInfo for the owner
-                    // exists in the table. If it doesn't, that implies that this value can be discarded
                     _ => {
+                        // Before discarding this value, check if a ContactInfo for the owner
+                        // exists in the table. If it doesn't, that implies that this value can be discarded
                         if crds.lookup(&CrdsValueLabel::ContactInfo(owner)).is_none() {
                             inc_new_counter_warn!(
                                 "cluster_info-gossip_pull_response_value_timeout",
@@ -564,8 +574,13 @@ mod test {
                 continue;
             }
             assert_eq!(rsp.len(), 1);
-            let failed =
-                node.process_pull_response(&mut node_crds, &node_pubkey, rsp.pop().unwrap(), 1);
+            let failed = node.process_pull_response(
+                &mut node_crds,
+                &node_pubkey,
+                &node.make_timeouts_def(&node_pubkey, &HashMap::new(), 0, 1),
+                rsp.pop().unwrap(),
+                1,
+            );
             assert_eq!(failed, 0);
             assert_eq!(
                 node_crds
