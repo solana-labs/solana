@@ -6903,7 +6903,7 @@
       "renderer": "flot",
       "seriesOverrides": [
         {
-          "alias": "serve_repair-repair_highest.ix",
+          "alias": "cluster_info-repair_highest.ix",
           "yaxis": 2
         }
       ],
@@ -6928,7 +6928,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-highest-slot\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-highest-slot\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -6965,7 +6965,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-highest-ix\") AS \"ix\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-highest-ix\") AS \"ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -7064,7 +7064,7 @@
       "renderer": "flot",
       "seriesOverrides": [
         {
-          "alias": "serve_repair-repair.repair-ix",
+          "alias": "cluster_info-repair.repair-ix",
           "yaxis": 2
         }
       ],
@@ -7089,7 +7089,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-ix\") AS \"repair-ix\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-ix\") AS \"repair-ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -7126,7 +7126,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-slot\") AS \"repair-slot\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-slot\") AS \"repair-slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -7245,7 +7245,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-orphan\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair_orphan\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-orphan\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_orphan\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
