@@ -384,6 +384,7 @@ mod tests {
 
     /// This test can't be run without an actual ledger device connected with the `Ledger Wallet Solana application` running
     #[test]
+    #[ignore]
     fn ledger_pubkey_test() {
         let wallet_manager = initialize_wallet_manager();
 
