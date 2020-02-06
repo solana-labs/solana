@@ -138,7 +138,12 @@ impl CrdsGossipPush {
         value: CrdsValue,
         now: u64,
     ) -> Result<Option<VersionedCrdsValue>, CrdsGossipError> {
-        if now > value.wallclock() + self.msg_timeout {
+        if now
+            > value
+                .wallclock()
+                .checked_add(self.msg_timeout)
+                .unwrap_or_else(|| 0)
+        {
             return Err(CrdsGossipError::PushMessageTimeout);
         }
         if now + self.msg_timeout < value.wallclock() {

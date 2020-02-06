@@ -221,7 +221,12 @@ impl CrdsGossipPull {
         let mut failed = 0;
         for r in response {
             let owner = r.label().pubkey();
-            if now > r.wallclock() + self.msg_timeout || now + self.msg_timeout < r.wallclock() {
+            if now
+                > r.wallclock()
+                    .checked_add(self.msg_timeout)
+                    .unwrap_or_else(|| 0)
+                || now + self.msg_timeout < r.wallclock()
+            {
                 match &r.label() {
                     CrdsValueLabel::ContactInfo(_) => {
                         // check if this ContactInfo is actually too old, it's possible that it has
@@ -229,7 +234,9 @@ impl CrdsGossipPull {
                         let timeout = *timeouts
                             .get(&owner)
                             .unwrap_or_else(|| timeouts.get(&Pubkey::default()).unwrap());
-                        if now > r.wallclock() + timeout || now + timeout < r.wallclock() {
+                        if now > r.wallclock().checked_add(timeout).unwrap_or_else(|| 0)
+                            || now + timeout < r.wallclock()
+                        {
                             inc_new_counter_warn!(
                                 "cluster_info-gossip_pull_response_value_timeout",
                                 1
