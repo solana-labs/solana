@@ -428,7 +428,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            // shred_version not considered for gossip peers (ie, spy nodes do not setshred_version)
+            // shred_version not considered for gossip peers (ie, spy nodes do not set shred_version)
             .filter(|x| x.id != me && ContactInfo::is_valid_address(&x.gossip))
             .cloned()
             .collect()
