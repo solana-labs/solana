@@ -17,6 +17,7 @@ RUN set -x \
       clang-7 \
       cmake \
       lcov \
+      libudev-dev \
       libclang-common-7-dev \
       mscgen \
       net-tools \
