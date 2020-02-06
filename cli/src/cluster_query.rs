@@ -9,7 +9,11 @@ use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
-use solana_client::{rpc_client::RpcClient, rpc_response::RpcVoteAccountInfo};
+use solana_client::{
+    pubsub_client::{PubsubClient, SlotInfoMessage},
+    rpc_client::RpcClient,
+    rpc_response::RpcVoteAccountInfo,
+};
 use solana_sdk::{
     account_utils::StateMut,
     clock::{self, Slot},
@@ -23,6 +27,10 @@ use solana_sdk::{
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -158,6 +166,19 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("live-slots")
+                .about("Show information about the current slot progression")
+                .arg(
+                    Arg::with_name("websocket_url")
+                        .short("w")
+                        .long("ws")
+                        .value_name("URL")
+                        .takes_value(true)
+                        .default_value("ws://127.0.0.1:8900")
+                        .help("WebSocket URL for PubSub RPC connection"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("block-production")
                 .about("Show information about block production")
                 .alias("show-block-production")
@@ -243,6 +264,14 @@ pub fn parse_cluster_ping(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Cl
             commitment_config,
         },
         require_keypair: true,
+    })
+}
+
+pub fn parse_live_slots(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let url: String = value_t_or_exit!(matches, "websocket_url", String);
+    Ok(CliCommandInfo {
+        command: CliCommand::LiveSlots { url },
+        require_keypair: false,
     })
 }
 
@@ -805,6 +834,63 @@ pub fn process_ping(
             dist.max(),
             dist.std_dev(Some(mean))
         );
+    }
+
+    Ok("".to_string())
+}
+
+pub fn process_live_slots(url: &str) -> ProcessResult {
+    let exit = Arc::new(AtomicBool::new(false));
+    let exit_clone = exit.clone();
+
+    ctrlc::set_handler(move || {
+        exit_clone.store(true, Ordering::Relaxed);
+    })?;
+
+    let mut current: Option<SlotInfoMessage> = None;
+    let mut message = "".to_string();
+
+    let slot_progress = new_spinner_progress_bar();
+    slot_progress.set_message("Connecting...");
+    let (mut client, receiver) = PubsubClient::slot_subscribe(url)?;
+    slot_progress.set_message("Connected.");
+
+    loop {
+        if exit.load(Ordering::Relaxed) {
+            eprintln!("{}", message);
+            client.shutdown().unwrap();
+            break;
+        }
+
+        match receiver.recv() {
+            Ok(new_info) => {
+                message = format!("{:?}", new_info).to_owned();
+                slot_progress.set_message(&message);
+
+                if let Some(previous) = current {
+                    let slot_delta: i64 = new_info.slot as i64 - previous.slot as i64;
+                    let root_delta: i64 = new_info.root as i64 - previous.root as i64;
+
+                    //
+                    // if slot has advanced out of step with the root, we detect
+                    // a mismatch and output the slot information
+                    //
+                    if slot_delta != root_delta {
+                        let prev_root = format!(
+                            "|<- {} <- … <- {} <- {}",
+                            previous.root, previous.parent, previous.slot
+                        )
+                        .to_owned();
+                        slot_progress.println(&prev_root);
+                    }
+                }
+                current = Some(new_info);
+            }
+            Err(err) => {
+                eprintln!("disconnected: {:?}", err);
+                break;
+            }
+        }
     }
 
     Ok("".to_string())

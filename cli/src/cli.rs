@@ -199,6 +199,9 @@ pub enum CliCommand {
         commitment_config: CommitmentConfig,
     },
     LeaderSchedule,
+    LiveSlots {
+        url: String,
+    },
     Ping {
         lamports: u64,
         interval: Duration,
@@ -474,6 +477,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             require_keypair: false,
         }),
         ("ping", Some(matches)) => parse_cluster_ping(matches),
+        ("live-slots", Some(matches)) => parse_live_slots(matches),
         ("block-production", Some(matches)) => parse_show_block_production(matches),
         ("gossip", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ShowGossip,
@@ -1274,6 +1278,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_get_transaction_count(&rpc_client, commitment_config)
         }
         CliCommand::LeaderSchedule => process_leader_schedule(&rpc_client),
+        CliCommand::LiveSlots { url } => process_live_slots(&url),
         CliCommand::Ping {
             lamports,
             interval,

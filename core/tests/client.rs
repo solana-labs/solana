@@ -1,12 +1,26 @@
-use solana_client::rpc_client::RpcClient;
-use solana_core::validator::new_validator_for_tests;
-use solana_sdk::commitment_config::CommitmentConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::KeypairUtil;
-use solana_sdk::system_transaction;
-use std::fs::remove_dir_all;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use solana_client::{
+    pubsub_client::{PubsubClient, SlotInfoMessage},
+    rpc_client::RpcClient,
+};
+use solana_core::{
+    rpc_pubsub_service::PubSubService, rpc_subscriptions::RpcSubscriptions,
+    validator::new_validator_for_tests,
+};
+use solana_sdk::{
+    commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::KeypairUtil,
+    system_transaction,
+};
+use std::{
+    fs::remove_dir_all,
+    net::{IpAddr, SocketAddr},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::sleep,
+    time::{Duration, Instant},
+};
+use systemstat::Ipv4Addr;
 
 #[test]
 fn test_rpc_client() {
@@ -56,4 +70,51 @@ fn test_rpc_client() {
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+fn test_slot_subscription() {
+    let pubsub_addr = SocketAddr::new(
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+    );
+    let exit = Arc::new(AtomicBool::new(false));
+    let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
+    let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
+    std::thread::sleep(Duration::from_millis(400));
+
+    let (mut client, receiver) =
+        PubsubClient::slot_subscribe(&format!("ws://0.0.0.0:{}/", pubsub_addr.port())).unwrap();
+
+    let mut errors: Vec<(SlotInfoMessage, SlotInfoMessage)> = Vec::new();
+
+    for i in 0..3 {
+        subscriptions.notify_slot(i + 1, i, i);
+
+        let maybe_actual = receiver.recv_timeout(Duration::from_millis(400));
+
+        match maybe_actual {
+            Ok(actual) => {
+                let expected = SlotInfoMessage {
+                    slot: i + 1,
+                    parent: i,
+                    root: i,
+                };
+
+                if actual != expected {
+                    errors.push((actual, expected));
+                }
+            }
+            Err(_err) => {
+                eprintln!("unexpected websocket receive timeout");
+                break;
+            }
+        }
+    }
+
+    exit.store(true, Ordering::Relaxed);
+    client.shutdown().unwrap();
+    pubsub_service.close().unwrap();
+
+    assert_eq!(errors, [].to_vec());
 }
