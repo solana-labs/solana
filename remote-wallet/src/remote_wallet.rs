@@ -56,8 +56,8 @@ impl RemoteWalletManager {
         })
     }
 
-    /// Re-populate device list
-    /// Note, this assumes all devices are iterated over and updated
+    /// Repopulate device list
+    /// Note: this method iterates over and updates all devices
     pub fn update_devices(&self) -> Result<usize, RemoteWalletError> {
         let mut usb = self.usb.lock();
         usb.refresh_devices()?;

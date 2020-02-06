@@ -17,9 +17,17 @@ const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; /
 
 /// Ledger vendor ID
 const LEDGER_VID: u16 = 0x2c97;
-/// Ledger product IDs: [Nano S and Nano X]
-// TODO: do we need to support Blue?
-const _LEDGER_PIDS: [u16; 2] = [0x0001, 0x0004]; // TODO: Nano S pid doesn't match expected LEDGER_PIDS value...
+/// Ledger product IDs: Nano S and Nano X
+const LEDGER_NANO_S_PIDS: [u16; 33] = [
+    0x0001, 0x1000, 0x1001, 0x1002, 0x1003, 0x1004, 0x1005, 0x1006, 0x1007, 0x1008, 0x1009, 0x100a,
+    0x100b, 0x100c, 0x100d, 0x100e, 0x100f, 0x1010, 0x1011, 0x1012, 0x1013, 0x1014, 0x1015, 0x1016,
+    0x1017, 0x1018, 0x1019, 0x101a, 0x101b, 0x101c, 0x101d, 0x101e, 0x101f,
+];
+const LEDGER_NANO_X_PIDS: [u16; 33] = [
+    0x0004, 0x4000, 0x4001, 0x4002, 0x4003, 0x4004, 0x4005, 0x4006, 0x4007, 0x4008, 0x4009, 0x400a,
+    0x400b, 0x400c, 0x400d, 0x400e, 0x400f, 0x4010, 0x4011, 0x4012, 0x4013, 0x4014, 0x4015, 0x4016,
+    0x4017, 0x4018, 0x4019, 0x401a, 0x401b, 0x401c, 0x401d, 0x401e, 0x401f,
+];
 const LEDGER_TRANSPORT_HEADER_LEN: usize = 5;
 
 const MAX_CHUNK_SIZE: usize = 255;
@@ -181,7 +189,7 @@ impl LedgerWallet {
         trace!("Read status {:x}", status);
         #[allow(clippy::match_overlapping_arm)]
         match status {
-            // TODO: These need to be aligned with solana Ledger app error codes, and clippy allowance removed
+            // These need to be aligned with solana Ledger app error codes, and clippy allowance removed
             0x6700 => Err(RemoteWalletError::Protocol("Incorrect length")),
             0x6982 => Err(RemoteWalletError::Protocol(
                 "Security status not satisfied (Canceled by user)",
@@ -227,19 +235,6 @@ impl LedgerWallet {
             ver[3].into(),
         ))
     }
-
-    fn get_derivation_path(&self, derivation: DerivationPath) -> Vec<u8> {
-        let byte = if derivation.change.is_some() { 4 } else { 3 };
-        let mut concat_derivation = vec![byte];
-        concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
-        concat_derivation.extend_from_slice(&[0x80, 0]);
-        concat_derivation.extend_from_slice(&derivation.account.to_be_bytes());
-        if let Some(change) = derivation.change {
-            concat_derivation.extend_from_slice(&[0x80, 0]);
-            concat_derivation.extend_from_slice(&change.to_be_bytes());
-        }
-        concat_derivation
-    }
 }
 
 impl RemoteWallet for LedgerWallet {
@@ -273,14 +268,7 @@ impl RemoteWallet for LedgerWallet {
     }
 
     fn get_pubkey(&self, derivation: DerivationPath) -> Result<Pubkey, RemoteWalletError> {
-        // let ledger_version = self.get_firmware_version()?;
-        // if ledger_version < FirmwareVersion::new(1, 0, 3) {
-        //     return Err(RemoteWalletError::Protocol(
-        //         "Ledger version 1.0.3 is required",
-        //     ));
-        // }
-
-        let derivation_path = self.get_derivation_path(derivation);
+        let derivation_path = get_derivation_path(derivation);
 
         let key = self.send_apdu(commands::GET_SOL_PUBKEY, 0, 0, &derivation_path)?;
         if key.len() != 32 {
@@ -294,17 +282,11 @@ impl RemoteWallet for LedgerWallet {
         derivation: DerivationPath,
         transaction: Transaction,
     ) -> Result<Signature, RemoteWalletError> {
-        // TODO: see if need version check here
-        let _version = self.get_firmware_version()?;
-        // if version < FirmwareVersion::new(1, 0, 8) {
-        //     return Err(RemoteWalletError::Protocol(
-        //         "Signing personal messages with Ledger requires version 1.0.8",
-        //     ));
-        // }
-
         let mut chunk = [0_u8; MAX_CHUNK_SIZE];
-        let derivation_path = self.get_derivation_path(derivation);
+        let derivation_path = get_derivation_path(derivation);
         let data = transaction.message_data();
+
+        let _firmware_version = self.get_firmware_version();
 
         // Copy the address of the key (only done once)
         chunk[0..derivation_path.len()].copy_from_slice(&derivation_path);
@@ -346,12 +328,26 @@ impl RemoteWallet for LedgerWallet {
 }
 
 /// Check if the detected device is a valid `Ledger device` by checking both the product ID and the vendor ID
-pub fn is_valid_ledger(vendor_id: u16, _product_id: u16) -> bool {
-    // vendor_id == LEDGER_VID && LEDGER_PIDS.contains(&product_id)
+pub fn is_valid_ledger(vendor_id: u16, product_id: u16) -> bool {
     vendor_id == LEDGER_VID
+        && (LEDGER_NANO_S_PIDS.contains(&product_id) || LEDGER_NANO_X_PIDS.contains(&product_id))
 }
 
-///
+/// Build the derivation path byte array from a DerivationPath selection
+fn get_derivation_path(derivation: DerivationPath) -> Vec<u8> {
+    let byte = if derivation.change.is_some() { 4 } else { 3 };
+    let mut concat_derivation = vec![byte];
+    concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
+    concat_derivation.extend_from_slice(&[0x80, 0]);
+    concat_derivation.extend_from_slice(&derivation.account.to_be_bytes());
+    if let Some(change) = derivation.change {
+        concat_derivation.extend_from_slice(&[0x80, 0]);
+        concat_derivation.extend_from_slice(&change.to_be_bytes());
+    }
+    concat_derivation
+}
+
+/// Choose a Ledger wallet based on matching info fields
 pub fn get_ledger_from_info(
     info: RemoteWalletInfo,
 ) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
