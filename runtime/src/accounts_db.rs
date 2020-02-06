@@ -1265,6 +1265,7 @@ impl AccountsDB {
         let mut slots: Vec<Slot> = storage.0.keys().cloned().collect();
         slots.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
+        let mut last_root = 0;
         for slot_id in slots.iter() {
             let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
                 .scan_account_storage(
@@ -1289,13 +1290,15 @@ impl AccountsDB {
                 AccountsDB::merge(&mut account_maps, &maps);
             }
             if !account_maps.is_empty() {
-                accounts_index.roots.insert(*slot_id);
+                last_root = *slot_id;
+                accounts_index.roots.insert(last_root);
                 let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
                 for (pubkey, (_, account_info)) in account_maps.iter() {
                     accounts_index.insert(*slot_id, pubkey, account_info.clone(), &mut _reclaims);
                 }
             }
         }
+        accounts_index.last_root = last_root;
 
         let mut counts = HashMap::new();
         for slot_list in accounts_index.account_maps.values() {
