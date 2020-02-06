@@ -54,6 +54,7 @@ use std::{
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
+pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -1147,8 +1148,6 @@ impl ReplayStage {
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
-        let last_vote = tower.last_vote().slots.last().cloned();
-        let mut last_votable_on_same_fork = None;
         for bank in frozen_banks {
             let bank_slot = bank.slot();
 
@@ -1218,7 +1217,7 @@ impl ReplayStage {
             stats.has_voted = tower.has_voted(bank_slot);
             stats.is_recent = tower.is_recent(bank_slot);
         }
-        (new_stats, last_votable_on_same_fork.cloned())
+        new_stats
     }
 
     fn update_propagation_status(
