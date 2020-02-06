@@ -219,12 +219,33 @@ impl CrdsGossipPull {
     ) -> usize {
         let mut failed = 0;
         for r in response {
-            if now > r.wallclock() + self.msg_timeout || now + self.msg_timeout < r.wallclock() {
-                inc_new_counter_error!("cluster_info-gossip_pull_response_value_timeout", 1);
-                failed += 1;
-                continue;
-            }
             let owner = r.label().pubkey();
+            if now > r.wallclock() + self.msg_timeout || now + self.msg_timeout < r.wallclock() {
+                match &r.label() {
+                    CrdsValueLabel::ContactInfo(_) => {
+                        // do not accept old ContactInfos
+                        inc_new_counter_warn!("cluster_info-gossip_pull_response_value_timeout", 1);
+                        failed += 1;
+                        continue;
+                    }
+                    // Before discarding this value, check if a ContactInfo for the owner
+                    // exists in the table. If it doesn't, that implies that this value can be discarded
+                    _ => {
+                        if crds.lookup(&CrdsValueLabel::ContactInfo(owner)).is_none() {
+                            inc_new_counter_warn!(
+                                "cluster_info-gossip_pull_response_value_timeout",
+                                1
+                            );
+                            failed += 1;
+                            continue;
+                        } else {
+                            // silently insert this old value without bumping record timestamps
+                            failed += crds.insert(r, now).is_err() as usize;
+                            continue;
+                        }
+                    }
+                }
+            }
             let old = crds.insert(r, now);
             failed += old.is_err() as usize;
             old.ok().map(|opt| {
