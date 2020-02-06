@@ -28,6 +28,11 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.roots.clear();
+        self.account_maps.clear();
+    }
+
     fn get_rooted_entries(&self, list: &[(Slot, T)]) -> Vec<(Slot, T)> {
         list.iter()
             .filter(|(slot, _)| self.is_root(*slot))
