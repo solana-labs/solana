@@ -335,6 +335,7 @@ impl Tower {
         false
     }
 
+    // TODO: optimize this by caching results from branches
     pub(crate) fn check_switch_threshold(
         &self,
         slot: u64,

@@ -1147,6 +1147,8 @@ impl ReplayStage {
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
+        let last_vote = tower.last_vote().slots.last().cloned();
+        let mut last_votable_on_same_fork = None;
         for bank in frozen_banks {
             let bank_slot = bank.slot();
 
@@ -1216,7 +1218,7 @@ impl ReplayStage {
             stats.has_voted = tower.has_voted(bank_slot);
             stats.is_recent = tower.is_recent(bank_slot);
         }
-        new_stats
+        (new_stats, last_votable_on_same_fork.cloned())
     }
 
     fn update_propagation_status(
@@ -1612,34 +1614,6 @@ impl ReplayStage {
         }
 
         did_newly_reach_threshold
-    }
-
-    fn compute_switch_threshold(
-        slot: u64,
-        ancestors: &HashMap<u64, HashSet<u64>>,
-        descendants: &HashMap<u64, HashSet<u64>>,
-        tower: &Tower,
-        switch_threshold: &mut HashMap<u64, bool>,
-        total_staked: u64,
-        progress: &ProgressMap,
-    ) {
-        if !switch_threshold.contains_key(&slot) {
-            for ancestor in ancestors
-                .get(&slot)
-                .expect("Frozen bank must exist in ancestors list")
-            {
-                // If any ancestors pass the switch threshold check, then this slot also passes
-                if *switch_threshold.get(&ancestor).unwrap_or(false) {
-                    switch_threshold.insert(slot, true);
-                    return;
-                }
-            }
-
-            switch_threshold.insert(
-                slot,
-                tower.check_switch_threshold(slot, ancestors, descendants, progress, total_staked),
-            );
-        }
     }
 
     fn confirm_forks(
