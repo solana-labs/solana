@@ -1279,6 +1279,7 @@ fn process_time_elapsed(
     log_instruction_custom_error::<BudgetError>(result)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_transfer(
     rpc_client: &RpcClient,
     config: &CliConfig,

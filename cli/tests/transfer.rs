@@ -153,7 +153,7 @@ fn test_transfer() {
         fee_payer: None,
     };
     process_command(&config).unwrap();
-    check_balance(49_980-minimum_nonce_balance, &rpc_client, &sender_pubkey);
+    check_balance(49_980 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
     check_balance(30, &rpc_client, &recipient_pubkey);
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
     let nonce_state: NonceState = account.state().unwrap();
