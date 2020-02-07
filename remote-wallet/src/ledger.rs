@@ -356,7 +356,7 @@ pub fn get_ledger_from_info(
     let devices = wallet_manager.list_devices();
     let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = devices
         .iter()
-        .filter(|&device_info| device_info == &info)
+        .filter(|&device_info| device_info.matches(&info))
         .map(|device_info| (device_info.pubkey, device_info.get_pretty_path()))
         .unzip();
     if pubkeys.is_empty() {

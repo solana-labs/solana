@@ -26,7 +26,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     let config = Config::load(config_file).unwrap_or_default();
                     if let Some(field) = subcommand_matches.value_of("specific_setting") {
                         let (field_name, value, default_value) = match field {
-                            "url" => ("RPC Url", config.url, CliConfig::default_json_rpc_url()),
+                            "url" => ("RPC URL", config.url, CliConfig::default_json_rpc_url()),
                             "keypair" => (
                                 "Key Path",
                                 config.keypair_path,
@@ -38,12 +38,12 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     } else {
                         println_name_value("Config File:", config_file);
                         println_name_value_or(
-                            "RPC Url:",
+                            "RPC URL:",
                             &config.url,
                             &CliConfig::default_json_rpc_url(),
                         );
                         println_name_value_or(
-                            "Key Path:",
+                            "Keypair Path:",
                             &config.keypair_path,
                             &CliConfig::default_keypair_path(),
                         );
