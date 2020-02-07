@@ -1291,10 +1291,12 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         packets: Packets,
         response_sender: &PacketSender,
+        epoch_ms: u64,
     ) {
         // iter over the packets, collect pulls separately and process everything else
         let allocated = thread_mem_usage::Allocatedp::default();
         let mut gossip_pull_data: Vec<PullData> = vec![];
+        let timeouts = me.read().unwrap().gossip.make_timeouts(&stakes, epoch_ms);
         packets.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();
             limited_deserialize(&packet.data[..packet.meta.size])
@@ -1336,7 +1338,7 @@ impl ClusterInfo {
                             }
                             ret
                         });
-                        Self::handle_pull_response(me, &from, data);
+                        Self::handle_pull_response(me, &from, data, &timeouts);
                         datapoint_debug!(
                             "solana-gossip-listen-memory",
                             ("pull_response", (allocated.get() - start) as i64, i64),
@@ -1455,7 +1457,12 @@ impl ClusterInfo {
         Some(packets)
     }
 
-    fn handle_pull_response(me: &Arc<RwLock<Self>>, from: &Pubkey, data: Vec<CrdsValue>) {
+    fn handle_pull_response(
+        me: &Arc<RwLock<Self>>,
+        from: &Pubkey,
+        data: Vec<CrdsValue>,
+        timeouts: &HashMap<Pubkey, u64>,
+    ) {
         let len = data.len();
         let now = Instant::now();
         let self_id = me.read().unwrap().gossip.id;
@@ -1463,7 +1470,7 @@ impl ClusterInfo {
         me.write()
             .unwrap()
             .gossip
-            .process_pull_response(from, data, timestamp());
+            .process_pull_response(from, timeouts, data, timestamp());
         inc_new_counter_debug!("cluster_info-pull_request_response", 1);
         inc_new_counter_debug!("cluster_info-pull_request_response-size", len);
 
@@ -1633,14 +1640,31 @@ impl ClusterInfo {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
         let reqs = requests_receiver.recv_timeout(timeout)?;
+        let epoch_ms;
         let stakes: HashMap<_, _> = match bank_forks {
             Some(ref bank_forks) => {
-                staking_utils::staked_nodes(&bank_forks.read().unwrap().working_bank())
+                let bank = bank_forks.read().unwrap().working_bank();
+                let epoch = bank.epoch();
+                let epoch_schedule = bank.epoch_schedule();
+                epoch_ms = epoch_schedule.get_slots_in_epoch(epoch) * DEFAULT_MS_PER_SLOT;
+                staking_utils::staked_nodes(&bank)
             }
-            None => HashMap::new(),
+            None => {
+                inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);
+                epoch_ms = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+                HashMap::new()
+            }
         };
 
-        Self::handle_packets(obj, &recycler, blockstore, &stakes, reqs, response_sender);
+        Self::handle_packets(
+            obj,
+            &recycler,
+            blockstore,
+            &stakes,
+            reqs,
+            response_sender,
+            epoch_ms,
+        );
         Ok(())
     }
     pub fn listen(
@@ -2601,10 +2625,12 @@ mod tests {
         let entrypoint_crdsvalue =
             CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint.clone()));
         let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let timeouts = cluster_info.read().unwrap().gossip.make_timeouts_test();
         ClusterInfo::handle_pull_response(
             &cluster_info,
             &entrypoint_pubkey,
             vec![entrypoint_crdsvalue],
+            &timeouts,
         );
         let pulls = cluster_info
             .write()
