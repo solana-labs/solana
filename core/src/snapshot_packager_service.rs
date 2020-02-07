@@ -1,6 +1,7 @@
 use solana_ledger::{
     snapshot_package::SnapshotPackageReceiver, snapshot_utils::archive_snapshot_package,
 };
+use solana_measure::thread_mem_usage;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -20,23 +21,36 @@ impl SnapshotPackagerService {
         let exit = exit.clone();
         let t_snapshot_packager = Builder::new()
             .name("solana-snapshot-packager".to_string())
-            .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                match snapshot_package_receiver.recv_timeout(Duration::from_secs(1)) {
-                    Ok(mut snapshot_package) => {
-                        // Only package the latest
-                        while let Ok(new_snapshot_package) = snapshot_package_receiver.try_recv() {
-                            snapshot_package = new_snapshot_package;
-                        }
-                        if let Err(err) = archive_snapshot_package(&snapshot_package) {
-                            warn!("Failed to create snapshot archive: {}", err);
-                        }
+            .spawn(move || {
+                let allocated = thread_mem_usage::Allocatedp::default();
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
                     }
-                    Err(RecvTimeoutError::Disconnected) => break,
-                    Err(RecvTimeoutError::Timeout) => (),
+                    let start = allocated.get();
+                    match snapshot_package_receiver.recv_timeout(Duration::from_secs(1)) {
+                        Ok(mut snapshot_package) => {
+                            // Only package the latest
+                            while let Ok(new_snapshot_package) =
+                                snapshot_package_receiver.try_recv()
+                            {
+                                snapshot_package = new_snapshot_package;
+                            }
+                            if let Err(err) = archive_snapshot_package(&snapshot_package) {
+                                warn!("Failed to create snapshot archive: {}", err);
+                            }
+                        }
+                        Err(RecvTimeoutError::Disconnected) => break,
+                        Err(RecvTimeoutError::Timeout) => (),
+                    }
+                    datapoint_info!(
+                        "snapshot_pacckager_service-memory",
+                        (
+                            "archive_snapshot_package",
+                            (allocated.get() - start) as i64,
+                            i64
+                        ),
+                    );
                 }
             })
             .unwrap();

@@ -8,6 +8,7 @@ use rayon::prelude::*;
 use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
+use solana_measure::thread_mem_usage;
 use solana_merkle_tree::MerkleTree;
 use solana_metrics::*;
 use solana_perf::cuda_runtime::PinnedVec;
@@ -309,6 +310,8 @@ impl EntrySlice for [Entry] {
         start_hash: &Hash,
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
+        let allocated = thread_mem_usage::Allocatedp::default();
+        let start_allocated = allocated.get();
         let api = perf_libs::api();
         if api.is_none() {
             return self.verify_cpu(start_hash);
@@ -383,6 +386,15 @@ impl EntrySlice for [Entry] {
                     .collect()
             })
         });
+
+        datapoint_info!(
+            "entry_verify-memory",
+            (
+                "start_verify",
+                (allocated.get() - start_allocated) as i64,
+                i64
+            ),
+        );
 
         EntryVerificationState::GPU(VerificationData {
             thread_h: Some(gpu_verify_thread),

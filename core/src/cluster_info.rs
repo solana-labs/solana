@@ -1319,7 +1319,7 @@ impl ClusterInfo {
                                 });
                             }
                         }
-                        datapoint_debug!(
+                        datapoint_info!(
                             "solana-gossip-listen-memory",
                             ("pull_request", (allocated.get() - start) as i64, i64),
                         );
@@ -1337,7 +1337,7 @@ impl ClusterInfo {
                             ret
                         });
                         Self::handle_pull_response(me, &from, data);
-                        datapoint_debug!(
+                        datapoint_info!(
                             "solana-gossip-listen-memory",
                             ("pull_response", (allocated.get() - start) as i64, i64),
                         );
@@ -1358,7 +1358,7 @@ impl ClusterInfo {
                         if let Some(rsp) = rsp {
                             let _ignore_disconnect = response_sender.send(rsp);
                         }
-                        datapoint_debug!(
+                        datapoint_info!(
                             "solana-gossip-listen-memory",
                             ("push_message", (allocated.get() - start) as i64, i64),
                         );
@@ -1389,17 +1389,22 @@ impl ClusterInfo {
                         } else {
                             inc_new_counter_debug!("cluster_info-gossip_prune_msg_verify_fail", 1);
                         }
-                        datapoint_debug!(
+                        datapoint_info!(
                             "solana-gossip-listen-memory",
                             ("prune_message", (allocated.get() - start) as i64, i64),
                         );
                     }
                     _ => {
+                        let start = allocated.get();
                         let rsp =
                             Self::handle_repair(me, recycler, &from_addr, blockstore, request);
                         if let Some(rsp) = rsp {
                             let _ignore_disconnect = response_sender.send(rsp);
                         }
+                        datapoint_info!(
+                            "solana-gossip-listen-memory",
+                            ("repair", (allocated.get() - start) as i64, i64),
+                        );
                     }
                 })
         });
