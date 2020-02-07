@@ -586,7 +586,8 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
     (node, contact_info, mint_keypair, ledger_path)
 }
 
-pub fn new_validator_for_tests_with_vote_pubkey() -> (Validator, ContactInfo, Keypair, PathBuf, Pubkey) {
+pub fn new_validator_for_tests_with_vote_pubkey(
+) -> (Validator, ContactInfo, Keypair, PathBuf, Pubkey) {
     use crate::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
     new_validator_for_tests_ex(0, BOOTSTRAP_VALIDATOR_LAMPORTS)
 }

@@ -17,7 +17,9 @@ use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 
 #[cfg(test)]
-use solana_core::validator::{new_validator_for_tests, new_validator_for_tests_ex, new_validator_for_tests_with_vote_pubkey};
+use solana_core::validator::{
+    new_validator_for_tests, new_validator_for_tests_ex, new_validator_for_tests_with_vote_pubkey,
+};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -122,7 +124,8 @@ fn test_stake_delegation_force() {
 fn test_seed_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path, vote_pubkey) = new_validator_for_tests_with_vote_pubkey();
+    let (server, leader_data, alice, ledger_path, vote_pubkey) =
+        new_validator_for_tests_with_vote_pubkey();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -204,7 +207,8 @@ fn test_seed_stake_delegation_and_deactivation() {
 fn test_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path, vote_pubkey) = new_validator_for_tests_with_vote_pubkey();
+    let (server, leader_data, alice, ledger_path, vote_pubkey) =
+        new_validator_for_tests_with_vote_pubkey();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -277,7 +281,8 @@ fn test_stake_delegation_and_deactivation() {
 fn test_offline_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path, vote_pubkey) = new_validator_for_tests_with_vote_pubkey();
+    let (server, leader_data, alice, ledger_path, vote_pubkey) =
+        new_validator_for_tests_with_vote_pubkey();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -397,7 +402,8 @@ fn test_offline_stake_delegation_and_deactivation() {
 fn test_nonced_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path, vote_pubkey) = new_validator_for_tests_with_vote_pubkey();
+    let (server, leader_data, alice, ledger_path, vote_pubkey) =
+        new_validator_for_tests_with_vote_pubkey();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -512,8 +518,13 @@ fn test_stake_authorize() {
     // Verfiy that we cannot reach the cluster
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config_offline.keypair.pubkey(), 100_000)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config_offline.keypair.pubkey(),
+        100_000,
+    )
+    .unwrap();
 
     // Create stake account, identity is authority
     let stake_keypair = Keypair::new();
@@ -702,7 +713,8 @@ fn test_stake_authorize_with_fee_payer() {
     solana_logger::setup();
     const SIG_FEE: u64 = 42;
 
-    let (server, leader_data, alice, ledger_path, _voter) = new_validator_for_tests_ex(SIG_FEE, 42_000);
+    let (server, leader_data, alice, ledger_path, _voter) =
+        new_validator_for_tests_ex(SIG_FEE, 42_000);
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
