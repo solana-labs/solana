@@ -221,6 +221,7 @@ impl CrdsGossipPull {
         let mut failed = 0;
         for r in response {
             let owner = r.label().pubkey();
+            // Check if the crds value is older than the msg_timeout
             if now
                 > r.wallclock()
                     .checked_add(self.msg_timeout)
@@ -229,7 +230,7 @@ impl CrdsGossipPull {
             {
                 match &r.label() {
                     CrdsValueLabel::ContactInfo(_) => {
-                        // check if this ContactInfo is actually too old, it's possible that it has
+                        // Check if this ContactInfo is actually too old, it's possible that it has
                         // stake and so might have a longer effective timeout
                         let timeout = *timeouts
                             .get(&owner)
@@ -256,7 +257,7 @@ impl CrdsGossipPull {
                             failed += 1;
                             continue;
                         } else {
-                            // silently insert this old value without bumping record timestamps
+                            // Silently insert this old value without bumping record timestamps
                             failed += crds.insert(r, now).is_err() as usize;
                             continue;
                         }
