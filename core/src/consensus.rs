@@ -37,7 +37,6 @@ impl StakeLockout {
     }
 }
 
-#[derive(Default)]
 pub struct Tower {
     node_pubkey: Pubkey,
     threshold_depth: usize,
@@ -47,16 +46,22 @@ pub struct Tower {
     last_timestamp: BlockTimestamp,
 }
 
-impl Tower {
-    pub fn new(node_pubkey: &Pubkey, vote_account_pubkey: &Pubkey, bank_forks: &BankForks) -> Self {
-        let mut tower = Self {
-            node_pubkey: *node_pubkey,
+impl Default for Tower {
+    fn default() -> Self {
+        Self {
+            node_pubkey: Pubkey::default(),
             threshold_depth: VOTE_THRESHOLD_DEPTH,
             threshold_size: VOTE_THRESHOLD_SIZE,
             lockouts: VoteState::default(),
             last_vote: Vote::default(),
             last_timestamp: BlockTimestamp::default(),
-        };
+        }
+    }
+}
+
+impl Tower {
+    pub fn new(node_pubkey: &Pubkey, vote_account_pubkey: &Pubkey, bank_forks: &BankForks) -> Self {
+        let mut tower = Self::new_with_key(node_pubkey);
 
         tower.initialize_lockouts_from_bank_forks(&bank_forks, vote_account_pubkey);
 
@@ -66,11 +71,7 @@ impl Tower {
     pub fn new_with_key(node_pubkey: &Pubkey) -> Self {
         Self {
             node_pubkey: *node_pubkey,
-            threshold_depth: VOTE_THRESHOLD_DEPTH,
-            threshold_size: VOTE_THRESHOLD_SIZE,
-            lockouts: VoteState::default(),
-            last_vote: Vote::default(),
-            last_timestamp: BlockTimestamp::default(),
+            ..Tower::default()
         }
     }
 
