@@ -95,8 +95,8 @@ fn transfer_one_token_from_escrow(
 
     //Sign it with the key keyword.
     //The runtime deterministically derives the key from the current
-    //program id and the keyword.
-    //If the derived key match a key in the instrution,
+    //program id and the supplied keyword.
+    //If the derived key matches a key in the instruction
     //the `is_signed` flag is set.
     sign_instruction(&instruction, &"escrow")?;
 
