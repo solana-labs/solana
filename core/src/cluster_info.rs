@@ -2625,11 +2625,12 @@ mod tests {
         let entrypoint_crdsvalue =
             CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint.clone()));
         let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let timeouts = cluster_info.read().unwrap().gossip.make_timeouts_test();
         ClusterInfo::handle_pull_response(
             &cluster_info,
             &entrypoint_pubkey,
             vec![entrypoint_crdsvalue],
-            &cluster_info.read().unwrap().gossip.make_timeouts_test(),
+            &timeouts,
         );
         let pulls = cluster_info
             .write()
