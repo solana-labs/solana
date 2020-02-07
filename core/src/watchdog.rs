@@ -40,7 +40,9 @@ impl Watchdog {
             .unwrap()
             .working_bank()
             .epoch_vote_accounts();
-
+        self.gc();
+        self.filter_known();
+        let leftovers = self.compute_unknown_slots();
     }
 
     fn gc(&mut self) {
