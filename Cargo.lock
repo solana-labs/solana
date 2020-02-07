@@ -3838,7 +3838,6 @@ dependencies = [
  "solana-net-utils 0.24.0",
  "solana-perf 0.24.0",
  "solana-rayon-threadlimit 0.24.0",
- "solana-reed-solomon-erasure 4.0.1-3 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-runtime 0.24.0",
  "solana-sdk 0.24.0",
  "solana-stake-program 0.24.0",
