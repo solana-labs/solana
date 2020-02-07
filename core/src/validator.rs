@@ -581,7 +581,16 @@ fn wait_for_supermajority(
 }
 
 pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
-    use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
+    use crate::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
+    new_validator_for_tests_ex(0, BOOTSTRAP_VALIDATOR_LAMPORTS)
+}
+
+pub fn new_validator_for_tests_ex(
+    fees: u64,
+    bootstrap_validator_lamports: u64,
+) -> (Validator, ContactInfo, Keypair, PathBuf) {
+    use crate::genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo};
+    use solana_sdk::fee_calculator::FeeCalculator;
 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
@@ -591,13 +600,19 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
         mut genesis_config,
         mint_keypair,
         voting_keypair,
-    } = create_genesis_config_with_leader(1_000_000, &contact_info.id, 42);
+    } = create_genesis_config_with_leader_ex(
+        1_000_000,
+        &contact_info.id,
+        42,
+        bootstrap_validator_lamports,
+    );
     genesis_config
         .native_instruction_processors
         .push(solana_budget_program!());
 
     genesis_config.rent.lamports_per_byte_year = 1;
     genesis_config.rent.exemption_threshold = 1.0;
+    genesis_config.fee_calculator = FeeCalculator::new(fees, 0);
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
