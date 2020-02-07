@@ -23,7 +23,6 @@ pub enum Error {
     Serialize(std::boxed::Box<bincode::ErrorKind>),
     TransactionError(transaction::TransactionError),
     ClusterInfoError(cluster_info::ClusterInfoError),
-    ErasureError(reed_solomon_erasure::Error),
     SendError,
     PohRecorderError(poh_recorder::PohRecorderError),
     BlockError(block_error::BlockError),
@@ -75,11 +74,6 @@ impl std::convert::From<transaction::TransactionError> for Error {
 impl std::convert::From<cluster_info::ClusterInfoError> for Error {
     fn from(e: cluster_info::ClusterInfoError) -> Error {
         Error::ClusterInfoError(e)
-    }
-}
-impl std::convert::From<reed_solomon_erasure::Error> for Error {
-    fn from(e: reed_solomon_erasure::Error) -> Error {
-        Error::ErasureError(e)
     }
 }
 impl<T> std::convert::From<crossbeam_channel::SendError<T>> for Error {
