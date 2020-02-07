@@ -455,7 +455,7 @@ fn network_run_pull(
                     overhead += node
                         .lock()
                         .unwrap()
-                        .process_pull_response(&from, timeouts, rsp, now);
+                        .process_pull_response(&from, &timeouts, rsp, now);
                 });
                 (bytes, msgs, overhead)
             })
