@@ -17,7 +17,7 @@ use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 
 #[cfg(test)]
-use solana_core::validator::new_validator_for_tests;
+use solana_core::validator::{new_validator_for_tests, new_validator_for_tests_ex};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -119,6 +119,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -131,6 +132,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -207,6 +209,7 @@ fn test_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -219,6 +222,7 @@ fn test_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -300,6 +304,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
@@ -315,6 +320,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -328,6 +334,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     let sig_response = process_command(&config_validator).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
@@ -341,6 +348,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -428,6 +436,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
 
@@ -449,6 +458,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: Some(config_keypair.into()),
+        fee_payer: None,
     };
     process_command(&config).unwrap();
 
@@ -503,6 +513,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -528,6 +539,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -554,6 +566,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     let sign_reply = process_command(&config).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
@@ -567,6 +580,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -615,6 +629,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
+        fee_payer: None,
     };
     let sign_reply = process_command(&config).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
@@ -629,6 +644,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
+        fee_payer: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -645,6 +661,143 @@ fn test_stake_authorize() {
         _ => panic!("Nonce is not initialized"),
     };
     assert_ne!(nonce_hash, new_nonce_hash);
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+fn test_stake_authorize_with_fee_payer() {
+    solana_logger::setup();
+    const SIG_FEE: u64 = 42;
+
+    let (server, leader_data, alice, ledger_path) = new_validator_for_tests_ex(SIG_FEE, 42_000);
+    let (sender, receiver) = channel();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+
+    let mut config = CliConfig::default();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+
+    let mut config_payer = CliConfig::default();
+    config_payer.json_rpc_url =
+        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    let payer_pubkey = config_payer.keypair.pubkey();
+    let (payer_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&config_payer.keypair, tmp_file.as_file_mut()).unwrap();
+
+    let mut config_offline = CliConfig::default();
+    let offline_pubkey = config_offline.keypair.pubkey();
+    let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
+    // Verify we're offline
+    config_offline.command = CliCommand::ClusterVersion;
+    process_command(&config_offline).unwrap_err();
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
+        .unwrap();
+    check_balance(100_000, &rpc_client, &config.keypair.pubkey());
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &payer_pubkey, 100_000).unwrap();
+    check_balance(100_000, &rpc_client, &payer_pubkey);
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    check_balance(100_000, &rpc_client, &offline_pubkey);
+
+    // Create stake account, identity is authority
+    let stake_keypair = Keypair::new();
+    let stake_account_pubkey = stake_keypair.pubkey();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        seed: None,
+        staker: None,
+        withdrawer: None,
+        lockup: Lockup::default(),
+        lamports: 50_000,
+    };
+    process_command(&config).unwrap();
+    // `config` balance should be 50,000 - 1 stake account sig - 1 fee sig
+    check_balance(
+        50_000 - SIG_FEE - SIG_FEE,
+        &rpc_client,
+        &config.keypair.pubkey(),
+    );
+
+    // Assign authority with separate fee payer
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorized_pubkey: offline_pubkey,
+        stake_authorize: StakeAuthorize::Staker,
+        authority: None,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: Some(read_keypair_file(&payer_keypair_file).unwrap().into()),
+    };
+    process_command(&config).unwrap();
+    // `config` balance has not changed, despite submitting the TX
+    check_balance(
+        50_000 - SIG_FEE - SIG_FEE,
+        &rpc_client,
+        &config.keypair.pubkey(),
+    );
+    // `config_payer` however has paid `config`'s authority sig
+    // and `config_payer`'s fee sig
+    check_balance(
+        100_000 - SIG_FEE - SIG_FEE,
+        &rpc_client,
+        &config_payer.keypair.pubkey(),
+    );
+
+    // Assign authority with offline fee payer
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    config_offline.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorized_pubkey: payer_pubkey,
+        stake_authorize: StakeAuthorize::Staker,
+        authority: None,
+        sign_only: true,
+        signers: None,
+        blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    let sign_reply = process_command(&config_offline).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorized_pubkey: payer_pubkey,
+        stake_authorize: StakeAuthorize::Staker,
+        authority: Some(offline_pubkey.into()),
+        sign_only: false,
+        signers: Some(signers),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: Some(offline_pubkey.into()),
+    };
+    process_command(&config).unwrap();
+    // `config`'s balance again has not changed
+    check_balance(
+        50_000 - SIG_FEE - SIG_FEE,
+        &rpc_client,
+        &config.keypair.pubkey(),
+    );
+    // `config_offline` however has paid 1 sig due to being both authority
+    // and fee payer
+    check_balance(
+        100_000 - SIG_FEE,
+        &rpc_client,
+        &config_offline.keypair.pubkey(),
+    );
+
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }
