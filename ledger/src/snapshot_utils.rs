@@ -26,6 +26,8 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
+pub const SNAPSHOT_VERSION: &str = "0.23.2"; // format!("{}\n", env!("CARGO_PKG_VERSION"));
+
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
     pub slot: Slot,
@@ -168,10 +170,8 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
 
     // Write version file
     {
-        let snapshot_version = format!("{}\n", env!("CARGO_PKG_VERSION"));
         let mut f = std::fs::File::create(staging_version_file)?;
-        //f.write_all(&snapshot_version.to_string().into_bytes())?;
-        f.write_all(&snapshot_version.into_bytes())?;
+        f.write_all(&SNAPSHOT_VERSION.to_string().into_bytes())?;
     }
 
     // Tar the staging directory into the archive at `archive_path`
@@ -524,7 +524,7 @@ where
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             let mut bank: Bank = match snapshot_version {
-                env!("CARGO_PKG_VERSION") => deserialize_from_snapshot(stream.by_ref())?,
+                SNAPSHOT_VERSION => deserialize_from_snapshot(stream.by_ref())?,
                 _ => {
                     return Err(get_io_error(&format!(
                         "unsupported snapshot version: {}",
