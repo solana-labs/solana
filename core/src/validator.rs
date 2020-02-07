@@ -646,6 +646,16 @@ fn report_target_features() {
             process::exit(1);
         }
     }
+
+    // TARGET_FEATURE_AVX512F is defined by build.rs
+    if option_env!("TARGET_FEATURE_AVX512F").is_some() {
+        if is_x86_feature_detected!("avx512f") {
+            info!("AVX512 detected");
+        } else {
+            error!("Your machine does not have AVX512 support, please rebuild from source on your machine");
+            process::exit(1);
+        }
+    }
 }
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
