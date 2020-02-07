@@ -370,8 +370,9 @@ impl CrdsGossipPull {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::crds_value::CrdsData;
+    use crate::crds_value::{CrdsData, Vote};
     use itertools::Itertools;
+    use solana_perf::test_tx::test_tx;
     use solana_sdk::hash::hash;
     use solana_sdk::packet::PACKET_DATA_SIZE;
 
@@ -727,5 +728,88 @@ mod test {
             .dedup()
             .collect();
         assert_eq!(masks.len(), 2u64.pow(mask_bits) as usize)
+    }
+
+    #[test]
+    fn test_process_pull_response() {
+        let mut node_crds = Crds::default();
+        let mut node = CrdsGossipPull::default();
+
+        let peer_pubkey = Pubkey::new_rand();
+        let peer_entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(
+            ContactInfo::new_localhost(&peer_pubkey, 0),
+        ));
+        let mut timeouts = HashMap::new();
+        timeouts.insert(Pubkey::default(), node.crds_timeout);
+        timeouts.insert(peer_pubkey, node.msg_timeout + 1);
+        // inserting a fresh value should be fine.
+        assert_eq!(
+            node.process_pull_response(
+                &mut node_crds,
+                &peer_pubkey,
+                &timeouts,
+                vec![peer_entry.clone()],
+                1,
+            ),
+            0
+        );
+
+        let mut node_crds = Crds::default();
+        let unstaked_peer_entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(
+            ContactInfo::new_localhost(&peer_pubkey, 0),
+        ));
+        // check that old contact infos fail if they are too old, regardless of "timeouts"
+        assert_eq!(
+            node.process_pull_response(
+                &mut node_crds,
+                &peer_pubkey,
+                &timeouts,
+                vec![peer_entry.clone(), unstaked_peer_entry],
+                node.msg_timeout + 100,
+            ),
+            2
+        );
+
+        let mut node_crds = Crds::default();
+        // check that old contact infos can still land as long as they have a "timeouts" entry
+        assert_eq!(
+            node.process_pull_response(
+                &mut node_crds,
+                &peer_pubkey,
+                &timeouts,
+                vec![peer_entry.clone()],
+                node.msg_timeout + 1,
+            ),
+            0
+        );
+
+        // construct something that's not a contact info
+        let peer_vote =
+            CrdsValue::new_unsigned(CrdsData::Vote(0, Vote::new(&peer_pubkey, test_tx(), 0)));
+        // check that older CrdsValues (non-ContactInfos) infos pass even if are too old,
+        // but a recent contact info (inserted above) exists
+        assert_eq!(
+            node.process_pull_response(
+                &mut node_crds,
+                &peer_pubkey,
+                &timeouts,
+                vec![peer_vote.clone()],
+                node.msg_timeout + 1,
+            ),
+            0
+        );
+
+        let mut node_crds = Crds::default();
+        // without a contact info, inserting an old value should fail
+        assert_eq!(
+            node.process_pull_response(
+                &mut node_crds,
+                &peer_pubkey,
+                &timeouts,
+                vec![peer_vote.clone()],
+                node.msg_timeout + 1,
+            ),
+            1
+        );
     }
 }
