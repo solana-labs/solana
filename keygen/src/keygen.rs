@@ -5,12 +5,20 @@ use clap::{
     SubCommand,
 };
 use num_cpus;
-use solana_clap_utils::keypair::{
-    keypair_from_seed_phrase, prompt_passphrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+use solana_clap_utils::{
+    input_parsers::derivation_of,
+    input_validators::is_derivation,
+    keypair::{
+        keypair_from_seed_phrase, prompt_passphrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+    },
 };
 use solana_cli_config::config::{Config, CONFIG_FILE};
+use solana_remote_wallet::{
+    ledger::get_ledger_from_info,
+    remote_wallet::{RemoteWallet, RemoteWalletInfo},
+};
 use solana_sdk::{
-    pubkey::write_pubkey_file,
+    pubkey::{write_pubkey_file, Pubkey},
     signature::{
         keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
         Keypair, KeypairUtil, Signature,
@@ -65,8 +73,44 @@ fn get_keypair_from_matches(
     } else if keypair == ASK_KEYWORD {
         let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
         keypair_from_seed_phrase("pubkey recovery", skip_validation, false)
+    } else if keypair.starts_with("usb://") {
+        Err(String::from("Remote wallet signing not yet implemented").into())
     } else {
         read_keypair_file(keypair)
+    }
+}
+
+fn get_pubkey_from_matches(
+    matches: &ArgMatches,
+    config: Config,
+) -> Result<Pubkey, Box<dyn error::Error>> {
+    let mut path = dirs::home_dir().expect("home directory");
+    let keypair = if matches.is_present("keypair") {
+        matches.value_of("keypair").unwrap()
+    } else if config.keypair_path != "" {
+        &config.keypair_path
+    } else {
+        path.extend(&[".config", "solana", "id.json"]);
+        path.to_str().unwrap()
+    };
+
+    if keypair == "-" {
+        let mut stdin = std::io::stdin();
+        read_keypair(&mut stdin).map(|keypair| keypair.pubkey())
+    } else if keypair == ASK_KEYWORD {
+        let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+        keypair_from_seed_phrase("pubkey recovery", skip_validation, false)
+            .map(|keypair| keypair.pubkey())
+    } else if keypair.starts_with("usb://") {
+        let (remote_wallet_info, mut derivation_path) =
+            RemoteWalletInfo::parse_path(keypair.to_string())?;
+        if let Some(derivation) = derivation_of(matches, "derivation_path") {
+            derivation_path = derivation;
+        }
+        let ledger = get_ledger_from_info(remote_wallet_info)?;
+        Ok(ledger.get_pubkey(derivation_path)?)
+    } else {
+        read_keypair_file(keypair).map(|keypair| keypair.pubkey())
     }
 }
 
@@ -326,7 +370,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .index(1)
                         .value_name("PATH")
                         .takes_value(true)
-                        .help("Path to keypair file"),
+                        .help("Path to keypair file or remote wallet"),
                 )
                 .arg(
                     Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
@@ -346,6 +390,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .short("f")
                         .long("force")
                         .help("Overwrite the output file if it exists"),
+                )
+                .arg(
+                    Arg::with_name("derivation_path")
+                        .long("derivation-path")
+                        .value_name("ACCOUNT or ACCOUNT/CHANGE")
+                        .takes_value(true)
+                        .validator(is_derivation)
+                        .help("Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'")
                 ),
         )
         .subcommand(
@@ -382,14 +434,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     match matches.subcommand() {
         ("pubkey", Some(matches)) => {
-            let keypair = get_keypair_from_matches(matches, config)?;
+            let pubkey = get_pubkey_from_matches(matches, config)?;
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
                 check_for_overwrite(&outfile, &matches);
-                write_pubkey_file(outfile, keypair.pubkey())?;
+                write_pubkey_file(outfile, pubkey)?;
             } else {
-                println!("{}", keypair.pubkey());
+                println!("{}", pubkey);
             }
         }
         ("new", Some(matches)) => {
