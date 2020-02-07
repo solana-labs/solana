@@ -760,9 +760,6 @@ fn main() {
             println!("{}", open_genesis_config(&ledger_path).hash());
         }
         ("shred-version", Some(arg_matches)) => {
-            let genesis_config = open_genesis_config(&ledger_path);
-            println!("{}", genesis_config.hash());
-
             let process_options = ProcessOptions {
                 dev_halt_at_slot: Some(0),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
