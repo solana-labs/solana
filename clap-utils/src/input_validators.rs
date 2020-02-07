@@ -1,8 +1,10 @@
 use crate::keypair::ASK_KEYWORD;
 use chrono::DateTime;
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{read_keypair_file, Signature};
+use solana_sdk::{
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::{read_keypair_file, Signature},
+};
 use std::str::FromStr;
 
 // Return an error if a pubkey cannot be parsed.
@@ -140,4 +142,48 @@ pub fn is_rfc3339_datetime(value: String) -> Result<(), String> {
     DateTime::parse_from_rfc3339(&value)
         .map(|_| ())
         .map_err(|e| format!("{:?}", e))
+}
+
+pub fn is_derivation(value: String) -> Result<(), String> {
+    let value = value.replace("'", "");
+    let mut parts = value.split('/');
+    let account = parts.next().unwrap();
+    account
+        .parse::<u16>()
+        .map_err(|e| {
+            format!(
+                "Unable to parse derivation, provided: {}, err: {:?}",
+                account, e
+            )
+        })
+        .and_then(|_| {
+            if let Some(change) = parts.next() {
+                change.parse::<u16>().map_err(|e| {
+                    format!(
+                        "Unable to parse derivation, provided: {}, err: {:?}",
+                        change, e
+                    )
+                })
+            } else {
+                Ok(0)
+            }
+        })
+        .map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_derivation() {
+        assert_eq!(is_derivation("2".to_string()), Ok(()));
+        assert_eq!(is_derivation("0".to_string()), Ok(()));
+        assert_eq!(is_derivation("0/2".to_string()), Ok(()));
+        assert_eq!(is_derivation("0'/2'".to_string()), Ok(()));
+        assert!(is_derivation("a".to_string()).is_err());
+        assert!(is_derivation("65537".to_string()).is_err());
+        assert!(is_derivation("a/b".to_string()).is_err());
+        assert!(is_derivation("0/65537".to_string()).is_err());
+    }
 }
