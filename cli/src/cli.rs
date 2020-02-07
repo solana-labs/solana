@@ -20,6 +20,10 @@ use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
 use solana_faucet::faucet_mock::request_airdrop_transaction;
+use solana_remote_wallet::{
+    ledger::get_ledger_from_info,
+    remote_wallet::{DerivationPath, RemoteWallet, RemoteWalletInfo},
+};
 use solana_sdk::{
     bpf_loader,
     clock::{Epoch, Slot},
@@ -439,6 +443,7 @@ pub struct CliConfig {
     pub json_rpc_url: String,
     pub keypair: Keypair,
     pub keypair_path: Option<String>,
+    pub derivation_path: Option<DerivationPath>,
     pub rpc_client: Option<RpcClient>,
     pub verbose: bool,
 }
@@ -453,6 +458,22 @@ impl CliConfig {
     pub fn default_json_rpc_url() -> String {
         "http://127.0.0.1:8899".to_string()
     }
+
+    pub(crate) fn pubkey(&self) -> Result<Pubkey, Box<dyn std::error::Error>> {
+        if let Some(path) = &self.keypair_path {
+            if path.starts_with("usb://") {
+                let (remote_wallet_info, mut derivation_path) =
+                    RemoteWalletInfo::parse_path(path.to_string())?;
+                if let Some(derivation) = &self.derivation_path {
+                    let derivation = derivation.clone();
+                    derivation_path = derivation;
+                }
+                let ledger = get_ledger_from_info(remote_wallet_info)?;
+                return Ok(ledger.get_pubkey(derivation_path)?);
+            }
+        }
+        Ok(self.keypair.pubkey())
+    }
 }
 
 impl Default for CliConfig {
@@ -465,6 +486,7 @@ impl Default for CliConfig {
             json_rpc_url: Self::default_json_rpc_url(),
             keypair: Keypair::new(),
             keypair_path: Some(Self::default_keypair_path()),
+            derivation_path: None,
             rpc_client: None,
             verbose: false,
         }
@@ -845,7 +867,7 @@ fn process_create_address_with_seed(
     seed: &str,
     program_id: &Pubkey,
 ) -> ProcessResult {
-    let config_pubkey = config.keypair.pubkey();
+    let config_pubkey = config.pubkey()?;
     let from_pubkey = from_pubkey.unwrap_or(&config_pubkey);
     let address = create_address_with_seed(from_pubkey, seed, program_id)?;
     Ok(address.to_string())
@@ -858,12 +880,13 @@ fn process_airdrop(
     lamports: u64,
     use_lamports_unit: bool,
 ) -> ProcessResult {
+    let pubkey = config.pubkey()?;
     println!(
         "Requesting airdrop of {} from {}",
         build_balance_message(lamports, use_lamports_unit, true),
         faucet_addr
     );
-    let previous_balance = match rpc_client.retry_get_balance(&config.keypair.pubkey(), 5)? {
+    let previous_balance = match rpc_client.retry_get_balance(&pubkey, 5)? {
         Some(lamports) => lamports,
         None => {
             return Err(CliError::RpcRequestError(
@@ -873,10 +896,10 @@ fn process_airdrop(
         }
     };
 
-    request_and_confirm_airdrop(&rpc_client, faucet_addr, &config.keypair.pubkey(), lamports)?;
+    request_and_confirm_airdrop(&rpc_client, faucet_addr, &pubkey, lamports)?;
 
     let current_balance = rpc_client
-        .retry_get_balance(&config.keypair.pubkey(), 5)?
+        .retry_get_balance(&pubkey, 5)?
         .unwrap_or(previous_balance);
 
     Ok(build_balance_message(
@@ -892,7 +915,7 @@ fn process_balance(
     pubkey: &Option<Pubkey>,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let pubkey = pubkey.unwrap_or(config.keypair.pubkey());
+    let pubkey = pubkey.unwrap_or(config.pubkey()?);
     let balance = rpc_client.retry_get_balance(&pubkey, 5)?;
     match balance {
         Some(lamports) => Ok(build_balance_message(lamports, use_lamports_unit, true)),
@@ -1260,6 +1283,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         println_name_value("RPC URL:", &config.json_rpc_url);
         if let Some(keypair_path) = &config.keypair_path {
             println_name_value("Keypair Path:", keypair_path);
+            if keypair_path.starts_with("usb://") {
+                println_name_value("Pubkey:", &format!("{:?}", config.pubkey()?));
+            }
         }
     }
 
@@ -1275,7 +1301,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
     match &config.command {
         // Cluster Query Commands
         // Get address of this client
-        CliCommand::Address => Ok(format!("{}", config.keypair.pubkey())),
+        CliCommand::Address => Ok(format!("{}", config.pubkey()?)),
 
         // Return software version of solana-cli and cluster entrypoint node
         CliCommand::Catchup { node_pubkey } => process_catchup(&rpc_client, node_pubkey),

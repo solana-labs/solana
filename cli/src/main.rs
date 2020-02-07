@@ -2,7 +2,8 @@ use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches
 use console::style;
 
 use solana_clap_utils::{
-    input_validators::is_url,
+    input_parsers::derivation_of,
+    input_validators::{is_derivation, is_url},
     keypair::{
         self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
@@ -25,7 +26,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     let config = Config::load(config_file).unwrap_or_default();
                     if let Some(field) = subcommand_matches.value_of("specific_setting") {
                         let (field_name, value, default_value) = match field {
-                            "url" => ("RPC Url", config.url, CliConfig::default_json_rpc_url()),
+                            "url" => ("RPC URL", config.url, CliConfig::default_json_rpc_url()),
                             "keypair" => (
                                 "Key Path",
                                 config.keypair_path,
@@ -37,12 +38,12 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     } else {
                         println_name_value("Config File:", config_file);
                         println_name_value_or(
-                            "RPC Url:",
+                            "RPC URL:",
                             &config.url,
                             &CliConfig::default_json_rpc_url(),
                         );
                         println_name_value_or(
-                            "Key Path:",
+                            "Keypair Path:",
                             &config.keypair_path,
                             &CliConfig::default_keypair_path(),
                         );
@@ -106,7 +107,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
     let (keypair, keypair_path) = if require_keypair {
         let KeypairWithSource { keypair, source } = keypair_input(&matches, "keypair")?;
         match source {
-            keypair::Source::File => (
+            keypair::Source::Path => (
                 keypair,
                 Some(matches.value_of("keypair").unwrap().to_string()),
             ),
@@ -126,12 +127,16 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
                     default_keypair_path
                 };
 
-                let keypair = read_keypair_file(&keypair_path).or_else(|err| {
-                    Err(CliError::BadParameter(format!(
-                        "{}: Unable to open keypair file: {}",
-                        err, keypair_path
-                    )))
-                })?;
+                let keypair = if keypair_path.starts_with("usb://") {
+                    keypair
+                } else {
+                    read_keypair_file(&keypair_path).or_else(|err| {
+                        Err(CliError::BadParameter(format!(
+                            "{}: Unable to open keypair file: {}",
+                            err, keypair_path
+                        )))
+                    })?
+                };
 
                 (keypair, Some(keypair_path))
             }
@@ -146,6 +151,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
         json_rpc_url,
         keypair,
         keypair_path,
+        derivation_path: derivation_of(matches, "derivation_path"),
         rpc_client: None,
         verbose: matches.is_present("verbose"),
     })
@@ -189,7 +195,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .value_name("PATH")
             .global(true)
             .takes_value(true)
-            .help("/path/to/id.json"),
+            .help("/path/to/id.json or usb://remote/wallet/path"),
+    )
+    .arg(
+        Arg::with_name("derivation_path")
+            .long("derivation-path")
+            .value_name("ACCOUNT or ACCOUNT/CHANGE")
+            .takes_value(true)
+            .validator(is_derivation)
+            .help("Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'")
     )
     .arg(
         Arg::with_name("verbose")

@@ -43,6 +43,7 @@ members = [
     "archiver",
     "archiver-lib",
     "archiver-utils",
+    "remote-wallet",
     "runtime",
     "sdk",
     "sdk-c",

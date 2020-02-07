@@ -1,0 +1,30 @@
+[package]
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+edition = "2018"
+name = "solana-remote-wallet"
+description = "Blockchain, Rebuilt for Scale"
+version = "0.24.0"
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+
+[dependencies]
+base32 = "0.4.0"
+dialoguer = "0.5.0"
+hidapi = { version = "1.1.1", default-features = false }
+log = "0.4.8"
+parking_lot = "0.7"
+semver = "0.9"
+solana-sdk = { path = "../sdk", version = "0.24.0" }
+thiserror = "1.0"
+
+[features]
+default = ["linux-static-hidraw"]
+linux-static-libusb = ["hidapi/linux-static-libusb"]
+linux-static-hidraw = ["hidapi/linux-static-hidraw"]
+linux-shared-libusb = ["hidapi/linux-shared-libusb"]
+linux-shared-hidraw = ["hidapi/linux-shared-hidraw"]
+
+[[bin]]
+name = "solana-ledger-udev"
+path = "src/bin/ledger-udev.rs"

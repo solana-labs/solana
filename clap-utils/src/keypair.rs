@@ -32,8 +32,8 @@ pub const SKIP_SEED_PHRASE_VALIDATION_ARG: ArgConstant<'static> = ArgConstant {
 
 #[derive(Debug, PartialEq)]
 pub enum Source {
-    File,
     Generated,
+    Path,
     SeedPhrase,
 }
 
@@ -131,7 +131,12 @@ pub fn keypair_input(
         keypair_from_seed_phrase(keypair_name, skip_validation, true)
             .map(|keypair| KeypairWithSource::new(keypair, Source::SeedPhrase))
     } else if let Some(keypair_file) = matches.value_of(keypair_match_name) {
-        read_keypair_file(keypair_file).map(|keypair| KeypairWithSource::new(keypair, Source::File))
+        if keypair_file.starts_with("usb://") {
+            Ok(KeypairWithSource::new(Keypair::new(), Source::Path))
+        } else {
+            read_keypair_file(keypair_file)
+                .map(|keypair| KeypairWithSource::new(keypair, Source::Path))
+        }
     } else {
         Ok(KeypairWithSource::new(Keypair::new(), Source::Generated))
     }
