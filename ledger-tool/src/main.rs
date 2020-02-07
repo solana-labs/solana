@@ -11,6 +11,7 @@ use solana_ledger::{
     blockstore_db::{self, Column, Database},
     blockstore_processor::{BankForksInfo, BlockstoreProcessorResult, ProcessOptions},
     rooted_slot_iterator::RootedSlotIterator,
+    shred_version::compute_shred_version,
     snapshot_utils,
 };
 use solana_sdk::{
@@ -526,6 +527,7 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
 fn load_bank_forks(
     arg_matches: &ArgMatches,
     ledger_path: &PathBuf,
+    genesis_config: &GenesisConfig,
     process_options: ProcessOptions,
 ) -> BlockstoreProcessorResult {
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
@@ -544,7 +546,7 @@ fn load_bank_forks(
     };
 
     bank_forks_utils::load(
-        &open_genesis_config(&ledger_path),
+        &genesis_config,
         &open_blockstore(&ledger_path),
         account_paths,
         snapshot_config.as_ref(),
@@ -615,8 +617,13 @@ fn main() {
             )
         )
         .subcommand(
-            SubCommand::with_name("print-genesis-hash")
+            SubCommand::with_name("genesis-hash")
             .about("Prints the ledger's genesis hash")
+        )
+        .subcommand(
+            SubCommand::with_name("shred-version")
+            .about("Prints the ledger's shred hash")
+            .arg(&hard_forks_arg)
         )
         .subcommand(
             SubCommand::with_name("bounds")
@@ -741,19 +748,49 @@ fn main() {
     });
 
     match matches.subcommand() {
-        ("print", Some(args_matches)) => {
-            let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
+        ("print", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             output_ledger(
                 open_blockstore(&ledger_path),
                 starting_slot,
                 LedgerOutputMethod::Print,
             );
         }
-        ("print-genesis-hash", Some(_args_matches)) => {
+        ("genesis-hash", Some(_arg_matches)) => {
             println!("{}", open_genesis_config(&ledger_path).hash());
         }
-        ("print-slot", Some(args_matches)) => {
-            let slots = values_t_or_exit!(args_matches, "slots", Slot);
+        ("shred-version", Some(arg_matches)) => {
+            let genesis_config = open_genesis_config(&ledger_path);
+            println!("{}", genesis_config.hash());
+
+            let process_options = ProcessOptions {
+                dev_halt_at_slot: Some(0),
+                new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                poh_verify: false,
+                ..ProcessOptions::default()
+            };
+            let genesis_config = open_genesis_config(&ledger_path);
+            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
+                Ok((bank_forks, bank_forks_info, _leader_schedule_cache)) => {
+                    let bank_info = &bank_forks_info[0];
+                    let bank = bank_forks[bank_info.bank_slot].clone();
+
+                    println!(
+                        "{}",
+                        compute_shred_version(
+                            &genesis_config.hash(),
+                            Some(&bank.hard_forks().read().unwrap())
+                        )
+                    );
+                }
+                Err(err) => {
+                    eprintln!("Failed to load ledger: {:?}", err);
+                    exit(1);
+                }
+            }
+        }
+        ("print-slot", Some(arg_matches)) => {
+            let slots = values_t_or_exit!(arg_matches, "slots", Slot);
             for slot in slots {
                 println!("Slot {}", slot);
                 output_slot(
@@ -763,8 +800,8 @@ fn main() {
                 );
             }
         }
-        ("json", Some(args_matches)) => {
-            let starting_slot = value_t_or_exit!(args_matches, "starting_slot", Slot);
+        ("json", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             output_ledger(
                 open_blockstore(&ledger_path),
                 starting_slot,
@@ -778,8 +815,15 @@ fn main() {
                 poh_verify: !arg_matches.is_present("skip_poh_verify"),
                 ..ProcessOptions::default()
             };
+            println!("{}", open_genesis_config(&ledger_path).hash());
 
-            load_bank_forks(arg_matches, &ledger_path, process_options).unwrap_or_else(|err| {
+            load_bank_forks(
+                arg_matches,
+                &ledger_path,
+                &open_genesis_config(&ledger_path),
+                process_options,
+            )
+            .unwrap_or_else(|err| {
                 eprintln!("Ledger verification failed: {:?}", err);
                 exit(1);
             });
@@ -795,7 +839,12 @@ fn main() {
                 ..ProcessOptions::default()
             };
 
-            match load_bank_forks(arg_matches, &ledger_path, process_options) {
+            match load_bank_forks(
+                arg_matches,
+                &ledger_path,
+                &open_genesis_config(&ledger_path),
+                process_options,
+            ) {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache)) => {
                     let dot = graph_forks(
                         &bank_forks,
@@ -834,7 +883,8 @@ fn main() {
                 poh_verify: false,
                 ..ProcessOptions::default()
             };
-            match load_bank_forks(arg_matches, &ledger_path, process_options) {
+            let genesis_config = open_genesis_config(&ledger_path);
+            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
                 Ok((bank_forks, _bank_forks_info, _leader_schedule_cache)) => {
                     let bank = bank_forks.get(snapshot_slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", snapshot_slot);
@@ -865,6 +915,13 @@ fn main() {
                                     "Successfully created snapshot for slot {}: {:?}",
                                     snapshot_slot, package.tar_output_file
                                 );
+                                println!(
+                                    "Shred version: {}",
+                                    compute_shred_version(
+                                        &genesis_config.hash(),
+                                        Some(&bank.hard_forks().read().unwrap())
+                                    )
+                                );
                                 ok
                             })
                         })
@@ -879,8 +936,8 @@ fn main() {
                 }
             }
         }
-        ("prune", Some(args_matches)) => {
-            if let Some(prune_file_path) = args_matches.value_of("slot_list") {
+        ("prune", Some(arg_matches)) => {
+            if let Some(prune_file_path) = arg_matches.value_of("slot_list") {
                 let blockstore = open_blockstore(&ledger_path);
                 let prune_file = File::open(prune_file_path.to_string()).unwrap();
                 let slot_hashes: BTreeMap<u64, String> =
@@ -916,14 +973,14 @@ fn main() {
                 blockstore.prune(*target_slot);
             }
         }
-        ("list-roots", Some(args_matches)) => {
+        ("list-roots", Some(arg_matches)) => {
             let blockstore = open_blockstore(&ledger_path);
-            let max_height = if let Some(height) = args_matches.value_of("max_height") {
+            let max_height = if let Some(height) = arg_matches.value_of("max_height") {
                 usize::from_str(height).expect("Maximum height must be a number")
             } else {
                 panic!("Maximum height must be provided");
             };
-            let num_roots = if let Some(roots) = args_matches.value_of("num_roots") {
+            let num_roots = if let Some(roots) = arg_matches.value_of("num_roots") {
                 usize::from_str(roots).expect("Number of roots must be a number")
             } else {
                 usize::from_str(DEFAULT_ROOT_COUNT).unwrap()
@@ -948,7 +1005,7 @@ fn main() {
                 .collect();
 
             let mut output_file: Box<dyn Write> =
-                if let Some(path) = args_matches.value_of("slot_list") {
+                if let Some(path) = arg_matches.value_of("slot_list") {
                     match File::create(path) {
                         Ok(file) => Box::new(file),
                         _ => Box::new(stdout()),
@@ -969,10 +1026,10 @@ fn main() {
                     }
                 });
         }
-        ("bounds", Some(args_matches)) => {
+        ("bounds", Some(arg_matches)) => {
             match open_blockstore(&ledger_path).slot_meta_iterator(0) {
                 Ok(metas) => {
-                    let all = args_matches.is_present("all");
+                    let all = arg_matches.is_present("all");
 
                     println!("Collecting Ledger information...");
                     let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();

@@ -7,7 +7,10 @@ use solana_clap_utils::{
     input_validators::{is_rfc3339_datetime, is_valid_percentage},
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
-use solana_ledger::{blockstore::create_new_ledger, poh::compute_hashes_per_tick};
+use solana_ledger::{
+    blockstore::create_new_ledger, poh::compute_hashes_per_tick,
+    shred_version::compute_shred_version,
+};
 use solana_sdk::{
     account::Account,
     clock,
@@ -521,10 +524,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     create_new_ledger(&ledger_path, &genesis_config)?;
 
     println!(
-        "Genesis hash: {}\nCreation time: {}\nOperating mode: {:?}\nHashes per tick: {:?}\nSlots per epoch: {}\nCapitalization: {} SOL in {} accounts",
-        genesis_config.hash(),
+        "\
+         Creation time: {}\n\
+         Operating mode: {:?}\n\
+         Genesis hash: {}\n\
+         Shred version: {}\n\
+         Hashes per tick: {:?}\n\
+         Slots per epoch: {}\n\
+         Capitalization: {} SOL in {} accounts\
+         ",
         Utc.timestamp(genesis_config.creation_time, 0).to_rfc3339(),
         operating_mode,
+        genesis_config.hash(),
+        compute_shred_version(&genesis_config.hash(), None),
         genesis_config.poh_config.hashes_per_tick,
         slots_per_epoch,
         lamports_to_sol(
@@ -537,7 +549,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     }
                     account.lamports
                 })
-                .sum::<u64>()),
+                .sum::<u64>()
+        ),
         genesis_config.accounts.len()
     );
 
