@@ -28,6 +28,20 @@ pub fn create_genesis_config_with_leader(
     bootstrap_validator_pubkey: &Pubkey,
     bootstrap_validator_stake_lamports: u64,
 ) -> GenesisConfigInfo {
+    create_genesis_config_with_leader_ex(
+        mint_lamports,
+        bootstrap_validator_pubkey,
+        bootstrap_validator_stake_lamports,
+        BOOTSTRAP_VALIDATOR_LAMPORTS,
+    )
+}
+
+pub fn create_genesis_config_with_leader_ex(
+    mint_lamports: u64,
+    bootstrap_validator_pubkey: &Pubkey,
+    bootstrap_validator_stake_lamports: u64,
+    bootstrap_validator_lamports: u64,
+) -> GenesisConfigInfo {
     let mint_keypair = Keypair::new();
     let bootstrap_validator_voting_keypair = Keypair::new();
     let bootstrap_validator_staking_keypair = Keypair::new();
@@ -56,7 +70,7 @@ pub fn create_genesis_config_with_leader(
         ),
         (
             *bootstrap_validator_pubkey,
-            Account::new(BOOTSTRAP_VALIDATOR_LAMPORTS, 0, &system_program::id()),
+            Account::new(bootstrap_validator_lamports, 0, &system_program::id()),
         ),
         (
             bootstrap_validator_voting_keypair.pubkey(),
