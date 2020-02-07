@@ -30,7 +30,10 @@ use std::collections::{HashMap, HashSet};
 
 pub const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
 pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
-pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 5000;
+// With a fanout of 6, a 1000 node cluster should only take ~4 hops to converge.
+// However since pushes are stake weighed, some trailing nodes
+// might need more time to receive values. 30 seconds should be plenty.
+pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30000;
 pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 pub const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
 
@@ -135,7 +138,12 @@ impl CrdsGossipPush {
         value: CrdsValue,
         now: u64,
     ) -> Result<Option<VersionedCrdsValue>, CrdsGossipError> {
-        if now > value.wallclock() + self.msg_timeout {
+        if now
+            > value
+                .wallclock()
+                .checked_add(self.msg_timeout)
+                .unwrap_or_else(|| 0)
+        {
             return Err(CrdsGossipError::PushMessageTimeout);
         }
         if now + self.msg_timeout < value.wallclock() {
