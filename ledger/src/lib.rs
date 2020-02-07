@@ -15,6 +15,7 @@ pub mod leader_schedule_utils;
 pub mod poh;
 pub mod rooted_slot_iterator;
 pub mod shred;
+pub mod shred_version;
 pub mod sigverify_shreds;
 pub mod snapshot_package;
 pub mod snapshot_utils;

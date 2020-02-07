@@ -19,7 +19,6 @@ use crate::{
     tvu::{Sockets, Tvu},
 };
 use crossbeam_channel::unbounded;
-use solana_ledger::shred::Shred;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
@@ -28,13 +27,14 @@ use solana_ledger::{
     create_new_tmp_ledger,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
+    shred_version::compute_shred_version,
 };
 use solana_metrics::datapoint_info;
-use solana_runtime::{bank::Bank, hard_forks::HardForks};
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Slot, DEFAULT_SLOTS_PER_TURN},
     genesis_config::GenesisConfig,
-    hash::{extend_and_hash, Hash},
+    hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil},
@@ -193,7 +193,7 @@ impl Validator {
 
         node.info.wallclock = timestamp();
         node.info.shred_version =
-            compute_shred_version(&genesis_hash, &bank.hard_forks().read().unwrap());
+            compute_shred_version(&genesis_hash, Some(&bank.hard_forks().read().unwrap()));
         Self::print_node_info(&node);
 
         if let Some(expected_shred_version) = config.expected_shred_version {
@@ -471,20 +471,6 @@ impl Validator {
     }
 }
 
-fn compute_shred_version(genesis_hash: &Hash, hard_forks: &HardForks) -> u16 {
-    use byteorder::{ByteOrder, LittleEndian};
-
-    let mut hash = *genesis_hash;
-    for (slot, count) in hard_forks.iter() {
-        let mut buf = [0u8; 16];
-        LittleEndian::write_u64(&mut buf[..8], *slot);
-        LittleEndian::write_u64(&mut buf[8..], *count as u64);
-        hash = extend_and_hash(&hash, &buf);
-    }
-
-    Shred::version_from_hash(&hash)
-}
-
 fn new_banks_from_blockstore(
     expected_genesis_hash: Option<Hash>,
     blockstore_path: &Path,
@@ -697,16 +683,6 @@ mod tests {
     use super::*;
     use crate::genesis_utils::create_genesis_config_with_leader;
     use std::fs::remove_dir_all;
-
-    #[test]
-    fn test_compute_shred_version() {
-        let mut hard_forks = HardForks::default();
-        assert_eq!(compute_shred_version(&Hash::default(), &hard_forks), 1);
-        hard_forks.register(1);
-        assert_eq!(compute_shred_version(&Hash::default(), &hard_forks), 55551);
-        hard_forks.register(1);
-        assert_eq!(compute_shred_version(&Hash::default(), &hard_forks), 46353);
-    }
 
     #[test]
     fn validator_exit() {
