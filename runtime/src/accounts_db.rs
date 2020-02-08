@@ -671,8 +671,6 @@ impl AccountsDB {
             reclaims.extend(new_reclaims);
         }
 
-        let last_root = accounts_index.last_root;
-
         drop(accounts_index);
         drop(storage);
 
@@ -683,16 +681,16 @@ impl AccountsDB {
             }
         }
 
-        self.handle_reclaims(&reclaims, last_root);
+        self.handle_reclaims(&reclaims);
     }
 
-    fn handle_reclaims(&self, reclaims: &[(Slot, AccountInfo)], last_root: Slot) {
+    fn handle_reclaims(&self, reclaims: &[(Slot, AccountInfo)]) {
         let mut dead_accounts = Measure::start("reclaims::remove_dead_accounts");
         let mut dead_slots = self.remove_dead_accounts(reclaims);
         dead_accounts.stop();
 
         let mut cleanup_dead_slots = Measure::start("reclaims::purge_slots");
-        self.cleanup_dead_slots(&mut dead_slots, last_root);
+        self.cleanup_dead_slots(&mut dead_slots);
         cleanup_dead_slots.stop();
 
         let mut purge_slots = Measure::start("reclaims::purge_slots");
@@ -1097,7 +1095,7 @@ impl AccountsDB {
         slot_id: Slot,
         infos: Vec<AccountInfo>,
         accounts: &[(&Pubkey, &Account)],
-    ) -> (Vec<(Slot, AccountInfo)>, u64) {
+    ) -> Vec<(Slot, AccountInfo)> {
         let mut reclaims: Vec<(Slot, AccountInfo)> = Vec::with_capacity(infos.len() * 2);
         let index = self.accounts_index.read().unwrap();
         let mut update_index_work = Measure::start("update_index_work");
@@ -1112,7 +1110,6 @@ impl AccountsDB {
             })
             .collect();
 
-        let last_root = index.last_root;
         drop(index);
         if !inserts.is_empty() {
             let mut index = self.accounts_index.write().unwrap();
@@ -1121,7 +1118,7 @@ impl AccountsDB {
             }
         }
         update_index_work.stop();
-        (reclaims, last_root)
+        reclaims
     }
 
     fn remove_dead_accounts(&self, reclaims: &[(Slot, AccountInfo)]) -> HashSet<Slot> {
@@ -1156,9 +1153,7 @@ impl AccountsDB {
         dead_slots
     }
 
-    fn cleanup_dead_slots(&self, dead_slots: &mut HashSet<Slot>, last_root: u64) {
-        // a slot is not totally dead until it is older than the root
-        dead_slots.retain(|slot| *slot < last_root);
+    fn cleanup_dead_slots(&self, dead_slots: &mut HashSet<Slot>) {
         if !dead_slots.is_empty() {
             {
                 let mut index = self.accounts_index.write().unwrap();
@@ -1219,11 +1214,11 @@ impl AccountsDB {
         store_accounts.stop();
 
         let mut update_index = Measure::start("store::update_index");
-        let (reclaims, last_root) = self.update_index(slot_id, infos, accounts);
+        let reclaims = self.update_index(slot_id, infos, accounts);
         update_index.stop();
         trace!("reclaim: {}", reclaims.len());
 
-        self.handle_reclaims(&reclaims, last_root);
+        self.handle_reclaims(&reclaims);
     }
 
     pub fn add_root(&self, slot: Slot) {
@@ -1265,7 +1260,6 @@ impl AccountsDB {
         let mut slots: Vec<Slot> = storage.0.keys().cloned().collect();
         slots.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
-        let mut last_root = 0;
         for slot_id in slots.iter() {
             let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
                 .scan_account_storage(
@@ -1290,15 +1284,13 @@ impl AccountsDB {
                 AccountsDB::merge(&mut account_maps, &maps);
             }
             if !account_maps.is_empty() {
-                last_root = *slot_id;
-                accounts_index.roots.insert(last_root);
+                accounts_index.roots.insert(*slot_id);
                 let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
                 for (pubkey, (_, account_info)) in account_maps.iter() {
                     accounts_index.insert(*slot_id, pubkey, account_info.clone(), &mut _reclaims);
                 }
             }
         }
-        accounts_index.last_root = last_root;
 
         let mut counts = HashMap::new();
         for slot_list in accounts_index.account_maps.values() {
@@ -1785,9 +1777,7 @@ pub mod tests {
             let (list, idx) = index.get(&pubkey, &ancestors).unwrap();
             list[idx].1.store_id
         };
-        //slot 0 is behind root, but it is not root, therefore it is purged
         accounts.add_root(1);
-        assert!(accounts.accounts_index.read().unwrap().is_purged(0));
 
         //slot is still there, since gc is lazy
         assert!(accounts.storage.read().unwrap().0[&0].get(&id).is_some());
