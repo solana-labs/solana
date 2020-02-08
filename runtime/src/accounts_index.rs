@@ -259,14 +259,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_max_last_root_old() {
-        let mut index = AccountsIndex::<bool>::default();
-        index.add_root(1);
-        index.add_root(0);
-    }
-
-    #[test]
     fn test_cleanup_first() {
         let mut index = AccountsIndex::<bool>::default();
         index.add_root(0);
