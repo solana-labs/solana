@@ -510,7 +510,7 @@ pub mod test {
             my_keypairs: &ValidatorVoteKeypairs,
             progress: &mut HashMap<u64, ForkProgress>,
             tower: &mut Tower,
-        ) -> VoteResult {
+        ) -> Vec<VoteFailures> {
             let node = self
                 .find_node_and_update_simulation(vote_slot)
                 .expect("Vote to simulate must be for a slot in the tree");
@@ -585,6 +585,7 @@ pub mod test {
                 .values()
                 .cloned()
                 .collect();
+
             ReplayStage::compute_bank_stats(
                 &my_pubkey,
                 &ancestors,
@@ -592,7 +593,6 @@ pub mod test {
                 tower,
                 progress,
             );
-            ReplayStage::select_fork(&frozen_banks, tower, progress);
 
             let bank = bank_forks
                 .read()
@@ -606,12 +606,15 @@ pub mod test {
                 .expect("Slot for vote must exist in progress map");
             info!("Checking vote: {}", vote_slot);
             info!("lockouts: {:?}", fork_progress.fork_stats.stake_lockouts);
-            if fork_progress.fork_stats.is_locked_out && !fork_progress.fork_stats.vote_threshold {
-                return VoteResult::FailedAllChecks(vote_slot);
-            } else if fork_progress.fork_stats.is_locked_out {
-                return VoteResult::LockedOut(vote_slot);
-            } else if !fork_progress.fork_stats.vote_threshold {
-                return VoteResult::FailedThreshold(vote_slot);
+            let mut failures = vec![];
+            if fork_progress.fork_stats.is_locked_out {
+                failures.push(VoteFailures::LockedOut(vote_slot));
+            }
+            if !fork_progress.fork_stats.vote_threshold {
+                failures.push(VoteFailures::FailedThreshold(vote_slot));
+            }
+            if !failures.is_empty() {
+                return failures;
             }
             let vote = tower.new_vote_from_bank(&bank, &my_vote_pubkey).0;
             if let Some(new_root) = tower.record_bank_vote(vote) {
@@ -621,7 +624,7 @@ pub mod test {
             // Mark the vote for this bank under this node's pubkey so it will be
             // integrated into any future child banks
             cluster_votes.entry(my_pubkey).or_default().push(vote_slot);
-            VoteResult::Ok
+            vec![]
         }
 
         // Find a node representing the given slot
@@ -666,11 +669,9 @@ pub mod test {
     }
 
     #[derive(PartialEq, Debug)]
-    pub(crate) enum VoteResult {
+    pub(crate) enum VoteFailures {
         LockedOut(u64),
         FailedThreshold(u64),
-        FailedAllChecks(u64),
-        Ok,
     }
 
     // Setup BankForks with bank 0 and all the validator accounts
@@ -782,9 +783,8 @@ pub mod test {
 
         let mut cluster_votes = HashMap::new();
         for vote in votes {
-            assert_eq!(
-                VoteResult::Ok,
-                voting_simulator.simulate_vote(
+            assert!(voting_simulator
+                .simulate_vote(
                     vote,
                     &bank_forks,
                     &mut cluster_votes,
@@ -793,7 +793,7 @@ pub mod test {
                     &mut progress,
                     &mut tower,
                 )
-            );
+                .is_empty());
         }
 
         for i in 0..5 {
@@ -856,8 +856,8 @@ pub mod test {
         let mut tower = Tower::new_with_key(&node_pubkey);
         for vote in &votes {
             // All these votes should be ok
-            assert_eq!(
-                voting_simulator.simulate_vote(
+            assert!(voting_simulator
+                .simulate_vote(
                     *vote,
                     &bank_forks,
                     &mut cluster_votes,
@@ -865,15 +865,14 @@ pub mod test {
                     keypairs.get(&node_pubkey).unwrap(),
                     &mut progress,
                     &mut tower,
-                ),
-                VoteResult::Ok
-            );
+                )
+                .is_empty());
         }
 
         // Try to come back to main fork
         let next_unlocked_slot = 110;
-        assert_eq!(
-            voting_simulator.simulate_vote(
+        assert!(voting_simulator
+            .simulate_vote(
                 next_unlocked_slot,
                 &bank_forks,
                 &mut cluster_votes,
@@ -881,9 +880,8 @@ pub mod test {
                 keypairs.get(&node_pubkey).unwrap(),
                 &mut progress,
                 &mut tower,
-            ),
-            VoteResult::Ok
-        );
+            )
+            .is_empty());
 
         info!("local tower: {:#?}", tower.lockouts.votes);
         let vote_accounts = bank_forks
