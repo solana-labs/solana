@@ -29,17 +29,64 @@ the winners.
 
 ## Proposed Solution
 
-The goal of this design is to allow programs to generate deterministic
-program specific addresses and programmatically set
-`KeyedAccount.is_signer` for those addresses when `process_instruction()`
-is invoked.
+The key to the design is two fold:
 
-### Deterministic Pubkey Addresses for Programs
+1. Allow programs to control specific addresses, called Program
+Addresses, in such a way that it is impossible for any external
+user to generate valid transactions with signatures for those
+addresses.
 
-Deterministic pubkey addresses for programs follow a similar derivation
-path as Accounts created with `SystemInstruction::CreateAccountWithSeed`.
+2. To allow programs to programatically control
+`KeyedAccount::is_signer` value for Program Addresses that are
+present in instructions that is invoked via `process_instruction()`.
 
-```text
+Given the two conditions, users can securely transfer or assign
+ownershp of on chain assets to Program Addresses.  Once assigned,
+the program and only the program can execute instructions that
+refences a Program Address with `KeyedAccount::is_signer` set to
+true.
+
+### Private keys for Program Addresses
+
+This address has no private key associated with it, and generating
+a signature for it is impossible.  While it has no private key of
+its own, the program can issue an instruction to set the
+`KeyedAccount::is_signer` flag for this address.
+
+### Hash based generated Program Addresses
+
+All 256 bit values are valid ed25519 curve points, and valid ed25519 public
+keys.  All are equally secure and equally as hard to break.
+Based on this assumption, Program Addresses can be deterministically
+derived from a base seed using a 256 bit preimage resistant hash function.
+
+Deterministic Program Addresses for programs follow a similar derivation
+path as Accounts created with `SystemInstruction::CreateAccountWithSeed`
+which is implemented with `system_instruction::create_address_with_seed`.
+
+For reference the implementation is as follows:
+
+```rust,ignore
+pub fn create_address_with_seed(
+    base: &Pubkey,
+    seed: &str,
+    program_id: &Pubkey,
+) -> Result<Pubkey, SystemError> {
+    if seed.len() > MAX_ADDRESS_SEED_LEN {
+        return Err(SystemError::MaxSeedLengthExceeded);
+    }
+
+    Ok(Pubkey::new(
+        hashv(&[base.as_ref(), seed.as_ref(), program_id.as_ref()]).as_ref(),
+    ))
+}
+```
+
+Programs can deterministically derive any number of addresses by
+using a keyword.  The keyword can symbolically identify how this
+address is used.
+
+```rust,ignore
 
 use system_instruction::create_address_with_seed;
 
@@ -48,58 +95,66 @@ pub fn derive_program_address(
     keyword, &str,
 ) -> Result<Pubkey, SystemError> {
 
-    //generate a deterministic base for all program addresses
-    let base = create_address_with_seed(program_id,
-            &"derived program base address" , program_id)?;
+    // Generate a deterministic base for all program addresses that
+    // are owned by `program_id`.
 
-    //generate the keyword specific address
-    create_address_with_seed(&base, keyword, program_id);
+    let base = create_address_with_seed(program_id,
+            &"ProgramAddress11111111111111111111111111111" , program_id)?;
+
+    // Generate a unique Program Address with the keyword.
+    create_address_with_seed(&base, keyword, program_id)
 }
 ```
 
-These addresses are hashed twice, and are impossible to generate
-externally with `CreateAccountWithSeed` or via other means.
-
-### Using Program Keys 
+### Using Program Addresses
 
 Clients can use the `derive_program_address` function to generate
-keys.
+a destination address.
 
 ```text
 //deterministically derive the escrow key
-let escrow = derive_program_address(&escrow_program_id, &"escrow");
+let escrow_pubkey = derive_program_address(&escrow_program_id, &"escrow");
 let message = Message::new(vec![
-    token_instruction::transfer(&alice, &escrow, 1),
+    token_instruction::transfer(&alice_pubkey, &escrow_pubkey, 1),
 ]);
 //transfer 1 token to escrow
-client.send_message(&[&alice, &escrow], &message);
+client.send_message(&[&alice_pubkey, &escrow_pubkey], &message);
 ```
 
-Escrow program can issue a `token_instruction::transfer` from its own
-address as if it had a private key to sign the transaction.
+Programs can use the same function to generate the same address.
+Below the program issue a `token_instruction::transfer` from its
+own address as if it had a private key to sign the transaction.
 
-```text
+```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount]
 ) -> Result<()> {
 
-    //deterministically derive the escrow key
-    let escrow = derive_program_address(program_id, &"escrow");
+    // Deterministically derive the escrow pubkey.
+    let escrow_pubkey = derive_program_address(program_id, &"escrow");
 
     //user supplies the destination
     let alice_pubkey = keyed_accounts[1].key;
 
     //create the transfer instruction
-    let instruction = token_instruction::transfer(&escrow, &alice, 1);
+    let instruction = token_instruction::transfer(&escrow_pubkey, &alice_pubkey, 1);
 
-    //Sign it with the key keyword.
-    //The runtime deterministically derives the key from the current
-    //program id and the supplied keyword.
-    //If the derived key matches a key in the instruction
-    //the `is_signed` flag is set.
-    sign_instruction(&instruction, &"escrow")?;
-
-    process_instruction(&instruction)?;
+    // The runtime deterministically derives the key from the current
+    // program id and the supplied keywords.
+    // If the derived key matches a key in the instruction
+    // the `is_signed` flag is set.
+    process_signed_instruction(&instruction,  &[&"escrow"])?
 }
 ```
+
+### Setting `KeyedAccount::is_signer`
+
+The addresses generated with `derive_program_address` are blinded
+and are indistinguishable from any other pubkey.  The only way for
+the runtime to verify that the address belongs to a program is for
+the program to supply the keyword used to generate the address.
+
+The runtime will internally run  `derive_program_address(program_id,
+&"escrow")`, and compare the result against the addresses supplied
+in the instruction.
