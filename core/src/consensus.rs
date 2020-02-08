@@ -675,7 +675,7 @@ pub mod test {
                 .cloned()
                 .collect();
 
-            ReplayStage::compute_bank_stats(
+            let (_, last_votable_on_same_fork) = ReplayStage::compute_bank_stats(
                 &my_pubkey,
                 &ancestors,
                 &mut frozen_banks,
