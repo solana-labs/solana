@@ -151,6 +151,10 @@ impl<T: Clone + Default + Sized> PinnedVec<T> {
     pub fn iter_mut(&mut self) -> PinnedIterMut<T> {
         PinnedIterMut(self.x.iter_mut())
     }
+
+    pub fn capacity(&self) -> usize {
+        self.x.capacity()
+    }
 }
 
 impl<'a, T: Clone + Send + Sync + Default + Sized> IntoParallelIterator for &'a PinnedVec<T> {
