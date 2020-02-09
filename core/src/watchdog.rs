@@ -20,11 +20,10 @@ struct WatchdogService {
 struct Watchdog {
     cluster_info: Arc<RwLock<ClusterInfo>>,
     bank_forks: Arc<RwLock<BankForks>>,
-    slot_heat_map: HashMap<Slot, (u64, HashSet<Pubkey>)>,
-    hash_heat_map: HashMap<Hash, (u64, HashSet<Pubkey>)>,
-    observed_hashes: HashMap<Hash, (u64, HashSet<Slot>)>,
-    observed_slots: HashMap<Slot, (u64, HashSet<Hash>)>,
+    hash_heat_map: HashMap<Hash, (u64, Slot, HashSet<Pubkey>)>,
+    observed_hashes: HashMap<Hash, (u64, Slot, HashSet<Slot>)>,
     since_votes: u64,
+    root: Slot,
 }
 
 const MIN_CLUSTER_AGREEMENT: f64 = 2f64 / 3f64;
@@ -41,12 +40,28 @@ impl Watchdog {
             .working_bank()
             .epoch_vote_accounts();
         self.gc();
-        self.filter_known();
-        let leftovers = self.compute_unknown_slots();
+        self.filter_rooted_slots();
+        self.compute_stats();
+    }
+    fn compute_stats(&self, vote_accounts: HashMap<Pubkey, (u64, Account)>) {
+        let mut hashes: HashMap<Hash, Slot> = HashMap::new();
+        for slot in observed_slots.keys() {
+            if slot >= self.root {
+                continue;
+            }
+            for h in observed_slots.get().1 {
+                hashes.insert(h, slot);
+            }
+        }
+        for (hash, pubkeys) in self.hash_heat_map {
+            if hashes.contains(hash) {
+                continue;
+            }
+        }
     }
 
-    fn filter_known(&mut self) {
-        let root = bank_forks.read().unwrap().root();
+    fn filter_rooted_slots(&mut self) {
+        self.root = bank_forks.read().unwrap().root();
         let slot_history = bank_forks
             .read()
             .unwrap()
@@ -56,7 +71,7 @@ impl Watchdog {
             .unwrap_or_default();
 
         for slot in observed_slots.keys() {
-            if slot >= root {
+            if slot >= self.root {
                 continue;
             }
             if slot_history.check(slot) != Check::Found {
@@ -71,7 +86,6 @@ impl Watchdog {
                 continue;
             }
             self.observed_slots.delete(slot);
-            self.slot_heat_map.delete(slot);
             for h in hashes {
                 self.observed_hashes.delete(h);
                 self.hash_heat_map.delete(h);
@@ -81,7 +95,6 @@ impl Watchdog {
 
     fn gc(&mut self) {
         let now = timestamp();
-        self.slot_heat_map.retain(|v| v.0 > now - TIMEOUT_MS);
         self.hash_heat_map.retain(|v| v.0 > now - TIMEOUT_MS);
         self.observed_hashes.retain(|v| v.0 > now - TIMEOUT_MS);
         self.observed_slots.retain(|v| v.0 > now - TIMEOUT_MS);
@@ -124,7 +137,6 @@ impl Watchdog {
             .get_votes(&self.since_votes);
         self.since_votes = ts;
         let new_votes = Self::collect_votes(votes);
-        self.update_slot_heat_map(&new_votes);
         self.update_hash_heat_map(&new_votes);
     }
 
@@ -147,19 +159,9 @@ impl Watchdog {
                 })
                 .collect();
             for hash in hashes {
-                self.hash_heat_map.entry(hash).or_default().1.insert(key);
+                self.hash_heat_map.entry(hash).or_default().2.insert(key);
                 self.hash_heat_map.entry(hash).or_default().0 = now;
             }
-        }
-    }
-
-    fn update_vote_heat_map(&mut self, votes: &HashMap<Pubkey, Vec<Vote>>) -> HashMap<Slot, u64> {
-        let now = timestamp();
-        for (key, val) in votes {
-            val.votes.iter().flat_map(|v| v.slots).for_each(|slot| {
-                self.slot_heat_map.entry(slot).or_default().insert(key);
-                self.slot_heat_map.entry(slot).or_default().0 = now;
-            });
         }
     }
 
