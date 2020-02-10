@@ -1316,10 +1316,12 @@ fn process_transfer(
     nonce_authority: Option<&SigningAuthority>,
     fee_payer: Option<&SigningAuthority>,
 ) -> ProcessResult {
-    let from = from.map(|f| f.keypair()).unwrap_or(&config.keypair);
+    let (from_pubkey, from) = from
+        .map(|f| (f.pubkey(), f.keypair()))
+        .unwrap_or((config.keypair.pubkey(), &config.keypair));
 
     check_unique_pubkeys(
-        (&from.pubkey(), "cli keypair".to_string()),
+        (&from_pubkey, "cli keypair".to_string()),
         (to, "to".to_string()),
     )?;
 
@@ -1327,9 +1329,9 @@ fn process_transfer(
         blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
     let ixs = vec![system_instruction::transfer(&from.pubkey(), to, lamports)];
 
-    let nonce_authority: &Keypair = nonce_authority
-        .map(|authority| authority.keypair())
-        .unwrap_or(&config.keypair);
+    let (nonce_authority_pubkey, nonce_authority) = nonce_authority
+        .map(|authority| (authority.pubkey(), authority.keypair()))
+        .unwrap_or((config.keypair.pubkey(), &config.keypair));
     let fee_payer = fee_payer.map(|fp| fp.keypair()).unwrap_or(&config.keypair);
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
@@ -1358,11 +1360,11 @@ fn process_transfer(
     } else {
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
-            &fee_payer.pubkey(),
+            &tx.message.account_keys[0],
             &fee_calculator,
             &tx.message,
         )?;
