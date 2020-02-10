@@ -59,10 +59,8 @@ mod tests {
         snapshot_utils::{self, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_runtime::{
-        accounts_db::AccountStorageEntry, bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
-        status_cache::SlotDelta,
+        accounts_db::AccountStorageEntry, bank::BankSlotDelta, bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
     };
-    use solana_sdk::transaction;
     use std::{
         fs::{self, remove_dir_all, OpenOptions},
         io::Write,
@@ -149,7 +147,7 @@ mod tests {
         // before we compare, stick an empty status_cache in this dir so that the package comparision works
         // This is needed since the status_cache is added by the packager and is not collected from
         // the source dir for snapshots
-        let dummy_slot_deltas: Vec<SlotDelta<transaction::Result<()>>> = vec![];
+        let dummy_slot_deltas: Vec<BankSlotDelta> = vec![];
         snapshot_utils::serialize_snapshot_data_file(
             &snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
             MAX_SNAPSHOT_DATA_FILE_SIZE,
