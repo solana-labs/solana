@@ -13,8 +13,6 @@ const APDU_PAYLOAD_HEADER_LEN: usize = 7;
 
 const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; // 44'/501', Solana
 
-// const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x00, 0x94]; // 44'/148', Stellar
-
 /// Ledger vendor ID
 const LEDGER_VID: u16 = 0x2c97;
 /// Ledger product IDs: Nano S and Nano X
@@ -30,8 +28,6 @@ const LEDGER_NANO_X_PIDS: [u16; 33] = [
 ];
 const LEDGER_TRANSPORT_HEADER_LEN: usize = 5;
 
-const MAX_CHUNK_SIZE: usize = 255;
-
 const HID_PACKET_SIZE: usize = 64 + HID_PREFIX_ZERO;
 
 #[cfg(windows)]
@@ -40,9 +36,10 @@ const HID_PREFIX_ZERO: usize = 1;
 const HID_PREFIX_ZERO: usize = 0;
 
 mod commands {
+    #[allow(dead_code)]
     pub const GET_APP_CONFIGURATION: u8 = 0x06;
     pub const GET_SOL_PUBKEY: u8 = 0x02;
-    pub const SIGN_SOL_TRANSACTION: u8 = 0x04;
+    pub const SIGN_SOL_TRANSACTION: u8 = 0x03;
 }
 
 /// Ledger Wallet device
@@ -224,7 +221,7 @@ impl LedgerWallet {
         self.read()
     }
 
-    fn get_firmware_version(&self) -> Result<FirmwareVersion, RemoteWalletError> {
+    fn _get_firmware_version(&self) -> Result<FirmwareVersion, RemoteWalletError> {
         let ver = self.send_apdu(commands::GET_APP_CONFIGURATION, 0, 0, &[])?;
         if ver.len() != 4 {
             return Err(RemoteWalletError::Protocol("Version packet size mismatch"));
@@ -258,7 +255,7 @@ impl RemoteWallet for LedgerWallet {
             .serial_number
             .clone()
             .unwrap_or_else(|| "Unknown".to_owned());
-        self.get_pubkey(DerivationPath::default())
+        self.get_pubkey(&DerivationPath::default())
             .map(|pubkey| RemoteWalletInfo {
                 model,
                 manufacturer,
@@ -267,10 +264,15 @@ impl RemoteWallet for LedgerWallet {
             })
     }
 
-    fn get_pubkey(&self, derivation: DerivationPath) -> Result<Pubkey, RemoteWalletError> {
+    fn get_pubkey(&self, derivation: &DerivationPath) -> Result<Pubkey, RemoteWalletError> {
         let derivation_path = get_derivation_path(derivation);
 
-        let key = self.send_apdu(commands::GET_SOL_PUBKEY, 0, 0, &derivation_path)?;
+        let key = self.send_apdu(
+            commands::GET_SOL_PUBKEY,
+            0, // In the naive implementation, default request is for no device confirmation
+            0,
+            &derivation_path,
+        )?;
         if key.len() != 32 {
             return Err(RemoteWalletError::Protocol("Key packet size mismatch"));
         }
@@ -279,44 +281,28 @@ impl RemoteWallet for LedgerWallet {
 
     fn sign_transaction(
         &self,
-        derivation: DerivationPath,
+        derivation: &DerivationPath,
         transaction: Transaction,
     ) -> Result<Signature, RemoteWalletError> {
-        let mut chunk = [0_u8; MAX_CHUNK_SIZE];
-        let derivation_path = get_derivation_path(derivation);
-        let data = transaction.message_data();
-
-        let _firmware_version = self.get_firmware_version();
-
-        // Copy the address of the key (only done once)
-        chunk[0..derivation_path.len()].copy_from_slice(&derivation_path);
-
-        let key_length = derivation_path.len();
-        let max_payload_size = MAX_CHUNK_SIZE - key_length;
-        let data_len = data.len();
-
-        let mut result = Vec::new();
-        let mut offset = 0;
-
-        while offset < data_len {
-            let p1 = if offset == 0 { 0 } else { 0x80 };
-            let take = min(max_payload_size, data_len - offset);
-
-            // Fetch piece of data and copy it!
-            {
-                let (_key, d) = &mut chunk.split_at_mut(key_length);
-                let (dst, _rem) = &mut d.split_at_mut(take);
-                dst.copy_from_slice(&data[offset..(offset + take)]);
-            }
-
-            result = self.send_apdu(
-                commands::SIGN_SOL_TRANSACTION,
-                p1,
-                0,
-                &chunk[0..(key_length + take)],
-            )?;
-            offset += take;
+        let mut payload = get_derivation_path(derivation);
+        let mut data = transaction.message_data();
+        if data.len() > u16::max_value() as usize {
+            return Err(RemoteWalletError::InvalidInput(
+                "Message to sign is too long".to_string(),
+            ));
         }
+        for byte in (data.len() as u16).to_be_bytes().iter() {
+            payload.push(*byte);
+        }
+        payload.append(&mut data);
+        trace!("Serialized payload length {:?}", payload.len());
+
+        let result = self.send_apdu(
+            commands::SIGN_SOL_TRANSACTION,
+            1, // In the naive implementation, default request is for requred device confirmation
+            0,
+            &payload,
+        )?;
 
         if result.len() != 64 {
             return Err(RemoteWalletError::Protocol(
@@ -334,7 +320,7 @@ pub fn is_valid_ledger(vendor_id: u16, product_id: u16) -> bool {
 }
 
 /// Build the derivation path byte array from a DerivationPath selection
-fn get_derivation_path(derivation: DerivationPath) -> Vec<u8> {
+fn get_derivation_path(derivation: &DerivationPath) -> Vec<u8> {
     let byte = if derivation.change.is_some() { 4 } else { 3 };
     let mut concat_derivation = vec![byte];
     concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
@@ -380,7 +366,9 @@ pub fn get_ledger_from_info(
 mod tests {
     use super::*;
     use crate::remote_wallet::initialize_wallet_manager;
-    use std::collections::HashSet;
+    use hex;
+    use solana_sdk::{system_instruction, transaction::Transaction};
+    use std::{collections::HashSet, str::FromStr};
 
     /// This test can't be run without an actual ledger device connected with the `Ledger Wallet Solana application` running
     #[test]
@@ -409,28 +397,28 @@ mod tests {
         pubkey_set.insert(ledger_base_pubkey);
 
         let pubkey_0_0 = ledger
-            .get_pubkey(DerivationPath {
+            .get_pubkey(&DerivationPath {
                 account: 0,
                 change: Some(0),
             })
             .expect("get pubkey");
         pubkey_set.insert(pubkey_0_0);
         let pubkey_0_1 = ledger
-            .get_pubkey(DerivationPath {
+            .get_pubkey(&DerivationPath {
                 account: 0,
                 change: Some(1),
             })
             .expect("get pubkey");
         pubkey_set.insert(pubkey_0_1);
         let pubkey_1 = ledger
-            .get_pubkey(DerivationPath {
+            .get_pubkey(&DerivationPath {
                 account: 1,
                 change: None,
             })
             .expect("get pubkey");
         pubkey_set.insert(pubkey_1);
         let pubkey_1_0 = ledger
-            .get_pubkey(DerivationPath {
+            .get_pubkey(&DerivationPath {
                 account: 1,
                 change: Some(0),
             })
@@ -438,5 +426,67 @@ mod tests {
         pubkey_set.insert(pubkey_1_0);
 
         assert_eq!(pubkey_set.len(), 5); // Ensure keys at various derivation paths are unique
+    }
+
+    /// This test can't be run without an actual ledger device connected with the `Ledger Wallet Solana application` running
+    /// It also requires interactive approval of message signing on the ledger.
+    #[test]
+    #[ignore]
+    fn ledger_sign_transaction_test() {
+        let wallet_manager = initialize_wallet_manager();
+
+        // Update device list
+        wallet_manager.update_devices().expect("No Ledger found, make sure you have a unlocked Ledger connected with the Ledger Wallet Solana running");
+        assert!(wallet_manager.list_devices().len() > 0);
+
+        // Fetch the base pubkey of a connected ledger device
+        let ledger_base_pubkey = wallet_manager
+            .list_devices()
+            .iter()
+            .filter(|d| d.manufacturer == "ledger".to_string())
+            .nth(0)
+            .map(|d| d.pubkey.clone())
+            .expect("No ledger device detected");
+
+        let ledger = wallet_manager
+            .get_ledger(&ledger_base_pubkey)
+            .expect("get device");
+
+        let derivation_path = DerivationPath {
+            account: 12345,
+            change: None,
+        };
+
+        let from = ledger.get_pubkey(&derivation_path).expect("get pubkey");
+        let transaction =
+            Transaction::new_unsigned_instructions(vec![system_instruction::transfer(
+                &from,
+                &ledger_base_pubkey,
+                42,
+            )]);
+        let message_data = transaction.message_data();
+        let signature = ledger
+            .sign_transaction(&derivation_path, transaction)
+            .expect("sign transaction");
+        assert!(signature.verify(&from.as_ref(), &message_data));
+
+        // Send hex string message, matching python test
+        let mut payload = get_derivation_path(&derivation_path);
+        let mut data = hex::decode("5ca1ab1e").expect("decode hex");
+        for byte in (data.len() as u16).to_be_bytes().iter() {
+            payload.push(*byte);
+        }
+        payload.append(&mut data);
+
+        let result = ledger
+            .send_apdu(
+                commands::SIGN_SOL_TRANSACTION,
+                1, // In the naive implementation, default request is for requred device confirmation
+                0,
+                &payload,
+            )
+            .expect("send apdu");
+        let signature = Signature::new(&result);
+        assert_eq!(signature, Signature::from_str("4hTVyB3wwrsKH91FpzCxzE5hHFNub2sFEcj1M6kL1u5pDc8wMdX4vdt4qjdDvKBUvmurUp9eskcmhARZnbxU7D6v").unwrap());
     }
 }

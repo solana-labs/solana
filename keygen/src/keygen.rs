@@ -108,7 +108,7 @@ fn get_pubkey_from_matches(
             derivation_path = derivation;
         }
         let ledger = get_ledger_from_info(remote_wallet_info)?;
-        Ok(ledger.get_pubkey(derivation_path)?)
+        Ok(ledger.get_pubkey(&derivation_path)?)
     } else {
         read_keypair_file(keypair).map(|keypair| keypair.pubkey())
     }
