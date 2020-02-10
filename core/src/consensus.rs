@@ -1,3 +1,4 @@
+use crate::replay_stage::ProgressMap;
 use chrono::prelude::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
@@ -355,6 +356,17 @@ impl Tower {
         }
     }
 
+    pub(crate) fn check_switch_threshold(
+        &self,
+        _slot: u64,
+        _ancestors: &HashMap<Slot, HashSet<u64>>,
+        _descendants: &HashMap<Slot, HashSet<u64>>,
+        _progress: &ProgressMap,
+        _total_stake: u64,
+    ) -> bool {
+        true
+    }
+
     /// Update lockouts for all the ancestors
     fn update_ancestor_lockouts(
         stake_lockouts: &mut HashMap<Slot, StakeLockout>,
@@ -468,7 +480,8 @@ impl Tower {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::replay_stage::{ForkProgress, ReplayStage};
+    use crate::replay_stage::{ForkProgress, HeaviestForkFailures, ReplayStage};
+    use bio::data_structures::interval_tree::IntervalTree;
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
         bank::Bank,
@@ -513,7 +526,7 @@ pub mod test {
             my_keypairs: &ValidatorVoteKeypairs,
             progress: &mut HashMap<u64, ForkProgress>,
             tower: &mut Tower,
-        ) -> Vec<VoteFailures> {
+        ) -> Vec<HeaviestForkFailures> {
             let node = self
                 .find_node_and_update_simulation(vote_slot)
                 .expect("Vote to simulate must be for a slot in the tree");
@@ -669,12 +682,6 @@ pub mod test {
                 search_result
             }
         }
-    }
-
-    #[derive(PartialEq, Debug)]
-    pub(crate) enum VoteFailures {
-        LockedOut(u64),
-        FailedThreshold(u64),
     }
 
     // Setup BankForks with bank 0 and all the validator accounts
