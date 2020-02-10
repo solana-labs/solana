@@ -49,7 +49,7 @@ fn recv_loop(
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if let Ok(len) = packet::recv_from(&mut msgs, sock) {
+            if let Ok(len) = packet::recv_from(&mut msgs, sock, 1) {
                 if len == NUM_RCVMMSGS {
                     num_max_received += 1;
                 }
