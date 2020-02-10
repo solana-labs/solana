@@ -1,0 +1,27 @@
+[package]
+name = "solana-accumulator"
+version = "0.24.0"
+edition = "2018"
+authors = [
+  "Pablo Aldape <pablo.aldape@gmail.com>",
+  "Lucas Ege <egelucas@gmail.com>",
+  "Alan Flores-Lopez <alanf94@gmail.com>",
+  "Sanjay Kannan <whaatt@gmail.com>",
+  "Michael Straka <mstraka100@gmail.com>",
+  "Eddie Wang <eddiew@cs.stanford.edu>"
+]
+description = "Cryptographic accumulators in Rust."
+keywords = ["cryptography", "crypto", "accumulator", "rsa", "vector", "commitment"]
+readme = "README.md"
+repository = "https://github.com/solana-labs/solana"
+
+[dependencies]
+arrayref = "0.3.5"
+blake2-rfc = "0.2.18"
+curve25519-dalek = "1.1.3"
+gmp-mpfr-sys = "1.1.12"
+lazy_static = "1.3.0"
+rug = "1.3.0"
+
+[dev-dependencies]
+rand = "0.6.5"
