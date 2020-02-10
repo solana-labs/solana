@@ -548,15 +548,9 @@ where
         &status_cache_path,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
-<<<<<<< HEAD
-            // Rebuild status cache
+            info!("Rebuilding status cache...");
             let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
                 deserialize_from_snapshot(stream)?;
-
-=======
-            info!("Rebuilding status cache...");
-            let slot_deltas: Vec<BankSlotDelta> = deserialize_from_snapshot(stream)?;
->>>>>>> 84b3e12e1... Minor logging improvements
             Ok(slot_deltas)
         },
     )?;
