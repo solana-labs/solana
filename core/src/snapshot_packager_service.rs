@@ -61,7 +61,6 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry, bank::BankSlotDelta, bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
     };
-    use solana_sdk::transaction;
     use std::{
         fs::{self, remove_dir_all, OpenOptions},
         io::Write,

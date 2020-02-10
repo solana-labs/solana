@@ -22,7 +22,7 @@ mod tests {
         hash::hashv,
         pubkey::Pubkey,
         signature::{Keypair, KeypairUtil},
-        system_transaction, transaction,
+        system_transaction,
     };
     use std::{fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc};
     use tempfile::TempDir;
