@@ -35,7 +35,7 @@ pub enum AccError {
 pub struct Accumulator<G: UnknownOrderGroup, T> {
     phantom: PhantomData<T>,
     /// the value
-    value: G::Elem,
+    pub value: G::Elem,
 }
 
 // Manual clone impl required because Rust's type inference is not good. See
@@ -73,6 +73,14 @@ pub struct NonmembershipProof<G: UnknownOrderGroup, T> {
 }
 
 impl<G: UnknownOrderGroup, T: Eq + Hash> Accumulator<G, T> {
+    /// Create an accumulator from a given one
+    pub fn new_from(new: G::Elem) -> Self {
+        Self {
+            phantom: PhantomData,
+            value: new,
+        }
+    }
+
     /// Returns a new, empty accumulator.
     pub fn empty() -> Self {
         Self {
@@ -145,7 +153,7 @@ impl<G: UnknownOrderGroup, T: Eq + Hash> Accumulator<G, T> {
         Ok((
             Self {
                 phantom: PhantomData,
-                value: acc_elem.clone(),
+                value: acc_elem,
             },
             prime_product,
         ))
@@ -541,5 +549,13 @@ mod tests {
     fn test_compute_individual_witnesses_rsa2048() {
         // Class version takes too long for a unit test.
         test_compute_individual_witnesses::<Rsa2048>();
+    }
+
+    #[test]
+    fn test_from() {
+        let acc = new_acc::<Rsa2048, &'static str>(&["a", "b", "c"]);
+        let value = acc.value.clone();
+        let new = Accumulator::new_from(value);
+        assert_eq!(new, acc);
     }
 }
