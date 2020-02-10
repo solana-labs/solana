@@ -1,9 +1,6 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
-use crate::{
-    cluster_info::ClusterInfo, cluster_info_repair_listener::ClusterInfoRepairListener,
-    result::Result,
-};
+use crate::{cluster_info::ClusterInfo, result::Result};
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
@@ -66,7 +63,6 @@ impl Default for RepairSlotRange {
 
 pub struct RepairService {
     t_repair: JoinHandle<()>,
-    cluster_info_repair_listener: Option<ClusterInfoRepairListener>,
 }
 
 impl RepairService {
@@ -77,19 +73,6 @@ impl RepairService {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
     ) -> Self {
-        let cluster_info_repair_listener = match repair_strategy {
-            RepairStrategy::RepairAll {
-                ref epoch_schedule, ..
-            } => Some(ClusterInfoRepairListener::new(
-                &blockstore,
-                &exit,
-                cluster_info.clone(),
-                *epoch_schedule,
-            )),
-
-            _ => None,
-        };
-
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
             .spawn(move || {
@@ -103,10 +86,7 @@ impl RepairService {
             })
             .unwrap();
 
-        RepairService {
-            t_repair,
-            cluster_info_repair_listener,
-        }
+        RepairService { t_repair }
     }
 
     fn run(
@@ -391,14 +371,7 @@ impl RepairService {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        let mut results = vec![self.t_repair.join()];
-        if let Some(cluster_info_repair_listener) = self.cluster_info_repair_listener {
-            results.push(cluster_info_repair_listener.join());
-        }
-        for r in results {
-            r?;
-        }
-        Ok(())
+        self.t_repair.join()
     }
 }
 
