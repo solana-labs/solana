@@ -67,6 +67,7 @@ pub const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 type BankStatusCache = StatusCache<Result<()>>;
+pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 
@@ -143,7 +144,7 @@ pub struct StatusCacheRc {
 }
 
 impl StatusCacheRc {
-    pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<SlotDelta<Result<()>>> {
+    pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<BankSlotDelta> {
         let sc = self.status_cache.read().unwrap();
         sc.slot_deltas(slots)
     }
@@ -159,7 +160,7 @@ impl StatusCacheRc {
             .collect()
     }
 
-    pub fn append(&self, slot_deltas: &[SlotDelta<Result<()>>]) {
+    pub fn append(&self, slot_deltas: &[BankSlotDelta]) {
         let mut sc = self.status_cache.write().unwrap();
         sc.append(slot_deltas);
     }

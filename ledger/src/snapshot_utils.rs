@@ -4,12 +4,10 @@ use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
-use solana_runtime::{
-    bank::{self, deserialize_from_snapshot, Bank, MAX_SNAPSHOT_DATA_FILE_SIZE},
-    status_cache::SlotDelta,
+use solana_runtime::bank::{
+    self, deserialize_from_snapshot, Bank, BankSlotDelta, MAX_SNAPSHOT_DATA_FILE_SIZE,
 };
-use solana_sdk::transaction::Result as TransactionResult;
-use solana_sdk::{clock::Slot, transaction};
+use solana_sdk::clock::Slot;
 use std::{
     cmp::Ordering,
     fs::{self, File},
@@ -362,7 +360,7 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<Slo
 
 pub fn serialize_status_cache(
     slot: Slot,
-    slot_deltas: &[SlotDelta<TransactionResult<()>>],
+    slot_deltas: &[BankSlotDelta],
     snapshot_links: &TempDir,
 ) -> Result<()> {
     // the status cache is stored as snapshot_path/status_cache
@@ -549,8 +547,7 @@ where
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             // Rebuild status cache
-            let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
-                deserialize_from_snapshot(stream)?;
+            let slot_deltas: Vec<BankSlotDelta> = deserialize_from_snapshot(stream)?;
 
             Ok(slot_deltas)
         },
