@@ -331,7 +331,7 @@ mod tests {
         // it should send this over the sockets.
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        packet::recv_from(&mut packets, &me_retransmit).unwrap();
+        packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
 
@@ -347,7 +347,7 @@ mod tests {
         let packets = Packets::new(vec![repair, Packet::default()]);
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        packet::recv_from(&mut packets, &me_retransmit).unwrap();
+        packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
     }
