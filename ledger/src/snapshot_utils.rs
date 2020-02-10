@@ -459,7 +459,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     )?;
 
     if !bank.verify_snapshot_bank() {
-        panic!("Snapshot bank failed to verify");
+        panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
     measure.stop();
     info!("{}", measure);
@@ -532,7 +532,7 @@ where
                     )));
                 }
             };
-            // Rebuild accounts
+            info!("Rebuilding accounts...");
             bank.set_bank_rc(
                 bank::BankRc::new(account_paths.to_vec(), 0, bank.slot()),
                 bank::StatusCacheRc::default(),
@@ -548,16 +548,16 @@ where
         &status_cache_path,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
-            // Rebuild status cache
+            info!("Rebuilding status cache...");
             let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
                 deserialize_from_snapshot(stream)?;
-
             Ok(slot_deltas)
         },
     )?;
 
     bank.src.append(&slot_deltas);
 
+    info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
 }
 
