@@ -137,7 +137,7 @@ fn slot_key_data_for_gpu<
     let keyvec_size = keys_to_slots.len() * size_of::<T>();
     keyvec.resize(keyvec_size, 0);
 
-    for (i, (k, slots)) in keys_to_slots.iter_mut().enumerate() {
+    for (i, (k, slots)) in keys_to_slots.iter().enumerate() {
         let start = i * size_of::<T>();
         let end = start + size_of::<T>();
         keyvec[start..end].copy_from_slice(k.as_ref());
