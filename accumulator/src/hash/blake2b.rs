@@ -7,26 +7,26 @@ use std::hash::Hasher;
 pub struct Blake2b(pub Blake2b_);
 
 impl Default for Blake2b {
-  fn default() -> Self {
-    // 32 bytes = 256 bits
-    Self(Blake2b_::new(32))
-  }
+    fn default() -> Self {
+        // 32 bytes = 256 bits
+        Self(Blake2b_::new(32))
+    }
 }
 
 impl Hasher for Blake2b {
-  /// We could return a truncated hash but it's easier just to not use this fn for now.
-  fn finish(&self) -> u64 {
-    panic!("Don't use! Prefer finalize(self).")
-  }
-  fn write(&mut self, bytes: &[u8]) {
-    Blake2b_::update(&mut self.0, bytes)
-  }
+    /// We could return a truncated hash but it's easier just to not use this fn for now.
+    fn finish(&self) -> u64 {
+        panic!("Don't use! Prefer finalize(self).")
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        Blake2b_::update(&mut self.0, bytes)
+    }
 }
 
 impl GeneralHasher for Blake2b {
-  type Output = [u8; 32];
-  fn finalize(self) -> Self::Output {
-    let res = self.0.finalize();
-    *array_ref![res.as_bytes(), 0, 32]
-  }
+    type Output = [u8; 32];
+    fn finalize(self) -> Self::Output {
+        let res = self.0.finalize();
+        *array_ref![res.as_bytes(), 0, 32]
+    }
 }

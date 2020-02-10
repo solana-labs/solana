@@ -18,10 +18,10 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
-use solana_accumulator::group::{ElemFrom, Rsa2048};
-use solana_accumulator::Accumulator;
 use rug::integer::ParseIntegerError;
 use rug::Integer;
+use solana_accumulator::group::{ElemFrom, Rsa2048};
+use solana_accumulator::Accumulator;
 
 use crate::{
     accounts_index::AccountsIndex,

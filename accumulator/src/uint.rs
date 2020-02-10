@@ -418,187 +418,187 @@ macro_rules! u_types {
 u_types!(U256, 4, U512, 8);
 
 impl U512 {
-  /// Returns the lower half of this `U512` as a `U256`.
-  /// TODO: Make checked?
-  pub fn low_u256(self) -> U256 {
-    let mut x = unsafe { transmute::<Self, (U256, [u64; 4])>(self) }.0;
-    x.normalize_size();
-    x
-  }
+    /// Returns the lower half of this `U512` as a `U256`.
+    /// TODO: Make checked?
+    pub fn low_u256(self) -> U256 {
+        let mut x = unsafe { transmute::<Self, (U256, [u64; 4])>(self) }.0;
+        x.normalize_size();
+        x
+    }
 }
 
 impl From<&U256> for U512 {
-  fn from(x: &U256) -> Self {
-    let mut limbs = [0; 8];
-    limbs[..4].copy_from_slice(&x.limbs);
-    Self {
-      size: x.size,
-      limbs,
+    fn from(x: &U256) -> Self {
+        let mut limbs = [0; 8];
+        limbs[..4].copy_from_slice(&x.limbs);
+        Self {
+            size: x.size,
+            limbs,
+        }
     }
-  }
 }
 
 impl From<U256> for U512 {
-  fn from(x: U256) -> Self {
-    Self::from(&x)
-  }
+    fn from(x: U256) -> Self {
+        Self::from(&x)
+    }
 }
 
 // This gets its own implementation for performance.
 impl ops::Rem<&U256> for U512 {
-  type Output = U256;
-  fn rem(self, x: &U256) -> U256 {
-    if x.size > self.size {
-      return self.low_u256();
+    type Output = U256;
+    fn rem(self, x: &U256) -> U256 {
+        if x.size > self.size {
+            return self.low_u256();
+        }
+        let (y, mut rem) = (Self::zero(), U256::zero());
+        unsafe {
+            gmp::mpn_tdiv_qr(
+                y.data(),
+                rem.data(),
+                0,
+                self.data(),
+                self.size,
+                x.data(),
+                x.size,
+            )
+        };
+        rem.normalize_size();
+        rem
     }
-    let (y, mut rem) = (Self::zero(), U256::zero());
-    unsafe {
-      gmp::mpn_tdiv_qr(
-        y.data(),
-        rem.data(),
-        0,
-        self.data(),
-        self.size,
-        x.data(),
-        x.size,
-      )
-    };
-    rem.normalize_size();
-    rem
-  }
 }
 
 impl ops::Rem<U256> for U512 {
-  type Output = U256;
-  fn rem(self, x: U256) -> U256 {
-    #![allow(clippy::op_ref)]
-    self % &x
-  }
+    type Output = U256;
+    fn rem(self, x: U256) -> U256 {
+        #![allow(clippy::op_ref)]
+        self % &x
+    }
 }
 
 impl U256 {
-  /// Returns (result of removing all `f`s, number of `f`s removed)
-  pub fn remove_factor(self, f: Self) -> (Self, u64) {
-    // For some reason this needs extra scratch space.
-    let mut out = U512::zero();
-    let outmpz = out.as_mpz();
-    let s = self.as_mpz();
-    let f = f.as_mpz();
-    let c = unsafe { gmp::mpz_remove(mut_ptr(&outmpz), mut_ptr(&s), mut_ptr(&f)) };
-    out.size = i64::from(outmpz.size);
-    (out.low_u256(), c)
-  }
+    /// Returns (result of removing all `f`s, number of `f`s removed)
+    pub fn remove_factor(self, f: Self) -> (Self, u64) {
+        // For some reason this needs extra scratch space.
+        let mut out = U512::zero();
+        let outmpz = out.as_mpz();
+        let s = self.as_mpz();
+        let f = f.as_mpz();
+        let c = unsafe { gmp::mpz_remove(mut_ptr(&outmpz), mut_ptr(&s), mut_ptr(&f)) };
+        out.size = i64::from(outmpz.size);
+        (out.low_u256(), c)
+    }
 }
 
 /// It turns out to be faster to provide multiplication as `U256 * U256 -> U512`, because it lets us
 /// use `mpn_mul_n` instead of `mpn_mul`.
 impl ops::Mul<&Self> for U256 {
-  type Output = U512;
-  fn mul(self, x: &Self) -> U512 {
-    let mut y = U512::zero();
-    unsafe { gmp::mpn_mul_n(y.data(), self.data(), x.data(), 4) };
-    y.normalize_size();
-    y
-  }
+    type Output = U512;
+    fn mul(self, x: &Self) -> U512 {
+        let mut y = U512::zero();
+        unsafe { gmp::mpn_mul_n(y.data(), self.data(), x.data(), 4) };
+        y.normalize_size();
+        y
+    }
 }
 
 impl ops::Mul for U256 {
-  type Output = U512;
-  fn mul(self, x: Self) -> U512 {
-    #![allow(clippy::op_ref)]
-    self * &x
-  }
+    type Output = U512;
+    fn mul(self, x: Self) -> U512 {
+        #![allow(clippy::op_ref)]
+        self * &x
+    }
 }
 
 #[allow(unused_mut)]
 fn mut_ptr<T>(mut t: &T) -> *mut T {
-  t as *const T as *mut T
+    t as *const T as *mut T
 }
 
 pub fn u256<T>(t: T) -> U256
 where
-  U256: From<T>,
+    U256: From<T>,
 {
-  U256::from(t)
+    U256::from(t)
 }
 
 pub fn u512<T>(t: T) -> U512
 where
-  U512: From<T>,
+    U512: From<T>,
 {
-  U512::from(t)
+    U512::from(t)
 }
 
 fn i32_to_mpz(i: i32, data: &mut u64) -> mpz_t {
-  *data = i.abs() as u64;
-  mpz_t {
-    size: i.signum(),
-    d: mut_ptr(&data),
-    alloc: 1,
-  }
+    *data = i.abs() as u64;
+    mpz_t {
+        size: i.signum(),
+        d: mut_ptr(&data),
+        alloc: 1,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+    use super::*;
 
-  #[test]
-  fn test_add() {
-    assert!(u256(1) + u256(0) == u256(1));
-    assert!(u256(1) + u256(2) == u256(3));
-    assert!(u256([0, 1, 0, 0]) + u256([0, 1, 0, 0]) == u256([0, 2, 0, 0]));
-    assert!(u256([0, 1, 0, 0]) + u256([0, 1, 1, 1]) == u256([0, 2, 1, 1]));
-  }
+    #[test]
+    fn test_add() {
+        assert!(u256(1) + u256(0) == u256(1));
+        assert!(u256(1) + u256(2) == u256(3));
+        assert!(u256([0, 1, 0, 0]) + u256([0, 1, 0, 0]) == u256([0, 2, 0, 0]));
+        assert!(u256([0, 1, 0, 0]) + u256([0, 1, 1, 1]) == u256([0, 2, 1, 1]));
+    }
 
-  #[should_panic(expected = "assertion failed: carry == 0")]
-  #[test]
-  fn test_add_overflow() {
-    let _ = u256([0, 0, 0, u64::max_value()]) + u256([0, 0, 0, u64::max_value()]);
-  }
+    #[should_panic(expected = "assertion failed: carry == 0")]
+    #[test]
+    fn test_add_overflow() {
+        let _ = u256([0, 0, 0, u64::max_value()]) + u256([0, 0, 0, u64::max_value()]);
+    }
 
-  #[test]
-  fn test_sub() {
-    assert!(u256(1) - u256(0) == u256(1));
-    assert!(u256(1) - u256(1) == u256(0));
-    assert!(u256([0, 1, 0, 0]) - u256([0, 1, 0, 0]) == u256([0, 0, 0, 0]));
-    assert!(u256([0, 1, 0, 1]) - u256([0, 1, 0, 0]) == u256([0, 0, 0, 1]));
-  }
+    #[test]
+    fn test_sub() {
+        assert!(u256(1) - u256(0) == u256(1));
+        assert!(u256(1) - u256(1) == u256(0));
+        assert!(u256([0, 1, 0, 0]) - u256([0, 1, 0, 0]) == u256([0, 0, 0, 0]));
+        assert!(u256([0, 1, 0, 1]) - u256([0, 1, 0, 0]) == u256([0, 0, 0, 1]));
+    }
 
-  #[should_panic(expected = "assertion failed: borrow == 0")]
-  #[test]
-  fn test_sub_borrow() {
-    let _ = u256([0, 1, 0, 0]) - u256([0, 0, 1, 0]);
-  }
+    #[should_panic(expected = "assertion failed: borrow == 0")]
+    #[test]
+    fn test_sub_borrow() {
+        let _ = u256([0, 1, 0, 0]) - u256([0, 0, 1, 0]);
+    }
 
-  #[test]
-  fn test_mul() {
-    assert!(u256(0) * u256(3) == u512(0));
-    assert!(u256(2) * u256(3) == u512(6));
-    assert!(u256([0, 1, 0, 0]) * u256([0, 1, 0, 0]) == u512([0, 0, 1, 0, 0, 0, 0, 0]));
-    assert!(u256([0, 2, 0, 0]) * u256([0, 1, 0, 1]) == u512([0, 0, 2, 0, 2, 0, 0, 0]));
-  }
+    #[test]
+    fn test_mul() {
+        assert!(u256(0) * u256(3) == u512(0));
+        assert!(u256(2) * u256(3) == u512(6));
+        assert!(u256([0, 1, 0, 0]) * u256([0, 1, 0, 0]) == u512([0, 0, 1, 0, 0, 0, 0, 0]));
+        assert!(u256([0, 2, 0, 0]) * u256([0, 1, 0, 1]) == u512([0, 0, 2, 0, 2, 0, 0, 0]));
+    }
 
-  #[test]
-  fn test_div() {
-    assert!(u256(0) / u256(3) == u256(0));
-    assert!(u256(5) / u256(3) == u256(1));
-    assert!(u256(6) / u256(3) == u256(2));
-    assert!(u256([0, 0, 1, 0]) / u256([0, 1, 0, 0]) == u256([0, 1, 0, 0]));
-  }
+    #[test]
+    fn test_div() {
+        assert!(u256(0) / u256(3) == u256(0));
+        assert!(u256(5) / u256(3) == u256(1));
+        assert!(u256(6) / u256(3) == u256(2));
+        assert!(u256([0, 0, 1, 0]) / u256([0, 1, 0, 0]) == u256([0, 1, 0, 0]));
+    }
 
-  #[test]
-  fn test_rem() {
-    assert!(u256(0) % u256(3) == u256(0));
-    assert!(u256(5) % u256(3) == u256(2));
-    assert!(u256(6) % u256(3) == u256(0));
-    assert!(u256([1, 0, 1, 0]) % u256([0, 1, 0, 0]) == u256(1));
-  }
+    #[test]
+    fn test_rem() {
+        assert!(u256(0) % u256(3) == u256(0));
+        assert!(u256(5) % u256(3) == u256(2));
+        assert!(u256(6) % u256(3) == u256(0));
+        assert!(u256([1, 0, 1, 0]) % u256([0, 1, 0, 0]) == u256(1));
+    }
 
-  #[test]
-  fn test_rem512() {
-    assert!(u512(0) % u256(3) == u256(0));
-    assert!(u512(5) % u256(3) == u256(2));
-    assert!(u512(6) % u256(3) == u256(0));
-    assert!(u512([1, 0, 1, 0, 0, 0, 0, 0]) % u256([0, 1, 0, 0]) == u256(1));
-  }
+    #[test]
+    fn test_rem512() {
+        assert!(u512(0) % u256(3) == u256(0));
+        assert!(u512(5) % u256(3) == u256(2));
+        assert!(u512(6) % u256(3) == u256(0));
+        assert!(u512([1, 0, 1, 0, 0, 0, 0, 0]) % u256([0, 1, 0, 0]) == u256(1));
+    }
 }
