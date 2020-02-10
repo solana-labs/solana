@@ -163,6 +163,51 @@ fn test_transfer() {
     };
     assert_ne!(nonce_hash, new_nonce_hash);
 
+    // Assign nonce authority to offline
+    config.command = CliCommand::AuthorizeNonceAccount {
+        nonce_account: nonce_account.pubkey(),
+        nonce_authority: None,
+        new_authority: offline_pubkey,
+    };
+    process_command(&config).unwrap();
+
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Offline, nonced transfer
+    offline.command = CliCommand::Transfer {
+        lamports: 10,
+        to: recipient_pubkey,
+        from: None,
+        sign_only: true,
+        signers: None,
+        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
+        nonce_account: Some(nonce_account.pubkey()),
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    let sign_only_reply = process_command(&offline).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sign_only_reply);
+    config.command = CliCommand::Transfer {
+        lamports: 10,
+        to: recipient_pubkey,
+        from: Some(offline_pubkey.into()),
+        sign_only: false,
+        signers: Some(signers),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        nonce_account: Some(nonce_account.pubkey()),
+        nonce_authority: Some(offline_pubkey.into()),
+        fee_payer: Some(offline_pubkey.into()),
+    };
+    process_command(&config).unwrap();
+    check_balance(30, &rpc_client, &offline_pubkey);
+    check_balance(40, &rpc_client, &recipient_pubkey);
+
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }
