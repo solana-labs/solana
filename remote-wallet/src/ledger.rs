@@ -9,7 +9,7 @@ use std::{cmp::min, fmt, sync::Arc};
 
 const APDU_TAG: u8 = 0x05;
 const APDU_CLA: u8 = 0xe0;
-const APDU_PAYLOAD_HEADER_LEN: usize = 7;
+const APDU_PAYLOAD_HEADER_LEN: usize = 8;
 
 const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; // 44'/501', Solana
 
@@ -97,14 +97,15 @@ impl LedgerWallet {
                 ]);
 
                 if sequence_number == 0 {
-                    let data_len = data.len() + 5;
-                    chunk[5..12].copy_from_slice(&[
+                    let data_len = data.len() + 6;
+                    chunk[5..13].copy_from_slice(&[
                         (data_len >> 8) as u8,
                         (data_len & 0xff) as u8,
                         APDU_CLA,
                         command,
                         p1,
                         p2,
+                        (data.len() >> 8) as u8,
                         data.len() as u8,
                     ]);
                 }
