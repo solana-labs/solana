@@ -9,7 +9,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil},
+    signature::{keypair_from_seed, read_keypair_file, write_keypair, Keypair, KeypairUtil},
     system_instruction::create_address_with_seed,
 };
 use solana_stake_program::stake_state::{Lockup, StakeAuthorize, StakeState};
@@ -839,6 +839,134 @@ fn test_stake_authorize_with_fee_payer() {
         100_000 - SIG_FEE,
         &rpc_client,
         &config_offline.keypair.pubkey(),
+    );
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+fn test_stake_split() {
+    solana_logger::setup();
+
+    let (server, leader_data, alice, ledger_path, _voter) = new_validator_for_tests_ex(1, 42_000);
+    let (sender, receiver) = channel();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+
+    let mut config = CliConfig::default();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+
+    let mut config_offline = CliConfig::default();
+    let offline_pubkey = config_offline.keypair.pubkey();
+    let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
+    // Verify we're offline
+    config_offline.command = CliCommand::ClusterVersion;
+    process_command(&config_offline).unwrap_err();
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 500_000)
+        .unwrap();
+    check_balance(500_000, &rpc_client, &config.keypair.pubkey());
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    check_balance(100_000, &rpc_client, &offline_pubkey);
+
+    // Create stake account, identity is authority
+    let minimum_stake_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())
+        .unwrap();
+    println!("stake min: {}", minimum_stake_balance);
+    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let stake_account_pubkey = stake_keypair.pubkey();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        seed: None,
+        staker: Some(offline_pubkey),
+        withdrawer: Some(offline_pubkey),
+        lockup: Lockup::default(),
+        lamports: 10 * minimum_stake_balance,
+    };
+    process_command(&config).unwrap();
+    check_balance(
+        10 * minimum_stake_balance,
+        &rpc_client,
+        &stake_account_pubkey,
+    );
+
+    // Create nonce account
+    let minimum_nonce_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(NonceState::size())
+        .unwrap();
+    println!("nonce min: {}", minimum_nonce_balance);
+    let nonce_account = keypair_from_seed(&[1u8; 32]).unwrap();
+    let nonce_account_pubkey = nonce_account.pubkey();
+    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateNonceAccount {
+        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        seed: None,
+        nonce_authority: Some(offline_pubkey),
+        lamports: minimum_nonce_balance,
+    };
+    process_command(&config).unwrap();
+    check_balance(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
+
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account_pubkey).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Nonced offline split
+    let split_account = keypair_from_seed(&[2u8; 32]).unwrap();
+    let (split_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&split_account, tmp_file.as_file_mut()).unwrap();
+    check_balance(0, &rpc_client, &split_account.pubkey());
+    config_offline.command = CliCommand::SplitStake {
+        stake_account_pubkey: stake_account_pubkey,
+        stake_authority: None,
+        sign_only: true,
+        signers: None,
+        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
+        nonce_account: Some(nonce_account_pubkey.into()),
+        nonce_authority: None,
+        split_stake_account: read_keypair_file(&split_keypair_file).unwrap().into(),
+        seed: None,
+        lamports: 2 * minimum_stake_balance,
+        fee_payer: None,
+    };
+    let sig_response = process_command(&config_offline).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    config.command = CliCommand::SplitStake {
+        stake_account_pubkey: stake_account_pubkey,
+        stake_authority: Some(offline_pubkey.into()),
+        sign_only: false,
+        signers: Some(signers),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        nonce_account: Some(nonce_account_pubkey.into()),
+        nonce_authority: Some(offline_pubkey.into()),
+        split_stake_account: read_keypair_file(&split_keypair_file).unwrap().into(),
+        seed: None,
+        lamports: 2 * minimum_stake_balance,
+        fee_payer: Some(offline_pubkey.into()),
+    };
+    process_command(&config).unwrap();
+    check_balance(
+        8 * minimum_stake_balance,
+        &rpc_client,
+        &stake_account_pubkey,
+    );
+    check_balance(
+        2 * minimum_stake_balance,
+        &rpc_client,
+        &split_account.pubkey(),
     );
 
     server.close().unwrap();
