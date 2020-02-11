@@ -37,11 +37,9 @@ fn ip_echo_server_request(
             // from an HTTP server
             bytes.push(b'\n');
 
+            stream.set_read_timeout(Some(Duration::new(10, 0)))?;
             stream.write_all(&bytes)?;
             stream.shutdown(std::net::Shutdown::Write)?;
-            stream
-                .set_read_timeout(Some(Duration::new(10, 0)))
-                .expect("set_read_timeout");
             stream.read_to_end(&mut data)
         })
         .and_then(|_| {
