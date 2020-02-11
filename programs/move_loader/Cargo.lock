@@ -1876,14 +1876,6 @@ version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "same-file"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "winapi-util 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "scopeguard"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2119,7 +2111,6 @@ dependencies = [
  "solana_libra_canonical_serialization 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana_libra_compiler 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana_libra_failure_ext 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_language_e2e_tests 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana_libra_state_view 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana_libra_stdlib 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana_libra_types 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2313,35 +2304,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana_libra_language_e2e_tests"
-version = "0.0.1-sol4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "proptest 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "proptest-derive 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "prost 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_bytecode_verifier 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_canonical_serialization 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_compiler 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_config 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_crypto 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_failure_ext 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_logger 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_proptest_helpers 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_state_view 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_stdlib 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_transaction_builder 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_types 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_vm 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_vm_genesis 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_vm_runtime 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_vm_runtime_types 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "walkdir 2.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "solana_libra_logger"
 version = "0.0.1-sol4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2395,15 +2357,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana_libra_prost_ext"
-version = "0.0.1-sol4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "prost 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "solana_libra_state_view"
 version = "0.0.1-sol4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2430,20 +2383,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana_libra_transaction_builder"
-version = "0.0.1-sol4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_config 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_crypto 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_ir_to_bytecode 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_stdlib 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_types 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_vm 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2500,27 +2439,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "chashmap 2.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "typed-arena 1.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana_libra_vm_genesis"
-version = "0.0.1-sol4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_config 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_crypto 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_failure_ext 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_prost_ext 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_state_view 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_stdlib 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_transaction_builder 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_types 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_vm 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_vm_cache_map 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_vm_runtime 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana_libra_vm_runtime_types 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3140,16 +3058,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "walkdir"
-version = "2.2.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "same-file 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "winapi-util 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "want"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3561,7 +3469,6 @@ dependencies = [
 "checksum rustls 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b25a18b1bf7387f0145e7f8324e700805aade3842dd3db2e74e4cdeb4677c09e"
 "checksum rusty-fork 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "3dd93264e10c577503e926bd1430193eeb5d21b059148910082245309b424fae"
 "checksum ryu 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "bfa8506c1de11c9c4e4c38863ccbe02a305c8188e85a05a784c9e11e1c3910c8"
-"checksum same-file 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)" = "585e8ddcedc187886a30fa705c47985c3fa88d06624095856b36ca0b82ff4421"
 "checksum scopeguard 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b42e15e59b18a828bbf5c58ea01debb36b9b096346de35d941dcb89009f24a0d"
 "checksum sct 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e3042af939fca8c3453b7af0f1c66e533a15a86169e39de2657310ade8f98d3c"
 "checksum semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
@@ -3593,20 +3500,16 @@ dependencies = [
 "checksum solana_libra_failure_macros 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "f9fb2b4161a853c17f0074719427551d34cb4c68affa098a0ac5d0721034607e"
 "checksum solana_libra_ir_to_bytecode 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "290f4322e54e0ba347729cf17bd1f9145d49dcf927ea3d1d1817e224692ebad6"
 "checksum solana_libra_ir_to_bytecode_syntax 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "90f56eccaf25ef145f814f82eeb5dcfbac1d4b025b9e4d15b0b760987afa4ab0"
-"checksum solana_libra_language_e2e_tests 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "1c895e0870ea3ba0fd527f194b191843527e7d4b1311868279a328363ebf1de8"
 "checksum solana_libra_logger 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "9b43115806f8f24055c36af78e0f9af9f93952d6ee2806a6bfb569834dd05ac9"
 "checksum solana_libra_metrics 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "238dcafcf6934a501732981138c70c577b59371ed18ef2dac572e0ad2d836aed"
 "checksum solana_libra_nibble 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "4b9937c68d78bb2287bd180f10539766974ac4f6ddde8946bf78a3dce5a0a654"
 "checksum solana_libra_proptest_helpers 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "6bde114ef094aa4b43eeaa01ef1bf3a6f9dc9608988737bf12a93186f14dbfa3"
-"checksum solana_libra_prost_ext 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "139efe49108d6f8e26053ef2d03aff4e0c43612b8c91a3a7c59bb5cb15a50d72"
 "checksum solana_libra_state_view 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "542d26b2c35dc879f77a311b657c5f89caae34d3ecef115061062a720c12f619"
 "checksum solana_libra_stdlib 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "b462ea5089ecd469f5d8b419b7b31cac30a1d5957ad6d222792ab6077a5fed49"
 "checksum solana_libra_tools 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "5214c4a84a097b03ddd1b73a6b287252e4b77226658f0b6abcbab634325d5b5c"
-"checksum solana_libra_transaction_builder 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "de6960c4114f9f96b6e08608ff95dcf7ae0d6aee86a1f3fb3bdfe0a77e077be8"
 "checksum solana_libra_types 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "06f40fce42cdb6ab6b12bb150d0336eacc1170dc62db4cdef77bca47b41c0a79"
 "checksum solana_libra_vm 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "14ecbd2cce1e5375b450262f119d18015fb3370eb1004b8098564d9634fe26b7"
 "checksum solana_libra_vm_cache_map 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "37fa2e1f00a87514cd2169149a5f81a89279703b2523979688d6ef84081a4690"
-"checksum solana_libra_vm_genesis 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "d2c98f2663f28ff221b119a471fd790dbbf1e87664fce4c40421120252c09b8e"
 "checksum solana_libra_vm_runtime 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "ff9f8a7b8212dc4ece5d93f2839896e633c34d7463856e4a555cbcb5c67e9c26"
 "checksum solana_libra_vm_runtime_types 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "254c23c8f30e7c82ae4dc6694e743400d674c66d371b700eec03378ba994f00b"
 "checksum sourcefile 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "4bf77cb82ba8453b42b6ae1d692e4cdc92f9a47beaf89a847c8be83f4e328ad3"
@@ -3673,7 +3576,6 @@ dependencies = [
 "checksum vec_map 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)" = "05c78687fb1a80548ae3250346c3db86a80a7cdd77bda190189f2d0a0987c81a"
 "checksum version_check 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "914b1a6776c4c929a602fafd8bc742e06365d4bcbe48c30f9cca5824f70dc9dd"
 "checksum wait-timeout 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9f200f5b12eb75f8c1ed65abd4b2db8a6e1b138a20de009dacee265a2498f3f6"
-"checksum walkdir 2.2.9 (registry+https://github.com/rust-lang/crates.io-index)" = "9658c94fa8b940eab2250bd5a457f9c48b748420d71293b165c8cdbe2f55f71e"
 "checksum want 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b6395efa4784b027708f7451087e647ec73cc74f5d9bc2e418404248d679a230"
 "checksum wasi 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b89c3ce4ce14bdc6fb6beaf9ec7928ca331de5df7e5ea278375642a2f478570d"
 "checksum wasm-bindgen 0.2.53 (registry+https://github.com/rust-lang/crates.io-index)" = "4c29d57d5c3b3bc53bbe35c5a4f4a0df994d870b7d3cb0ad1c2065e21822ae41"

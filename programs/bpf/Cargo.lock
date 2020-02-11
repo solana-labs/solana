@@ -1944,7 +1944,7 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 0.24.0",
  "solana-sdk 0.24.0",
- "solana_rbpf 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana_rbpf 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1958,7 +1958,7 @@ dependencies = [
  "solana-logger 0.24.0",
  "solana-runtime 0.24.0",
  "solana-sdk 0.24.0",
- "solana_rbpf 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana_rbpf 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2293,7 +2293,7 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.1.20"
+version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3255,7 +3255,7 @@ dependencies = [
 "checksum sha2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)" = "27044adfd2e1f077f649f59deb9490d3941d674002f7d062870a60ebe9bd47a0"
 "checksum slab 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
 "checksum smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)" = "ab606a9c5e214920bb66c458cd7be8ef094f813f20fe77a54cc7dbfff220d4b7"
-"checksum solana_rbpf 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)" = "3a42509c38aaba4e771b6067d8d7bbfeb83e2b314fb2f3da401acdec9b8425ba"
+"checksum solana_rbpf 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)" = "053e2a0f1f6c6298bf832493aeacdd6df98efb756a90feabd33caca9c708f2be"
 "checksum sourcefile 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "4bf77cb82ba8453b42b6ae1d692e4cdc92f9a47beaf89a847c8be83f4e328ad3"
 "checksum spin 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 "checksum stable_deref_trait 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
