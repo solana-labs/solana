@@ -97,7 +97,7 @@
     "babel-eslint": "10.0.3",
     "babel-plugin-module-resolver": "4.0.0",
     "codecov": "^3.0.4",
-    "cross-env": "6.0.3",
+    "cross-env": "7.0.0",
     "elfy": "^1.0.0",
     "enzyme": "3.11.0",
     "esdoc": "^1.1.0",
