@@ -567,6 +567,13 @@ fn wait_for_supermajority(
 }
 
 pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
+    let (node, contact_info, mint_keypair, ledger_path, _vote_pubkey) =
+        new_validator_for_tests_with_vote_pubkey();
+    (node, contact_info, mint_keypair, ledger_path)
+}
+
+pub fn new_validator_for_tests_with_vote_pubkey(
+) -> (Validator, ContactInfo, Keypair, PathBuf, Pubkey) {
     use crate::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
     new_validator_for_tests_ex(0, BOOTSTRAP_VALIDATOR_LAMPORTS)
 }
@@ -574,7 +581,7 @@ pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
 pub fn new_validator_for_tests_ex(
     fees: u64,
     bootstrap_validator_lamports: u64,
-) -> (Validator, ContactInfo, Keypair, PathBuf) {
+) -> (Validator, ContactInfo, Keypair, PathBuf, Pubkey) {
     use crate::genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo};
     use solana_sdk::fee_calculator::FeeCalculator;
 
@@ -621,7 +628,13 @@ pub fn new_validator_for_tests_ex(
         &config,
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
-    (node, contact_info, mint_keypair, ledger_path)
+    (
+        node,
+        contact_info,
+        mint_keypair,
+        ledger_path,
+        leader_voting_keypair.pubkey(),
+    )
 }
 
 fn report_target_features() {

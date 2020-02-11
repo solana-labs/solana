@@ -17,7 +17,9 @@ use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 
 #[cfg(test)]
-use solana_core::validator::{new_validator_for_tests, new_validator_for_tests_ex};
+use solana_core::validator::{
+    new_validator_for_tests, new_validator_for_tests_ex, new_validator_for_tests_with_vote_pubkey,
+};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -42,10 +44,88 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 }
 
 #[test]
+fn test_stake_delegation_force() {
+    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (sender, receiver) = channel();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+
+    let mut config = CliConfig::default();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
+        .unwrap();
+
+    // Create vote account
+    let vote_keypair = Keypair::new();
+    let (vote_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&vote_keypair, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateVoteAccount {
+        vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
+        seed: None,
+        node_pubkey: config.keypair.pubkey(),
+        authorized_voter: None,
+        authorized_withdrawer: None,
+        commission: 0,
+    };
+    process_command(&config).unwrap();
+
+    // Create stake account
+    let stake_keypair = Keypair::new();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        seed: None,
+        staker: None,
+        withdrawer: None,
+        lockup: Lockup::default(),
+        lamports: 50_000,
+    };
+    process_command(&config).unwrap();
+
+    // Delegate stake fails (vote account had never voted)
+    config.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        vote_account_pubkey: vote_keypair.pubkey(),
+        stake_authority: None,
+        force: false,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    process_command(&config).unwrap_err();
+
+    // But if we force it, it works anyway!
+    config.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        vote_account_pubkey: vote_keypair.pubkey(),
+        stake_authority: None,
+        force: true,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    process_command(&config).unwrap();
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
 fn test_seed_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, vote_pubkey) =
+        new_validator_for_tests_with_vote_pubkey();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -59,12 +139,6 @@ fn test_seed_stake_delegation_and_deactivation() {
     let (validator_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&config_validator.keypair, tmp_file.as_file_mut()).unwrap();
 
-    let mut config_vote = CliConfig::default();
-    config_vote.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (vote_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_vote.keypair, tmp_file.as_file_mut()).unwrap();
-
     let mut config_stake = CliConfig::default();
     config_stake.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
@@ -77,17 +151,6 @@ fn test_seed_stake_delegation_and_deactivation() {
     )
     .unwrap();
     check_balance(100_000, &rpc_client, &config_validator.keypair.pubkey());
-
-    // Create vote account
-    config_validator.command = CliCommand::CreateVoteAccount {
-        vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
-        seed: None,
-        node_pubkey: config_validator.keypair.pubkey(),
-        authorized_voter: None,
-        authorized_withdrawer: None,
-        commission: 0,
-    };
-    process_command(&config_validator).unwrap();
 
     let stake_address = create_address_with_seed(
         &config_validator.keypair.pubkey(),
@@ -111,9 +174,9 @@ fn test_seed_stake_delegation_and_deactivation() {
     // Delegate stake
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_address,
-        vote_account_pubkey: config_vote.keypair.pubkey(),
+        vote_account_pubkey: vote_pubkey,
         stake_authority: None,
-        force: true,
+        force: false,
         sign_only: false,
         signers: None,
         blockhash_query: BlockhashQuery::default(),
@@ -144,7 +207,8 @@ fn test_seed_stake_delegation_and_deactivation() {
 fn test_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, vote_pubkey) =
+        new_validator_for_tests_with_vote_pubkey();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -154,12 +218,6 @@ fn test_stake_delegation_and_deactivation() {
     let mut config_validator = CliConfig::default();
     config_validator.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    let mut config_vote = CliConfig::default();
-    config_vote.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (vote_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_vote.keypair, tmp_file.as_file_mut()).unwrap();
 
     let mut config_stake = CliConfig::default();
     config_stake.json_rpc_url =
@@ -176,17 +234,6 @@ fn test_stake_delegation_and_deactivation() {
     .unwrap();
     check_balance(100_000, &rpc_client, &config_validator.keypair.pubkey());
 
-    // Create vote account
-    config_validator.command = CliCommand::CreateVoteAccount {
-        vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
-        seed: None,
-        node_pubkey: config_validator.keypair.pubkey(),
-        authorized_voter: None,
-        authorized_withdrawer: None,
-        commission: 0,
-    };
-    process_command(&config_validator).unwrap();
-
     // Create stake account
     config_validator.command = CliCommand::CreateStakeAccount {
         stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
@@ -201,9 +248,9 @@ fn test_stake_delegation_and_deactivation() {
     // Delegate stake
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
-        vote_account_pubkey: config_vote.keypair.pubkey(),
+        vote_account_pubkey: vote_pubkey,
         stake_authority: None,
-        force: true,
+        force: false,
         sign_only: false,
         signers: None,
         blockhash_query: BlockhashQuery::default(),
@@ -234,7 +281,8 @@ fn test_stake_delegation_and_deactivation() {
 fn test_offline_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, vote_pubkey) =
+        new_validator_for_tests_with_vote_pubkey();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -249,17 +297,17 @@ fn test_offline_stake_delegation_and_deactivation() {
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    let mut config_vote = CliConfig::default();
-    config_vote.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (vote_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_vote.keypair, tmp_file.as_file_mut()).unwrap();
-
     let mut config_stake = CliConfig::default();
     config_stake.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&config_stake.keypair, tmp_file.as_file_mut()).unwrap();
+
+    let mut config_offline = CliConfig::default();
+    config_offline.json_rpc_url = String::default();
+    config_offline.command = CliCommand::ClusterVersion;
+    // Verfiy that we cannot reach the cluster
+    process_command(&config_offline).unwrap_err();
 
     request_and_confirm_airdrop(
         &rpc_client,
@@ -270,22 +318,20 @@ fn test_offline_stake_delegation_and_deactivation() {
     .unwrap();
     check_balance(100_000, &rpc_client, &config_validator.keypair.pubkey());
 
-    // Create vote account
-    config_validator.command = CliCommand::CreateVoteAccount {
-        vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
-        seed: None,
-        node_pubkey: config_validator.keypair.pubkey(),
-        authorized_voter: None,
-        authorized_withdrawer: None,
-        commission: 0,
-    };
-    process_command(&config_validator).unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config_offline.keypair.pubkey(),
+        100_000,
+    )
+    .unwrap();
+    check_balance(100_000, &rpc_client, &config_offline.keypair.pubkey());
 
     // Create stake account
     config_validator.command = CliCommand::CreateStakeAccount {
         stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
         seed: None,
-        staker: None,
+        staker: Some(config_offline.keypair.pubkey().into()),
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
@@ -294,11 +340,11 @@ fn test_offline_stake_delegation_and_deactivation() {
 
     // Delegate stake offline
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
-    config_validator.command = CliCommand::DelegateStake {
+    config_offline.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
-        vote_account_pubkey: config_vote.keypair.pubkey(),
+        vote_account_pubkey: vote_pubkey,
         stake_authority: None,
-        force: true,
+        force: false,
         sign_only: true,
         signers: None,
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
@@ -306,27 +352,25 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: None,
         fee_payer: None,
     };
-    let sig_response = process_command(&config_validator).unwrap();
+    let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-
-    // Delegate stake online
     config_payer.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
-        vote_account_pubkey: config_vote.keypair.pubkey(),
-        stake_authority: None,
-        force: true,
+        vote_account_pubkey: vote_pubkey,
+        stake_authority: Some(config_offline.keypair.pubkey().into()),
+        force: false,
         sign_only: false,
         signers: Some(signers),
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: None,
+        fee_payer: Some(config_offline.keypair.pubkey().into()),
     };
     process_command(&config_payer).unwrap();
 
     // Deactivate stake offline
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
-    config_validator.command = CliCommand::DeactivateStake {
+    config_offline.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         stake_authority: None,
         sign_only: true,
@@ -336,19 +380,17 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: None,
         fee_payer: None,
     };
-    let sig_response = process_command(&config_validator).unwrap();
+    let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-
-    // Deactivate stake online
     config_payer.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
-        stake_authority: None,
+        stake_authority: Some(config_offline.keypair.pubkey().into()),
         sign_only: false,
         signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: None,
+        fee_payer: Some(config_offline.keypair.pubkey().into()),
     };
     process_command(&config_payer).unwrap();
 
@@ -360,7 +402,8 @@ fn test_offline_stake_delegation_and_deactivation() {
 fn test_nonced_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, alice, ledger_path, vote_pubkey) =
+        new_validator_for_tests_with_vote_pubkey();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -376,20 +419,6 @@ fn test_nonced_stake_delegation_and_deactivation() {
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
         .unwrap();
-
-    // Create vote account
-    let vote_keypair = Keypair::new();
-    let (vote_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&vote_keypair, tmp_file.as_file_mut()).unwrap();
-    config.command = CliCommand::CreateVoteAccount {
-        vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
-        seed: None,
-        node_pubkey: config.keypair.pubkey(),
-        authorized_voter: None,
-        authorized_withdrawer: None,
-        commission: 0,
-    };
-    process_command(&config).unwrap();
 
     // Create stake account
     let stake_keypair = Keypair::new();
@@ -428,9 +457,9 @@ fn test_nonced_stake_delegation_and_deactivation() {
     // Delegate stake
     config.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
-        vote_account_pubkey: vote_keypair.pubkey(),
+        vote_account_pubkey: vote_pubkey,
         stake_authority: None,
-        force: true,
+        force: false,
         sign_only: false,
         signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
@@ -483,6 +512,20 @@ fn test_stake_authorize() {
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
         .unwrap();
 
+    let mut config_offline = CliConfig::default();
+    config_offline.json_rpc_url = String::default();
+    config_offline.command = CliCommand::ClusterVersion;
+    // Verfiy that we cannot reach the cluster
+    process_command(&config_offline).unwrap_err();
+
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config_offline.keypair.pubkey(),
+        100_000,
+    )
+    .unwrap();
+
     // Create stake account, identity is authority
     let stake_keypair = Keypair::new();
     let stake_account_pubkey = stake_keypair.pubkey();
@@ -525,10 +568,9 @@ fn test_stake_authorize() {
     assert_eq!(current_authority, online_authority_pubkey);
 
     // Assign new offline stake authority
-    let offline_authority = Keypair::new();
-    let offline_authority_pubkey = offline_authority.pubkey();
+    let offline_authority_pubkey = config_offline.keypair.pubkey();
     let (offline_authority_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&offline_authority, tmp_file.as_file_mut()).unwrap();
+    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: offline_authority_pubkey,
@@ -556,7 +598,7 @@ fn test_stake_authorize() {
     let (nonced_authority_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonced_authority, tmp_file.as_file_mut()).unwrap();
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
-    config.command = CliCommand::StakeAuthorize {
+    config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: nonced_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
@@ -568,7 +610,7 @@ fn test_stake_authorize() {
         nonce_authority: None,
         fee_payer: None,
     };
-    let sign_reply = process_command(&config).unwrap();
+    let sign_reply = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
@@ -580,7 +622,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: None,
+        fee_payer: Some(offline_authority_pubkey.into()),
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -601,7 +643,7 @@ fn test_stake_authorize() {
     config.command = CliCommand::CreateNonceAccount {
         nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
         seed: None,
-        nonce_authority: Some(config.keypair.pubkey()),
+        nonce_authority: Some(config_offline.keypair.pubkey()),
         lamports: minimum_nonce_balance,
     };
     process_command(&config).unwrap();
@@ -619,7 +661,7 @@ fn test_stake_authorize() {
     let online_authority_pubkey = online_authority.pubkey();
     let (_online_authority_file, mut tmp_file) = make_tmp_file();
     write_keypair(&online_authority, tmp_file.as_file_mut()).unwrap();
-    config.command = CliCommand::StakeAuthorize {
+    config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: online_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
@@ -631,7 +673,7 @@ fn test_stake_authorize() {
         nonce_authority: None,
         fee_payer: None,
     };
-    let sign_reply = process_command(&config).unwrap();
+    let sign_reply = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
     assert_eq!(blockhash, nonce_hash);
     config.command = CliCommand::StakeAuthorize {
@@ -643,8 +685,8 @@ fn test_stake_authorize() {
         signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_account.pubkey()),
-        nonce_authority: None,
-        fee_payer: None,
+        nonce_authority: Some(offline_authority_pubkey.into()),
+        fee_payer: Some(offline_authority_pubkey.into()),
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -671,7 +713,8 @@ fn test_stake_authorize_with_fee_payer() {
     solana_logger::setup();
     const SIG_FEE: u64 = 42;
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests_ex(SIG_FEE, 42_000);
+    let (server, leader_data, alice, ledger_path, _voter) =
+        new_validator_for_tests_ex(SIG_FEE, 42_000);
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
