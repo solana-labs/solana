@@ -70,14 +70,14 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let is_signer = {
                 #[allow(clippy::cast_ptr_alignment)]
                 let is_signer = *(input.add(offset) as *const u8);
-                (is_signer != 0)
+                is_signer != 0
             };
             offset += size_of::<u8>();
 
             let is_writable = {
                 #[allow(clippy::cast_ptr_alignment)]
                 let is_writable = *(input.add(offset) as *const u8);
-                (is_writable != 0)
+                is_writable != 0
             };
             offset += size_of::<u8>();
 

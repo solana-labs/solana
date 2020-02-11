@@ -1,6 +1,5 @@
 //! The `hash` module provides functions for creating SHA-256 hashes.
 
-use bs58;
 use sha2::{Digest, Sha256};
 use std::{convert::TryFrom, fmt, mem, str::FromStr};
 
@@ -97,7 +96,6 @@ pub fn extend_and_hash(id: &Hash, val: &[u8]) -> Hash {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bs58;
 
     #[test]
     fn test_hash_fromstr() {
