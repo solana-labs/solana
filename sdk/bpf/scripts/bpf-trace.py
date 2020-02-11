@@ -83,36 +83,57 @@ if __name__ == '__main__':
         exits = [] # instruction counts at each call exit
         call_nums = [] # used to match up exits to calls
         frame = 1
+        max_frame = 0
         num_calls = 0
         line = file_object.readline()
         while line:
+            # print line
             key, match = parse_line(rxs_call, line)
             if key == 'call':
                 ixs_count = int(match.group(1))
+                calling_pc = int(match.group(2))
                 line = file_object.readline()
                 key, match = parse_line(rxs_called, line)
-                if key == 'pc':
-                    called_pc = int(match.group(1))
+                while key != 'pc':
+                    line = file_object.readline()
+                    key, match = parse_line(rxs_called, line)
+                called_pc = int(match.group(1))
+                if calling_pc + 1 == called_pc:
+                    calls.append((ixs_count, frame, 'Solana system call'))
+                    exits.append(ixs_count)
+                    num_calls += 1
+                else:
                     calls.append((ixs_count, frame, symbols[called_pc]))
                     call_nums.append(num_calls)
                     exits.append(0)
                     num_calls += 1
                     frame += 1
+                    max_frame = max(frame, max_frame)
             else:
                 if key == 'entry':
-                        pc = int(match.group(1))
-                        calls.append((0, 0, symbols[pc]))
-                        call_nums.append(num_calls)
-                        exits.append(0)
-                        num_calls += 1
+                    pc = int(match.group(1))
+                    calls.append((0, 0, symbols[pc]))
+                    call_nums.append(num_calls)
+                    exits.append(0)
+                    num_calls += 1
                 elif key == 'exit':
                     ixs_count = int(match.group(1))
                     num = call_nums.pop()
                     exits[num] = ixs_count
                     frame -= 1
                 line = file_object.readline()
+    if len(calls) == 0:
+        sys.exit("Error: No valid trace in : " + tracepath)
 
     # print the call trace with instruction counts for each call
+    print "Max frame depth: ", max_frame - 1
+    print "Call trace:"
+    print "Ins num   (Ins count):  Symbol called"
     for call, exit in zip(calls, exits):
-        print("%7d: %s %s" % (exit - call[0], ' |  ' * call[1], call[2]))
-
+        if exit == 0:
+            count = " No return"
+        else:
+            count = "%9d" % (exit - call[0])
+        print("%9d (%s): %s %s" % (call[0], count, ' |  ' * call[1], call[2]))
+    if frame != 0:
+        print "Error: Program did not exit gracefully"
