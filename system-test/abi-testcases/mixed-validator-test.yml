@@ -1,0 +1,3 @@
+steps:
+  - command: "system-test/abi-testcases/mixed-validator-test.sh"
+    label: "Mixed Validator Test"
