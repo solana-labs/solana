@@ -310,6 +310,7 @@ pub enum CliCommand {
         split_stake_account: KeypairEq,
         seed: Option<String>,
         lamports: u64,
+        fee_payer: Option<SigningAuthority>,
     },
     ShowStakeHistory {
         use_lamports_unit: bool,
@@ -1605,6 +1606,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             split_stake_account,
             seed,
             lamports,
+            ref fee_payer,
         } => process_split_stake(
             &rpc_client,
             config,
@@ -1618,6 +1620,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             split_stake_account,
             seed,
             *lamports,
+            fee_payer.as_ref(),
         ),
         CliCommand::ShowStakeAccount {
             pubkey: stake_account_pubkey,
@@ -3045,6 +3048,7 @@ mod tests {
             split_stake_account: split_stake_account.into(),
             seed: None,
             lamports: 1234,
+            fee_payer: None,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
