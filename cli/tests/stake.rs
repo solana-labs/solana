@@ -83,6 +83,13 @@ fn test_stake_delegation_force() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
 
@@ -168,6 +175,13 @@ fn test_seed_stake_delegation_and_deactivation() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -242,6 +256,13 @@ fn test_stake_delegation_and_deactivation() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -335,6 +356,13 @@ fn test_offline_stake_delegation_and_deactivation() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -431,6 +459,13 @@ fn test_nonced_stake_delegation_and_deactivation() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
 
@@ -538,6 +573,13 @@ fn test_stake_authorize() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
 
@@ -761,6 +803,13 @@ fn test_stake_authorize_with_fee_payer() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
     // `config` balance should be 50,000 - 1 stake account sig - 1 fee sig
@@ -890,6 +939,13 @@ fn test_stake_split() {
         withdrawer: Some(offline_pubkey),
         lockup: Lockup::default(),
         lamports: 10 * minimum_stake_balance,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
     check_balance(
@@ -1022,6 +1078,13 @@ fn test_stake_set_lockup() {
         withdrawer: Some(offline_pubkey),
         lockup,
         lamports: 10 * minimum_stake_balance,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
     check_balance(

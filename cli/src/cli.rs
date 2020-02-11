@@ -273,12 +273,19 @@ pub enum CliCommand {
     Deploy(String),
     // Stake Commands
     CreateStakeAccount {
-        stake_account: KeypairEq,
+        stake_account: SigningAuthority,
         seed: Option<String>,
         staker: Option<Pubkey>,
         withdrawer: Option<Pubkey>,
         lockup: Lockup,
         lamports: u64,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: Option<SigningAuthority>,
+        fee_payer: Option<SigningAuthority>,
+        from: Option<SigningAuthority>,
     },
     DeactivateStake {
         stake_account_pubkey: Pubkey,
@@ -1551,12 +1558,19 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Create stake account
         CliCommand::CreateStakeAccount {
-            stake_account,
+            ref stake_account,
             seed,
             staker,
             withdrawer,
             lockup,
             lamports,
+            sign_only,
+            ref signers,
+            blockhash_query,
+            ref nonce_account,
+            ref nonce_authority,
+            ref fee_payer,
+            ref from,
         } => process_create_stake_account(
             &rpc_client,
             config,
@@ -1566,6 +1580,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             withdrawer,
             lockup,
             *lamports,
+            *sign_only,
+            signers.as_ref(),
+            blockhash_query,
+            nonce_account.as_ref(),
+            nonce_authority.as_ref(),
+            fee_payer.as_ref(),
+            from.as_ref(),
         ),
         CliCommand::DeactivateStake {
             stake_account_pubkey,
@@ -3048,6 +3069,13 @@ mod tests {
                 custodian,
             },
             lamports: 1234,
+            sign_only: false,
+            signers: None,
+            blockhash_query: BlockhashQuery::All,
+            nonce_account: None,
+            nonce_authority: None,
+            fee_payer: None,
+            from: None,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
