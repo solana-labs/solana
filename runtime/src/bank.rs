@@ -1826,19 +1826,38 @@ impl Bank {
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
     /// snapshot.
-    pub fn verify_hash_internal_state(&self) -> bool {
+    #[must_use]
+    fn verify_bank_hash(&self) -> bool {
         self.rc
             .accounts
             .verify_bank_hash(self.slot(), &self.ancestors)
+    }
+
+    #[must_use]
+    fn verify_hash(&self) -> bool {
+        assert!(self.is_frozen());
+        let calculated_hash = self.hash_internal_state();
+        let expected_hash = self.hash();
+
+        if calculated_hash == expected_hash {
+            true
+        } else {
+            warn!(
+                "verify failed: slot: {}, {} (calculated) != {} (expected)",
+                self.slot(),
+                calculated_hash,
+                expected_hash
+            );
+            false
+        }
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
         self.purge_zero_lamport_accounts();
-        self.rc
-            .accounts
-            .verify_bank_hash(self.slot(), &self.ancestors)
+        // Order and short-circuiting is significant; verify_hash requires a valid bank hash
+        self.verify_bank_hash() && self.verify_hash()
     }
 
     /// Return the number of hashes per tick
@@ -3085,21 +3104,21 @@ mod tests {
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
-        assert!(bank0.verify_hash_internal_state());
+        assert!(bank0.verify_bank_hash());
 
         // Squash and then verify hash_internal value
         bank0.squash();
-        assert!(bank0.verify_hash_internal_state());
+        assert!(bank0.verify_bank_hash());
 
         bank1.squash();
-        assert!(bank1.verify_hash_internal_state());
+        assert!(bank1.verify_bank_hash());
 
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
         bank1.purge_zero_lamport_accounts();
 
-        assert!(bank1.verify_hash_internal_state());
+        assert!(bank1.verify_bank_hash());
     }
 
     #[test]
@@ -3820,7 +3839,7 @@ mod tests {
         let pubkey2 = Pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
-        assert!(bank2.verify_hash_internal_state());
+        assert!(bank2.verify_bank_hash());
     }
 
     #[test]
@@ -3843,17 +3862,40 @@ mod tests {
 
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
-        assert!(bank2.verify_hash_internal_state());
+        assert!(bank2.verify_bank_hash());
         let bank3 = new_from_parent(&bank0);
         assert_eq!(bank0_state, bank0.hash_internal_state());
-        assert!(bank2.verify_hash_internal_state());
-        assert!(bank3.verify_hash_internal_state());
+        assert!(bank2.verify_bank_hash());
+        assert!(bank3.verify_bank_hash());
 
         let pubkey2 = Pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
-        assert!(bank2.verify_hash_internal_state());
-        assert!(bank3.verify_hash_internal_state());
+        assert!(bank2.verify_bank_hash());
+        assert!(bank3.verify_bank_hash());
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: self.is_frozen()")]
+    fn test_verify_hash_unfrozen() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(2_000);
+        let bank = Bank::new(&genesis_config);
+        assert!(bank.verify_hash());
+    }
+
+    #[test]
+    fn test_verify_snapshot_bank() {
+        let pubkey = Pubkey::new_rand();
+        let (genesis_config, mint_keypair) = create_genesis_config(2_000);
+        let bank = Bank::new(&genesis_config);
+
+        bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
+        bank.freeze();
+        assert!(bank.verify_snapshot_bank());
+
+        // tamper the bank after freeze!
+        bank.increment_signature_count(1);
+        assert!(!bank.verify_snapshot_bank());
     }
 
     // Test that two bank forks with the same accounts should not hash to the same value.
