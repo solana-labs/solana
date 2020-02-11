@@ -57,7 +57,7 @@ pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 6;
 
 /// Converts a slot to a storage segment. Does not indicate that a segment is complete.
 pub fn get_segment_from_slot(rooted_slot: Slot, slots_per_segment: u64) -> Segment {
-    ((rooted_slot + (slots_per_segment - 1)) / slots_per_segment)
+    (rooted_slot + (slots_per_segment - 1)) / slots_per_segment
 }
 
 /// Given a slot returns the latest complete segment, if no segment could possibly be complete

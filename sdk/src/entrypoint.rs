@@ -71,7 +71,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let is_signer = {
                 #[allow(clippy::cast_ptr_alignment)]
                 let is_signer = *(input.add(offset) as *const u64);
-                (is_signer != 0)
+                is_signer != 0
             };
             offset += size_of::<u64>();
 
