@@ -1118,43 +1118,48 @@ pub fn process_delegate_stake(
         .map(|a| a.keypair())
         .unwrap_or(&config.keypair);
 
-    // Sanity check the vote account to ensure it is attached to a validator that has recently
-    // voted at the tip of the ledger
-    let vote_account_data = rpc_client
-        .get_account_data(vote_account_pubkey)
-        .map_err(|_| {
-            CliError::RpcRequestError(format!("Vote account not found: {}", vote_account_pubkey))
+    if !sign_only {
+        // Sanity check the vote account to ensure it is attached to a validator that has recently
+        // voted at the tip of the ledger
+        let vote_account_data = rpc_client
+            .get_account_data(vote_account_pubkey)
+            .map_err(|_| {
+                CliError::RpcRequestError(format!(
+                    "Vote account not found: {}",
+                    vote_account_pubkey
+                ))
+            })?;
+
+        let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
+            CliError::RpcRequestError(
+                "Account data could not be deserialized to vote state".to_string(),
+            )
         })?;
 
-    let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
-        CliError::RpcRequestError(
-            "Account data could not be deserialized to vote state".to_string(),
-        )
-    })?;
-
-    let sanity_check_result = match vote_state.root_slot {
-        None => Err(CliError::BadParameter(
-            "Unable to delegate. Vote account has no root slot".to_string(),
-        )),
-        Some(root_slot) => {
-            let slot = rpc_client.get_slot()?;
-            if root_slot + solana_sdk::clock::DEFAULT_SLOTS_PER_TURN < slot {
-                Err(CliError::BadParameter(
-                    format!(
-                    "Unable to delegate. Vote account root slot ({}) is too old, the current slot is {}", root_slot, slot
-                    )
-                ))
-            } else {
-                Ok(())
+        let sanity_check_result = match vote_state.root_slot {
+            None => Err(CliError::BadParameter(
+                "Unable to delegate. Vote account has no root slot".to_string(),
+            )),
+            Some(root_slot) => {
+                let slot = rpc_client.get_slot()?;
+                if root_slot + solana_sdk::clock::DEFAULT_SLOTS_PER_TURN < slot {
+                    Err(CliError::BadParameter(
+                        format!(
+                        "Unable to delegate. Vote account root slot ({}) is too old, the current slot is {}", root_slot, slot
+                        )
+                    ))
+                } else {
+                    Ok(())
+                }
             }
-        }
-    };
+        };
 
-    if sanity_check_result.is_err() {
-        if !force {
-            sanity_check_result?;
-        } else {
-            println!("--force supplied, ignoring: {:?}", sanity_check_result);
+        if sanity_check_result.is_err() {
+            if !force {
+                sanity_check_result?;
+            } else {
+                println!("--force supplied, ignoring: {:?}", sanity_check_result);
+            }
         }
     }
 
