@@ -720,8 +720,11 @@ pub(crate) mod tests {
     #[test]
     fn test_add_and_remove_subscription() {
         let (subscriber, _id_receiver, _transport_receiver) = Subscriber::new_test("notification");
-        let sink = subscriber.assign_id(SubscriptionId::String("test".to_string())).unwrap();
-        let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, (Sink<()>, Confirmations)>> = HashMap::new();
+        let sink = subscriber
+            .assign_id(SubscriptionId::String("test".to_string()))
+            .unwrap();
+        let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, (Sink<()>, Confirmations)>> =
+            HashMap::new();
 
         let num_keys = 5;
         let mut next_id: u64 = 0;
@@ -740,12 +743,21 @@ pub(crate) mod tests {
         assert_eq!(subscriptions.get(&0).unwrap().len(), 2);
         assert_eq!(subscriptions.get(&1).unwrap().len(), 1);
 
-        assert_eq!(remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)), true);
+        assert_eq!(
+            remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)),
+            true
+        );
         assert_eq!(subscriptions.len(), num_keys);
         assert_eq!(subscriptions.get(&0).unwrap().len(), 1);
-        assert_eq!(remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)), false);
+        assert_eq!(
+            remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)),
+            false
+        );
 
-        assert_eq!(remove_subscription(&mut subscriptions, &SubscriptionId::Number(next_id)), true);
+        assert_eq!(
+            remove_subscription(&mut subscriptions, &SubscriptionId::Number(next_id)),
+            true
+        );
         assert_eq!(subscriptions.len(), num_keys - 1);
         assert!(subscriptions.get(&0).is_none());
     }
