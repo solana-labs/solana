@@ -443,7 +443,7 @@ declare module '@solana/web3.js' {
       payer: Account,
       program: Account,
       programId: PublicKey,
-      data: Array<number>,
+      data: Buffer | Array<number>,
     ): Promise<PublicKey>;
   }
 
@@ -454,7 +454,7 @@ declare module '@solana/web3.js' {
     static load(
       connection: Connection,
       payer: Account,
-      elfBytes: Array<number>,
+      elfBytes: Buffer | Array<number>,
     ): Promise<PublicKey>;
   }
 
