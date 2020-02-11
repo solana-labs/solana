@@ -70,8 +70,9 @@ pub fn serialize_parameters(
             v.write_u8(position as u8).unwrap();
         } else {
             v.write_u8(0).unwrap();
-            v.write_u64::<LittleEndian>(keyed_account.signer_key().is_some() as u64)
+            v.write_u8(keyed_account.signer_key().is_some() as u8)
                 .unwrap();
+            v.write_u8(keyed_account.is_writable() as u8).unwrap();
             v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
             v.write_u64::<LittleEndian>(keyed_account.lamports()?)
                 .unwrap();
@@ -98,7 +99,8 @@ pub fn deserialize_parameters(
         let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
         start += 1; // is_dup
         if !is_dup {
-            start += mem::size_of::<u64>(); // is_signer
+            start += mem::size_of::<u8>(); // is_signer
+            start += mem::size_of::<u8>(); // is_writable
             start += mem::size_of::<Pubkey>(); // pubkey
             keyed_account.try_account_ref_mut()?.lamports =
                 LittleEndian::read_u64(&buffer[start..]);

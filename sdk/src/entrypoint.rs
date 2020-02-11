@@ -69,10 +69,17 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
         if dup_info == 0 {
             let is_signer = {
                 #[allow(clippy::cast_ptr_alignment)]
-                let is_signer = *(input.add(offset) as *const u64);
+                let is_signer = *(input.add(offset) as *const u8);
                 (is_signer != 0)
             };
-            offset += size_of::<u64>();
+            offset += size_of::<u8>();
+
+            let is_writable = {
+                #[allow(clippy::cast_ptr_alignment)]
+                let is_writable = *(input.add(offset) as *const u8);
+                (is_writable != 0)
+            };
+            offset += size_of::<u8>();
 
             let key: &Pubkey = &*(input.add(offset) as *const Pubkey);
             offset += size_of::<Pubkey>();
@@ -95,6 +102,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
 
             accounts.push(AccountInfo {
                 is_signer,
+                is_writable,
                 key,
                 lamports,
                 data,
