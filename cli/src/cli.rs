@@ -806,12 +806,11 @@ fn check_account_for_multiple_fees(
 ) -> Result<(), Box<dyn error::Error>> {
     let balance = rpc_client.retry_get_balance(account_pubkey, 5)?;
     if let Some(lamports) = balance {
-        if lamports
-            >= messages
-                .iter()
-                .map(|message| fee_calculator.calculate_fee(message))
-                .sum()
-        {
+        let fee = messages
+            .iter()
+            .map(|message| fee_calculator.calculate_fee(message))
+            .sum();
+        if lamports != 0 && lamports >= fee {
             return Ok(());
         }
     }
