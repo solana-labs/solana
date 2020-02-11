@@ -35,17 +35,28 @@ if [[ -d target/cov ]]; then
 fi
 rm -rf target/cov/$reportName
 mkdir -p target/cov
+
+# Mark the base time for a clean room dir
 timing_file=target/cov/before-test
 touch "$timing_file"
 
 source ci/rust-version.sh nightly
+
+# Force rebuild of possibly-cached proc macro crates and build.rs because
+# we always want stable coverage for them
+# Don't support odd file names in our repo ever
+# shellcheck disable=SC2046
+touch \
+  $(git ls-files :**/build.rs) \
+  $(git grep -l "proc-macro.*true" :**/Cargo.toml | sed 's|Cargo.toml|src/lib.rs|')
 
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --no-run "${packages[@]}"
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log
 
 echo "--- grcov"
 
-# Create a clean room dir only with updated gcda/gcno files for this run
+# Create a clean room dir only with updated gcda/gcno files for this run,
+# because our cached target dir is full of other builds' coverage files
 rm -rf target/cov/tmp
 mkdir -p target/cov/tmp
 
@@ -66,6 +77,8 @@ echo "--- filter-files-from-lcov"
 ignored_directories="^(bench-tps|upload-perf|bench-streamer|bench-exchange)"
 
 filter-files-from-lcov() {
+  # this function is too noisy for casual bash -x
+  set +x
   declare skip=false
   while read -r line; do
     if [[ $line =~ ^SF:/ ]]; then
