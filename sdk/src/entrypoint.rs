@@ -64,9 +64,9 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
 
     let mut accounts = Vec::with_capacity(num_accounts);
     for _ in 0..num_accounts {
-        let dup_info = *(input.add(offset) as *const u8) as usize;
+        let dup_info = *(input.add(offset) as *const u8);
         offset += size_of::<u8>();
-        if dup_info == 0 {
+        if dup_info == std::u8::MAX {
             let is_signer = {
                 #[allow(clippy::cast_ptr_alignment)]
                 let is_signer = *(input.add(offset) as *const u8);
@@ -110,7 +110,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             });
         } else {
             // Duplicate account, clone the original
-            accounts.push(accounts[dup_info].clone());
+            accounts.push(accounts[dup_info as usize].clone());
         }
     }
 
