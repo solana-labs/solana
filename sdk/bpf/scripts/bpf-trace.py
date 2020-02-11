@@ -92,7 +92,7 @@ if __name__ == '__main__':
                 line = file_object.readline()
                 key, match = parse_line(rxs_called, line)
                 if key == 'pc':
-                called_pc = int(match.group(1))
+                    called_pc = int(match.group(1))
                     calls.append((ixs_count, frame, symbols[called_pc]))
                     call_nums.append(num_calls)
                     exits.append(0)
@@ -100,11 +100,11 @@ if __name__ == '__main__':
                     frame += 1
             else:
                 if key == 'entry':
-                    pc = int(match.group(1))
-                    calls.append((0, 0, symbols[pc]))
-                    call_nums.append(num_calls)
-                    exits.append(0)
-                    num_calls += 1
+                        pc = int(match.group(1))
+                        calls.append((0, 0, symbols[pc]))
+                        call_nums.append(num_calls)
+                        exits.append(0)
+                        num_calls += 1
                 elif key == 'exit':
                     ixs_count = int(match.group(1))
                     num = call_nums.pop()
