@@ -169,13 +169,13 @@ SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
  * Keyed Account
  */
 typedef struct {
-  SolPubkey *key;        /** Public key of the account */
-  bool is_signer;        /** Transaction was signed by this account's key? */
-  bool is_writable;      /** Is the account writable? */
-  uint64_t *lamports;    /** Number of lamports owned by this account */
-  uint64_t userdata_len; /** Length of data in bytes */
-  uint8_t *userdata;     /** On-chain data within this account */
-  SolPubkey *owner;      /** Program that owns this account */
+  SolPubkey *key;      /** Public key of the account */
+  bool is_signer;      /** Transaction was signed by this account's key? */
+  bool is_writable;    /** Is the account writable? */
+  uint64_t *lamports;  /** Number of lamports owned by this account */
+  uint64_t data_len;   /** Length of data in bytes */
+  uint8_t *data;       /** On-chain data within this account */
+  SolPubkey *owner;    /** Program that owns this account */
 } SolKeyedAccount;
 
 /**
@@ -233,7 +233,7 @@ SOL_FN_PREFIX size_t sol_strlen(const char *s) {
  * Panics
  *
  * Prints the line number where the panic occurred and then causes
- * the BPF VM to immediately halt execution. No accounts' userdata are updated
+ * the BPF VM to immediately halt execution. No accounts' data are updated
  */
 void sol_panic_(const char *, uint64_t, uint64_t, uint64_t);
 #define sol_panic() sol_panic_(__FILE__, sizeof(__FILE__), __LINE__, 0)
@@ -306,11 +306,11 @@ SOL_FN_PREFIX bool sol_deserialize(
       params->ka[i].lamports = (uint64_t *) input;
       input += sizeof(uint64_t);
 
-      // account userdata
-      params->ka[i].userdata_len = *(uint64_t *) input;
+      // account data
+      params->ka[i].data_len = *(uint64_t *) input;
       input += sizeof(uint64_t);
-      params->ka[i].userdata = (uint8_t *) input;
-      input += params->ka[i].userdata_len;
+      params->ka[i].data = (uint8_t *) input;
+      input += params->ka[i].data_len;
 
       // owner
       params->ka[i].owner = (SolPubkey *) input;
@@ -319,8 +319,8 @@ SOL_FN_PREFIX bool sol_deserialize(
       params->ka[i].is_signer = params->ka[dup_info].is_signer;
       params->ka[i].key = params->ka[dup_info].key;
       params->ka[i].lamports = params->ka[dup_info].lamports;
-      params->ka[i].userdata_len = params->ka[dup_info].userdata_len;
-      params->ka[i].userdata = params->ka[dup_info].userdata;
+      params->ka[i].data_len = params->ka[dup_info].data_len;
+      params->ka[i].data = params->ka[dup_info].data;
       params->ka[i].owner = params->ka[dup_info].owner;
     }
   }
@@ -383,8 +383,8 @@ SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
     sol_log_key(params->ka[i].key);
     sol_log("  - Lamports");
     sol_log_64(0, 0, 0, 0, *params->ka[i].lamports);
-    sol_log("  - Userdata");
-    sol_log_array(params->ka[i].userdata, params->ka[i].userdata_len);
+    sol_log("  - data");
+    sol_log_array(params->ka[i].data, params->ka[i].data_len);
     sol_log("  - Owner");
     sol_log_key(params->ka[i].owner);
   }

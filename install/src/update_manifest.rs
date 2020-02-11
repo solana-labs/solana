@@ -15,7 +15,7 @@ pub struct UpdateManifest {
     pub download_sha256: Hash, // SHA256 digest of the release tar.bz2 file
 }
 
-/// Userdata of an Update Manifest program Account.
+/// Data of an Update Manifest program Account.
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 pub struct SignedUpdateManifest {
     pub manifest: UpdateManifest,

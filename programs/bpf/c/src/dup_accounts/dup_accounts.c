@@ -18,17 +18,17 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
   switch (params.data[0]) {
     case(1):
-        sol_log("modify first account userdata");
-        ka[2].userdata[0] = 1;
+        sol_log("modify first account data");
+        ka[2].data[0] = 1;
         break;
     case(2):
-        sol_log("modify first account userdata");
-        ka[3].userdata[0] = 2;
+        sol_log("modify first account data");
+        ka[3].data[0] = 2;
         break;
     case(3):
-        sol_log("modify both account userdata");
-        ka[2].userdata[0] += 1;
-        ka[3].userdata[0] += 2;
+        sol_log("modify both account data");
+        ka[2].data[0] += 1;
+        ka[3].data[0] += 2;
         break;
     case(4):
         sol_log("modify first account lamports");
