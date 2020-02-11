@@ -52,7 +52,7 @@ export class Loader {
     payer: Account,
     program: Account,
     programId: PublicKey,
-    data: Array<number>,
+    data: Buffer | Array<number>,
   ): Promise<PublicKey> {
     {
       const balanceNeeded = await connection.getMinimumBalanceForRentExemption(

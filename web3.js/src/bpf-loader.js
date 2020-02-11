@@ -36,7 +36,7 @@ export class BpfLoader {
   static load(
     connection: Connection,
     payer: Account,
-    elf: Array<number>,
+    elf: Buffer | Array<number>,
   ): Promise<PublicKey> {
     const program = new Account();
     return Loader.load(connection, payer, program, BpfLoader.programId, elf);
