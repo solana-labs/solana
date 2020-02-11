@@ -649,6 +649,21 @@ impl AccountsDB {
             }
         }
 
+        for account_infos in purges.values() {
+            let mut no_delete = false;
+            for (_slot_id, account_info) in account_infos {
+                if *store_counts.get(&account_info.store_id).unwrap() != 0 {
+                    no_delete = true;
+                    break;
+                }
+            }
+            if no_delete {
+                for (_slot_id, account_info) in account_infos {
+                    *store_counts.get_mut(&account_info.store_id).unwrap() += 1;
+                }
+            }
+        }
+
         // Only keep purges where the entire history of the account in the root set
         // can be purged. All AppendVecs for those updates are dead.
         purges.retain(|_pubkey, account_infos| {
