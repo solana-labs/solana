@@ -94,7 +94,7 @@ fn main() {
     let num_threads = BankingStage::num_threads() as usize;
     //   a multiple of packet chunk duplicates to avoid races
     const CHUNKS: usize = 8 * 2;
-    const PACKETS_PER_BATCH: usize = 192;
+    const PACKETS_PER_BATCH: usize = 10;
     let txes = PACKETS_PER_BATCH * num_threads * CHUNKS;
     let mint_total = 1_000_000_000_000;
     let GenesisConfigInfo {
@@ -216,7 +216,7 @@ fn main() {
                 }
             }
             if check_txs(&signal_receiver, txes / CHUNKS, &poh_recorder) {
-                debug!(
+                info!(
                     "resetting bank {} tx count: {} txs_proc: {}",
                     bank.slot(),
                     bank.transaction_count(),
@@ -234,25 +234,34 @@ fn main() {
                 );
                 poh_time.stop();
 
-                let mut new_bank_time = Measure::start("new_bank");
-                let new_bank = Bank::new_from_parent(&bank, &collector, bank.slot() + 1);
-                new_bank_time.stop();
+                let mut total_new_bank_time = 0;
+                let mut total_insert_time = 0;
+                loop {
+                    let mut new_bank_time = Measure::start("new_bank");
+                    let new_bank = Bank::new_from_parent(&bank, &collector, bank.slot() + 1);
+                    new_bank_time.stop();
+                    total_new_bank_time += new_bank_time.as_us();
 
-                let mut insert_time = Measure::start("insert_time");
-                bank_forks.insert(new_bank);
-                bank = bank_forks.working_bank();
-                insert_time.stop();
+                    let mut insert_time = Measure::start("insert_time");
+                    bank_forks.insert(new_bank);
+                    bank = bank_forks.working_bank();
+                    insert_time.stop();
+                    total_insert_time += insert_time.as_us();
 
-                poh_recorder.lock().unwrap().set_bank(&bank);
-                assert!(poh_recorder.lock().unwrap().bank().is_some());
+                    poh_recorder.lock().unwrap().set_bank(&bank);
+                    //assert!(poh_recorder.lock().unwrap().bank().is_some());
+                    if poh_recorder.lock().unwrap().bank().is_some() {
+                        break;
+                    }
+                }
                 if bank.slot() > 32 {
                     bank_forks.set_root(root, &None);
                     root += 1;
                 }
                 debug!(
                     "new_bank_time: {}us insert_time: {}us poh_time: {}us",
-                    new_bank_time.as_us(),
-                    insert_time.as_us(),
+                    total_new_bank_time,
+                    total_insert_time,
                     poh_time.as_us(),
                 );
             } else {
