@@ -3,28 +3,34 @@
 #[cfg(test)]
 mod tests {
     use log::*;
-    use solana_core::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_core::storage_stage::{test_cluster_info, SLOTS_PER_TURN_TEST};
-    use solana_core::storage_stage::{StorageStage, StorageState};
-    use solana_ledger::bank_forks::BankForks;
-    use solana_ledger::blockstore_processor;
-    use solana_ledger::entry;
-    use solana_ledger::{blockstore::Blockstore, create_new_tmp_ledger};
+    use solana_core::{
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        storage_stage::{test_cluster_info, StorageStage, StorageState, SLOTS_PER_TURN_TEST},
+    };
+    use solana_ledger::{
+        bank_forks::BankForks, blockstore::Blockstore, blockstore_processor, create_new_tmp_ledger,
+        entry,
+    };
     use solana_runtime::bank::Bank;
-    use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::message::Message;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::Transaction;
-    use solana_storage_program::storage_instruction;
-    use solana_storage_program::storage_instruction::StorageAccountType;
-    use std::fs::remove_dir_all;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
-    use std::time::Duration;
+    use solana_sdk::{
+        clock::DEFAULT_TICKS_PER_SLOT,
+        hash::Hash,
+        message::Message,
+        pubkey::Pubkey,
+        signature::{Keypair, KeypairCreate, KeypairUtil},
+        transaction::Transaction,
+    };
+    use solana_storage_program::storage_instruction::{self, StorageAccountType};
+    use std::{
+        fs::remove_dir_all,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::channel,
+            Arc, RwLock,
+        },
+        thread::sleep,
+        time::Duration,
+    };
 
     #[test]
     fn test_storage_stage_process_account_proofs() {

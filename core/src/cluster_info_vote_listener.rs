@@ -1,14 +1,21 @@
-use crate::cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS};
-use crate::packet::Packets;
-use crate::poh_recorder::PohRecorder;
-use crate::result::Result;
-use crate::{packet, sigverify};
+use crate::{
+    cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
+    packet,
+    packet::Packets,
+    poh_recorder::PohRecorder,
+    result::Result,
+    sigverify,
+};
 use crossbeam_channel::Sender as CrossbeamSender;
 use solana_metrics::inc_new_counter_debug;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Duration;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, RwLock,
+    },
+    thread::{self, sleep, Builder, JoinHandle},
+    time::Duration,
+};
 
 pub struct ClusterInfoVoteListener {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -83,11 +90,12 @@ impl ClusterInfoVoteListener {
 #[cfg(test)]
 mod tests {
     use crate::packet;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::Transaction;
-    use solana_vote_program::vote_instruction;
-    use solana_vote_program::vote_state::Vote;
+    use solana_sdk::{
+        hash::Hash,
+        signature::{Keypair, KeypairCreate, KeypairUtil},
+        transaction::Transaction,
+    };
+    use solana_vote_program::{vote_instruction, vote_state::Vote};
 
     #[test]
     fn test_max_vote_tx_fits() {

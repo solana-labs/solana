@@ -1,31 +1,39 @@
 //! `window_service` handles the data plane incoming shreds, storing them in
 //!   blockstore and retransmitting where required
 //!
-use crate::cluster_info::ClusterInfo;
-use crate::packet::Packets;
-use crate::repair_service::{RepairService, RepairStrategy};
-use crate::result::{Error, Result};
-use crate::streamer::PacketSender;
+use crate::{
+    cluster_info::ClusterInfo,
+    packet::Packets,
+    repair_service::{RepairService, RepairStrategy},
+    result::{Error, Result},
+    streamer::PacketSender,
+};
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
 };
-use rayon::iter::IntoParallelRefMutIterator;
-use rayon::iter::ParallelIterator;
-use rayon::ThreadPool;
-use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blockstore::{self, Blockstore, MAX_DATA_SHREDS_PER_SLOT};
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::Shred;
+use rayon::{
+    iter::{IntoParallelRefMutIterator, ParallelIterator},
+    ThreadPool,
+};
+use solana_ledger::{
+    bank_forks::BankForks,
+    blockstore::{self, Blockstore, MAX_DATA_SHREDS_PER_SLOT},
+    leader_schedule_cache::LeaderScheduleCache,
+    shred::Shred,
+};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::duration_as_ms;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::{self, Builder, JoinHandle};
-use std::time::{Duration, Instant};
+use solana_sdk::{pubkey::Pubkey, timing::duration_as_ms};
+use std::{
+    net::UdpSocket,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
+    thread::{self, Builder, JoinHandle},
+    time::{Duration, Instant},
+};
 
 fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
     if shred.is_data() {
@@ -494,7 +502,7 @@ mod test {
         clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate, KeypairUtil},
     };
     use std::{
         net::UdpSocket,

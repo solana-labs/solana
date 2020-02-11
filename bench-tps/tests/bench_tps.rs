@@ -1,16 +1,19 @@
 use serial_test_derive::serial;
-use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs};
-use solana_bench_tps::cli::Config;
+use solana_bench_tps::{
+    bench::{do_bench_tps, generate_and_fund_keypairs},
+    cli::Config,
+};
 use solana_client::thin_client::create_client;
-use solana_core::cluster_info::VALIDATOR_PORT_RANGE;
-use solana_core::validator::ValidatorConfig;
+use solana_core::{cluster_info::VALIDATOR_PORT_RANGE, validator::ValidatorConfig};
 use solana_faucet::faucet::run_local_faucet;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 #[cfg(feature = "move")]
 use solana_sdk::move_loader::solana_move_loader_program;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use std::sync::{mpsc::channel, Arc};
-use std::time::Duration;
+use solana_sdk::signature::{Keypair, KeypairCreate, KeypairUtil};
+use std::{
+    sync::{mpsc::channel, Arc},
+    time::Duration,
+};
 
 fn test_bench_tps_local_cluster(config: Config) {
     #[cfg(feature = "move")]

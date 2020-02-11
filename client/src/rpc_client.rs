@@ -1130,7 +1130,7 @@ mod tests {
     use solana_logger;
     use solana_sdk::{
         instruction::InstructionError,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate},
         system_transaction,
         transaction::TransactionError,
     };

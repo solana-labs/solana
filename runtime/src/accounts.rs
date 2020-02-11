@@ -21,8 +21,7 @@ use solana_sdk::{
     native_loader,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    transaction::Result,
-    transaction::{Transaction, TransactionError},
+    transaction::{Result, Transaction, TransactionError},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -678,7 +677,7 @@ mod tests {
         message::Message,
         nonce_state,
         rent::Rent,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate, KeypairUtil},
         system_program,
         transaction::Transaction,
     };

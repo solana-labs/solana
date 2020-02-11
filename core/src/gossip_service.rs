@@ -1,20 +1,28 @@
 //! The `gossip_service` module implements the network control plane.
 
-use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
-use crate::contact_info::ContactInfo;
-use crate::streamer;
+use crate::{
+    cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE},
+    contact_info::ContactInfo,
+    streamer,
+};
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_ledger::bank_forks::BankForks;
 use solana_perf::recycler::Recycler;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use std::net::{SocketAddr, TcpListener, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
-use std::sync::{Arc, RwLock};
-use std::thread::{self, sleep, JoinHandle};
-use std::time::{Duration, Instant};
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairCreate, KeypairUtil},
+};
+use std::{
+    net::{SocketAddr, TcpListener, UdpSocket},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::channel,
+        Arc, RwLock,
+    },
+    thread::{self, sleep, JoinHandle},
+    time::{Duration, Instant},
+};
 
 pub struct GossipService {
     thread_hdls: Vec<JoinHandle<()>>,

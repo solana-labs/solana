@@ -115,7 +115,7 @@ pub fn derivation_of(matches: &ArgMatches<'_>, name: &str) -> Option<DerivationP
 mod tests {
     use super::*;
     use clap::{App, Arg};
-    use solana_sdk::signature::write_keypair_file;
+    use solana_sdk::signature::{write_keypair_file, KeypairCreate};
     use std::fs;
 
     fn app<'ab, 'v>() -> App<'ab, 'v> {

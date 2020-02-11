@@ -9,7 +9,9 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, read_keypair_file, write_keypair, Keypair, KeypairUtil},
+    signature::{
+        keypair_from_seed, read_keypair_file, write_keypair, Keypair, KeypairCreate, KeypairUtil,
+    },
     system_instruction::create_address_with_seed,
 };
 use solana_stake_program::stake_state::{Lockup, StakeAuthorize, StakeState};

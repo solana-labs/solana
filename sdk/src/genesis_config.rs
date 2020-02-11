@@ -10,7 +10,7 @@ use crate::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent::Rent,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, KeypairCreate, KeypairUtil},
     system_program::{self, solana_system_program},
 };
 use bincode::{deserialize, serialize};

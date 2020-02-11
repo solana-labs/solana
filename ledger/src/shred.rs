@@ -919,8 +919,7 @@ pub mod tests {
     use super::*;
     use bincode::serialized_size;
     use matches::assert_matches;
-    use solana_sdk::hash::hash;
-    use solana_sdk::system_transaction;
+    use solana_sdk::{hash::hash, signature::KeypairCreate, system_transaction};
     use std::collections::HashSet;
     use std::convert::TryInto;
 

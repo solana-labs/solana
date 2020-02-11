@@ -144,18 +144,18 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::id;
-    use crate::vest_instruction;
+    use crate::{id, vest_instruction};
     use solana_config_program::date_instruction;
-    use solana_runtime::bank::Bank;
-    use solana_runtime::bank_client::BankClient;
-    use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_config::create_genesis_config;
-    use solana_sdk::hash::hash;
-    use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-    use solana_sdk::transaction::TransactionError;
-    use solana_sdk::transport::Result;
+    use solana_runtime::{bank::Bank, bank_client::BankClient};
+    use solana_sdk::{
+        client::SyncClient,
+        genesis_config::create_genesis_config,
+        hash::hash,
+        message::Message,
+        signature::{Keypair, KeypairCreate, KeypairUtil, Signature},
+        transaction::TransactionError,
+        transport::Result,
+    };
     use std::sync::Arc;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {

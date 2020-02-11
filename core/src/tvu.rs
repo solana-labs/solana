@@ -247,11 +247,14 @@ impl Tvu {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::banking_stage::create_test_recorder;
-    use crate::cluster_info::{ClusterInfo, Node};
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use crate::{
+        banking_stage::create_test_recorder,
+        cluster_info::{ClusterInfo, Node},
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    };
     use solana_ledger::create_new_tmp_ledger;
     use solana_runtime::bank::Bank;
+    use solana_sdk::signature::KeypairCreate;
     use std::sync::atomic::Ordering;
 
     #[test]

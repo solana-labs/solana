@@ -7,9 +7,11 @@ use chrono::{SecondsFormat, Utc};
 use serde_json::json;
 use solana_ledger::entry::Entry;
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
-use std::cell::RefCell;
-use std::io::Result;
-use std::path::{Path, PathBuf};
+use std::{
+    cell::RefCell,
+    io::Result,
+    path::{Path, PathBuf},
+};
 
 pub trait EntryWriter: std::fmt::Debug {
     fn write(&self, payload: String) -> Result<()>;
@@ -179,11 +181,12 @@ mod test {
     use super::*;
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
-    use std::collections::HashSet;
-    use std::path::PathBuf;
+    use solana_sdk::{
+        hash::Hash,
+        signature::{Keypair, KeypairCreate, KeypairUtil},
+        system_transaction,
+    };
+    use std::{collections::HashSet, path::PathBuf};
 
     #[test]
     fn test_serialize_transactions() {

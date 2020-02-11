@@ -8,7 +8,9 @@ use solana_sdk::{
     instruction::CompiledInstruction as CompiledInstructionNative,
     message::{Message as MessageNative, MessageHeader as MessageHeaderNative},
     pubkey::Pubkey,
-    signature::{Keypair as KeypairNative, KeypairUtil, Signature as SignatureNative},
+    signature::{
+        Keypair as KeypairNative, KeypairCreate, KeypairUtil, Signature as SignatureNative,
+    },
     transaction::Transaction as TransactionNative,
 };
 use std::{

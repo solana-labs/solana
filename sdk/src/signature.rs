@@ -102,19 +102,25 @@ impl FromStr for Signature {
     }
 }
 
-pub trait KeypairUtil {
+pub trait KeypairCreate {
     fn new() -> Self;
-    fn pubkey(&self) -> Pubkey;
-    fn sign_message(&self, message: &[u8]) -> Signature;
 }
 
-impl KeypairUtil for Keypair {
+impl KeypairCreate for Keypair {
     /// Return a new ED25519 keypair
     fn new() -> Self {
         let mut rng = OsRng::new().unwrap();
         Keypair::generate(&mut rng)
     }
+}
 
+pub trait KeypairUtil {
+    fn pubkey(&self) -> Pubkey;
+    fn sign_message(&self, message: &[u8]) -> Signature;
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>>;
+}
+
+impl KeypairUtil for Keypair {
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
         Pubkey::new(self.public.as_ref())
@@ -122,6 +128,10 @@ impl KeypairUtil for Keypair {
 
     fn sign_message(&self, message: &[u8]) -> Signature {
         Signature::new(&self.sign(message).to_bytes())
+    }
+
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+        Ok(self.sign_message(message))
     }
 }
 

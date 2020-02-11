@@ -1,11 +1,13 @@
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{pubkey::Pubkey, timing::timestamp};
 #[cfg(test)]
-use solana_sdk::rpc_port;
-#[cfg(test)]
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::timestamp;
-use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
-use std::net::{IpAddr, SocketAddr};
+use solana_sdk::{
+    rpc_port,
+    signature::{Keypair, KeypairCreate, KeypairUtil},
+};
+use std::{
+    cmp::{Ord, Ordering, PartialEq, PartialOrd},
+    net::{IpAddr, SocketAddr},
+};
 
 /// Structure representing a node on the network
 #[derive(Serialize, Deserialize, Clone, Debug)]

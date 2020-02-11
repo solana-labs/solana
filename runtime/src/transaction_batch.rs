@@ -59,7 +59,7 @@ mod tests {
     use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
     use solana_sdk::{
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate},
         system_transaction,
     };
 

@@ -1,19 +1,20 @@
 use log::*;
 use solana_bench_exchange::bench::{airdrop_lamports, do_bench_exchange, Config};
-use solana_core::gossip_service::{discover_cluster, get_multi_client};
-use solana_core::validator::ValidatorConfig;
-use solana_exchange_program::exchange_processor::process_instruction;
-use solana_exchange_program::id;
-use solana_exchange_program::solana_exchange_program;
+use solana_core::{
+    gossip_service::{discover_cluster, get_multi_client},
+    validator::ValidatorConfig,
+};
+use solana_exchange_program::{
+    exchange_processor::process_instruction, id, solana_exchange_program,
+};
 use solana_faucet::faucet::run_local_faucet;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
-use solana_runtime::bank::Bank;
-use solana_runtime::bank_client::BankClient;
-use solana_sdk::genesis_config::create_genesis_config;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use std::process::exit;
-use std::sync::mpsc::channel;
-use std::time::Duration;
+use solana_runtime::{bank::Bank, bank_client::BankClient};
+use solana_sdk::{
+    genesis_config::create_genesis_config,
+    signature::{Keypair, KeypairCreate, KeypairUtil},
+};
+use std::{process::exit, sync::mpsc::channel, time::Duration};
 
 #[test]
 #[ignore]

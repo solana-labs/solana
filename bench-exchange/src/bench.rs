@@ -15,7 +15,7 @@ use solana_sdk::{
     client::{Client, SyncClient},
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, KeypairCreate, KeypairUtil},
     timing::{duration_as_ms, duration_as_s},
     transaction::Transaction,
     {system_instruction, system_program},

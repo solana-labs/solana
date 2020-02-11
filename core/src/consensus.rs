@@ -479,15 +479,20 @@ pub mod test {
         clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate, KeypairUtil},
         transaction::Transaction,
     };
     use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state;
-    use solana_vote_program::{vote_instruction, vote_state::Vote};
-    use std::collections::{HashMap, VecDeque};
-    use std::sync::RwLock;
-    use std::{thread::sleep, time::Duration};
+    use solana_vote_program::{
+        vote_instruction,
+        vote_state::{self, Vote},
+    };
+    use std::{
+        collections::{HashMap, VecDeque},
+        sync::RwLock,
+        thread::sleep,
+        time::Duration,
+    };
     use trees::{tr, Node, Tree};
 
     pub(crate) struct ValidatorKeypairs {

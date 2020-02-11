@@ -222,18 +222,18 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::budget_instruction;
-    use crate::id;
-    use solana_runtime::bank::Bank;
-    use solana_runtime::bank_client::BankClient;
-    use solana_sdk::account::Account;
-    use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_config::create_genesis_config;
-    use solana_sdk::hash::hash;
-    use solana_sdk::instruction::InstructionError;
-    use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::TransactionError;
+    use crate::{budget_instruction, id};
+    use solana_runtime::{bank::Bank, bank_client::BankClient};
+    use solana_sdk::{
+        account::Account,
+        client::SyncClient,
+        genesis_config::create_genesis_config,
+        hash::hash,
+        instruction::InstructionError,
+        message::Message,
+        signature::{Keypair, KeypairCreate, KeypairUtil},
+        transaction::TransactionError,
+    };
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);

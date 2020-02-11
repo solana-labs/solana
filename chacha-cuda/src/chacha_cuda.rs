@@ -4,9 +4,7 @@ use solana_chacha::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
 use solana_ledger::blockstore::Blockstore;
 use solana_perf::perf_libs;
 use solana_sdk::hash::Hash;
-use std::io;
-use std::mem::size_of;
-use std::sync::Arc;
+use std::{io, mem::size_of, sync::Arc};
 
 // Encrypt a file with multiple starting IV states, determined by ivecs.len()
 //
@@ -115,12 +113,15 @@ mod tests {
     use super::*;
     use solana_archiver_utils::sample_file;
     use solana_chacha::chacha::chacha_cbc_encrypt_ledger;
-    use solana_ledger::entry::create_ticks;
-    use solana_ledger::get_tmp_ledger_path;
-    use solana_sdk::clock::DEFAULT_SLOTS_PER_SEGMENT;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::fs::{remove_dir_all, remove_file};
-    use std::path::Path;
+    use solana_ledger::{entry::create_ticks, get_tmp_ledger_path};
+    use solana_sdk::{
+        clock::DEFAULT_SLOTS_PER_SEGMENT,
+        signature::{Keypair, KeypairCreate},
+    };
+    use std::{
+        fs::{remove_dir_all, remove_file},
+        path::Path,
+    };
 
     #[test]
     fn test_encrypt_file_many_keys_single() {

@@ -474,7 +474,7 @@ pub fn process_show_vote_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::write_keypair;
+    use solana_sdk::signature::{write_keypair, KeypairCreate};
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {

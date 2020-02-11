@@ -249,7 +249,7 @@ mod tests {
     use super::*;
     use crate::{
         instruction::AccountMeta,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate, KeypairUtil},
     };
 
     #[test]

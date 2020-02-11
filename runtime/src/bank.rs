@@ -2110,7 +2110,7 @@ mod tests {
         nonce_state,
         poh_config::PohConfig,
         rent::Rent,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate, KeypairUtil},
         system_instruction,
         system_program::{self, solana_system_program},
         sysvar::{fees::Fees, rewards::Rewards},

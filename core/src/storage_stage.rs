@@ -648,12 +648,18 @@ mod tests {
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use rayon::prelude::*;
     use solana_runtime::bank::Bank;
-    use solana_sdk::hash::Hasher;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::cmp::{max, min};
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
+    use solana_sdk::{
+        hash::Hasher,
+        signature::{Keypair, KeypairCreate, KeypairUtil},
+    };
+    use std::{
+        cmp::{max, min},
+        sync::{
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+            mpsc::channel,
+            Arc, RwLock,
+        },
+    };
 
     #[test]
     fn test_storage_stage_none_ledger() {

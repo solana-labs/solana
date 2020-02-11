@@ -12,11 +12,10 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use console::style;
 use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::{
     account_utils::StateMut,
     pubkey::Pubkey,
-    signature::KeypairUtil,
+    signature::{Keypair, KeypairUtil, Signature},
     system_instruction::{create_address_with_seed, SystemError},
     sysvar::{
         stake_history::{self, StakeHistory},
@@ -1230,7 +1229,7 @@ mod tests {
     use solana_sdk::{
         fee_calculator::FeeCalculator,
         hash::Hash,
-        signature::{keypair_from_seed, read_keypair_file, write_keypair, KeypairUtil},
+        signature::{keypair_from_seed, read_keypair_file, write_keypair, KeypairCreate},
     };
     use tempfile::NamedTempFile;
 

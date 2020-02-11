@@ -63,7 +63,7 @@ mod tests {
         client::SyncClient,
         genesis_config::create_genesis_config,
         message::Message,
-        signature::{Keypair, KeypairUtil, Signature},
+        signature::{Keypair, KeypairCreate, KeypairUtil, Signature},
         system_program,
         transport::Result,
     };

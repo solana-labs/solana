@@ -6,7 +6,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{
         keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair,
-        KeypairUtil,
+        KeypairCreate,
     },
 };
 use std::{

@@ -21,7 +21,7 @@ mod tests {
         clock::Slot,
         hash::hashv,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate, KeypairUtil},
         system_transaction,
     };
     use std::{fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc};

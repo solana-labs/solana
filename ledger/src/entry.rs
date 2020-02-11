@@ -4,25 +4,24 @@
 //! represents an approximate amount of time since the last Entry was created.
 use crate::poh::Poh;
 use log::*;
-use rayon::prelude::*;
-use rayon::ThreadPool;
+use rayon::{prelude::*, ThreadPool};
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_merkle_tree::MerkleTree;
 use solana_metrics::*;
-use solana_perf::cuda_runtime::PinnedVec;
-use solana_perf::perf_libs;
-use solana_perf::recycler::Recycler;
+use solana_perf::{cuda_runtime::PinnedVec, perf_libs, recycler::Recycler};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::hash::Hash;
-use solana_sdk::timing;
-use solana_sdk::transaction::Transaction;
-use std::cell::RefCell;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
-use std::time::Instant;
-use std::{cmp, thread};
+use solana_sdk::{hash::Hash, timing, transaction::Transaction};
+use std::{
+    cell::RefCell,
+    cmp,
+    sync::{
+        mpsc::{Receiver, Sender},
+        Arc, Mutex,
+    },
+    thread::{self, JoinHandle},
+    time::Instant,
+};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -457,7 +456,7 @@ mod tests {
     use solana_sdk::{
         hash::{hash, Hash},
         message::Message,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate, KeypairUtil},
         system_transaction,
         transaction::Transaction,
     };

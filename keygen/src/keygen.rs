@@ -21,7 +21,7 @@ use solana_sdk::{
     pubkey::{write_pubkey_file, Pubkey},
     signature::{
         keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
-        Keypair, KeypairUtil, Signature,
+        Keypair, KeypairCreate, KeypairUtil, Signature,
     },
 };
 use std::{

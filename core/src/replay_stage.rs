@@ -1063,7 +1063,7 @@ pub(crate) mod tests {
         instruction::InstructionError,
         packet::PACKET_DATA_SIZE,
         rent::Rent,
-        signature::{Keypair, KeypairUtil, Signature},
+        signature::{Keypair, KeypairCreate, KeypairUtil, Signature},
         system_transaction,
         transaction::TransactionError,
     };

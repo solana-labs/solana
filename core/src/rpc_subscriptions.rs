@@ -11,14 +11,16 @@ use solana_sdk::{
     account::Account, clock::Slot, pubkey::Pubkey, signature::Signature, transaction,
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
-use std::ops::DerefMut;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
-use std::thread::{Builder, JoinHandle};
-use std::time::Duration;
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, RwLock},
+    ops::DerefMut,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
+        Arc, Mutex, RwLock,
+    },
+    thread::{Builder, JoinHandle},
+    time::Duration,
 };
 
 const RECEIVE_DELAY_MILLIS: u64 = 100;
@@ -485,7 +487,7 @@ pub(crate) mod tests {
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_budget_program;
     use solana_sdk::{
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate, KeypairUtil},
         system_transaction,
     };
     use tokio::prelude::{Async, Stream};

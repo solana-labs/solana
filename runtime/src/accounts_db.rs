@@ -48,8 +48,10 @@ use std::{
     fmt,
     io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, RwLock,
+    },
 };
 use tempfile::TempDir;
 
@@ -1330,7 +1332,11 @@ pub mod tests {
     use assert_matches::assert_matches;
     use bincode::serialize_into;
     use rand::{thread_rng, Rng};
-    use solana_sdk::{account::Account, hash::HASH_BYTES};
+    use solana_sdk::{
+        account::Account,
+        hash::HASH_BYTES,
+        signature::{Keypair, KeypairCreate, KeypairUtil},
+    };
     use std::{fs, str::FromStr};
     use tempfile::TempDir;
 
@@ -2396,7 +2402,6 @@ pub mod tests {
 
     #[test]
     fn test_bad_bank_hash() {
-        use solana_sdk::signature::{Keypair, KeypairUtil};
         let db = AccountsDB::new(Vec::new());
 
         let some_slot: Slot = 0;

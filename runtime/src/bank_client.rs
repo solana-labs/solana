@@ -274,7 +274,9 @@ impl BankClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{genesis_config::create_genesis_config, instruction::AccountMeta};
+    use solana_sdk::{
+        genesis_config::create_genesis_config, instruction::AccountMeta, signature::KeypairCreate,
+    };
 
     #[test]
     fn test_bank_client_new_with_keypairs() {

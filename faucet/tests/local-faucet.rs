@@ -3,7 +3,7 @@ use solana_sdk::{
     hash::Hash,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, KeypairCreate, KeypairUtil},
     system_instruction,
     transaction::Transaction,
 };

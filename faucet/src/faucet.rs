@@ -307,7 +307,7 @@ pub fn run_faucet(
 mod tests {
     use super::*;
     use bytes::BufMut;
-    use solana_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::{signature::KeypairCreate, system_instruction::SystemInstruction};
     use std::time::Duration;
 
     #[test]

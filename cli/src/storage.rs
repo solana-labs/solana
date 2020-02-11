@@ -5,10 +5,13 @@ use crate::cli::{
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::signature::Keypair;
 use solana_sdk::{
-    account_utils::StateMut, message::Message, pubkey::Pubkey, signature::KeypairUtil,
-    system_instruction::SystemError, transaction::Transaction,
+    account_utils::StateMut,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Keypair, KeypairUtil},
+    system_instruction::SystemError,
+    transaction::Transaction,
 };
 use solana_storage_program::storage_instruction::{self, StorageAccountType};
 
@@ -259,7 +262,7 @@ pub fn process_show_storage_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::write_keypair;
+    use solana_sdk::signature::{write_keypair, KeypairCreate};
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {

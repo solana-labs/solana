@@ -464,13 +464,14 @@ pub fn process_instruction(
 mod test {
     use super::*;
     use crate::{exchange_instruction, id};
-    use solana_runtime::bank::Bank;
-    use solana_runtime::bank_client::BankClient;
-    use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_config::create_genesis_config;
-    use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_instruction;
+    use solana_runtime::{bank::Bank, bank_client::BankClient};
+    use solana_sdk::{
+        client::SyncClient,
+        genesis_config::create_genesis_config,
+        message::Message,
+        signature::{Keypair, KeypairCreate, KeypairUtil},
+        system_instruction,
+    };
     use std::mem;
 
     fn try_calc(

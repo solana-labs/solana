@@ -1,14 +1,20 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl};
-use crate::rpc_subscriptions::RpcSubscriptions;
+use crate::{
+    rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
+    rpc_subscriptions::RpcSubscriptions,
+};
 use jsonrpc_pubsub::{PubSubHandler, Session};
 use jsonrpc_ws_server::{RequestContext, ServerBuilder};
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Duration;
+use std::{
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::{self, sleep, Builder, JoinHandle},
+    time::Duration,
+};
 
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,

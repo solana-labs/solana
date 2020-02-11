@@ -72,11 +72,10 @@ impl SigVerifier for ShredSigVerifier {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::genesis_utils::create_genesis_config_with_leader;
-    use crate::packet::Packet;
+    use crate::{genesis_utils::create_genesis_config_with_leader, packet::Packet};
     use solana_ledger::shred::{Shred, Shredder};
     use solana_runtime::bank::Bank;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairCreate, KeypairUtil};
 
     #[test]
     fn test_sigverify_shreds_read_slots() {

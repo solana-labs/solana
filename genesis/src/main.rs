@@ -560,12 +560,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::genesis_config::GenesisConfig;
-    use solana_sdk::pubkey::Pubkey;
-    use std::collections::HashMap;
-    use std::fs::remove_file;
-    use std::io::Write;
-    use std::path::Path;
+    use solana_sdk::{genesis_config::GenesisConfig, pubkey::Pubkey, signature::KeypairCreate};
+    use std::{collections::HashMap, fs::remove_file, io::Write, path::Path};
     use tempfile;
 
     #[test]

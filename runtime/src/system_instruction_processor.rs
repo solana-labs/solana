@@ -329,7 +329,7 @@ mod tests {
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         nonce_state,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, KeypairCreate, KeypairUtil},
         system_instruction, system_program, sysvar,
         transaction::TransactionError,
     };

@@ -178,7 +178,7 @@ impl<T: Clone> AccountsIndex<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairCreate, KeypairUtil};
 
     #[test]
     fn test_get_empty() {

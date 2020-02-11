@@ -618,7 +618,7 @@ mod tests {
         account::Account,
         hash::hash,
         nonce_state::{Meta as NonceMeta, NonceState},
-        signature::{read_keypair_file, write_keypair},
+        signature::{read_keypair_file, write_keypair, KeypairCreate},
         system_program,
     };
     use tempfile::NamedTempFile;

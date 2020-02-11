@@ -2,20 +2,26 @@
 //! using the `blockstream` module, providing client services such as a block explorer with
 //! real-time access to entries.
 
-use crate::blockstream::BlockstreamEvents;
 #[cfg(test)]
 use crate::blockstream::MockBlockstream as Blockstream;
 #[cfg(not(test))]
 use crate::blockstream::SocketBlockstream as Blockstream;
-use crate::result::{Error, Result};
+use crate::{
+    blockstream::BlockstreamEvents,
+    result::{Error, Result},
+};
 use solana_ledger::blockstore::Blockstore;
 use solana_sdk::pubkey::Pubkey;
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
-use std::sync::Arc;
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
+use std::{
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{Receiver, RecvTimeoutError},
+        Arc,
+    },
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
+};
 
 pub struct BlockstreamService {
     t_blockstream: JoinHandle<()>,
@@ -104,13 +110,16 @@ mod test {
     use bincode::{deserialize, serialize};
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
-    use solana_ledger::create_new_tmp_ledger;
-    use solana_ledger::entry::{create_ticks, Entry};
-    use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction;
-    use std::path::PathBuf;
-    use std::sync::mpsc::channel;
+    use solana_ledger::{
+        create_new_tmp_ledger,
+        entry::{create_ticks, Entry},
+    };
+    use solana_sdk::{
+        hash::Hash,
+        signature::{Keypair, KeypairCreate, KeypairUtil},
+        system_transaction,
+    };
+    use std::{path::PathBuf, sync::mpsc::channel};
 
     #[test]
     fn test_blockstream_service_process_entries() {

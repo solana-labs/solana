@@ -1,10 +1,8 @@
 use clap::{crate_description, crate_name, value_t, App, Arg, ArgMatches};
 use solana_core::gen_keys::GenKeys;
 use solana_faucet::faucet::FAUCET_PORT;
-use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
-use std::net::SocketAddr;
-use std::process::exit;
-use std::time::Duration;
+use solana_sdk::signature::{read_keypair_file, Keypair, KeypairCreate};
+use std::{net::SocketAddr, process::exit, time::Duration};
 
 pub struct Config {
     pub entrypoint_addr: SocketAddr,

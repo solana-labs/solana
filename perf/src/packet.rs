@@ -105,7 +105,7 @@ where
 mod tests {
     use super::*;
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairCreate, KeypairUtil};
     use solana_sdk::system_transaction;
 
     #[test]

@@ -11,16 +11,13 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil},
+    signature::{read_keypair_file, write_keypair, Keypair, KeypairCreate, KeypairUtil},
 };
-use std::fs::remove_dir_all;
-use std::sync::mpsc::channel;
+use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
+use tempfile::NamedTempFile;
 
 #[cfg(test)]
 use solana_core::validator::new_validator_for_tests;
-use std::thread::sleep;
-use std::time::Duration;
-use tempfile::NamedTempFile;
 
 fn make_tmp_file() -> (String, NamedTempFile) {
     let tmp_file = NamedTempFile::new().unwrap();

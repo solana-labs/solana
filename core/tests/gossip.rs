@@ -2,17 +2,24 @@
 extern crate log;
 
 use rayon::iter::*;
-use solana_core::cluster_info::{ClusterInfo, Node};
-use solana_core::gossip_service::GossipService;
-
-use solana_core::packet::Packet;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::timestamp;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::time::Duration;
+use solana_core::{
+    cluster_info::{ClusterInfo, Node},
+    gossip_service::GossipService,
+    packet::Packet,
+};
+use solana_sdk::{
+    signature::{Keypair, KeypairCreate, KeypairUtil},
+    timing::timestamp,
+};
+use std::{
+    net::UdpSocket,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
+    thread::sleep,
+    time::Duration,
+};
 
 fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
     let keypair = Arc::new(Keypair::new());

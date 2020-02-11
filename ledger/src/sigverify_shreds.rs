@@ -445,9 +445,8 @@ pub fn sign_shreds_gpu(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::shred::SIZE_OF_DATA_SHRED_PAYLOAD;
-    use crate::shred::{Shred, Shredder};
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD};
+    use solana_sdk::signature::{Keypair, KeypairCreate, KeypairUtil};
     #[test]
     fn test_sigverify_shred_cpu() {
         solana_logger::setup();

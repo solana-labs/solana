@@ -24,7 +24,7 @@ use solana_sdk::{
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{Keypair, KeypairCreate, KeypairUtil, Signature},
     system_transaction,
     timing::duration_as_ms,
     transport::TransportError,
