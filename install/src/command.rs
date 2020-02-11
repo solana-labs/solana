@@ -757,11 +757,11 @@ pub fn update(config_file: &str) -> Result<bool, String> {
     let update_manifest = info(config_file, false)?;
 
     let release_dir = if let Some(explicit_release) = &config.explicit_release {
-        let (download, release_dir) = match explicit_release {
+        let (download_url, release_dir) = match explicit_release {
             ExplicitRelease::Semver(release_semver) => {
                 let download_url = github_release_download_url(release_semver);
                 let release_dir = config.release_dir(&release_semver);
-                let download = if release_dir.join(".ok").exists() {
+                let download_url = if release_dir.join(".ok").exists() {
                     // If this release_semver has already been successfully downloaded, no update
                     // needed
                     println!("{} is present, no download required.", release_semver);
@@ -769,36 +769,43 @@ pub fn update(config_file: &str) -> Result<bool, String> {
                 } else {
                     Some(download_url)
                 };
-                (download, release_dir)
+                (download_url, release_dir)
             }
             ExplicitRelease::Channel(release_channel) => {
-                let version_url = release_channel_version_url(release_channel);
-
-                let (_temp_dir, temp_file, _temp_archive_sha256) =
-                    download_to_temp(&version_url, None)
-                        .map_err(|err| format!("Unable to download {}: {}", version_url, err))?;
-
-                let update_release_version = load_release_version(&temp_file)?;
-
                 let release_dir = config.release_dir(&release_channel);
-                let current_release_version =
-                    load_release_version(&release_dir.join("solana-release").join("version.yml"))?;
+                let current_release_version_yml =
+                    release_dir.join("solana-release").join("version.yml");
+                let download_url = Some(release_channel_download_url(release_channel));
 
-                let download = if update_release_version.commit == current_release_version.commit {
-                    // Same commit, no update required
-                    println!(
-                        "Latest {} build is already present, no download required.",
-                        release_channel
-                    );
-                    None
+                if !current_release_version_yml.exists() {
+                    (download_url, release_dir)
                 } else {
-                    Some(release_channel_download_url(release_channel))
-                };
-                (download, release_dir)
+                    let version_url = release_channel_version_url(release_channel);
+
+                    let (_temp_dir, temp_file, _temp_archive_sha256) =
+                        download_to_temp(&version_url, None).map_err(|err| {
+                            format!("Unable to download {}: {}", version_url, err)
+                        })?;
+
+                    let update_release_version = load_release_version(&temp_file)?;
+                    let current_release_version =
+                        load_release_version(&current_release_version_yml)?;
+
+                    if update_release_version.commit == current_release_version.commit {
+                        // Same commit, no update required
+                        println!(
+                            "Latest {} build is already present, no download required.",
+                            release_channel
+                        );
+                        (None, release_dir)
+                    } else {
+                        (download_url, release_dir)
+                    }
+                }
             }
         };
 
-        if let Some(download_url) = download {
+        if let Some(download_url) = download_url {
             let (_temp_dir, temp_archive, _temp_archive_sha256) =
                 download_to_temp(&download_url, None)
                     .map_err(|err| format!("Unable to download {}: {}", download_url, err))?;
