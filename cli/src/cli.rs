@@ -481,7 +481,7 @@ impl CliConfig {
                     derivation_path = derivation;
                 }
                 let ledger = get_ledger_from_info(remote_wallet_info)?;
-                return Ok(ledger.get_pubkey(derivation_path)?);
+                return Ok(ledger.get_pubkey(&derivation_path)?);
             }
         }
         Ok(self.keypair.pubkey())
