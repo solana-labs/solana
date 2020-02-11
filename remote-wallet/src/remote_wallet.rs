@@ -153,12 +153,12 @@ pub trait RemoteWallet {
     ) -> Result<RemoteWalletInfo, RemoteWalletError>;
 
     /// Get solana pubkey from a RemoteWallet
-    fn get_pubkey(&self, derivation: &DerivationPath) -> Result<Pubkey, RemoteWalletError>;
+    fn get_pubkey(&self, derivation_path: &DerivationPath) -> Result<Pubkey, RemoteWalletError>;
 
     /// Sign transaction data with wallet managing pubkey at derivation path m/44'/501'/<account>'/<change>'.
     fn sign_transaction(
         &self,
-        derivation: &DerivationPath,
+        derivation_path: &DerivationPath,
         transaction: Transaction,
     ) -> Result<Signature, RemoteWalletError>;
 }
