@@ -273,7 +273,7 @@ SOL_FN_PREFIX bool sol_deserialize(
       // is writable?
       params->ka[i].is_writable = *(uint8_t *) input != 0;
       input += sizeof(uint8_t);
-      
+
       // key
       params->ka[i].key = (SolPubkey *) input;
       input += sizeof(SolPubkey);
