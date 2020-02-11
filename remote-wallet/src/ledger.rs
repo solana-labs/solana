@@ -233,6 +233,19 @@ impl LedgerWallet {
             ver[3].into(),
         ))
     }
+
+    pub fn sign_raw_data(
+        &self,
+        derivation: &DerivationPath,
+        data: &[u8],
+    ) -> Result<Vec<u8>, RemoteWalletError> {
+        let mut payload = get_derivation_path(&derivation);
+        for byte in (data.len() as u16).to_be_bytes().iter() {
+            payload.push(*byte);
+        }
+        payload.extend_from_slice(data);
+        self.send_apdu(0x03, 1, 0, &payload)
+    }
 }
 
 impl RemoteWallet for LedgerWallet {
