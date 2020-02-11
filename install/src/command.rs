@@ -6,6 +6,7 @@ use crate::{
 use chrono::{Local, TimeZone};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
+use serde_derive::Deserialize;
 use solana_client::rpc_client::RpcClient;
 use solana_config_program::{config_instruction, get_config_data, ConfigState};
 use solana_sdk::{
@@ -24,6 +25,13 @@ use std::{
 };
 use tempdir::TempDir;
 use url::Url;
+
+#[derive(Deserialize, Debug)]
+pub struct ReleaseVersion {
+    pub target: String,
+    pub commit: String,
+    channel: String,
+}
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static LOOKING_GLASS: Emoji = Emoji("🔍 ", "");
@@ -46,15 +54,15 @@ fn println_name_value(name: &str, value: &str) {
     println!("{} {}", style(name).bold(), value);
 }
 
-/// Downloads the release archive at `url` to a temporary location.  If `expected_sha256` is
-/// Some(_), produce an error if the release SHA256 doesn't match.
+/// Downloads a file at `url` to a temporary location.  If `expected_sha256` is
+/// Some(_), produce an error if the SHA256 of the file contents doesn't match.
 ///
 /// Returns a tuple consisting of:
 /// * TempDir - drop this value to clean up the temporary location
-/// * PathBuf - path to the downloaded release (within `TempDir`)
+/// * PathBuf - path to the downloaded file (within `TempDir`)
 /// * String  - SHA256 of the release
 ///
-fn download_to_temp_archive(
+fn download_to_temp(
     url: &str,
     expected_sha256: Option<&Hash>,
 ) -> Result<(TempDir, PathBuf, Hash), Box<dyn std::error::Error>> {
@@ -77,7 +85,7 @@ fn download_to_temp_archive(
     let url = Url::parse(url).map_err(|err| format!("Unable to parse {}: {}", url, err))?;
 
     let temp_dir = TempDir::new(clap::crate_name!())?;
-    let temp_file = temp_dir.path().join("release.tar.bz2");
+    let temp_file = temp_dir.path().join("download");
 
     let client = reqwest::blocking::Client::new();
 
@@ -162,22 +170,21 @@ fn extract_release_archive(
     Ok(())
 }
 
-/// Reads the supported TARGET triple for the given release
-fn load_release_target(release_dir: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    use serde_derive::Deserialize;
-    #[derive(Deserialize, Debug)]
-    pub struct ReleaseVersion {
-        pub target: String,
-        pub commit: String,
-        channel: String,
-    }
+fn load_release_version(version_yml: &Path) -> Result<ReleaseVersion, String> {
+    let file = File::open(&version_yml)
+        .map_err(|err| format!("Unable to open {:?}: {:?}", version_yml, err))?;
+    let version: ReleaseVersion = serde_yaml::from_reader(file)
+        .map_err(|err| format!("Unable to parse {:?}: {:?}", version_yml, err))?;
+    Ok(version)
+}
 
+/// Reads the supported TARGET triple for the given release
+fn load_release_target(release_dir: &Path) -> Result<String, String> {
     let mut version_yml = PathBuf::from(release_dir);
     version_yml.push("solana-release");
     version_yml.push("version.yml");
 
-    let file = File::open(&version_yml)?;
-    let version: ReleaseVersion = serde_yaml::from_reader(file)?;
+    let version = load_release_version(&version_yml)?;
     Ok(version.target)
 }
 
@@ -554,6 +561,14 @@ fn release_channel_download_url(release_channel: &str) -> String {
     )
 }
 
+fn release_channel_version_url(release_channel: &str) -> String {
+    format!(
+        "http://release.solana.com/{}/solana-release-{}.yml",
+        release_channel,
+        crate::build_env::TARGET
+    )
+}
+
 pub fn info(config_file: &str, local_info_only: bool) -> Result<Option<UpdateManifest>, String> {
     let config = Config::load(config_file)?;
 
@@ -663,9 +678,8 @@ pub fn deploy(
     }
 
     // Download the release
-    let (temp_dir, temp_archive, temp_archive_sha256) =
-        download_to_temp_archive(download_url, None)
-            .map_err(|err| format!("Unable to download {}: {}", download_url, err))?;
+    let (temp_dir, temp_archive, temp_archive_sha256) = download_to_temp(download_url, None)
+        .map_err(|err| format!("Unable to download {}: {}", download_url, err))?;
 
     if let Ok(update_manifest) = get_update_manifest(&rpc_client, &update_manifest_keypair.pubkey())
     {
@@ -750,6 +764,7 @@ pub fn update(config_file: &str) -> Result<bool, String> {
                 let download = if release_dir.join(".ok").exists() {
                     // If this release_semver has already been successfully downloaded, no update
                     // needed
+                    println!("{} is present, no download required.", release_semver);
                     None
                 } else {
                     Some(download_url)
@@ -757,17 +772,35 @@ pub fn update(config_file: &str) -> Result<bool, String> {
                 (download, release_dir)
             }
             ExplicitRelease::Channel(release_channel) => {
-                let download_url = release_channel_download_url(release_channel);
+                let version_url = release_channel_version_url(release_channel);
+
+                let (_temp_dir, temp_file, _temp_archive_sha256) =
+                    download_to_temp(&version_url, None)
+                        .map_err(|err| format!("Unable to download {}: {}", version_url, err))?;
+
+                let update_release_version = load_release_version(&temp_file)?;
+
                 let release_dir = config.release_dir(&release_channel);
-                // Note: There's currently no mechanism to check for an updated binary for a release
-                // channel so a download always occurs.
-                (Some(download_url), release_dir)
+                let current_release_version =
+                    load_release_version(&release_dir.join("solana-release").join("version.yml"))?;
+
+                let download = if update_release_version.commit == current_release_version.commit {
+                    // Same commit, no update required
+                    println!(
+                        "Latest {} build is already present, no download required.",
+                        release_channel
+                    );
+                    None
+                } else {
+                    Some(release_channel_download_url(release_channel))
+                };
+                (download, release_dir)
             }
         };
 
         if let Some(download_url) = download {
             let (_temp_dir, temp_archive, _temp_archive_sha256) =
-                download_to_temp_archive(&download_url, None)
+                download_to_temp(&download_url, None)
                     .map_err(|err| format!("Unable to download {}: {}", download_url, err))?;
             extract_release_archive(&temp_archive, &release_dir).map_err(|err| {
                 format!(
@@ -797,7 +830,7 @@ pub fn update(config_file: &str) -> Result<bool, String> {
             }
         }
         let release_dir = config.release_dir(&update_manifest.download_sha256.to_string());
-        let (_temp_dir, temp_archive, _temp_archive_sha256) = download_to_temp_archive(
+        let (_temp_dir, temp_archive, _temp_archive_sha256) = download_to_temp(
             &update_manifest.download_url,
             Some(&update_manifest.download_sha256),
         )
