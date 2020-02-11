@@ -69,7 +69,7 @@ pub fn serialize_parameters(
         if is_dup {
             v.write_u8(position as u8).unwrap();
         } else {
-            v.write_u8(0).unwrap();
+            v.write_u8(std::u8::MAX).unwrap();
             v.write_u8(keyed_account.signer_key().is_some() as u8)
                 .unwrap();
             v.write_u8(keyed_account.is_writable() as u8).unwrap();
@@ -375,6 +375,7 @@ mod tests {
         // Case: With duplicate accounts
         let duplicate_key = Pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
+        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
         assert_eq!(

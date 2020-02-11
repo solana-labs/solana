@@ -47,6 +47,30 @@ static_assert(sizeof(uint64_t) == 8);
 #endif
 
 /**
+ * Minimum of signed integral types
+ */
+# define INT8_MIN   (-128)
+# define INT16_MIN  (-32767-1)
+# define INT32_MIN  (-2147483647-1)
+# define INT64_MIN  (-__INT64_C(9223372036854775807)-1)
+
+/**
+ * Maximum of signed integral types
+ */
+# define INT8_MAX   (127)
+# define INT16_MAX  (32767)
+# define INT32_MAX  (2147483647)
+# define INT64_MAX  (__INT64_C(9223372036854775807))
+
+/**
+ * Maximum of unsigned integral types
+ */
+# define UINT8_MAX   (255)
+# define UINT16_MAX  (65535)
+# define UINT32_MAX  (4294967295U)
+# define UINT64_MAX  (__UINT64_C(18446744073709551615))
+
+/**
  * NULL
  */
 #define NULL 0
@@ -265,7 +289,7 @@ SOL_FN_PREFIX bool sol_deserialize(
   for (int i = 0; i < params->ka_num; i++) {
     uint8_t dup_info = input[0];
     input += sizeof(uint8_t);
-    if (dup_info == 0) {
+    if (dup_info == UINT8_MAX) {
       // is signer?
       params->ka[i].is_signer = *(uint8_t *) input != 0;
       input += sizeof(uint8_t);
