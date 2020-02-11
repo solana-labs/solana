@@ -12,6 +12,8 @@ pub struct AccountInfo<'a> {
     pub key: &'a Pubkey,
     // Was the transaction signed by this account's public key?
     pub is_signer: bool,
+    // Is the account writable?
+    pub is_writable: bool,
     /// Account members that are mutable by the program
     pub lamports: Rc<RefCell<&'a mut u64>>,
     /// Account members that are mutable by the program
@@ -53,6 +55,10 @@ impl<'a> AccountInfo<'a> {
 
     pub fn unsigned_key(&self) -> &Pubkey {
         self.key
+    }
+
+    pub fn is_writable(&self) -> bool {
+        self.is_writable
     }
 
     pub fn lamports(&self) -> u64 {
@@ -106,6 +112,7 @@ impl<'a> AccountInfo<'a> {
     pub fn new(
         key: &'a Pubkey,
         is_signer: bool,
+        is_writable: bool,
         lamports: &'a mut u64,
         data: &'a mut [u8],
         owner: &'a Pubkey,
@@ -113,6 +120,7 @@ impl<'a> AccountInfo<'a> {
         Self {
             key,
             is_signer,
+            is_writable,
             lamports: Rc::new(RefCell::new(lamports)),
             data: Rc::new(RefCell::new(data)),
             owner,
@@ -136,6 +144,7 @@ impl<'a> From<(&'a Pubkey, &'a mut Account)> for AccountInfo<'a> {
         Self::new(
             key,
             false,
+            false,
             &mut account.lamports,
             &mut account.data,
             &account.owner,
@@ -148,6 +157,7 @@ impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for AccountInfo<'a> {
         Self::new(
             key,
             is_signer,
+            false,
             &mut account.lamports,
             &mut account.data,
             &account.owner,
@@ -159,6 +169,7 @@ impl<'a> From<&'a mut (Pubkey, Account)> for AccountInfo<'a> {
     fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
         Self::new(
             key,
+            false,
             false,
             &mut account.lamports,
             &mut account.data,
@@ -180,6 +191,7 @@ pub fn create_is_signer_account_infos<'a>(
             AccountInfo::new(
                 key,
                 *is_signer,
+                false,
                 &mut account.lamports,
                 &mut account.data,
                 &account.owner,

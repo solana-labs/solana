@@ -146,8 +146,9 @@ SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
  */
 typedef struct {
   SolPubkey *key;        /** Public key of the account */
-  bool is_signer;        /** Transaction was signed by this account's key */
-  uint64_t *lamports;      /** Number of lamports owned by this account */
+  bool is_signer;        /** Transaction was signed by this account's key? */
+  bool is_writable;      /** Is the account writable? */
+  uint64_t *lamports;    /** Number of lamports owned by this account */
   uint64_t userdata_len; /** Length of data in bytes */
   uint8_t *userdata;     /** On-chain data within this account */
   SolPubkey *owner;      /** Program that owns this account */
@@ -265,9 +266,15 @@ SOL_FN_PREFIX bool sol_deserialize(
     uint8_t dup_info = input[0];
     input += sizeof(uint8_t);
     if (dup_info == 0) {
+      // is signer?
+      params->ka[i].is_signer = *(uint8_t *) input != 0;
+      input += sizeof(uint8_t);
+
+      // is writable?
+      params->ka[i].is_writable = *(uint8_t *) input != 0;
+      input += sizeof(uint8_t);
+
       // key
-      params->ka[i].is_signer = *(uint64_t *) input != 0;
-      input += sizeof(uint64_t);
       params->ka[i].key = (SolPubkey *) input;
       input += sizeof(SolPubkey);
 
@@ -346,6 +353,8 @@ SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
   for (int i = 0; i < params->ka_num; i++) {
     sol_log("  - Is signer");
     sol_log_64(0, 0, 0, 0, params->ka[i].is_signer);
+    sol_log("  - Is writable");
+    sol_log_64(0, 0, 0, 0, params->ka[i].is_writable);
     sol_log("  - Key");
     sol_log_key(params->ka[i].key);
     sol_log("  - Lamports");
