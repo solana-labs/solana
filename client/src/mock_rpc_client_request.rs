@@ -60,13 +60,10 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                     Value::Null
                 }
             }
-            RpcRequest::GetBalance => {
-                let n = if self.url == "airdrop" { 0 } else { 50 };
-                serde_json::to_value(Response {
-                    context: RpcResponseContext { slot: 1 },
-                    value: Value::Number(Number::from(n)),
-                })?
-            }
+            RpcRequest::GetBalance => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: Value::Number(Number::from(50)),
+            })?,
             RpcRequest::GetRecentBlockhash => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: (

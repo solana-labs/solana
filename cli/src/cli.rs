@@ -3198,7 +3198,6 @@ mod tests {
         };
         assert!(process_command(&config).is_ok());
 
-        config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
         config.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
