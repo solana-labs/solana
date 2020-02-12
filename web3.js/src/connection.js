@@ -201,6 +201,7 @@ const Version = struct({
  * @property {Blockhash} previousBlockhash Blockhash of this block's parent
  * @property {number} parentSlot Slot index of this block's parent
  * @property {Array<object>} transactions Vector of transactions and status metas
+ * @property {Array<object>} rewards Vector of block rewards
  */
 type ConfirmedBlock = {
   blockhash: Blockhash,
@@ -214,6 +215,10 @@ type ConfirmedBlock = {
       postBalances: Array<number>,
       status?: SignatureStatusResult,
     },
+  }>,
+  rewards: Array<{
+    pubkey: string,
+    lamports: number,
   }>,
 };
 
@@ -501,6 +506,15 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
             }),
           ]),
         }),
+      ]),
+      rewards: struct.union([
+        'undefined',
+        struct.array([
+          struct({
+            pubkey: 'string',
+            lamports: 'number',
+          }),
+        ]),
       ]),
     }),
   ]),
@@ -1112,6 +1126,7 @@ export class Connection {
           meta: result.meta,
         };
       }),
+      rewards: result.result.rewards || [],
     };
   }
 
