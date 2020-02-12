@@ -211,7 +211,6 @@ impl LocalCluster {
             leader_node.info.rpc.port(),
             leader_node.info.rpc_pubsub.port(),
         ));
-        leader_config.transaction_status_service_disabled = true;
         let leader_server = Validator::new(
             leader_node,
             &leader_keypair,
@@ -359,7 +358,6 @@ impl LocalCluster {
             validator_node.info.rpc.port(),
             validator_node.info.rpc_pubsub.port(),
         ));
-        config.transaction_status_service_disabled = true;
         let voting_keypair = Arc::new(voting_keypair);
         let validator_server = Validator::new(
             validator_node,
@@ -668,9 +666,6 @@ impl Cluster for LocalCluster {
         cluster_validator_info.info.contact_info = node.info.clone();
         cluster_validator_info.config.rpc_ports =
             Some((node.info.rpc.port(), node.info.rpc_pubsub.port()));
-        cluster_validator_info
-            .config
-            .transaction_status_service_disabled = true;
 
         let entry_point_info = {
             if *pubkey == self.entry_point_info.id {

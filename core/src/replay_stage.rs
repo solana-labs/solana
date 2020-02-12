@@ -78,7 +78,7 @@ pub struct ReplayStageConfig {
     pub snapshot_package_sender: Option<SnapshotPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
-    pub rewards_sender: Option<RewardsRecorderSender>,
+    pub rewards_recorder_sender: Option<RewardsRecorderSender>,
 }
 
 pub struct ReplayStage {
@@ -181,7 +181,7 @@ impl ReplayStage {
             snapshot_package_sender,
             block_commitment_cache,
             transaction_status_sender,
-            rewards_sender,
+            rewards_recorder_sender,
         } = config;
 
         let (root_bank_sender, root_bank_receiver) = channel();
@@ -222,7 +222,7 @@ impl ReplayStage {
                         &bank_forks,
                         &leader_schedule_cache,
                         &subscriptions,
-                        rewards_sender.clone(),
+                        rewards_recorder_sender.clone(),
                     );
                     datapoint_debug!(
                         "replay_stage-memory",
@@ -399,7 +399,7 @@ impl ReplayStage {
                             &poh_recorder,
                             &leader_schedule_cache,
                             &subscriptions,
-                            rewards_sender.clone(),
+                            rewards_recorder_sender.clone(),
                         );
 
                         if let Some(bank) = poh_recorder.lock().unwrap().bank() {
@@ -473,7 +473,7 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
-        rewards_sender: Option<RewardsRecorderSender>,
+        rewards_recorder_sender: Option<RewardsRecorderSender>,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -539,7 +539,7 @@ impl ReplayStage {
                 .unwrap()
                 .insert(Bank::new_from_parent(&parent, my_pubkey, poh_slot));
 
-            Self::record_rewards(&tpu_bank, &rewards_sender);
+            Self::record_rewards(&tpu_bank, &rewards_recorder_sender);
             poh_recorder.lock().unwrap().set_bank(&tpu_bank);
         } else {
             error!("{} No next leader found", my_pubkey);
@@ -983,7 +983,7 @@ impl ReplayStage {
         forks_lock: &RwLock<BankForks>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
-        rewards_sender: Option<RewardsRecorderSender>,
+        rewards_recorder_sender: Option<RewardsRecorderSender>,
     ) {
         // Find the next slot that chains to the old slot
         let forks = forks_lock.read().unwrap();
@@ -1021,7 +1021,7 @@ impl ReplayStage {
                 subscriptions.notify_slot(child_slot, parent_slot, forks.root());
 
                 let child_bank = Bank::new_from_parent(&parent_bank, &leader, child_slot);
-                Self::record_rewards(&child_bank, &rewards_sender);
+                Self::record_rewards(&child_bank, &rewards_recorder_sender);
                 new_banks.insert(child_slot, child_bank);
             }
         }
@@ -1033,12 +1033,12 @@ impl ReplayStage {
         }
     }
 
-    fn record_rewards(bank: &Bank, rewards_sender: &Option<RewardsRecorderSender>) {
-        if let Some(rewards_sender) = rewards_sender {
+    fn record_rewards(bank: &Bank, rewards_recorder_sender: &Option<RewardsRecorderSender>) {
+        if let Some(rewards_recorder_sender) = rewards_recorder_sender {
             if let Some(ref rewards) = bank.rewards {
-                rewards_sender
+                rewards_recorder_sender
                     .send((bank.slot(), rewards.iter().copied().collect()))
-                    .unwrap_or_else(|err| warn!("rewards_sender failed: {:?}", err));
+                    .unwrap_or_else(|err| warn!("rewards_recorder_sender failed: {:?}", err));
             }
         }
     }
