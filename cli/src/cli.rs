@@ -357,6 +357,12 @@ pub enum CliCommand {
         destination_account_pubkey: Pubkey,
         lamports: u64,
         withdraw_authority: Option<SigningAuthority>,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: Option<SigningAuthority>,
+        fee_payer: Option<SigningAuthority>,
     },
     // Storage Commands
     CreateStorageAccount {
@@ -1726,6 +1732,12 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             destination_account_pubkey,
             lamports,
             ref withdraw_authority,
+            sign_only,
+            ref signers,
+            blockhash_query,
+            ref nonce_account,
+            ref nonce_authority,
+            ref fee_payer,
         } => process_withdraw_stake(
             &rpc_client,
             config,
@@ -1733,6 +1745,12 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &destination_account_pubkey,
             *lamports,
             withdraw_authority.as_ref(),
+            *sign_only,
+            signers.as_ref(),
+            blockhash_query,
+            nonce_account.as_ref(),
+            nonce_authority.as_ref(),
+            fee_payer.as_ref(),
         ),
 
         // Storage Commands
@@ -3087,6 +3105,12 @@ mod tests {
             destination_account_pubkey: to_pubkey,
             lamports: 100,
             withdraw_authority: None,
+            sign_only: false,
+            signers: None,
+            blockhash_query: BlockhashQuery::All,
+            nonce_account: None,
+            nonce_authority: None,
+            fee_payer: None,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
