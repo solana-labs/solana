@@ -1399,10 +1399,19 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     process_command(&config).unwrap();
     check_balance(42, &rpc_client, &recipient_pubkey);
 
-    // Test that offline derived addresses fail
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Create another stake account. This time with seed
+    let seed = "seedy";
     config_offline.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
-        seed: Some("fail".to_string()),
+        stake_account: read_keypair_file(&offline_keypair_file).unwrap().into(),
+        seed: Some(seed.to_string()),
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
@@ -1411,11 +1420,31 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_pubkey),
-        nonce_authority: Some(read_keypair_file(&offline_keypair_file).unwrap().into()),
-        fee_payer: Some(read_keypair_file(&offline_keypair_file).unwrap().into()),
-        from: Some(read_keypair_file(&offline_keypair_file).unwrap().into()),
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
-    process_command(&config_offline).unwrap_err();
+    let sig_response = process_command(&config_offline).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: offline_pubkey.into(),
+        seed: Some(seed.to_string()),
+        staker: Some(offline_pubkey.into()),
+        withdrawer: Some(offline_pubkey.into()),
+        lockup: Lockup::default(),
+        lamports: 50_000,
+        sign_only: false,
+        signers: Some(signers),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        nonce_account: Some(nonce_pubkey),
+        nonce_authority: Some(offline_pubkey.into()),
+        fee_payer: Some(offline_pubkey.into()),
+        from: Some(offline_pubkey.into()),
+    };
+    process_command(&config).unwrap();
+    let seed_address =
+        create_address_with_seed(&offline_pubkey, seed, &solana_stake_program::id()).unwrap();
+    check_balance(50_000, &rpc_client, &seed_address);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
