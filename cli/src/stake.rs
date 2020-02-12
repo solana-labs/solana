@@ -47,7 +47,7 @@ fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(STAKE_AUTHORITY_ARG.name)
         .long(STAKE_AUTHORITY_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR of PUBKEY")
+        .value_name("KEYPAIR or PUBKEY")
         .validator(is_pubkey_or_keypair_or_ask_keyword)
         .help(STAKE_AUTHORITY_ARG.help)
 }
@@ -99,7 +99,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("custodian")
                         .long("custodian")
-                        .value_name("PUBKEY")
+                        .value_name("KEYPAIR or PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Identity of the custodian (can withdraw before lockup expires)")
@@ -337,7 +337,55 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Specify unit to use for request")
                 )
                 .arg(withdraw_authority_arg())
-           )
+        )
+        .subcommand(
+            SubCommand::with_name("stake-set-lockup")
+                .about("Set Lockup for the stake account")
+                .arg(
+                    Arg::with_name("stake_account_pubkey")
+                        .index(1)
+                        .value_name("STAKE ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Stake account for which to set Lockup")
+                )
+                .arg(
+                    Arg::with_name("lockup_epoch")
+                        .long("lockup-epoch")
+                        .value_name("EPOCH")
+                        .takes_value(true)
+                        .help("The epoch height at which this account will be available for withdrawal")
+                )
+                .arg(
+                    Arg::with_name("lockup_date")
+                        .long("lockup-date")
+                        .value_name("RFC3339 DATE TIME")
+                        .validator(is_rfc3339_datetime)
+                        .takes_value(true)
+                        .help("The date and time at which this account will be available for withdrawal")
+                )
+                .arg(
+                    Arg::with_name("new_custodian")
+                        .long("new-custodian")
+                        .value_name("KEYPAIR or PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Identity of the new lockup custodian (can withdraw before lockup expires)")
+                )
+                .arg(
+                    Arg::with_name("custodian")
+                        .long("custodian")
+                        .takes_value(true)
+                        .value_name("KEYPAIR or PUBKEY")
+                        .validator(is_pubkey_or_keypair_or_ask_keyword)
+                        .help("Public key of signing custodian (defaults to cli config pubkey)")
+                )
+                .offline_args()
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
+                .arg(fee_payer_arg())
+        )
         .subcommand(
             SubCommand::with_name("stake-account")
                 .about("Show the contents of a stake account")
@@ -550,6 +598,44 @@ pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
             withdraw_authority,
         },
         require_keypair: true,
+    })
+}
+
+pub fn parse_stake_set_lockup(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+    let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
+    let unix_timestamp = unix_timestamp_from_rfc3339_datetime(&matches, "lockup_date").unwrap_or(0);
+    let new_custodian = pubkey_of(matches, "new_custodian").unwrap_or_default();
+
+    let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
+    let blockhash_query = BlockhashQuery::new_from_matches(matches);
+    let require_keypair = signers.is_none();
+    let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+
+    let custodian = SigningAuthority::new_from_matches(&matches, "custodian", signers.as_deref())?;
+    let nonce_authority =
+        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+    let fee_payer =
+        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
+
+    Ok(CliCommandInfo {
+        command: CliCommand::StakeSetLockup {
+            stake_account_pubkey,
+            lockup: Lockup {
+                custodian: new_custodian,
+                epoch,
+                unix_timestamp,
+            },
+            custodian,
+            sign_only,
+            signers,
+            blockhash_query,
+            nonce_account,
+            nonce_authority,
+            fee_payer,
+        },
+        require_keypair,
     })
 }
 
@@ -960,6 +1046,74 @@ pub fn process_split_stake(
             ixs,
             Some(&fee_payer.pubkey()),
             &[fee_payer, stake_authority, split_stake_account],
+            recent_blockhash,
+        )
+    };
+    if let Some(signers) = signers {
+        replace_signatures(&mut tx, &signers)?;
+    }
+    if sign_only {
+        return_signers(&tx)
+    } else {
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = rpc_client.get_account(nonce_account)?;
+            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
+        }
+        check_account_for_fee(
+            rpc_client,
+            &tx.message.account_keys[0],
+            &fee_calculator,
+            &tx.message,
+        )?;
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+        log_instruction_custom_error::<StakeError>(result)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn process_stake_set_lockup(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    stake_account_pubkey: &Pubkey,
+    lockup: &mut Lockup,
+    custodian: Option<&SigningAuthority>,
+    sign_only: bool,
+    signers: &Option<Vec<(Pubkey, Signature)>>,
+    blockhash_query: &BlockhashQuery,
+    nonce_account: Option<Pubkey>,
+    nonce_authority: Option<&SigningAuthority>,
+    fee_payer: Option<&SigningAuthority>,
+) -> ProcessResult {
+    let (recent_blockhash, fee_calculator) =
+        blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
+    let custodian = custodian.map(|a| a.keypair()).unwrap_or(&config.keypair);
+    // If new custodian is not explicitly set, default to current custodian
+    if lockup.custodian == Pubkey::default() {
+        lockup.custodian = custodian.pubkey();
+    }
+    let ixs = vec![stake_instruction::set_lockup(
+        stake_account_pubkey,
+        lockup,
+        &custodian.pubkey(),
+    )];
+    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
+        .map(|a| (a.keypair(), a.pubkey()))
+        .unwrap_or((&config.keypair, config.keypair.pubkey()));
+    let fee_payer = fee_payer.map(|f| f.keypair()).unwrap_or(&config.keypair);
+    let mut tx = if let Some(nonce_account) = &nonce_account {
+        Transaction::new_signed_with_nonce(
+            ixs,
+            Some(&fee_payer.pubkey()),
+            &[fee_payer, nonce_authority, custodian],
+            nonce_account,
+            &nonce_authority.pubkey(),
+            recent_blockhash,
+        )
+    } else {
+        Transaction::new_signed_with_payer(
+            ixs,
+            Some(&fee_payer.pubkey()),
+            &[fee_payer, custodian],
             recent_blockhash,
         )
     };

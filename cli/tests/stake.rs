@@ -860,6 +860,7 @@ fn test_stake_split() {
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let mut config_offline = CliConfig::default();
+    config_offline.json_rpc_url = String::default();
     let offline_pubkey = config_offline.keypair.pubkey();
     let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
@@ -878,7 +879,6 @@ fn test_stake_split() {
     let minimum_stake_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())
         .unwrap();
-    println!("stake min: {}", minimum_stake_balance);
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
@@ -902,7 +902,6 @@ fn test_stake_split() {
     let minimum_nonce_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
-    println!("nonce min: {}", minimum_nonce_balance);
     let nonce_account = keypair_from_seed(&[1u8; 32]).unwrap();
     let nonce_account_pubkey = nonce_account.pubkey();
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
@@ -935,7 +934,7 @@ fn test_stake_split() {
         sign_only: true,
         signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
-        nonce_account: Some(nonce_account_pubkey.into()),
+        nonce_account: Some(nonce_account_pubkey),
         nonce_authority: None,
         split_stake_account: read_keypair_file(&split_keypair_file).unwrap().into(),
         seed: None,
@@ -950,7 +949,7 @@ fn test_stake_split() {
         sign_only: false,
         signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-        nonce_account: Some(nonce_account_pubkey.into()),
+        nonce_account: Some(nonce_account_pubkey),
         nonce_authority: Some(offline_pubkey.into()),
         split_stake_account: read_keypair_file(&split_keypair_file).unwrap().into(),
         seed: None,
@@ -968,6 +967,228 @@ fn test_stake_split() {
         &rpc_client,
         &split_account.pubkey(),
     );
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+fn test_stake_set_lockup() {
+    solana_logger::setup();
+
+    let (server, leader_data, alice, ledger_path, _voter) = new_validator_for_tests_ex(1, 42_000);
+    let (sender, receiver) = channel();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+
+    let mut config = CliConfig::default();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+
+    let mut config_offline = CliConfig::default();
+    config_offline.json_rpc_url = String::default();
+    let offline_pubkey = config_offline.keypair.pubkey();
+    let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
+    // Verify we're offline
+    config_offline.command = CliCommand::ClusterVersion;
+    process_command(&config_offline).unwrap_err();
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 500_000)
+        .unwrap();
+    check_balance(500_000, &rpc_client, &config.keypair.pubkey());
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    check_balance(100_000, &rpc_client, &offline_pubkey);
+
+    // Create stake account, identity is authority
+    let minimum_stake_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())
+        .unwrap();
+
+    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let stake_account_pubkey = stake_keypair.pubkey();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
+
+    let mut lockup = Lockup::default();
+    lockup.custodian = config.keypair.pubkey();
+
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        seed: None,
+        staker: Some(offline_pubkey),
+        withdrawer: Some(offline_pubkey),
+        lockup,
+        lamports: 10 * minimum_stake_balance,
+    };
+    process_command(&config).unwrap();
+    check_balance(
+        10 * minimum_stake_balance,
+        &rpc_client,
+        &stake_account_pubkey,
+    );
+
+    // Online set lockup
+    let mut lockup = Lockup {
+        unix_timestamp: 1581534570,
+        epoch: 200,
+        custodian: Pubkey::default(),
+    };
+    config.command = CliCommand::StakeSetLockup {
+        stake_account_pubkey,
+        lockup,
+        custodian: None,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let current_lockup = match stake_state {
+        StakeState::Initialized(meta) => meta.lockup,
+        _ => panic!("Unexpected stake state!"),
+    };
+    lockup.custodian = config.keypair.pubkey(); // Default new_custodian is config.keypair
+    assert_eq!(current_lockup, lockup);
+
+    // Set custodian to another pubkey
+    let online_custodian = Keypair::new();
+    let online_custodian_pubkey = online_custodian.pubkey();
+    let (online_custodian_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&online_custodian, tmp_file.as_file_mut()).unwrap();
+
+    let lockup = Lockup {
+        unix_timestamp: 1581534571,
+        epoch: 201,
+        custodian: online_custodian_pubkey,
+    };
+    config.command = CliCommand::StakeSetLockup {
+        stake_account_pubkey,
+        lockup,
+        custodian: None,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    process_command(&config).unwrap();
+
+    let mut lockup = Lockup {
+        unix_timestamp: 1581534572,
+        epoch: 202,
+        custodian: Pubkey::default(),
+    };
+    config.command = CliCommand::StakeSetLockup {
+        stake_account_pubkey,
+        lockup,
+        custodian: Some(read_keypair_file(&online_custodian_file).unwrap().into()),
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let current_lockup = match stake_state {
+        StakeState::Initialized(meta) => meta.lockup,
+        _ => panic!("Unexpected stake state!"),
+    };
+    lockup.custodian = online_custodian_pubkey; // Default new_custodian is designated custodian
+    assert_eq!(current_lockup, lockup);
+
+    // Set custodian to offline pubkey
+    let lockup = Lockup {
+        unix_timestamp: 1581534573,
+        epoch: 203,
+        custodian: offline_pubkey,
+    };
+    config.command = CliCommand::StakeSetLockup {
+        stake_account_pubkey,
+        lockup,
+        custodian: Some(online_custodian.into()),
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    process_command(&config).unwrap();
+
+    // Create nonce account
+    let minimum_nonce_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(NonceState::size())
+        .unwrap();
+    let nonce_account = keypair_from_seed(&[1u8; 32]).unwrap();
+    let nonce_account_pubkey = nonce_account.pubkey();
+    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateNonceAccount {
+        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        seed: None,
+        nonce_authority: Some(offline_pubkey),
+        lamports: minimum_nonce_balance,
+    };
+    process_command(&config).unwrap();
+    check_balance(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
+
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account_pubkey).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Nonced offline set lockup
+    let lockup = Lockup {
+        unix_timestamp: 1581534576,
+        epoch: 222,
+        custodian: offline_pubkey,
+    };
+    config_offline.command = CliCommand::StakeSetLockup {
+        stake_account_pubkey,
+        lockup,
+        custodian: None,
+        sign_only: true,
+        signers: None,
+        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
+        nonce_account: Some(nonce_account_pubkey),
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    let sig_response = process_command(&config_offline).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    config.command = CliCommand::StakeSetLockup {
+        stake_account_pubkey,
+        lockup,
+        custodian: Some(offline_pubkey.into()),
+        sign_only: false,
+        signers: Some(signers),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        nonce_account: Some(nonce_account_pubkey),
+        nonce_authority: Some(offline_pubkey.into()),
+        fee_payer: Some(offline_pubkey.into()),
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let current_lockup = match stake_state {
+        StakeState::Initialized(meta) => meta.lockup,
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(current_lockup, lockup);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
