@@ -342,6 +342,19 @@ declare module '@solana/web3.js' {
     ): Transaction;
   }
 
+  declare export class SystemInstruction extends TransactionInstruction {
+    type: InstructionType;
+    fromPublicKey: PublicKey | null;
+    toPublicKey: PublicKey | null;
+    amount: number | null;
+
+    constructor(
+      opts?: TransactionInstructionCtorFields,
+      type?: InstructionType,
+    ): SystemInstruction;
+    static from(instruction: TransactionInstruction): SystemInstruction;
+  }
+
   // === src/validator-info.js ===
   declare export var VALIDATOR_INFO_KEY;
   declare export type Info = {|
@@ -438,6 +451,7 @@ declare module '@solana/web3.js' {
     recentBlockhash: ?Blockhash;
 
     constructor(opts?: TransactionCtorFields): Transaction;
+    static from(buffer: Buffer): Transaction;
     add(
       ...items: Array<
         Transaction | TransactionInstruction | TransactionInstructionCtorFields,
