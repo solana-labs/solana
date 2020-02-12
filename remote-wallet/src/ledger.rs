@@ -233,6 +233,19 @@ impl LedgerWallet {
             ver[3].into(),
         ))
     }
+
+    pub fn sign_raw_data(
+        &self,
+        derivation_path: &DerivationPath,
+        data: &[u8],
+    ) -> Result<Vec<u8>, RemoteWalletError> {
+        let mut payload = extend_and_serialize(&derivation_path);
+        for byte in (data.len() as u16).to_be_bytes().iter() {
+            payload.push(*byte);
+        }
+        payload.extend_from_slice(data);
+        self.send_apdu(0x03, 1, 0, &payload)
+    }
 }
 
 impl RemoteWallet for LedgerWallet {
@@ -265,8 +278,8 @@ impl RemoteWallet for LedgerWallet {
             })
     }
 
-    fn get_pubkey(&self, derivation: &DerivationPath) -> Result<Pubkey, RemoteWalletError> {
-        let derivation_path = get_derivation_path(derivation);
+    fn get_pubkey(&self, derivation_path: &DerivationPath) -> Result<Pubkey, RemoteWalletError> {
+        let derivation_path = extend_and_serialize(derivation_path);
 
         let key = self.send_apdu(
             commands::GET_SOL_PUBKEY,
@@ -282,10 +295,10 @@ impl RemoteWallet for LedgerWallet {
 
     fn sign_transaction(
         &self,
-        derivation: &DerivationPath,
+        derivation_path: &DerivationPath,
         transaction: Transaction,
     ) -> Result<Signature, RemoteWalletError> {
-        let mut payload = get_derivation_path(derivation);
+        let mut payload = extend_and_serialize(derivation_path);
         let mut data = transaction.message_data();
         if data.len() > u16::max_value() as usize {
             return Err(RemoteWalletError::InvalidInput(
@@ -321,13 +334,17 @@ pub fn is_valid_ledger(vendor_id: u16, product_id: u16) -> bool {
 }
 
 /// Build the derivation path byte array from a DerivationPath selection
-fn get_derivation_path(derivation: &DerivationPath) -> Vec<u8> {
-    let byte = if derivation.change.is_some() { 4 } else { 3 };
+fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
+    let byte = if derivation_path.change.is_some() {
+        4
+    } else {
+        3
+    };
     let mut concat_derivation = vec![byte];
     concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
     concat_derivation.extend_from_slice(&[0x80, 0]);
-    concat_derivation.extend_from_slice(&derivation.account.to_be_bytes());
-    if let Some(change) = derivation.change {
+    concat_derivation.extend_from_slice(&derivation_path.account.to_be_bytes());
+    if let Some(change) = derivation_path.change {
         concat_derivation.extend_from_slice(&[0x80, 0]);
         concat_derivation.extend_from_slice(&change.to_be_bytes());
     }
