@@ -87,7 +87,7 @@ impl Tvu {
         cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
-        rewards_sender: Option<RewardsRecorderSender>,
+        rewards_recorder_sender: Option<RewardsRecorderSender>,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -172,7 +172,7 @@ impl Tvu {
             snapshot_package_sender,
             block_commitment_cache,
             transaction_status_sender,
-            rewards_sender,
+            rewards_recorder_sender,
         };
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(

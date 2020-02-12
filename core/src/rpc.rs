@@ -47,7 +47,8 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
 
 #[derive(Debug, Default, Clone)]
 pub struct JsonRpcConfig {
-    pub enable_validator_exit: bool, // Enable the 'validatorExit' command
+    pub enable_validator_exit: bool,
+    pub enable_get_confirmed_block: bool,
     pub faucet_addr: Option<SocketAddr>,
 }
 
@@ -330,7 +331,11 @@ impl JsonRpcRequestProcessor {
         slot: Slot,
         encoding: Option<RpcTransactionEncoding>,
     ) -> Result<Option<RpcConfirmedBlock>> {
-        Ok(self.blockstore.get_confirmed_block(slot, encoding).ok())
+        if self.config.enable_get_confirmed_block {
+            Ok(self.blockstore.get_confirmed_block(slot, encoding).ok())
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn get_confirmed_blocks(
@@ -1240,7 +1245,10 @@ pub mod tests {
         let _ = bank.process_transaction(&tx);
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
-            JsonRpcConfig::default(),
+            JsonRpcConfig {
+                enable_get_confirmed_block: true,
+                ..JsonRpcConfig::default()
+            },
             bank_forks.clone(),
             block_commitment_cache.clone(),
             blockstore,

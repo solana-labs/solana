@@ -61,7 +61,6 @@ pub struct ValidatorConfig {
     pub expected_genesis_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
-    pub transaction_status_service_disabled: bool,
     pub blockstream_unix_socket: Option<PathBuf>,
     pub storage_slots_per_turn: u64,
     pub account_paths: Vec<PathBuf>,
@@ -84,7 +83,6 @@ impl Default for ValidatorConfig {
             expected_genesis_hash: None,
             expected_shred_version: None,
             voting_disabled: false,
-            transaction_status_service_disabled: false,
             blockstream_unix_socket: None,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
             max_ledger_slots: None,
@@ -256,7 +254,7 @@ impl Validator {
         });
 
         let (transaction_status_sender, transaction_status_service) =
-            if rpc_service.is_some() && !config.transaction_status_service_disabled {
+            if rpc_service.is_some() && config.rpc_config.enable_get_confirmed_block {
                 let (transaction_status_sender, transaction_status_receiver) = unbounded();
                 (
                     Some(transaction_status_sender),
@@ -270,11 +268,11 @@ impl Validator {
                 (None, None)
             };
 
-        let (rewards_sender, rewards_recorder_service) =
-            if rpc_service.is_some() && !config.transaction_status_service_disabled {
-                let (rewards_sender, rewards_receiver) = unbounded();
+        let (rewards_recorder_sender, rewards_recorder_service) =
+            if rpc_service.is_some() && config.rpc_config.enable_get_confirmed_block {
+                let (rewards_recorder_sender, rewards_receiver) = unbounded();
                 (
-                    Some(rewards_sender),
+                    Some(rewards_recorder_sender),
                     Some(RewardsRecorderService::new(
                         rewards_receiver,
                         blockstore.clone(),
@@ -405,7 +403,7 @@ impl Validator {
             config.enable_partition.clone(),
             node.info.shred_version,
             transaction_status_sender.clone(),
-            rewards_sender,
+            rewards_recorder_sender,
         );
 
         if config.dev_sigverify_disabled {
@@ -647,7 +645,6 @@ pub fn new_validator_for_tests_ex(
     let leader_voting_keypair = Arc::new(voting_keypair);
     let storage_keypair = Arc::new(Keypair::new());
     let config = ValidatorConfig {
-        transaction_status_service_disabled: true,
         rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
         ..ValidatorConfig::default()
     };
@@ -748,7 +745,6 @@ mod tests {
         let voting_keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
-            transaction_status_service_disabled: true,
             rpc_ports: Some((
                 validator_node.info.rpc.port(),
                 validator_node.info.rpc_pubsub.port(),
@@ -788,7 +784,6 @@ mod tests {
                 let voting_keypair = Arc::new(Keypair::new());
                 let storage_keypair = Arc::new(Keypair::new());
                 let config = ValidatorConfig {
-                    transaction_status_service_disabled: true,
                     rpc_ports: Some((
                         validator_node.info.rpc.port(),
                         validator_node.info.rpc_pubsub.port(),
