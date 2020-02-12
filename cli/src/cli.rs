@@ -1912,10 +1912,6 @@ impl FaucetKeypair {
 }
 
 impl KeypairUtil for FaucetKeypair {
-    fn new() -> Self {
-        unimplemented!();
-    }
-
     /// Return the public key of the keypair used to sign votes
     fn pubkey(&self) -> Pubkey {
         self.transaction.message().account_keys[0]

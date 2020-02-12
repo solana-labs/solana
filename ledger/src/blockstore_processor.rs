@@ -23,7 +23,7 @@ use solana_sdk::{
     clock::{Slot, MAX_RECENT_BLOCKHASHES},
     genesis_config::GenesisConfig,
     hash::Hash,
-    signature::{Keypair, KeypairUtil},
+    signature::Keypair,
     timing::duration_as_ms,
     transaction::{Result, Transaction, TransactionError},
 };

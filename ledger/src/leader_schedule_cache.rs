@@ -265,7 +265,7 @@ mod tests {
         EpochSchedule, DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET, DEFAULT_SLOTS_PER_EPOCH,
         MINIMUM_SLOTS_PER_EPOCH,
     };
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::Keypair;
     use std::{sync::mpsc::channel, sync::Arc, thread::Builder};
 
     #[test]

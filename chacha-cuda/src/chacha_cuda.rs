@@ -118,7 +118,7 @@ mod tests {
     use solana_ledger::entry::create_ticks;
     use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::clock::DEFAULT_SLOTS_PER_SEGMENT;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::Keypair;
     use std::fs::{remove_dir_all, remove_file};
     use std::path::Path;
 
