@@ -36,7 +36,7 @@ use solana_sdk::{
     native_token::lamports_to_sol,
     program_utils::DecodeError,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, Keypair, KeypairUtil, Signature},
+    signature::{generate_keypair, keypair_from_seed, Keypair, KeypairUtil, Signature},
     system_instruction::{self, create_address_with_seed, SystemError, MAX_ADDRESS_SEED_LEN},
     system_transaction,
     transaction::{Transaction, TransactionError},
@@ -496,7 +496,7 @@ impl Default for CliConfig {
                 use_lamports_unit: false,
             },
             json_rpc_url: Self::default_json_rpc_url(),
-            keypair: Keypair::new(),
+            keypair: generate_keypair(),
             keypair_path: Some(Self::default_keypair_path()),
             derivation_path: None,
             rpc_client: None,
@@ -1021,7 +1021,7 @@ fn process_deploy(
     config: &CliConfig,
     program_location: &str,
 ) -> ProcessResult {
-    let program_id = Keypair::new();
+    let program_id = generate_keypair();
     let mut file = File::open(program_location).map_err(|err| {
         CliError::DynamicProgramError(format!("Unable to open program file: {}", err))
     })?;
@@ -1171,7 +1171,7 @@ fn process_pay(
             None => config.keypair.pubkey(),
         };
 
-        let contract_state = Keypair::new();
+        let contract_state = generate_keypair();
 
         // Initializing contract
         let ixs = budget_instruction::on_date(
@@ -1220,7 +1220,7 @@ fn process_pay(
             .into());
         };
 
-        let contract_state = Keypair::new();
+        let contract_state = generate_keypair();
 
         // Initializing contract
         let ixs = budget_instruction::when_signed(
@@ -2357,7 +2357,7 @@ mod tests {
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
 
         let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
 
@@ -2407,7 +2407,7 @@ mod tests {
 
         // Test Balance Subcommand, incl pubkey and keypair-file inputs
         let keypair_file = make_tmp_path("keypair_file");
-        write_keypair_file(&Keypair::new(), &keypair_file).unwrap();
+        write_keypair_file(&generate_keypair(), &keypair_file).unwrap();
         let keypair = read_keypair_file(&keypair_file).unwrap();
         let test_balance = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2667,7 +2667,7 @@ mod tests {
 
         // Test Pay Subcommand w/ signer
         let key1 = Pubkey::new_rand();
-        let sig1 = Keypair::new().sign_message(&[0u8]);
+        let sig1 = generate_keypair().sign_message(&[0u8]);
         let signer1 = format!("{}={}", key1, sig1);
         let test_pay = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2696,7 +2696,7 @@ mod tests {
 
         // Test Pay Subcommand w/ signers
         let key2 = Pubkey::new_rand();
-        let sig2 = Keypair::new().sign_message(&[1u8]);
+        let sig2 = generate_keypair().sign_message(&[1u8]);
         let signer2 = format!("{}={}", key2, sig2);
         let test_pay = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2946,7 +2946,7 @@ mod tests {
         let mut config = CliConfig::default();
         config.rpc_client = Some(RpcClient::new_mock("succeeds".to_string()));
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let pubkey = keypair.pubkey().to_string();
         config.keypair = keypair;
         config.command = CliCommand::Address;
@@ -2972,7 +2972,7 @@ mod tests {
         config.command = CliCommand::Confirm(good_signature);
         assert_eq!(process_command(&config).unwrap(), "Confirmed");
 
-        let bob_keypair = Keypair::new();
+        let bob_keypair = generate_keypair();
         let bob_pubkey = bob_keypair.pubkey();
         let node_pubkey = Pubkey::new_rand();
         config.command = CliCommand::CreateVoteAccount {
@@ -2999,12 +2999,12 @@ mod tests {
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
             new_identity_pubkey,
-            authorized_voter: Keypair::new().into(),
+            authorized_voter: generate_keypair().into(),
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        let bob_keypair = Keypair::new();
+        let bob_keypair = generate_keypair();
         let bob_pubkey = bob_keypair.pubkey();
         let custodian = Pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
@@ -3048,7 +3048,7 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let stake_pubkey = Pubkey::new_rand();
-        let split_stake_account = Keypair::new();
+        let split_stake_account = generate_keypair();
         config.command = CliCommand::SplitStake {
             stake_account_pubkey: stake_pubkey,
             stake_authority: None,
@@ -3151,7 +3151,7 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         // Nonced pay w/ non-payer authority
-        let bob_keypair = Keypair::new();
+        let bob_keypair = generate_keypair();
         let bob_pubkey = bob_keypair.pubkey();
         let blockhash = Hash::default();
         let nonce_authority_response = json!(Response {
@@ -3242,7 +3242,7 @@ mod tests {
         };
         assert!(process_command(&config).is_err());
 
-        let bob_keypair = Keypair::new();
+        let bob_keypair = generate_keypair();
         config.command = CliCommand::CreateVoteAccount {
             vote_account: bob_keypair.into(),
             seed: None,
@@ -3263,7 +3263,7 @@ mod tests {
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
             new_identity_pubkey: bob_pubkey,
-            authorized_voter: Keypair::new().into(),
+            authorized_voter: generate_keypair().into(),
         };
         assert!(process_command(&config).is_err());
 

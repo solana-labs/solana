@@ -22,7 +22,7 @@ use solana_sdk::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent::Rent,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
     system_program, timing,
 };
 use solana_stake_program::stake_state::{self, StakeState};
@@ -730,7 +730,7 @@ mod tests {
         }
 
         // Test accounts from keypairs can be appended
-        let account_keypairs: Vec<_> = (0..3).map(|_| Keypair::new()).collect();
+        let account_keypairs: Vec<_> = (0..3).map(|_| generate_keypair()).collect();
         let mut genesis_accounts2 = HashMap::new();
         genesis_accounts2.insert(
             serde_json::to_string(&account_keypairs[0].to_bytes().to_vec()).unwrap(),

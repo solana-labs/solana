@@ -274,13 +274,16 @@ impl BankClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{genesis_config::create_genesis_config, instruction::AccountMeta};
+    use solana_sdk::{
+        genesis_config::create_genesis_config, instruction::AccountMeta,
+        signature::generate_keypair,
+    };
 
     #[test]
     fn test_bank_client_new_with_keypairs() {
         let (genesis_config, john_doe_keypair) = create_genesis_config(10_000);
         let john_pubkey = john_doe_keypair.pubkey();
-        let jane_doe_keypair = Keypair::new();
+        let jane_doe_keypair = generate_keypair();
         let jane_pubkey = jane_doe_keypair.pubkey();
         let doe_keypairs = vec![&john_doe_keypair, &jane_doe_keypair];
         let bank = Bank::new(&genesis_config);

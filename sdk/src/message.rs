@@ -249,7 +249,7 @@ mod tests {
     use super::*;
     use crate::{
         instruction::AccountMeta,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, KeypairUtil},
     };
 
     #[test]
@@ -431,7 +431,7 @@ mod tests {
         let program_id0 = Pubkey::new_rand();
         let program_id1 = Pubkey::new_rand();
         let id0 = Pubkey::default();
-        let keypair1 = Keypair::new();
+        let keypair1 = generate_keypair();
         let id1 = keypair1.pubkey();
         let message = Message::new(vec![
             Instruction::new(program_id0, &0, vec![AccountMeta::new(id0, false)]),

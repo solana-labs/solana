@@ -11,7 +11,7 @@ use solana_core::sigverify::TransactionSigVerifier;
 use solana_core::sigverify_stage::SigVerifyStage;
 use solana_perf::test_tx::test_tx;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::duration_as_ms;
 use std::sync::mpsc::channel;
@@ -34,8 +34,8 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         let tx = test_tx();
         to_packets_chunked(&vec![tx; len], chunk_size)
     } else {
-        let from_keypair = Keypair::new();
-        let to_keypair = Keypair::new();
+        let from_keypair = generate_keypair();
+        let to_keypair = generate_keypair();
         let txs: Vec<_> = (0..len)
             .into_iter()
             .map(|_| {

@@ -329,7 +329,7 @@ mod tests {
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         nonce_state,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, KeypairUtil},
         system_instruction, system_program, sysvar,
         transaction::TransactionError,
     };
@@ -904,7 +904,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
 
-        let alice_keypair = Keypair::new();
+        let alice_keypair = generate_keypair();
         let alice_pubkey = alice_keypair.pubkey();
         let seed = "seed";
         let program_id = Pubkey::new_rand();
@@ -942,7 +942,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
 
-        let alice_keypair = Keypair::new();
+        let alice_keypair = generate_keypair();
         let alice_pubkey = alice_keypair.pubkey();
         let seed = "seed";
         let program_id = Pubkey::new_rand();
@@ -971,7 +971,7 @@ mod tests {
     fn test_system_unsigned_transaction() {
         let (genesis_config, alice_keypair) = create_genesis_config(100);
         let alice_pubkey = alice_keypair.pubkey();
-        let mallory_keypair = Keypair::new();
+        let mallory_keypair = generate_keypair();
         let mallory_pubkey = mallory_keypair.pubkey();
 
         // Fund to account to bypass AccountNotFound error

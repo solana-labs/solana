@@ -6,7 +6,7 @@ use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::gossip_service::GossipService;
 
 use solana_core::packet::Packet;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,7 +15,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
-    let keypair = Arc::new(Keypair::new());
+    let keypair = Arc::new(generate_keypair());
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
     let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
         test_node.info.clone(),

@@ -232,7 +232,7 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, Keypair, KeypairUtil};
     use solana_sdk::transaction::TransactionError;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
@@ -248,7 +248,7 @@ mod tests {
         let bank_client = BankClient::new(bank);
 
         let alice_pubkey = alice_keypair.pubkey();
-        let budget_keypair = Keypair::new();
+        let budget_keypair = generate_keypair();
         let budget_pubkey = budget_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
 
@@ -272,7 +272,7 @@ mod tests {
         let bank_client = BankClient::new(bank);
         let alice_pubkey = alice_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
-        let budget_keypair = Keypair::new();
+        let budget_keypair = generate_keypair();
         let budget_pubkey = budget_keypair.pubkey();
         let instructions =
             budget_instruction::payment(&alice_pubkey, &bob_pubkey, &budget_pubkey, 100);
@@ -290,7 +290,7 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
 
         // Initialize BudgetState
-        let budget_keypair = Keypair::new();
+        let budget_keypair = generate_keypair();
         let budget_pubkey = budget_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let witness = Pubkey::new_rand();
@@ -308,7 +308,7 @@ mod tests {
             .unwrap();
 
         // Attack! Part 1: Sign a witness transaction with a random key.
-        let mallory_keypair = Keypair::new();
+        let mallory_keypair = generate_keypair();
         let mallory_pubkey = mallory_keypair.pubkey();
         bank_client
             .transfer(1, &alice_keypair, &mallory_pubkey)
@@ -339,7 +339,7 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
 
         // Initialize BudgetState
-        let budget_keypair = Keypair::new();
+        let budget_keypair = generate_keypair();
         let budget_pubkey = budget_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
@@ -358,7 +358,7 @@ mod tests {
             .unwrap();
 
         // Attack! Part 1: Sign a timestamp transaction with a random key.
-        let mallory_keypair = Keypair::new();
+        let mallory_keypair = generate_keypair();
         let mallory_pubkey = mallory_keypair.pubkey();
         bank_client
             .transfer(1, &alice_keypair, &mallory_pubkey)
@@ -387,7 +387,7 @@ mod tests {
         let (bank, alice_keypair) = create_bank(2);
         let bank_client = BankClient::new(bank);
         let alice_pubkey = alice_keypair.pubkey();
-        let budget_keypair = Keypair::new();
+        let budget_keypair = generate_keypair();
         let budget_pubkey = budget_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let mallory_pubkey = Pubkey::new_rand();
@@ -458,7 +458,7 @@ mod tests {
         let (bank, alice_keypair) = create_bank(3);
         let bank_client = BankClient::new(bank);
         let alice_pubkey = alice_keypair.pubkey();
-        let budget_keypair = Keypair::new();
+        let budget_keypair = generate_keypair();
         let budget_pubkey = budget_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
@@ -487,7 +487,7 @@ mod tests {
         assert!(budget_state.is_pending());
 
         // Attack! try to put the lamports into the wrong account with cancel
-        let mallory_keypair = Keypair::new();
+        let mallory_keypair = generate_keypair();
         let mallory_pubkey = mallory_keypair.pubkey();
         bank_client
             .transfer(1, &alice_keypair, &mallory_pubkey)
@@ -531,9 +531,9 @@ mod tests {
 
         let alice_pubkey = alice_keypair.pubkey();
         let game_hash = hash(&[1, 2, 3]);
-        let budget_keypair = Keypair::new();
+        let budget_keypair = generate_keypair();
         let budget_pubkey = budget_keypair.pubkey();
-        let bob_keypair = Keypair::new();
+        let bob_keypair = generate_keypair();
         let bob_pubkey = bob_keypair.pubkey();
 
         // Give Bob some lamports so he can sign the witness transaction.

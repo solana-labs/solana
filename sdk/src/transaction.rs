@@ -339,7 +339,12 @@ impl Transaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{hash::hash, instruction::AccountMeta, signature::Keypair, system_instruction};
+    use crate::{
+        hash::hash,
+        instruction::AccountMeta,
+        signature::{generate_keypair, Keypair},
+        system_instruction,
+    };
     use bincode::{deserialize, serialize, serialized_size};
     use std::mem::size_of;
 
@@ -351,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_refs() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let key1 = Pubkey::new_rand();
         let key2 = Pubkey::new_rand();
         let prog1 = Pubkey::new_rand();
@@ -392,7 +397,7 @@ mod tests {
     }
     #[test]
     fn test_refs_invalid_program_id() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let instructions = vec![CompiledInstruction::new(1, &(), vec![])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&key],
@@ -405,7 +410,7 @@ mod tests {
     }
     #[test]
     fn test_refs_invalid_account() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let instructions = vec![CompiledInstruction::new(1, &(), vec![2])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&key],
@@ -455,7 +460,7 @@ mod tests {
     /// Detect changes to the serialized size of payment transactions, which affects TPS.
     #[test]
     fn test_transaction_minimum_serialized_size() {
-        let alice_keypair = Keypair::new();
+        let alice_keypair = generate_keypair();
         let alice_pubkey = alice_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let ix = system_instruction::transfer(&alice_pubkey, &bob_pubkey, 42);
@@ -526,14 +531,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_transaction_missing_key() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         Transaction::new_unsigned_instructions(vec![]).sign(&[&keypair], Hash::default());
     }
 
     #[test]
     #[should_panic]
     fn test_partial_sign_mismatched_key() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         Transaction::new_unsigned_instructions(vec![Instruction::new(
             Pubkey::default(),
             &0,
@@ -544,9 +549,9 @@ mod tests {
 
     #[test]
     fn test_partial_sign() {
-        let keypair0 = Keypair::new();
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
+        let keypair0 = generate_keypair();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
         let mut tx = Transaction::new_unsigned_instructions(vec![Instruction::new(
             Pubkey::default(),
             &0,
@@ -573,7 +578,7 @@ mod tests {
     #[should_panic]
     fn test_transaction_missing_keypair() {
         let program_id = Pubkey::default();
-        let keypair0 = Keypair::new();
+        let keypair0 = generate_keypair();
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         Transaction::new_unsigned_instructions(vec![ix])
@@ -584,7 +589,7 @@ mod tests {
     #[should_panic]
     fn test_transaction_wrong_key() {
         let program_id = Pubkey::default();
-        let keypair0 = Keypair::new();
+        let keypair0 = generate_keypair();
         let wrong_id = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(wrong_id, true)]);
         Transaction::new_unsigned_instructions(vec![ix]).sign(&[&keypair0], Hash::default());
@@ -593,7 +598,7 @@ mod tests {
     #[test]
     fn test_transaction_correct_key() {
         let program_id = Pubkey::default();
-        let keypair0 = Keypair::new();
+        let keypair0 = generate_keypair();
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
@@ -608,7 +613,7 @@ mod tests {
     #[test]
     fn test_transaction_instruction_with_duplicate_keys() {
         let program_id = Pubkey::default();
-        let keypair0 = Keypair::new();
+        let keypair0 = generate_keypair();
         let id0 = keypair0.pubkey();
         let id1 = Pubkey::new_rand();
         let ix = Instruction::new(

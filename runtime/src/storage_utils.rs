@@ -84,7 +84,7 @@ pub(crate) mod tests {
         client::SyncClient,
         genesis_config::create_genesis_config,
         message::Message,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, KeypairUtil},
     };
     use solana_storage_program::{
         storage_contract::{StorageAccount, STORAGE_ACCOUNT_SPACE},
@@ -98,9 +98,9 @@ pub(crate) mod tests {
         let (mut genesis_config, mint_keypair) = create_genesis_config(1000);
         genesis_config.rent.lamports_per_byte_year = 0;
         let mint_pubkey = mint_keypair.pubkey();
-        let archiver_keypair = Keypair::new();
+        let archiver_keypair = generate_keypair();
         let archiver_pubkey = archiver_keypair.pubkey();
-        let validator_keypair = Keypair::new();
+        let validator_keypair = generate_keypair();
         let validator_pubkey = validator_keypair.pubkey();
         let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(

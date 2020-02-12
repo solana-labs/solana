@@ -2,7 +2,7 @@ use solana_sdk::pubkey::Pubkey;
 #[cfg(test)]
 use solana_sdk::rpc_port;
 #[cfg(test)]
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, SocketAddr};
@@ -200,7 +200,7 @@ impl ContactInfo {
 
     #[cfg(test)]
     pub(crate) fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         Self::new_with_pubkey_socketaddr(&keypair.pubkey(), bind_addr)
     }
 
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn replayed_data_new_with_socketaddr_with_pubkey() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let d1 = ContactInfo::new_with_pubkey_socketaddr(
             &keypair.pubkey(),
             &socketaddr!("127.0.0.1:1234"),

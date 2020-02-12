@@ -362,7 +362,7 @@ mod test {
     use solana_sdk::{
         clock::Slot,
         genesis_config::GenesisConfig,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, KeypairUtil},
     };
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
@@ -382,7 +382,7 @@ mod test {
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Arc::new(generate_keypair());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
@@ -404,7 +404,7 @@ mod test {
 
     #[test]
     fn test_interrupted_slot_last_shred() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
         let mut run = StandardBroadcastRun::new(keypair.clone(), 0);
 
         // Set up the slot to be interrupted

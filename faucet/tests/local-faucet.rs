@@ -3,7 +3,7 @@ use solana_sdk::{
     hash::Hash,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, KeypairUtil},
     system_instruction,
     transaction::Transaction,
 };
@@ -11,7 +11,7 @@ use std::sync::mpsc::channel;
 
 #[test]
 fn test_local_faucet() {
-    let keypair = Keypair::new();
+    let keypair = generate_keypair();
     let to = Pubkey::new_rand();
     let lamports = 50;
     let blockhash = Hash::new(&to.as_ref());

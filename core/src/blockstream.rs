@@ -180,7 +180,7 @@ mod test {
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use std::collections::HashSet;
     use std::path::PathBuf;
@@ -191,8 +191,8 @@ mod test {
         let empty_vec: Vec<Vec<u8>> = vec![];
         assert_eq!(serialize_transactions(&entry), empty_vec);
 
-        let keypair0 = Keypair::new();
-        let keypair1 = Keypair::new();
+        let keypair0 = generate_keypair();
+        let keypair1 = generate_keypair();
         let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
         let tx1 = system_transaction::transfer(&keypair1, &keypair0.pubkey(), 2, Hash::default());
         let serialized_tx0 = serialize(&tx0).unwrap();

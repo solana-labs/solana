@@ -21,7 +21,7 @@ mod tests {
         clock::Slot,
         hash::hashv,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, Keypair, KeypairUtil},
         system_transaction,
     };
     use std::{fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc};
@@ -155,12 +155,12 @@ mod tests {
         run_bank_forks_snapshot_n(
             4,
             |bank, mint_keypair| {
-                let key1 = Keypair::new().pubkey();
+                let key1 = generate_keypair().pubkey();
                 let tx =
                     system_transaction::transfer(&mint_keypair, &key1, 1, bank.last_blockhash());
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
 
-                let key2 = Keypair::new().pubkey();
+                let key2 = generate_keypair().pubkey();
                 let tx =
                     system_transaction::transfer(&mint_keypair, &key2, 0, bank.last_blockhash());
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
@@ -225,7 +225,7 @@ mod tests {
                 (forks + 1) as u64,
             );
             let slot = bank.slot();
-            let key1 = Keypair::new().pubkey();
+            let key1 = generate_keypair().pubkey();
             let tx = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
@@ -379,8 +379,8 @@ mod tests {
         // this is done to ensure the AccountStorageEntries keep getting cleaned up as the root moves
         // ahead. Also tests the status_cache purge and status cache snapshotting.
         // Makes sure that the last bank is restored correctly
-        let key1 = Keypair::new().pubkey();
-        let key2 = Keypair::new().pubkey();
+        let key1 = generate_keypair().pubkey();
+        let key2 = generate_keypair().pubkey();
         for set_root_interval in &[1, 4] {
             run_bank_forks_snapshot_n(
                 (MAX_CACHE_ENTRIES * 2 + 1) as u64,

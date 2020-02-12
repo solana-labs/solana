@@ -8,7 +8,7 @@ use solana_sdk::{
     client::SyncClient,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
     system_instruction::create_address_with_seed,
     sysvar::{self, stake_history::StakeHistory, Sysvar},
 };
@@ -159,9 +159,9 @@ fn test_stake_create_and_split_single_signature() {
 
 #[test]
 fn test_stake_account_lifetime() {
-    let stake_keypair = Keypair::new();
+    let stake_keypair = generate_keypair();
     let stake_pubkey = stake_keypair.pubkey();
-    let vote_keypair = Keypair::new();
+    let vote_keypair = generate_keypair();
     let vote_pubkey = vote_keypair.pubkey();
     let node_pubkey = Pubkey::new_rand();
 
@@ -274,7 +274,7 @@ fn test_stake_account_lifetime() {
     assert!(lamports > 1_000_000);
 
     // split the stake
-    let split_stake_keypair = Keypair::new();
+    let split_stake_keypair = generate_keypair();
     let split_stake_pubkey = split_stake_keypair.pubkey();
 
     let bank_client = BankClient::new_shared(&bank);
@@ -390,7 +390,7 @@ fn test_stake_account_lifetime() {
 
 #[test]
 fn test_create_stake_account_from_seed() {
-    let vote_keypair = Keypair::new();
+    let vote_keypair = generate_keypair();
     let vote_pubkey = vote_keypair.pubkey();
     let node_pubkey = Pubkey::new_rand();
 

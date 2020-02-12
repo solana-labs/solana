@@ -8,7 +8,7 @@ use solana_ledger::sigverify_shreds::{
 };
 use solana_perf::packet::{Packet, Packets};
 use solana_perf::recycler_cache::RecyclerCache;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use std::sync::Arc;
 use test::Bencher;
 
@@ -39,7 +39,7 @@ fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
         shred.copy_to_packet(p);
     }
     let mut batch = vec![packets; NUM_BATCHES];
-    let keypair = Keypair::new();
+    let keypair = generate_keypair();
     let pinned_keypair = sign_shreds_gpu_pinned_keypair(&keypair, &recycler_cache);
     let pinned_keypair = Some(Arc::new(pinned_keypair));
     //warmup
@@ -71,7 +71,7 @@ fn bench_sigverify_shreds_sign_cpu(bencher: &mut Bencher) {
         shred.copy_to_packet(p);
     }
     let mut batch = vec![packets; NUM_BATCHES];
-    let keypair = Keypair::new();
+    let keypair = generate_keypair();
     bencher.iter(|| {
         sign_shreds_cpu(&keypair, &mut batch);
     })

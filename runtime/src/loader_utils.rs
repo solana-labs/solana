@@ -5,7 +5,7 @@ use solana_sdk::{
     loader_instruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
     system_instruction,
 };
 
@@ -15,7 +15,7 @@ pub fn load_program<T: Client>(
     loader_pubkey: &Pubkey,
     program: Vec<u8>,
 ) -> Pubkey {
-    let program_keypair = Keypair::new();
+    let program_keypair = generate_keypair();
     let program_pubkey = program_keypair.pubkey();
 
     let instruction = system_instruction::create_account(

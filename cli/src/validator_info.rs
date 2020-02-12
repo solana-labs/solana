@@ -19,7 +19,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
     transaction::Transaction,
 };
 use std::error;
@@ -286,7 +286,7 @@ pub fn process_set_validator_info(
         });
 
     // Create validator-info keypair to use if info_pubkey not provided or does not exist
-    let info_keypair = Keypair::new();
+    let info_keypair = generate_keypair();
     let mut info_pubkey = if let Some(pubkey) = info_pubkey {
         pubkey
     } else if let Some(validator_info) = existing_account {

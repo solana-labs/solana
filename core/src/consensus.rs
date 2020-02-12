@@ -479,7 +479,7 @@ pub mod test {
         clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, Keypair, KeypairUtil},
         transaction::Transaction,
     };
     use solana_stake_program::stake_state;
@@ -790,8 +790,8 @@ pub mod test {
 
     #[test]
     fn test_simple_votes() {
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
+        let vote_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
 
         let mut keypairs = HashMap::new();
@@ -839,8 +839,8 @@ pub mod test {
     #[test]
     fn test_double_partition() {
         solana_logger::setup();
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
+        let vote_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let vote_pubkey = vote_keypair.pubkey();
 

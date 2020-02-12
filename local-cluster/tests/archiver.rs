@@ -15,7 +15,7 @@ use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     genesis_config::create_genesis_config,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, KeypairUtil},
 };
 use std::{
     fs::remove_dir_all,
@@ -101,8 +101,8 @@ fn test_archiver_startup_leader_hang() {
     let (archiver_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
     {
-        let archiver_keypair = Arc::new(Keypair::new());
-        let storage_keypair = Arc::new(Keypair::new());
+        let archiver_keypair = Arc::new(generate_keypair());
+        let storage_keypair = Arc::new(generate_keypair());
 
         info!("starting archiver node");
         let archiver_node = Node::new_localhost_with_pubkey(&archiver_keypair.pubkey());
@@ -138,8 +138,8 @@ fn test_archiver_startup_ledger_hang() {
     let cluster = LocalCluster::new_with_equal_stakes(2, 10_000, 100);
 
     info!("starting archiver node");
-    let bad_keys = Arc::new(Keypair::new());
-    let storage_keypair = Arc::new(Keypair::new());
+    let bad_keys = Arc::new(generate_keypair());
+    let storage_keypair = Arc::new(generate_keypair());
     let mut archiver_node = Node::new_localhost_with_pubkey(&bad_keys.pubkey());
 
     // Pass bad TVU sockets to prevent successful ledger download

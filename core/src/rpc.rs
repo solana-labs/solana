@@ -1115,7 +1115,7 @@ pub mod tests {
         hash::{hash, Hash},
         instruction::InstructionError,
         rpc_port,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, Keypair, KeypairUtil},
         system_transaction,
         transaction::TransactionError,
     };
@@ -1172,9 +1172,9 @@ pub mod tests {
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let blockstore = Arc::new(blockstore);
 
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
+        let keypair3 = generate_keypair();
         bank.transfer(4, &alice, &keypair2.pubkey()).unwrap();
         let confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
             vec![&alice, &keypair1, &keypair2, &keypair3],
@@ -1605,7 +1605,7 @@ pub mod tests {
 
     #[test]
     fn test_rpc_get_program_accounts() {
-        let bob = Keypair::new();
+        let bob = generate_keypair();
         let RpcHandler {
             io,
             meta,
@@ -1871,7 +1871,8 @@ pub mod tests {
 
     #[test]
     fn test_rpc_verify_signature() {
-        let tx = system_transaction::transfer(&Keypair::new(), &Pubkey::new_rand(), 20, hash(&[0]));
+        let tx =
+            system_transaction::transfer(&generate_keypair(), &Pubkey::new_rand(), 20, hash(&[0]));
         assert_eq!(
             verify_signature(&tx.signatures[0].to_string()).unwrap(),
             tx.signatures[0]
@@ -2273,7 +2274,7 @@ pub mod tests {
         assert_eq!(bank.vote_accounts().len(), 1);
 
         // Create a vote account with no stake.
-        let alice_vote_keypair = Keypair::new();
+        let alice_vote_keypair = generate_keypair();
         let instructions = vote_instruction::create_account(
             &alice.pubkey(),
             &alice_vote_keypair.pubkey(),

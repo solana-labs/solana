@@ -474,7 +474,7 @@ pub fn process_show_vote_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::write_keypair;
+    use solana_sdk::signature::{generate_keypair, write_keypair};
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -485,10 +485,10 @@ mod tests {
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let pubkey = keypair.pubkey();
         let pubkey_string = pubkey.to_string();
-        let keypair2 = Keypair::new();
+        let keypair2 = generate_keypair();
         let pubkey2 = keypair2.pubkey();
         let pubkey2_string = pubkey2.to_string();
 
@@ -511,7 +511,7 @@ mod tests {
         );
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
         // Test CreateVoteAccount SubCommand
         let node_pubkey = Pubkey::new_rand();
@@ -540,7 +540,7 @@ mod tests {
         );
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
@@ -567,7 +567,7 @@ mod tests {
         // test init with an authed voter
         let authed = Pubkey::new_rand();
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_create_vote_account3 = test_commands.clone().get_matches_from(vec![
@@ -594,7 +594,7 @@ mod tests {
         );
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
         // test init with an authed withdrawer
         let test_create_vote_account4 = test_commands.clone().get_matches_from(vec![

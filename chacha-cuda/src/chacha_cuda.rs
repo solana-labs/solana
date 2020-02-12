@@ -118,7 +118,7 @@ mod tests {
     use solana_ledger::entry::create_ticks;
     use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::clock::DEFAULT_SLOTS_PER_SEGMENT;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::generate_keypair;
     use std::fs::{remove_dir_all, remove_file};
     use std::path::Path;
 
@@ -144,7 +144,7 @@ mod tests {
                 ticks_per_slot,
                 Some(0),
                 true,
-                &Arc::new(Keypair::new()),
+                &Arc::new(generate_keypair()),
                 entries,
                 0,
             )
@@ -205,7 +205,7 @@ mod tests {
                 ticks_per_slot,
                 Some(0),
                 true,
-                &Arc::new(Keypair::new()),
+                &Arc::new(generate_keypair()),
                 entries,
                 0,
             )

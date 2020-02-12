@@ -8,7 +8,7 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 #[cfg(feature = "move")]
 use solana_sdk::move_loader::solana_move_loader_program;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use std::sync::{mpsc::channel, Arc};
 use std::time::Duration;
 
@@ -29,7 +29,7 @@ fn test_bench_tps_local_cluster(config: Config) {
         ..ClusterConfig::default()
     });
 
-    let faucet_keypair = Keypair::new();
+    let faucet_keypair = generate_keypair();
     cluster.transfer(
         &cluster.funding_keypair,
         &faucet_keypair.pubkey(),

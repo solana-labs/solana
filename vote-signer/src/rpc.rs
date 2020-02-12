@@ -4,7 +4,7 @@ use jsonrpc_core::{Error, MetaIoHandler, Metadata, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::signature::{generate_keypair, Keypair, KeypairUtil, Signature};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -138,7 +138,7 @@ impl VoteSigner for LocalVoteSigner {
                 return Ok(voting_keypair.pubkey());
             }
         }
-        let voting_keypair = Keypair::new();
+        let voting_keypair = generate_keypair();
         let voting_pubkey = voting_keypair.pubkey();
         self.nodes.write().unwrap().insert(*pubkey, voting_keypair);
         Ok(voting_pubkey)
@@ -169,7 +169,7 @@ impl Default for LocalVoteSigner {
 mod tests {
     use super::*;
     use jsonrpc_core::{types::*, Response};
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use std::mem;
 
     fn start_rpc_handler() -> (MetaIoHandler<Meta>, Meta) {
@@ -185,7 +185,7 @@ mod tests {
     fn test_rpc_register_node() {
         let (io, meta) = start_rpc_handler();
 
-        let node_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let sig = node_keypair.sign_message(msg.as_bytes());
@@ -221,7 +221,7 @@ mod tests {
     fn test_rpc_register_node_invalid_sig() {
         let (io, meta) = start_rpc_handler();
 
-        let node_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let msg1 = "This is a Test1";
@@ -253,7 +253,7 @@ mod tests {
     fn test_rpc_deregister_node() {
         let (io, meta) = start_rpc_handler();
 
-        let node_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let sig = node_keypair.sign_message(msg.as_bytes());
@@ -284,7 +284,7 @@ mod tests {
     fn test_rpc_deregister_node_invalid_sig() {
         let (io, meta) = start_rpc_handler();
 
-        let node_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let msg1 = "This is a Test1";
@@ -316,7 +316,7 @@ mod tests {
     fn test_rpc_sign_vote() {
         let (io, meta) = start_rpc_handler();
 
-        let node_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let sig = node_keypair.sign_message(msg.as_bytes());
@@ -380,7 +380,7 @@ mod tests {
     fn test_rpc_sign_vote_before_register() {
         let (io, meta) = start_rpc_handler();
 
-        let node_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let sig = node_keypair.sign_message(msg.as_bytes());
@@ -411,7 +411,7 @@ mod tests {
     fn test_rpc_sign_vote_after_deregister() {
         let (io, meta) = start_rpc_handler();
 
-        let node_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let sig = node_keypair.sign_message(msg.as_bytes());
@@ -459,7 +459,7 @@ mod tests {
     fn test_rpc_sign_vote_invalid_sig() {
         let (io, meta) = start_rpc_handler();
 
-        let node_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let msg1 = "This is a Test";

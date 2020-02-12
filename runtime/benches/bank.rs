@@ -12,7 +12,7 @@ use solana_sdk::{
     genesis_config::create_genesis_config,
     instruction::InstructionError,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, KeypairUtil},
     transaction::Transaction,
 };
 use std::{sync::Arc, thread::sleep, time::Duration};
@@ -46,7 +46,7 @@ pub fn create_builtin_transactions(
         .into_iter()
         .map(|_| {
             // Seed the signer account
-            let rando0 = Keypair::new();
+            let rando0 = generate_keypair();
             bank_client
                 .transfer(10_000, &mint_keypair, &rando0.pubkey())
                 .expect(&format!("{}:{}", line!(), file!()));
@@ -68,7 +68,7 @@ pub fn create_native_loader_transactions(
         .into_iter()
         .map(|_| {
             // Seed the signer account©41
-            let rando0 = Keypair::new();
+            let rando0 = generate_keypair();
             bank_client
                 .transfer(10_000, &mint_keypair, &rando0.pubkey())
                 .expect(&format!("{}:{}", line!(), file!()));

@@ -225,7 +225,7 @@ mod bpf {
             clock::DEFAULT_SLOTS_PER_EPOCH,
             instruction::{AccountMeta, Instruction, InstructionError},
             pubkey::Pubkey,
-            signature::{Keypair, KeypairUtil},
+            signature::{generate_keypair, KeypairUtil},
             sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
             transaction::TransactionError,
         };
@@ -270,7 +270,7 @@ mod bpf {
                 let program_id = load_program(&bank_client, &mint_keypair, &bpf_loader::id(), elf);
                 let account_metas = vec![
                     AccountMeta::new(mint_keypair.pubkey(), true),
-                    AccountMeta::new(Keypair::new().pubkey(), false),
+                    AccountMeta::new(generate_keypair().pubkey(), false),
                     AccountMeta::new(clock::id(), false),
                     AccountMeta::new(fees::id(), false),
                     AccountMeta::new(rewards::id(), false),

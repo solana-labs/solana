@@ -678,7 +678,7 @@ mod tests {
         message::Message,
         nonce_state,
         rent::Rent,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, Keypair, KeypairUtil},
         system_program,
         transaction::Transaction,
     };
@@ -767,7 +767,7 @@ mod tests {
         let accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
         let tx = Transaction::new_with_compiled_instructions(
@@ -796,7 +796,7 @@ mod tests {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
@@ -833,7 +833,7 @@ mod tests {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let key0 = keypair.pubkey();
 
         let account = Account::new(1, 0, &Pubkey::default());
@@ -870,7 +870,7 @@ mod tests {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let key0 = keypair.pubkey();
 
         let account = Account::new(1, 1, &Pubkey::new_rand()); // <-- owner is not the system program
@@ -914,7 +914,7 @@ mod tests {
             .rent
             .minimum_balance(nonce_state::NonceState::size());
         let fee_calculator = FeeCalculator::new(min_balance, 0);
-        let nonce = Keypair::new();
+        let nonce = generate_keypair();
         let mut accounts = vec![(
             nonce.pubkey(),
             Account::new_data(
@@ -981,7 +981,7 @@ mod tests {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
@@ -1025,7 +1025,7 @@ mod tests {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
         let key2 = Pubkey::new(&[6u8; 32]);
@@ -1094,7 +1094,7 @@ mod tests {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
@@ -1133,7 +1133,7 @@ mod tests {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
@@ -1171,7 +1171,7 @@ mod tests {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
         let key2 = Pubkey::new(&[6u8; 32]);
@@ -1234,7 +1234,7 @@ mod tests {
         let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let pubkey = keypair.pubkey();
 
         let account = Account::new(10, 1, &Pubkey::default());
@@ -1362,10 +1362,10 @@ mod tests {
 
     #[test]
     fn test_accounts_locks() {
-        let keypair0 = Keypair::new();
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
+        let keypair0 = generate_keypair();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
+        let keypair3 = generate_keypair();
 
         let account0 = Account::new(1, 0, &Pubkey::default());
         let account1 = Account::new(2, 0, &Pubkey::default());
@@ -1476,9 +1476,9 @@ mod tests {
         let counter = Arc::new(AtomicU64::new(0));
         let exit = Arc::new(AtomicBool::new(false));
 
-        let keypair0 = Keypair::new();
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
+        let keypair0 = generate_keypair();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
 
         let account0 = Account::new(1, 0, &Pubkey::default());
         let account1 = Account::new(2, 0, &Pubkey::default());
@@ -1550,8 +1550,8 @@ mod tests {
 
     #[test]
     fn test_collect_accounts_to_store() {
-        let keypair0 = Keypair::new();
-        let keypair1 = Keypair::new();
+        let keypair0 = generate_keypair();
+        let keypair1 = generate_keypair();
         let pubkey = Pubkey::new_rand();
 
         let rent_collector = RentCollector::default();

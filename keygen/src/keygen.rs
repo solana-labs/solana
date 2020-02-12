@@ -20,8 +20,8 @@ use solana_remote_wallet::{
 use solana_sdk::{
     pubkey::{write_pubkey_file, Pubkey},
     signature::{
-        keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
-        Keypair, KeypairUtil, Signature,
+        generate_keypair, keypair_from_seed, read_keypair, read_keypair_file, write_keypair,
+        write_keypair_file, Keypair, KeypairUtil, Signature,
     },
 };
 use std::{
@@ -572,7 +572,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             found.load(Ordering::Relaxed),
                         );
                     }
-                    let keypair = Keypair::new();
+                    let keypair = generate_keypair();
                     let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
                     if ignore_case {
                         pubkey = pubkey.to_lowercase();

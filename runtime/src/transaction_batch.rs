@@ -57,11 +57,7 @@ impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
 mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
-    use solana_sdk::{
-        pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
-        system_transaction,
-    };
+    use solana_sdk::{pubkey::Pubkey, signature::generate_keypair, system_transaction};
 
     #[test]
     fn test_transaction_batch() {
@@ -95,7 +91,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
 
         let pubkey = Pubkey::new_rand();
-        let keypair2 = Keypair::new();
+        let keypair2 = generate_keypair();
         let pubkey2 = Pubkey::new_rand();
 
         let txs = vec![

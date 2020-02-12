@@ -112,7 +112,7 @@ fn make_programs_txs(txes: usize, hash: Hash) -> Vec<Transaction> {
         .into_iter()
         .map(|_| {
             let mut instructions = vec![];
-            let from_key = Keypair::new();
+            let from_key = generate_keypair();
             for _ in 1..progs {
                 let to_key = Pubkey::new_rand();
                 instructions.push(system_instruction::transfer(&from_key.pubkey(), &to_key, 1));
@@ -310,7 +310,7 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
     let tx_vector: Vec<Transaction> = Vec::with_capacity(num_accounts / 2);
 
     for _ in 0..num_accounts {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         keypairs.push(keypair);
     }
 

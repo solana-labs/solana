@@ -288,7 +288,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_sdk::{
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, KeypairUtil},
         system_program, system_transaction,
         transaction::{self, Transaction},
     };
@@ -320,7 +320,7 @@ mod tests {
             mint_keypair: alice,
             ..
         } = create_genesis_config(10_000);
-        let bob = Keypair::new();
+        let bob = generate_keypair();
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
@@ -411,9 +411,9 @@ mod tests {
             .push(solana_budget_program!());
 
         let bob_pubkey = Pubkey::new_rand();
-        let witness = Keypair::new();
-        let contract_funds = Keypair::new();
-        let contract_state = Keypair::new();
+        let witness = generate_keypair();
+        let contract_funds = generate_keypair();
+        let contract_state = generate_keypair();
         let budget_program_id = solana_budget_program::id();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
@@ -548,7 +548,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
-        let bob = Keypair::new();
+        let bob = generate_keypair();
 
         let rpc = RpcSolPubSubImpl::default();
         let session = create_session();
@@ -579,7 +579,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
-        let bob = Keypair::new();
+        let bob = generate_keypair();
 
         let rpc = RpcSolPubSubImpl::default();
         let session = create_session();

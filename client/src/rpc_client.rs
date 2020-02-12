@@ -1129,9 +1129,7 @@ mod tests {
     use serde_json::Number;
     use solana_logger;
     use solana_sdk::{
-        instruction::InstructionError,
-        signature::{Keypair, KeypairUtil},
-        system_transaction,
+        instruction::InstructionError, signature::generate_keypair, system_transaction,
         transaction::TransactionError,
     };
     use std::{sync::mpsc::channel, thread};
@@ -1231,7 +1229,7 @@ mod tests {
     fn test_send_transaction() {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
-        let key = Keypair::new();
+        let key = generate_keypair();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
         let tx = system_transaction::transfer(&key, &to, 50, blockhash);
@@ -1280,7 +1278,7 @@ mod tests {
     fn test_send_and_confirm_transaction() {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
-        let key = Keypair::new();
+        let key = generate_keypair();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
         let mut tx = system_transaction::transfer(&key, &to, 50, blockhash);
@@ -1313,7 +1311,7 @@ mod tests {
     fn test_resign_transaction() {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
-        let key = Keypair::new();
+        let key = generate_keypair();
         let to = Pubkey::new_rand();
         let blockhash: Hash = "HUu3LwEzGRsUkuJS121jzkPJW39Kq62pXCTmTa1F9jDL"
             .parse()

@@ -9,7 +9,9 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, read_keypair_file, write_keypair, Keypair, KeypairUtil},
+    signature::{
+        generate_keypair, keypair_from_seed, read_keypair_file, write_keypair, Keypair, KeypairUtil,
+    },
     system_instruction::create_address_with_seed,
 };
 use solana_stake_program::stake_state::{Lockup, StakeAuthorize, StakeState};
@@ -59,7 +61,7 @@ fn test_stake_delegation_force() {
         .unwrap();
 
     // Create vote account
-    let vote_keypair = Keypair::new();
+    let vote_keypair = generate_keypair();
     let (vote_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&vote_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateVoteAccount {
@@ -73,7 +75,7 @@ fn test_stake_delegation_force() {
     process_command(&config).unwrap();
 
     // Create stake account
-    let stake_keypair = Keypair::new();
+    let stake_keypair = generate_keypair();
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateStakeAccount {
@@ -421,7 +423,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         .unwrap();
 
     // Create stake account
-    let stake_keypair = Keypair::new();
+    let stake_keypair = generate_keypair();
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateStakeAccount {
@@ -435,7 +437,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     process_command(&config).unwrap();
 
     // Create nonce account
-    let nonce_account = Keypair::new();
+    let nonce_account = generate_keypair();
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
@@ -527,7 +529,7 @@ fn test_stake_authorize() {
     .unwrap();
 
     // Create stake account, identity is authority
-    let stake_keypair = Keypair::new();
+    let stake_keypair = generate_keypair();
     let stake_account_pubkey = stake_keypair.pubkey();
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
@@ -542,7 +544,7 @@ fn test_stake_authorize() {
     process_command(&config).unwrap();
 
     // Assign new online stake authority
-    let online_authority = Keypair::new();
+    let online_authority = generate_keypair();
     let online_authority_pubkey = online_authority.pubkey();
     let (online_authority_file, mut tmp_file) = make_tmp_file();
     write_keypair(&online_authority, tmp_file.as_file_mut()).unwrap();
@@ -593,7 +595,7 @@ fn test_stake_authorize() {
     assert_eq!(current_authority, offline_authority_pubkey);
 
     // Offline assignment of new nonced stake authority
-    let nonced_authority = Keypair::new();
+    let nonced_authority = generate_keypair();
     let nonced_authority_pubkey = nonced_authority.pubkey();
     let (nonced_authority_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonced_authority, tmp_file.as_file_mut()).unwrap();
@@ -637,7 +639,7 @@ fn test_stake_authorize() {
     let minimum_nonce_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
-    let nonce_account = Keypair::new();
+    let nonce_account = generate_keypair();
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
@@ -657,7 +659,7 @@ fn test_stake_authorize() {
     };
 
     // Nonced assignment of new online stake authority
-    let online_authority = Keypair::new();
+    let online_authority = generate_keypair();
     let online_authority_pubkey = online_authority.pubkey();
     let (_online_authority_file, mut tmp_file) = make_tmp_file();
     write_keypair(&online_authority, tmp_file.as_file_mut()).unwrap();
@@ -750,7 +752,7 @@ fn test_stake_authorize_with_fee_payer() {
     check_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
-    let stake_keypair = Keypair::new();
+    let stake_keypair = generate_keypair();
     let stake_account_pubkey = stake_keypair.pubkey();
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();

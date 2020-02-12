@@ -8,7 +8,7 @@ use solana_client::thin_client::{create_client, ThinClient};
 use solana_ledger::bank_forks::BankForks;
 use solana_perf::recycler::Recycler;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use std::net::{SocketAddr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -269,7 +269,7 @@ fn make_gossip_node(
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
 ) -> (GossipService, Option<TcpListener>, Arc<RwLock<ClusterInfo>>) {
-    let keypair = Arc::new(Keypair::new());
+    let keypair = Arc::new(generate_keypair());
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
         ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr)
     } else {
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn test_gossip_services_spy() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let peer0 = Pubkey::new_rand();
         let peer1 = Pubkey::new_rand();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);

@@ -2134,7 +2134,7 @@ mod tests {
         nonce_state,
         poh_config::PohConfig,
         rent::Rent,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, KeypairUtil},
         system_instruction,
         system_program::{self, solana_system_program},
         sysvar::{fees::Fees, rewards::Rewards},
@@ -2330,14 +2330,14 @@ mod tests {
     #[test]
     fn test_credit_debit_rent_no_side_effect_on_hash() {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
-        let keypair1: Keypair = Keypair::new();
-        let keypair2: Keypair = Keypair::new();
-        let keypair3: Keypair = Keypair::new();
-        let keypair4: Keypair = Keypair::new();
+        let keypair1: Keypair = generate_keypair();
+        let keypair2: Keypair = generate_keypair();
+        let keypair3: Keypair = generate_keypair();
+        let keypair4: Keypair = generate_keypair();
 
         // Transaction between these two keypairs will fail
-        let keypair5: Keypair = Keypair::new();
-        let keypair6: Keypair = Keypair::new();
+        let keypair5: Keypair = generate_keypair();
+        let keypair6: Keypair = generate_keypair();
 
         genesis_config.rent = Rent {
             lamports_per_byte_year: 1,
@@ -2628,8 +2628,8 @@ mod tests {
 
         let validator_1_pubkey = Pubkey::new_rand();
         let validator_1_stake_lamports = 20;
-        let validator_1_staking_keypair = Keypair::new();
-        let validator_1_voting_keypair = Keypair::new();
+        let validator_1_staking_keypair = generate_keypair();
+        let validator_1_voting_keypair = generate_keypair();
 
         let validator_1_vote_account = vote_state::create_account(
             &validator_1_voting_keypair.pubkey(),
@@ -2661,8 +2661,8 @@ mod tests {
 
         let validator_2_pubkey = Pubkey::new_rand();
         let validator_2_stake_lamports = 20;
-        let validator_2_staking_keypair = Keypair::new();
-        let validator_2_voting_keypair = Keypair::new();
+        let validator_2_staking_keypair = generate_keypair();
+        let validator_2_voting_keypair = generate_keypair();
 
         let validator_2_vote_account = vote_state::create_account(
             &validator_2_voting_keypair.pubkey(),
@@ -2694,8 +2694,8 @@ mod tests {
 
         let validator_3_pubkey = Pubkey::new_rand();
         let validator_3_stake_lamports = 30;
-        let validator_3_staking_keypair = Keypair::new();
-        let validator_3_voting_keypair = Keypair::new();
+        let validator_3_staking_keypair = generate_keypair();
+        let validator_3_voting_keypair = generate_keypair();
 
         let validator_3_vote_account = vote_state::create_account(
             &validator_3_voting_keypair.pubkey(),
@@ -2736,11 +2736,11 @@ mod tests {
         bank.rent_collector.epoch = 5;
         bank.rent_collector.slots_per_year = 192.0;
 
-        let payer = Keypair::new();
+        let payer = generate_keypair();
         let payer_account = Account::new(400, 0, &system_program::id());
         bank.store_account(&payer.pubkey(), &payer_account);
 
-        let payee = Keypair::new();
+        let payee = generate_keypair();
         let payee_account = Account::new(70, 1, &system_program::id());
         bank.store_account(&payee.pubkey(), &payee_account);
 
@@ -2833,7 +2833,7 @@ mod tests {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
         let mut keypairs: Vec<Keypair> = Vec::with_capacity(14);
         for _i in 0..14 {
-            keypairs.push(Keypair::new());
+            keypairs.push(generate_keypair());
         }
 
         genesis_config.rent = Rent {
@@ -3118,7 +3118,7 @@ mod tests {
 
         let bank0 = Arc::new(new_from_parent(&bank));
         let blockhash = bank.last_blockhash();
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 10, blockhash);
         bank0.process_transaction(&tx).unwrap();
 
@@ -3246,7 +3246,7 @@ mod tests {
         genesis_config.fee_calculator.lamports_per_signature = 1;
         let bank = Bank::new(&genesis_config);
 
-        let dest = Keypair::new();
+        let dest = generate_keypair();
 
         // source with 0 program context
         let tx =
@@ -3273,7 +3273,7 @@ mod tests {
     fn test_account_not_found() {
         let (genesis_config, mint_keypair) = create_genesis_config(0);
         let bank = Bank::new(&genesis_config);
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         assert_eq!(
             bank.transfer(1, &keypair, &mint_keypair.pubkey()),
             Err(TransactionError::AccountNotFound)
@@ -3319,7 +3319,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
 
         // Test new account
-        let key = Keypair::new();
+        let key = generate_keypair();
         bank.deposit(&key.pubkey(), 10);
         assert_eq!(bank.get_balance(&key.pubkey()), 10);
 
@@ -3334,7 +3334,7 @@ mod tests {
         let bank = Bank::new(&genesis_config);
 
         // Test no account
-        let key = Keypair::new();
+        let key = generate_keypair();
         assert_eq!(
             bank.withdraw(&key.pubkey(), 10),
             Err(TransactionError::AccountNotFound)
@@ -3362,7 +3362,7 @@ mod tests {
 
         let min_balance =
             bank.get_minimum_balance_for_rent_exemption(nonce_state::NonceState::size());
-        let nonce = Keypair::new();
+        let nonce = generate_keypair();
         let nonce_account = Account::new_data(
             min_balance + 42,
             &nonce_state::NonceState::Initialized(
@@ -3413,7 +3413,7 @@ mod tests {
 
         let capitalization = bank.capitalization();
 
-        let key = Keypair::new();
+        let key = generate_keypair();
         let tx = system_transaction::transfer(
             &mint_keypair,
             &key.pubkey(),
@@ -3494,7 +3494,7 @@ mod tests {
         let bank = Bank::new_from_parent(&Arc::new(bank), &leader, 2);
 
         // Send a transfer using cheap_blockhash
-        let key = Keypair::new();
+        let key = generate_keypair();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
         let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, cheap_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
@@ -3505,7 +3505,7 @@ mod tests {
         );
 
         // Send a transfer using expensive_blockhash
-        let key = Keypair::new();
+        let key = generate_keypair();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
         let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, expensive_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
@@ -3527,7 +3527,7 @@ mod tests {
         genesis_config.fee_calculator.lamports_per_signature = 2;
         let bank = Bank::new(&genesis_config);
 
-        let key = Keypair::new();
+        let key = generate_keypair();
         let tx1 =
             system_transaction::transfer(&mint_keypair, &key.pubkey(), 2, genesis_config.hash());
         let tx2 =
@@ -3563,7 +3563,7 @@ mod tests {
     fn test_debits_before_credits() {
         let (genesis_config, mint_keypair) = create_genesis_config(2);
         let bank = Bank::new(&genesis_config);
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let tx0 = system_transaction::transfer(
             &mint_keypair,
             &keypair.pubkey(),
@@ -3596,9 +3596,9 @@ mod tests {
         let vote_pubkey0 = Pubkey::new_rand();
         let vote_pubkey1 = Pubkey::new_rand();
         let vote_pubkey2 = Pubkey::new_rand();
-        let authorized_voter = Keypair::new();
-        let payer0 = Keypair::new();
-        let payer1 = Keypair::new();
+        let authorized_voter = generate_keypair();
+        let payer0 = generate_keypair();
+        let payer1 = generate_keypair();
 
         // Create vote accounts
         let vote_account0 =
@@ -3664,8 +3664,8 @@ mod tests {
     fn test_interleaving_locks() {
         let (genesis_config, mint_keypair) = create_genesis_config(3);
         let bank = Bank::new(&genesis_config);
-        let alice = Keypair::new();
-        let bob = Keypair::new();
+        let alice = generate_keypair();
+        let bob = generate_keypair();
 
         let tx1 =
             system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_config.hash());
@@ -3699,9 +3699,9 @@ mod tests {
     fn test_readonly_relaxed_locks() {
         let (genesis_config, _) = create_genesis_config(3);
         let bank = Bank::new(&genesis_config);
-        let key0 = Keypair::new();
-        let key1 = Keypair::new();
-        let key2 = Keypair::new();
+        let key0 = generate_keypair();
+        let key1 = generate_keypair();
+        let key2 = generate_keypair();
         let key3 = Pubkey::new_rand();
 
         let message = Message {
@@ -3759,7 +3759,7 @@ mod tests {
     #[test]
     fn test_bank_invalid_account_index() {
         let (genesis_config, mint_keypair) = create_genesis_config(1);
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let bank = Bank::new(&genesis_config);
 
         let tx = system_transaction::transfer(
@@ -3787,7 +3787,7 @@ mod tests {
     #[test]
     fn test_bank_pay_to_self() {
         let (genesis_config, mint_keypair) = create_genesis_config(1);
-        let key1 = Keypair::new();
+        let key1 = generate_keypair();
         let bank = Bank::new(&genesis_config);
 
         bank.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
@@ -3823,7 +3823,7 @@ mod tests {
     #[test]
     fn test_bank_parent_duplicate_signature() {
         let (genesis_config, mint_keypair) = create_genesis_config(2);
-        let key1 = Keypair::new();
+        let key1 = generate_keypair();
         let parent = Arc::new(Bank::new(&genesis_config));
 
         let tx =
@@ -3840,8 +3840,8 @@ mod tests {
     #[test]
     fn test_bank_parent_account_spend() {
         let (genesis_config, mint_keypair) = create_genesis_config(2);
-        let key1 = Keypair::new();
-        let key2 = Keypair::new();
+        let key1 = generate_keypair();
+        let key2 = generate_keypair();
         let parent = Arc::new(Bank::new(&genesis_config));
 
         let tx =
@@ -3996,7 +3996,7 @@ mod tests {
         assert_ne!(orig, bank.hash_internal_state());
 
         let orig = bank.hash_internal_state();
-        let empty_keypair = Keypair::new();
+        let empty_keypair = generate_keypair();
         assert!(bank.transfer(1000, &empty_keypair, &key0).is_err());
         assert_eq!(orig, bank.hash_internal_state());
     }
@@ -4024,8 +4024,8 @@ mod tests {
     fn test_bank_squash() {
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(2);
-        let key1 = Keypair::new();
-        let key2 = Keypair::new();
+        let key1 = generate_keypair();
+        let key2 = generate_keypair();
         let parent = Arc::new(Bank::new(&genesis_config));
 
         let tx_transfer_mint_to_1 =
@@ -4087,7 +4087,7 @@ mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let parent = Arc::new(Bank::new(&genesis_config));
 
-        let key1 = Keypair::new();
+        let key1 = generate_keypair();
 
         parent.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
         assert_eq!(parent.get_balance(&key1.pubkey()), 1);
@@ -4102,7 +4102,7 @@ mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let bank0 = Arc::new(Bank::new(&genesis_config));
 
-        let key1 = Keypair::new();
+        let key1 = generate_keypair();
 
         bank0.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
         assert_eq!(bank0.get_balance(&key1.pubkey()), 1);
@@ -4365,7 +4365,7 @@ mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
         bank.fee_calculator.lamports_per_signature = 2;
-        let key = Keypair::new();
+        let key = generate_keypair();
 
         let mut transfer_instruction =
             system_instruction::transfer(&mint_keypair.pubkey(), &key.pubkey(), 0);
@@ -4437,7 +4437,7 @@ mod tests {
     fn test_is_delta_true() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let key1 = Keypair::new();
+        let key1 = generate_keypair();
         let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_config.hash());
         assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
@@ -4457,7 +4457,7 @@ mod tests {
     fn test_is_empty() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let bank0 = Arc::new(Bank::new(&genesis_config));
-        let key1 = Keypair::new();
+        let key1 = generate_keypair();
 
         // The zeroth bank is empty becasue there are no transactions
         assert_eq!(bank0.is_empty(), true);
@@ -4483,7 +4483,7 @@ mod tests {
         assert_eq!(
             bank1.process_transaction(&system_transaction::transfer(
                 &mint_keypair,
-                &Keypair::new().pubkey(),
+                &generate_keypair().pubkey(),
                 1,
                 genesis_config.hash(),
             )),
@@ -4534,7 +4534,7 @@ mod tests {
         assert_eq!(vote_accounts.len(), 1); // bootstrap validator has
                                             // to have a vote account
 
-        let vote_keypair = Keypair::new();
+        let vote_keypair = generate_keypair();
         let instructions = vote_instruction::create_account(
             &mint_keypair.pubkey(),
             &vote_keypair.pubkey(),
@@ -4581,7 +4581,7 @@ mod tests {
         assert_eq!(stake_delegations.len(), 1); // bootstrap validator has
                                                 // to have a stake delegation
 
-        let vote_keypair = Keypair::new();
+        let vote_keypair = generate_keypair();
         let mut instructions = vote_instruction::create_account(
             &mint_keypair.pubkey(),
             &vote_keypair.pubkey(),
@@ -4594,7 +4594,7 @@ mod tests {
             10,
         );
 
-        let stake_keypair = Keypair::new();
+        let stake_keypair = generate_keypair();
         instructions.extend(stake_instruction::create_account_and_delegate_stake(
             &mint_keypair.pubkey(),
             &stake_keypair.pubkey(),
@@ -4638,8 +4638,8 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         bank.is_delta.store(false, Ordering::Relaxed);
 
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
         let fail_tx =
             system_transaction::transfer(&keypair1, &keypair2.pubkey(), 1, bank.last_blockhash());
 
@@ -4676,17 +4676,17 @@ mod tests {
         bank0.squash();
 
         // Create an account on a non-root fork
-        let key1 = Keypair::new();
+        let key1 = generate_keypair();
         bank1.deposit(&key1.pubkey(), 5);
 
         let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
 
         // Test new account
-        let key2 = Keypair::new();
+        let key2 = generate_keypair();
         bank2.deposit(&key2.pubkey(), 10);
         assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
 
-        let key3 = Keypair::new();
+        let key3 = generate_keypair();
         bank2.deposit(&key3.pubkey(), 0);
 
         bank2.squash();
@@ -4823,7 +4823,7 @@ mod tests {
         bank.add_instruction_processor(solana_vote_program::id(), mock_vote_processor);
         assert!(bank.get_account(&solana_vote_program::id()).is_some());
 
-        let mock_account = Keypair::new();
+        let mock_account = generate_keypair();
         let instructions = vote_instruction::create_account(
             &mint_keypair.pubkey(),
             &mock_account.pubkey(),
@@ -4864,7 +4864,7 @@ mod tests {
             Err(InstructionError::CustomError(42))
         }
 
-        let mock_account = Keypair::new();
+        let mock_account = generate_keypair();
         let instructions = vote_instruction::create_account(
             &mint_keypair.pubkey(),
             &mock_account.pubkey(),
@@ -5039,8 +5039,8 @@ mod tests {
         nonce_lamports: u64,
         nonce_authority: Option<Pubkey>,
     ) -> Result<(Keypair, Keypair)> {
-        let custodian_keypair = Keypair::new();
-        let nonce_keypair = Keypair::new();
+        let custodian_keypair = generate_keypair();
+        let nonce_keypair = generate_keypair();
         /* Setup accounts */
         let mut setup_ixs = vec![system_instruction::transfer(
             &mint_keypair.pubkey(),
@@ -5159,7 +5159,7 @@ mod tests {
             setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
-        let missing_keypair = Keypair::new();
+        let missing_keypair = generate_keypair();
         let missing_pubkey = missing_keypair.pubkey();
 
         let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
@@ -5198,7 +5198,7 @@ mod tests {
     fn test_assign_from_nonce_account_fail() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let nonce = Keypair::new();
+        let nonce = generate_keypair();
         let nonce_account = Account::new_data(
             42424242,
             &nonce_state::NonceState::Initialized(
@@ -5239,7 +5239,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let alice_keypair = Keypair::new();
+        let alice_keypair = generate_keypair();
         let alice_pubkey = alice_keypair.pubkey();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
@@ -5350,7 +5350,7 @@ mod tests {
         let parent = Arc::new(Bank::new(&genesis_config));
         let bank0 = Arc::new(new_from_parent(&parent));
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let pubkey0 = Pubkey::new_rand();
         let pubkey1 = Pubkey::new_rand();
         let program_id = Pubkey::new(&[2; 32]);
@@ -5391,8 +5391,8 @@ mod tests {
         let parent = Arc::new(Bank::new(&genesis_config));
         let bank0 = Arc::new(new_from_parent(&parent));
 
-        let keypair0 = Keypair::new();
-        let keypair1 = Keypair::new();
+        let keypair0 = generate_keypair();
+        let keypair1 = generate_keypair();
         let pubkey0 = Pubkey::new_rand();
         let pubkey1 = Pubkey::new_rand();
         let pubkey2 = Pubkey::new_rand();
@@ -5406,7 +5406,7 @@ mod tests {
         let blockhash = bank0.last_blockhash();
 
         let tx0 = system_transaction::transfer(&keypair0, &pubkey0, 2, blockhash.clone());
-        let tx1 = system_transaction::transfer(&Keypair::new(), &pubkey1, 2, blockhash.clone());
+        let tx1 = system_transaction::transfer(&generate_keypair(), &pubkey1, 2, blockhash.clone());
         let tx2 = system_transaction::transfer(&keypair1, &pubkey2, 12, blockhash.clone());
         let txs = vec![tx0, tx1, tx2];
 

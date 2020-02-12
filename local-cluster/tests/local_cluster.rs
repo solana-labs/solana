@@ -23,7 +23,7 @@ use solana_sdk::{
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
     genesis_config::OperatingMode,
     poh_config::PohConfig,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
@@ -237,7 +237,7 @@ fn run_cluster_partition(
             )
         } else {
             (
-                iter::repeat_with(|| Arc::new(Keypair::new()))
+                iter::repeat_with(|| Arc::new(generate_keypair()))
                     .take(partitions.len())
                     .collect(),
                 10_000,
@@ -404,7 +404,7 @@ fn test_kill_partition() {
     let mut leader_schedule = vec![];
     let num_slots_per_validator = 8;
     let partitions: [&[(usize, bool)]; 3] = [&[(9, true)], &[(10, false)], &[(10, false)]];
-    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
+    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(generate_keypair()))
         .take(partitions.len())
         .collect();
     for (i, k) in validator_keys.iter().enumerate() {
@@ -724,7 +724,7 @@ fn test_snapshots_blockstore_floor() {
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
         validator_stake,
-        Arc::new(Keypair::new()),
+        Arc::new(generate_keypair()),
     );
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys

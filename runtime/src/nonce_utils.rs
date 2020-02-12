@@ -79,16 +79,16 @@ mod tests {
         instruction::InstructionError,
         nonce_state::{with_test_keyed_account, Meta, NonceAccount},
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, KeypairUtil},
         system_instruction,
         sysvar::{recent_blockhashes::create_test_recent_blockhashes, rent::Rent},
     };
     use std::collections::HashSet;
 
     fn nonced_transfer_tx() -> (Pubkey, Pubkey, Transaction) {
-        let from_keypair = Keypair::new();
+        let from_keypair = generate_keypair();
         let from_pubkey = from_keypair.pubkey();
-        let nonce_keypair = Keypair::new();
+        let nonce_keypair = generate_keypair();
         let nonce_pubkey = nonce_keypair.pubkey();
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn tx_uses_nonce_empty_ix_fail() {
         let tx =
-            Transaction::new_signed_instructions(&[&Keypair::new(); 0], vec![], Hash::default());
+            Transaction::new_signed_instructions(&[&generate_keypair(); 0], vec![], Hash::default());
         assert!(transaction_uses_durable_nonce(&tx).is_none());
     }
 
@@ -123,9 +123,9 @@ mod tests {
 
     #[test]
     fn tx_uses_nonce_first_prog_id_not_nonce_fail() {
-        let from_keypair = Keypair::new();
+        let from_keypair = generate_keypair();
         let from_pubkey = from_keypair.pubkey();
-        let nonce_keypair = Keypair::new();
+        let nonce_keypair = generate_keypair();
         let nonce_pubkey = nonce_keypair.pubkey();
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
@@ -140,9 +140,9 @@ mod tests {
 
     #[test]
     fn tx_uses_nonce_wrong_first_nonce_ix_fail() {
-        let from_keypair = Keypair::new();
+        let from_keypair = generate_keypair();
         let from_pubkey = from_keypair.pubkey();
-        let nonce_keypair = Keypair::new();
+        let nonce_keypair = generate_keypair();
         let nonce_pubkey = nonce_keypair.pubkey();
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],

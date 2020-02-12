@@ -447,7 +447,7 @@ pub mod tests {
     use super::*;
     use crate::shred::SIZE_OF_DATA_SHRED_PAYLOAD;
     use crate::shred::{Shred, Shredder};
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     #[test]
     fn test_sigverify_shred_cpu() {
         solana_logger::setup();
@@ -465,7 +465,7 @@ pub mod tests {
             0xc0de,
         );
         assert_eq!(shred.slot(), slot);
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         Shredder::sign_shred(&keypair, &mut shred);
         trace!("signature {}", shred.common_header.signature);
         packet.data[0..shred.payload.len()].copy_from_slice(&shred.payload);
@@ -478,7 +478,7 @@ pub mod tests {
         let rv = verify_shred_cpu(&packet, &leader_slots);
         assert_eq!(rv, Some(1));
 
-        let wrong_keypair = Keypair::new();
+        let wrong_keypair = generate_keypair();
         let leader_slots = [(slot, wrong_keypair.pubkey().to_bytes())]
             .iter()
             .cloned()
@@ -507,7 +507,7 @@ pub mod tests {
             0,
             0xc0de,
         );
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         Shredder::sign_shred(&keypair, &mut shred);
         batch[0].packets.resize(1, Packet::default());
         batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
@@ -520,7 +520,7 @@ pub mod tests {
         let rv = verify_shreds_cpu(&batch, &leader_slots);
         assert_eq!(rv, vec![vec![1]]);
 
-        let wrong_keypair = Keypair::new();
+        let wrong_keypair = generate_keypair();
         let leader_slots = [(slot, wrong_keypair.pubkey().to_bytes())]
             .iter()
             .cloned()
@@ -559,7 +559,7 @@ pub mod tests {
             0,
             0xc0de,
         );
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         Shredder::sign_shred(&keypair, &mut shred);
         batch[0].packets.resize(1, Packet::default());
         batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
@@ -575,7 +575,7 @@ pub mod tests {
         let rv = verify_shreds_gpu(&batch, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![1]]);
 
-        let wrong_keypair = Keypair::new();
+        let wrong_keypair = generate_keypair();
         let leader_slots = [
             (std::u64::MAX, Pubkey::default().to_bytes()),
             (slot, wrong_keypair.pubkey().to_bytes()),
@@ -627,7 +627,7 @@ pub mod tests {
             shred.copy_to_packet(p);
         }
         let mut batch = vec![packets; num_batches];
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let pinned_keypair = sign_shreds_gpu_pinned_keypair(&keypair, &recycler_cache);
         let pinned_keypair = Some(Arc::new(pinned_keypair));
         let pubkeys = [
@@ -655,7 +655,7 @@ pub mod tests {
 
         let mut batch = [Packets::default()];
         let slot = 0xdeadc0de;
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let shred = Shred::new_from_data(
             slot,
             0xc0de,

@@ -486,7 +486,7 @@ pub(crate) mod tests {
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_budget_program;
     use solana_sdk::{
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, KeypairUtil},
         system_transaction,
     };
     use tokio::prelude::{Async, Stream};
@@ -521,7 +521,7 @@ pub(crate) mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
-        let alice = Keypair::new();
+        let alice = generate_keypair();
         let tx = system_transaction::create_account(
             &mint_keypair,
             &alice,
@@ -577,7 +577,7 @@ pub(crate) mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
-        let alice = Keypair::new();
+        let alice = generate_keypair();
         let tx = system_transaction::create_account(
             &mint_keypair,
             &alice,
@@ -634,7 +634,7 @@ pub(crate) mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
-        let alice = Keypair::new();
+        let alice = generate_keypair();
         let tx = system_transaction::transfer(&mint_keypair, &alice.pubkey(), 20, blockhash);
         let signature = tx.signatures[0];
         bank_forks

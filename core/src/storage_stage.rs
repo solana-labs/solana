@@ -649,7 +649,7 @@ mod tests {
     use rayon::prelude::*;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hasher;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use std::cmp::{max, min};
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc::channel;
@@ -657,8 +657,8 @@ mod tests {
 
     #[test]
     fn test_storage_stage_none_ledger() {
-        let keypair = Arc::new(Keypair::new());
-        let storage_keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
+        let storage_keypair = Arc::new(generate_keypair());
         let exit = Arc::new(AtomicBool::new(false));
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
@@ -701,7 +701,7 @@ mod tests {
             (0..(32 * NUM_IDENTITIES))
                 .into_par_iter()
                 .for_each(move |_| {
-                    let keypair = Keypair::new();
+                    let keypair = generate_keypair();
                     let hash = hasher.clone().result();
                     let signature = keypair.sign_message(&hash.as_ref());
                     let ix = get_identity_index_from_signature(&signature);

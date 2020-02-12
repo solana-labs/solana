@@ -920,7 +920,7 @@ pub mod tests {
     use bincode::serialized_size;
     use matches::assert_matches;
     use solana_sdk::hash::hash;
-    use solana_sdk::system_transaction;
+    use solana_sdk::{signature::generate_keypair, system_transaction};
     use std::collections::HashSet;
     use std::convert::TryInto;
 
@@ -966,7 +966,7 @@ pub mod tests {
 
     #[test]
     fn test_data_shredder() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
         let slot = 0x123456789abcdef0;
 
         // Test that parent cannot be > current slot
@@ -993,8 +993,8 @@ pub mod tests {
 
         let entries: Vec<_> = (0..5)
             .map(|_| {
-                let keypair0 = Keypair::new();
-                let keypair1 = Keypair::new();
+                let keypair0 = generate_keypair();
+                let keypair1 = generate_keypair();
                 let tx0 =
                     system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
                 Entry::new(&Hash::default(), 1, vec![tx0])
@@ -1059,7 +1059,7 @@ pub mod tests {
 
     #[test]
     fn test_deserialize_shred_payload() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
         let slot = 1;
 
         let parent_slot = 0;
@@ -1068,8 +1068,8 @@ pub mod tests {
 
         let entries: Vec<_> = (0..5)
             .map(|_| {
-                let keypair0 = Keypair::new();
-                let keypair1 = Keypair::new();
+                let keypair0 = generate_keypair();
+                let keypair1 = generate_keypair();
                 let tx0 =
                     system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
                 Entry::new(&Hash::default(), 1, vec![tx0])
@@ -1085,7 +1085,7 @@ pub mod tests {
 
     #[test]
     fn test_shred_reference_tick() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
         let slot = 1;
 
         let parent_slot = 0;
@@ -1094,8 +1094,8 @@ pub mod tests {
 
         let entries: Vec<_> = (0..5)
             .map(|_| {
-                let keypair0 = Keypair::new();
-                let keypair1 = Keypair::new();
+                let keypair0 = generate_keypair();
+                let keypair1 = generate_keypair();
                 let tx0 =
                     system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
                 Entry::new(&Hash::default(), 1, vec![tx0])
@@ -1115,7 +1115,7 @@ pub mod tests {
 
     #[test]
     fn test_shred_reference_tick_overflow() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
         let slot = 1;
 
         let parent_slot = 0;
@@ -1124,8 +1124,8 @@ pub mod tests {
 
         let entries: Vec<_> = (0..5)
             .map(|_| {
-                let keypair0 = Keypair::new();
-                let keypair1 = Keypair::new();
+                let keypair0 = generate_keypair();
+                let keypair1 = generate_keypair();
                 let tx0 =
                     system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
                 Entry::new(&Hash::default(), 1, vec![tx0])
@@ -1151,7 +1151,7 @@ pub mod tests {
 
     #[test]
     fn test_data_and_code_shredder() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
 
         let slot = 0x123456789abcdef0;
         // Test that FEC rate cannot be > 1.0
@@ -1167,8 +1167,8 @@ pub mod tests {
         let num_entries = max_ticks_per_n_shreds(1) + 1;
         let entries: Vec<_> = (0..num_entries)
             .map(|_| {
-                let keypair0 = Keypair::new();
-                let keypair1 = Keypair::new();
+                let keypair0 = generate_keypair();
+                let keypair1 = generate_keypair();
                 let tx0 =
                     system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
                 Entry::new(&Hash::default(), 1, vec![tx0])
@@ -1197,13 +1197,13 @@ pub mod tests {
 
     #[test]
     fn test_recovery_and_reassembly() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
         let slot = 0x123456789abcdef0;
         let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
             .expect("Failed in creating shredder");
 
-        let keypair0 = Keypair::new();
-        let keypair1 = Keypair::new();
+        let keypair0 = generate_keypair();
+        let keypair1 = generate_keypair();
         let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
         let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
 
@@ -1211,8 +1211,8 @@ pub mod tests {
         let num_entries = max_entries_per_n_shred(&entry, num_data_shreds as u64);
         let entries: Vec<_> = (0..num_entries)
             .map(|_| {
-                let keypair0 = Keypair::new();
-                let keypair1 = Keypair::new();
+                let keypair0 = generate_keypair();
+                let keypair1 = generate_keypair();
                 let tx0 =
                     system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
                 Entry::new(&Hash::default(), 1, vec![tx0])
@@ -1449,7 +1449,7 @@ pub mod tests {
 
     #[test]
     fn test_shred_version() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
         let hash = hash(Hash::default().as_ref());
         let version = Shred::version_from_hash(&hash);
         assert_ne!(version, 0);
@@ -1458,8 +1458,8 @@ pub mod tests {
 
         let entries: Vec<_> = (0..5)
             .map(|_| {
-                let keypair0 = Keypair::new();
-                let keypair1 = Keypair::new();
+                let keypair0 = generate_keypair();
+                let keypair1 = generate_keypair();
                 let tx0 =
                     system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
                 Entry::new(&Hash::default(), 1, vec![tx0])
@@ -1499,7 +1499,7 @@ pub mod tests {
 
     #[test]
     fn test_shred_fec_set_index() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
         let hash = hash(Hash::default().as_ref());
         let version = Shred::version_from_hash(&hash);
         assert_ne!(version, 0);
@@ -1508,8 +1508,8 @@ pub mod tests {
 
         let entries: Vec<_> = (0..500)
             .map(|_| {
-                let keypair0 = Keypair::new();
-                let keypair1 = Keypair::new();
+                let keypair0 = generate_keypair();
+                let keypair1 = generate_keypair();
                 let tx0 =
                     system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
                 Entry::new(&Hash::default(), 1, vec![tx0])
@@ -1537,7 +1537,7 @@ pub mod tests {
 
     #[test]
     fn test_max_coding_shreds() {
-        let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
         let hash = hash(Hash::default().as_ref());
         let version = Shred::version_from_hash(&hash);
         assert_ne!(version, 0);
@@ -1546,8 +1546,8 @@ pub mod tests {
 
         let entries: Vec<_> = (0..500)
             .map(|_| {
-                let keypair0 = Keypair::new();
-                let keypair1 = Keypair::new();
+                let keypair0 = generate_keypair();
+                let keypair1 = generate_keypair();
                 let tx0 =
                     system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
                 Entry::new(&Hash::default(), 1, vec![tx0])

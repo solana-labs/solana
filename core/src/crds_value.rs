@@ -246,7 +246,7 @@ mod test {
     use crate::contact_info::ContactInfo;
     use bincode::deserialize;
     use solana_perf::test_tx::test_tx;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use solana_sdk::timing::timestamp;
 
     #[test]
@@ -291,8 +291,8 @@ mod test {
 
     #[test]
     fn test_signature() {
-        let keypair = Keypair::new();
-        let wrong_keypair = Keypair::new();
+        let keypair = generate_keypair();
+        let wrong_keypair = generate_keypair();
         let mut v = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &keypair.pubkey(),
             timestamp(),
@@ -316,7 +316,7 @@ mod test {
 
     #[test]
     fn test_max_vote_index() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let vote = CrdsValue::new_signed(
             CrdsData::Vote(
                 MAX_VOTES,
@@ -337,7 +337,7 @@ mod test {
 
     #[test]
     fn test_compute_vote_index_one() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let vote = CrdsValue::new_unsigned(CrdsData::Vote(
             0,
             Vote::new(&keypair.pubkey(), test_tx(), 0),
@@ -352,7 +352,7 @@ mod test {
 
     #[test]
     fn test_compute_vote_index_full() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let votes: Vec<_> = (0..MAX_VOTES)
             .map(|x| {
                 CrdsValue::new_unsigned(CrdsData::Vote(

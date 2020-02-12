@@ -1026,7 +1026,7 @@ mod tests {
     use solana_runtime::bank::HashAgeKind;
     use solana_sdk::{
         instruction::InstructionError,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, KeypairUtil},
         system_transaction,
         transaction::TransactionError,
     };
@@ -1160,7 +1160,7 @@ mod tests {
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
-            let keypair = Keypair::new();
+            let keypair = generate_keypair();
             let fund_tx =
                 system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash);
             bank.process_transaction(&fund_tx).unwrap();
@@ -1174,7 +1174,7 @@ mod tests {
             let tx_no_ver = system_transaction::transfer(&keypair, &to2, 2, start_hash);
 
             // bad tx, AccountNotFound
-            let keypair = Keypair::new();
+            let keypair = generate_keypair();
             let to3 = Pubkey::new_rand();
             let tx_anf = system_transaction::transfer(&keypair, &to3, 1, start_hash);
 
@@ -1251,7 +1251,7 @@ mod tests {
         let (verified_sender, verified_receiver) = unbounded();
 
         // Process a batch that includes a transaction that receives two lamports.
-        let alice = Keypair::new();
+        let alice = generate_keypair();
         let tx =
             system_transaction::transfer(&mint_keypair, &alice.pubkey(), 2, genesis_config.hash());
 
@@ -1366,7 +1366,7 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
             let pubkey = Pubkey::new_rand();
-            let keypair2 = Keypair::new();
+            let keypair2 = generate_keypair();
             let pubkey2 = Pubkey::new_rand();
 
             let transactions = vec![
@@ -1908,7 +1908,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
         let pubkey = Pubkey::new_rand();
         let pubkey1 = Pubkey::new_rand();
-        let keypair1 = Keypair::new();
+        let keypair1 = generate_keypair();
 
         let success_tx =
             system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash());

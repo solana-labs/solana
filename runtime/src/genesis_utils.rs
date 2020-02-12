@@ -4,7 +4,7 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     pubkey::Pubkey,
     rent::Rent,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
     system_program::{self, solana_system_program},
 };
 use solana_stake_program::stake_state;
@@ -42,9 +42,9 @@ pub fn create_genesis_config_with_leader_ex(
     bootstrap_validator_stake_lamports: u64,
     bootstrap_validator_lamports: u64,
 ) -> GenesisConfigInfo {
-    let mint_keypair = Keypair::new();
-    let bootstrap_validator_voting_keypair = Keypair::new();
-    let bootstrap_validator_staking_keypair = Keypair::new();
+    let mint_keypair = generate_keypair();
+    let bootstrap_validator_voting_keypair = generate_keypair();
+    let bootstrap_validator_staking_keypair = generate_keypair();
 
     let bootstrap_validator_vote_account = vote_state::create_account(
         &bootstrap_validator_voting_keypair.pubkey(),

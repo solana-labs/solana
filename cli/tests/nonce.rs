@@ -6,7 +6,7 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil},
+    signature::{generate_keypair, read_keypair_file, write_keypair, KeypairUtil},
     system_instruction::create_address_with_seed,
     system_program,
 };
@@ -123,7 +123,7 @@ fn test_nonce_with_authority() {
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&config_nonce.keypair, tmp_file.as_file_mut()).unwrap();
 
-    let nonce_authority = Keypair::new();
+    let nonce_authority = generate_keypair();
     let (authority_keypair_file, mut tmp_file2) = make_tmp_file();
     write_keypair(&nonce_authority, tmp_file2.as_file_mut()).unwrap();
 
@@ -230,7 +230,7 @@ fn full_battery_tests(
     process_command(&config_payer).unwrap();
 
     // Set new authority
-    let new_authority = Keypair::new();
+    let new_authority = generate_keypair();
     let (new_authority_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&new_authority, tmp_file.as_file_mut()).unwrap();
     config_payer.command = CliCommand::AuthorizeNonceAccount {

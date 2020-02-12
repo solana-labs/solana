@@ -9,7 +9,7 @@ use solana_ledger::shred::{
 };
 use solana_perf::test_tx;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use std::sync::Arc;
 use test::Bencher;
 
@@ -28,7 +28,7 @@ fn make_large_unchained_entries(txs_per_entry: u64, num_entries: u64) -> Vec<Ent
 
 #[bench]
 fn bench_shredder_ticks(bencher: &mut Bencher) {
-    let kp = Arc::new(Keypair::new());
+    let kp = Arc::new(generate_keypair());
     let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
     let num_shreds = ((1000 * 1000) + (shred_size - 1)) / shred_size;
     // ~1Mb
@@ -42,7 +42,7 @@ fn bench_shredder_ticks(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_shredder_large_entries(bencher: &mut Bencher) {
-    let kp = Arc::new(Keypair::new());
+    let kp = Arc::new(generate_keypair());
     let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
     let num_shreds = ((1000 * 1000) + (shred_size - 1)) / shred_size;
     let txs_per_entry = 128;
@@ -57,7 +57,7 @@ fn bench_shredder_large_entries(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_deshredder(bencher: &mut Bencher) {
-    let kp = Arc::new(Keypair::new());
+    let kp = Arc::new(generate_keypair());
     let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
     // ~10Mb
     let num_shreds = ((10000 * 1000) + (shred_size - 1)) / shred_size;

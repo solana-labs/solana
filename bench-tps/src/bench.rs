@@ -1,6 +1,8 @@
 use crate::cli::Config;
 use log::*;
 use rayon::prelude::*;
+#[cfg(feature = "move")]
+use signature::generate_keypair;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -873,7 +875,7 @@ fn fund_move_keys<T: Client>(
     let (mut blockhash, _fee_calculator) = get_recent_blockhash(client);
 
     info!("creating the libra funding account..");
-    let libra_funding_key = Keypair::new();
+    let libra_funding_key = generate_keypair();
     let tx = librapay_transaction::create_account(funding_key, &libra_funding_key, 1, blockhash);
     client
         .send_message(&[funding_key, &libra_funding_key], tx.message)
@@ -924,7 +926,7 @@ fn fund_move_keys<T: Client>(
     }
 
     const NUM_FUNDING_KEYS: usize = 10;
-    let funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| Keypair::new()).collect();
+    let funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| generate_keypair()).collect();
     let pubkey_amounts: Vec<_> = funding_keys
         .iter()
         .map(|key| (key.pubkey(), total / NUM_FUNDING_KEYS as u64))
@@ -953,7 +955,7 @@ fn fund_move_keys<T: Client>(
         balance
     );
 
-    let libra_funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| Keypair::new()).collect();
+    let libra_funding_keys: Vec<_> = (0..NUM_FUNDING_KEYS).map(|_| generate_keypair()).collect();
     for (i, key) in libra_funding_keys.iter().enumerate() {
         let tx = librapay_transaction::create_account(&funding_keys[i], &key, 1, blockhash);
         client

@@ -255,13 +255,14 @@ pub mod tests {
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::create_new_tmp_ledger;
     use solana_runtime::bank::Bank;
+    use solana_sdk::signature::generate_keypair;
     use std::sync::atomic::Ordering;
 
     #[test]
     fn test_tvu_exit() {
         solana_logger::setup();
         let leader = Node::new_localhost();
-        let target1_keypair = Keypair::new();
+        let target1_keypair = generate_keypair();
         let target1 = Node::new_localhost_with_pubkey(&target1_keypair.pubkey());
 
         let starting_balance = 10_000;
@@ -282,8 +283,8 @@ pub mod tests {
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
             create_test_recorder(&bank, &blockstore, None);
-        let voting_keypair = Keypair::new();
-        let storage_keypair = Arc::new(Keypair::new());
+        let voting_keypair = generate_keypair();
+        let storage_keypair = Arc::new(generate_keypair());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let tvu = Tvu::new(

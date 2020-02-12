@@ -259,7 +259,7 @@ mod test {
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use std::path::Path;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
@@ -285,7 +285,7 @@ mod test {
         let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
 
         // Make a node to broadcast to
-        let buddy_keypair = Keypair::new();
+        let buddy_keypair = generate_keypair();
         let broadcast_buddy = Node::new_localhost_with_pubkey(&buddy_keypair.pubkey());
 
         // Fill the cluster_info with the buddy's info
@@ -323,7 +323,7 @@ mod test {
 
         {
             // Create the leader scheduler
-            let leader_keypair = Keypair::new();
+            let leader_keypair = generate_keypair();
 
             let (entry_sender, entry_receiver) = channel();
             let broadcast_service = setup_dummy_broadcast_service(

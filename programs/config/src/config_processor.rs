@@ -108,7 +108,7 @@ mod tests {
     use serde_derive::{Deserialize, Serialize};
     use solana_sdk::{
         account::{create_keyed_is_signer_accounts, Account},
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, Keypair, KeypairUtil},
         system_instruction::SystemInstruction,
     };
     use std::cell::RefCell;
@@ -139,7 +139,7 @@ mod tests {
 
     fn create_config_account(keys: Vec<(Pubkey, bool)>) -> (Keypair, RefCell<Account>) {
         let from_pubkey = Pubkey::new_rand();
-        let config_keypair = Keypair::new();
+        let config_keypair = generate_keypair();
         let config_pubkey = config_keypair.pubkey();
 
         let instructions =

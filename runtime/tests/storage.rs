@@ -13,7 +13,7 @@ use solana_sdk::{
     hash::{hash, Hash},
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{generate_keypair, Keypair, KeypairUtil, Signature},
     system_instruction,
     sysvar::{
         rewards::{self, Rewards},
@@ -33,9 +33,9 @@ const TICKS_IN_SEGMENT: u64 = DEFAULT_SLOTS_PER_SEGMENT * DEFAULT_TICKS_PER_SLOT
 #[test]
 fn test_account_owner() {
     let account_owner = Pubkey::new_rand();
-    let validator_storage_keypair = Keypair::new();
+    let validator_storage_keypair = generate_keypair();
     let validator_storage_pubkey = validator_storage_keypair.pubkey();
-    let archiver_storage_keypair = Keypair::new();
+    let archiver_storage_keypair = generate_keypair();
     let archiver_storage_pubkey = archiver_storage_keypair.pubkey();
 
     let GenesisConfigInfo {
@@ -105,13 +105,13 @@ fn test_validate_mining() {
     // 1 owner for all archiver and validator accounts for the test
     let owner_pubkey = Pubkey::new_rand();
 
-    let archiver_1_storage_keypair = Keypair::new();
+    let archiver_1_storage_keypair = generate_keypair();
     let archiver_1_storage_id = archiver_1_storage_keypair.pubkey();
 
-    let archiver_2_storage_keypair = Keypair::new();
+    let archiver_2_storage_keypair = generate_keypair();
     let archiver_2_storage_id = archiver_2_storage_keypair.pubkey();
 
-    let validator_storage_keypair = Keypair::new();
+    let validator_storage_keypair = generate_keypair();
     let validator_storage_id = validator_storage_keypair.pubkey();
 
     let bank = Bank::new(&genesis_config);
@@ -403,9 +403,9 @@ fn test_bank_storage() {
         .native_instruction_processors
         .push(solana_storage_program::solana_storage_program!());
     let mint_pubkey = mint_keypair.pubkey();
-    let archiver_keypair = Keypair::new();
+    let archiver_keypair = generate_keypair();
     let archiver_pubkey = archiver_keypair.pubkey();
-    let validator_keypair = Keypair::new();
+    let validator_keypair = generate_keypair();
     let validator_pubkey = validator_keypair.pubkey();
 
     let bank = Bank::new(&genesis_config);

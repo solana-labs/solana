@@ -107,7 +107,7 @@ pub(crate) mod tests {
         clock::Clock,
         instruction::Instruction,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, Keypair, KeypairUtil},
         sysvar::{
             stake_history::{self, StakeHistory},
             Sysvar,
@@ -163,7 +163,7 @@ pub(crate) mod tests {
             ),
         );
 
-        let stake_account_keypair = Keypair::new();
+        let stake_account_keypair = generate_keypair();
         let stake_account_pubkey = stake_account_keypair.pubkey();
 
         process_instructions(
@@ -193,7 +193,7 @@ pub(crate) mod tests {
             ..Stake::default()
         };
 
-        let validator = Keypair::new();
+        let validator = generate_keypair();
 
         let GenesisConfigInfo {
             genesis_config,
@@ -202,7 +202,7 @@ pub(crate) mod tests {
         } = create_genesis_config(10_000);
 
         let bank = Bank::new(&genesis_config);
-        let vote_account = Keypair::new();
+        let vote_account = generate_keypair();
 
         // Give the validator some stake but don't setup a staking account
         // Validator has no lamports staked, so they get filtered out. Only the bootstrap validator

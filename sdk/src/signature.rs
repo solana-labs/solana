@@ -111,8 +111,7 @@ pub trait KeypairUtil {
 impl KeypairUtil for Keypair {
     /// Return a new ED25519 keypair
     fn new() -> Self {
-        let mut rng = OsRng::new().unwrap();
-        Keypair::generate(&mut rng)
+        generate_keypair()
     }
 
     /// Return the public key for the given keypair
@@ -176,6 +175,10 @@ pub fn write_keypair_file(
     write_keypair(keypair, &mut f)
 }
 
+pub fn generate_keypair() -> Keypair {
+    Keypair::generate(&mut OsRng::new().unwrap())
+}
+
 pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> {
     if seed.len() < ed25519_dalek::SECRET_KEY_LENGTH {
         return Err("Seed is too short".into());
@@ -215,7 +218,7 @@ mod tests {
     fn tmp_file_path(name: &str) -> String {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
 
         format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey()).to_string()
     }
@@ -223,7 +226,7 @@ mod tests {
     #[test]
     fn test_write_keypair_file() {
         let outfile = tmp_file_path("test_write_keypair_file.json");
-        let serialized_keypair = write_keypair_file(&Keypair::new(), &outfile).unwrap();
+        let serialized_keypair = write_keypair_file(&generate_keypair(), &outfile).unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
         assert!(Path::new(&outfile).exists());
         assert_eq!(
@@ -258,15 +261,15 @@ mod tests {
     fn test_write_keypair_file_overwrite_ok() {
         let outfile = tmp_file_path("test_write_keypair_file_overwrite_ok.json");
 
-        write_keypair_file(&Keypair::new(), &outfile).unwrap();
-        write_keypair_file(&Keypair::new(), &outfile).unwrap();
+        write_keypair_file(&generate_keypair(), &outfile).unwrap();
+        write_keypair_file(&generate_keypair(), &outfile).unwrap();
     }
 
     #[test]
     fn test_write_keypair_file_truncate() {
         let outfile = tmp_file_path("test_write_keypair_file_truncate.json");
 
-        write_keypair_file(&Keypair::new(), &outfile).unwrap();
+        write_keypair_file(&generate_keypair(), &outfile).unwrap();
         read_keypair_file(&outfile).unwrap();
 
         // Ensure outfile is truncated
@@ -275,7 +278,7 @@ mod tests {
             f.write_all(String::from_utf8([b'a'; 2048].to_vec()).unwrap().as_bytes())
                 .unwrap();
         }
-        write_keypair_file(&Keypair::new(), &outfile).unwrap();
+        write_keypair_file(&generate_keypair(), &outfile).unwrap();
         read_keypair_file(&outfile).unwrap();
     }
 
@@ -290,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_signature_fromstr() {
-        let signature = Keypair::new().sign_message(&[0u8]);
+        let signature = generate_keypair().sign_message(&[0u8]);
 
         let mut signature_base58_str = bs58::encode(signature).into_string();
 

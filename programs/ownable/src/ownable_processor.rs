@@ -63,7 +63,7 @@ mod tests {
         client::SyncClient,
         genesis_config::create_genesis_config,
         message::Message,
-        signature::{Keypair, KeypairUtil, Signature},
+        signature::{generate_keypair, Keypair, KeypairUtil, Signature},
         system_program,
         transport::Result,
     };
@@ -116,9 +116,9 @@ mod tests {
     #[test]
     fn test_ownable_set_owner() {
         let (bank_client, payer_keypair) = create_bank_client(2);
-        let account_keypair = Keypair::new();
+        let account_keypair = generate_keypair();
         let account_pubkey = account_keypair.pubkey();
-        let owner_keypair = Keypair::new();
+        let owner_keypair = generate_keypair();
         let owner_pubkey = owner_keypair.pubkey();
 
         create_ownable_account(
@@ -130,7 +130,7 @@ mod tests {
         )
         .unwrap();
 
-        let new_owner_keypair = Keypair::new();
+        let new_owner_keypair = generate_keypair();
         let new_owner_pubkey = new_owner_keypair.pubkey();
         send_set_owner(
             &bank_client,

@@ -178,11 +178,11 @@ impl<T: Clone> AccountsIndex<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
 
     #[test]
     fn test_get_empty() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let index = AccountsIndex::<bool>::default();
         let ancestors = HashMap::new();
         assert!(index.get(&key.pubkey(), &ancestors).is_none());
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_insert_no_ancestors() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let mut index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), true, &mut gc);
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_insert_wrong_ancestors() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let mut index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), true, &mut gc);
@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     fn test_insert_with_ancestors() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let mut index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), true, &mut gc);
@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn test_insert_with_root() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let mut index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), true, &mut gc);
@@ -316,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_update_last_wins() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let mut index = AccountsIndex::<bool>::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn test_update_new_slot() {
         solana_logger::setup();
-        let key = Keypair::new();
+        let key = generate_keypair();
         let mut index = AccountsIndex::<bool>::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_update_gc_purged_slot() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let mut index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), true, &mut gc);
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn test_purge() {
-        let key = Keypair::new();
+        let key = generate_keypair();
         let mut index = AccountsIndex::<u64>::default();
         let mut gc = Vec::new();
         assert_eq!(Some(12), index.update(1, &key.pubkey(), 12, &mut gc));

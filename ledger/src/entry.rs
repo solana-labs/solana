@@ -457,14 +457,14 @@ mod tests {
     use solana_sdk::{
         hash::{hash, Hash},
         message::Message,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, Keypair, KeypairUtil},
         system_transaction,
         transaction::Transaction,
     };
 
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
-        let budget_contract = Keypair::new();
+        let budget_contract = generate_keypair();
         let budget_pubkey = budget_contract.pubkey();
         let ixs = budget_instruction::payment(&pubkey, &pubkey, &budget_pubkey, 1);
         Transaction::new_signed_instructions(&[keypair, &budget_contract], ixs, hash)
@@ -497,7 +497,7 @@ mod tests {
         let zero = Hash::default();
 
         // First, verify entries
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let tx0 = system_transaction::transfer(&keypair, &keypair.pubkey(), 0, zero);
         let tx1 = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
@@ -514,7 +514,7 @@ mod tests {
         let zero = Hash::default();
 
         // First, verify entries
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let tx0 = create_sample_timestamp(&keypair, zero);
         let tx1 = create_sample_apply_signature(&keypair, zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
@@ -537,7 +537,7 @@ mod tests {
         assert_eq!(tick.num_hashes, 0);
         assert_eq!(tick.hash, zero);
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let tx0 = create_sample_timestamp(&keypair, zero);
         let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
         assert_eq!(entry0.num_hashes, 1);
@@ -548,7 +548,7 @@ mod tests {
     #[should_panic]
     fn test_next_entry_panic() {
         let zero = Hash::default();
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 0, zero);
         next_entry(&zero, 0, vec![tx]);
     }

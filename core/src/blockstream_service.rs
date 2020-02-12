@@ -107,7 +107,7 @@ mod test {
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::entry::{create_ticks, Entry};
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use std::path::PathBuf;
     use std::sync::mpsc::channel;
@@ -135,7 +135,7 @@ mod test {
         // Create entries - 4 ticks + 1 populated entry + 1 tick
         let mut entries = create_ticks(4, 0, Hash::default());
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let mut blockhash = entries[3].hash;
         let tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default());
         let entry = Entry::new(&mut blockhash, 1, vec![tx]);
@@ -155,7 +155,7 @@ mod test {
                 ticks_per_slot,
                 None,
                 true,
-                &Arc::new(Keypair::new()),
+                &Arc::new(generate_keypair()),
                 entries,
                 0,
             )

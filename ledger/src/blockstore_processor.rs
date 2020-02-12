@@ -23,7 +23,7 @@ use solana_sdk::{
     clock::{Slot, MAX_RECENT_BLOCKHASHES},
     genesis_config::GenesisConfig,
     hash::Hash,
-    signature::{Keypair, KeypairUtil},
+    signature::generate_keypair,
     timing::duration_as_ms,
     transaction::{Result, Transaction, TransactionError},
 };
@@ -840,7 +840,7 @@ pub fn fill_blockstore_slot_with_ticks(
             ticks_per_slot,
             Some(parent_slot),
             true,
-            &Arc::new(Keypair::new()),
+            &Arc::new(generate_keypair()),
             entries,
             0,
         )
@@ -898,7 +898,7 @@ pub mod tests {
                 ticks_per_slot,
                 Some(parent_slot),
                 true,
-                &Arc::new(Keypair::new()),
+                &Arc::new(generate_keypair()),
                 entries,
                 0,
             ),
@@ -941,7 +941,7 @@ pub mod tests {
                 ticks_per_slot,
                 Some(parent_slot),
                 true,
-                &Arc::new(Keypair::new()),
+                &Arc::new(generate_keypair()),
                 entries,
                 0,
             ),
@@ -996,7 +996,7 @@ pub mod tests {
 
         let mut entries = create_ticks(ticks_per_slot, 0, blockhash);
         let trailing_entry = {
-            let keypair = Keypair::new();
+            let keypair = generate_keypair();
             let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 1, blockhash);
             next_entry(&blockhash, 1, vec![tx])
         };
@@ -1014,7 +1014,7 @@ pub mod tests {
                 ticks_per_slot + 1,
                 Some(parent_slot),
                 true,
-                &Arc::new(Keypair::new()),
+                &Arc::new(generate_keypair()),
                 entries,
                 0,
             ),
@@ -1075,7 +1075,7 @@ pub mod tests {
                     ticks_per_slot,
                     Some(parent_slot),
                     false,
-                    &Arc::new(Keypair::new()),
+                    &Arc::new(generate_keypair()),
                     entries,
                     0,
                 ),
@@ -1557,7 +1557,7 @@ pub mod tests {
             ..
         } = create_genesis_config(2);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let slot_entries = create_ticks(genesis_config.ticks_per_slot, 1, genesis_config.hash());
         let tx = system_transaction::transfer(
             &mint_keypair,
@@ -1597,14 +1597,14 @@ pub mod tests {
         let blockhash = genesis_config.hash();
         for _ in 0..deducted_from_mint {
             // Transfer one token from the mint to a random account
-            let keypair = Keypair::new();
+            let keypair = generate_keypair();
             let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 1, blockhash);
             let entry = next_entry_mut(&mut last_entry_hash, 1, vec![tx]);
             entries.push(entry);
 
             // Add a second Transaction that will produce a
             // InstructionError<0, ResultWithNegativeLamports> error when processed
-            let keypair2 = Keypair::new();
+            let keypair2 = generate_keypair();
             let tx =
                 system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 101, blockhash);
             let entry = next_entry_mut(&mut last_entry_hash, 1, vec![tx]);
@@ -1633,7 +1633,7 @@ pub mod tests {
                 genesis_config.ticks_per_slot,
                 None,
                 true,
-                &Arc::new(Keypair::new()),
+                &Arc::new(generate_keypair()),
                 entries,
                 0,
             )
@@ -1722,7 +1722,7 @@ pub mod tests {
         let blockstore =
             Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
         let blockhash = genesis_config.hash();
-        let keypairs = [Keypair::new(), Keypair::new(), Keypair::new()];
+        let keypairs = [generate_keypair(), generate_keypair(), generate_keypair()];
 
         let tx = system_transaction::transfer(&mint_keypair, &keypairs[0].pubkey(), 1, blockhash);
         let entry_1 = next_entry(&last_entry_hash, 1, vec![tx]);
@@ -1744,7 +1744,7 @@ pub mod tests {
                 genesis_config.ticks_per_slot,
                 None,
                 true,
-                &Arc::new(Keypair::new()),
+                &Arc::new(generate_keypair()),
                 entries,
                 0,
             )
@@ -1791,8 +1791,8 @@ pub mod tests {
             ..
         } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
 
         let blockhash = bank.last_blockhash();
 
@@ -1828,9 +1828,9 @@ pub mod tests {
             ..
         } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
+        let keypair3 = generate_keypair();
 
         // fund: put 4 in each of 1 and 2
         assert_matches!(bank.transfer(4, &mint_keypair, &keypair1.pubkey()), Ok(_));
@@ -1890,10 +1890,10 @@ pub mod tests {
             ..
         } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
-        let keypair4 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
+        let keypair3 = generate_keypair();
+        let keypair4 = generate_keypair();
 
         // fund: put 4 in each of 1 and 2
         assert_matches!(bank.transfer(4, &mint_keypair, &keypair1.pubkey()), Ok(_));
@@ -1976,9 +1976,9 @@ pub mod tests {
             ..
         } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
+        let keypair3 = generate_keypair();
 
         // fund: put some money in each of 1 and 2
         assert_matches!(bank.transfer(5, &mint_keypair, &keypair1.pubkey()), Ok(_));
@@ -2072,10 +2072,10 @@ pub mod tests {
             ..
         } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
-        let keypair4 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
+        let keypair3 = generate_keypair();
+        let keypair4 = generate_keypair();
 
         //load accounts
         let tx = system_transaction::transfer(
@@ -2123,7 +2123,7 @@ pub mod tests {
         const NUM_TRANSFERS: usize = NUM_TRANSFERS_PER_ENTRY * 32;
         // large enough to scramble locks and results
 
-        let keypairs: Vec<_> = (0..NUM_TRANSFERS * 2).map(|_| Keypair::new()).collect();
+        let keypairs: Vec<_> = (0..NUM_TRANSFERS * 2).map(|_| generate_keypair()).collect();
 
         // give everybody one lamport
         for keypair in &keypairs {
@@ -2132,7 +2132,7 @@ pub mod tests {
         }
         let mut hash = bank.last_blockhash();
 
-        let present_account_key = Keypair::new();
+        let present_account_key = generate_keypair();
         let present_account = Account::new(1, 10, &Pubkey::default());
         bank.store_account(&present_account_key.pubkey(), &present_account);
 
@@ -2186,7 +2186,7 @@ pub mod tests {
         let mut keypairs: Vec<Keypair> = vec![];
 
         for _ in 0..num_accounts {
-            let keypair = Keypair::new();
+            let keypair = generate_keypair();
             let create_account_tx = system_transaction::transfer(
                 &mint_keypair,
                 &keypair.pubkey(),
@@ -2249,10 +2249,10 @@ pub mod tests {
             ..
         } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
-        let keypair4 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
+        let keypair3 = generate_keypair();
+        let keypair4 = generate_keypair();
 
         //load accounts
         let tx = system_transaction::transfer(
@@ -2354,8 +2354,8 @@ pub mod tests {
             ..
         } = create_genesis_config(11_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
         let success_tx = system_transaction::transfer(
             &mint_keypair,
             &keypair1.pubkey(),
@@ -2486,7 +2486,7 @@ pub mod tests {
         const NUM_TRANSFERS_PER_ENTRY: usize = 8;
         const NUM_TRANSFERS: usize = NUM_TRANSFERS_PER_ENTRY * 32;
 
-        let keypairs: Vec<_> = (0..NUM_TRANSFERS * 2).map(|_| Keypair::new()).collect();
+        let keypairs: Vec<_> = (0..NUM_TRANSFERS * 2).map(|_| generate_keypair()).collect();
 
         // give everybody one lamport
         for keypair in &keypairs {
@@ -2494,7 +2494,7 @@ pub mod tests {
                 .expect("funding failed");
         }
 
-        let present_account_key = Keypair::new();
+        let present_account_key = generate_keypair();
         let present_account = Account::new(1, 10, &Pubkey::default());
         bank.store_account(&present_account_key.pubkey(), &present_account);
 
@@ -2589,7 +2589,7 @@ pub mod tests {
         } = create_genesis_config(100);
         let bank0 = Arc::new(Bank::new(&genesis_config));
         let genesis_hash = genesis_config.hash();
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
 
         // Simulate a slot of virtual ticks, creates a new blockhash
         let mut entries = create_ticks(genesis_config.ticks_per_slot, 1, genesis_hash);

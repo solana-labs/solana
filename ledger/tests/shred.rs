@@ -2,30 +2,30 @@ use solana_ledger::entry::Entry;
 use solana_ledger::shred::{
     max_entries_per_n_shred, verify_test_data_shred, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
 };
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use solana_sdk::{hash::Hash, system_transaction};
 use std::convert::TryInto;
 use std::sync::Arc;
 
 #[test]
 fn test_multi_fec_block_coding() {
-    let keypair = Arc::new(Keypair::new());
+    let keypair = Arc::new(generate_keypair());
     let slot = 0x123456789abcdef0;
     let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
         .expect("Failed in creating shredder");
 
     let num_fec_sets = 100;
     let num_data_shreds = (MAX_DATA_SHREDS_PER_FEC_BLOCK * num_fec_sets) as usize;
-    let keypair0 = Keypair::new();
-    let keypair1 = Keypair::new();
+    let keypair0 = generate_keypair();
+    let keypair1 = generate_keypair();
     let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
     let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
     let num_entries = max_entries_per_n_shred(&entry, num_data_shreds as u64);
 
     let entries: Vec<_> = (0..num_entries)
         .map(|_| {
-            let keypair0 = Keypair::new();
-            let keypair1 = Keypair::new();
+            let keypair0 = generate_keypair();
+            let keypair1 = generate_keypair();
             let tx0 =
                 system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
             Entry::new(&Hash::default(), 1, vec![tx0])

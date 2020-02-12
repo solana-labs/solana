@@ -3,7 +3,7 @@ extern crate test;
 
 use solana_ledger::entry::{next_entry_mut, Entry, EntrySlice};
 use solana_sdk::hash::{hash, Hash};
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use solana_sdk::system_transaction;
 use test::Bencher;
 
@@ -32,7 +32,7 @@ fn bench_poh_verify_transaction_entries(bencher: &mut Bencher) {
     let mut cur_hash = hash(&zero.as_ref());
     let start = *&cur_hash;
 
-    let keypair1 = Keypair::new();
+    let keypair1 = generate_keypair();
     let pubkey1 = keypair1.pubkey();
 
     let mut ticks: Vec<Entry> = Vec::with_capacity(NUM_ENTRIES);

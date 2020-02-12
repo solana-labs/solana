@@ -84,7 +84,7 @@ impl ClusterInfoVoteListener {
 mod tests {
     use crate::packet;
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use solana_vote_program::vote_instruction;
     use solana_vote_program::vote_state::Vote;
@@ -92,8 +92,8 @@ mod tests {
     #[test]
     fn test_max_vote_tx_fits() {
         solana_logger::setup();
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
+        let vote_keypair = generate_keypair();
         let slots: Vec<_> = (0..31).into_iter().collect();
         let votes = Vote::new(slots, Hash::default());
         let vote_ix = vote_instruction::vote(&vote_keypair.pubkey(), &vote_keypair.pubkey(), votes);

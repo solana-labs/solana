@@ -39,7 +39,7 @@ use solana_perf::packet::{to_packets_with_destination, Packets, PacketsRecycler}
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT},
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signable, Signature},
+    signature::{generate_keypair, Keypair, Signable, Signature},
     timing::{duration_as_ms, timestamp},
     transaction::Transaction,
 };
@@ -174,7 +174,7 @@ enum Protocol {
 impl ClusterInfo {
     /// Without a valid keypair gossip will not function. Only useful for tests.
     pub fn new_with_invalid_keypair(contact_info: ContactInfo) -> Self {
-        Self::new(contact_info, Arc::new(Keypair::new()))
+        Self::new(contact_info, Arc::new(generate_keypair()))
     }
 
     pub fn new(contact_info: ContactInfo, keypair: Arc<Keypair>) -> Self {
@@ -1730,7 +1730,7 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use rayon::prelude::*;
     use solana_perf::test_tx::test_tx;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::{Arc, RwLock};
@@ -1882,8 +1882,8 @@ mod tests {
     #[test]
     fn test_gossip_signature_verification() {
         //create new cluster info, leader, and peer
-        let keypair = Keypair::new();
-        let peer_keypair = Keypair::new();
+        let keypair = generate_keypair();
+        let peer_keypair = generate_keypair();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let peer = ContactInfo::new_localhost(&peer_keypair.pubkey(), 0);
         let mut cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
@@ -2051,7 +2051,7 @@ mod tests {
 
     #[test]
     fn test_push_vote() {
-        let keys = Keypair::new();
+        let keys = generate_keypair();
         let now = timestamp();
         let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
@@ -2078,7 +2078,7 @@ mod tests {
 
     #[test]
     fn test_add_entrypoint() {
-        let node_keypair = Arc::new(Keypair::new());
+        let node_keypair = Arc::new(generate_keypair());
         let mut cluster_info = ClusterInfo::new(
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
@@ -2257,7 +2257,7 @@ mod tests {
 
     #[test]
     fn test_pull_from_entrypoint_if_not_present() {
-        let node_keypair = Arc::new(Keypair::new());
+        let node_keypair = Arc::new(generate_keypair());
         let mut cluster_info = ClusterInfo::new(
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
@@ -2298,7 +2298,7 @@ mod tests {
 
     #[test]
     fn test_repair_peers() {
-        let node_keypair = Arc::new(Keypair::new());
+        let node_keypair = Arc::new(generate_keypair());
         let mut cluster_info = ClusterInfo::new(
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,

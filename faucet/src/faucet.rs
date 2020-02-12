@@ -307,12 +307,13 @@ pub fn run_faucet(
 mod tests {
     use super::*;
     use bytes::BufMut;
+    use solana_sdk::signature::generate_keypair;
     use solana_sdk::system_instruction::SystemInstruction;
     use std::time::Duration;
 
     #[test]
     fn test_check_request_limit() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let mut faucet = Faucet::new(keypair, None, Some(3));
         assert!(faucet.check_request_limit(1));
         faucet.request_current = 3;
@@ -321,7 +322,7 @@ mod tests {
 
     #[test]
     fn test_clear_request_count() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let mut faucet = Faucet::new(keypair, None, None);
         faucet.request_current = faucet.request_current + 256;
         assert_eq!(faucet.request_current, 256);
@@ -331,7 +332,7 @@ mod tests {
 
     #[test]
     fn test_add_ip_to_cache() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let mut faucet = Faucet::new(keypair, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(faucet.ip_cache.len(), 0);
@@ -342,7 +343,7 @@ mod tests {
 
     #[test]
     fn test_clear_ip_cache() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let mut faucet = Faucet::new(keypair, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(faucet.ip_cache.len(), 0);
@@ -355,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_faucet_default_init() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
         let faucet = Faucet::new(keypair, time_slice, request_cap);
@@ -373,7 +374,7 @@ mod tests {
             blockhash,
         };
 
-        let mint = Keypair::new();
+        let mint = generate_keypair();
         let mint_pubkey = mint.pubkey();
         let mut faucet = Faucet::new(mint, None, None);
 
@@ -391,7 +392,7 @@ mod tests {
         let instruction: SystemInstruction = deserialize(&message.instructions[0].data).unwrap();
         assert_eq!(instruction, SystemInstruction::Transfer { lamports: 2 });
 
-        let mint = Keypair::new();
+        let mint = generate_keypair();
         faucet = Faucet::new(mint, None, Some(1));
         let tx = faucet.build_airdrop_transaction(request);
         assert!(tx.is_err());
@@ -411,7 +412,7 @@ mod tests {
         let mut bytes = BytesMut::with_capacity(req.len());
         bytes.put(&req[..]);
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let expected_instruction = system_instruction::transfer(&keypair.pubkey(), &to, lamports);
         let message = Message::new(vec![expected_instruction]);
         let expected_tx = Transaction::new(&[&keypair], message, blockhash);

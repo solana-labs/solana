@@ -494,7 +494,7 @@ mod test {
         clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
-        signature::{Keypair, KeypairUtil},
+        signature::{generate_keypair, Keypair, KeypairUtil},
     };
     use std::{
         net::UdpSocket,
@@ -522,7 +522,8 @@ mod test {
         let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
         let num_entries = 10;
         let original_entries = create_ticks(num_entries, 0, Hash::default());
-        let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Arc::new(Keypair::new()));
+        let mut shreds =
+            local_entries_to_shred(&original_entries, 0, 0, &Arc::new(generate_keypair()));
         shreds.reverse();
         blockstore
             .insert_shreds(shreds, None, false)
@@ -540,7 +541,7 @@ mod test {
     #[test]
     fn test_should_retransmit_and_persist() {
         let me_id = Pubkey::new_rand();
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Arc::new(generate_keypair());
         let leader_pubkey = leader_keypair.pubkey();
         let bank = Arc::new(Bank::new(
             &create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config,

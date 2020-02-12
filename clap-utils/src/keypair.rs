@@ -5,8 +5,8 @@ use rpassword::prompt_password_stderr;
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{
-        keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair,
-        KeypairUtil,
+        generate_keypair, keypair_from_seed, keypair_from_seed_phrase_and_passphrase,
+        read_keypair_file, Keypair,
     },
 };
 use std::{
@@ -132,13 +132,16 @@ pub fn keypair_input(
             .map(|keypair| KeypairWithSource::new(keypair, Source::SeedPhrase))
     } else if let Some(keypair_file) = matches.value_of(keypair_match_name) {
         if keypair_file.starts_with("usb://") {
-            Ok(KeypairWithSource::new(Keypair::new(), Source::Path))
+            Ok(KeypairWithSource::new(generate_keypair(), Source::Path))
         } else {
             read_keypair_file(keypair_file)
                 .map(|keypair| KeypairWithSource::new(keypair, Source::Path))
         }
     } else {
-        Ok(KeypairWithSource::new(Keypair::new(), Source::Generated))
+        Ok(KeypairWithSource::new(
+            generate_keypair(),
+            Source::Generated,
+        ))
     }
 }
 

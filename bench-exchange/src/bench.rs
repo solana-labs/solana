@@ -15,7 +15,7 @@ use solana_sdk::{
     client::{Client, SyncClient},
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
     timing::{duration_as_ms, duration_as_s},
     transaction::Transaction,
     {system_instruction, system_program},
@@ -63,7 +63,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            identity: Keypair::new(),
+            identity: generate_keypair(),
             threads: 4,
             duration: Duration::new(u64::max_value(), 0),
             transfer_delay: 0,
@@ -963,7 +963,7 @@ fn compute_and_report_stats(maxes: &Arc<RwLock<Vec<(String, SampleStats)>>>, tot
 
 fn generate_keypairs(num: u64) -> Vec<Keypair> {
     let mut seed = [0_u8; 32];
-    seed.copy_from_slice(&Keypair::new().pubkey().as_ref());
+    seed.copy_from_slice(&generate_keypair().pubkey().as_ref());
     let mut rnd = GenKeys::new(seed);
     rnd.gen_n_keypairs(num)
 }

@@ -1,7 +1,7 @@
 use clap::{crate_description, crate_name, value_t, App, Arg, ArgMatches};
 use solana_core::gen_keys::GenKeys;
 use solana_faucet::faucet::FAUCET_PORT;
-use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, read_keypair_file, Keypair};
 use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
@@ -28,7 +28,7 @@ impl Default for Config {
         Self {
             entrypoint_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
             faucet_addr: SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT)),
-            identity: Keypair::new(),
+            identity: generate_keypair(),
             num_nodes: 1,
             threads: 4,
             duration: Duration::new(u64::max_value(), 0),

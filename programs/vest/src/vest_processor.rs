@@ -153,7 +153,7 @@ mod tests {
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::hash::hash;
     use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use solana_sdk::signature::{generate_keypair, Keypair, KeypairUtil, Signature};
     use solana_sdk::transaction::TransactionError;
     use solana_sdk::transport::Result;
     use std::sync::Arc;
@@ -340,7 +340,7 @@ mod tests {
     fn test_initialize_no_panic() {
         let (bank_client, alice_keypair) = create_bank_client(3);
 
-        let contract_keypair = Keypair::new();
+        let contract_keypair = generate_keypair();
 
         let mut instructions = vest_instruction::create_account(
             &alice_keypair.pubkey(),
@@ -367,9 +367,9 @@ mod tests {
         let (bank_client, alice_keypair) = create_bank_client(39);
         let alice_pubkey = alice_keypair.pubkey();
         let date_pubkey = Pubkey::new_rand();
-        let contract_keypair = Keypair::new();
+        let contract_keypair = generate_keypair();
         let contract_pubkey = contract_keypair.pubkey();
-        let bob_keypair = Keypair::new();
+        let bob_keypair = generate_keypair();
         let bob_pubkey = bob_keypair.pubkey();
         let start_date = Utc.ymd(2018, 1, 1);
 
@@ -389,7 +389,7 @@ mod tests {
 
         // Ensure some rando can't change the payee.
         // Transfer bob a token to pay the transaction fee.
-        let mallory_keypair = Keypair::new();
+        let mallory_keypair = generate_keypair();
         bank_client
             .transfer(1, &alice_keypair, &mallory_keypair.pubkey())
             .unwrap();
@@ -438,9 +438,9 @@ mod tests {
         let (bank_client, alice_keypair) = create_bank_client(38);
         let alice_pubkey = alice_keypair.pubkey();
         let date_pubkey = Pubkey::new_rand();
-        let contract_keypair = Keypair::new();
+        let contract_keypair = generate_keypair();
         let contract_pubkey = contract_keypair.pubkey();
-        let bob_keypair = Keypair::new();
+        let bob_keypair = generate_keypair();
         let bob_pubkey = bob_keypair.pubkey();
         let start_date = Utc.ymd(2018, 1, 1);
 
@@ -460,7 +460,7 @@ mod tests {
 
         // Ensure some rando can't change the payee.
         // Transfer bob a token to pay the transaction fee.
-        let mallory_keypair = Keypair::new();
+        let mallory_keypair = generate_keypair();
         bank_client
             .transfer(1, &alice_keypair, &mallory_keypair.pubkey())
             .unwrap();
@@ -492,13 +492,13 @@ mod tests {
         let bank_client = BankClient::new_shared(&bank);
         let alice_pubkey = alice_keypair.pubkey();
 
-        let date_keypair = Keypair::new();
+        let date_keypair = generate_keypair();
         let date_pubkey = date_keypair.pubkey();
 
         let current_date = Utc.ymd(2019, 1, 1);
         create_date_account(&bank_client, &date_keypair, &alice_keypair, current_date).unwrap();
 
-        let contract_keypair = Keypair::new();
+        let contract_keypair = generate_keypair();
         let contract_pubkey = contract_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let start_date = Utc.ymd(2018, 1, 1);
@@ -560,12 +560,12 @@ mod tests {
     fn test_terminate_and_refund() {
         let (bank_client, alice_keypair) = create_bank_client(3);
         let alice_pubkey = alice_keypair.pubkey();
-        let contract_keypair = Keypair::new();
+        let contract_keypair = generate_keypair();
         let contract_pubkey = contract_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let start_date = Utc::now().date();
 
-        let date_keypair = Keypair::new();
+        let date_keypair = generate_keypair();
         let date_pubkey = date_keypair.pubkey();
 
         let current_date = Utc.ymd(2019, 1, 1);
@@ -604,12 +604,12 @@ mod tests {
     fn test_terminate_and_send_funds() {
         let (bank_client, alice_keypair) = create_bank_client(3);
         let alice_pubkey = alice_keypair.pubkey();
-        let contract_keypair = Keypair::new();
+        let contract_keypair = generate_keypair();
         let contract_pubkey = contract_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let start_date = Utc::now().date();
 
-        let date_keypair = Keypair::new();
+        let date_keypair = generate_keypair();
         let date_pubkey = date_keypair.pubkey();
 
         let current_date = Utc.ymd(2019, 1, 1);
@@ -649,12 +649,12 @@ mod tests {
     fn test_renege_and_send_funds() {
         let (bank_client, alice_keypair) = create_bank_client(3);
         let alice_pubkey = alice_keypair.pubkey();
-        let contract_keypair = Keypair::new();
+        let contract_keypair = generate_keypair();
         let contract_pubkey = contract_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let start_date = Utc::now().date();
 
-        let date_keypair = Keypair::new();
+        let date_keypair = generate_keypair();
         let date_pubkey = date_keypair.pubkey();
 
         let current_date = Utc.ymd(2019, 1, 1);

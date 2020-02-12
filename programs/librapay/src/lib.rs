@@ -13,14 +13,14 @@ use solana_sdk::{
     instruction::InstructionError,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, KeypairUtil},
     system_instruction,
 };
 
 use types::account_config;
 
 pub fn create_genesis<T: Client>(from: &Keypair, client: &T, amount: u64) -> Keypair {
-    let genesis = Keypair::new();
+    let genesis = generate_keypair();
 
     let instruction = system_instruction::create_account(
         &from.pubkey(),

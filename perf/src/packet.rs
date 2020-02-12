@@ -105,12 +105,12 @@ where
 mod tests {
     use super::*;
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use solana_sdk::system_transaction;
 
     #[test]
     fn test_to_packets() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let hash = Hash::new(&[1; 32]);
         let tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
         let rv = to_packets(&vec![tx.clone(); 1]);

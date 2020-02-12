@@ -11,7 +11,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil},
+    signature::{generate_keypair, read_keypair_file, write_keypair, KeypairUtil},
 };
 use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
@@ -353,7 +353,7 @@ fn test_nonced_pay_tx() {
     );
 
     // Create nonce account
-    let nonce_account = Keypair::new();
+    let nonce_account = generate_keypair();
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {

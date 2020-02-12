@@ -115,7 +115,7 @@ pub fn derivation_of(matches: &ArgMatches<'_>, name: &str) -> Option<DerivationP
 mod tests {
     use super::*;
     use clap::{App, Arg};
-    use solana_sdk::signature::write_keypair_file;
+    use solana_sdk::signature::{generate_keypair, write_keypair_file};
     use std::fs;
 
     fn app<'ab, 'v>() -> App<'ab, 'v> {
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_keypair_of() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let outfile = tmp_file_path("test_keypair_of.json", &keypair.pubkey());
         let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_pubkey_of() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let outfile = tmp_file_path("test_pubkey_of.json", &keypair.pubkey());
         let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_pubkeys_of() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let outfile = tmp_file_path("test_pubkeys_of.json", &keypair.pubkey());
         let _ = write_keypair_file(&keypair, &outfile).unwrap();
 
@@ -251,8 +251,8 @@ mod tests {
     fn test_pubkeys_sigs_of() {
         let key1 = Pubkey::new_rand();
         let key2 = Pubkey::new_rand();
-        let sig1 = Keypair::new().sign_message(&[0u8]);
-        let sig2 = Keypair::new().sign_message(&[1u8]);
+        let sig1 = generate_keypair().sign_message(&[0u8]);
+        let sig2 = generate_keypair().sign_message(&[1u8]);
         let signer1 = format!("{}={}", key1, sig1);
         let signer2 = format!("{}={}", key2, sig2);
         let matches = app().clone().get_matches_from(vec![

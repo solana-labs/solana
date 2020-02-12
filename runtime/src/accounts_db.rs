@@ -2396,7 +2396,7 @@ pub mod tests {
 
     #[test]
     fn test_bad_bank_hash() {
-        use solana_sdk::signature::{Keypair, KeypairUtil};
+        use solana_sdk::signature::{generate_keypair, KeypairUtil};
         let db = AccountsDB::new(Vec::new());
 
         let some_slot: Slot = 0;
@@ -2407,7 +2407,7 @@ pub mod tests {
             let accounts_keys: Vec<_> = (0..num_accounts)
                 .into_iter()
                 .map(|_| {
-                    let key = Keypair::new().pubkey();
+                    let key = generate_keypair().pubkey();
                     let lamports = thread_rng().gen_range(0, 100);
                     let some_data_len = thread_rng().gen_range(0, 1000);
                     let account = Account::new(lamports, some_data_len, &key);

@@ -76,7 +76,7 @@ pub mod tests {
     use crate::packet::Packet;
     use solana_ledger::shred::{Shred, Shredder};
     use solana_runtime::bank::Bank;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
 
     #[test]
     fn test_sigverify_shreds_read_slots() {
@@ -94,7 +94,7 @@ pub mod tests {
         );
         let mut batch = [Packets::default(), Packets::default()];
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         Shredder::sign_shred(&keypair, &mut shred);
         batch[0].packets.resize(1, Packet::default());
         batch[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
@@ -122,7 +122,7 @@ pub mod tests {
 
     #[test]
     fn test_sigverify_shreds_verify_batch() {
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Arc::new(generate_keypair());
         let leader_pubkey = leader_keypair.pubkey();
         let bank =
             Bank::new(&create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config);
@@ -159,7 +159,7 @@ pub mod tests {
             0,
             0xc0de,
         );
-        let wrong_keypair = Keypair::new();
+        let wrong_keypair = generate_keypair();
         Shredder::sign_shred(&wrong_keypair, &mut shred);
         batch[0].packets[1].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batch[0].packets[1].meta.size = shred.payload.len();

@@ -469,7 +469,7 @@ mod test {
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, Keypair, KeypairUtil};
     use solana_sdk::system_instruction;
     use std::mem;
 
@@ -558,7 +558,7 @@ mod test {
     }
 
     fn create_client(bank: Bank, mint_keypair: Keypair) -> (BankClient, Keypair) {
-        let owner = Keypair::new();
+        let owner = generate_keypair();
         let bank_client = BankClient::new(bank);
         bank_client
             .transfer(42, &mint_keypair, &owner.pubkey())
@@ -568,7 +568,7 @@ mod test {
     }
 
     fn create_account(client: &BankClient, owner: &Keypair) -> Pubkey {
-        let new = Keypair::new();
+        let new = generate_keypair();
 
         let instruction = system_instruction::create_account(
             &owner.pubkey(),

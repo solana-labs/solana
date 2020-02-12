@@ -10,7 +10,7 @@ use crate::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent::Rent,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
     system_program::{self, solana_system_program},
 };
 use bincode::{deserialize, serialize};
@@ -57,7 +57,7 @@ pub struct GenesisConfig {
 
 // useful for basic tests
 pub fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
-    let faucet_keypair = Keypair::new();
+    let faucet_keypair = generate_keypair();
     (
         GenesisConfig::new(
             &[(
@@ -175,12 +175,12 @@ impl GenesisConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::signature::{Keypair, KeypairUtil};
+    use crate::signature::KeypairUtil;
     use std::path::PathBuf;
 
     fn make_tmp_path(name: &str) -> PathBuf {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
 
         let path = [
             out_dir,
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_genesis_config() {
-        let faucet_keypair = Keypair::new();
+        let faucet_keypair = generate_keypair();
         let mut config = GenesisConfig::default();
         config.add_account(
             faucet_keypair.pubkey(),

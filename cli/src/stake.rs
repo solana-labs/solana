@@ -1230,7 +1230,9 @@ mod tests {
     use solana_sdk::{
         fee_calculator::FeeCalculator,
         hash::Hash,
-        signature::{keypair_from_seed, read_keypair_file, write_keypair, KeypairUtil},
+        signature::{
+            generate_keypair, keypair_from_seed, read_keypair_file, write_keypair, KeypairUtil,
+        },
     };
     use tempfile::NamedTempFile;
 
@@ -1335,7 +1337,7 @@ mod tests {
             }
         );
         // Test Authorize Subcommand w/ signer
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let sig = keypair.sign_message(&[0u8]);
         let signer = format!("{}={}", keypair.pubkey(), sig);
         let test_authorize = test_commands.clone().get_matches_from(vec![
@@ -1367,7 +1369,7 @@ mod tests {
             }
         );
         // Test Authorize Subcommand w/ signers
-        let keypair2 = Keypair::new();
+        let keypair2 = generate_keypair();
         let sig2 = keypair.sign_message(&[0u8]);
         let signer2 = format!("{}={}", keypair2.pubkey(), sig2);
         let test_authorize = test_commands.clone().get_matches_from(vec![
@@ -1429,7 +1431,7 @@ mod tests {
         );
         // Test Authorize Subcommand w/ nonce
         let (nonce_keypair_file, mut nonce_tmp_file) = make_tmp_file();
-        let nonce_authority_keypair = Keypair::new();
+        let nonce_authority_keypair = generate_keypair();
         write_keypair(&nonce_authority_keypair, nonce_tmp_file.as_file_mut()).unwrap();
         let nonce_account_pubkey = nonce_authority_keypair.pubkey();
         let nonce_account_string = nonce_account_pubkey.to_string();
@@ -1465,7 +1467,7 @@ mod tests {
         );
         // Test Authorize Subcommand w/ fee-payer
         let (fee_payer_keypair_file, mut fee_payer_tmp_file) = make_tmp_file();
-        let fee_payer_keypair = Keypair::new();
+        let fee_payer_keypair = generate_keypair();
         write_keypair(&fee_payer_keypair, fee_payer_tmp_file.as_file_mut()).unwrap();
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
         let fee_payer_string = fee_payer_pubkey.to_string();
@@ -1534,11 +1536,11 @@ mod tests {
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let stake_account_keypair = Keypair::new();
+        let stake_account_keypair = generate_keypair();
         write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
         let stake_account_pubkey = stake_account_keypair.pubkey();
         let (stake_authority_keypair_file, mut tmp_file) = make_tmp_file();
-        let stake_authority_keypair = Keypair::new();
+        let stake_authority_keypair = generate_keypair();
         write_keypair(&stake_authority_keypair, tmp_file.as_file_mut()).unwrap();
 
         parse_authorize_tests(
@@ -1594,7 +1596,7 @@ mod tests {
         );
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let stake_account_keypair = Keypair::new();
+        let stake_account_keypair = generate_keypair();
         write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
         let stake_account_pubkey = stake_account_keypair.pubkey();
         let stake_account_string = stake_account_pubkey.to_string();
@@ -1771,7 +1773,7 @@ mod tests {
 
         // Test Delegate Subcommand w/ signer
         let key1 = Pubkey::new_rand();
-        let sig1 = Keypair::new().sign_message(&[0u8]);
+        let sig1 = generate_keypair().sign_message(&[0u8]);
         let signer1 = format!("{}={}", key1, sig1);
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1804,7 +1806,7 @@ mod tests {
 
         // Test Delegate Subcommand w/ signers
         let key2 = Pubkey::new_rand();
-        let sig2 = Keypair::new().sign_message(&[0u8]);
+        let sig2 = generate_keypair().sign_message(&[0u8]);
         let signer2 = format!("{}={}", key2, sig2);
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1839,7 +1841,7 @@ mod tests {
 
         // Test Delegate Subcommand w/ fee-payer
         let (fee_payer_keypair_file, mut fee_payer_tmp_file) = make_tmp_file();
-        let fee_payer_keypair = Keypair::new();
+        let fee_payer_keypair = generate_keypair();
         write_keypair(&fee_payer_keypair, fee_payer_tmp_file.as_file_mut()).unwrap();
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
         let fee_payer_string = fee_payer_pubkey.to_string();
@@ -2062,7 +2064,7 @@ mod tests {
 
         // Test Deactivate Subcommand w/ signers
         let key1 = Pubkey::new_rand();
-        let sig1 = Keypair::new().sign_message(&[0u8]);
+        let sig1 = generate_keypair().sign_message(&[0u8]);
         let signer1 = format!("{}={}", key1, sig1);
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2092,7 +2094,7 @@ mod tests {
 
         // Test Deactivate Subcommand w/ signers
         let key2 = Pubkey::new_rand();
-        let sig2 = Keypair::new().sign_message(&[0u8]);
+        let sig2 = generate_keypair().sign_message(&[0u8]);
         let signer2 = format!("{}={}", key2, sig2);
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2180,10 +2182,10 @@ mod tests {
 
         // Test SplitStake SubCommand
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let stake_account_keypair = Keypair::new();
+        let stake_account_keypair = generate_keypair();
         write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
         let (split_stake_account_keypair_file, mut tmp_file) = make_tmp_file();
-        let split_stake_account_keypair = Keypair::new();
+        let split_stake_account_keypair = generate_keypair();
         write_keypair(&split_stake_account_keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_split_stake_account = test_commands.clone().get_matches_from(vec![

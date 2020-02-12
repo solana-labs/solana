@@ -40,7 +40,7 @@ use solana_sdk::{
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
     timing::timestamp,
 };
 use std::{
@@ -618,7 +618,7 @@ pub fn new_validator_for_tests_ex(
     use crate::genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo};
     use solana_sdk::fee_calculator::FeeCalculator;
 
-    let node_keypair = Arc::new(Keypair::new());
+    let node_keypair = Arc::new(generate_keypair());
     let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
     let contact_info = node.info.clone();
 
@@ -643,7 +643,7 @@ pub fn new_validator_for_tests_ex(
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
     let leader_voting_keypair = Arc::new(voting_keypair);
-    let storage_keypair = Arc::new(Keypair::new());
+    let storage_keypair = Arc::new(generate_keypair());
     let config = ValidatorConfig {
         rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
         ..ValidatorConfig::default()
@@ -732,18 +732,18 @@ mod tests {
     #[test]
     fn validator_exit() {
         solana_logger::setup();
-        let leader_keypair = Keypair::new();
+        let leader_keypair = generate_keypair();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
-        let validator_keypair = Keypair::new();
+        let validator_keypair = generate_keypair();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let genesis_config =
             create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
                 .genesis_config;
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-        let voting_keypair = Arc::new(Keypair::new());
-        let storage_keypair = Arc::new(Keypair::new());
+        let voting_keypair = Arc::new(generate_keypair());
+        let storage_keypair = Arc::new(generate_keypair());
         let config = ValidatorConfig {
             rpc_ports: Some((
                 validator_node.info.rpc.port(),
@@ -768,21 +768,21 @@ mod tests {
 
     #[test]
     fn validator_parallel_exit() {
-        let leader_keypair = Keypair::new();
+        let leader_keypair = generate_keypair();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         let mut ledger_paths = vec![];
         let mut validators: Vec<Validator> = (0..2)
             .map(|_| {
-                let validator_keypair = Keypair::new();
+                let validator_keypair = generate_keypair();
                 let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
                 let genesis_config =
                     create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
                         .genesis_config;
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
                 ledger_paths.push(validator_ledger_path.clone());
-                let voting_keypair = Arc::new(Keypair::new());
-                let storage_keypair = Arc::new(Keypair::new());
+                let voting_keypair = Arc::new(generate_keypair());
+                let storage_keypair = Arc::new(generate_keypair());
                 let config = ValidatorConfig {
                     rpc_ports: Some((
                         validator_node.info.rpc.port(),

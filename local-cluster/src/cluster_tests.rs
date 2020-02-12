@@ -24,7 +24,7 @@ use solana_sdk::{
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{generate_keypair, Keypair, KeypairUtil, Signature},
     system_transaction,
     timing::duration_as_ms,
     transport::TransportError,
@@ -51,7 +51,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
         if ignore_nodes.contains(&ingress_node.id) {
             continue;
         }
-        let random_keypair = Keypair::new();
+        let random_keypair = generate_keypair();
         let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         let bal = client
             .poll_get_balance_with_commitment(&funding_keypair.pubkey(), CommitmentConfig::recent())
@@ -98,7 +98,7 @@ pub fn send_many_transactions(
     let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
     let mut expected_balances = HashMap::new();
     for _ in 0..num_txs {
-        let random_keypair = Keypair::new();
+        let random_keypair = generate_keypair();
         let bal = client
             .poll_get_balance_with_commitment(&funding_keypair.pubkey(), CommitmentConfig::recent())
             .expect("balance in source");
@@ -241,7 +241,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 result.unwrap();
             }
 
-            let random_keypair = Keypair::new();
+            let random_keypair = generate_keypair();
             let (blockhash, _fee_calculator) = client
                 .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
                 .unwrap();

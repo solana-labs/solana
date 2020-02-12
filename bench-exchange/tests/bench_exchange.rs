@@ -10,7 +10,7 @@ use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;
 use solana_sdk::genesis_config::create_genesis_config;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{generate_keypair, KeypairUtil};
 use std::process::exit;
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -23,7 +23,7 @@ fn test_exchange_local_cluster() {
     const NUM_NODES: usize = 1;
 
     let mut config = Config::default();
-    config.identity = Keypair::new();
+    config.identity = generate_keypair();
     config.duration = Duration::from_secs(1);
     config.fund_amount = 100_000;
     config.threads = 1;
@@ -47,7 +47,7 @@ fn test_exchange_local_cluster() {
         ..ClusterConfig::default()
     });
 
-    let faucet_keypair = Keypair::new();
+    let faucet_keypair = generate_keypair();
     cluster.transfer(
         &cluster.funding_keypair,
         &faucet_keypair.pubkey(),

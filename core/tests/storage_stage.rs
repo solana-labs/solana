@@ -15,7 +15,7 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::message::Message;
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use solana_storage_program::storage_instruction;
     use solana_storage_program::storage_instruction::StorageAccountType;
@@ -29,9 +29,9 @@ mod tests {
     #[test]
     fn test_storage_stage_process_account_proofs() {
         solana_logger::setup();
-        let keypair = Arc::new(Keypair::new());
-        let storage_keypair = Arc::new(Keypair::new());
-        let archiver_keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
+        let storage_keypair = Arc::new(generate_keypair());
+        let archiver_keypair = Arc::new(generate_keypair());
         let exit = Arc::new(AtomicBool::new(false));
 
         let GenesisConfigInfo {
@@ -97,7 +97,7 @@ mod tests {
             reference_keys.copy_from_slice(keys);
         }
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
 
         let mining_proof_ix = storage_instruction::mining_proof(
             &archiver_keypair.pubkey(),
@@ -157,8 +157,8 @@ mod tests {
     #[test]
     fn test_storage_stage_process_banks() {
         solana_logger::setup();
-        let keypair = Arc::new(Keypair::new());
-        let storage_keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(generate_keypair());
+        let storage_keypair = Arc::new(generate_keypair());
         let exit = Arc::new(AtomicBool::new(false));
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
@@ -191,7 +191,7 @@ mod tests {
         );
         bank_sender.send(vec![bank.clone()]).unwrap();
 
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let hash = Hash::default();
         let signature = keypair.sign_message(&hash.as_ref());
 

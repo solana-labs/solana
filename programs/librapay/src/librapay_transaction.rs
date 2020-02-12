@@ -9,7 +9,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, KeypairUtil},
     system_instruction,
     transaction::Transaction,
 };
@@ -155,7 +155,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_config::create_genesis_config;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{generate_keypair, KeypairUtil};
     use std::sync::Arc;
 
     fn create_bank(lamports: u64) -> (Arc<Bank>, Keypair, Keypair, Pubkey, Pubkey) {
@@ -186,8 +186,8 @@ mod tests {
 
         let (bank, mint, genesis_keypair, mint_script_pubkey, payment_script_pubkey) =
             create_bank(10_000);
-        let from_keypair = Keypair::new();
-        let to_keypair = Keypair::new();
+        let from_keypair = generate_keypair();
+        let to_keypair = generate_keypair();
 
         let tx = create_accounts(
             &mint,

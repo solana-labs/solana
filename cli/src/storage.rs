@@ -259,7 +259,7 @@ pub fn process_show_storage_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::write_keypair;
+    use solana_sdk::signature::{generate_keypair, write_keypair};
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -274,7 +274,7 @@ mod tests {
         let pubkey_string = pubkey.to_string();
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let storage_account_keypair = Keypair::new();
+        let storage_account_keypair = generate_keypair();
         write_keypair(&storage_account_keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_create_archiver_storage_account = test_commands.clone().get_matches_from(vec![
@@ -296,7 +296,7 @@ mod tests {
         );
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let storage_account_keypair = Keypair::new();
+        let storage_account_keypair = generate_keypair();
         write_keypair(&storage_account_keypair, tmp_file.as_file_mut()).unwrap();
         let storage_account_pubkey = storage_account_keypair.pubkey();
         let storage_account_string = storage_account_pubkey.to_string();

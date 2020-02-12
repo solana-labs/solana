@@ -35,7 +35,7 @@ use solana_sdk::{
     hash::Hash,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{generate_keypair, Keypair, KeypairUtil, Signature},
     timing::timestamp,
     transaction::Transaction,
 };
@@ -2266,7 +2266,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
     let last_hash = entries.last().unwrap().hash;
     let version = Shred::version_from_hash(&last_hash);
 
-    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0, version)
+    let shredder = Shredder::new(0, 0, 0.0, Arc::new(generate_keypair()), 0, version)
         .expect("Failed to create entry shredder");
     let shreds = shredder.entries_to_shreds(&entries, true, 0).0;
     assert!(shreds.last().unwrap().last_in_slot());
@@ -2324,7 +2324,7 @@ macro_rules! get_tmp_ledger_path {
 pub fn get_ledger_path_from_name(name: &str) -> PathBuf {
     use std::env;
     let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-    let keypair = Keypair::new();
+    let keypair = generate_keypair();
 
     let path = [
         out_dir,
@@ -2382,8 +2382,15 @@ pub fn entries_to_test_shreds(
     is_full_slot: bool,
     version: u16,
 ) -> Vec<Shred> {
-    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()), 0, version)
-        .expect("Failed to create entry shredder");
+    let shredder = Shredder::new(
+        slot,
+        parent_slot,
+        0.0,
+        Arc::new(generate_keypair()),
+        0,
+        version,
+    )
+    .expect("Failed to create entry shredder");
 
     shredder.entries_to_shreds(&entries, is_full_slot, 0).0
 }
@@ -2512,7 +2519,7 @@ pub mod tests {
         let mut entries: Vec<Entry> = Vec::new();
         for x in 0..num_entries {
             let transaction = Transaction::new_with_compiled_instructions(
-                &[&Keypair::new()],
+                &[&generate_keypair()],
                 &[Pubkey::new_rand()],
                 Hash::default(),
                 vec![Pubkey::new_rand()],
@@ -2677,7 +2684,7 @@ pub mod tests {
                         ticks_per_slot,
                         Some(i.saturating_sub(1)),
                         true,
-                        &Arc::new(Keypair::new()),
+                        &Arc::new(generate_keypair()),
                         new_ticks.clone(),
                         0,
                     )
@@ -4889,7 +4896,7 @@ pub mod tests {
 
     #[test]
     fn test_get_block_timestamps() {
-        let vote_keypairs: Vec<Keypair> = (0..6).map(|_| Keypair::new()).collect();
+        let vote_keypairs: Vec<Keypair> = (0..6).map(|_| generate_keypair()).collect();
         let base_timestamp = 1576183541;
         let mut expected_timestamps: Vec<(Pubkey, (Slot, UnixTimestamp))> = Vec::new();
 
@@ -5175,7 +5182,7 @@ pub mod tests {
             let mut transactions: Vec<Transaction> = vec![];
             for x in 0..4 {
                 let transaction = Transaction::new_with_compiled_instructions(
-                    &[&Keypair::new()],
+                    &[&generate_keypair()],
                     &[Pubkey::new_rand()],
                     Hash::default(),
                     vec![Pubkey::new_rand()],
@@ -5198,7 +5205,7 @@ pub mod tests {
             }
             // Push transaction that will not have matching status, as a test case
             transactions.push(Transaction::new_with_compiled_instructions(
-                &[&Keypair::new()],
+                &[&generate_keypair()],
                 &[Pubkey::new_rand()],
                 Hash::default(),
                 vec![Pubkey::new_rand()],
@@ -5413,7 +5420,7 @@ pub mod tests {
         erasure_rate: f32,
     ) -> (Vec<Shred>, Vec<Shred>, Arc<LeaderScheduleCache>) {
         let entries = make_slot_entries_with_transactions(num_entries);
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Arc::new(generate_keypair());
         let shredder = Shredder::new(
             slot,
             parent_slot,
@@ -5473,7 +5480,7 @@ pub mod tests {
         let slot = 0;
         let entries1 = make_slot_entries_with_transactions(1);
         let entries2 = make_slot_entries_with_transactions(1);
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Arc::new(generate_keypair());
         let shredder = Shredder::new(slot, 0, 1.0, leader_keypair.clone(), 0, 0)
             .expect("Failed in creating shredder");
         let (shreds, _, _) = shredder.entries_to_shreds(&entries1, true, 0);

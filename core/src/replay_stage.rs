@@ -1081,7 +1081,7 @@ pub(crate) mod tests {
         instruction::InstructionError,
         packet::PACKET_DATA_SIZE,
         rent::Rent,
-        signature::{Keypair, KeypairUtil, Signature},
+        signature::{generate_keypair, KeypairUtil, Signature},
         system_transaction,
         transaction::TransactionError,
     };
@@ -1338,22 +1338,22 @@ pub(crate) mod tests {
         let validators: Vec<ValidatorInfo> = vec![
             ValidatorInfo {
                 stake: 34_000_000,
-                keypair: Keypair::new(),
-                voting_keypair: Keypair::new(),
-                staking_keypair: Keypair::new(),
+                keypair: generate_keypair(),
+                voting_keypair: generate_keypair(),
+                staking_keypair: generate_keypair(),
             },
             ValidatorInfo {
                 stake: 33_000_000,
-                keypair: Keypair::new(),
-                voting_keypair: Keypair::new(),
-                staking_keypair: Keypair::new(),
+                keypair: generate_keypair(),
+                voting_keypair: generate_keypair(),
+                staking_keypair: generate_keypair(),
             },
             // Malicious Node
             ValidatorInfo {
                 stake: 33_000_000,
-                keypair: Keypair::new(),
-                voting_keypair: Keypair::new(),
-                staking_keypair: Keypair::new(),
+                keypair: generate_keypair(),
+                voting_keypair: generate_keypair(),
+                staking_keypair: generate_keypair(),
             },
         ];
 
@@ -1446,10 +1446,10 @@ pub(crate) mod tests {
 
     #[test]
     fn test_dead_fork_transaction_error() {
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let missing_keypair = Keypair::new();
-        let missing_keypair2 = Keypair::new();
+        let keypair1 = generate_keypair();
+        let keypair2 = generate_keypair();
+        let missing_keypair = generate_keypair();
+        let missing_keypair2 = generate_keypair();
 
         let res = check_dead_fork(|_keypair, bank| {
             let blockhash = bank.last_blockhash();
@@ -1481,7 +1481,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_dead_fork_entry_verification_failure() {
-        let keypair2 = Keypair::new();
+        let keypair2 = generate_keypair();
         let res = check_dead_fork(|genesis_keypair, bank| {
             let blockhash = bank.last_blockhash();
             let slot = bank.slot();
@@ -1600,7 +1600,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_dead_fork_trailing_entry() {
-        let keypair = Keypair::new();
+        let keypair = generate_keypair();
         let res = check_dead_fork(|genesis_keypair, bank| {
             let blockhash = bank.last_blockhash();
             let slot = bank.slot();
@@ -1868,9 +1868,9 @@ pub(crate) mod tests {
                 .expect("Expected to successfully open database ledger");
             let blockstore = Arc::new(blockstore);
 
-            let keypair1 = Keypair::new();
-            let keypair2 = Keypair::new();
-            let keypair3 = Keypair::new();
+            let keypair1 = generate_keypair();
+            let keypair2 = generate_keypair();
+            let keypair3 = generate_keypair();
 
             let bank0 = Arc::new(Bank::new(&genesis_config));
             bank0
@@ -1915,8 +1915,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_child_bank_heavier() {
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
+        let node_keypair = generate_keypair();
+        let vote_keypair = generate_keypair();
         let node_pubkey = node_keypair.pubkey();
         let mut keypairs = HashMap::new();
         keypairs.insert(

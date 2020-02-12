@@ -21,7 +21,7 @@ use solana_sdk::{
     epoch_schedule::Epoch,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, KeypairUtil},
     system_transaction,
 };
 use std::{
@@ -722,7 +722,7 @@ pub fn process_ping(
     timeout: &Duration,
     commitment_config: &CommitmentConfig,
 ) -> ProcessResult {
-    let to = Keypair::new().pubkey();
+    let to = generate_keypair().pubkey();
 
     println_name_value("Source Account:", &config.keypair.pubkey().to_string());
     println_name_value("Destination Account:", &to.to_string());

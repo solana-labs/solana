@@ -20,7 +20,7 @@ use solana_sdk::{
     message::Message,
     poh_config::PohConfig,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{generate_keypair, Keypair, KeypairUtil},
     system_transaction,
     transaction::Transaction,
 };
@@ -137,7 +137,7 @@ impl LocalCluster {
                 assert_eq!(config.validator_configs.len(), keys.len());
                 keys.clone()
             } else {
-                iter::repeat_with(|| Arc::new(Keypair::new()))
+                iter::repeat_with(|| Arc::new(generate_keypair()))
                     .take(config.validator_configs.len())
                     .collect()
             }
@@ -184,7 +184,7 @@ impl LocalCluster {
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
 
-        let storage_keypair = Keypair::new();
+        let storage_keypair = generate_keypair();
         genesis_config.add_account(
             storage_keypair.pubkey(),
             storage_contract::create_validator_storage_account(leader_pubkey, 1),
@@ -263,7 +263,7 @@ impl LocalCluster {
             ..config.validator_configs[0].clone()
         };
         (0..config.num_listeners).for_each(|_| {
-            cluster.add_validator(&listener_config, 0, Arc::new(Keypair::new()));
+            cluster.add_validator(&listener_config, 0, Arc::new(generate_keypair()));
         });
 
         discover_cluster(
@@ -318,8 +318,8 @@ impl LocalCluster {
         );
 
         // Must have enough tokens to fund vote account and set delegate
-        let voting_keypair = Keypair::new();
-        let storage_keypair = Arc::new(Keypair::new());
+        let voting_keypair = generate_keypair();
+        let storage_keypair = Arc::new(generate_keypair());
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let contact_info = validator_node.info.clone();
@@ -389,9 +389,9 @@ impl LocalCluster {
     }
 
     fn add_archiver(&mut self) {
-        let archiver_keypair = Arc::new(Keypair::new());
+        let archiver_keypair = Arc::new(generate_keypair());
         let archiver_pubkey = archiver_keypair.pubkey();
-        let storage_keypair = Arc::new(Keypair::new());
+        let storage_keypair = Arc::new(generate_keypair());
         let storage_pubkey = storage_keypair.pubkey();
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
@@ -486,7 +486,7 @@ impl LocalCluster {
     ) -> Result<()> {
         let vote_account_pubkey = vote_account.pubkey();
         let node_pubkey = from_account.pubkey();
-        let stake_account_keypair = Keypair::new();
+        let stake_account_keypair = generate_keypair();
         let stake_account_pubkey = stake_account_keypair.pubkey();
 
         // Create the vote account if necessary

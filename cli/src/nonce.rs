@@ -618,7 +618,7 @@ mod tests {
         account::Account,
         hash::hash,
         nonce_state::{Meta as NonceMeta, NonceState},
-        signature::{read_keypair_file, write_keypair},
+        signature::{generate_keypair, read_keypair_file, write_keypair},
         system_program,
     };
     use tempfile::NamedTempFile;
@@ -632,13 +632,13 @@ mod tests {
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
         let (keypair_file, mut tmp_file) = make_tmp_file();
-        let nonce_account_keypair = Keypair::new();
+        let nonce_account_keypair = generate_keypair();
         write_keypair(&nonce_account_keypair, tmp_file.as_file_mut()).unwrap();
         let nonce_account_pubkey = nonce_account_keypair.pubkey();
         let nonce_account_string = nonce_account_pubkey.to_string();
 
         let (authority_keypair_file, mut tmp_file2) = make_tmp_file();
-        let nonce_authority_keypair = Keypair::new();
+        let nonce_authority_keypair = generate_keypair();
         write_keypair(&nonce_authority_keypair, tmp_file2.as_file_mut()).unwrap();
 
         // Test AuthorizeNonceAccount Subcommand
