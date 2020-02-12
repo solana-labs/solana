@@ -508,6 +508,12 @@ pub fn main() {
                 .help("Enable the JSON RPC 'validatorExit' API.  Only enable in a debug environment"),
         )
         .arg(
+            Arg::with_name("enable_rpc_get_confirmed_block")
+                .long("enable-rpc-get-confirmed-block")
+                .takes_value(false)
+                .help("Enable the JSON RPC 'getConfirmedBlock' API.  This will cause an increase in disk usage and IOPS"),
+        )
+        .arg(
             Arg::with_name("rpc_faucet_addr")
                 .long("rpc-faucet-address")
                 .value_name("HOST:PORT")
@@ -684,6 +690,7 @@ pub fn main() {
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
+            enable_get_confirmed_block: matches.is_present("enable_rpc_get_confirmed_block"),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
