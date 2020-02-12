@@ -1,7 +1,7 @@
 use crate::ledger::{is_valid_ledger, LedgerWallet};
 use log::*;
 use parking_lot::{Mutex, RwLock};
-use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::Transaction};
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::{
     fmt,
     str::FromStr,
@@ -156,10 +156,10 @@ pub trait RemoteWallet {
     fn get_pubkey(&self, derivation_path: &DerivationPath) -> Result<Pubkey, RemoteWalletError>;
 
     /// Sign transaction data with wallet managing pubkey at derivation path m/44'/501'/<account>'/<change>'.
-    fn sign_transaction(
+    fn sign_message(
         &self,
         derivation_path: &DerivationPath,
-        transaction: Transaction,
+        data: &[u8],
     ) -> Result<Signature, RemoteWalletError>;
 }
 
