@@ -15,7 +15,7 @@ use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 
 #[cfg(test)]
-use solana_core::validator::new_validator_for_tests;
+use solana_core::validator::new_validator_for_tests_ex;
 use std::thread::sleep;
 use std::time::Duration;
 use tempfile::NamedTempFile;
@@ -40,7 +40,7 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 
 #[test]
 fn test_transfer() {
-    let (server, leader_data, mint_keypair, ledger_path) = new_validator_for_tests();
+    let (server, leader_data, mint_keypair, ledger_path, _) = new_validator_for_tests_ex(1, 42_000);
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);
@@ -73,7 +73,7 @@ fn test_transfer() {
         fee_payer: None,
     };
     process_command(&config).unwrap();
-    check_balance(49_990, &rpc_client, &sender_pubkey);
+    check_balance(49_989, &rpc_client, &sender_pubkey);
     check_balance(10, &rpc_client, &recipient_pubkey);
 
     let mut offline = CliConfig::default();
@@ -114,7 +114,7 @@ fn test_transfer() {
         fee_payer: Some(offline_pubkey.into()),
     };
     process_command(&config).unwrap();
-    check_balance(40, &rpc_client, &offline_pubkey);
+    check_balance(39, &rpc_client, &offline_pubkey);
     check_balance(20, &rpc_client, &recipient_pubkey);
 
     // Create nonce account
@@ -131,6 +131,7 @@ fn test_transfer() {
         lamports: minimum_nonce_balance,
     };
     process_command(&config).unwrap();
+    check_balance(49_987 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
@@ -153,7 +154,7 @@ fn test_transfer() {
         fee_payer: None,
     };
     process_command(&config).unwrap();
-    check_balance(49_980 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
+    check_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
     check_balance(30, &rpc_client, &recipient_pubkey);
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
     let nonce_state: NonceState = account.state().unwrap();
@@ -170,6 +171,7 @@ fn test_transfer() {
         new_authority: offline_pubkey,
     };
     process_command(&config).unwrap();
+    check_balance(49_975 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
@@ -205,7 +207,7 @@ fn test_transfer() {
         fee_payer: Some(offline_pubkey.into()),
     };
     process_command(&config).unwrap();
-    check_balance(30, &rpc_client, &offline_pubkey);
+    check_balance(28, &rpc_client, &offline_pubkey);
     check_balance(40, &rpc_client, &recipient_pubkey);
 
     server.close().unwrap();
