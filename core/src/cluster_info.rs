@@ -519,15 +519,7 @@ impl ClusterInfo {
         let me = self.my_data();
         ClusterInfo::tvu_peers(self)
             .into_iter()
-            .filter(|x| x.id != me.id)
-            .filter(|x| x.shred_version == me.shred_version)
-            .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .filter(|x| {
-<<<<<<< HEAD
-                self.get_epoch_state_for_node(&x.id, None)
-                    .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
-                    .unwrap_or_else(|| /* fallback to legacy behavior */ true)
-=======
                 x.id != me.id
                     && x.shred_version == me.shred_version
                     && ContactInfo::is_valid_address(&x.serve_repair)
@@ -536,7 +528,6 @@ impl ClusterInfo {
                             .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
                             .unwrap_or_else(|| /* fallback to legacy behavior */ true)
                     }
->>>>>>> d0a468699... Avoid assigning the serve repair port to the storage port
             })
             .collect()
     }
