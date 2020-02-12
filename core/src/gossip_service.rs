@@ -98,7 +98,7 @@ pub fn discover(
 
     let _ip_echo_server = ip_echo.map(solana_net_utils::ip_echo_server);
 
-    let (met_criteria, secs, tvu_peers, archivers) = spy(
+    let (met_criteria, secs, tvu_peers, storage_peers) = spy(
         spy_ref.clone(),
         num_nodes,
         timeout,
@@ -115,7 +115,7 @@ pub fn discover(
             secs,
             spy_ref.read().unwrap().contact_info_trace()
         );
-        return Ok((tvu_peers, archivers));
+        return Ok((tvu_peers, storage_peers));
     }
 
     if !tvu_peers.is_empty() {
@@ -123,7 +123,7 @@ pub fn discover(
             "discover failed to match criteria by timeout...\n{}",
             spy_ref.read().unwrap().contact_info_trace()
         );
-        return Ok((tvu_peers, archivers));
+        return Ok((tvu_peers, storage_peers));
     }
 
     info!(
@@ -181,72 +181,51 @@ fn spy(
     let now = Instant::now();
     let mut met_criteria = false;
     let mut tvu_peers: Vec<ContactInfo> = Vec::new();
-    let mut archivers: Vec<ContactInfo> = Vec::new();
-    let mut i = 0;
-    loop {
+    let mut storage_peers: Vec<ContactInfo> = Vec::new();
+    let mut i = 1;
+    while !met_criteria {
         if let Some(secs) = timeout {
             if now.elapsed() >= Duration::from_secs(secs) {
                 break;
             }
         }
-        // collect tvu peers but filter out archivers since their tvu is transient and we do not want
-        // it to show up as a "node"
+
         tvu_peers = spy_ref
             .read()
             .unwrap()
             .all_tvu_peers()
             .into_iter()
             .collect::<Vec<_>>();
-        archivers = spy_ref.read().unwrap().all_storage_peers();
+        storage_peers = spy_ref.read().unwrap().all_storage_peers();
+
+        let mut nodes: Vec<_> = tvu_peers.iter().chain(storage_peers.iter()).collect();
+        nodes.sort();
+        nodes.dedup();
+
+        let found_node_by_pubkey = if let Some(pubkey) = find_node_by_pubkey {
+            nodes.iter().any(|x| x.id == pubkey)
+        } else {
+            false
+        };
+
+        let found_node_by_gossip_addr = if let Some(gossip_addr) = find_node_by_gossip_addr {
+            nodes.iter().any(|x| x.gossip == *gossip_addr)
+        } else {
+            false
+        };
+
         if let Some(num) = num_nodes {
-            if tvu_peers.len() + archivers.len() >= num {
-                if let Some(gossip_addr) = find_node_by_gossip_addr {
-                    if tvu_peers
-                        .iter()
-                        .chain(archivers.iter())
-                        .any(|x| x.gossip == *gossip_addr)
-                    {
-                        met_criteria = true;
-                        break;
-                    }
+            if nodes.len() >= num {
+                if found_node_by_pubkey || found_node_by_gossip_addr {
+                    met_criteria = true;
                 }
-                if let Some(pubkey) = find_node_by_pubkey {
-                    if tvu_peers
-                        .iter()
-                        .chain(archivers.iter())
-                        .any(|x| x.id == pubkey)
-                    {
-                        met_criteria = true;
-                        break;
-                    }
-                }
+
                 if find_node_by_pubkey.is_none() && find_node_by_gossip_addr.is_none() {
                     met_criteria = true;
-                    break;
                 }
             }
-        }
-        if num_nodes.is_none() {
-            if let Some(pubkey) = find_node_by_pubkey {
-                if tvu_peers
-                    .iter()
-                    .chain(archivers.iter())
-                    .any(|x| x.id == pubkey)
-                {
-                    met_criteria = true;
-                    break;
-                }
-            }
-            if let Some(gossip_addr) = find_node_by_gossip_addr {
-                if tvu_peers
-                    .iter()
-                    .chain(archivers.iter())
-                    .any(|x| x.gossip == *gossip_addr)
-                {
-                    met_criteria = true;
-                    break;
-                }
-            }
+        } else if found_node_by_pubkey || found_node_by_gossip_addr {
+            met_criteria = true;
         }
         if i % 20 == 0 {
             info!(
@@ -259,7 +238,12 @@ fn spy(
         ));
         i += 1;
     }
-    (met_criteria, now.elapsed().as_secs(), tvu_peers, archivers)
+    (
+        met_criteria,
+        now.elapsed().as_secs(),
+        tvu_peers,
+        storage_peers,
+    )
 }
 
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
