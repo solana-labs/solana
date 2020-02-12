@@ -9,7 +9,6 @@ use crate::{
     signature::{KeypairUtil, Signature},
     system_instruction,
 };
-use bincode::serialize;
 use std::result;
 use thiserror::Error;
 
@@ -211,7 +210,7 @@ impl Transaction {
 
     /// Return the serialized message data to sign.
     pub fn message_data(&self) -> Vec<u8> {
-        serialize(&self.message()).unwrap()
+        self.message().serialize()
     }
 
     /// Check keys and keypair lengths, then sign this transaction.
