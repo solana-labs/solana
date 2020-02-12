@@ -298,34 +298,6 @@ declare module '@solana/web3.js' {
     ): Transaction;
   }
 
-  // === src/system-program.js ===
-  export class SystemProgram {
-    static programId: PublicKey;
-
-    static createAccount(
-      from: PublicKey,
-      newAccount: PublicKey,
-      lamports: number,
-      space: number,
-      programId: PublicKey,
-    ): Transaction;
-    static transfer(
-      from: PublicKey,
-      to: PublicKey,
-      amount: number,
-    ): Transaction;
-    static assign(from: PublicKey, programId: PublicKey): Transaction;
-    static createAccountWithSeed(
-      from: PublicKey,
-      newAccount: PublicKey,
-      base: PublicKey,
-      seed: string,
-      lamports: number,
-      space: number,
-      programId: PublicKey,
-    ): Transaction;
-  }
-
   // === src/validator-info.js ===
   export const VALIDATOR_INFO_KEY: PublicKey;
   export type Info = {
@@ -424,6 +396,7 @@ declare module '@solana/web3.js' {
     recentBlockhash?: Blockhash;
 
     constructor(opts?: TransactionCtorFields);
+    static from(buffer: Buffer): Transaction;
     add(
       ...items: Array<
         Transaction | TransactionInstruction | TransactionInstructionCtorFields
@@ -433,6 +406,47 @@ declare module '@solana/web3.js' {
     signPartial(...partialSigners: Array<PublicKey | Account>): void;
     addSigner(signer: Account): void;
     serialize(): Buffer;
+  }
+
+  // === src/system-program.js ===
+  export class SystemProgram {
+    static programId: PublicKey;
+
+    static createAccount(
+      from: PublicKey,
+      newAccount: PublicKey,
+      lamports: number,
+      space: number,
+      programId: PublicKey,
+    ): Transaction;
+    static transfer(
+      from: PublicKey,
+      to: PublicKey,
+      amount: number,
+    ): Transaction;
+    static assign(from: PublicKey, programId: PublicKey): Transaction;
+    static createAccountWithSeed(
+      from: PublicKey,
+      newAccount: PublicKey,
+      base: PublicKey,
+      seed: string,
+      lamports: number,
+      space: number,
+      programId: PublicKey,
+    ): Transaction;
+  }
+
+  export class SystemInstruction extends TransactionInstruction {
+    type: InstructionType;
+    fromPublicKey: PublicKey | null;
+    toPublicKey: PublicKey | null;
+    amount: number | null;
+
+    constructor(
+      opts?: TransactionInstructionCtorFields,
+      type?: InstructionType,
+    );
+    static from(instruction: TransactionInstruction): SystemInstruction;
   }
 
   // === src/loader.js ===
