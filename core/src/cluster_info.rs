@@ -261,7 +261,7 @@ impl ClusterInfo {
 
                 let ip_addr = node.gossip.ip();
                 format!(
-                    "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5} | {:5}| {:5} | {:5}| {:5} | {:5}| {:5}| {}\n",
+                    "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                     if ContactInfo::is_valid_address(&node.gossip) {
                         ip_addr.to_string()
                     } else {
@@ -276,6 +276,7 @@ impl ClusterInfo {
                     addr_to_string(&ip_addr, &node.tvu),
                     addr_to_string(&ip_addr, &node.tvu_forwards),
                     addr_to_string(&ip_addr, &node.repair),
+                    addr_to_string(&ip_addr, &node.serve_repair),
                     addr_to_string(&ip_addr, &node.storage_addr),
                     addr_to_string(&ip_addr, &node.rpc),
                     addr_to_string(&ip_addr, &node.rpc_pubsub),
@@ -286,9 +287,9 @@ impl ClusterInfo {
 
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
-             |Gossip| TPU  |TPU fwd| TVU  |TVU fwd|Repair|Storage| RPC  |PubSub|ShredVer\n\
+             |Gossip| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR|Storag| RPC  |PubSub|ShredVer\n\
              ------------------+-------+----------------------------------------------+\
-             ------+------+-------+------+-------+------+-------+------+------+--------\n\
+             ------+------+------+------+------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
@@ -522,9 +523,20 @@ impl ClusterInfo {
             .filter(|x| x.shred_version == me.shred_version)
             .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .filter(|x| {
+<<<<<<< HEAD
                 self.get_epoch_state_for_node(&x.id, None)
                     .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
                     .unwrap_or_else(|| /* fallback to legacy behavior */ true)
+=======
+                x.id != me.id
+                    && x.shred_version == me.shred_version
+                    && ContactInfo::is_valid_address(&x.serve_repair)
+                    && {
+                        self.get_epoch_state_for_node(&x.id, None)
+                            .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
+                            .unwrap_or_else(|| /* fallback to legacy behavior */ true)
+                    }
+>>>>>>> d0a468699... Avoid assigning the serve repair port to the storage port
             })
             .collect()
     }
@@ -1667,10 +1679,10 @@ impl Node {
             SocketAddr::new(gossip_addr.ip(), repair_port),
             SocketAddr::new(gossip_addr.ip(), tpu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
+            socketaddr_any!(),
+            socketaddr_any!(),
+            socketaddr_any!(),
             SocketAddr::new(gossip_addr.ip(), serve_repair_port),
-            socketaddr_any!(),
-            socketaddr_any!(),
-            socketaddr_any!(),
             0,
         );
         trace!("new ContactInfo: {:?}", info);
